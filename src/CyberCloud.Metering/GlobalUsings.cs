@@ -8,5 +8,11 @@ global using CyberCloud.Core;
 global using CyberCloud.Core.Resources;
 
 // The meter vocabulary and every wire type are named on nearly every file here.
+//
+// ⚠ CyberCloud.Tenancy.Contracts is deliberately NOT imported. QuotaMeter reaches this assembly only
+// as the type of MeteredQuantity.Family, which is always inferred and never spelled — and nothing
+// here calls IQuotaGrain. That is the shape docs/plan/22 § Quota describes: quota is "distinct from
+// billing and enforced earlier", by the resource manager's write path, and metering reads the same
+// vocabulary rather than taking a second reservation. The day this import becomes necessary is the
+// day something here started enforcing quota, which is the wrong layer.
 global using CyberCloud.Metering.Contracts;
-global using CyberCloud.Tenancy.Contracts;

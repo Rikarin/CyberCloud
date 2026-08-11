@@ -169,13 +169,14 @@ public sealed class UsageSamplerGrain(
         await state.WriteStateAsync();
 
         return Result<UsageSampleReport>.Success(
-            new(
-                window,
-                found.Length,
-                emitted.Length,
-                outcomes.Count(x => x.Outcome == UsageIngestOutcome.Accepted),
-                outcomes.Count(x => x.Outcome == UsageIngestOutcome.Duplicate)
-            )
+            new() {
+                WindowStart = window.Start,
+                WindowEnd = window.End,
+                ResourcesSeen = found.Length,
+                Emitted = emitted.Length,
+                Accepted = outcomes.Count(x => x.Outcome == UsageIngestOutcome.Accepted),
+                Duplicates = outcomes.Count(x => x.Outcome == UsageIngestOutcome.Duplicate)
+            }
         );
     }
 

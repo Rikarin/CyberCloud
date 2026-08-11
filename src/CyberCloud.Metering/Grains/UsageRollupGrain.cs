@@ -89,7 +89,7 @@ public sealed class UsageRollupGrain(
             // collapses". Delivery is at-least-once (docs/plan/04 § Streams), so this branch is the
             // expected path after a restart and not an error — see UsageIngestOutcome.Duplicate.
             if (state.State.SeenKeys.ContainsKey(record.IdempotencyKey)) {
-                receipts.Add(new(UsageIngestOutcome.Duplicate, record.IdempotencyKey));
+                receipts.Add(new() { Outcome = UsageIngestOutcome.Duplicate, IdempotencyKey = record.IdempotencyKey });
                 continue;
             }
 
@@ -97,7 +97,7 @@ public sealed class UsageRollupGrain(
             state.State.Pending.Add(record);
             changed = true;
 
-            receipts.Add(new(UsageIngestOutcome.Accepted, record.IdempotencyKey));
+            receipts.Add(new() { Outcome = UsageIngestOutcome.Accepted, IdempotencyKey = record.IdempotencyKey });
         }
 
         // ⚠ THE KEY IS RECORDED AND THE STATE IS WRITTEN BEFORE THE CALLER IS TOLD IT LANDED. If the

@@ -22,8 +22,15 @@
     -->
 
     <ItemGroup>
-        <!-- Grain implementations, [PersistentState], reminders. -->
+        <!-- Grain implementations and [PersistentState]. -->
         <PackageReference Include="Microsoft.Orleans.Server"/>
+        <!--
+          IRemindable, RegisterOrUpdateReminder, TickStatus. Both the sampler and the rollup are
+          reminder-driven — docs/plan/22 § Two kinds of meter's 5-minute sampler and docs/plan/04
+          § Reminders' fourth use, "Rollups — metering aggregation windows". ⚠ The reminder SERVICE
+          is the host's choice (Redis in production, in-memory in a test) and is not decided here.
+        -->
+        <PackageReference Include="Microsoft.Orleans.Reminders"/>
         <!-- ForTenant, GetKeyWithinTenant, GetTenantId. -->
         <PackageReference Include="Orleans.Multitenant"/>
     </ItemGroup>

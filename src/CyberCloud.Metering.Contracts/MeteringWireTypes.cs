@@ -14,9 +14,26 @@ namespace CyberCloud.Metering.Contracts;
 ///     write path reserves, so a resource is metered in the units it was admitted in. See
 ///     <see cref="MeterCatalog" /> for why there is only one vocabulary.
 /// </remarks>
-/// <param name="Family">Which family. <see cref="QuotaMeter.Unknown" /> is not one and is refused.</param>
-/// <param name="Amount">How much exists. Non-negative.</param>
-public readonly record struct MeteredQuantity(QuotaMeter Family, decimal Amount);
+/// <remarks>
+///     ⚠ <b>A sealed record and not a <c>readonly record struct</c>, which is what it wants to be.</b>
+///     It is an <c>[Id]</c> member of <see cref="MeteredResource" />, so Orleans generates a
+///     serializer for it, and the generator emits a copier that assigns through a <c>ref</c> — which
+///     a positional readonly struct's <c>init</c>-only members refuse (<c>CS1620</c>). The tree's
+///     existing answer for a struct that must go on the wire is a surrogate
+///     (<c>CyberCloud.Core.Contracts.Serialization.ResourceIdSurrogate</c>); a surrogate for a pair
+///     of scalars would be more machinery than the allocation it saves.
+/// </remarks>
+[GenerateSerializer]
+[Alias("CyberCloud.Metering.MeteredQuantity")]
+public sealed record MeteredQuantity {
+    /// <summary>Which family. <see cref="QuotaMeter.Unknown" /> is not one and is refused.</summary>
+    [Id(0)]
+    public QuotaMeter Family { get; init; } = QuotaMeter.Unknown;
+
+    /// <summary>How much exists. Non-negative.</summary>
+    [Id(1)]
+    public decimal Amount { get; init; }
+}
 
 /// <summary>
 ///     What the platform is observed to be doing with a resource, for display and for the abuse
@@ -257,47 +274,78 @@ public sealed record UsageLedgerEntry {
     public bool IsCorrection => CorrectsEntryId.HasValue;
 
     /// <inheritdoc />
-    public override string ToString() =>
-        string.Create(
-            CultureInfo.InvariantCulture,
-            $"#{Sequence} {Meter} {Quantity}"
-            + (IsCorrection ? $" correcting {CorrectsEntryId:N} ({Reason})" : string.Empty)
-        );
+    public override string ToString() {
+        // ⚠ Not one string.Create with a `+` in it. Concatenating a conditional onto an interpolated
+        // string literal loses the DefaultInterpolatedStringHandler conversion and the call binds to
+        // string.Create(IFormatProvider, ref handler) with a plain string — CS1620, and a confusing
+        // one. Two calls, each over a literal.
+        var head = string.Create(CultureInfo.InvariantCulture, $"#{Sequence} {Meter} {Quantity}");
+
+        return IsCorrection
+            ? head
+            + string.Create(CultureInfo.InvariantCulture, $" correcting {CorrectsEntryId:N} ({Reason})")
+            : head;
+    }
 }
 
 /// <summary>What one sampler pass did.</summary>
-/// <param name="Window">The window sampled. Snapped, so a second pass in the same window repeats it.</param>
-/// <param name="ResourcesSeen">How many resources the source reported.</param>
-/// <param name="Emitted">How many records were built and handed to the emitter.</param>
-/// <param name="Accepted">How many the rollup took as new.</param>
-/// <param name="Duplicates">
-///     How many collapsed. ⚠ A steady non-zero figure here is normal and is the mechanism working —
-///     it is what a re-run over an unfinished window, or a redelivery after a silo restart, looks like.
-/// </param>
+/// <remarks>
+///     ⚠ The window is carried as two instants rather than as a <see cref="UsageWindow" />, and
+///     <see cref="Window" /> recomposes it. <see cref="UsageWindow" /> is a positional readonly
+///     record struct, which Orleans' generated copier cannot assign through — see
+///     <see cref="MeteredQuantity" /> for the same trap and the same reasoning.
+/// </remarks>
 [GenerateSerializer]
 [Alias("CyberCloud.Metering.UsageSampleReport")]
-public readonly record struct UsageSampleReport(
-    [property: Id(0)] UsageWindow Window,
-    [property: Id(1)] int ResourcesSeen,
-    [property: Id(2)] int Emitted,
-    [property: Id(3)] int Accepted,
-    [property: Id(4)] int Duplicates
-);
+public sealed record UsageSampleReport {
+    /// <summary>The window sampled, inclusive. Snapped, so a second pass in the same window repeats it.</summary>
+    [Id(0)]
+    public DateTimeOffset WindowStart { get; init; }
+
+    /// <summary>The window sampled, exclusive.</summary>
+    [Id(1)]
+    public DateTimeOffset WindowEnd { get; init; }
+
+    /// <summary>How many resources the source reported.</summary>
+    [Id(2)]
+    public int ResourcesSeen { get; init; }
+
+    /// <summary>How many records were built and handed to the emitter.</summary>
+    [Id(3)]
+    public int Emitted { get; init; }
+
+    /// <summary>How many the rollup took as new.</summary>
+    [Id(4)]
+    public int Accepted { get; init; }
+
+    /// <summary>
+    ///     How many collapsed. ⚠ A steady non-zero figure here is normal and is the mechanism
+    ///     working — it is what a re-run over an unfinished window, or a redelivery after a silo
+    ///     restart, looks like.
+    /// </summary>
+    [Id(5)]
+    public int Duplicates { get; init; }
+
+    /// <summary>The window, as a pair.</summary>
+    public UsageWindow Window => new(WindowStart, WindowEnd);
+}
 
 /// <summary>What one ingest did.</summary>
-/// <param name="Outcome">Accepted or duplicate. ⚠ Both are success — see <see cref="UsageIngestOutcome" />.</param>
-/// <param name="IdempotencyKey">The key that decided it, so a log line can be correlated with the emitter's.</param>
 [GenerateSerializer]
 [Alias("CyberCloud.Metering.UsageIngestReceipt")]
-public readonly record struct UsageIngestReceipt(
-    [property: Id(0)] UsageIngestOutcome Outcome,
-    [property: Id(1)]
-    [property: SuppressMessage(
+public sealed record UsageIngestReceipt {
+    /// <summary>Accepted or duplicate. ⚠ Both are success — see <see cref="UsageIngestOutcome" />.</summary>
+    [Id(0)]
+    public UsageIngestOutcome Outcome { get; init; } = UsageIngestOutcome.Unknown;
+
+    /// <summary>The key that decided it, so a log line can be correlated with the emitter's.</summary>
+    [Id(1)]
+    [SuppressMessage(
         "CyberCloud.Security",
         "CC1005:A secret must not be a serialized member of grain state",
         Justification =
             "Not a secret — it is the echo of UsageEvent.IdempotencyKey, a sha256 of values that "
             + "travel beside it. See the justification on UsageEvent.IdempotencyKey."
     )]
-    string IdempotencyKey
-);
+    public string IdempotencyKey { get; init; } = string.Empty;
+}

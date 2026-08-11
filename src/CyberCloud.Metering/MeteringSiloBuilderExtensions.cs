@@ -1,6 +1,5 @@
 using CyberCloud.Core.Time;
 using CyberCloud.Metering.Sinks;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace CyberCloud.Metering;

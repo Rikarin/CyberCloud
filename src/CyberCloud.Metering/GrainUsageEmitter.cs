@@ -98,7 +98,7 @@ public sealed class GrainUsageEmitter(IGrainFactory grains) : IUsageEmitter {
             ordered.Add(
                 byKey.TryGetValue(record.IdempotencyKey, out var receipt)
                     ? receipt
-                    : new(UsageIngestOutcome.Unknown, record.IdempotencyKey)
+                    : new() { Outcome = UsageIngestOutcome.Unknown, IdempotencyKey = record.IdempotencyKey }
             );
         }
 
