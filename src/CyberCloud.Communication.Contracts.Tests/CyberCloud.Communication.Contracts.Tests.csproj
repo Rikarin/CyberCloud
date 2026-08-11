@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      The pure half of the sending domain's tests: destination normalization and the two spellings of
+      one number that must collapse, the stop-keyword match and the reply it must NOT match, the
+      template renderer's missing-parameter refusal and its locale fallback, the derived grain key's
+      determinism and its sensitivity, and the reflection sweep that asserts no wire type carries
+      credential material.
+
+      ⚠ NO Testcontainers AND NO Aspire.Hosting HERE, AND NONE IS NEEDED. Nothing in this project
+      touches a grain, so ADR-018's "real storage" rule does not reach it — that rule is about grain
+      behaviour, and these are pure functions and one reflection sweep. The grain-backed half is
+      CyberCloud.Communication.Tests, which does have something to say about it.
+    -->
+
+    <ItemGroup>
+        <PackageReference Include="xunit.v3"/>
+        <PackageReference Include="Shouldly"/>
+    </ItemGroup>
+
+    <ItemGroup Label="Global usings">
+        <Using Include="Xunit"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../CyberCloud.Communication.Contracts/CyberCloud.Communication.Contracts.csproj"/>
+    </ItemGroup>
+
+</Project>

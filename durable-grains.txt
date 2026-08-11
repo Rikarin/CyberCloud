@@ -116,6 +116,66 @@ CyberCloud.Metering.Grains.UsageLedgerGrain
 # holding something the resource manager should have been holding for it. The day a provider does
 # need a line here, the first question is what the manager is missing.
 
+# ── Communication — docs/plan/17 ───────────────────────────────────────────────────────────────
+# The sending product's four pieces of state that a person, a carrier or a regulator would notice
+# the loss of. docs/plan/17 § The parts that are actually the work puts MESSAGE grains in the hot
+# tier and is right to; everything below is the other kind of state, and each entry says why.
+#
+# SuppressionListGrain is the one entry here that is not arguable. It holds bounces, complaints and
+# opt-outs, "per tenant, honoured before dispatch" — docs/plan/17 § The parts that are actually the
+# work, which adds "ignoring a complaint is how a sending domain gets blocked". docs/plan/05
+# § Choosing a tier asks whether the state can be rebuilt, and here the upstream is a person who
+# already told us to stop: losing the list does not degrade sending, it silently REVERSES a consent
+# decision, and the platform then messages everyone who opted out. That is a regulatory finding in
+# most jurisdictions and, in the US, a statutory penalty per message. ⚠ Rebuilding it would mean
+# asking every recipient again, which is itself the thing they asked us not to do.
+CyberCloud.Communication.Grains.SuppressionListGrain
+#
+# CommunicationServiceGrain holds a paying customer's carrier wiring: which provider each channel
+# uses, whose account pays, the vault HANDLES for their own credentials (never the values — CC1005),
+# and the per-window spend caps. Nothing upstream holds any of it; the tenant does, in their head,
+# and asking them to re-enter it is asking them to redo the onboarding they paid for. The caps are
+# the sharper half — ChannelLimits.None is the default, so a lost configuration does not overspend,
+# it stops sending entirely and every OTP in the platform fails at once.
+CyberCloud.Communication.Grains.CommunicationServiceGrain
+#
+# MessageTemplateGrain holds template versions and, for WhatsApp, the carrier's approval of each
+# BODY. docs/plan/17 § The parts that are actually the work: "WhatsApp requires pre-approved
+# templates." An approval is attached to that exact text, so losing our copy is not losing a cache —
+# it is resubmitting and waiting days with business-initiated WhatsApp sending down. "Can this be
+# rebuilt" answers no, and the recovery is a queue at Meta rather than a warm-up.
+CyberCloud.Communication.Grains.MessageTemplateGrain
+#
+# SenderIdentityGrain is a compliance record: what the tenant submitted for sender-id registration
+# or a 10DLC campaign, what the carrier answered, and which countries were cleared. docs/plan/17
+# § The channel abstraction makes those the tenant's obligations with our tooling, which means our
+# copy is the evidence — and the question it answers ("what were you approved for, and by whom")
+# arrives months later from somebody with the authority to ask.
+CyberCloud.Communication.Grains.SenderIdentityGrain
+#
+# ⚠ NOT MessageGrain, NOT SendLimitGrain and NOT ProviderMessageIndexGrain, and all three absences
+# are reviewed rather than forgotten.
+#
+# MessageGrain is Hot because docs/plan/17 § The parts that are actually the work says so directly —
+# "message grains (hot tier, TTL'd)" — and the argument survives docs/plan/05 § Choosing a tier's
+# test. What a flush loses is the ability to answer "did it arrive" for messages inside the
+# retention window, and the ability to collapse a retry that arrives after it. Neither is a record
+# of account: the money is metering's durable ledger and the trail is the audit log. ⚠ The cost is
+# real and is stated rather than hidden — a hot-tier loss inside the window turns a retry into a
+# second send, which is the exact harm idempotency exists to prevent. It is bounded: a FLUSHALL is a
+# declared incident (docs/plan/05 § Hot), and the alternative is a synchronously-replicated write on
+# the path an OTP travels, with a user waiting at a login form, forever.
+#
+# SendLimitGrain holds counters and never the caps — the caps live on CommunicationServiceGrain
+# above, which is durable. That split is what bounds a hot-tier loss to one window's counters
+# instead of resetting every tenant's cap, and docs/plan/05 § Hot already lists "rate-limit
+# counters" among what the hot tier holds. The backstop if a window is ever in doubt is metering's
+# ledger, which is the durable record of what was actually sent.
+#
+# ProviderMessageIndexGrain maps a carrier's message id back to ours and must expire with the
+# message it points at. An index entry that outlived its message would resurrect an empty activation
+# on every late webhook, so it is Hot for the same reason and to the same horizon.
+
 # ── Identity — docs/plan/11 ────────────────────────────────────────────────────────────────────
 # Who may sign in, and with what. docs/plan/02 § ADR-003 puts the loss tolerance of this tier at
 # zero, and for these four the honest answer to "can this be rebuilt" is no, in a way that is worse

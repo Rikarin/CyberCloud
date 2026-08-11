@@ -1,0 +1,52 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      The grain-backed half of the sending domain's tests, one class per failure class docs/plan/17
+      § The parts that are actually the work names: the same idempotency key sending once across a
+      deactivation and a different one sending twice, the suppressed address the provider is never
+      told about, STOP arriving inbound and the next send being refused, the runaway loop stopping at
+      the spend limit with the limit and the window named, the delivery receipt for a provider
+      message id nobody remembers being ignored rather than fatal, and the template whose missing
+      parameter fails before the carrier.
+
+      ⚠ NO Testcontainers AND NO Aspire.Hosting, AND THAT IS THE SAME DEVIATION FROM ADR-018 THAT
+      CyberCloud.Metering.Tests AND CyberCloud.ResourceManager.Tests RECORD, OWED BACK ON THE SAME
+      TERMS. docs/plan/02 ADR-018 wants grain behaviour tested "against a real in-process TestCluster
+      … with real storage providers backed by Testcontainers". This project uses Orleans.TestingHost's
+      TestCluster with AddMemoryGrainStorage instead, because the environment this was built in could
+      not start a container.
+
+      What that costs, stated so it can be paid rather than forgotten:
+
+        - Nothing here proves the state SERIALIZES. In-memory storage keeps the object graph; a real
+          provider round-trips it. SuppressionListState.Entries is a Dictionary and
+          CommunicationServiceState.Channels a List, both `{ get; set; }` for exactly the "STJ does
+          not populate a get-only collection" trap — but the assertion that they round-trip is owed,
+          and for the suppression list it is the assertion that matters most: a list that fails to
+          deserialize is a list that has silently forgotten every opt-out, which is the one failure
+          in this module with a legal consequence.
+        - Nothing here proves the DURABLE tier is durable across a silo restart. Deactivation is used
+          to exercise re-activation, which keeps the same in-process store — so
+          "IdempotencySurvivesDeactivation" proves the grain re-reads its state rather than proving
+          Redis kept it.
+        - Nothing here exercises a real carrier, by design. IChannelProvider is the seam and
+          InMemoryChannelProvider is the double; what is proven is our side of it, which is where
+          every property docs/plan/17 asks for actually lives.
+    -->
+
+    <ItemGroup>
+        <PackageReference Include="xunit.v3"/>
+        <PackageReference Include="Shouldly"/>
+        <PackageReference Include="Microsoft.Orleans.TestingHost"/>
+        <PackageReference Include="Orleans.Multitenant"/>
+    </ItemGroup>
+
+    <ItemGroup Label="Global usings">
+        <Using Include="Xunit"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../CyberCloud.Communication/CyberCloud.Communication.csproj"/>
+    </ItemGroup>
+
+</Project>
