@@ -742,6 +742,125 @@ public class GrainKeysTests
         GrainKeys.Resource(Resource)
             .ShouldBe("res/" + Resource.ToString("N", CultureInfo.InvariantCulture));
 
+    // ── The two shapes docs/plan/06's table does NOT have ────────────────────────────────────
+    //
+    // ⚠ A DOC DEFECT, and these tests are the repair. docs/plan/04 § Grain taxonomy names
+    // ITenantGrain in its Entity row (tenant-qualified, Durable) and ITenantDirectoryGrain /
+    // IShardMapGrain / IProviderRegistryGrain in its Platform row (null-tenant, Durable) — and
+    // docs/plan/06 § Grain keys has a row for none of them. Its eight rows start at
+    // ISubscriptionGrain. Since that table is what closes GrainKeys' set, CyberCloud.Tenancy could
+    // not have built any of those grains until one of the two documents moved.
+
+    [Fact]
+    public void TheTenantShapeIsTenantSlashTheTenantIdInNForm()
+    {
+        GrainKeys.Tenant(Tenant).ShouldBe("tenant/2b4a1c662e704a9d9d0a1f7ec1f1a4b3");
+
+        var parsed = GrainKeys.Parse(GrainKeys.Tenant(Tenant)).GetValueOrThrow();
+        parsed.Kind.ShouldBe(GrainKeyKind.Tenant);
+        parsed.Id.ShouldBe(Tenant);
+        parsed.ToString().ShouldBe(GrainKeys.Tenant(Tenant));
+    }
+
+    [Fact]
+    public void ATenantKeyCannotBeConfusedWithAnyOtherShape()
+    {
+        // The same GUID under every shape, including the new one, must produce distinct strings
+        // that each parse back to their own kind.
+        var kinds = new[]
+        {
+            (GrainKeys.Tenant(Resource), GrainKeyKind.Tenant),
+            (GrainKeys.Subscription(Resource), GrainKeyKind.Subscription),
+            (GrainKeys.Resource(Resource), GrainKeyKind.Resource),
+            (GrainKeys.User(Resource), GrainKeyKind.User),
+            (GrainKeys.Operation(Resource), GrainKeyKind.Operation),
+            (GrainKeys.ClusterConnection(Resource), GrainKeyKind.ClusterConnection),
+        };
+
+        kinds.Select(x => x.Item1).Distinct(StringComparer.Ordinal).Count().ShouldBe(kinds.Length);
+
+        foreach (var (key, kind) in kinds)
+        {
+            GrainKeys.Parse(key).GetValueOrThrow().Kind.ShouldBe(kind);
+        }
+    }
+
+    [Fact]
+    public void ThePlatformSingletonsAreAClosedSetOfTwo()
+    {
+        GrainKeys.ShardMap().ShouldBe("platform/shard-map");
+        GrainKeys.TenantDirectory().ShouldBe("platform/tenant-directory");
+
+        GrainKeys.PlatformSingletons.ShouldBe(["shard-map", "tenant-directory"]);
+
+        foreach (var name in GrainKeys.PlatformSingletons)
+        {
+            var key = GrainKeys.PlatformSingleton(name);
+            var parsed = GrainKeys.Parse(key).GetValueOrThrow();
+
+            parsed.Kind.ShouldBe(GrainKeyKind.PlatformSingleton);
+            parsed.Name.ShouldBe(name);
+            parsed.Id.ShouldBe(Guid.Empty);
+            parsed.ToString().ShouldBe(key);
+        }
+    }
+
+    [Theory]
+    [InlineData("provider-registry")]
+    [InlineData("tenants")]
+    [InlineData("")]
+    [InlineData("Shard-Map")]
+    public void APlatformSingletonOutsideTheSetCannotBeBuilt(string name) =>
+        // ⚠ The set is closed so that "platform singleton" never becomes a namespace somebody drops
+        // a per-tenant key into — which would be docs/plan/04 § Grain taxonomy's low-cardinality
+        // index grain with a different name. IProviderRegistryGrain is in that document's Platform
+        // row and is deliberately NOT here: it belongs to the provider registry, not to tenancy,
+        // and adding its name before its grain exists would be a key with nothing behind it.
+        Should.Throw<ArgumentException>(() => GrainKeys.PlatformSingleton(name));
+
+    [Theory]
+    [InlineData("platform/provider-registry", "a singleton outside the closed set")]
+    [InlineData("platform/shard-map/extra", "a third segment")]
+    [InlineData("platform", "the prefix alone")]
+    [InlineData("PLATFORM/shard-map", "upper-case prefix")]
+    [InlineData("platform/Shard-Map", "upper-case name")]
+    [InlineData("tenant/2b4a1c66-2e70-4a9d-9d0a-1f7ec1f1a4b3", "a hyphenated tenant id")]
+    [InlineData("tenant", "the tenant prefix alone")]
+    public void AForgedPlatformOrTenantKeyIsRejected(string forged, string why) =>
+        GrainKeys.TryParse(forged, out _).ShouldBeFalse($"'{forged}' — {why}");
+
+    [Fact]
+    public void ThePlatformKeysAreNullTenantSafeInBothDirections()
+    {
+        // Same argument as the cluster-connection key: these are null-tenant, so they must pass
+        // through Orleans.Multitenant's null-tenant branch as themselves, and must never read back
+        // as belonging to a tenant.
+        foreach (var key in new[] { GrainKeys.ShardMap(), GrainKeys.TenantDirectory() })
+        {
+            key.ShouldNotContain("|");
+
+            OrleansMultitenantKeyModel.Qualify(null, key).ShouldBe(key);
+            OrleansMultitenantKeyModel.ExtractTenant(key).ShouldBeNull();
+            OrleansMultitenantKeyModel.ExtractKey(key).ShouldBe(key);
+
+            GrainKeys.IsTenantQualificationSafe(key).ShouldBeTrue();
+        }
+    }
+
+    [Fact]
+    public void ATenantKeyIsTenantQualificationSafeSoThePhysicalKeySaysTheTenantTwice()
+    {
+        // The physical key is "{tenantId}|tenant/{tenantId:N}". Redundant on its face and not in
+        // fact: a key read outside its qualification — in a repair tool, an audit export, a psql
+        // session — still says which tenant it is.
+        var tenant = Tenant.ToString("N", CultureInfo.InvariantCulture);
+        var key = GrainKeys.Tenant(Tenant);
+
+        GrainKeys.IsTenantQualificationSafe(key).ShouldBeTrue();
+        OrleansMultitenantKeyModel.Qualify(tenant, key).ShouldBe(tenant + "|" + key);
+        OrleansMultitenantKeyModel.ExtractKey(tenant + "|" + key).ShouldBe(key);
+    }
+
     [Fact]
     public void TheEmptyGuidIsAKeyLikeAnyOtherBecauseItIsTheNullTenantsId() =>
         // docs/plan/06:171 — the platform tenant is Guid.Empty. Nothing here may special-case it.

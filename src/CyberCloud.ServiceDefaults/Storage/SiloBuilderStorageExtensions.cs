@@ -65,14 +65,26 @@ public static class SiloBuilderStorageExtensions
     ///         which demonstrates exactly what is still open.
     ///     </para>
     /// </remarks>
+    /// <param name="map">
+    ///     The shard map the two tier configurators will <b>capture</b>. Defaults to a
+    ///     <see cref="StaticShardMapCache" />.
+    /// </param>
     public static ISiloBuilder AddCyberCloudGrainStorage(
         this ISiloBuilder silo,
-        CyberCloudStorageOptions options)
+        CyberCloudStorageOptions options,
+        IShardMapCache? map = null)
     {
         ArgumentNullException.ThrowIfNull(silo);
         ArgumentNullException.ThrowIfNull(options);
 
-        var shardMap = new StaticShardMapCache(options);
+        // ⚠ CAPTURED, not resolved. Orleans.Multitenant's configureTenantOptions callback takes
+        // (options, tenantId) and no IServiceProvider — see TenantOptionsConfigurator — so the
+        // instance handed in here is the instance the storage layer will use for the life of the
+        // silo. Registering a different IShardMapCache in the container afterwards changes what
+        // other code resolves and changes nothing about where a grain is stored. That is why the
+        // parameter is here rather than a container lookup: swapping the map has to be a decision at
+        // this call site, where it is visible.
+        var shardMap = map ?? new StaticShardMapCache(options);
         var connections = new ConfiguredShardConnections(options);
         var hot = new HotTierConfigurator(shardMap, connections);
         var durable = new DurableTierConfigurator(shardMap, connections);
@@ -83,7 +95,7 @@ public static class SiloBuilderStorageExtensions
         silo.ConfigureServices(services =>
         {
             services.AddSingleton(options);
-            services.AddSingleton<IShardMapCache>(shardMap);
+            services.AddSingleton(shardMap);
             services.AddSingleton<IShardConnections>(connections);
             services.AddSingleton(hot);
             services.AddSingleton(durable);

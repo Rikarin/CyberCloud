@@ -7,7 +7,11 @@
       "src/CyberCloud.Core.Contracts/CyberCloud.Core.Contracts.csproj",
       "src/CyberCloud.Core.Contracts.Tests/CyberCloud.Core.Contracts.Tests.csproj",
       "src/CyberCloud.ServiceDefaults/CyberCloud.ServiceDefaults.csproj",
-      "src/CyberCloud.ServiceDefaults.Tests/CyberCloud.ServiceDefaults.Tests.csproj"
+      "src/CyberCloud.ServiceDefaults.Tests/CyberCloud.ServiceDefaults.Tests.csproj",
+      "src/CyberCloud.Tenancy.Contracts/CyberCloud.Tenancy.Contracts.csproj",
+      "src/CyberCloud.Tenancy.Contracts.Tests/CyberCloud.Tenancy.Contracts.Tests.csproj",
+      "src/CyberCloud.Tenancy/CyberCloud.Tenancy.csproj",
+      "src/CyberCloud.Tenancy.Tests/CyberCloud.Tenancy.Tests.csproj"
     ]
   }
 }
