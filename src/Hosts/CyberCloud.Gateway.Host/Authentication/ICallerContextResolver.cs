@@ -11,12 +11,20 @@ namespace CyberCloud.Gateway.Host.Authentication;
 ///     produces no claims at all.
 /// </remarks>
 /// <param name="TenantId">The token's <c>tid</c>. The one and only source of a request's tenant.</param>
-/// <param name="SubjectType">The ReBAC subject type — <c>user</c>, <c>serviceprincipal</c>.</param>
-/// <param name="SubjectId">The ReBAC subject id — the <c>sub</c> claim.</param>
+/// <param name="SubjectType">
+///     The ReBAC subject type — the token's <c>sub_typ</c> claim, one of <c>user</c>,
+///     <c>servicePrincipal</c>, <c>managedIdentity</c>. ⚠ Its own claim, never a prefix on
+///     <see cref="SubjectId" />: docs/plan/07 § The model makes <c>user:abc</c> and
+///     <c>servicePrincipal:abc</c> two different subjects, so a resolver that produced the id alone
+///     would leave the type to be guessed at the one place a wrong guess is a wrong access decision.
+/// </param>
+/// <param name="SubjectId">The ReBAC subject id — the <c>sub</c> claim, and only the id.</param>
 /// <param name="Scopes">The token's scopes, space-separated as the <c>scp</c> claim carries them.</param>
 /// <param name="ImpersonatedBy">
-///     The operator behind an impersonated request, or empty. docs/plan/06 § Platform administration.
-///     ⚠ A claim, not a header: a header would let any caller set it.
+///     The operator behind an impersonated request — the token's <c>act_sub</c> claim — or empty.
+///     docs/plan/06 § Platform administration.
+///     ⚠ A claim, not a header: a header would let any caller set it, and with it the audit record,
+///     the 60-minute box and the tenant's notification all become decoration.
 /// </param>
 /// <param name="ExpiresAt">When the token expires. docs/plan/10 § Authentication inputs: 10 minutes.</param>
 readonly record struct TokenClaims(
@@ -64,12 +72,35 @@ readonly record struct TokenClaims(
 ///         </item>
 ///         <item>
 ///             <b>A subject type</b> distinguishable from the subject id, because ReBAC subjects are
-///             typed (docs/plan/07 § The model) and <c>user:abc</c> and <c>serviceprincipal:abc</c>
+///             typed (docs/plan/07 § The model) and <c>user:abc</c> and <c>servicePrincipal:abc</c>
 ///             are different subjects. A dedicated claim, not a prefix convention on <c>sub</c>.
+///             ✅ <b>Settled: the claim is <c>sub_typ</c></b>, carrying one of <c>user</c>,
+///             <c>servicePrincipal</c>, <c>managedIdentity</c> — <c>CyberCloud.Identity.Contracts</c>'s
+///             <c>AccessTokenClaims.SubjectType</c> and <c>SubjectTypes</c>. ⚠ The spellings are ReBAC
+///             object types and are matched <i>ordinally</i>: <c>serviceprincipal</c> is not
+///             <c>servicePrincipal</c>, and the wrong case produces a subject no tuple names, so
+///             every check denies and it reads as a permissions bug.
 ///         </item>
 ///         <item>
 ///             <b>The impersonation claim</b> of docs/plan/06 § Platform administration, minted only
 ///             by the identity host and never accepted from a header.
+///             ✅ <b>Settled: the claim is <c>act_sub</c></b> — <c>AccessTokenClaims.ImpersonatedBy</c>,
+///             the flattened <c>act.sub</c> of RFC 8693 § 4.1 — carrying the operator's user GUID in
+///             <c>N</c> form, and absent entirely on an ordinary token.
+///             <para>
+///                 ⚠ <b>docs/plan/06 § Platform administration says the value travels as an
+///                 <c>X-CyberCloud-Impersonated-By</c> header, and read literally that is a doc
+///                 defect the gateway must not implement.</b> That header is caller-controlled on
+///                 every request this component serves, so honouring it would let anyone name any
+///                 operator in the audit trail — defeating the second-operator approval, the 60-minute
+///                 box and the tenant's notification in one line. The header is correct on the
+///                 <i>internal</i> hop, gateway to resource manager, which is what
+///                 <c>CallerContext.ImpersonatedBy</c> already is; at the edge the value comes from
+///                 the token or it does not exist. <see cref="ResolveAsync" /> reads the
+///                 <c>Authorization</c> header and nothing else, which is what makes that structural
+///                 rather than a rule — and <c>ImpersonationIsMintedNotInjectedTests</c> is the
+///                 assertion.
+///             </para>
 ///         </item>
 ///         <item>
 ///             <b>Token lifetime of 10 minutes</b> and a refresh flow, per docs/plan/10

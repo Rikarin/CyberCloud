@@ -1,3 +1,4 @@
+using CyberCloud.Core;
 using System.Collections.Frozen;
 
 namespace CyberCloud.Identity.Contracts;
@@ -69,10 +70,90 @@ public static class AccessTokenClaims {
     /// <summary>The token's own id.</summary>
     public const string TokenId = "jti";
 
-    /// <summary>Every claim a Cyber Cloud access token may carry. The set is closed.</summary>
+    /// <summary>
+    ///     The <b>type</b> of the subject <see cref="Subject" /> names — one of
+    ///     <see cref="SubjectTypes" />.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>A dedicated claim, and never a prefix convention on <c>sub</c>.</b> The gateway
+    ///         states the requirement in <c>ICallerContextResolver</c>'s remarks, item 4, and the
+    ///         reason is docs/plan/07 § The model: ReBAC subjects are <i>typed</i>, so
+    ///         <c>user:abc</c> and <c>servicePrincipal:abc</c> are two different subjects that happen
+    ///         to share an id. Without this claim the gateway cannot build a correct <c>SubjectRef</c>
+    ///         and every <c>Check</c> is made against a guess — which fails <i>open</i> exactly when
+    ///         two subject types collide on one GUID, and is invisible until they do.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Why not <c>sub = "user:abc"</c>.</b> A prefix convention makes the type a
+    ///         substring of a value that is also a database key, an audit field and a log line; every
+    ///         consumer then needs the same splitting rule, one of them gets it wrong for an id
+    ///         containing a colon, and the failure is a subject silently reinterpreted as a different
+    ///         one. <c>ThereIsNoTypeInsideSubAlone</c> in <c>AccessTokenContractTests</c> is the
+    ///         assertion that <c>sub</c> on its own cannot be parsed into a typed subject, so nobody
+    ///         can reintroduce the convention by reading one.
+    ///     </para>
+    ///     <para>
+    ///         The spelling is <c>sub_typ</c> rather than Entra's <c>idtyp</c>: neither is IANA
+    ///         registered, and one that reads as "the type of <c>sub</c>" is the one that cannot be
+    ///         mistaken for something about the <i>token</i>'s type.
+    ///     </para>
+    /// </remarks>
+    public const string SubjectType = "sub_typ";
+
+    /// <summary>
+    ///     The platform operator behind an impersonated request, as a user GUID in <c>N</c> form.
+    ///     Absent on every ordinary token. docs/plan/06 § Platform administration.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>MINTED HERE AND NEVER ACCEPTED FROM A HEADER. THIS IS THE WHOLE SECURITY
+    ///         PROPERTY.</b> docs/plan/06 § Platform administration builds impersonation out of four
+    ///         controls — a second operator's approval for a production tenant, a 60-minute box, an
+    ///         audit record, and <i>"the tenant sees a notification"</i>. Every one of those is
+    ///         defeated by a caller who can set the value themselves: the approval is skipped, the box
+    ///         is unbounded, the audit names whoever the attacker typed, and the notification either
+    ///         never fires or accuses the wrong operator. A claim inside a signed token is the only
+    ///         form of this value that carries the approval it was granted under.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>docs/plan/06 § Platform administration says "header", and that sentence is a doc
+    ///         defect.</b> It reads: "every request made under it carries an
+    ///         <c>X-CyberCloud-Impersonated-By</c> header into the audit log". A header is
+    ///         caller-controlled on every request the gateway serves, so implementing that sentence
+    ///         literally would let any caller impersonate any operator in the audit trail. The header
+    ///         is the right shape <i>internally</i> — gateway to resource manager, on a hop the caller
+    ///         cannot reach, which is what <c>CallerContext.ImpersonatedBy</c> already is — and the
+    ///         wrong shape at the edge. This claim is where the value enters the system;
+    ///         <c>ICallerContextResolver</c>'s item 5 states the same rule from the other side.
+    ///     </para>
+    ///     <para>
+    ///         The spelling is the flattened form of RFC 8693 § 4.1's <c>act</c> claim, whose value is
+    ///         a JSON object with a nested <c>sub</c>. A claims principal carries flat string claims
+    ///         (see <c>AccessTokenPrincipalFactory</c>), and a nested object would need a second
+    ///         serialization path for one value; <c>act_sub</c> <i>is</i> that nested <c>sub</c>,
+    ///         spelled flat, so a reader of RFC 8693 recognises the concept and its meaning is
+    ///         unchanged. ⚠ There is deliberately no <c>act</c> claim as well — two spellings of one
+    ///         fact is how a consumer ends up reading the one that was not populated.
+    ///     </para>
+    /// </remarks>
+    public const string ImpersonatedBy = "act_sub";
+
+    /// <summary>
+    ///     Every claim a Cyber Cloud access token may carry. <b>The set is closed and stays closed.</b>
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Fourteen, and adding the last two did not make this an open set.</b>
+    ///     <see cref="SubjectType" /> and <see cref="ImpersonatedBy" /> were added because the gateway
+    ///     cannot do its job without them, and each arrived as an entry in this list plus a line in
+    ///     the factory that emits it plus an assertion on both sides — which is the cost the closure
+    ///     exists to impose. <c>ThePermittedSetIsClosedAndNotMerelyLong</c> holds the count and the
+    ///     exact membership, so a fifteenth claim is a test failure rather than a diff nobody read.
+    /// </remarks>
     public static FrozenSet<string> Permitted { get; } = new[] {
         Subject, TenantId, Audience, Issuer, Scope, AuthorizedParty,
-        AuthenticationTime, AuthenticationMethods, SessionId, IssuedAt, ExpiresAt, TokenId
+        AuthenticationTime, AuthenticationMethods, SessionId, IssuedAt, ExpiresAt, TokenId,
+        SubjectType, ImpersonatedBy
     }.ToFrozenSet(StringComparer.Ordinal);
 
     /// <summary>
@@ -105,6 +186,116 @@ public static class AccessTokenClaims {
         "scope",
         "http://schemas.microsoft.com/ws/2008/06/identity/claims/role"
     }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    ///     Whether every one of <paramref name="claimTypes" /> is in <see cref="Permitted" />, and a
+    ///     failure naming the first that is not.
+    /// </summary>
+    /// <param name="claimTypes">The claim types about to be put in a token.</param>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>An allow-list check, not a strip.</b> The tempting shape is "remove anything
+    ///         forbidden and carry on", and it is wrong twice: it only removes the spellings somebody
+    ///         thought of (<see cref="ForbiddenClaims" /> is a list of <i>spellings</i>, and the next
+    ///         library will invent a seventh), and it turns a mistake into a silent success — the
+    ///         claim the caller added is gone and nothing says so. Refusing means a token that was
+    ///         built wrongly is never issued at all.
+    ///     </para>
+    ///     <para>
+    ///         The forbidden set is checked first only so the message can say <i>why</i> a role claim
+    ///         in particular is refused. Anything outside <see cref="Permitted" /> is refused
+    ///         regardless of whether it is on that list, which is what keeps the set closed against
+    ///         claims nobody has thought of yet.
+    ///     </para>
+    /// </remarks>
+    public static Result EnsurePermitted(IEnumerable<string> claimTypes) {
+        ArgumentNullException.ThrowIfNull(claimTypes);
+
+        foreach (var claimType in claimTypes) {
+            if (Permitted.Contains(claimType)) {
+                continue;
+            }
+
+            return ForbiddenClaims.Contains(claimType)
+                ? Result.Failure(
+                    ErrorCode.InternalError,
+                    $"'{claimType}' is a role or permission claim and must never be in an access "
+                    + "token. docs/plan/11 § Protocol: they are looked up per request from ReBAC, "
+                    + "because a claim in a 10-minute token makes a revoke take up to 10 minutes and "
+                    + "a large user's groups make the header too big."
+                )
+                : Result.Failure(
+                    ErrorCode.InternalError,
+                    $"'{claimType}' is not one of the {Permitted.Count} claims a Cyber Cloud access "
+                    + "token may carry. The set is closed — docs/plan/11 § Protocol — so a new claim "
+                    + "is an edit to AccessTokenClaims.Permitted and to the gateway that reads it, "
+                    + "not a line in whatever is building this principal."
+                );
+        }
+
+        return Result.Success;
+    }
+}
+
+/// <summary>
+///     The subject types a Cyber Cloud access token's <see cref="AccessTokenClaims.SubjectType" />
+///     may name. <b>The set is closed.</b> docs/plan/07 § The model, docs/plan/11 § The object model.
+/// </summary>
+/// <remarks>
+///     <para>
+///         ⚠ <b>These are ReBAC object types, and the spelling has to match the tuples exactly.</b> A
+///         token that said <c>serviceprincipal</c> where the tuple store says <c>servicePrincipal</c>
+///         would produce a <c>SubjectRef</c> that matches no tuple, so every check would deny — which
+///         looks like a permissions bug and is a spelling bug. They are declared here rather than
+///         referenced from <c>CyberCloud.Authorization</c>'s <c>ObjectTypes</c> because
+///         <c>CyberCloud.Identity.Contracts</c> must not depend on the authorization implementation
+///         assembly; ⚠ the duplication is owed a fix, which is to lift the subject types into
+///         <c>CyberCloud.Authorization.Contracts</c> where both sides already look.
+///         <c>SubjectTypesMatchTheReBacSpellings</c> pins them meanwhile.
+///     </para>
+///     <para>
+///         ⚠ <b><c>group</c> is deliberately absent.</b> A group is a ReBAC object and the
+///         <i>subject</i> of role assignments through its <c>member</c> userset, but nothing ever
+///         signs in as one — there is no credential a group holds. A token whose subject type were
+///         <c>group</c> would be a bearer credential for everyone in it.
+///     </para>
+/// </remarks>
+public static class SubjectTypes {
+    /// <summary>A human. docs/plan/11 § The object model.</summary>
+    public const string User = "user";
+
+    /// <summary>A machine identity with a client secret or a certificate.</summary>
+    public const string ServicePrincipal = "servicePrincipal";
+
+    /// <summary>
+    ///     A workload identity bound to <c>(cluster, namespace, serviceAccount)</c> — the third
+    ///     subject type, and the one that holds no credential at all. docs/plan/11 § Managed identity.
+    /// </summary>
+    public const string ManagedIdentity = "managedIdentity";
+
+    /// <summary>The closed set, in the order docs/plan/11 § The object model names them.</summary>
+    public static FrozenSet<string> All { get; } =
+        new[] { User, ServicePrincipal, ManagedIdentity }.ToFrozenSet(StringComparer.Ordinal);
+
+    /// <summary>
+    ///     Whether <paramref name="subjectType" /> is one of <see cref="All" />, and a failure that
+    ///     names the closed set when it is not.
+    /// </summary>
+    /// <param name="subjectType">The candidate.</param>
+    /// <remarks>
+    ///     ⚠ Ordinal and case-sensitive, because the value is a ReBAC object type and the tuple store
+    ///     is case-sensitive. Accepting <c>User</c> here would mint a token whose every check denies.
+    /// </remarks>
+    public static Result Ensure(string? subjectType) =>
+        subjectType is not null && All.Contains(subjectType)
+            ? Result.Success
+            : Result.Failure(
+                ErrorCode.InternalError,
+                $"'{subjectType}' is not a subject type. The set is closed and is "
+                + $"[{string.Join(", ", All.Order(StringComparer.Ordinal))}] — docs/plan/07 § The "
+                + "model. It is matched ordinally because it is a ReBAC object type, and a token "
+                + "carrying a differently-cased spelling would produce a subject no tuple names."
+            );
 }
 
 /// <summary>

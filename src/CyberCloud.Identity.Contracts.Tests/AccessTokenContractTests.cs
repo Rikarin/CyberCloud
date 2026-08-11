@@ -57,11 +57,123 @@ public sealed class AccessTokenContractTests {
     [Fact]
     public void ThePermittedClaimSetIsExactlyWhatTheDocumentNames() {
         // docs/plan/11 § Protocol: "`aud` names the API, `tid` the tenant, `sub` the GUID, plus
-        // `scp`, `azp`, and an `auth_time`/`amr` pair so step-up authentication can be required".
+        // `scp`, `azp`, and an `auth_time`/`amr` pair so step-up authentication can be required" —
+        // plus the two the GATEWAY requires and that sentence does not name. See
+        // TheTwoClaimsTheGatewayCannotWorkWithout.
         AccessTokenClaims.Permitted.ShouldBe(
-            ["sub", "tid", "aud", "iss", "scp", "azp", "auth_time", "amr", "sid", "iat", "exp", "jti"],
+            [
+                "sub", "tid", "aud", "iss", "scp", "azp", "auth_time", "amr", "sid", "iat", "exp",
+                "jti", "sub_typ", "act_sub"
+            ],
             ignoreOrder: true
         );
+    }
+
+    [Fact]
+    public void TheTwoClaimsTheGatewayCannotWorkWithout() {
+        // ICallerContextResolver's items 4 and 5. Item 4: "a subject type distinguishable from the
+        // subject id … a dedicated claim, not a prefix convention on `sub`". Item 5: "the
+        // impersonation claim of docs/plan/06 § Platform administration, minted only by the identity
+        // host and never accepted from a header."
+        AccessTokenClaims.SubjectType.ShouldBe("sub_typ");
+        AccessTokenClaims.ImpersonatedBy.ShouldBe("act_sub");
+
+        AccessTokenClaims.Permitted.ShouldContain(AccessTokenClaims.SubjectType);
+        AccessTokenClaims.Permitted.ShouldContain(AccessTokenClaims.ImpersonatedBy);
+    }
+
+    [Fact]
+    public void ThePermittedSetIsClosedAndNotMerelyLong() {
+        // ⚠ THE ONE THE TWO ADDITIONS COULD HAVE BROKEN. Widening a closed set twice is how it stops
+        // being one: the third addition is "we already added two". The count is pinned so a
+        // fifteenth claim is a failure here rather than a diff nobody read, and EnsurePermitted is
+        // the mechanism rather than the intention — a claim outside the set is refused whether or not
+        // anybody anticipated its spelling.
+        AccessTokenClaims.Permitted.Count.ShouldBe(14);
+
+        foreach (var unanticipated in new[] {
+                     "act",                 // the nested RFC 8693 form we deliberately do not also carry
+                     "sub_type",            // a near-miss spelling of sub_typ
+                     "idtyp",               // Entra's name for the same idea
+                     "impersonated_by",     // the header's name, which is not a claim name
+                     "tenant_id",           // tid spelled out
+                     "email", "name", "preferred_username", "upn"
+                 }) {
+            AccessTokenClaims.Permitted.ShouldNotContain(unanticipated);
+
+            AccessTokenClaims.EnsurePermitted([unanticipated]).IsFailure.ShouldBeTrue(
+                $"'{unanticipated}' is not in the closed set, so a token carrying it must be refused "
+                + "rather than stripped — a strip only removes the spellings somebody thought of."
+            );
+        }
+
+        // And the whole permitted set passes, so the check is a closure and not a blanket refusal.
+        AccessTokenClaims.EnsurePermitted(AccessTokenClaims.Permitted).IsSuccess.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void ATokenCarryingAForbiddenClaimIsRejectedAndTheMessageSaysWhy() {
+        foreach (var forbidden in AccessTokenClaims.ForbiddenClaims) {
+            var refused = AccessTokenClaims.EnsurePermitted(["sub", "tid", forbidden]);
+
+            refused.IsFailure.ShouldBeTrue($"'{forbidden}' must never survive into a token.");
+            refused.Error!.Message.ShouldContain("ReBAC");
+        }
+
+        // ⚠ Case does not rescue it. `Roles` is the same disclosure as `roles`, and Permitted is
+        // matched ordinally, so an oddly-cased spelling falls out of the allow-list even before the
+        // forbidden list is consulted.
+        AccessTokenClaims.EnsurePermitted(["Roles"]).IsFailure.ShouldBeTrue();
+        AccessTokenClaims.EnsurePermitted(["SUB"]).IsFailure.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void ThereIsNoTypeInsideSubAlone() {
+        // ⚠ THE ASSERTION THAT THE PREFIX CONVENTION IS NOT SECRETLY BACK. `sub` is a GUID in N form
+        // and nothing else — there is no separator in it, so no amount of parsing recovers a subject
+        // type from it. If somebody "helpfully" starts minting `sub` as "user:{guid}", this fails,
+        // because the value stops being a GUID.
+        var subject = Guid.Parse("2b4a1c66-2e70-4a9d-9d0a-1f7ec1f1a4b3").ToString("N");
+
+        subject.ShouldNotContain(":");
+        subject.ShouldNotContain("/");
+        Guid.TryParseExact(subject, "N", out _).ShouldBeTrue();
+
+        // The type is a different claim, and the two are different names — so a consumer cannot read
+        // one and believe it has both.
+        AccessTokenClaims.SubjectType.ShouldNotBe(AccessTokenClaims.Subject);
+        AccessTokenClaims.SubjectType.StartsWith(AccessTokenClaims.Subject, StringComparison.Ordinal)
+            .ShouldBeTrue("the name should read as 'the type of sub', which is the point of it");
+    }
+
+    [Fact]
+    public void SubjectTypesMatchTheReBacSpellings() {
+        // ⚠ These are ReBAC object types and the tuple store is case-sensitive, so a token carrying
+        // `serviceprincipal` names a subject no tuple mentions — every Check denies, and it presents
+        // as a permissions bug rather than as a spelling bug.
+        SubjectTypes.All.ShouldBe(["user", "servicePrincipal", "managedIdentity"], ignoreOrder: true);
+
+        SubjectTypes.Ensure("user").IsSuccess.ShouldBeTrue();
+        SubjectTypes.Ensure("servicePrincipal").IsSuccess.ShouldBeTrue();
+        SubjectTypes.Ensure("managedIdentity").IsSuccess.ShouldBeTrue();
+
+        SubjectTypes.Ensure("serviceprincipal").IsFailure.ShouldBeTrue("ordinal, not case-insensitive");
+        SubjectTypes.Ensure("User").IsFailure.ShouldBeTrue();
+        SubjectTypes.Ensure(null).IsFailure.ShouldBeTrue();
+        SubjectTypes.Ensure("").IsFailure.ShouldBeTrue();
+
+        // ⚠ A group is a ReBAC object and never a token subject: nothing signs in as a group, and a
+        // token whose subject were one would be a bearer credential for everybody in it.
+        SubjectTypes.All.ShouldNotContain("group");
+    }
+
+    [Fact]
+    public void ManagedIdentityIsAThirdSubjectTypeAlongsideTheOtherTwo() {
+        // docs/plan/11 § Managed identity, step 6: "ReBAC grants are made to `managedIdentity:{id}`
+        // like any other subject." That sentence only type-checks if the subject type is a first
+        // class value rather than a special case at the exchange.
+        SubjectTypes.ManagedIdentity.ShouldBe("managedIdentity");
+        SubjectTypes.All.Count.ShouldBe(3);
     }
 
     [Fact]

@@ -69,9 +69,21 @@ sealed class OneTypeRegistry : IProviderRegistry {
 /// </remarks>
 sealed class RecordingResourceManager : IResourceManager {
     readonly ConcurrentQueue<string> paths = new();
+    readonly ConcurrentQueue<CallerContext> callers = new();
 
     /// <summary>Every resource path this manager was asked about, in order.</summary>
     public IReadOnlyCollection<string> Paths => paths;
+
+    /// <summary>
+    ///     The caller the gateway built for each of those requests, in order.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>This is where the impersonation assertion has to be made.</b>
+    ///     <c>CallerContext.ImpersonatedBy</c> is what reaches the audit log, so "a header cannot
+    ///     inject an operator" is only proven by looking at what came out of stage 3 — asserting on
+    ///     the response would pass for a gateway that faithfully copied the header through.
+    /// </remarks>
+    public IReadOnlyCollection<CallerContext> Callers => callers;
 
     /// <summary>What <see cref="ReadAsync" /> answers. Default: a resource that exists.</summary>
     public Func<WriteRequest, Result<ResourceSnapshot>> OnRead { get; set; } =
@@ -105,6 +117,7 @@ sealed class RecordingResourceManager : IResourceManager {
         where T : notnull {
         ArgumentNullException.ThrowIfNull(request);
         paths.Enqueue(request.Path);
+        callers.Enqueue(request.Caller);
         return Task.FromResult(answer(request));
     }
 }
