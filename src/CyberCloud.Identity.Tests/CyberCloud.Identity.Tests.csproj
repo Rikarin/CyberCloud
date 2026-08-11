@@ -56,6 +56,15 @@
         <ProjectReference Include="../CyberCloud.Tenancy/CyberCloud.Tenancy.csproj"/>
         <!-- The REAL tuple store and check grain — group membership is tested through the engine. -->
         <ProjectReference Include="../CyberCloud.Authorization/CyberCloud.Authorization.csproj"/>
+        <!--
+          The REAL sending domain, not a fake IMessageSender — OtpDeliveryTests is about the
+          idempotency key reaching a real IMessageGrain, and a double for IMessageSender would assert
+          only that this suite's own stub counts calls. This is the implementation assembly rather
+          than its contracts because the test needs AddCyberCloudCommunication, GrainMessageSender
+          and InMemoryChannelProvider. ⚠ CyberCloud.Identity itself references only
+          CyberCloud.Communication.Contracts; see its .csproj for why the direction matters.
+        -->
+        <ProjectReference Include="../CyberCloud.Communication/CyberCloud.Communication.csproj"/>
     </ItemGroup>
 
 </Project>

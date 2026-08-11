@@ -47,17 +47,61 @@ public enum CredentialKind {
     /// <summary>A single-use printed code. The thing that prevents "I lost my phone".</summary>
     RecoveryCode = 3,
 
-    /// <summary>⚠ Seam only — needs <c>CyberCloud.Communication</c>, which does not exist.</summary>
+    /// <summary>Delivered through <c>CyberCloud.Communication</c> — see <see cref="IOtpDeliverySeam" />.</summary>
     EmailOtp = 4,
 
-    /// <summary>⚠ Seam only. Weakest factor: SIM swap. Never the only factor for an admin.</summary>
+    /// <summary>⚠ Weakest factor: SIM swap. Never the only factor for an admin.</summary>
     SmsOtp = 5,
 
-    /// <summary>⚠ Seam only. M2, and template pre-approval is a business task.</summary>
+    /// <summary>⚠ M2, and template pre-approval is a business task.</summary>
     WhatsAppOtp = 6,
 
     /// <summary>⚠ M2. mTLS for service principals.</summary>
     Certificate = 7
+}
+
+/// <summary>
+///     Why a one-time code is being sent. <see cref="OtpDelivery.Purpose" />.
+/// </summary>
+/// <remarks>
+///     <para>
+///         ⚠ <b>An enum rather than a string, and that is a correctness decision rather than a
+///         tidiness one.</b> This value is part of the idempotency key
+///         <c>CyberCloud.Communication</c> derives a message grain's identity from, and that key is
+///         compared <b>ordinally and without case folding</b> — <c>CommunicationGrainKeys.Message</c>
+///         says so. An open string therefore lets two call sites spell the same purpose differently
+///         and silently stop deduplicating against each other: <c>"signin"</c> and <c>"signIn"</c>
+///         would be two grains, so a retry that reached the second one would send a second SMS. That
+///         is the same one-character class of defect this platform has already shipped once, with
+///         <c>resourcegroup</c> against <c>resourceGroup</c>. A closed set makes the disagreement a
+///         compile error.
+///     </para>
+///     <para>
+///         ⚠ <b>The purpose is part of the key precisely so that two <i>different</i> reasons do not
+///         collapse.</b> A sign-in code and a password-reset code issued to the same user seconds
+///         apart are two messages, and a key that omitted the purpose would make the second one look
+///         like a retry of the first.
+///     </para>
+/// </remarks>
+public enum OtpPurpose {
+    /// <summary>
+    ///     The zero value a default-constructed <see cref="OtpDelivery" /> carries. ⚠ Never a
+    ///     purpose, and refused rather than defaulted: a delivery that did not say why it was being
+    ///     sent would share one key space with every other reason.
+    /// </summary>
+    Unknown = 0,
+
+    /// <summary>A second factor during sign-in.</summary>
+    SignIn = 1,
+
+    /// <summary>Re-proving a factor in front of a sensitive operation — docs/plan/11 § Step-up.</summary>
+    StepUp = 2,
+
+    /// <summary>Proving control of an address or a number while enrolling it as a factor.</summary>
+    Enrolment = 3,
+
+    /// <summary>The password-reset code. docs/plan/11 § Credentials.</summary>
+    PasswordReset = 4
 }
 
 /// <summary>

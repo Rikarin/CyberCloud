@@ -1,3 +1,4 @@
+using CyberCloud.Communication.Contracts;
 using CyberCloud.Core.Time;
 using CyberCloud.Identity.Credentials;
 using CyberCloud.Identity.ManagedIdentity;
@@ -77,6 +78,64 @@ public static class IdentitySiloBuilderExtensions {
         builder.Services.TryAddSingleton<ITokenExchange, GrainTokenExchange>();
         builder.Services.TryAddSingleton<SignInOptions>(_ => SignInOptions.Default);
         builder.Services.TryAddSingleton<SignInService>();
+
+        return builder;
+    }
+
+    /// <summary>
+    ///     Points <see cref="IOtpDeliverySeam" /> at <c>CyberCloud.Communication</c>.
+    /// </summary>
+    /// <param name="builder">The silo being composed.</param>
+    /// <param name="tenantId">The tenant that owns the communication service.</param>
+    /// <param name="serviceId">
+    ///     The <c>CyberCloud.Communication/services/{name}</c> resource the platform's own codes are
+    ///     sent through — see <see cref="OtpDeliveryRoute" /> for why there is one of these rather
+    ///     than one per tenant.
+    /// </param>
+    /// <param name="templateName">
+    ///     A template within that service, or empty for a free-text body. ⚠ WhatsApp requires one;
+    ///     <c>IMessageGrain</c> is what refuses a free-text send on that channel, not this call.
+    /// </param>
+    /// <returns>The same builder, for chaining.</returns>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b><see cref="ServiceCollectionDescriptorExtensions.Replace" /> rather than
+    ///         <c>TryAdd</c> or <c>Add</c>, so this call is order-independent.</b>
+    ///         <see cref="AddCyberCloudIdentity" /> registers <see cref="UnavailableOtpDelivery" />
+    ///         with <c>TryAdd</c>: called before it, a plain <c>Add</c> here would be silently
+    ///         overridden — no, worse, it would <i>win</i> or lose depending on which order a host
+    ///         happened to write two lines in, and the losing arrangement is the one where every OTP
+    ///         fails with a message about missing wiring that is <i>present</i>.
+    ///         <c>Replace</c> removes whatever is there and installs this, whichever way round the
+    ///         host writes it.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The host still owes <c>AddCyberCloudCommunication()</c>.</b> This registers the
+    ///         adapter, which resolves <c>IMessageSender</c>; that call is what provides one. A silo
+    ///         with this and without it fails at the first <i>activation</i> that needs the seam,
+    ///         with a DI resolution error naming <c>IMessageSender</c> — the same shape of failure
+    ///         this class's other remarks describe for the grains.
+    ///     </para>
+    /// </remarks>
+    public static ISiloBuilder AddCommunicationOtpDelivery(
+        this ISiloBuilder builder,
+        Guid tenantId,
+        Guid serviceId,
+        string templateName = ""
+    ) {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        var route = new OtpDeliveryRoute {
+            TenantId = tenantId,
+            ServiceId = serviceId,
+            TemplateName = templateName
+        };
+
+        builder.Services.Replace(
+            ServiceDescriptor.Singleton<IOtpDeliverySeam>(
+                services => new CommunicationOtpDelivery(services.GetRequiredService<IMessageSender>(), route)
+            )
+        );
 
         return builder;
     }

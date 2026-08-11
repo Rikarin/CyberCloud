@@ -1,3 +1,4 @@
+using CyberCloud.Communication;
 using CyberCloud.ServiceDefaults;
 using CyberCloud.ServiceDefaults.Storage;
 using CyberCloud.Silo.Host;
@@ -39,6 +40,28 @@ if (args.Contains(applySchemaFlag, StringComparer.Ordinal)) {
 
 var builder = OrleansApplication.CreateSilo(
     args,
+    // ── The sending domain — docs/plan/17, docs/plan/04 § Silo composition ─────────────────────
+    //
+    // ⚠ THIS ADDS SEVEN GRAIN TYPES TO THE SILO AND NO NEW START-UP REQUIREMENT, and the second half
+    // is the part worth checking rather than assuming. AddCyberCloudCommunication registers
+    // services only — the clock, the five refusing channel providers, the provider registry, the
+    // client-side sender and the webhook router. It configures no reminder service (nothing in the
+    // module is IRemindable), no stream provider, and no storage: the grains bind
+    // StorageTiers.Hot and StorageTiers.Durable, which are exactly the two AddCyberCloudTenancy
+    // already wires below. That is why this can sit beside the tenancy call rather than needing the
+    // "reminders are the host's to choose" arrangement AddCyberCloudResourceManager's remarks
+    // describe.
+    //
+    // ⚠ configureCluster runs AFTER configureStorage inside CreateSilo, which is the order this
+    // needs: the tiers must exist before a grain that binds one is activated. Nothing here resolves
+    // a tier at wiring time, so the ordering is belt to the braces rather than load-bearing.
+    //
+    // ⚠ WITH NO CARRIER CONFIGURED, EVERY SEND FAILS WITH A SENTENCE SAYING SO. That is the
+    // designed state of a silo with no Twilio client in it, not a defect — see
+    // CommunicationSiloBuilderExtensions on why the refusing seams are registered rather than
+    // omitted. A channel with no provider at all would fail with a wiring error instead, which is
+    // the message an operator cannot act on.
+    configureCluster: silo => silo.AddCyberCloudCommunication(),
     configureStorage: (silo, storage) => silo.AddCyberCloudTenancy(storage)
 );
 
