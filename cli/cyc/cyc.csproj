@@ -49,10 +49,33 @@
         <EnableAotAnalyzer>true</EnableAotAnalyzer>
 
         <!--
-          Publish-time settings, kept here rather than on the command line so that a
-          `dotnet publish` for a RID produces the documented artifact without anyone remembering
-          four switches. `dotnet build` ignores all of them.
+          ⚠ THESE LIVE HERE AND NOT ON THE COMMAND LINE, AND THAT IS FORCED RATHER THAN TIDY.
+
+          `dotnet publish … -p:PublishAot=true` sets a GLOBAL MSBuild property, and a global property
+          flows to every project in the graph — including CyberCloud.Analyzers, which every shipping
+          project must reference (build/Build.Architecture.cs § AnalyzerCoverageGate) and which is
+          the tree's one netstandard2.0 project (docs/plan/02 § Platform baseline's documented
+          exception, because a Roslyn analyzer is loaded by the compiler). Handed PublishAot=true it
+          fails before anything is compiled:
+
+            error NETSDK1207: Ahead-of-time compilation is not supported for the target framework.
+              [src/CyberCloud.Analyzers/CyberCloud.Analyzers.csproj]
+
+          A project cannot override a global property, and `GlobalPropertiesToRemove` on the
+          ProjectReference does not help: it is honoured by the build and NOT by NuGet's restore, so
+          the failure happens during restore either way. Verified both, and verified that
+          src/CyberCloud.Sdk fails identically — so this is a property of the repository rather than
+          of `cyc`.
+
+          As a project property it reaches only this project, restore pulls the ILCompiler package
+          for this project only, and the analyzer is left alone. The publish command is therefore:
+
+            dotnet publish cli/cyc/cyc.csproj -r <rid>
+
+          ⚠ The RuntimeIdentifier condition matters. PublishAot with no RID is an error, and a plain
+          `dotnet publish` of the solution is something CI does.
         -->
+        <PublishAot Condition="'$(RuntimeIdentifier)' != ''">true</PublishAot>
         <PublishTrimmed>true</PublishTrimmed>
         <TrimMode>full</TrimMode>
         <InvariantTimezone>true</InvariantTimezone>
@@ -80,19 +103,39 @@
         <PackageReference Include="System.CommandLine"/>
     </ItemGroup>
 
-    <ItemGroup Label="CyberCloud.Analyzers — build/Build.Architecture.cs § AnalyzerCoverageGate">
+    <ItemGroup Label="Project references">
+        <!--
+          ⚠ GlobalPropertiesToRemove IS WHAT MAKES THE PUBLISH COMMAND WORK, and it took a failed
+          publish to find out.
+
+          `dotnet publish -p:PublishAot=true …` sets a GLOBAL MSBuild property, and a global property
+          flows to every project in the graph. CyberCloud.Analyzers is netstandard2.0 — docs/plan/02
+          § Platform baseline's one documented exception, because a Roslyn analyzer is loaded by the
+          compiler — and a netstandard2.0 project handed PublishAot=true fails restore outright:
+
+            error NETSDK1207: Ahead-of-time compilation is not supported for the target framework.
+              [src/CyberCloud.Analyzers/CyberCloud.Analyzers.csproj]
+
+          It reaches the analyzer by two paths — this reference and the SDK's — so both are stripped.
+          Nothing is lost: PublishAot, PublishTrimmed and TrimMode are properties of the published
+          ROOT. The trimmer walks the whole closure from here regardless, and CyberCloud.Sdk carries
+          its own IsAotCompatible so its analysers run on its own build.
+
+          ⚠ Reproduced on src/CyberCloud.Sdk with the same command, so this is not specific to `cyc`:
+          any project in this repository that is AOT-published from the command line hits it.
+        -->
         <ProjectReference Include="../../src/CyberCloud.Analyzers/CyberCloud.Analyzers.csproj"
                           OutputItemType="Analyzer"
-                          ReferenceOutputAssembly="false"/>
-    </ItemGroup>
+                          ReferenceOutputAssembly="false"
+                          GlobalPropertiesToRemove="PublishAot;PublishTrimmed;TrimMode"/>
 
-    <ItemGroup Label="The SDK — docs/plan/21 § Generation, one pipeline rather than two">
         <!--
           ⚠ The CLI owns no HTTP and no OAuth. Every request `cyc` makes, including `cyc rest`, goes
           through CyberCloudPipeline, so it is authenticated, retried and correlated by the same code
           the SDK's own callers use. Raw means untyped, not unauthenticated.
         -->
-        <ProjectReference Include="../../src/CyberCloud.Sdk/CyberCloud.Sdk.csproj"/>
+        <ProjectReference Include="../../src/CyberCloud.Sdk/CyberCloud.Sdk.csproj"
+                          GlobalPropertiesToRemove="PublishAot;PublishTrimmed;TrimMode"/>
     </ItemGroup>
 
     <ItemGroup Label="The generated verb tree — ADR-012's second surface">

@@ -282,12 +282,28 @@ sealed class Payload {
     /// <param name="indented">Whether to pretty-print. Scripts do not care; humans do.</param>
     public string ToJson(bool indented) {
         using var buffer = new MemoryStream();
-        using (var writer = new Utf8JsonWriter(buffer, new JsonWriterOptions { Indented = indented })) {
+        using (var writer = new Utf8JsonWriter(buffer, new JsonWriterOptions { Indented = indented, Encoder = Encoder })) {
             WriteTo(writer);
         }
 
         return Encoding.UTF8.GetString(buffer.ToArray());
     }
+
+    /// <summary>
+    ///     The JSON escaper. Relaxed, deliberately.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>"Unsafe" in this encoder's name means "unsafe to paste into an HTML attribute", and
+    ///     nothing here is going into one.</b> The strict default escapes every non-ASCII character
+    ///     and every quote, so a message quoting a resource name arrives as
+    ///     <c>'w1' is not …</c> and this codebase's own <c>§</c> becomes <c>§</c> —
+    ///     correct JSON that a person reading a terminal cannot read and that <c>grep</c> cannot
+    ///     match. The output of this CLI is read by a shell, a pager and <c>jq</c>; it is never
+    ///     interpolated into markup, and the platform's own error messages contain the numbers a user
+    ///     needs to see (docs/plan/08 § Errors).
+    /// </remarks>
+    static readonly System.Text.Encodings.Web.JavaScriptEncoder Encoder =
+        System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping;
 
     /// <summary>
     ///     The value as one cell of a table or a TSV row: a string as itself, a scalar as its literal
