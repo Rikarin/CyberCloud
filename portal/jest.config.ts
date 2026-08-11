@@ -12,8 +12,16 @@ import type { Config } from 'jest';
 const config: Config = {
   preset: 'jest-preset-angular',
   testEnvironment: 'jsdom',
+  // ⚠ One setup file for both apps. `apps/identity/src/test-setup.ts` is byte-for-byte equivalent
+  // — install `$localize`, then a zoneless test environment — and exists so the identity app is
+  // self-contained if the two ever need to diverge. Listing both here would install the localize
+  // runtime twice, which throws.
   setupFilesAfterEnv: ['<rootDir>/apps/portal/src/test-setup.ts'],
-  testMatch: ['<rootDir>/apps/portal/src/**/*.spec.ts', '<rootDir>/libs/**/*.spec.ts'],
+  testMatch: [
+    '<rootDir>/apps/portal/src/**/*.spec.ts',
+    '<rootDir>/apps/identity/src/**/*.spec.ts',
+    '<rootDir>/libs/**/*.spec.ts',
+  ],
   testPathIgnorePatterns: ['/node_modules/', '/dist/'],
   moduleNameMapper: {
     '^@cybercloud/shell$': '<rootDir>/libs/shell/src/index.ts',
