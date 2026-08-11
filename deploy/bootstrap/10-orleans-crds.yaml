@@ -1,0 +1,106 @@
+# The two custom resource definitions Orleans membership writes into — docs/plan/02 § ADR-004,
+# "membership is Kubernetes; there is no clustering database".
+#
+# ⚠ NOTHING CREATES THESE AT RUNTIME, AND THAT IS THE WHOLE REASON THIS FILE EXISTS.
+#
+# Verified against `Orleans.Clustering.Kubernetes` 10.0.1 (the version pinned in
+# Directory.Packages.props) by reading the shipped assembly: the only Kubernetes calls it makes are
+# `CreateNamespacedCustomObjectAsync`, `GetNamespacedCustomObjectAsync`,
+# `ListNamespacedCustomObjectAsync`, `ReplaceNamespacedCustomObjectAsync` and
+# `DeleteNamespacedCustomObjectAsync`. There is no `apiextensions.k8s.io` call anywhere in it. So a
+# silo started against a cluster without these definitions does not create them and does not degrade
+# — it fails, and the failure names a custom resource rather than a missing CRD.
+#
+# ⚠ CRDs ARE CLUSTER-SCOPED. Applying this file needs cluster-level rights, which the operator has
+# and no Cyber Cloud ServiceAccount does. That asymmetry is deliberate: `20-rbac.yaml` grants the silo
+# nothing on `apiextensions.k8s.io`, so a compromised silo cannot rewrite the schema of its own
+# membership store. The *instances* are namespaced (`scope: Namespaced` below), which is what keeps
+# the silo's grant confined to its own namespace.
+#
+# ⚠ NOT SHIPPED BY `charts/platform` EITHER. Helm's `crds/` directory is installed once and *never*
+# upgraded or deleted, so a chart-owned CRD is a CRD nobody can change. Bootstrap owns them, and
+# `deploy/README.md` § What bootstrap owns says so as an interface.
+#
+# PROVENANCE: copied verbatim from the NuGet package `Orleans.Clustering.Kubernetes` 10.0.1,
+# `lib/Definitions/ClusterVersionCRD.yaml` and `lib/Definitions/SiloEntryCRD.yaml`. Only comments are
+# added. If the package version in Directory.Packages.props moves, re-copy both files and diff — the
+# `orleans.dot.net/v1` schema is the package's, not ours.
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: clusterversions.orleans.dot.net
+spec:
+  group: orleans.dot.net
+  versions:
+    - name: v1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            clusterId:
+              type: string
+            clusterVersion:
+              type: integer
+  scope: Namespaced
+  names:
+    plural: clusterversions
+    singular: clusterversion
+    kind: OrleansClusterVersion
+    shortNames:
+      - ocv
+      - oc
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: silos.orleans.dot.net
+spec:
+  group: orleans.dot.net
+  versions:
+    - name: v1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          required: [address, port, generation, hostname, status, siloName]
+          type: object
+          properties:
+            clusterId:
+              type: string
+            address:
+              type: string
+            port:
+              type: integer
+            generation:
+              type: integer
+            hostname:
+              type: string
+            status:
+              type: string
+            proxyPort:
+              type: integer
+            siloName:
+              type: string
+            suspectingSilos:
+              type: array
+              items:
+                type: string
+            suspectingTimes:
+              type: array
+              items:
+                type: string
+            startTime:
+              type: string
+            iAmAliveTime:
+              type: string
+  scope: Namespaced
+  names:
+    plural: silos
+    singular: silo
+    kind: OrleansSilo
+    shortNames:
+      - oso
+      - os

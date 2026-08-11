@@ -1,0 +1,147 @@
+# The identities the platform runs as, and exactly what each one may do.
+#
+# docs/plan/02 § ADR-004 puts the cost of Kubernetes membership in one sentence — "the silo needs RBAC
+# to read/write its membership CRs, and `UseKubernetesHosting()` so Orleans learns its pod identity"
+# — and this file is that sentence, itemised. Every verb below was read off the shipped assemblies
+# rather than copied from a sample; the evidence is on each rule.
+#
+# ⚠ THREE SERVICE ACCOUNTS, NOT ONE, AND THE THIRD HAS NO PERMISSIONS AT ALL. The durable-schema job
+# talks to PostgreSQL and to nothing else, so it runs with a token that is not even mounted. A single
+# shared ServiceAccount would hand the job the silo's membership rights for no reason.
+#
+# ⚠ BOOTSTRAP OWNS THESE OBJECTS. `charts/platform` references them by name and must not template
+# them — see `deploy/README.md` § What `charts/platform` must honour. The reason is ordering: the
+# `pre-install` schema hook runs before the release's own manifests, so a ServiceAccount created by
+# the release does not exist when the hook pod is scheduled.
+#
+# ⚠ NAMESPACED Role, NOT ClusterRole. Orleans membership resources are `scope: Namespaced`, and
+# `Orleans.Clustering.Kubernetes` reads its namespace from
+# `/var/run/secrets/kubernetes.io/serviceaccount/namespace` — it cannot address another one. A
+# ClusterRole here would grant reach the code has no way to use.
+#
+# ⚠ Every object here takes its namespace from `kubectl -n`, EXCEPT the two RoleBinding subjects.
+# RBAC validation requires `subjects[].namespace` on a `kind: ServiceAccount` subject and rejects the
+# object without it — `subjects[0].namespace: Required value` — so those two lines are the only place
+# the namespace is repeated. `bootstrap.sh --namespace` rewrites exactly those lines and the
+# `Namespace` object's name; nothing else in this directory contains the namespace.
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: cybercloud-silo
+  labels:
+    app.kubernetes.io/part-of: cybercloud
+    app.kubernetes.io/component: silo
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: cybercloud-gateway
+  labels:
+    app.kubernetes.io/part-of: cybercloud
+    app.kubernetes.io/component: gateway
+---
+# The durable-schema job's identity. It exists so the job is not `default`, and it is granted nothing:
+# see `automountServiceAccountToken: false` in `30-durable-schema-job.yaml`.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: cybercloud-durable-schema
+  labels:
+    app.kubernetes.io/part-of: cybercloud
+    app.kubernetes.io/component: durable-schema
+automountServiceAccountToken: false
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: cybercloud-silo
+  labels:
+    app.kubernetes.io/part-of: cybercloud
+rules:
+  # ── The membership store — `UseKubeMembership()` ────────────────────────────────────────────────
+  #
+  # `Orleans.Clustering.Kubernetes` 10.0.1 makes exactly five calls, and each maps to one verb:
+  #
+  #   CreateNamespacedCustomObjectAsync  → create   (a silo announces itself; the cluster version row)
+  #   GetNamespacedCustomObjectAsync     → get      (read one silo entry, read the cluster version)
+  #   ListNamespacedCustomObjectAsync    → list     (read the whole membership table)
+  #   ReplaceNamespacedCustomObjectAsync → update   (the I-am-alive timer, status and suspicion writes)
+  #   DeleteNamespacedCustomObjectAsync  → delete   (CleanupDefunctSiloEntries, DeleteMembershipTableEntries)
+  #
+  # ⚠ DELIBERATELY ABSENT: `watch` and `patch`. The provider polls with `list`; it never opens a watch,
+  # and it never patches — it replaces. `deletecollection` is absent for the same reason: the cleanup
+  # path deletes entries one at a time.
+  - apiGroups: ["orleans.dot.net"]
+    resources: ["silos", "clusterversions"]
+    verbs: ["create", "get", "list", "update", "delete"]
+  # ── Pod identity — `UseKubernetesHosting()` ─────────────────────────────────────────────────────
+  #
+  # Verbatim from the example role that `Microsoft.Orleans.Hosting.Kubernetes` prints when it is
+  # denied ("Unable to monitor pods due to insufficient permissions"), so the grant and the package's
+  # own expectation cannot drift:
+  #
+  #   get, list   → read this pod, and enumerate the silo pods
+  #   watch       → the pod monitor; a deleted pod is a silo Orleans declares dead immediately rather
+  #                 than after the membership timeout, which is the whole value of ADR-004's last line
+  #   patch       → AddClusterOptionsToPodLabels writes `orleans/clusterId` and `orleans/serviceId`
+  #                 onto its own pod, and that is what the label selector then matches on
+  #
+  # ⚠ `delete` IS NOT GRANTED, AND THAT IS A CHOICE WITH A SWITCH ATTACHED.
+  # `KubernetesHostingOptions.DeleteDefunctSiloPods` makes the agent delete the pod of a silo it has
+  # declared dead. It is off by default and it must stay off, because a Role without `delete` turns a
+  # config flag flipped in a values file into a logged error ("Error deleting pod …") rather than into
+  # a silo that can delete its neighbours' pods. Turning it on means adding `delete` here, on purpose,
+  # in the same change.
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: cybercloud-gateway
+  labels:
+    app.kubernetes.io/part-of: cybercloud
+rules:
+  # The read half of ADR-004: `UseKubeGatewayListProvider()` builds the gateway list from the same
+  # silo custom resources, so a client needs no clustering database either. Read-only — a client never
+  # writes a membership entry.
+  #
+  # ⚠ `clusterversions` is included on less evidence than the rest of this file. The gateway list
+  # provider's list call over `silos` is certain; whether it also reads the cluster version row was not
+  # established from the assembly. `get`/`list` on a two-field row is not a privilege worth being
+  # wrong about in the other direction — a denied read here presents as a gateway that finds no silos.
+  - apiGroups: ["orleans.dot.net"]
+    resources: ["silos", "clusterversions"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: cybercloud-silo
+  labels:
+    app.kubernetes.io/part-of: cybercloud
+subjects:
+  - kind: ServiceAccount
+    name: cybercloud-silo
+    namespace: cybercloud
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: cybercloud-silo
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: cybercloud-gateway
+  labels:
+    app.kubernetes.io/part-of: cybercloud
+subjects:
+  - kind: ServiceAccount
+    name: cybercloud-gateway
+    namespace: cybercloud
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: cybercloud-gateway
