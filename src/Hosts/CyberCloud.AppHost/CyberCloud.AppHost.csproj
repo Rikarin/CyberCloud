@@ -55,4 +55,33 @@
         <ProjectReference Include="../CyberCloud.Silo.Host/CyberCloud.Silo.Host.csproj"/>
     </ItemGroup>
 
+    <ItemGroup Label="CyberCloud.Analyzers — docs/plan/00 § Coding standards, § Non-negotiables">
+        <!--
+          ⚠ Deliberately in its own ItemGroup, away from "The processes Aspire launches" above.
+          Aspire.AppHost.Sdk turns a ProjectReference into a `Projects.<Name>` handle for
+          AddProject<T>(); this one is not a process and must not be read as one. OutputItemType=
+          "Analyzer" with ReferenceOutputAssembly="false" is what keeps it a rule list rather than a
+          reference.
+
+          ⚠ IsAspireProjectResource="false" is REQUIRED and is not optional tidiness. Without it,
+          Aspire.Hosting.AppHost.targets treats the reference as a resource to launch and the build
+          fails with
+
+            error ASPIRE004: '../../CyberCloud.Analyzers/CyberCloud.Analyzers.csproj' is referenced by
+              an Aspire Host project, but it is not an executable. Did you mean to set
+              IsAspireProjectResource="false"?
+
+          which is exactly right — an analyzer is netstandard2.0 and launches nothing. OutputItemType
+          and ReferenceOutputAssembly are compiler-facing and Aspire's target does not read either.
+
+          CC1001 and CC1002 are the live rules here — an AppHost is orchestration code, which is where
+          a blocking wait looks harmless. Enforced across the tree by the Analyzer coverage gate in
+          build/Build.Architecture.cs.
+        -->
+        <ProjectReference Include="../../CyberCloud.Analyzers/CyberCloud.Analyzers.csproj"
+                          OutputItemType="Analyzer"
+                          ReferenceOutputAssembly="false"
+                          IsAspireProjectResource="false"/>
+    </ItemGroup>
+
 </Project>

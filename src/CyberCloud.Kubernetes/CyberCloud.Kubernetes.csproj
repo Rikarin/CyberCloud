@@ -45,4 +45,21 @@
         <ProjectReference Include="../CyberCloud.Kubernetes.Contracts/CyberCloud.Kubernetes.Contracts.csproj"/>
     </ItemGroup>
 
+    <ItemGroup Label="CyberCloud.Analyzers — docs/plan/00 § Coding standards, § Non-negotiables">
+        <!--
+          OutputItemType="Analyzer" with ReferenceOutputAssembly="false", so the analyzer joins the
+          compiler's rule list without reaching this assembly's metadata — it does not affect rule 3
+          of docs/plan/03 § Assembly graph rules either way.
+
+          ⚠ This assembly is how the platform authenticates to a tenant's cluster, which makes CC1005
+          (no secret-shaped [Id] member outside CyberCloud.Vault) the rule with the most to say here.
+          docs/plan/23 § The architecture gates calls that row analyzer-enforced; the Analyzer
+          coverage gate in build/Build.Architecture.cs is what makes it true of every assembly rather
+          than of whoever remembered to add this line.
+        -->
+        <ProjectReference Include="../CyberCloud.Analyzers/CyberCloud.Analyzers.csproj"
+                          OutputItemType="Analyzer"
+                          ReferenceOutputAssembly="false"/>
+    </ItemGroup>
+
 </Project>

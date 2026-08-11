@@ -1,5 +1,6 @@
 using CyberCloud.Core;
 using CyberCloud.Core.Resources;
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 
 namespace CyberCloud.Authorization.Contracts;
@@ -339,6 +340,19 @@ public sealed record Consistency {
 
     /// <summary>The token, for <see cref="ConsistencyMode.AtLeastAsFresh" />.</summary>
     [Id(1)]
+    // ⚠ CC1005 matches on the NAME, and this member is a Zanzibar zookie, not a credential. A
+    // ConsistencyToken is `{tenantId:N}.{version}` — a public monotonic version handed back by every
+    // write and passed to the next check (docs/plan/07 § Consistency). Holding one confers nothing.
+    // Suppressed on the member rather than with NoWarn on the assembly: CyberCloud.Authorization
+    // .Contracts is the wire surface of the permission system and CC1005 must stay live over the
+    // rest of it. Not a #pragma either — docs/plan/00 § Non-negotiables bans those without a linked
+    // issue, and there is no issue to link, because this is not a defect to be fixed later.
+    [SuppressMessage(
+        "CyberCloud.Security",
+        "CC1005:A secret must not be a serialized member of grain state",
+        Justification = "A ConsistencyToken is Zanzibar's zookie — a public {tenantId}.{version} "
+            + "pair, not a credential. docs/plan/07 § Consistency."
+    )]
     public ConsistencyToken? Token { get; init; }
 
     /// <summary>The default — any cached result. docs/plan/07 § Consistency, row 1.</summary>
@@ -373,6 +387,13 @@ public sealed record CheckResult {
 
     /// <summary>The tenant relation version this answer reflects.</summary>
     [Id(2)]
+    // See the note on Consistency.Token: a zookie is a version, not a credential.
+    [SuppressMessage(
+        "CyberCloud.Security",
+        "CC1005:A secret must not be a serialized member of grain state",
+        Justification = "A ConsistencyToken is Zanzibar's zookie — a public {tenantId}.{version} "
+            + "pair, not a credential. docs/plan/07 § Consistency."
+    )]
     public ConsistencyToken Token { get; init; } = new();
 
     /// <summary>Whether the answer came from the hot-tier check cache rather than a walk.</summary>

@@ -22,6 +22,16 @@ namespace CyberCloud.Silo.Host.Hello;
 ///         within the tenant, which is exactly what <c>Orleans.Multitenant</c> qualifies.
 ///     </para>
 /// </remarks>
+// ⚠ [DurableStateRationale], not a line in durable-grains.txt, and the distinction is the point of
+// both. That file is reviewed like a schema migration (docs/plan/05 § Choosing a tier) and every
+// entry on it is tenant data whose loss tolerance is zero. This grain's durable binding is real —
+// it has to be, or it would prove nothing — but it is a bring-up fixture, and putting it on the
+// list would teach the next reviewer that the list contains things they can skim past.
+[DurableStateRationale(
+    "Phase-0 exit criterion (docs/plan/24 § Phase 0): a grain that writes to both tiers in one call "
+    + "is how the storage wiring is proved end to end. Holds no tenant data and ships only in the "
+    + "Silo host's bring-up path, so it is not schema and does not belong on the reviewed list."
+)]
 public sealed class HelloGrain(
     [PersistentState("hello-hot", StorageTiers.Hot)] IPersistentState<HelloState> hot,
     [PersistentState("hello-durable", StorageTiers.Durable)] IPersistentState<HelloState> durable,

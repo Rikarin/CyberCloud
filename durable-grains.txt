@@ -1,0 +1,50 @@
+# durable-grains.txt — the grain types whose state is durable.
+#
+# docs/plan/05 § Choosing a tier: "every grain type in durable-grains.txt must bind its primary
+# state to Durable, and any grain type not on the list that binds to Durable must carry
+# [DurableStateRationale("…")]. The list is reviewed like a schema migration, because that is what
+# it is."
+#
+# Enforced in both directions by the Storage tier gate in build/Build.Architecture.cs. Both
+# directions catch a different mistake:
+#
+#   * a line here whose grain no longer binds Durable is state that silently became rebuildable,
+#     and the loss is discovered by a customer;
+#   * a grain binding Durable that is not here is a schema change nobody reviewed.
+#
+# ⚠ ADDING A LINE IS A REVIEW REQUEST, NOT A BUILD FIX. docs/plan/02 § ADR-003 puts the loss
+# tolerance of this tier at zero: every entry below is PostgreSQL, sharded by tenant, on a
+# synchronous replica, in every backup. If the honest answer is "this can be rebuilt", the tier is
+# Hot and the line does not belong here.
+#
+# One fully-qualified grain type per line, as the CLR names it — namespace, type, and `+` before a
+# nested type. Blank lines and lines starting with `#` are ignored. Test fixtures are out of scope;
+# the gate reads shipping assemblies only.
+
+# ── Tenancy — docs/plan/06 ─────────────────────────────────────────────────────────────────────
+# The tenant, what it has bought, and how its resources are grouped. The directory and the shard
+# map are the two null-tenant platform grains of docs/plan/05 § The shard map: losing either one
+# means no tenant can be located, so "rebuildable" is not a property they have.
+CyberCloud.Tenancy.TenantGrain
+CyberCloud.Tenancy.TenantDirectoryGrain
+CyberCloud.Tenancy.ShardMapGrain
+CyberCloud.Tenancy.SubscriptionGrain
+CyberCloud.Tenancy.ResourceGroupGrain
+CyberCloud.Tenancy.QuotaGrain
+
+# The indexes. Rebuildable in principle by scanning every tenant, which is exactly the operation
+# that is impossible during the incident where you need them.
+CyberCloud.Tenancy.ResourceIndexGrain
+CyberCloud.Tenancy.EmailIndexGrain
+
+# ── Authorization — docs/plan/07 ───────────────────────────────────────────────────────────────
+# The ReBAC tuples and both of their indexes. These are the answer to "who may do what": losing a
+# tuple does not degrade a permission check, it silently reverses it.
+CyberCloud.Authorization.Grains.TupleStoreGrain
+CyberCloud.Authorization.Grains.ObjectRelationsGrain
+CyberCloud.Authorization.Grains.SubjectRelationsGrain
+
+# ── Kubernetes — docs/plan/09 ──────────────────────────────────────────────────────────────────
+# How to reach a tenant's cluster. The informer cursors on this grain are the cheap thing kept so
+# the expensive thing — the informer cache — can be rebuilt; see ClusterConnectionState.
+CyberCloud.Kubernetes.Connections.ClusterConnectionGrain

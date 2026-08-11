@@ -15,8 +15,16 @@ build/
 ├── Build.E2E.cs              # ─┐
 ├── Build.Chaos.cs            #  ├ against a real deployment; nightly and weekly, not per-PR
 ├── Build.Load.cs             # ─┘
-└── Build.Publish.cs          # NuGet, npm, charts, `cyc` binaries per RID
+├── Build.Publish.cs          # NuGet, npm, charts, `cyc` binaries per RID
+└── ArchitectureFacts.cs      # ⚠ not a Build partial — see below
 ```
+
+`ArchitectureFacts.cs` is the one file here that is **not** a partial of `Build`, and the exception is
+deliberate. `Architecture` reads compiled assemblies through `System.Reflection.Metadata`; the record
+and the `ICustomAttributeTypeProvider` that does it are ordinary types with their own lifetime, and
+folding them into the target's partial would mix "what the gates read" with "what the gates decide"
+in one 700-line file. The rule that still holds is the one that matters: **one partial per target,
+named after it** — no target's logic lives anywhere but its own `Build.<Target>.cs`.
 
 Nuke is pinned in [`.config/dotnet-tools.json`](../.config/dotnet-tools.json) (`dotnet nuke`) and
 `Nuke.Common` in [`Directory.Packages.props`](../Directory.Packages.props). Both must move together.

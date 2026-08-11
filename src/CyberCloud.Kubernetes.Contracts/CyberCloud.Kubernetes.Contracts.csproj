@@ -27,4 +27,19 @@
         <ProjectReference Include="../CyberCloud.Core.Contracts/CyberCloud.Core.Contracts.csproj"/>
     </ItemGroup>
 
+    <ItemGroup Label="CyberCloud.Analyzers — docs/plan/00 § Coding standards, § Non-negotiables">
+        <!--
+          OutputItemType="Analyzer" with ReferenceOutputAssembly="false": the analyzer joins the
+          compiler's rule list and nothing from it reaches this assembly's metadata.
+
+          The wire surface of the Kubernetes fabric, so CC1003 ([Alias] on every [GenerateSerializer])
+          and CC1005 (no secret-shaped [Id] member) are the rules that matter — a cluster connection
+          descriptor is exactly the shape that grows a *Token member. Enforced across the tree by the
+          Analyzer coverage gate in build/Build.Architecture.cs.
+        -->
+        <ProjectReference Include="../CyberCloud.Analyzers/CyberCloud.Analyzers.csproj"
+                          OutputItemType="Analyzer"
+                          ReferenceOutputAssembly="false"/>
+    </ItemGroup>
+
 </Project>

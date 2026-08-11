@@ -42,4 +42,21 @@
         <ProjectReference Include="../CyberCloud.Authorization.Contracts/CyberCloud.Authorization.Contracts.csproj"/>
     </ItemGroup>
 
+    <ItemGroup Label="CyberCloud.Analyzers — docs/plan/00 § Coding standards, § Non-negotiables">
+        <!--
+          Not an ordinary reference: OutputItemType="Analyzer" puts the analyzer on the compiler's
+          rule list and ReferenceOutputAssembly="false" keeps it off the compile line, so nothing from
+          it reaches this assembly's metadata.
+
+          ⚠ CC1005 is the one that earns its place here. This assembly holds the ReBAC tuple store,
+          and an [Id]-annotated member named *Token or *Key in that state would be a credential in
+          every backup and every replica. docs/plan/23 § The architecture gates calls that row
+          "analyzer-enforced"; without this line the claim was not true of CyberCloud.Authorization.
+          The Analyzer coverage gate in build/Build.Architecture.cs is what keeps it true.
+        -->
+        <ProjectReference Include="../CyberCloud.Analyzers/CyberCloud.Analyzers.csproj"
+                          OutputItemType="Analyzer"
+                          ReferenceOutputAssembly="false"/>
+    </ItemGroup>
+
 </Project>

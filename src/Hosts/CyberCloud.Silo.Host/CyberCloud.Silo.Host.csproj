@@ -38,4 +38,19 @@
         <PackageReference Include="Volo.Abp.Autofac"/>
     </ItemGroup>
 
+    <ItemGroup Label="CyberCloud.Analyzers — docs/plan/00 § Coding standards, § Non-negotiables">
+        <!--
+          OutputItemType="Analyzer" with ReferenceOutputAssembly="false": the analyzer joins the
+          compiler's rule list and nothing from it reaches this assembly's metadata.
+
+          A host is where CC1001 and CC1002 have the most room to do damage — startup code is
+          synchronous, so `.Result` on a task is both easy to write and the exact shape that deadlocks
+          a silo. HelloGrain also lives here, which puts the grain rules in scope. Enforced across the
+          tree by the Analyzer coverage gate in build/Build.Architecture.cs.
+        -->
+        <ProjectReference Include="../../CyberCloud.Analyzers/CyberCloud.Analyzers.csproj"
+                          OutputItemType="Analyzer"
+                          ReferenceOutputAssembly="false"/>
+    </ItemGroup>
+
 </Project>

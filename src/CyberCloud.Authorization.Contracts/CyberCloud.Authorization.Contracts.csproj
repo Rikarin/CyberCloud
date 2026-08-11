@@ -39,4 +39,19 @@
         <ProjectReference Include="../CyberCloud.Core.Contracts/CyberCloud.Core.Contracts.csproj"/>
     </ItemGroup>
 
+    <ItemGroup Label="CyberCloud.Analyzers — docs/plan/00 § Coding standards, § Non-negotiables">
+        <!--
+          OutputItemType="Analyzer" with ReferenceOutputAssembly="false": the analyzer joins the
+          compiler's rule list and nothing from it reaches this assembly's metadata.
+
+          A .Contracts assembly is where CC1003 ([Alias] on every [GenerateSerializer]) and CC1005
+          (no secret-shaped [Id] member) bite hardest — these types are the wire surface, so a missing
+          alias is a rolling-upgrade break and a leaked member is in every serialization trace.
+          Enforced across the tree by the Analyzer coverage gate in build/Build.Architecture.cs.
+        -->
+        <ProjectReference Include="../CyberCloud.Analyzers/CyberCloud.Analyzers.csproj"
+                          OutputItemType="Analyzer"
+                          ReferenceOutputAssembly="false"/>
+    </ItemGroup>
+
 </Project>
