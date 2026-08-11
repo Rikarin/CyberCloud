@@ -9,17 +9,32 @@ namespace CyberCloud.Core.Tests;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         <b>Provenance.</b> The algorithm below was read out of the shipped assembly
-///         (<c>~/.nuget/packages/orleans.multitenant/4.0.0/lib/net10.0/Orleans.Multitenant.dll</c>,
-///         nuspec repository commit <c>1762e3bedc55ee5ba9a488e4ad5f10a13312f2ed</c>), decompiled
-///         with <c>ilspycmd</c>. It lives in the internal static class
-///         <c>Orleans.Multitenant.Internal.TenantIdExtensions</c> — methods <c>AsTenantId</c>,
-///         <c>GetTenantQualifiedKey</c>, <c>TryGetTenantId</c> and <c>GetKey</c>. It was then
-///         <i>executed</i> against the real package out of tree: a capturing
-///         <c>IGrainFactory</c> behind <c>IGrainFactory.ForTenant(t).GetGrain(type, key)</c> gives
-///         the physical key verbatim, and <c>GrainIdExtensions.GetTenantId</c> /
-///         <c>GetKeyWithinTenant</c> decode it. 18 encode/decode pairs round-tripped with zero
-///         mismatches.
+///         <b>Provenance — three independent readings, all agreeing.</b>
+///     </para>
+///     <list type="number">
+///         <item>
+///             <b>Decompiled.</b> <c>ilspycmd</c> over the shipped assembly
+///             <c>~/.nuget/packages/orleans.multitenant/4.0.0/lib/net10.0/Orleans.Multitenant.dll</c>.
+///             The algorithm is the internal static class
+///             <c>Orleans.Multitenant.Internal.TenantIdExtensions</c> — <c>AsTenantId</c>,
+///             <c>GetTenantQualifiedKey</c>, <c>TryGetTenantId</c>, <c>GetKey</c>.
+///         </item>
+///         <item>
+///             <b>Upstream source.</b> The nuspec pins repository commit
+///             <c>1762e3bedc55ee5ba9a488e4ad5f10a13312f2ed</c>; at that commit the code is
+///             <c>src/Orleans.Multitenant/Internal/Extensions.cs</c> lines 61-78, and it matches
+///             the decompilation statement for statement. ADR-002's file citation is therefore
+///             correct — only its description of the escaping is not.
+///         </item>
+///         <item>
+///             <b>Executed.</b> Out of tree, against the real package: a capturing
+///             <c>IGrainFactory</c> behind <c>factory.ForTenant(t).GetGrain(type, key)</c> yields
+///             the physical key verbatim, and <c>GrainIdExtensions.GetTenantId</c> /
+///             <c>GetKeyWithinTenant</c> decode it. 18 encode/decode pairs — the
+///             <c>[InlineData]</c> rows below — round-tripped with zero mismatches.
+///         </item>
+///     </list>
+///     <para>
 ///     </para>
 ///     <para>
 ///         <b>What ADR-002 (docs/plan/02:127-135) gets right and wrong.</b> The ADR says the

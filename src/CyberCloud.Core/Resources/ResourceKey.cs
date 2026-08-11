@@ -18,8 +18,10 @@ namespace CyberCloud.Core.Resources;
 ///         <i>within-tenant</i> half. <c>Orleans.Multitenant</c> prepends the tenant and hands the
 ///         result to <c>IGrainFactory</c>. The physical key is
 ///         <c>{escapedTenantId}|{keyWithinTenant}</c> — <b>verified</b> against
-///         <c>Orleans.Multitenant</c> 4.0.0's shipped assembly, internal type
-///         <c>Orleans.Multitenant.Internal.TenantIdExtensions</c>, methods <c>AsTenantId</c> and
+///         <c>Orleans.Multitenant</c> 4.0.0 three ways (decompiled assembly, upstream
+///         <c>src/Orleans.Multitenant/Internal/Extensions.cs</c>:61-78 at the nuspec's pinned
+///         commit <c>1762e3be</c>, and executed against the real package). The code is the internal
+///         static class <c>TenantIdExtensions</c>, methods <c>AsTenantId</c> and
 ///         <c>GetTenantQualifiedKey</c>. Precisely:
 ///     </para>
 ///     <list type="bullet">
