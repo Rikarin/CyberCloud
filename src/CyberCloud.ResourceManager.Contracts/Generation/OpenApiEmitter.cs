@@ -974,10 +974,20 @@ public static class OpenApiEmitter {
         new() { ["$ref"] = "#/components/" + section + "/" + name };
 
     /// <summary>
-    ///     An <c>operationId</c>. Unique within a document because a resource type is.
+    ///     An <c>operationId</c>, which the specification requires to be unique across the whole
+    ///     document and which every SDK generator turns into a method name.
     /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>The provider namespace is in it, and leaving it out is the obvious mistake.</b> Azure's
+    ///     own specs spell this <c>Servers_CreateOrUpdate</c> because each resource provider gets its
+    ///     own document; ours is one document per api-version across every provider, so
+    ///     <c>CyberCloud.DBforPostgreSQL/servers</c> and <c>CyberCloud.DBforMySQL/servers</c> — two
+    ///     types docs/plan/03 § Providers plans to have — would both be <c>servers_CreateOrUpdate</c>.
+    ///     <see cref="OpenApiStructure" /> catches the collision, but catching it at the eleventh
+    ///     provider is worse than not having it.
+    /// </remarks>
     static string OperationIdOf(ResourceTypeName type, string verb) =>
-        type.Type.Replace('/', '_') + "_" + verb;
+        type.Namespace.Replace('.', '_') + "_" + type.Type.Replace('/', '_') + "_" + verb;
 
     static string Capitalise(string value) =>
         value.Length == 0

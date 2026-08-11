@@ -333,6 +333,35 @@ public sealed class OpenApiEmitterTests {
     }
 
     [Fact]
+    public void TwoProvidersWithTheSameTypeNameDoNotCollide() {
+        // ⚠ docs/plan/03 § Providers plans CyberCloud.DBforPostgreSQL and CyberCloud.DBforMySQL, and
+        // both will have a type called `servers`. This document is one per api-version across every
+        // provider, so an operationId of `servers_CreateOrUpdate` would be two operations with one
+        // name — which is an invalid document and an SDK with one method where it needs two.
+        var registry = new FakeRegistry {
+            Namespaces = ["CyberCloud.DBforPostgreSQL", "CyberCloud.DBforMySQL"],
+            Types = [
+                new ResourceTypeRegistration {
+                    Type = new("CyberCloud.DBforPostgreSQL", "servers"),
+                    ApiVersions = [new(ApiVersion.Parse(Fixtures.FirstVersion), Fixtures.DatabaseSchema())]
+                },
+                new ResourceTypeRegistration {
+                    Type = new("CyberCloud.DBforMySQL", "servers"),
+                    ApiVersions = [new(ApiVersion.Parse(Fixtures.FirstVersion), Fixtures.DatabaseSchema())]
+                }
+            ]
+        };
+
+        var document = Emit(registry);
+
+        OpenApiStructure.Validate(document).ShouldBeEmpty();
+
+        document["paths"]!.AsObject().Count.ShouldBe(3);
+        document["components"]!["schemas"]!.AsObject().ShouldContainKey("CyberCloud.DBforMySQL.servers");
+        document["components"]!["schemas"]!.AsObject().ShouldContainKey("CyberCloud.DBforPostgreSQL.servers");
+    }
+
+    [Fact]
     public void QuotaMetersReachTheDocumentBecauseTheRegistryDeclaresThem() {
         // A caller about to be told QuotaExceeded can see which limit before sending, and the amount
         // is a JSON Pointer rather than a delegate precisely so it can be generated from.
