@@ -56,7 +56,18 @@ sealed class DiscoveringProviderBuilder : IResourceTypeBuilder {
     public IResourceTypeBuilder Permissions(string read, string write, string delete) => this;
 
     /// <inheritdoc />
-    public IResourceTypeBuilder Action(string name, ActionKind kind, string permission, bool secret = false) => this;
+    public IResourceTypeBuilder Action(
+        string name,
+        ActionKind kind,
+        string permission,
+        bool secret = false,
+        ResourceSchema? request = null,
+        ResourceSchema? response = null,
+        bool longRunning = false
+    ) => this;
+
+    /// <inheritdoc />
+    public IResourceTypeBuilder Display(string name, string plural, string shortName = "", string summary = "") => this;
 
     /// <inheritdoc />
     public IResourceTypeBuilder Chart(string chart) => this;
@@ -68,5 +79,5 @@ sealed class DiscoveringProviderBuilder : IResourceTypeBuilder {
     public IResourceTypeBuilder SupportsTags() => this;
 
     /// <inheritdoc />
-    public IResourceTypeBuilder RequiresCluster() => this;
+    public IResourceTypeBuilder RequiresCluster(string clusterIdPointer = ClusterPlacement.DefaultPointer) => this;
 }

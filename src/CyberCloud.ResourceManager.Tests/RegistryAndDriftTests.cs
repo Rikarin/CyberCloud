@@ -29,7 +29,9 @@ public sealed class ProviderRegistryTests {
         registration.ReadPermission.ShouldBe("read");
         registration.WritePermission.ShouldBe("write");
         registration.DeletePermission.ShouldBe("delete");
-        registration.Actions.Length.ShouldBe(2);
+        // restart, listKeys and resize — the third declares a request and a response schema, which is
+        // the expressiveness an action had none of.
+        registration.Actions.Length.ShouldBe(3);
         registration.Meters.Length.ShouldBe(2);
         registration.SoftDeleteDays.ShouldBe(7);
         registration.SupportsTags.ShouldBeTrue();

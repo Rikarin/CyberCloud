@@ -59,9 +59,25 @@ public static class SampleWidgets {
     ///     The body shape at <see cref="V2026" />.
     /// </summary>
     /// <remarks>
-    ///     A location, the cluster to land in, a message and a switch. That is the whole surface, and
-    ///     it is enough to exercise every kind the schema model has a case for except
-    ///     <c>SchemaKind.Number</c> and <c>SchemaKind.Array</c>.
+    ///     <para>
+    ///         A location, the cluster to land in, a message and a switch. That is the whole surface,
+    ///         and it is enough to exercise every kind the schema model has a case for.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The constraints below are declarations, not capability.</b> This provider's own
+    ///         remarks warn that cleverness here degrades the measurement docs/plan/25 § R1 asks for —
+    ///         and none of this is cleverness: not one line of <c>WidgetReconciler</c> changed. Every
+    ///         one is a fact the registry could not previously express, declared here so that the
+    ///         published <c>openapi/2026-08-01.json</c> shows it. A registry field no provider declares
+    ///         is a field no generated surface proves, and "it works in a unit test" is exactly the
+    ///         evidence R1 says not to accept.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Every property added here is optional.</b> A published api-version is immutable
+    ///         (docs/plan/08 § The provider registry) and <c>OpenApiCompatibility.RequiredAdded</c>
+    ///         refuses a property that was optional and became required — so a <i>new</i> required
+    ///         property would need a new date, not an edit to this one.
+    ///     </para>
     /// </remarks>
     public static ResourceSchema Schema2026 { get; } =
         ResourceSchema.Of(
@@ -71,25 +87,122 @@ public static class SampleWidgets {
                     SchemaKind.Text,
                     Required: true,
                     Description: "The region the widget is billed in."
-                ),
+                ) {
+                    // A platform format: checked with the same rule every other platform name obeys,
+                    // and rendered by docs/plan/20's region picker rather than by a text box.
+                    Format = SchemaFormat.Region,
+                    Widget = WidgetHint.Region,
+                    Immutable = true,
+                    ExampleJson = "\"eu-central\""
+                },
                 new("/properties", SchemaKind.Nested, Description: "The widget's own settings."),
                 new(
                     "/properties/clusterId",
                     SchemaKind.Text,
                     Required: true,
                     Description: "The cluster whose namespace holds the widget's ConfigMap."
-                ),
+                ) {
+                    // ⚠ This is the property RequiresCluster names. ProviderBuilder now refuses the
+                    // type if this pointer is missing or is not a required string, so the flag and the
+                    // shape can no longer disagree.
+                    Format = SchemaFormat.Uuid,
+                    Widget = WidgetHint.Cluster,
+                    Immutable = true
+                },
                 new(
                     "/properties/message",
                     SchemaKind.Text,
                     Required: true,
                     Description: "What the ConfigMap's 'message' key says."
-                ),
+                ) {
+                    // A ConfigMap key's value is a string of any length; the cap is ours, so that a
+                    // caller learns the limit from the document rather than from the API server.
+                    MinLength = 1,
+                    MaxLength = 1024,
+                    ExampleJson = "\"hello\""
+                },
                 new(
                     "/properties/enabled",
                     SchemaKind.Boolean,
                     Description: "Whether the widget is switched on. Defaults to off when absent."
-                )
+                ) {
+                    // The sentence above was already in the description and was not machine-readable.
+                    DefaultJson = "false"
+                },
+                new(
+                    "/properties/tier",
+                    SchemaKind.Text,
+                    Description: "How much the widget's ConfigMap is allowed to say."
+                ) {
+                    // The sku.name case, on the one type the platform has. Four values, refused at the
+                    // write path and offered by every generated surface.
+                    AllowedValues = ["free", "basic", "standard", "premium"],
+                    Widget = WidgetHint.Sku,
+                    DefaultJson = "\"free\""
+                },
+                new(
+                    "/properties/replicas",
+                    SchemaKind.WholeNumber,
+                    Description: "How many copies of the ConfigMap's message the widget claims to hold."
+                ) {
+                    Minimum = 1,
+                    Maximum = 9,
+                    DefaultJson = "1"
+                },
+                new(
+                    "/properties/allowedCidrs",
+                    SchemaKind.Array,
+                    Description: "The ranges the widget claims to serve. Shape only; nothing enforces it."
+                ) {
+                    // The array gap: an element kind, and the element's own constraints. Before this
+                    // an SDK saw object[] and a CLI could not type a repeated flag.
+                    ElementKind = SchemaKind.Text,
+                    Pattern = @"\d{1,3}(\.\d{1,3}){3}/\d{1,2}",
+                    Widget = WidgetHint.Cidr,
+                    ExampleJson = "[\"10.0.0.0/8\"]"
+                },
+                new(
+                    "/properties/retiredOn",
+                    SchemaKind.Text,
+                    Description: "When the widget was retired, or null while it is live."
+                ) {
+                    // ⚠ The one nullable property in the platform, and it is here to make the decision
+                    // visible in a published document rather than only in a doc comment. Note what it
+                    // costs: on a PATCH this field's null and "remove this field" are the same bytes —
+                    // see the remarks on SchemaProperty.Nullable.
+                    Nullable = true,
+                    Format = SchemaFormat.DateTime
+                }
+            ]
+        );
+
+    /// <summary>
+    ///     What a <c>POST …/ping</c> carries.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ Declared so that the action's parameters are refused by the write path on the same terms
+    ///     a resource's properties are. Before <c>ActionRegistration.Request</c> existed, the emitted
+    ///     document said <c>schema: {}</c> and the manager checked nothing — an action was the one
+    ///     part of the API surface with no contract at all.
+    /// </remarks>
+    public static ResourceSchema PingRequest { get; } =
+        ResourceSchema.Of(
+            [
+                new("/echo", SchemaKind.Text, Description: "Text the response repeats back.") {
+                    MaxLength = 64,
+                    DefaultJson = "\"pong\""
+                }
+            ]
+        );
+
+    /// <summary>What a <c>POST …/ping</c> returns.</summary>
+    public static ResourceSchema PingResponse { get; } =
+        ResourceSchema.Of(
+            [
+                new("/echo", SchemaKind.Text, Required: true, Description: "What was echoed."),
+                new("/at", SchemaKind.Text, Required: true, Description: "When the ping was served.") {
+                    Format = SchemaFormat.DateTime
+                }
             ]
         );
 

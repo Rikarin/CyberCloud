@@ -211,8 +211,12 @@ public sealed class OpenApiArtifactsTests : IDisposable {
         var narrowed = Fixtures.PostgresWith(
             ResourceSchema.Of([
                 .. Fixtures.ServerSchema().Properties
+                    // ⚠ The numeric bounds and default come off with the kind. Leaving them on is not
+                    // "a narrowed property", it is an incoherent declaration — a minimum on a string —
+                    // and ResourceSchema.Of refuses that before any document is emitted. The test is
+                    // about the compatibility diff, so the input has to be a schema that could exist.
                     .Select(x => string.Equals(x.JsonPointer, "/properties/storageGb", StringComparison.Ordinal)
-                        ? x with { Kind = SchemaKind.Text }
+                        ? x with { Kind = SchemaKind.Text, Minimum = null, Maximum = null, DefaultJson = "" }
                         : x)
             ])
         );

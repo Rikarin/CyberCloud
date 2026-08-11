@@ -7,12 +7,131 @@ namespace CyberCloud.ResourceManager.Contracts.Registry;
 /// <param name="Kind">How it is invoked.</param>
 /// <param name="Permission">The ReBAC permission it needs.</param>
 /// <param name="Secret">Whether the response carries secret material. Always audited.</param>
+/// <remarks>
+///     <para>
+///         ⚠ <b><see cref="Request" /> and <see cref="Response" /> are the reason
+///         <c>listKeys</c> stopped returning "secrets of unknown shape".</b> Before them an action
+///         carried a name, a kind, a permission and a flag, so every generated surface had to describe
+///         its result as an unconstrained object: the OpenAPI emitter wrote <c>schema: {}</c> and said
+///         so out loud, an SDK could only hand back a <c>JsonElement</c>, and a portal had nothing to
+///         render. An action is a <c>POST</c> with a body and a result like any other operation, and
+///         the registry can now say what they are.
+///     </para>
+///     <para>
+///         ⚠ <b>Both are <see langword="null" /> when undeclared, and that is not the same as
+///         <see cref="ResourceSchema.Empty" />.</b> Empty means "an object with no members, and an
+///         unknown member is refused" — a real, checkable shape. Null means the provider has not said,
+///         and the emitters render that as the unconstrained schema it is rather than pretending the
+///         action takes nothing.
+///     </para>
+/// </remarks>
 public readonly record struct ActionRegistration(
     string Name,
     ActionKind Kind,
     string Permission,
     bool Secret
-);
+) {
+    /// <summary>
+    ///     The shape of the <c>POST</c> body, or <see langword="null" /> when the action declares none.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ Validated by the write path against the same <see cref="ResourceSchema.Validate" /> a
+    ///     resource body goes through, so an action's parameters are refused on the same terms as a
+    ///     resource's properties rather than on each handler's care.
+    /// </remarks>
+    public ResourceSchema? Request { get; init; }
+
+    /// <summary>
+    ///     The shape of the <c>200</c> body, or <see langword="null" /> when the action declares none.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ For a <see cref="Secret" /> action this is <b>the</b> description of what leaves the
+    ///     platform. docs/plan/08 § The provider registry makes a <c>secret: true</c> action the only
+    ///     path a secret value leaves by; a response schema is what lets a reviewer see which values
+    ///     those are without reading the handler.
+    /// </remarks>
+    public ResourceSchema? Response { get; init; }
+
+    /// <summary>
+    ///     Whether the action returns <c>202</c> and an operation to poll rather than <c>200</c>.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Not derivable, and guessing it wrong is a generated client that hangs or one that
+    ///     returns too early.</b> <c>restart</c> takes a minute and is long-running; <c>listKeys</c>
+    ///     reads two strings and is not. Both are <see cref="ActionKind.Post" /> and nothing else in
+    ///     the registration distinguishes them, so before this the emitter had to declare one shape
+    ///     for both — and it chose <c>200</c>, which is wrong for every action that does work.
+    /// </remarks>
+    public bool LongRunning { get; init; }
+}
+
+/// <summary>
+///     What a resource type is called, for the surfaces a human reads.
+/// </summary>
+/// <param name="Name">
+///     The singular display name — <c>PostgreSQL server</c>. Empty when the provider declared none.
+/// </param>
+/// <param name="Plural">The plural — <c>PostgreSQL servers</c>. A portal list's heading.</param>
+/// <param name="Alias">
+///     The short form docs/plan/21 § Grammar's alias table maps — <c>postgres</c> for
+///     <c>dbforpostgresql server</c>. ⚠ Declared by the provider that owns the type rather than kept
+///     in the CLI, so the "only hand-maintained part of the CLI's surface" is one table the registry
+///     generates instead of one a human edits per provider.
+/// </param>
+/// <param name="Summary">One sentence about the type, for CLI group help and a portal blade header.</param>
+/// <remarks>
+///     <para>
+///         ⚠ <b>A CLI verb tree and a portal breadcrumb had nothing to draw on.</b> The registry knew
+///         a type's path (<c>servers/databases</c>) and nothing else, so every surface that shows a
+///         name to a person would have had to invent one — and two surfaces inventing independently is
+///         two names for one thing.
+///     </para>
+///     <para>
+///         <b>Empty is honest and is what the fallback keys on.</b> A type that declares no display
+///         metadata gets its path segment in the generated surfaces, which is what those surfaces
+///         would have used anyway; the difference is that the fallback is in one place and is visible
+///         in the emitted document, so "nobody has named this type yet" is a fact you can grep for.
+///     </para>
+/// </remarks>
+public readonly record struct DisplayMetadata(
+    string Name = "",
+    string Plural = "",
+    string Alias = "",
+    string Summary = ""
+) {
+    // ⚠ Normalised on read because `default(DisplayMetadata)` skips the constructor's defaults and
+    // leaves every string null. A type that declares no Display is exactly that default, so IsEmpty
+    // — the first thing anything asks — would throw for the common case. The same reason
+    // SchemaProperty normalises its own optional members.
+
+    /// <inheritdoc cref="DisplayMetadata(string,string,string,string)" />
+    public string Name {
+        get => field ?? string.Empty;
+        init => field = value ?? string.Empty;
+    } = Name;
+
+    /// <inheritdoc cref="DisplayMetadata(string,string,string,string)" />
+    public string Plural {
+        get => field ?? string.Empty;
+        init => field = value ?? string.Empty;
+    } = Plural;
+
+    /// <inheritdoc cref="DisplayMetadata(string,string,string,string)" />
+    public string Alias {
+        get => field ?? string.Empty;
+        init => field = value ?? string.Empty;
+    } = Alias;
+
+    /// <inheritdoc cref="DisplayMetadata(string,string,string,string)" />
+    public string Summary {
+        get => field ?? string.Empty;
+        init => field = value ?? string.Empty;
+    } = Summary;
+
+    /// <summary>Whether the provider declared anything at all.</summary>
+    public bool IsEmpty =>
+        Name.Length == 0 && Plural.Length == 0 && Alias.Length == 0 && Summary.Length == 0;
+}
 
 /// <summary>
 ///     One declared quota draw: which meter, and where in the body the amount comes from.
@@ -86,10 +205,49 @@ public sealed record ResourceTypeRegistration {
     public int SoftDeleteDays { get; init; }
 
     /// <summary>Whether this type carries tags.</summary>
+    /// <remarks>
+    ///     ⚠ <b>This flag now has a shape, and it did not before.</b> It makes the write path accept a
+    ///     root-level <c>tags</c> object (<see cref="ResourceSchema.Validate" />'s <c>allowTags</c>)
+    ///     <i>and</i> makes the emitters declare one (<see cref="TagRules" />). While it made only the
+    ///     first happen, the published document said <c>additionalProperties: false</c> over a body
+    ///     that accepted <c>tags</c> — the runtime and the contract disagreeing, in the published
+    ///     direction.
+    /// </remarks>
     public bool SupportsTags { get; init; }
 
     /// <summary>Whether this type is placed into a cluster.</summary>
+    /// <remarks>
+    ///     ⚠ Read <see cref="ClusterIdPointer" /> with it: the flag says a cluster is needed and the
+    ///     pointer says where the request supplies it.
+    /// </remarks>
     public bool RequiresCluster { get; init; }
+
+    /// <summary>
+    ///     Where in the body the cluster id is, for a type that declares
+    ///     <see cref="RequiresCluster" />. Empty for one that does not.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>The second flag with no schema consequence, and its failure mode was worse than
+    ///         the tag one.</b> <c>RequiresCluster()</c> made the reconcile driver refuse a pass with
+    ///         no connection, and the connection was resolved by reading <c>/properties/clusterId</c>
+    ///         out of the body — a pointer hard-coded in <c>ResourceManagerService</c> and declared, if
+    ///         at all, by each provider's schema. Nothing connected the two. A provider that declared
+    ///         <c>RequiresCluster</c> and forgot the property compiled, started, accepted a
+    ///         <c>PUT</c>, returned <c>202</c>, and then failed <i>per resource</i> at reconcile time
+    ///         — the worst possible place to find out, because the caller has already been told yes.
+    ///     </para>
+    ///     <para>
+    ///         The repair is that the pointer is a registry fact: the builder records it, the builder's
+    ///         <c>Build</c> refuses a type whose every api-version does not declare it as a required
+    ///         string, and the write path reads the resource's own pointer rather than a constant. A
+    ///         provider that forgets now fails at silo start, which is a deploy that does not roll out.
+    ///     </para>
+    /// </remarks>
+    public string ClusterIdPointer { get; init; } = string.Empty;
+
+    /// <summary>What this type is called, for the surfaces a human reads.</summary>
+    public DisplayMetadata Display { get; init; }
 
     /// <summary>
     ///     When each api-version stops being served, for versions under notice. Absent means "not

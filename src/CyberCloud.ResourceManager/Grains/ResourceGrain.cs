@@ -22,8 +22,15 @@ public sealed class ResourceGrain(
     IClock clock
 )
     : Grain, IResourceGrain {
-    /// <summary>The tag cap of docs/plan/06 § Tags, locks — 50 pairs.</summary>
-    public const int MaxTags = 50;
+    /// <summary>
+    ///     The tag cap of docs/plan/06 § Tags, locks — 50 pairs.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <see cref="Contracts.Registry.TagRules.MaxTags" />' value rather than a second 50. The emitted OpenAPI
+    ///     document publishes the cap as <c>maxProperties</c>, so a number written twice would be a
+    ///     published contract and an enforced limit that could silently disagree.
+    /// </remarks>
+    public const int MaxTags = Contracts.Registry.TagRules.MaxTags;
 
     Guid resourceId;
 

@@ -329,6 +329,25 @@ public sealed class ResourceManagerService(
             );
         }
 
+        // ── 2. Validate the action's body against the shape the action declares ─────────────────
+        //
+        // ⚠ An action's parameters go through the same validator a resource body does, and that is
+        // what makes ActionRegistration.Request a contract rather than documentation. An action whose
+        // request shape reached only the generated document would be an API that published a body it
+        // did not check — the exact inversion of the tag defect, and just as invisible.
+        //
+        // ⚠ Only when the action declares one. An action with no declared request takes whatever it
+        // is given, which is what every action did before the registry could say otherwise; refusing
+        // an undeclared body here would break every action that already works.
+        if (action.Request is { } requestSchema) {
+            trace.Enter(WriteStep.ValidateBody);
+
+            var problem = ValidateActionBody(request.Body, requestSchema, target.Id.Type, action.Name);
+            if (problem is { } refusal) {
+                return Result<WriteAccepted>.Failure(refusal);
+            }
+        }
+
         trace.Enter(WriteStep.AuthorizationCheck);
 
         var authorized = await authorizer.AuthorizeAsync(
@@ -390,6 +409,39 @@ public sealed class ResourceManagerService(
                 Trace = trace.Build()
             }
         );
+    }
+
+    /// <summary>
+    ///     Checks an action's <c>POST</c> body against the shape the action declares.
+    /// </summary>
+    /// <returns>The failure, or <see langword="null" /> when the body is acceptable.</returns>
+    /// <remarks>
+    ///     ⚠ <b>Full requiredness, and no tag bag.</b> A <c>POST</c> to an action is not a merge —
+    ///     there is nothing to merge it into — so every required parameter must be present, exactly as
+    ///     on a <c>PUT</c>. Tags belong to a resource and not to an invocation, so the bag is not
+    ///     allowed here even for a type that carries tags.
+    /// </remarks>
+    static Error? ValidateActionBody(string requestBody, ResourceSchema schema, ResourceTypeName type, string action) {
+        // An action with a declared request and an empty body is validated as `{}`, so a missing
+        // required parameter is reported as missing rather than as "the body is not JSON".
+        var text = string.IsNullOrWhiteSpace(requestBody) ? "{}" : requestBody;
+
+        JsonDocument parsed;
+        try {
+            parsed = JsonDocument.Parse(text);
+        }
+        catch (JsonException exception) {
+            return new(
+                ErrorCode.InvalidRequestBody,
+                $"The body of '{type}/{action}' is not valid JSON: {exception.Message}",
+                ""
+            );
+        }
+
+        using (parsed) {
+            var validated = schema.Validate(parsed.RootElement);
+            return validated.TryGetError(out var error) ? error : null;
+        }
     }
 
     // ── Steps 3 through 11 of the write path ───────────────────────────────────────────────────
@@ -533,7 +585,7 @@ public sealed class ResourceManagerService(
                     Caller = request.Caller,
                     Tags = TagsFrom(body, resolvedTarget.Registration),
                     Location = LocationFrom(body),
-                    ClusterId = ClusterFrom(body),
+                    ClusterId = ClusterFrom(body, resolvedTarget.Registration),
                     DeclaredPointers = Pointers(resolvedTarget.Schema)
                 }
             );
@@ -823,15 +875,40 @@ public sealed class ResourceManagerService(
             ? location.GetString() ?? string.Empty
             : string.Empty;
 
-    static Guid ClusterFrom(JsonElement body) {
-        if (!body.TryGetProperty("properties", out var properties)
-            || properties.ValueKind != JsonValueKind.Object
-            || !properties.TryGetProperty("clusterId", out var clusterId)
-            || clusterId.ValueKind != JsonValueKind.String) {
+    /// <summary>
+    ///     Reads the cluster id out of the body, at the pointer the type's own registration names.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>The pointer used to be written here, and that is what made <c>RequiresCluster()</c> a
+    ///     flag with no schema consequence.</b> The manager looked for <c>/properties/clusterId</c>
+    ///     whatever the type's schema declared, and nothing checked that a type declaring the flag
+    ///     declared the property — so a provider that forgot it got <c>Guid.Empty</c> here, a
+    ///     <c>202</c> to the caller, and a reconcile failure per resource.
+    ///     <c>ProviderBuilder.CheckClusterPlacement</c> now refuses such a type at silo start, and this
+    ///     reads the pointer that check verified.
+    /// </remarks>
+    static Guid ClusterFrom(JsonElement body, ResourceTypeRegistration registration) {
+        if (!registration.RequiresCluster || registration.ClusterIdPointer.Length == 0) {
             return Guid.Empty;
         }
 
-        return Guid.TryParse(clusterId.GetString(), out var parsed) ? parsed : Guid.Empty;
+        var current = body;
+
+        foreach (var token in registration.ClusterIdPointer.Split('/', StringSplitOptions.RemoveEmptyEntries)) {
+            var name = token.Contains('~', StringComparison.Ordinal)
+                ? token.Replace("~1", "/", StringComparison.Ordinal).Replace("~0", "~", StringComparison.Ordinal)
+                : token;
+
+            if (current.ValueKind != JsonValueKind.Object || !current.TryGetProperty(name, out var next)) {
+                return Guid.Empty;
+            }
+
+            current = next;
+        }
+
+        return current.ValueKind == JsonValueKind.String && Guid.TryParse(current.GetString(), out var parsed)
+            ? parsed
+            : Guid.Empty;
     }
 
     static string OperationUri(Guid operationId) =>

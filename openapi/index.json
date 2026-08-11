@@ -65,7 +65,33 @@
           "SubscriptionNotFound",
           "TenantNotFound",
           "TenantSuspended"
-        ]
+        ],
+        "x-cybercloud-http-status": {
+          "AuthorizationFailed": 403,
+          "Conflict": 409,
+          "InternalError": 500,
+          "InvalidApiVersion": 400,
+          "InvalidGrainKey": 400,
+          "InvalidRequestBody": 400,
+          "InvalidResourceId": 400,
+          "InvalidResourceName": 400,
+          "InvalidResourceType": 400,
+          "OperationCanceled": 409,
+          "OperationInProgress": 409,
+          "OperationTimeout": 500,
+          "PolicyViolation": 403,
+          "PreconditionFailed": 412,
+          "ProvisioningFailed": 500,
+          "QuotaExceeded": 429,
+          "ResourceAlreadyExists": 409,
+          "ResourceGroupNotFound": 404,
+          "ResourceNotFound": 404,
+          "SchemaInvalid": 404,
+          "ScopeLocked": 409,
+          "SubscriptionNotFound": 404,
+          "TenantNotFound": 404,
+          "TenantSuspended": 403
+        }
       },
       "ErrorResponse": {
         "type": "object",
@@ -156,7 +182,14 @@
       "type": "CyberCloud.Sample/widgets",
       "apiVersions": [
         "2026-08-01"
-      ]
+      ],
+      "display": {
+        "name": "Widget",
+        "plural": "Widgets",
+        "alias": "widget",
+        "summary": "A ConfigMap with two fields in it.",
+        "declared": true
+      }
     }
   ],
   "x-cybercloud-api-versions": [

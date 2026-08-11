@@ -48,6 +48,9 @@
           "409": {
             "$ref": "#/components/responses/Conflict"
           },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
           "429": {
             "$ref": "#/components/responses/TooManyRequests"
           },
@@ -104,6 +107,9 @@
           },
           "409": {
             "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
           },
           "429": {
             "$ref": "#/components/responses/TooManyRequests"
@@ -165,6 +171,9 @@
           "409": {
             "$ref": "#/components/responses/Conflict"
           },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
           "429": {
             "$ref": "#/components/responses/TooManyRequests"
           },
@@ -225,6 +234,9 @@
           "409": {
             "$ref": "#/components/responses/Conflict"
           },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
           "429": {
             "$ref": "#/components/responses/TooManyRequests"
           },
@@ -240,6 +252,7 @@
       "delete": {
         "operationId": "CyberCloud_Sample_widgets_Delete",
         "summary": "Delete a CyberCloud.Sample/widgets.",
+        "description": "The delete is permanent: this type declares no soft-delete window.",
         "responses": {
           "202": {
             "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
@@ -274,6 +287,9 @@
           "409": {
             "$ref": "#/components/responses/Conflict"
           },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
           "429": {
             "$ref": "#/components/responses/TooManyRequests"
           },
@@ -284,11 +300,20 @@
             "$ref": "#/components/responses/InternalServerError"
           }
         },
-        "x-cybercloud-permission": "delete"
+        "x-cybercloud-permission": "delete",
+        "x-cybercloud-soft-delete-days": 0
       },
       "x-cybercloud-resource-type": "CyberCloud.Sample/widgets",
+      "x-cybercloud-display": {
+        "name": "Widget",
+        "plural": "Widgets",
+        "alias": "widget",
+        "summary": "A ConfigMap with two fields in it.",
+        "declared": true
+      },
       "x-cybercloud-supports-tags": true,
       "x-cybercloud-requires-cluster": true,
+      "x-cybercloud-cluster-id-pointer": "/properties/clusterId",
       "x-cybercloud-soft-delete-days": 0,
       "x-cybercloud-meters": [
         {
@@ -320,12 +345,24 @@
         "operationId": "CyberCloud_Sample_widgets_Ping",
         "summary": "ping a CyberCloud.Sample/widgets.",
         "description": "An action never creates: a POST to a name that does not exist is a 404 — docs/plan/08 § The write path, end to end.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CyberCloud.Sample.widgets.PingRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
-            "description": "The action's result. ⚠ Unconstrained: the registry declares no request or response schema for an action, so no generated surface can type this.",
+            "description": "The action's result.",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Sample.widgets.PingResponse"
+                }
               }
             }
           },
@@ -341,6 +378,9 @@
           "409": {
             "$ref": "#/components/responses/Conflict"
           },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
           "429": {
             "$ref": "#/components/responses/TooManyRequests"
           },
@@ -352,7 +392,8 @@
           }
         },
         "x-cybercloud-permission": "write",
-        "x-cybercloud-secret": false
+        "x-cybercloud-secret": false,
+        "x-cybercloud-long-running": false
       },
       "x-cybercloud-resource-type": "CyberCloud.Sample/widgets",
       "x-cybercloud-action": "ping"
@@ -436,17 +477,15 @@
               "$ref": "#/components/schemas/ErrorResponse"
             }
           }
-        }
-      },
-      "Conflict": {
-        "description": "The write conflicts: the name is taken, an operation is already running, the scope is locked, or a precondition failed.",
-        "content": {
-          "application/json": {
-            "schema": {
-              "$ref": "#/components/schemas/ErrorResponse"
-            }
-          }
-        }
+        },
+        "x-cybercloud-error-codes": [
+          "InvalidApiVersion",
+          "InvalidGrainKey",
+          "InvalidRequestBody",
+          "InvalidResourceId",
+          "InvalidResourceName",
+          "InvalidResourceType"
+        ]
       },
       "Forbidden": {
         "description": "The caller can read the resource but may not perform this action — docs/plan/07 § The enforcement seam.",
@@ -456,17 +495,12 @@
               "$ref": "#/components/schemas/ErrorResponse"
             }
           }
-        }
-      },
-      "InternalServerError": {
-        "description": "An internal error. ⚠ Never carries exception detail: the correlation id is in the response header and the detail is in the trace — docs/plan/08 § Errors.",
-        "content": {
-          "application/json": {
-            "schema": {
-              "$ref": "#/components/schemas/ErrorResponse"
-            }
-          }
-        }
+        },
+        "x-cybercloud-error-codes": [
+          "AuthorizationFailed",
+          "PolicyViolation",
+          "TenantSuspended"
+        ]
       },
       "NotFound": {
         "description": "The resource does not exist, or the caller may not read it. ⚠ The two are deliberately indistinguishable — docs/plan/07 § The enforcement seam.",
@@ -476,17 +510,72 @@
               "$ref": "#/components/schemas/ErrorResponse"
             }
           }
-        }
+        },
+        "x-cybercloud-error-codes": [
+          "ResourceGroupNotFound",
+          "ResourceNotFound",
+          "SchemaInvalid",
+          "SubscriptionNotFound",
+          "TenantNotFound"
+        ]
       },
-      "TooManyRequests": {
-        "description": "The caller is being rate limited — docs/plan/10 § Rate limiting.",
+      "Conflict": {
+        "description": "The write conflicts: the name is taken, an operation is already running, or the scope is locked.",
         "content": {
           "application/json": {
             "schema": {
               "$ref": "#/components/schemas/ErrorResponse"
             }
           }
-        }
+        },
+        "x-cybercloud-error-codes": [
+          "Conflict",
+          "OperationCanceled",
+          "OperationInProgress",
+          "ResourceAlreadyExists",
+          "ScopeLocked"
+        ]
+      },
+      "PreconditionFailed": {
+        "description": "An If-Match etag did not match — docs/plan/06 § Tags, locks. A conditional retry keys on this rather than on the 409.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            }
+          }
+        },
+        "x-cybercloud-error-codes": [
+          "PreconditionFailed"
+        ]
+      },
+      "TooManyRequests": {
+        "description": "The caller is being rate limited, or a quota meter would be exceeded — docs/plan/10 § Rate limiting and docs/plan/06 § Quota.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            }
+          }
+        },
+        "x-cybercloud-error-codes": [
+          "QuotaExceeded"
+        ]
+      },
+      "InternalServerError": {
+        "description": "An internal error. ⚠ Never carries exception detail: the correlation id is in the response header and the detail is in the trace — docs/plan/08 § Errors.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            }
+          }
+        },
+        "x-cybercloud-error-codes": [
+          "InternalError",
+          "OperationTimeout",
+          "ProvisioningFailed"
+        ]
       }
     },
     "schemas": {
@@ -496,23 +585,73 @@
         "properties": {
           "location": {
             "description": "The region the widget is billed in.",
-            "type": "string"
+            "example": "eu-central",
+            "format": "cybercloud-region",
+            "type": "string",
+            "x-cybercloud-immutable": true,
+            "x-cybercloud-widget": "region"
           },
           "properties": {
             "additionalProperties": false,
             "description": "The widget's own settings.",
             "properties": {
+              "allowedCidrs": {
+                "description": "The ranges the widget claims to serve. Shape only; nothing enforces it.",
+                "example": [
+                  "10.0.0.0/8"
+                ],
+                "items": {
+                  "pattern": "^(?:\\d{1,3}(\\.\\d{1,3}){3}/\\d{1,2})$",
+                  "type": "string"
+                },
+                "type": "array",
+                "x-cybercloud-widget": "cidr"
+              },
               "clusterId": {
                 "description": "The cluster whose namespace holds the widget's ConfigMap.",
-                "type": "string"
+                "format": "uuid",
+                "type": "string",
+                "x-cybercloud-immutable": true,
+                "x-cybercloud-widget": "cluster"
               },
               "enabled": {
+                "default": false,
                 "description": "Whether the widget is switched on. Defaults to off when absent.",
                 "type": "boolean"
               },
               "message": {
                 "description": "What the ConfigMap's 'message' key says.",
+                "example": "hello",
+                "maxLength": 1024,
+                "minLength": 1,
                 "type": "string"
+              },
+              "replicas": {
+                "default": 1,
+                "description": "How many copies of the ConfigMap's message the widget claims to hold.",
+                "maximum": 9,
+                "minimum": 1,
+                "type": "integer"
+              },
+              "retiredOn": {
+                "description": "When the widget was retired, or null while it is live.",
+                "format": "date-time",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "tier": {
+                "default": "free",
+                "description": "How much the widget's ConfigMap is allowed to say.",
+                "enum": [
+                  "free",
+                  "basic",
+                  "standard",
+                  "premium"
+                ],
+                "type": "string",
+                "x-cybercloud-widget": "sku"
               }
             },
             "required": [
@@ -520,12 +659,56 @@
               "message"
             ],
             "type": "object"
+          },
+          "tags": {
+            "type": "object",
+            "description": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "maxProperties": 50,
+            "x-cybercloud-widget": "tag-input"
           }
         },
         "required": [
           "location"
         ],
         "title": "CyberCloud.Sample/widgets",
+        "type": "object"
+      },
+      "CyberCloud.Sample.widgets.PingRequest": {
+        "additionalProperties": false,
+        "description": "The body of a POST to CyberCloud.Sample/widgets/ping.",
+        "properties": {
+          "echo": {
+            "default": "pong",
+            "description": "Text the response repeats back.",
+            "maxLength": 64,
+            "type": "string"
+          }
+        },
+        "title": "CyberCloud.Sample.widgets.PingRequest",
+        "type": "object"
+      },
+      "CyberCloud.Sample.widgets.PingResponse": {
+        "additionalProperties": false,
+        "description": "What CyberCloud.Sample/widgets/ping returns.",
+        "properties": {
+          "at": {
+            "description": "When the ping was served.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "echo": {
+            "description": "What was echoed.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "at",
+          "echo"
+        ],
+        "title": "CyberCloud.Sample.widgets.PingResponse",
         "type": "object"
       },
       "Error": {
@@ -585,7 +768,33 @@
           "SubscriptionNotFound",
           "TenantNotFound",
           "TenantSuspended"
-        ]
+        ],
+        "x-cybercloud-http-status": {
+          "AuthorizationFailed": 403,
+          "Conflict": 409,
+          "InternalError": 500,
+          "InvalidApiVersion": 400,
+          "InvalidGrainKey": 400,
+          "InvalidRequestBody": 400,
+          "InvalidResourceId": 400,
+          "InvalidResourceName": 400,
+          "InvalidResourceType": 400,
+          "OperationCanceled": 409,
+          "OperationInProgress": 409,
+          "OperationTimeout": 500,
+          "PolicyViolation": 403,
+          "PreconditionFailed": 412,
+          "ProvisioningFailed": 500,
+          "QuotaExceeded": 429,
+          "ResourceAlreadyExists": 409,
+          "ResourceGroupNotFound": 404,
+          "ResourceNotFound": 404,
+          "SchemaInvalid": 404,
+          "ScopeLocked": 409,
+          "SubscriptionNotFound": 404,
+          "TenantNotFound": 404,
+          "TenantSuspended": 403
+        }
       },
       "ErrorResponse": {
         "type": "object",
