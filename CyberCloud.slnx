@@ -37,7 +37,10 @@
 
   <Folder Name="/build/" />
 
-  <Folder Name="/src/" />
+  <Folder Name="/src/">
+    <Project Path="src/CyberCloud.Core/CyberCloud.Core.csproj" />
+    <Project Path="src/CyberCloud.Core.Tests/CyberCloud.Core.Tests.csproj" />
+  </Folder>
   <Folder Name="/src/Providers/" />
   <Folder Name="/src/Hosts/" />
 
