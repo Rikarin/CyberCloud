@@ -13,9 +13,18 @@ namespace CyberCloud.Cli;
 ///     <para>
 ///         ⚠ <b>Built at run time from a description embedded at build time.</b>
 ///         <see cref="VerbTreeCatalog" /> argues that decision; the short version is that
-///         <c>--api-version</c> selects between trees, <c>cyc extension add</c> (docs/plan/21
-///         § Extensions) adds groups from an assembly load context, and <c>CliEmitter</c> deliberately
-///         emits a description rather than C#.
+///         <c>--api-version</c> selects between trees and <c>CliEmitter</c> deliberately emits a
+///         description rather than C#.
+///     </para>
+///     <para>
+///         ⚠ <b>This used to cite <c>cyc extension add</c> "adding groups from an assembly load
+///         context" as a third reason, and that mechanism cannot exist here.</b> A NativeAOT binary
+///         cannot load a managed assembly — measured: every load path throws
+///         <c>PlatformNotSupportedException</c>, and the call does not even compile in this project,
+///         because <c>EnableAotAnalyzer</c> plus <c>TreatWarningsAsErrors</c> makes it
+///         <c>error IL2026</c>. Recorded as a defect in docs/plan/21 § Extensions, which needs a
+///         decision before anything is built. The two surviving reasons above still carry this
+///         design on their own.
 ///     </para>
 ///     <para>
 ///         ⚠ <b>The alias table is generated and this file is the proof.</b> docs/plan/21 § Grammar
