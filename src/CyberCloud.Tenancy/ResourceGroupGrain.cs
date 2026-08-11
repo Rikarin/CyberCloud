@@ -69,6 +69,21 @@ public sealed class ResourceGroupGrain(
         );
 
     /// <inheritdoc />
+    public async Task<Result> SetLockAsync(LockLevel level) {
+        if (state.State.Descriptor is not { } descriptor) {
+            return Result.Failure(TenancyGrainKeys.NotCreated(ErrorCode.ResourceGroupNotFound, "Resource group", name));
+        }
+
+        if (descriptor.Lock == level) {
+            return Result.Success;
+        }
+
+        state.State.Descriptor = descriptor with { Lock = level, Version = descriptor.Version + 1 };
+        await state.WriteStateAsync();
+        return Result.Success;
+    }
+
+    /// <inheritdoc />
     public async Task<Result> BeginCreateAsync(ResourceId address) {
         if (state.State.Descriptor is null) {
             return Result.Failure(TenancyGrainKeys.NotCreated(ErrorCode.ResourceGroupNotFound, "Resource group", name));

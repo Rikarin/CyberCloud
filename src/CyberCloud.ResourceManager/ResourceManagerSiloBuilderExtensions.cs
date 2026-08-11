@@ -98,6 +98,12 @@ public static class ResourceManagerSiloBuilderExtensions {
         services.TryAddSingleton<IClusterObjectInventory, UnavailableClusterObjectInventory>();
         services.TryAddSingleton<IResourceAuthorizer, ReBacResourceAuthorizer>();
 
+        // Writes the resource -> resourceGroup `parent` edge at step 8 of the write path. It belongs
+        // in this list rather than the gateway's for the same reason IResourceAuthorizer does: it
+        // names an authorization engine, and docs/plan/10 § What the gateway must never do keeps that
+        // in one seam, in this assembly.
+        services.TryAddSingleton<IResourceRelationWriter, ReBacResourceRelationWriter>();
+
         services.TryAddSingleton<DriftScanner>();
         services.TryAddSingleton<ReconcileDriver>();
         services.TryAddSingleton<IResourceManager, ResourceManagerService>();

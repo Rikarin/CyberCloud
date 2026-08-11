@@ -38,7 +38,24 @@ Schema.DefineType("resourceGroup")
 
 `From(x, y)` is Zanzibar's *tupleset-to-userset*: "whoever has `y` on the object I point to via `x`".
 It is the whole of hierarchical inheritance and it is why a role assignment at a subscription grants
-on every resource group in it without any tuple being written per resource.
+on every resource group in it without any *role* tuple being written per resource.
+
+**But `parent` itself is a tuple, and something has to write it.** "No tuple per resource" is a claim
+about role tuples and it stays true; it is not a claim about the pointer the rewrite follows. A
+resource with no `parent` tuple is a resource the walk cannot leave, so it inherits nothing, so its
+own creator cannot read it.
+
+**The resource manager writes that edge, at step 8 of [08](08-resource-manager.md) § The write path,
+end to end, and nothing else in the platform does.** It is `resource:{id}#parent@resourceGroup:{sub}-{rg}`
+— the parent is the **resource group**, not the subscription, because this schema's chain is
+resource → resourceGroup → subscription → tenant and an edge that skipped the group would make every
+`resourceGroup:R#contributor` assignment in the table below grant nothing on the resources inside it.
+The manager is the right owner for two reasons: it is already the one place a tenant's intent enters
+the platform, and it is the only component that knows the resource's GUID before the resource exists,
+which is what lets the edge be written *before* the durable state rather than after it. Providers do
+not write tuples, for the same reason § The enforcement seam says they do not read them. The manager
+removes the edge when the resource is gone; where and why is [08](08-resource-manager.md)'s to state,
+because it is a property of the delete choreography rather than of the model.
 
 The schema is **C# and compiled**, not a DSL file. It gets type checking, IDE navigation, and — the
 real reason — the analyzer can then verify that every `[Authorize]` on a provider's application service
@@ -54,7 +71,7 @@ are a *view* over this. They are:
 |---|---|
 | `Owner` on subscription `S` for user `U` | `subscription:S#owner@user:U` |
 | `Contributor` on resource group `R` for group `G` | `resourceGroup:R#contributor@group:G#member` |
-| Inheritance sub → rg → resource | The `From("parent", …)` rewrites; no tuples written |
+| Inheritance sub → rg → resource | The `From("parent", …)` rewrites; no *role* tuples written per resource — one `parent` edge is, by the resource manager, at step 8 of [08](08-resource-manager.md) |
 | Deny assignment | `#suspended`, and the `& !Rel("suspended")` in the permission |
 
 The API can present `GET /roleAssignments` by listing tuples whose relation is a named role, which is

@@ -63,8 +63,11 @@ public static class ConformanceState<TSource>
     /// <summary>The lock resolver.</summary>
     public static SettableLockResolver Locks { get; } = new();
 
-    /// <summary>Step 10's recorded events.</summary>
+    /// <summary>Step 11's recorded events.</summary>
     public static RecordingChanges Changes { get; } = new();
+
+    /// <summary>Step 8's recorded ReBAC parent edges.</summary>
+    public static RecordingRelationWriter Relations { get; } = new();
 
     /// <summary>Puts every piece back to its default.</summary>
     public static void Reset() {
@@ -73,6 +76,7 @@ public static class ConformanceState<TSource>
         Authorizer.Reset();
         Locks.Reset();
         Changes.Reset();
+        Relations.Reset();
     }
 }
 
@@ -95,7 +99,7 @@ public static class ConformanceState<TSource>
 ///         <item>The API server is <see cref="FakeKubeCluster" />, which is a dictionary. See its remarks.</item>
 ///     </list>
 ///     <para>
-///         Everything above that line — the eleven steps, the operation lifecycle, the verb grammar,
+///         Everything above that line — the twelve steps, the operation lifecycle, the verb grammar,
 ///         the reconciler's four clauses, drift correction, the labels on rendered output — is
 ///         behaviour of our own code and is fully exercised.
 ///     </para>
@@ -135,8 +139,13 @@ public class ProviderTestCluster<TSource> : IAsyncLifetime
     /// <summary>The lock resolver.</summary>
     public SettableLockResolver Locks => ConformanceState<TSource>.Locks;
 
-    /// <summary>Step 10's recorded events.</summary>
+    /// <summary>Step 11's recorded events.</summary>
     public RecordingChanges Changes => ConformanceState<TSource>.Changes;
+
+    /// <summary>
+    ///     Step 8's recorded ReBAC parent edges — what a delete must leave empty.
+    /// </summary>
+    public RecordingRelationWriter Relations => ConformanceState<TSource>.Relations;
 
     /// <summary>The cluster the harness answers for.</summary>
     public static Guid ClusterId => ConformanceIds.Cluster;
@@ -194,6 +203,27 @@ public class ProviderTestCluster<TSource> : IAsyncLifetime
             CorrelationId = "conformance"
         };
 
+    /// <summary>
+    ///     Creates a subscription and its resource group, so step 1 of the write path can find them.
+    /// </summary>
+    /// <param name="tenant">The tenant.</param>
+    /// <param name="subscription">The subscription.</param>
+    async Task CreateSubscriptionAsync(Guid tenant, Guid subscription) {
+        var created = await For(tenant)
+            .GetGrain<ISubscriptionGrain>(GrainKeys.Subscription(subscription))
+            .CreateAsync("conformance");
+
+        created.IsSuccess.ShouldBeTrue(created.Error?.Message);
+
+        // The group carries the lock the resolver walks. Created here so a run that sets one has
+        // something to set it on.
+        var group = await For(tenant)
+            .GetGrain<IResourceGroupGrain>(GrainKeys.ResourceGroup(subscription, ConformanceIds.ResourceGroup))
+            .CreateAsync(tenant, "eu-west-1");
+
+        group.IsSuccess.ShouldBeTrue(group.Error?.Message);
+    }
+
     /// <inheritdoc />
     public async ValueTask InitializeAsync() {
         var builder = new TestClusterBuilder(1);
@@ -203,9 +233,17 @@ public class ProviderTestCluster<TSource> : IAsyncLifetime
 
         Registry = ProviderRegistry.Build([Case.CreateProvider()]);
 
+        // ⚠ The subscriptions are created before anything is written into them. Step 1 of the write
+        // path now reads ISubscriptionGrain and answers 404 for a subscription that does not exist,
+        // so a harness that skipped this would fail every create with "does not exist" and the reason
+        // would be the harness rather than the provider.
+        await CreateSubscriptionAsync(ConformanceIds.Tenant, ConformanceIds.Subscription);
+        await CreateSubscriptionAsync(ConformanceIds.OtherTenant, ConformanceIds.OtherSubscription);
+
         Manager = new ResourceManagerService(
             Registry,
             Authorizer,
+            Relations,
             Locks,
             new NotSupportedPolicyEvaluator(),
             Changes,
@@ -242,6 +280,7 @@ public class ProviderTestCluster<TSource> : IAsyncLifetime
                     services.AddSingleton<IResourceAuthorizer>(ConformanceState<TSource>.Authorizer);
                     services.AddSingleton<ILockResolver>(ConformanceState<TSource>.Locks);
                     services.AddSingleton<IResourceChangedSink>(ConformanceState<TSource>.Changes);
+                    services.AddSingleton<IResourceRelationWriter>(ConformanceState<TSource>.Relations);
                     services.AddSingleton<IClusterConnectionFactory>(
                         new FakeClusterConnectionFactory(ConformanceState<TSource>.Cluster)
                     );

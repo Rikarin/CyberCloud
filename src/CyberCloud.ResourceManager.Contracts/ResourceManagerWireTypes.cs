@@ -154,7 +154,7 @@ public sealed record CallerContext {
 [GenerateSerializer]
 [Alias("CyberCloud.ResourceManager.WriteTrace")]
 public sealed record WriteTrace {
-    /// <summary>The canonical order — the eleven steps as docs/plan/08 numbers them.</summary>
+    /// <summary>The canonical order — the twelve steps as docs/plan/08 numbers them.</summary>
     public static ImmutableArray<WriteStep> Canonical { get; } = [
         WriteStep.ResolveRegistration,
         WriteStep.ValidateBody,
@@ -163,6 +163,7 @@ public sealed record WriteTrace {
         WriteStep.Policy,
         WriteStep.Quota,
         WriteStep.IndexClaim,
+        WriteStep.LinkParent,
         WriteStep.SubmitDesired,
         WriteStep.StartOperation,
         WriteStep.EmitChanged,
@@ -258,7 +259,7 @@ public sealed record WriteRequest {
 }
 
 /// <summary>
-///     The <c>202 Accepted</c> of step 11, with everything the response needs.
+///     The <c>202 Accepted</c> of step 12, with everything the response needs.
 /// </summary>
 [GenerateSerializer]
 [Alias("CyberCloud.ResourceManager.WriteAccepted")]
@@ -586,7 +587,7 @@ public sealed record OperationStatus {
 }
 
 /// <summary>
-///     The <c>resource-changed</c> event of step 10 — the input to docs/plan/08 § The resource-graph
+///     The <c>resource-changed</c> event of step 11 — the input to docs/plan/08 § The resource-graph
 ///     projection.
 /// </summary>
 /// <remarks>
@@ -671,7 +672,7 @@ public sealed record ResourceChangedEvent {
     [Id(16)]
     public long Version { get; init; }
 
-    /// <summary>The stream this event belongs on — <c>cc.{tenantId:N}.res</c>, per step 10.</summary>
+    /// <summary>The stream this event belongs on — <c>cc.{tenantId:N}.res</c>, per step 11.</summary>
     public string StreamNamespace =>
         string.Create(CultureInfo.InvariantCulture, $"cc.{TenantId:N}.res");
 }

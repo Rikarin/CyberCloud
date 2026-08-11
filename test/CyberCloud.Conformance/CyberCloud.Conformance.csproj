@@ -20,7 +20,7 @@
       asserts a weaker thing under the same test name is worse.
 
       What the Docker-free half DOES prove, against Orleans.TestingHost with in-memory storage and an
-      in-memory API server: the eleven-step write path end to end for a real provider, the operation
+      in-memory API server: the twelve-step write path end to end for a real provider, the operation
       lifecycle to Succeeded, read-back and api-version projection, tags, locks, delete, the
       cross-tenant 404, the 409 on a delete that races an operation, drift correction against the fake
       cluster, all four reconciler clauses, and — for the first time in this repository — ADR-013's

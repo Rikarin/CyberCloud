@@ -100,7 +100,12 @@ public sealed class TenancyWireContractTests {
         ("QuotaUsage", 0, "Meter"),
         ("QuotaUsage", 1, "Committed"),
         ("QuotaUsage", 2, "Reserved"),
-        ("QuotaUsage", 3, "Limit")
+        ("QuotaUsage", 3, "Limit"),
+
+        // Appended, never inserted — docs/plan/05 § Serialization. Both carry the scope's own lock,
+        // which is what let ILockResolver stop returning None for every scope above the resource.
+        ("ResourceGroupDescriptor", 7, "Lock"),
+        ("SubscriptionDescriptor", 7, "Lock")
     ];
 
     /// <summary>The aliases this assembly publishes. Changing one is a wire break.</summary>
@@ -122,6 +127,15 @@ public sealed class TenancyWireContractTests {
 
         // Enums.
         ("IndexEntryState", "CyberCloud.Tenancy.IndexEntryState"),
+
+        // ⚠ LockLevel's alias reads CyberCloud.ResourceManager.LockLevel and that is DELIBERATE, not
+        // a copy-paste. The type moved here from CyberCloud.ResourceManager.Contracts — a lock is a
+        // property of the hierarchy, and the scopes that carry one are this assembly's — and the
+        // alias is the name a peer looks the type up by, so keeping the old one is what makes the
+        // move invisible during a rolling upgrade (docs/plan/04 § Failure and upgrade). Changing it
+        // to match the namespace would be the wire break the move avoided.
+        ("LockLevel", "CyberCloud.ResourceManager.LockLevel"),
+
         ("ProvisioningState", "CyberCloud.Tenancy.ProvisioningState"),
         ("QuotaMeter", "CyberCloud.Tenancy.QuotaMeter"),
         ("TenantStatus", "CyberCloud.Tenancy.TenantStatus"),

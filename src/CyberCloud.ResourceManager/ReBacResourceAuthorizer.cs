@@ -167,7 +167,7 @@ public sealed class ReBacResourceAuthorizer(IGrainFactory grains, ILogger<ReBacR
     ///     followed by a DNS-1123 name is prefix-free — no two (subscription, group) pairs can be
     ///     re-cut into a different one.
     /// </remarks>
-    internal static string GroupObjectId(ResourceId id) =>
+    public static string GroupObjectId(ResourceId id) =>
         id.SubscriptionId.ToString("N", CultureInfo.InvariantCulture) + "-" + id.ResourceGroup;
 
     static Result NotFound(ResourceId id) =>

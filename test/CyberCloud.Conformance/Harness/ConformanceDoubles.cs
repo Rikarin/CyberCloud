@@ -76,7 +76,52 @@ public sealed class SettableLockResolver : ILockResolver {
         Task.FromResult(Result<LockLevel>.Success(Level));
 }
 
-/// <summary>Records every <c>resource-changed</c> event step 10 emitted.</summary>
+/// <summary>
+///     An <see cref="IResourceRelationWriter" /> that keeps the edge set in a dictionary.
+/// </summary>
+/// <remarks>
+///     ⚠ <b>A double, and a <i>recording</i> one rather than a no-op.</b> What a provider must pass is
+///     the resource lifecycle, and standing up a ReBAC tuple store for that would make every
+///     provider's conformance run depend on docs/plan/07's engine. But "the write path links, and the
+///     delete unlinks" is a lifecycle property — a resource whose delete left an edge behind is a leak
+///     in every tenant that ever deleted anything — so the edges are recorded and the conformance list
+///     asserts the set is empty once the resource is gone. The <b>real</b>
+///     <c>ReBacResourceRelationWriter</c> over the real schema is driven by the isolation suite, which
+///     is where the engine is the thing under test.
+/// </remarks>
+public sealed class RecordingRelationWriter : IResourceRelationWriter {
+    readonly ConcurrentDictionary<Guid, string> edges = new();
+
+    /// <summary>Every resource that currently has a parent edge, against the parent it points at.</summary>
+    public IReadOnlyDictionary<Guid, string> Edges => edges;
+
+    /// <summary>Whether writes fail, so the write path's rollback can be driven.</summary>
+    public bool Fail { get; set; }
+
+    /// <summary>Forgets every edge.</summary>
+    public void Reset() {
+        edges.Clear();
+        Fail = false;
+    }
+
+    /// <inheritdoc />
+    public Task<Result> LinkToParentAsync(ResourceId id, CancellationToken cancellationToken = default) {
+        if (Fail) {
+            return Task.FromResult(Result.Failure(ErrorCode.InternalError, "the tuple store is down"));
+        }
+
+        edges[id.Id] = id.SubscriptionId.ToString("N") + "-" + id.ResourceGroup;
+        return Task.FromResult(Result.Success);
+    }
+
+    /// <inheritdoc />
+    public Task<Result> UnlinkFromParentAsync(ResourceId id, CancellationToken cancellationToken = default) {
+        edges.TryRemove(id.Id, out _);
+        return Task.FromResult(Result.Success);
+    }
+}
+
+/// <summary>Records every <c>resource-changed</c> event step 11 emitted.</summary>
 public sealed class RecordingChanges : IResourceChangedSink {
     /// <summary>Everything published.</summary>
     public ConcurrentQueue<ResourceChangedEvent> Published { get; } = new();

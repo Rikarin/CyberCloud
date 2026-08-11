@@ -134,7 +134,55 @@ public sealed class SwitchableLockResolver : ILockResolver {
         Task.FromResult(Result<LockLevel>.Success(Level));
 }
 
-/// <summary>Records every <c>resource-changed</c> event step 10 emitted.</summary>
+/// <summary>
+///     An <see cref="IResourceRelationWriter" /> that keeps step 8's edge set in a dictionary.
+/// </summary>
+/// <remarks>
+///     ⚠ <b>A double, for the same reason <see cref="SwitchableAuthorizer" /> is one.</b> What these
+///     tests assert about step 8 is <i>when</i> it runs relative to the index claim and the durable
+///     write, and <i>whether</i> a delete removes what a create wrote — both of which are properties
+///     of the write path. Whether the tuple the real writer produces is one <c>CyberCloudSchema</c>
+///     can walk is a property of the schema, and the isolation suite drives the real
+///     <c>ReBacResourceRelationWriter</c> against the real engine to answer it.
+/// </remarks>
+public sealed class RecordingRelationWriter : IResourceRelationWriter {
+    /// <summary>Every resource that currently has a parent edge, against the parent it points at.</summary>
+    public static ConcurrentDictionary<Guid, string> Edges { get; } = new();
+
+    /// <summary>Every call made, as <c>link</c>/<c>unlink</c>, in order.</summary>
+    public static ConcurrentQueue<string> Calls { get; } = new();
+
+    /// <summary>Whether linking fails, so the write path's rollback can be driven.</summary>
+    public static bool FailLink { get; set; }
+
+    /// <summary>Forgets everything.</summary>
+    public static void Reset() {
+        Edges.Clear();
+        Calls.Clear();
+        FailLink = false;
+    }
+
+    /// <inheritdoc />
+    public Task<Result> LinkToParentAsync(ResourceId id, CancellationToken cancellationToken = default) {
+        Calls.Enqueue("link");
+
+        if (FailLink) {
+            return Task.FromResult(Result.Failure(ErrorCode.InternalError, "the tuple store is down"));
+        }
+
+        Edges[id.Id] = id.SubscriptionId.ToString("N", CultureInfo.InvariantCulture) + "-" + id.ResourceGroup;
+        return Task.FromResult(Result.Success);
+    }
+
+    /// <inheritdoc />
+    public Task<Result> UnlinkFromParentAsync(ResourceId id, CancellationToken cancellationToken = default) {
+        Calls.Enqueue("unlink");
+        Edges.TryRemove(id.Id, out _);
+        return Task.FromResult(Result.Success);
+    }
+}
+
+/// <summary>Records every <c>resource-changed</c> event step 11 emitted.</summary>
 public sealed class RecordingChangeSink : IResourceChangedSink {
     /// <summary>Everything published.</summary>
     public static ConcurrentQueue<ResourceChangedEvent> Published { get; } = new();
@@ -269,6 +317,7 @@ public sealed class ResourceManagerCluster : IAsyncLifetime {
         SwitchableAuthorizer.Reset();
         SwitchablePolicyEvaluator.Reset();
         SwitchableLockResolver.Reset();
+        RecordingRelationWriter.Reset();
         RecordingChangeSink.Reset();
         TestClock.Instance.Reset();
     }
@@ -282,15 +331,43 @@ public sealed class ResourceManagerCluster : IAsyncLifetime {
 
         Registry = ProviderRegistry.Build([new TestingProvider()]);
 
+        // ⚠ Step 1 of the write path reads ISubscriptionGrain and answers 404 for a subscription
+        // this tenant does not have, so the suite's subscriptions are created before anything is
+        // written into them. OtherTenant gets one too — the cross-tenant tests must be refused by the
+        // TENANT comparison, and a subscription that did not exist would refuse them one line earlier
+        // for the wrong reason.
+        await CreateSubscriptionAsync(Tenant);
+        await CreateSubscriptionAsync(OtherTenant);
+
         Manager = new ResourceManagerService(
             Registry,
             new SwitchableAuthorizer(),
+            new RecordingRelationWriter(),
             new SwitchableLockResolver(),
             new SwitchablePolicyEvaluator(),
             new RecordingChangeSink(),
             cluster.GrainFactory,
             NullLogger<ResourceManagerService>.Instance
         );
+    }
+
+    /// <summary>
+    ///     Creates a tenant's subscription and the resource group the suite addresses, so step 1 can
+    ///     find them and so the lock walk has scopes above the resource to read.
+    /// </summary>
+    /// <param name="tenant">The tenant.</param>
+    async Task CreateSubscriptionAsync(Guid tenant) {
+        var created = await For(tenant)
+            .GetGrain<ISubscriptionGrain>(GrainKeys.Subscription(Subscription))
+            .CreateAsync("tests");
+
+        created.IsSuccess.ShouldBeTrue(created.Error?.Message);
+
+        var made = await For(tenant)
+            .GetGrain<IResourceGroupGrain>(GrainKeys.ResourceGroup(Subscription, "prod"))
+            .CreateAsync(tenant, "eu-west-1");
+
+        made.IsSuccess.ShouldBeTrue(made.Error?.Message);
     }
 
     /// <inheritdoc />
@@ -319,6 +396,7 @@ public sealed class ResourceManagerCluster : IAsyncLifetime {
                     services.AddSingleton<IPolicyEvaluator, SwitchablePolicyEvaluator>();
                     services.AddSingleton<ILockResolver, SwitchableLockResolver>();
                     services.AddSingleton<IResourceChangedSink, RecordingChangeSink>();
+                    services.AddSingleton<IResourceRelationWriter, RecordingRelationWriter>();
 
                     services.AddSingleton<ConformingReconciler>();
                     services.AddSingleton<IResourceProvider, TestingProvider>();

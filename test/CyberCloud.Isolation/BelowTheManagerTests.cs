@@ -163,17 +163,19 @@ public sealed class BelowTheManagerTests(IsolationCluster cluster) {
 
     [Theory]
     [MemberData(nameof(Targets))]
-    public async Task AnotherTenantsSubscriptionIdUnderYourOwnTenantReachesNoneOfTheirState(IsolationTarget target) {
-        // ⚠ A GAP, ASSERTED FROM THE SAFE SIDE. The write path compares the PATH's tenant against the
-        // caller's and never checks that the path's SUBSCRIPTION belongs to that tenant — nothing in
-        // docs/plan/08 § The write path, end to end's eleven steps does. So an attacker may address
-        // /tenants/{their own}/subscriptions/{somebody else's}/... and the request is accepted.
+    public async Task AnotherTenantsSubscriptionIdUnderYourOwnTenantIs404(IsolationTarget target) {
+        // ⚠ THIS TEST USED TO DOCUMENT A GAP FROM THE SAFE SIDE AND NOW ASSERTS THAT IT IS CLOSED.
         //
-        // It leaks nothing, and this test is what says so: every grain the request touches is reached
-        // through ForTenant(caller), so the quota, the index and the resource all land in the
-        // ATTACKER's tenant under a subscription GUID that happens to be somebody else's label. What
-        // it does mean is that subscription ids are not validated, which is worth knowing before
-        // billing reads one.
+        // The write path compared the PATH's tenant against the caller's and never looked at the
+        // path's SUBSCRIPTION, so /tenants/{mine}/subscriptions/{theirs}/… was accepted. It leaked
+        // nothing — the property at the bottom of this test is why: every grain is reached through
+        // ForTenant(caller), so the quota, the index and the resource all landed in the CALLER's
+        // tenant under a GUID that was merely somebody else's label. What it meant is that
+        // subscription ids were never validated at all, and an unvalidated id stops being survivable
+        // the moment billing or quota reporting keys a number on one.
+        //
+        // Step 1 now reads ISubscriptionGrain through ForTenant(caller), which makes "exists" and
+        // "belongs to this tenant" the same question, and answers 404 to both.
         var confused = IsolationCluster.Address(
             target,
             "subscription-confusion",
@@ -181,9 +183,6 @@ public sealed class BelowTheManagerTests(IsolationCluster cluster) {
             IsolationCluster.VictimSubscription
         );
 
-        // The attacker owns `prod` in their OWN subscription, not in the victim's, so the create is
-        // refused for want of a tuple rather than accepted — which is a happier answer than the one
-        // this test was written expecting, and is recorded rather than assumed.
         var attempt = await cluster.Manager.WriteAsync(
             new() {
                 Path = confused.Path,
@@ -195,24 +194,26 @@ public sealed class BelowTheManagerTests(IsolationCluster cluster) {
             TestContext.Current.CancellationToken
         );
 
-        if (attempt.IsSuccess) {
-            // Accepted: then every touched grain must be in the attacker's tenant and none of the
-            // victim's state may have moved.
-            var victimIndex = await cluster.For(IsolationCluster.Victim)
-                .GetGrain<IResourceIndexGrain>(GrainKeys.PathIndex(confused))
-                .GetAsync();
+        attempt.IsFailure.ShouldBeTrue("a path naming another tenant's subscription was accepted");
+        attempt.Error!.Code.ShouldBe(
+            ErrorCode.ResourceNotFound,
+            "a subscription in another tenant must be indistinguishable from one that does not "
+            + "exist — docs/plan/07 § The enforcement seam"
+        );
 
-            victimIndex.GetValueOrThrow().State.ShouldBe(
-                IndexEntryState.Free,
-                "a create under the attacker's tenant claimed a name in the victim's index"
-            );
-        }
-        else {
-            attempt.Error!.Code.ShouldBe(
-                ErrorCode.ResourceNotFound,
-                "a refusal here must still be the invisible answer, not an authorization one"
-            );
-        }
+        // ⚠ And it was refused BEFORE anything was claimed, in either tenant. A check that answered
+        // 404 after taking the name would be a denial-of-service dressed as a refusal.
+        var attackerIndex = await cluster.For(IsolationCluster.Attacker)
+            .GetGrain<IResourceIndexGrain>(GrainKeys.PathIndex(confused))
+            .GetAsync();
+
+        attackerIndex.GetValueOrThrow().State.ShouldBe(IndexEntryState.Free);
+
+        var victimIndex = await cluster.For(IsolationCluster.Victim)
+            .GetGrain<IResourceIndexGrain>(GrainKeys.PathIndex(confused))
+            .GetAsync();
+
+        victimIndex.GetValueOrThrow().State.ShouldBe(IndexEntryState.Free);
 
         var victimQuota = cluster.For(IsolationCluster.Victim)
             .GetGrain<IQuotaGrain>(GrainKeys.Subscription(IsolationCluster.VictimSubscription));
@@ -220,12 +221,89 @@ public sealed class BelowTheManagerTests(IsolationCluster cluster) {
         var attackerQuota = cluster.For(IsolationCluster.Attacker)
             .GetGrain<IQuotaGrain>(GrainKeys.Subscription(IsolationCluster.VictimSubscription));
 
-        // ⚠ The same subscription GUID, two tenants, two grains. That is the property that makes the
-        // missing subscription-ownership check survivable.
+        // ⚠ The same subscription GUID, two tenants, two grains — kept as an assertion because it is
+        // the second layer. The step-1 check is one line in one service; ADR-002's tenant-qualified
+        // key is what holds if somebody ever removes it.
         (await victimQuota.ListLeasesAsync()).IsSuccess.ShouldBeTrue();
         (await attackerQuota.ListLeasesAsync()).IsSuccess.ShouldBeTrue();
 
         victimQuota.GetPrimaryKeyString().ShouldNotBe(attackerQuota.GetPrimaryKeyString());
+    }
+
+    [Theory]
+    [MemberData(nameof(Targets))]
+    public async Task ASubscriptionInAnotherTenantAnswersByteIdenticallyToOneThatNeverExisted(
+        IsolationTarget target
+    ) {
+        // ⚠ THE ORACLE THE STATUS CODE ALONE DOES NOT CLOSE, APPLIED TO SUBSCRIPTIONS. Two 404s whose
+        // messages differ are still a way to ask "is this GUID a live subscription somewhere". A
+        // subscription id is exactly as enumerable as a resource name and leaks more: it is the
+        // billing boundary, so knowing one exists is knowing a customer does.
+        var theirs = IsolationCluster.Address(
+            target,
+            "sub-oracle",
+            IsolationCluster.Attacker,
+            IsolationCluster.VictimSubscription
+        );
+
+        var invented = IsolationCluster.Address(
+            target,
+            "sub-oracle",
+            IsolationCluster.Attacker,
+            Guid.Parse("99999999-9999-4999-8999-999999999999")
+        );
+
+        var caller = IsolationCluster.Caller(IsolationCluster.Attacker, IsolationCluster.AttackerUser);
+
+        var onReal = await cluster.Manager.ReadAsync(
+            new() { Path = theirs.Path, ApiVersion = target.ApiVersion, Caller = caller },
+            TestContext.Current.CancellationToken
+        );
+
+        var onInvented = await cluster.Manager.ReadAsync(
+            new() { Path = invented.Path, ApiVersion = target.ApiVersion, Caller = caller },
+            TestContext.Current.CancellationToken
+        );
+
+        onReal.IsFailure.ShouldBeTrue();
+        onInvented.IsFailure.ShouldBeTrue();
+
+        onReal.Error!.Code.ShouldBe(onInvented.Error!.Code);
+        onReal.Error.Target.ShouldBe(onInvented.Error.Target);
+        onReal.Error.Details.ShouldBeEmpty();
+
+        // The one legitimate difference: each message quotes the path it was given. Blank that out
+        // and the two messages are the same bytes.
+        onReal.Error.Message.Replace(theirs.Path, "PATH", StringComparison.Ordinal)
+            .ShouldBe(onInvented.Error.Message.Replace(invented.Path, "PATH", StringComparison.Ordinal));
+
+        // ⚠ AND IT IS THE SAME ANSWER AS A PLAIN MISSING RESOURCE, WHICH IS THE STRONGER CLAIM.
+        // Byte-identical to each other would be satisfied by a "no such subscription" message that
+        // was consistent with itself and still told the attacker which of the two things was wrong.
+        // This third probe uses the attacker's OWN, perfectly valid subscription and a name nobody
+        // took — so the only thing it has in common with the other two is that the answer must not
+        // say which layer refused.
+        var mine = IsolationCluster.Address(
+            target,
+            "sub-oracle",
+            IsolationCluster.Attacker,
+            IsolationCluster.AttackerSubscription
+        );
+
+        var onMine = await cluster.Manager.ReadAsync(
+            new() { Path = mine.Path, ApiVersion = target.ApiVersion, Caller = caller },
+            TestContext.Current.CancellationToken
+        );
+
+        onMine.IsFailure.ShouldBeTrue();
+        onMine.Error!.Code.ShouldBe(onReal.Error.Code);
+
+        onReal.Error.Message.Replace(theirs.Path, "PATH", StringComparison.Ordinal)
+            .ShouldBe(
+                onMine.Error.Message.Replace(mine.Path, "PATH", StringComparison.Ordinal),
+                "a bad subscription and a bad resource name give different answers, so the shape of "
+                + "the message says which layer refused"
+            );
     }
 
     /// <summary>The providers under attack.</summary>

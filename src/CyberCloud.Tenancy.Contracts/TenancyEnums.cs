@@ -88,6 +88,70 @@ public enum ProvisioningState {
 }
 
 /// <summary>
+///     A lock level, <b>inherited down the hierarchy</b> — docs/plan/06 § Tags, locks, and the small
+///     stuff that is not small.
+/// </summary>
+/// <remarks>
+///     <para>
+///         ⚠ <b>This lives here rather than in <c>CyberCloud.ResourceManager.Contracts</c>, and the
+///         reason is the word "inherited".</b> A lock is set at a <i>scope</i> — a resource, a
+///         resource group, a subscription, eventually a management group — and every scope above the
+///         resource is docs/plan/06's, owned by <c>IResourceGroupGrain</c> and
+///         <c>ISubscriptionGrain</c> in this assembly. This assembly cannot reference the resource
+///         manager's contracts (the dependency runs the other way), so while the enum lived over
+///         there a resource group had no way to name its own lock — and
+///         <c>ResourceScopeLockResolver</c> had nothing above the resource to read, which is exactly
+///         how a subscription-level <see cref="CanNotDelete" /> failed to stop a delete.
+///     </para>
+///     <para>
+///         The <c>[Alias]</c> deliberately still reads <c>CyberCloud.ResourceManager.LockLevel</c>:
+///         it is the name a peer looks the type up by, so keeping it makes the move invisible on the
+///         wire during a rolling upgrade (docs/plan/04 § Failure and upgrade).
+///     </para>
+///     <para>
+///         ⚠ <b>Ordering is <i>not</i> severity and must not be compared with <c>&gt;</c>.</b>
+///         <see cref="ReadOnly" /> is 1 and <see cref="CanNotDelete" /> is 2, but
+///         <see cref="ReadOnly" /> is the stronger of the two — it refuses writes as well as deletes.
+///         Combine two scopes' locks with <see cref="LockLevels.Strongest" />, never with
+///         <c>Math.Max</c>.
+///     </para>
+/// </remarks>
+[Alias("CyberCloud.ResourceManager.LockLevel")]
+public enum LockLevel {
+    /// <summary>No lock.</summary>
+    None = 0,
+
+    /// <summary>Writes and deletes are both refused.</summary>
+    ReadOnly = 1,
+
+    /// <summary>Writes are allowed; deletes are refused.</summary>
+    CanNotDelete = 2
+}
+
+/// <summary>Combining locks found at different scopes.</summary>
+public static class LockLevels {
+    /// <summary>
+    ///     The stronger of two locks — what a scope inherits when it and an ancestor both carry one.
+    /// </summary>
+    /// <param name="first">One scope's lock.</param>
+    /// <param name="second">Another scope's lock.</param>
+    /// <remarks>
+    ///     ⚠ <b>Not <c>Math.Max</c>, because the enum's numbers are not a severity order.</b>
+    ///     <see cref="LockLevel.ReadOnly" /> (1) refuses strictly more than
+    ///     <see cref="LockLevel.CanNotDelete" /> (2) does, so a maximum would silently downgrade a
+    ///     subscription-wide <see cref="LockLevel.ReadOnly" /> to <c>CanNotDelete</c> the moment any
+    ///     scope below it carried the weaker lock — and the write it then let through is the whole
+    ///     incident docs/plan/06 § Tags, locks says a lock exists to prevent.
+    /// </remarks>
+    public static LockLevel Strongest(LockLevel first, LockLevel second) =>
+        first == LockLevel.ReadOnly || second == LockLevel.ReadOnly
+            ? LockLevel.ReadOnly
+            : first == LockLevel.CanNotDelete || second == LockLevel.CanNotDelete
+                ? LockLevel.CanNotDelete
+                : LockLevel.None;
+}
+
+/// <summary>
 ///     The quota meters of docs/plan/06 § Quota — "per-region and per-family".
 /// </summary>
 /// <remarks>

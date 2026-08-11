@@ -15,23 +15,68 @@ PUT /tenants/{t}/subscriptions/{s}/resourceGroups/{rg}
     └─ if not this region → proxy, done
 
   ResourceManager.WriteAsync
-    1. parse path → ResourceId; look up the provider + type + api-version in the registry
+    1. parse path → ResourceId; check tenant == caller's; check the subscription is one this
+       tenant has (ISubscriptionGrain, through ForTenant(caller))  → 404 if it is not
+       look up the provider + type + api-version in the registry
     2. validate body against the type's JSON Schema for that api-version
     3. ReBAC Check(resource | parent rg, "write", caller)      → 404 if not readable
     4. locks: CanNotDelete / ReadOnly inherited from rg, sub, mg
     5. policy evaluation (M3) — deny / modify / audit
     6. quota: IQuotaGrain.TryReserveAsync                      → 429 with which meter
     7. IResourceIndexGrain.TryClaim(path)                      → 409 if taken
-    8. IResourceGrain.SubmitDesiredAsync(body, etag, operationId)
+    8. write the ReBAC parent edge — resource:{id}#parent@resourceGroup:{sub}-{rg}
+         → the manager writes it; nothing else in the platform does
+         → BEFORE step 9, and that ordering is the point
+    9. IResourceGrain.SubmitDesiredAsync(body, etag, operationId)
          → writes durable desired state, provisioningState = Creating|Updating
          → registers the reconcile reminder
-    9. IOperationGrain.StartAsync(...)
-   10. emit resource-changed to cc.{t}.res....
-   11. → 202 Accepted, Azure-Async-Operation: /operations/{opId}, Retry-After: 10
+   10. IOperationGrain.StartAsync(...)
+   11. emit resource-changed to cc.{t}.res....
+   12. → 202 Accepted, Azure-Async-Operation: /operations/{opId}, Retry-After: 10
 ```
 
 Steps 3–7 are the entire reason this is one component rather than a shared library each provider calls.
 A provider that could skip step 3 is a provider that eventually will.
+
+**Step 1 checks two things the caller supplied and does it before anything else.** The tenant in the
+path must be the caller's, and the subscription must be one that tenant has. Both refuse with `404`
+and with the same message a missing resource gets — a subscription is exactly as enumerable as a
+resource name and leaks more, because it is the billing boundary ([07](07-rebac-authorization.md)
+§ The enforcement seam). The subscription lookup goes through `ForTenant(caller)`, which is what makes
+"exists" and "belongs to this tenant" the same question. Both checks come before the registry, because
+the registry's refusal names the api-versions the platform serves and that is a description handed out
+through an address nobody has shown the caller owns.
+
+**Step 8 is the only step that writes to the authorization store, and its position is a decision
+rather than an ordering.** [07](07-rebac-authorization.md) § The model makes a resource's permissions
+inherit through `From("parent", …)`, which follows a `resource:X#parent@resourceGroup:Y` tuple. The
+resource's GUID exists from step 6 and its name is claimed at step 7, so the edge can be written before
+any durable state does — and it must be:
+
+- **After it (steps 9–12) a failure is not recoverable by the request.** There is a window in which
+  the resource is durable and invisible to the person who just created it, and a silo lost inside that
+  window leaves it invisible permanently: the operation grain that could re-drive the work has not been
+  started yet either.
+- **Before it, a failure is a clean refusal.** Nothing durable was written, the quota lease is
+  released, the index claim expires, and the caller gets an error instead of a `202` for a resource
+  they cannot see.
+
+The cost is the mirror image: a silo lost between step 8 and step 9 leaves a tuple pointing at a GUID
+no path resolves to. It grants nothing — the id is unaddressable, the claim expires, and the next create
+of that path mints a different GUID — so it is inert storage rather than an authorization defect. The
+write path removes it on the one failure that leaves no resource (step 9 refusing a create), and does
+**not** remove it on failures after that, because a resource that exists with an odd-looking edge is
+one its owner can still see and delete, and a resource that exists with no edge is one nobody can.
+
+**The delete side belongs to the operation grain, not to `DeleteAsync`.** A delete is accepted long
+before it converges and the resource stays visible in `Deleting` the whole time
+([06](06-tenancy-and-resource-model.md) § Two-phase create), so unlinking at the request would blind
+the owner to their own teardown. `IOperationGrain` removes the edge after `CompleteDeleteAsync` — when
+the resource is *gone* — and retries from its reminder if that fails, because a tuple pointing at a
+deleted object is a slow leak in the tenant's tuple store and "log it and move on" would grow one row
+per resource ever deleted. The retry converges: on a re-drive the reconciler reports `Converged` for an
+already-absent resource, `CompleteDeleteAsync` is idempotent, and the unlink is attempted again until
+it lands or the sixty-minute ceiling reports a `Failed` operation that names the reason.
 
 **`PUT` is a full replacement and is idempotent.** `PATCH` is a JSON Merge Patch and is not. `POST`
 appears only for actions on an existing resource (`/restart`, `/rotateKeys`, `/listKeys`), never for
