@@ -1,7 +1,9 @@
 // docs/plan/03 § build/ — the target graph. Everything a target actually does lives in a sibling
 // partial: Build.Compile.cs, Build.Test.cs, Build.Generate.cs, Build.Charts.cs, Build.Images.cs,
 // Build.Architecture.cs, Build.Licence.cs, Build.Portal.cs, Build.E2E.cs, Build.Chaos.cs,
-// Build.Load.cs, Build.Publish.cs.
+// Build.Load.cs, Build.Publish.cs. Three files are not partials of this class and are named for what
+// they read rather than for a target: ArchitectureFacts.cs (assembly metadata), CoverageReport.cs
+// (Cobertura) and TargetPreconditions.cs (the shape of an honest block).
 //
 // One partial per target, named after it. docs/plan/03 § Top level stopped at Build.Licence.cs and
 // has been extended to list all of them: doc 03's tree describes this directory, docs/plan/23
@@ -62,23 +64,31 @@ sealed partial class Build : NukeBuild
     //
     //   Clean
     //   Restore ──► Compile ──┬──► Test
-    //                         ├──► Generate       (stub)
-    //                         ├──► Architecture   (stub)
-    //                         ├──► E2E            (stub)
-    //                         ├──► Chaos          (stub)
-    //                         ├──► Load           (stub)
-    //                         └──► Images ────────┐ (stub)
-    //   Charts (stub) ────────────────────────────┴──► Licence (stub)
+    //                         ├──► Generate
+    //                         ├──► Architecture
+    //                         ├──► E2E            (blocks: no suite, no staging, no cyc)
+    //                         ├──► Chaos          (blocks: no suite, no cluster)
+    //                         ├──► Load           (blocks: no suite, no environment)
+    //                         └──► Images ────────┐ (blocks: no registry, no syft, no cosign)
+    //   Charts ───────────────────────────────────┴──► Licence (stub)
     //   Portal (stub)
     //
-    //   Publish (stub) ──► Test, Generate, Architecture, Portal, Licence
+    //   Publish ──► Test, Generate, Architecture, Portal, Licence   (blocks: no version, no feeds, no cyc)
     //
     // Publish's fan-in is written out rather than drawn: it reaches five nodes from three different
     // rows above, and the lines needed to show that cost more than they explain.
     //
-    // The ten stubs are wired with their real dependencies so the graph is right from day one, and
-    // each logs where its implementation is tracked. They succeed: a stub that fails the build is
-    // worse than no stub, because it trains everyone to ignore a red target.
+    // ⚠ "BLOCKS" IS NOT "STUB", AND THE DIFFERENCE IS THE WHOLE DESIGN OF THOSE FIVE TARGETS. A stub
+    // logs that it is unwritten and succeeds. A blocked target is written — it discovers its work,
+    // reports how much of it there is, and then fails naming every input it does not have and the
+    // command or parameter that would supply each. See TargetPreconditions.cs.
+    //
+    // The earlier note here said a stub that fails the build is worse than no stub, because it trains
+    // everyone to ignore a red target. That is true of `Test` and `Architecture`, which gate every PR
+    // (docs/plan/23 § CI shape) and must be green on a clean checkout. It is not true of these five:
+    // none is on the PR path, each is invoked deliberately by somebody who wants images pushed or
+    // staging exercised, and answering "nothing was pushed, and here is why" with exit 0 is how a
+    // release goes out with no images in it.
     //
     // ⚠ Three edges that are missing on purpose, because each is the first thing a reader looks for:
     //

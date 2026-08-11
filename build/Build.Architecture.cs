@@ -214,10 +214,7 @@ partial class Build
             GateOutcome.Analyzer("No blocking", "CC1001 and CC1002, wider than the doc's 'grain assemblies'"),
             GeneratedSurfacesGate(),
             OpenApiCompatibilityGate(),
-            GateOutcome.Blocked(
-                "Labels",
-                "docs/plan/23 § The architecture gates says this one is asserted by the conformance "
-                + "suite against real rendered output, not by inspection. No provider exists to render any"),
+            LabelsGate(),
             AnalyzerCoverageGate(),
             PlanCitationGate(),
         };
@@ -380,8 +377,37 @@ partial class Build
                     $"{assembly.Name} binds types from {reference}. This is about types, not packages — "
                     + "docs/plan/02 § ADR-004 legitimately puts KubernetesClient in the restore closure")));
 
-        // Rule 4. The "except its own host" half needs a host↔application map that does not exist
-        // while there are no .Application assemblies; what is checkable now is "except a host".
+        // ── Rule 4 ────────────────────────────────────────────────────────────────────────────
+        //
+        // ⚠ THE STATEMENT BELOW IS NOT THE DOC'S, AND THE DIFFERENCE IS DELIBERATE.
+        //
+        // docs/plan/03 § Assembly graph rules says "except its OWN host". What is enforced is "except
+        // A host under src/Hosts", which is strictly weaker: a second host binding another host's
+        // application layer passes this and violates the doc.
+        //
+        // It used to be reported under the doc's wording with the gap explained in a comment. That is
+        // the wrong place for it — a violation message and a gate report are read by people who are
+        // not reading this file, and a rule that claims more than it checks is a rule everyone
+        // believes is holding. So the statement says what runs, and the shortfall is named in the
+        // report rather than only here.
+        //
+        // ⚠ WHAT THE STRONGER RULE NEEDS, CONCRETELY, so this is a proposal and not a shrug.
+        // Nothing in the tree says which host owns which application layer: `IsHost` reads a
+        // directory name, and an application assembly's name (`CyberCloud.Providers.Sample.Application`)
+        // names its provider, not its host. Three ways to supply the mapping, in order of preference:
+        //
+        //  1. An assembly-level attribute on the application assembly — `[assembly: OwningHost(
+        //     "CyberCloud.Silo.Host")]` — read here the same way DurableStateRationale already is by
+        //     ArchitectureFacts. It travels with the assembly, survives a project move, and is
+        //     reviewable in the diff that creates the coupling.
+        //  2. A committed manifest, like durable-grains.txt. Same reviewability, but it is a second
+        //     file to keep in step, which durable-grains.txt shows is a real cost.
+        //  3. Inferring it from the host's ProjectReference closure. Cheapest and wrong: it derives
+        //     the rule from the very edge the rule is about, so any host that adds the reference
+        //     immediately becomes its "own host".
+        //
+        // Until one of those exists, doc 03's own sentence is unenforceable as written, and the
+        // honest report is the weaker rule under its own name.
         var applications = ShippingAssemblies
             .Where(x => x.Name.EndsWith(".Application", StringComparison.Ordinal))
             .Select(x => x.Name)
@@ -389,7 +415,10 @@ partial class Build
 
         Rule(
             4,
-            "Nothing references a *.Application assembly except its own host.",
+            "Nothing outside src/Hosts references a *.Application assembly. ⚠ WEAKER THAN "
+            + "docs/plan/03 § Assembly graph rules, which says \"except its OWN host\" — there is no "
+            + "host-to-application mapping in the tree, so host-on-another-host's-application passes "
+            + "here. See Build.Architecture.cs § AssemblyGraphGate, rule 4, for the three ways to fix that.",
             applications.Count,
             ShippingAssemblies
                 .Where(assembly => !IsHost(assembly.Name))
@@ -796,6 +825,78 @@ partial class Build
             "OpenAPI compatibility",
             diffable.Count,
             "published api-version document(s) diffed against their checked-in predecessor",
+            violations);
+    }
+
+    // ── Gate: Labels — docs/plan/23 § The architecture gates, row Labels ──────────────────────
+
+    /// <summary>
+    ///     The assertion this gate delegates to. docs/plan/23 § The architecture gates, row Labels:
+    ///     "every reconciler's rendered output carries the seven <c>cybercloud.io/*</c> labels —
+    ///     asserted by the conformance suite against real output, not by inspection."
+    /// </summary>
+    const string LabelsAssertion = "EveryAppliedObjectCarriesTheSevenMandatoryLabelsAndBothAnnotations";
+
+    /// <summary>
+    ///     Runs the labels assertion in every provider's conformance suite.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>This gate was <see cref="GateStatus.Blocked" /> with the reason "no provider
+    ///         exists to render any", and that reason expired the day
+    ///         <c>src/Providers/CyberCloud.Providers.Sample</c> landed.</b> A blocked row whose stated
+    ///         blocker is gone is worse than a failing one: the report keeps printing a sentence that
+    ///         is no longer true, and nothing in the build can notice, because nothing in the build
+    ///         reads a blocked row's prose.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>It runs the test rather than looking for it.</b> Doc 23 puts this row's assertion
+    ///         in the conformance suite deliberately — the labels have to be read off objects a real
+    ///         reconciler really applied, not off source — so the only thing this gate can honestly
+    ///         report is the result of that run. Checking that the method exists would be inspection
+    ///         wearing the suite's name, and a green tick over a test that has been failing since
+    ///         Tuesday.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The duplicated work with <c>Test</c> is the point, not an oversight.</b>
+    ///         <c>Test</c> runs the whole conformance suite and would fail on this assertion too, but
+    ///         <c>Architecture</c> is the target docs/plan/23 § The architecture gates names, and a
+    ///         gate that is green because a different target would have caught it is a gate that
+    ///         reports on that target's configuration rather than on the tree. The cost is one filtered
+    ///         test per provider, about a second each.
+    ///     </para>
+    ///     <para>
+    ///         Counted in conformance suites: <see cref="GateStatus.Vacuous" /> until a provider ships
+    ///         one, which is what the old Blocked row was reaching for and could not express.
+    ///     </para>
+    /// </remarks>
+    GateOutcome LabelsGate()
+    {
+        // ⚠ Provider suites only — under src/Providers, not test/. test/CyberCloud.Conformance holds
+        // the shared base class and a reference provider that exists to test the harness; counting it
+        // would let the gate stay green on a tree whose real providers all stopped rendering labels.
+        var suites = ClassifiedTestProjects
+            .Where(x => x.Suite == TestSuite.PerPullRequest)
+            .Select(x => x.Project)
+            .Where(x => x.NameWithoutExtension.EndsWith(".Conformance", StringComparison.Ordinal))
+            .Where(x => x.ToString().Contains($"{Path.DirectorySeparatorChar}Providers{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
+            .OrderBy(x => x.NameWithoutExtension, StringComparer.Ordinal)
+            .ToList();
+
+        var violations = suites
+            .Where(suite => !SuiteTestPasses(suite, $"*.{LabelsAssertion}"))
+            .Select(suite =>
+                $"{suite.NameWithoutExtension} does not pass {LabelsAssertion} — either the assertion "
+                + "failed (its output is above) or the suite has no test by that name, which "
+                + "--minimum-expected-tests 1 reports the same way. docs/plan/23 § The architecture "
+                + "gates, row Labels; the seven labels are CyberCloud.Kubernetes' KubeLabels.Mandatory")
+            .ToList();
+
+        return GateOutcome.From(
+            "Labels",
+            suites.Count,
+            $"provider conformance suite(s), each running {LabelsAssertion} against objects a real "
+            + "reconciler applied",
             violations);
     }
 
