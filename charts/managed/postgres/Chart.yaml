@@ -1,0 +1,37 @@
+# Managed PostgreSQL — docs/plan/12 § The catalogue, "PostgreSQL — CyberCloud.DBforPostgreSQL/servers".
+#
+# The operator is CloudNativePG, taken from Cozystack's survey per docs/plan/02 § ADR-010. No
+# Cozystack code is vendored; see SOURCE next to this file.
+apiVersion: v2
+name: postgres
+description: Managed PostgreSQL on CloudNativePG — streaming replication, PgBouncer, barman-cloud backup.
+type: application
+
+# The chart's own version. Bumped on every change to this directory.
+version: 0.1.0
+
+# The default major PostgreSQL version, matching values.yaml `version`.
+appVersion: "17"
+
+kubeVersion: ">=1.31.0-0"
+
+keywords:
+  - postgresql
+  - database
+  - cloudnativepg
+
+home: https://cloudnative-pg.io
+sources:
+  - https://github.com/cloudnative-pg/cloudnative-pg
+
+maintainers:
+  - name: Cyber Cloud Platform
+
+# ⚠ These three are read by `Build.Charts` and written into `values.schema.json` as
+# `x-cybercloud-*`. They are what makes the generated schema addressable as a resource type's
+# body rather than as an anonymous blob of Helm values — docs/plan/12 § The pattern, once, piece 2.
+# A chart under charts/managed/ without them fails the build.
+annotations:
+  cybercloud.io/resource-type: CyberCloud.DBforPostgreSQL/servers
+  cybercloud.io/api-version: "2026-08-01"
+  cybercloud.io/operator: cloudnative-pg

@@ -1,0 +1,28 @@
+# Provenance — docs/plan/02 § ADR-010, "Their charts are a starting point, not a dependency.
+# Where a chart is close, fork it into charts/ with the upstream commit recorded in a SOURCE file.
+# A drifting vendored chart with no provenance is how a platform ends up unable to upgrade Postgres."
+#
+# `Build.Charts` requires this file for every chart under charts/managed/ and requires the three
+# keys below. "We wrote it" is an answer to "where did this come from"; "there is no SOURCE file"
+# is indistinguishable from "somebody forgot", which is the state ADR-010 exists to prevent.
+
+# Where the templates came from. `none` means the templates in this directory were written here.
+vendored: none
+
+# The upstream project whose CRD contract these templates render against. Not a dependency: the
+# operator is installed by charts/bundle/, and this chart renders only its custom resources.
+upstream: https://github.com/cloudnative-pg/cloudnative-pg
+
+# The upstream API this chart's templates target. ⚠ This is an API group/version, not a commit:
+# nothing is vendored, so there is no upstream tree to pin. If a template is ever copied from
+# upstream, replace this with `upstream-commit:` and the full 40-character SHA of the tree it was
+# copied from, and say which files.
+upstream-api: postgresql.cnpg.io/v1
+
+# Reviewed against the upstream CRD on this date. A bare date rather than a SHA is a weaker claim
+# and is labelled as one — see upstream-api above.
+reviewed: 2026-08-11
+
+# ⚠ Cozystack (docs/plan/02 § ADR-010) contributed the *operator choice* and the annotated-values
+# pipeline shape to this chart, and no code. It is deliberately not listed as `upstream`, because
+# `upstream` means "there is a tree we could diff against" and here there is not.
