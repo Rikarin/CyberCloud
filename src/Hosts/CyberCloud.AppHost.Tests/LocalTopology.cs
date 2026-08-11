@@ -7,6 +7,7 @@ using Orleans.Configuration;
 using Projects;
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Net.NetworkInformation;
 
 namespace CyberCloud.AppHost.Tests;
 
@@ -36,6 +37,23 @@ namespace CyberCloud.AppHost.Tests;
 ///         things it knows about, and it does not know about these. The failure is an
 ///         <c>AddressInUseException</c> from a silo, which names the port.
 ///     </para>
+///     <para>
+///         ⚠
+///         <b>
+///             Nor beside a second copy of <i>this suite</i> — which is why the bring-up takes a
+///             machine-wide lock (<see cref="MachineLockPath" />).
+///         </b>
+///         The paragraph above anticipated a developer's manual <c>dotnet run</c>; it did not
+///         anticipate a second checkout running <c>./build.sh Test</c> at the same time, which is
+///         now routine and collides identically. The observed failure is <b>not</b> an
+///         <c>AddressInUseException</c>, because 6443 is a Docker-published port rather than a
+///         socket this process binds: Docker refuses the container with
+///         <c>Bind for 0.0.0.0:6443 failed: port is already allocated</c>, k3s never starts, and the
+///         only test that notices is <c>TheK3sApiServerAnswersKubernetes</c>, which fails with
+///         <c>Connection refused (127.0.0.1:6443)</c> while every other resource is genuinely
+///         healthy. That reads as a mystery, and it is the reason this lock exists rather than a
+///         comment advising people not to do it.
+///     </para>
 /// </remarks>
 public sealed class LocalTopology : IAsyncLifetime {
     /// <summary>
@@ -49,10 +67,38 @@ public sealed class LocalTopology : IAsyncLifetime {
     /// </remarks>
     static readonly TimeSpan BringUpBudget = TimeSpan.FromMinutes(10);
 
+    /// <summary>
+    ///     How long to wait for the previous run's k3s container to release host port 6443.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>This waits for a release, it does not retry a failure.</b> Holding the machine lock
+    ///     means no other copy of this suite is starting; anything still on 6443 is therefore the
+    ///     <i>previous</i> holder's container, and Aspire's teardown returns before Docker has
+    ///     finished removing it — measured at over 20 s on this machine. Waiting for a resource to
+    ///     be released is not the same as re-running an operation until it happens to work: if the
+    ///     port never frees, the bring-up fails with the reason rather than proceeding.
+    /// </remarks>
+    static readonly TimeSpan PortReleaseBudget = TimeSpan.FromSeconds(90);
+
     readonly ConcurrentDictionary<string, string> resourceStates =
         new(StringComparer.Ordinal);
 
     IHost clientHost = null!;
+
+    /// <summary>The machine-wide lock, held for as long as the topology is up.</summary>
+    FileStream? machineLock;
+
+    /// <summary>
+    ///     Where the machine-wide lock lives.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ The system temp directory, deliberately, because the point is to be found by a process
+    ///     that shares nothing else with this one — a different git worktree, a different checkout,
+    ///     a different branch. A path under the repository would be per-worktree and would lock
+    ///     nothing.
+    /// </remarks>
+    static string MachineLockPath { get; } =
+        Path.Combine(Path.GetTempPath(), "cybercloud-apphost-local-topology.lock");
 
     /// <summary>How long <c>StartAsync</c> plus both silos becoming healthy took.</summary>
     public TimeSpan ColdStart { get; private set; }
@@ -67,6 +113,9 @@ public sealed class LocalTopology : IAsyncLifetime {
     public async ValueTask InitializeAsync() {
         using var budget = new CancellationTokenSource(BringUpBudget);
         var token = budget.Token;
+
+        machineLock = await AcquireMachineLockAsync(token);
+        await WaitForApiPortToBeFreeAsync(token);
 
         var builder = await DistributedApplicationTestingBuilder
             .CreateAsync<CyberCloud_AppHost>([], token);
@@ -124,6 +173,13 @@ public sealed class LocalTopology : IAsyncLifetime {
             await Application.StopAsync();
             await Application.DisposeAsync();
         }
+
+        // ⚠ Last, and after the application is disposed. Releasing the lock is the signal that the
+        // ports are the next run's to take, and Aspire only asks Docker to remove the containers
+        // during DisposeAsync. Releasing earlier would hand over ports this process still holds —
+        // which is the collision this lock exists to prevent, merely made narrower.
+        machineLock?.Dispose();
+        machineLock = null;
     }
 
     /// <summary>The last observed state of every resource, one per line.</summary>
@@ -141,6 +197,80 @@ public sealed class LocalTopology : IAsyncLifetime {
     public async Task<string> ShardConnectionStringAsync(string shard, CancellationToken cancellationToken) =>
         await Application.GetConnectionStringAsync(shard, cancellationToken)
         ?? throw new InvalidOperationException($"The AppHost has no resource named '{shard}'.");
+
+    /// <summary>
+    ///     Takes the machine-wide lock, waiting for whoever holds it.
+    /// </summary>
+    /// <param name="cancellationToken">The bring-up budget.</param>
+    /// <remarks>
+    ///     ⚠ <b>A file lock rather than a <see cref="Mutex" />, and the reason is the crash case.</b>
+    ///     A named mutex abandoned by a killed process surfaces as
+    ///     <c>AbandonedMutexException</c> on the next waiter, and a test run cancelled with Ctrl-C —
+    ///     the normal way a bring-up ends when somebody changes their mind — is exactly that case.
+    ///     A <see cref="FileStream" /> handle is released by the operating system when the process
+    ///     dies, however it dies, so a killed run cannot wedge every future one.
+    /// </remarks>
+    static async Task<FileStream> AcquireMachineLockAsync(CancellationToken cancellationToken) {
+        var announced = false;
+
+        while (true) {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            try {
+                return new FileStream(
+                    MachineLockPath,
+                    FileMode.OpenOrCreate,
+                    FileAccess.ReadWrite,
+                    FileShare.None
+                );
+            } catch (IOException) {
+                if (!announced) {
+                    // ⚠ Said out loud, because the alternative is a suite that looks hung. Another
+                    // checkout's `./build.sh Test` holds this for the length of its bring-up.
+                    Console.WriteLine(
+                        $"[CyberCloud.AppHost] waiting for another AppHost bring-up on this machine "
+                        + $"to finish (lock: {MachineLockPath})."
+                    );
+
+                    announced = true;
+                }
+
+                await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
+            }
+        }
+    }
+
+    /// <summary>
+    ///     Waits until nothing is listening on the k3s API port, and explains it if that never
+    ///     happens.
+    /// </summary>
+    /// <param name="cancellationToken">The bring-up budget.</param>
+    /// <exception cref="InvalidOperationException">The port never became free.</exception>
+    static async Task WaitForApiPortToBeFreeAsync(CancellationToken cancellationToken) {
+        var clock = Stopwatch.StartNew();
+
+        while (IsApiPortTaken()) {
+            if (clock.Elapsed > PortReleaseBudget) {
+                throw new InvalidOperationException(
+                    $"Host port {CyberCloudResources.K3sApiPort} is still in use after "
+                    + $"{PortReleaseBudget.TotalSeconds:F0} s, and CyberCloud.AppHost publishes k3s "
+                    + $"on it unproxied, so this bring-up would leave k3s unable to start and only "
+                    + $"TheK3sApiServerAnswersKubernetes would notice. Something outside this test "
+                    + $"run holds it — a manual `dotnet run` of CyberCloud.AppHost, or a k3s "
+                    + $"container left behind by an earlier run "
+                    + $"(`docker ps --filter publish={CyberCloudResources.K3sApiPort}`)."
+                );
+            }
+
+            await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
+        }
+    }
+
+    /// <summary>Whether anything on this machine is listening on the k3s API port.</summary>
+    static bool IsApiPortTaken() =>
+        IPGlobalProperties.GetIPGlobalProperties()
+            .GetActiveTcpListeners()
+            .Any(x => x.Port == CyberCloudResources.K3sApiPort);
 
     async Task RecordResourceStatesAsync(CancellationToken cancellationToken) {
         try {
