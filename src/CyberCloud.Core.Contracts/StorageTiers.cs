@@ -1,13 +1,13 @@
 namespace CyberCloud.Core.Contracts;
 
 /// <summary>
-///     The names of the two grain-storage providers. ADR-003 (docs/plan/02:228-259) and
+///     The names of the two grain-storage providers. ADR-003 (docs/plan/02 § ADR-003) and
 ///     docs/plan/05 § The two tiers.
 /// </summary>
 /// <remarks>
 ///     <para>
 ///         These strings are the ones in <c>[PersistentState("state", StorageTiers.Hot)]</c>
-///         (docs/plan/02:233-234) and in <c>AddMultitenantGrainStorage…(StorageTiers.Durable, …)</c>
+///         (docs/plan/02 § ADR-003, the tier table) and in <c>AddMultitenantGrainStorage…(StorageTiers.Durable, …)</c>
 ///         (docs/plan/04:50-53). They live in <c>.Contracts</c> rather than in
 ///         <c>ServiceDefaults</c> because <b>both ends need them</b>: the silo names a provider when
 ///         it registers one, and a grain names the same provider from a provider-implementation
@@ -39,7 +39,7 @@ public static class StorageTiers
     /// <summary>
     ///     PostgreSQL, sharded by tenant, synchronous replica. Tenants, subscriptions, resource
     ///     desired state, users, ReBAC tuples, operations, the billing ledger. Loss tolerance is
-    ///     <b>zero</b> (docs/plan/02:240).
+    ///     <b>zero</b> (docs/plan/02 § ADR-003).
     /// </summary>
     public const string Durable = "Durable";
 }

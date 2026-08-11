@@ -103,15 +103,39 @@ tenant-qualified key. `GrainKeys` is the only type allowed to build the within-t
 | `ISubscriptionGrain` | `sub/{subscriptionId:N}` |
 | `IResourceGroupGrain` | `sub/{subscriptionId:N}/rg/{name}` |
 | `IResourceGrain` | `res/{resourceId:N}` |
-| `IResourceIndexGrain` | `idx/path/{sha256(path)[..16]}` |
+| `IResourceIndexGrain` | `idx/path/{sha256(canonicalPath)[..16]}` |
 | `IUserGrain` | `user/{userId:N}` |
-| `IEmailIndexGrain` | `idx/email/{sha256(normalized)[..16]}` |
+| `IEmailIndexGrain` | `idx/email/{sha256(tenantId + normalizedEmail)[..16]}` |
 | `IOperationGrain` | `op/{operationId:N}` |
 | `IClusterConnectionGrain` | *(null tenant)* `cluster/{clusterId:N}` — see below |
 
 Resource grains are keyed by GUID, not by path, so a rename is a metadata update rather than a grain
 migration. The path index is a separate grain, and the two are updated in one flow with the index
 claimed first — [§ Two-phase create](#two-phase-create).
+
+Three things about the two `idx/` rows that the earlier version of this table got wrong, and that
+matter because a wrong index key is a wrong *uniqueness* answer:
+
+- **`idx/path/` hashes `canonicalPath`, never `path`** — the ⚠ under [§ Identifiers](#identifiers)
+  explains why. The table used to say `path`, which is the spelling that defeats two-phase create.
+- **`idx/email/` includes the tenant id.** The table used to say `sha256(normalized)`, which
+  specifies a **global** email index — precisely the thing [11 § Sign-up](11-identity.md) says we do
+  not have and do not want, because a global index is a global hot spot on the sign-up path. Email
+  uniqueness is *per tenant*.
+- **`normalized` means: trim, reject empty/over-254/control characters, require exactly one `@` with
+  a non-empty local part and domain, then case-fold `A`–`Z` and nothing else.** ⚠ Not
+  `ToLowerInvariant()` — U+212A KELVIN SIGN folds onto `k`, so `aK@x` and `ak@x` would collapse to
+  one key, which at sign-up is one account silently claiming another's identity and is
+  indistinguishable from a legitimate duplicate. Folding only ASCII letters merges exactly the
+  equivalence every mail provider implements. Non-ASCII passes through uncased, so `Ä@x` and `ä@x`
+  are two entries — a *missed* duplicate, which is the safe direction to be wrong in.
+
+⚠ **`[..16]` is sixteen hex characters — 64 bits — not sixteen bytes.** Both index keys are scoped
+*within a tenant*, so the birthday bound is over one tenant's entries: at 1 000 000 resources in a
+single tenant the collision probability is ~3 × 10⁻⁸, and a tenant that large is already an outlier
+([07 § ListObjects](07-rebac-authorization.md) sizes the big case at 200 000). A collision is a
+correctness bug — two names claiming one index grain — so if that margin is ever judged too thin,
+widen to 32 characters. It is a one-line change *before* anything ships and a re-key afterwards.
 
 ⚠ **`IClusterConnectionGrain` is a null-tenant grain and that is a deliberate exception.** A cluster
 connection holds a live client and watches; there must be exactly one activation per cluster

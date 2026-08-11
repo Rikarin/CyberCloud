@@ -174,10 +174,15 @@ public static class GrainKeys
     public static string User(Guid userId)                      => $"user/{userId:N}";
     public static string Operation(Guid operationId)            => $"op/{operationId:N}";
     public static string ClusterConnection(Guid clusterId)      => $"cluster/{clusterId:N}";
-    public static string PathIndex(string canonicalPath)        => $"idx/path/{Sha256Prefix(canonicalPath)}";
-    public static string EmailIndex(Guid tenantId, string email) => $"idx/email/{Sha256Prefix(...)}";
+    public static string PathIndex(ResourceId id)               => $"idx/path/{Sha256Prefix(id.CanonicalPath)}";
+    public static string EmailIndex(Guid tenantId, string email) => $"idx/email/{Sha256Prefix(tenantId, NormalizeEmail(email))}";
 }
 ```
+
+⚠ `PathIndex` takes a `ResourceId`, **not a string**. A `string` overload would accept `Path` exactly
+as readily as `CanonicalPath`, and the difference between those two *is* the bug — see
+[06 § Grain keys](06-tenancy-and-resource-model.md), which also defines `NormalizeEmail` and explains
+why it is not `ToLowerInvariant()`.
 
 ⚠ `PathIndex` hashes the **canonical** path, not `ResourceId.Path`. The provider namespace is
 case-preserving, so `CyberCloud.Cache/redis` and `cybercloud.cache/redis` would otherwise claim two
