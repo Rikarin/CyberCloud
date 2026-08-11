@@ -93,6 +93,19 @@
         <Project Path="src/CyberCloud.Identity.Contracts.Tests/CyberCloud.Identity.Contracts.Tests.csproj"/>
         <Project Path="src/CyberCloud.Identity/CyberCloud.Identity.csproj"/>
         <Project Path="src/CyberCloud.Identity.Tests/CyberCloud.Identity.Tests.csproj"/>
+        <!--
+          The hand-written half of the .NET SDK — docs/plan/21 § Generation. ⚠ It is the ONE project
+          under src/ with IsPackable=true: docs/plan/03 § Top level keeps `cli/` out of src/ "because
+          it ships separately" and places the SDK nowhere at all, which is a gap in that document
+          rather than a decision. It is here because it is .NET library code the generator writes
+          into, and because Build.Publish's NuGet step wants one project rather than a fourth
+          top-level tree.
+
+          ⚠ Nothing named Azure.* is in its graph — docs/plan/21 § The .NET SDK, DECIDED 2026-08-11.
+          Its only package is Polly, which was already in the register for the fabric.
+        -->
+        <Project Path="src/CyberCloud.Sdk/CyberCloud.Sdk.csproj"/>
+        <Project Path="src/CyberCloud.Sdk.Tests/CyberCloud.Sdk.Tests.csproj"/>
     </Folder>
     <!--
       docs/plan/03 § Providers — the five projects every provider has. CyberCloud.Sample is the first

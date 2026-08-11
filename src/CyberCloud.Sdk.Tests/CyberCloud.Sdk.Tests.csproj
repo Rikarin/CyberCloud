@@ -1,0 +1,50 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      docs/plan/02 ADR-018: tests are siblings. OutputType=Exe, the Microsoft.Testing.Platform
+      switches and the NoWarn set come from the repository-root Directory.Build.props /
+      Directory.Build.targets § Test project conventions.
+
+      ⚠ NOTHING HERE OPENS A SOCKET AND NOTHING HERE NEEDS A GATEWAY. docs/plan/10's gateway does not
+      exist yet and neither does docs/plan/11's identity host. Every test drives the SDK through
+      `CyberCloudClientOptions.Transport` / `CyberCloudCredentialOptions.Transport` — an
+      HttpMessageHandler seam — with a scripted double (Infrastructure/ScriptedTransport.cs). That is
+      the same seam a caller uses to point the SDK at a private deployment, so the tests exercise a
+      supported configuration rather than a test-only back door.
+    -->
+
+    <PropertyGroup Label="Analyzer suppression — one, and it is a finding about the emitter">
+        <!--
+          CA1711 "Rename type name WidgetCollection so that it does not end in 'Collection'". The type
+          it fires on is StandIn/WidgetStandIn.cs's `WidgetCollection`, which is not ours to rename:
+          docs/plan/21 § The .NET SDK's conventions table names the shape
+          `{Type}Resource` / `{Type}Collection` / `{Type}Data`, and Azure.ResourceManager — the shape it
+          is borrowed from — uses exactly those words.
+
+          ⚠ This is not a test-project concession. The generated assembly will contain one
+          `{Type}Collection` per resource type and will hit the same rule, so the emitter's project
+          file needs this line too. Recorded in src/CyberCloud.Sdk/EmitterContract.cs § 1.
+        -->
+        <NoWarn>$(NoWarn);CA1711</NoWarn>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="xunit.v3"/>
+        <PackageReference Include="Shouldly"/>
+    </ItemGroup>
+
+    <ItemGroup Label="Global usings">
+        <!-- xunit.v3 ships no implicit using for its own namespace. -->
+        <Using Include="Xunit"/>
+        <Using Include="Shouldly"/>
+        <Using Include="CyberCloud.Sdk"/>
+        <Using Include="System.Net"/>
+        <Using Include="System.Net.Http"/>
+        <Using Include="System.Text"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../CyberCloud.Sdk/CyberCloud.Sdk.csproj"/>
+    </ItemGroup>
+
+</Project>
