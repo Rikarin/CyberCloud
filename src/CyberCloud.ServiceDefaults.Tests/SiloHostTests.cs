@@ -1,6 +1,8 @@
 using System.Net;
 using System.Net.Sockets;
 using System.Text.Json;
+using CyberCloud.Core.Contracts;
+using CyberCloud.ServiceDefaults.Storage;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
@@ -207,14 +209,34 @@ public sealed class SiloHostTests(SiloHostFixture silo) : IClassFixture<SiloHost
     }
 
     [Fact]
-    public void TheSiloHasNoGrainStorageBecauseThatWiringIsADeliberateSeam()
+    public void TheSiloHasNoGrainStorageUnlessTheStorageSectionIsConfigured()
     {
-        // ⚠ This is not a bug being ratified; it is the scope line being made visible. CreateSilo
-        // wires no storage provider (docs/plan/04:50-56 is a marked seam in its body), so a silo
-        // built without `configureCluster` cannot persist a grain. If somebody later adds a default
-        // provider, this test fails and forces the question "which tier, and sharded how?" — which
-        // is the question docs/plan/05 exists to answer and the one a silently-added
-        // AddMemoryGrainStorage would bury.
+        // ⚠ REPLACES TheSiloHasNoGrainStorageBecauseThatWiringIsADeliberateSeam, and is strictly
+        // stronger than it was.
+        //
+        // What changed underneath: CreateSilo now wires both tiers (docs/plan/05 § The two tiers)
+        // when `CyberCloud:Storage` is present. This fixture supplies no such section, so the
+        // original claim — a silo built without storage configuration cannot persist a grain — must
+        // still hold exactly, and it is still the first assertion below.
+        //
+        // What is stronger: the old test asked only the UNKEYED IGrainStorage registration, and
+        // Orleans does not resolve grain storage that way. `[PersistentState("s", "Hot")]` resolves
+        // GetKeyedService<IGrainStorage>("Hot"), and "Default" for an unnamed one. So a provider
+        // registered under any of those keys — which is what every real registration does, including
+        // AddMemoryGrainStorage — would have left the old assertion green while the silo happily
+        // persisted grains. All four spellings are asked here.
         silo.Services.GetServices<IGrainStorage>().ShouldBeEmpty();
+
+        foreach (var name in new[] { "Default", StorageTiers.Hot, StorageTiers.Durable })
+        {
+            silo.Services.GetKeyedServices<IGrainStorage>(name).ShouldBeEmpty(
+                $"a grain storage provider is registered under '{name}' on a silo that was given no "
+                + "CyberCloud:Storage configuration. If that is deliberate, say which tier and how "
+                + "it is sharded — docs/plan/05 § The two tiers.");
+        }
+
+        // The wiring types are not in the container either, so nothing can have been half-wired.
+        silo.Services.GetService<IShardMapCache>().ShouldBeNull();
+        silo.Services.GetService<IShardConnections>().ShouldBeNull();
     }
 }

@@ -33,6 +33,35 @@
     <PackageVersion Include="Microsoft.Orleans.Client" Version="$(OrleansVersion)" />
     <PackageVersion Include="Microsoft.Orleans.Clustering.Redis" Version="$(OrleansVersion)" />
     <PackageVersion Include="Microsoft.Orleans.Persistence.Redis" Version="$(OrleansVersion)" />
+
+    <!--
+      ⚠ MISSING FROM docs/plan/02 § Orleans and hosting, and required by ADR-003.
+
+      ADR-003 makes the durable tier "PostgreSQL, sharded by tenant" and docs/plan/04 § Silo
+      composition puts `AddMultitenantGrainStorage<AdoNetGrainStorage, AdoNetGrainStorageOptions>`
+      in the CreateSilo block, but the dependency register lists no ADO.NET persistence package at
+      all — it lists Persistence.Redis and stops. This is that package, and it is the only one that
+      provides `AddAdoNetGrainStorage`, `Orleans.Storage.AdoNetGrainStorage`,
+      `Orleans.Configuration.AdoNetGrainStorageOptions` and
+      `Orleans.Configuration.AdoNetGrainStorageOptionsValidator`. Confirmed published at 10.2.2
+      (`dotnet package search Microsoft.Orleans.Persistence.AdoNet`, exact match), so it tracks
+      $(OrleansVersion) like every other first-party Orleans reference.
+
+      ⚠ It does NOT contain a PostgreSQL driver, and it does not reference one. The provider loads
+      the driver by reflection at first use: `DbConnectionFactory` does `Assembly.Load("Npgsql")`
+      and reads the static `Instance` field off `Npgsql.NpgsqlFactory`, keyed by the `Invariant`
+      string "Npgsql". So `Npgsql` (already in the register, below) is a *runtime* dependency of
+      any host that wires the durable tier, and dropping it produces an AggregateException on the
+      first grain write rather than a build error.
+
+      ⚠ It also ships NO SQL. docs/plan/05 § Durable quotes the OrleansStorage column list but no
+      document says who creates the table, and the package has no .sql content and no embedded
+      resources (verified: GetManifestResourceNames() is empty). The DDL lives in the dotnet/orleans
+      repository — src/AdoNet/Shared/PostgreSQL-Main.sql and
+      src/AdoNet/Orleans.Persistence.AdoNet/PostgreSQL-Persistence.sql — and nothing in this
+      repository applies it to a shard yet. See CyberCloud.ServiceDefaults.Tests/Storage/OrleansAdoNetSchema.cs.
+    -->
+    <PackageVersion Include="Microsoft.Orleans.Persistence.AdoNet" Version="$(OrleansVersion)" />
     <PackageVersion Include="Microsoft.Orleans.Reminders.Redis" Version="$(OrleansVersion)" />
     <PackageVersion Include="Microsoft.Orleans.Streaming" Version="$(OrleansVersion)" />
     <PackageVersion Include="Microsoft.Orleans.Serialization.SystemTextJson" Version="$(OrleansVersion)" />

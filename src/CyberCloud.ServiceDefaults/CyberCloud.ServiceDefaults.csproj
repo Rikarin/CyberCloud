@@ -35,6 +35,34 @@
     <PackageReference Include="Microsoft.Orleans.Hosting.Kubernetes" />
   </ItemGroup>
 
+  <ItemGroup Label="Grain storage — ADR-003, docs/plan/05 § The two tiers">
+    <!-- Hot: RedisGrainStorage + RedisStorageOptions. -->
+    <PackageReference Include="Microsoft.Orleans.Persistence.Redis" />
+    <!-- Durable: AdoNetGrainStorage + AdoNetGrainStorageOptions. Absent from docs/plan/02's register. -->
+    <PackageReference Include="Microsoft.Orleans.Persistence.AdoNet" />
+    <!--
+      Per-tenant storage provider instances, keyed by the tenant id in the grain key — ADR-002.
+      This is what makes the two references above sharded rather than shared.
+    -->
+    <PackageReference Include="Orleans.Multitenant" />
+    <!--
+      ⚠ Two direct reasons and one indirect one.
+
+      Direct: ConfiguredShardConnections composes the durable connection string through
+      NpgsqlConnectionStringBuilder rather than by concatenation, so that a MaxPoolSize already
+      present in the operator's string is overridden rather than duplicated and ignored
+      (docs/plan/05 § Storage provider wiring); and it sets the two transaction-mode-PgBouncer
+      settings by name.
+
+      Indirect, and the one that would bite: Microsoft.Orleans.Persistence.AdoNet resolves its
+      driver with Assembly.Load("Npgsql"). Without this reference the assembly is not in the host's
+      output and the failure is at first grain write.
+    -->
+    <PackageReference Include="Npgsql" />
+    <!-- Cluster-aware key/slot handling and ConfigurationOptions parsing — ADR-003, docs/plan/05 § Hot. -->
+    <PackageReference Include="StackExchange.Redis" />
+  </ItemGroup>
+
   <ItemGroup Label="ABP — ADR-006, module system only">
     <PackageReference Include="Volo.Abp.Autofac" />
   </ItemGroup>
