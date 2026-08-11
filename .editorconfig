@@ -1,0 +1,345 @@
+# EditorConfig — https://editorconfig.org
+#
+# The formatting rules below describe the code as it is actually written in this repository. They
+# were derived from it, not imposed on it: every setting in the C# formatting section was measured
+# across 244 files before it was written down. Where the measurement was one-sided, the rule is
+# stated flatly; where it was mixed, the comment says so.
+#
+# Documentation style — how doc comments are *worded* — is not expressible here. It lives in
+# docs/code-documentation-style.md and follows the Microsoft Writing Style Guide.
+
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 4
+
+[*.{json,jsonc,yml,yaml,ts,js,mts,cts,html,scss,css}]
+indent_size = 2
+
+[*.md]
+# Two trailing spaces are a hard line break in Markdown.
+trim_trailing_whitespace = false
+
+# ⚠ NOT PROSE. Despite the .md extension, these are parsed by
+# Microsoft.CodeAnalysis.Analyzers and their format is strict: the first two lines are `;` comments,
+# and the rule table is column-parsed. Reformatting them breaks the build with `RS2007: Analyzer
+# release file has a missing or invalid release header`, which names the file but not the cause.
+#
+# This has already happened once — a Markdown reflow rewrapped `; Unshipped analyzer release` onto
+# two lines, so the second line began `release ;` instead of `;`, and 12 RS2007 errors followed.
+# Keep any Markdown formatter away from them.
+[**/AnalyzerReleases.*.md]
+trim_trailing_whitespace = false
+insert_final_newline = true
+max_line_length = off
+
+[*.{csproj,props,targets,slnx,slnf,xml,config,ruleset,nuspec}]
+indent_size = 4
+
+[*.{sh,bash}]
+end_of_line = lf
+
+[*.{cmd,bat,ps1}]
+end_of_line = crlf
+
+# ══════════════════════════════════════════════════════════════════════════════════════════════
+# C#
+# ══════════════════════════════════════════════════════════════════════════════════════════════
+
+[*.cs]
+indent_size = 4
+max_line_length = 120
+
+# ── Braces: K&R, not Allman ──────────────────────────────────────────────────────────────────
+# Measured: 2 086 opening braces trail the declaration, 111 stand alone. This is the single
+# largest departure from the C# default, so it is stated first.
+csharp_new_line_before_open_brace = none
+csharp_new_line_before_else = false
+csharp_new_line_before_catch = false
+csharp_new_line_before_finally = false
+csharp_new_line_before_members_in_object_initializers = true
+csharp_new_line_before_members_in_anonymous_types = true
+csharp_new_line_between_query_expression_clauses = true
+
+# ── Indentation ──────────────────────────────────────────────────────────────────────────────
+csharp_indent_case_contents = true
+csharp_indent_case_contents_when_block = false
+csharp_indent_switch_labels = true
+csharp_indent_labels = one_less_than_current
+csharp_indent_block_contents = true
+csharp_indent_braces = false
+
+# ── Spacing ──────────────────────────────────────────────────────────────────────────────────
+csharp_space_after_cast = false
+csharp_space_after_keywords_in_control_flow_statements = true
+csharp_space_before_colon_in_inheritance_clause = true
+csharp_space_after_colon_in_inheritance_clause = true
+csharp_space_around_binary_operators = before_and_after
+csharp_space_between_method_declaration_parameter_list_parentheses = false
+csharp_space_between_method_declaration_empty_parameter_list_parentheses = false
+csharp_space_between_method_declaration_name_and_open_parenthesis = false
+csharp_space_between_method_call_parameter_list_parentheses = false
+csharp_space_between_method_call_empty_parameter_list_parentheses = false
+csharp_space_between_method_call_name_and_opening_parenthesis = false
+csharp_space_between_parentheses = false
+csharp_space_between_square_brackets = false
+csharp_space_before_open_square_brackets = false
+csharp_space_after_comma = true
+csharp_space_before_comma = false
+csharp_space_after_dot = false
+csharp_space_before_dot = false
+csharp_space_after_semicolon_in_for_statement = true
+csharp_space_before_semicolon_in_for_statement = false
+csharp_space_around_declaration_statements = false
+
+# ── Wrapping ─────────────────────────────────────────────────────────────────────────────────
+# 99.5 % of lines are under 110 characters and 99.94 % are under 120. The limit is a guide for
+# the formatter, not a gate — no analyzer enforces it.
+csharp_preserve_single_line_statements = false
+csharp_preserve_single_line_blocks = true
+
+# ── Language style ───────────────────────────────────────────────────────────────────────────
+# `var` is near-universal: 1 769 uses against 8 explicit `T x = new …`.
+csharp_style_var_for_built_in_types = true:suggestion
+csharp_style_var_when_type_is_apparent = true:suggestion
+csharp_style_var_elsewhere = true:suggestion
+
+# File-scoped namespaces are unanimous: 217 files, no block-scoped namespace anywhere.
+csharp_style_namespace_declarations = file_scoped:error
+
+# Expression bodies are used heavily (860 members). They are preferred, never required —
+# IDE0022 stays silent below, because "this method would read better as a block" is a judgement.
+csharp_style_expression_bodied_methods = true:silent
+csharp_style_expression_bodied_constructors = true:silent
+csharp_style_expression_bodied_operators = true:silent
+csharp_style_expression_bodied_properties = true:suggestion
+csharp_style_expression_bodied_indexers = true:suggestion
+csharp_style_expression_bodied_accessors = true:suggestion
+csharp_style_expression_bodied_lambdas = true:suggestion
+csharp_style_expression_bodied_local_functions = true:silent
+
+csharp_prefer_braces = true:suggestion
+csharp_prefer_simple_using_statement = true:suggestion
+csharp_prefer_static_local_function = true:suggestion
+csharp_prefer_simple_default_expression = true:suggestion
+csharp_style_prefer_primary_constructors = true:suggestion
+csharp_style_prefer_range_operator = true:suggestion
+csharp_style_prefer_index_operator = true:suggestion
+csharp_style_prefer_null_check_over_type_check = true:suggestion
+csharp_style_prefer_pattern_matching = true:suggestion
+csharp_style_pattern_matching_over_is_with_cast_check = true:suggestion
+csharp_style_pattern_matching_over_as_with_null_check = true:suggestion
+csharp_style_prefer_switch_expression = true:suggestion
+csharp_style_prefer_not_pattern = true:suggestion
+csharp_style_inlined_variable_declaration = true:suggestion
+csharp_style_throw_expression = true:suggestion
+csharp_style_conditional_delegate_call = true:suggestion
+csharp_style_deconstructed_variable_declaration = true:suggestion
+csharp_style_unused_value_assignment_preference = discard_variable:suggestion
+csharp_style_unused_value_expression_statement_preference = discard_variable:silent
+csharp_using_directive_placement = outside_namespace:error
+
+# ── using directives ─────────────────────────────────────────────────────────────────────────
+# Plain alphabetical, with no System-first group. Measured across the 72 files that mix System
+# and non-System imports: `CyberCloud.*` and `Microsoft.*` sort ahead of `System.*` because C and
+# M precede S, and that is what the tree does.
+dotnet_sort_system_directives_first = false
+dotnet_separate_import_directive_groups = false
+
+# ── Qualification and types ──────────────────────────────────────────────────────────────────
+# `this.` appears 53 times and every one disambiguates a constructor parameter from the field it
+# assigns — which the compiler requires. It is not a general qualification style.
+dotnet_style_qualification_for_field = false:suggestion
+dotnet_style_qualification_for_property = false:suggestion
+dotnet_style_qualification_for_method = false:suggestion
+dotnet_style_qualification_for_event = false:suggestion
+dotnet_style_predefined_type_for_locals_parameters_members = true:suggestion
+dotnet_style_predefined_type_for_member_access = true:suggestion
+
+# Accessibility modifiers are written only when they change something — 303 members declare
+# `static …` with no modifier against 3 explicit `private`.
+dotnet_style_require_accessibility_modifiers = omit_if_default:suggestion
+dotnet_style_readonly_field = true:suggestion
+
+dotnet_style_object_initializer = true:suggestion
+dotnet_style_collection_initializer = true:suggestion
+dotnet_style_prefer_collection_expression = when_types_loosely_match:suggestion
+dotnet_style_explicit_tuple_names = true:suggestion
+dotnet_style_prefer_inferred_tuple_names = true:suggestion
+dotnet_style_prefer_inferred_anonymous_type_member_names = true:suggestion
+dotnet_style_coalesce_expression = true:suggestion
+dotnet_style_null_propagation = true:suggestion
+dotnet_style_prefer_is_null_check_over_reference_equality_method = true:suggestion
+dotnet_style_prefer_auto_properties = true:suggestion
+dotnet_style_prefer_conditional_expression_over_assignment = true:silent
+dotnet_style_prefer_conditional_expression_over_return = true:silent
+dotnet_style_prefer_compound_assignment = true:suggestion
+dotnet_style_prefer_simplified_boolean_expressions = true:suggestion
+dotnet_style_prefer_simplified_interpolation = true:suggestion
+dotnet_style_namespace_match_folder = true:suggestion
+dotnet_style_operator_placement_when_wrapping = beginning_of_line
+dotnet_style_allow_multiple_blank_lines_experimental = false:suggestion
+dotnet_style_allow_statement_immediately_after_block_experimental = false:suggestion
+
+# ══════════════════════════════════════════════════════════════════════════════════════════════
+# Naming — docs/plan/00 § Coding standards
+# ══════════════════════════════════════════════════════════════════════════════════════════════
+# "PascalCase for anything a caller can name; camelCase, no `_` prefix, for private state."
+# The tree agrees: exactly one `_`-prefixed identifier exists in 244 files.
+
+dotnet_naming_style.pascal.capitalization = pascal_case
+dotnet_naming_style.camel.capitalization = camel_case
+dotnet_naming_style.i_pascal.capitalization = pascal_case
+dotnet_naming_style.i_pascal.required_prefix = I
+dotnet_naming_style.t_pascal.capitalization = pascal_case
+dotnet_naming_style.t_pascal.required_prefix = T
+
+dotnet_naming_symbols.nameable.applicable_kinds = namespace, class, struct, interface, enum, property, method, event, delegate, local_function
+dotnet_naming_symbols.nameable.applicable_accessibilities = *
+dotnet_naming_rule.nameable_are_pascal.symbols = nameable
+dotnet_naming_rule.nameable_are_pascal.style = pascal
+dotnet_naming_rule.nameable_are_pascal.severity = error
+
+dotnet_naming_symbols.ifaces.applicable_kinds = interface
+dotnet_naming_symbols.ifaces.applicable_accessibilities = *
+dotnet_naming_rule.interfaces_are_i_pascal.symbols = ifaces
+dotnet_naming_rule.interfaces_are_i_pascal.style = i_pascal
+dotnet_naming_rule.interfaces_are_i_pascal.severity = error
+
+dotnet_naming_symbols.tparams.applicable_kinds = type_parameter
+dotnet_naming_symbols.tparams.applicable_accessibilities = *
+dotnet_naming_rule.type_parameters_are_t_pascal.symbols = tparams
+dotnet_naming_rule.type_parameters_are_t_pascal.style = t_pascal
+dotnet_naming_rule.type_parameters_are_t_pascal.severity = error
+
+dotnet_naming_symbols.non_private_fields.applicable_kinds = field
+dotnet_naming_symbols.non_private_fields.applicable_accessibilities = public, internal, protected, protected_internal, private_protected
+dotnet_naming_rule.non_private_fields_are_pascal.symbols = non_private_fields
+dotnet_naming_rule.non_private_fields_are_pascal.style = pascal
+dotnet_naming_rule.non_private_fields_are_pascal.severity = error
+
+dotnet_naming_symbols.consts.applicable_kinds = field
+dotnet_naming_symbols.consts.applicable_accessibilities = *
+dotnet_naming_symbols.consts.required_modifiers = const
+dotnet_naming_rule.constants_are_pascal.symbols = consts
+dotnet_naming_rule.constants_are_pascal.style = pascal
+dotnet_naming_rule.constants_are_pascal.severity = error
+
+dotnet_naming_symbols.static_readonly.applicable_kinds = field
+dotnet_naming_symbols.static_readonly.applicable_accessibilities = *
+dotnet_naming_symbols.static_readonly.required_modifiers = static, readonly
+dotnet_naming_rule.static_readonly_are_pascal.symbols = static_readonly
+dotnet_naming_rule.static_readonly_are_pascal.style = pascal
+dotnet_naming_rule.static_readonly_are_pascal.severity = error
+
+# No `_` prefix. A private field is plain camelCase, and `this.` disambiguates in a constructor.
+dotnet_naming_symbols.private_fields.applicable_kinds = field
+dotnet_naming_symbols.private_fields.applicable_accessibilities = private
+dotnet_naming_rule.private_fields_are_camel_no_underscore.symbols = private_fields
+dotnet_naming_rule.private_fields_are_camel_no_underscore.style = camel
+dotnet_naming_rule.private_fields_are_camel_no_underscore.severity = error
+
+dotnet_naming_symbols.locals_and_parameters.applicable_kinds = parameter, local
+dotnet_naming_symbols.locals_and_parameters.applicable_accessibilities = *
+dotnet_naming_rule.locals_and_parameters_are_camel.symbols = locals_and_parameters
+dotnet_naming_rule.locals_and_parameters_are_camel.style = camel
+dotnet_naming_rule.locals_and_parameters_are_camel.severity = error
+
+# ══════════════════════════════════════════════════════════════════════════════════════════════
+# Diagnostics
+# ══════════════════════════════════════════════════════════════════════════════════════════════
+# Severity here is not warning-versus-error: `TreatWarningsAsErrors` is on, so the only real
+# choice is "breaks the build" or "doesn't".
+#
+# ⚠ Formatting rules are deliberately NOT errors. IDE0055 is left unset, so reformatting the tree
+# can never fail a build. That is the whole reason the formatting section above describes the code
+# rather than policing it.
+
+# CyberCloud.Analyzers — the rules docs/plan already claimed were enforced. Each had zero hits on
+# the tree when it was introduced.
+dotnet_diagnostic.CC1001.severity = error   # blocking on a task from a synchronous member
+dotnet_diagnostic.CC1002.severity = error   # async void
+dotnet_diagnostic.CC1003.severity = error   # [GenerateSerializer] without a stable [Alias]
+dotnet_diagnostic.CC1004.severity = error   # a grain key built by concatenation
+dotnet_diagnostic.CC1005.severity = error   # a secret-shaped member in grain state
+dotnet_diagnostic.CC1006.severity = error   # raw IGrainFactory.GetGrain outside grain code
+dotnet_diagnostic.CC1007.severity = error   # #pragma warning disable with no linked issue
+
+# Interpolated log message templates. docs/plan/00 § Coding standards bans them outright.
+# ⚠ CA2254 catches the interpolated template. It does not enforce "use [LoggerMessage]" — that
+# half is review-enforced, and CA1848 below is the nudge rather than the gate.
+dotnet_diagnostic.CA2254.severity = error
+dotnet_diagnostic.CA2253.severity = error
+dotnet_diagnostic.CA1848.severity = suggestion
+
+# Nullable. docs/plan/00 § Non-negotiables enables it, so the violations are errors.
+dotnet_diagnostic.CS8600.severity = error
+dotnet_diagnostic.CS8602.severity = error
+dotnet_diagnostic.CS8603.severity = error
+dotnet_diagnostic.CS8604.severity = error
+dotnet_diagnostic.CS8618.severity = error
+dotnet_diagnostic.CS8625.severity = error
+
+# Dead code and unused state. Cheap to fix and always a real finding.
+dotnet_diagnostic.IDE0005.severity = error  # unnecessary using
+dotnet_diagnostic.IDE0044.severity = error  # make field readonly
+dotnet_diagnostic.IDE0051.severity = error  # unused private member
+dotnet_diagnostic.IDE0052.severity = error  # unread private member
+dotnet_diagnostic.CS0168.severity = error   # declared, never used
+dotnet_diagnostic.CS0219.severity = error   # assigned, never used
+
+# Correctness worth breaking a build for.
+dotnet_diagnostic.CA1062.severity = none    # public-argument null checks — nullable annotations do this job
+dotnet_diagnostic.CA1305.severity = error   # specify IFormatProvider
+dotnet_diagnostic.CA1310.severity = error   # StringComparison on a culture-sensitive compare
+dotnet_diagnostic.CA1849.severity = error   # blocking call inside an async method
+dotnet_diagnostic.CA1852.severity = error   # seal an internal type that is never inherited
+dotnet_diagnostic.CA2008.severity = error   # pass a TaskScheduler explicitly
+dotnet_diagnostic.CA2012.severity = error   # use ValueTask correctly
+dotnet_diagnostic.CA2016.severity = error   # forward the CancellationToken
+dotnet_diagnostic.CA2201.severity = error   # do not raise reserved exception types
+dotnet_diagnostic.CA2213.severity = error   # disposable fields disposed
+dotnet_diagnostic.CA2215.severity = error   # Dispose should call base.Dispose
+dotnet_diagnostic.CS1998.severity = error   # async method with no await
+dotnet_diagnostic.CS4014.severity = error   # unawaited task
+
+# File-scoped namespaces and `using` placement, both unanimous in the tree.
+dotnet_diagnostic.IDE0161.severity = error
+dotnet_diagnostic.IDE0065.severity = error
+
+# ── Demoted, each because it was observed failing a build of correct code ────────────────────
+#
+# CA1873 fired on `logger.LogDebug("Cache hit for {ThingId}", id)` with a Guid argument — the
+# exact shape docs/plan/00 asks for. Its heuristic treats any boxed argument as "may be
+# expensive". The real answer is [LoggerMessage]; an error here would ban idiomatic ILogger calls.
+dotnet_diagnostic.CA1873.severity = suggestion
+#
+# CA1822 fired on an ordinary instance helper that happens not to touch a field. It makes "add a
+# private helper" a compile error until you also decide its staticness.
+dotnet_diagnostic.CA1822.severity = suggestion
+
+# Style rules that fire on shape rather than on defects. Visible in the IDE, never a gate.
+dotnet_diagnostic.IDE0011.severity = suggestion  # add braces
+dotnet_diagnostic.IDE0022.severity = silent      # expression-bodied method
+dotnet_diagnostic.IDE0045.severity = silent      # conditional expression over assignment
+dotnet_diagnostic.IDE0046.severity = silent      # conditional expression over return
+dotnet_diagnostic.IDE0058.severity = silent      # expression value never used
+dotnet_diagnostic.IDE0072.severity = silent      # add missing cases to switch expression
+dotnet_diagnostic.IDE0130.severity = suggestion  # namespace does not match folder structure
+
+# ══════════════════════════════════════════════════════════════════════════════════════════════
+# Generated code — the generator owns it (docs/plan/03 § Assembly graph rules, rule 6; ADR-012)
+# ══════════════════════════════════════════════════════════════════════════════════════════════
+
+[*.{g,generated,Designer}.cs]
+generated_code = true
+dotnet_analyzer_diagnostic.severity = none
+
+[**/obj/**.cs]
+generated_code = true
+dotnet_analyzer_diagnostic.severity = none

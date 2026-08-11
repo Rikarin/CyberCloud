@@ -152,9 +152,6 @@ public sealed class ErrorCode : IEquatable<ErrorCode> {
     /// </summary>
     public static readonly ErrorCode QuotaExceeded = new("QuotaExceeded");
 
-    static readonly FrozenDictionary<string, ErrorCode> ByValue =
-        All.ToFrozenDictionary(x => x.Value, StringComparer.Ordinal);
-
     // ── The closed set, and the lookup built from it. ──────────────────────────────────────────
 
     /// <summary>Every code in the registry, in declaration order.</summary>
@@ -190,6 +187,23 @@ public sealed class ErrorCode : IEquatable<ErrorCode> {
         TenantSuspended,
         QuotaExceeded
     ];
+
+    /// <summary>The value-to-code lookup behind <see cref="TryFromValue" />.</summary>
+    /// <remarks>
+    ///     ⚠ <b>This declaration must stay below <see cref="All" />.</b> Static field initializers
+    ///     run in declaration order, so moving it above <see cref="All" /> makes it read a default
+    ///     <see cref="ImmutableArray{T}" /> and the whole type fails to initialize:
+    ///     <c>TypeInitializationException</c> wrapping "This operation cannot be performed on a
+    ///     default instance of ImmutableArray&lt;T&gt;". Because <see cref="ErrorCode" /> is
+    ///     touched by <see cref="Result" />, that surfaces as every call in the process throwing,
+    ///     nowhere near this file.
+    ///     <para>
+    ///         This is not hypothetical — a reformatting pass moved it above and broke 40 tenancy
+    ///         tests at once. The compiler does not warn, and no analyzer catches it.
+    ///     </para>
+    /// </remarks>
+    static readonly FrozenDictionary<string, ErrorCode> ByValue =
+        All.ToFrozenDictionary(x => x.Value, StringComparer.Ordinal);
 
     /// <summary>The wire form — the exact string that appears in <c>error.code</c>.</summary>
     public string Value { get; }
