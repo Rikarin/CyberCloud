@@ -45,26 +45,28 @@
     <PackageVersion Include="Orleans.Multitenant" Version="4.0.0" />
 
     <!--
-      ⚠ UNRESOLVED, deliberately. docs/plan/02:31 and ADR-005 both flag this.
-      `Rikarin.Orleans.Streaming.NATs` has exactly ONE published version — 9.1.0-alpha.1 — and it
-      declares a dependency on `Microsoft.Orleans.Streaming [9.1.0,)`. That range's lower bound is
-      satisfied by our Orleans 10.2.2, so NuGet will resolve it, but the assembly is compiled against
-      the Orleans 9 surface and nothing here proves it loads. Do NOT attempt to reconcile it with
-      Orleans 10 in this file — bumping the package to a 10.x build is a scheduled task in
-      docs/plan/24, with the ADR-005 fallback (direct NATS.Client.JetStream) if it slips.
-      Verified by restoring the whole register together: it resolves alongside Orleans 10.2.2 with
-      no downgrade — Microsoft.Orleans.Streaming, .Analyzers and .CodeGenerator all land on 10.2.2,
-      because the package's dependency "9.1.0" is a minimum, not a pin. Restore and compile are
-      therefore NOT evidence that it works; the assembly was compiled against the Orleans 9 surface
-      and whether it binds at runtime is untested and out of scope here.
+      ⚠ SUPERSEDES docs/plan/02:31 and ADR-005 (docs/plan/02:216-232).
 
-      ⚠ The published package id is `Rikarin.Orleans.Streaming.NATS` (upper-case S). docs/plan/02:31
-      writes `…NATs`. NuGet ids are case-insensitive so both restore, but the id below is spelled as
-      published so the lock file and the doc agree.
+      The plan names `Rikarin.Orleans.Streaming.NATs` as "ours, and on Orleans 9", and schedules a
+      0.4 EM Phase-0 task in docs/plan/24:18 to bump it to Orleans 10. That task is DROPPED: the
+      Rikarin package is not relevant. Orleans now ships a first-party NATS stream provider,
+      `Microsoft.Orleans.Streaming.NATS`, built against Orleans 10 and targeting net10.0.
+      ADR-005's stated fallback (a hand-rolled adapter over NATS.Client.JetStream) is not needed.
 
-      No project references this yet.
+      ⚠ VERSION TRAP — do not "take the latest". Every published version carries an `-alpha.1`
+      suffix, so there is no stable release and SemVer prerelease ordering is misleading here:
+      `10.2.2-rc.2.alpha.1` sorts ABOVE `10.2.2-alpha.1` (because "rc" > "alpha" alphabetically),
+      but it is built against Orleans `10.2.2-rc.2`, and taking it would drag an Orleans release
+      candidate into a graph pinned to 10.2.2 stable. Verified against the registration index:
+          10.2.2-alpha.1        -> Microsoft.Orleans.Streaming [10.2.2, )       ← matches our pin
+          10.2.2-rc.2.alpha.1   -> Microsoft.Orleans.Streaming [10.2.2-rc.2, )  ← do NOT use
+      So the pin tracks $(OrleansVersion) with an `-alpha.1` suffix, NOT the highest version.
+
+      ⚠ It is still a prerelease and it also pulls NATS.Net [2.7.2,), a different client package
+      from the NATS.Client.Core/.JetStream pair named in docs/plan/02:61. Whether both can coexist
+      is untested — no project references this yet.
     -->
-    <PackageVersion Include="Rikarin.Orleans.Streaming.NATS" Version="9.1.0-alpha.1" />
+    <PackageVersion Include="Microsoft.Orleans.Streaming.NATS" Version="$(OrleansVersion)-alpha.1" />
   </ItemGroup>
 
   <!-- ══════════════ ABP — docs/plan/02 § ABP, ADR-006 ══════════════ -->
