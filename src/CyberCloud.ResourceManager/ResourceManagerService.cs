@@ -288,7 +288,19 @@ public sealed class ResourceManagerService(
                     SubscriptionId = target.Id.SubscriptionId,
                     ApiVersion = target.ApiVersion.Value,
                     Desired = "{}",
+                    // ⚠ A DELETE HOLDS NO LEASE, AND THAT IS THE WHOLE DEFECT THIS LINE CLOSES.
+                    // The operation grain used to "return committed quota" by releasing leases; this
+                    // array is empty and always was, so nothing came back and a subscription's
+                    // committed usage climbed by one resource's worth on every delete.
                     QuotaLeaseIds = [],
+                    // ⚠ …and this is what it actually has to give back. Derived from the resource's
+                    // STORED body — BeginDeleteAsync above projected the whole superset, not an
+                    // api-version's view of it — through the same AmountFor the create reserved with,
+                    // so a delete returns the number the create committed rather than one near it.
+                    // Recorded on the spec because the grain is re-driven from a reminder after
+                    // CompleteDeleteAsync has cleared the resource, at which point there is nothing
+                    // left to derive it from.
+                    CommittedQuota = CommittedBy(target.Registration, snapshot.Properties),
                     IndexClaimed = false,
                     Caller = request.Caller
                 }
@@ -553,6 +565,7 @@ public sealed class ResourceManagerService(
         trace.Enter(WriteStep.Quota);
 
         var leases = ImmutableArray<Guid>.Empty;
+        var committed = ImmutableArray<QuotaCommitment>.Empty;
         var operationId = Guid.NewGuid();
         var resourceId = target.Exists ? target.Id.Id : Guid.NewGuid();
 
@@ -562,7 +575,7 @@ public sealed class ResourceManagerService(
                 return Result<WriteAccepted>.Failure(quotaError);
             }
 
-            leases = reserved.GetValueOrThrow();
+            (leases, committed) = reserved.GetValueOrThrow();
         }
 
         var addressed = target.Id.WithId(resourceId);
@@ -706,6 +719,11 @@ public sealed class ResourceManagerService(
                     ApiVersion = resolvedTarget.ApiVersion.Value,
                     Desired = effectiveBody,
                     QuotaLeaseIds = leases,
+                    // ⚠ What the leases above will COMMIT to, recorded at the moment the amounts are
+                    // known. A create does not read this back — CommitAsync works off the lease ids —
+                    // but recording it is what makes the spec a complete account of the quota this
+                    // operation moved, which is the property the delete path needs on its own side.
+                    CommittedQuota = committed,
                     IndexClaimed = true,
                     Caller = request.Caller
                 }
@@ -757,6 +775,109 @@ public sealed class ResourceManagerService(
             }
         );
     }
+
+    // ── The operation poll ─────────────────────────────────────────────────────────────────────
+
+    /// <inheritdoc />
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>Two grain calls, and the second one is the enforcement seam.</b> The operation
+    ///         grain is reached through <c>ForTenant</c> with the tenant off the token, which is the
+    ///         only thing closing the cross-tenant read; then the resource the operation names is put
+    ///         to <see cref="IResourceAuthorizer" /> with the read permission on both arguments, which
+    ///         makes every refusal on this path a <c>404</c> — docs/plan/07 § The enforcement seam has
+    ///         no third case for a <c>GET</c>.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>What this deliberately does NOT do is read the resource.</b> The question a poll
+    ///         asks is "may this caller see this operation?", and the answer is "may they read its
+    ///         resource?" — which the check answers on its own. Reading the resource to obtain the
+    ///         answer, which is what the gateway's own reader had to do while this method did not
+    ///         exist, adds an index resolve, a resource-grain call and an api-version projection to
+    ///         every poll of every operation. <c>cyc --wait</c> polls a nine-minute cluster create
+    ///         continuously.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The resource GUID comes off the operation, not out of the index.</b>
+    ///         <see cref="OperationStatus.ResourceId" /> exists for this: a ReBAC check built from the
+    ///         path alone would carry <see cref="Guid.Empty" /> and
+    ///         <c>ReBacResourceAuthorizer</c> would fall back to the parent resource group, which is a
+    ///         different question with a different answer. An operation that names no resource — one
+    ///         that was never started, or one from a peer that predates the member — is a <c>404</c>
+    ///         rather than a check against something weaker.
+    ///     </para>
+    /// </remarks>
+    public async Task<Result<OperationStatus>> GetOperationAsync(
+        Guid operationId,
+        CallerContext caller,
+        CancellationToken cancellationToken = default
+    ) {
+        ArgumentNullException.ThrowIfNull(caller);
+
+        var status = await grains
+            .ForTenant(caller.TenantId.ToString("D", CultureInfo.InvariantCulture))
+            .GetGrain<IOperationGrain>(GrainKeys.Operation(operationId))
+            .GetAsync();
+
+        if (status.TryGetError(out var statusError)) {
+            return Result<OperationStatus>.Failure(statusError);
+        }
+
+        var value = status.GetValueOrThrow();
+
+        if (value.ResourceId == Guid.Empty || value.ResourcePath.Length == 0) {
+            return OperationNotFound(operationId);
+        }
+
+        var parsed = ResourceId.ParsePath(value.ResourcePath);
+        if (parsed.TryGetError(out _)) {
+            // Unreachable: the path was produced by ResourceId.Path and is parsed by its inverse. If
+            // it ever were reachable, the honest answer is the one an unanswerable check gets.
+            return OperationNotFound(operationId);
+        }
+
+        var address = parsed.GetValueOrThrow().WithId(value.ResourceId);
+
+        // ⚠ TryGetType rather than Resolve, because there is no api-version to resolve against.
+        // docs/plan/10 § API versioning makes the parameter required on every request, but on
+        // /operations/{opId} it selects the response RENDERING; nothing here projects a body, so
+        // asking the registry for a schema would be asking a question this method does not have an
+        // input for. ReadPermission is declared per type and not per version, which is the whole
+        // reason this is decidable without one.
+        if (!registry.TryGetType(address.Type, out var registration)) {
+            // A resource type the registry no longer serves. The operation is real and its resource
+            // may be too, but there is no declared read permission to check against — and inventing
+            // one, in either direction, is worse than the 404.
+            return OperationNotFound(operationId);
+        }
+
+        var authorized = await authorizer.AuthorizeAsync(
+            address,
+            registration.ReadPermission,
+            registration.ReadPermission,
+            caller,
+            false,
+            cancellationToken
+        );
+
+        return authorized.TryGetError(out var authError)
+            ? Result<OperationStatus>.Failure(authError)
+            : Result<OperationStatus>.Success(value);
+    }
+
+    /// <summary>
+    ///     The <c>404</c> an operation gets, worded like every other absence.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ Identical for "no such operation", "another tenant's operation" and "an operation whose
+    ///     resource you cannot read". Three different messages would be the enumeration oracle the
+    ///     status code closed.
+    /// </remarks>
+    static Result<OperationStatus> OperationNotFound(Guid operationId) =>
+        Result<OperationStatus>.Failure(
+            ErrorCode.ResourceNotFound,
+            $"Operation {operationId:D} does not exist."
+        );
 
     // ── Step 1's parts ─────────────────────────────────────────────────────────────────────────
 
@@ -848,9 +969,21 @@ public sealed class ResourceManagerService(
 
     // ── Step 6's parts ─────────────────────────────────────────────────────────────────────────
 
-    async Task<Result<ImmutableArray<Guid>>> ReserveAsync(WriteTarget target, JsonElement body, Guid operationId) {
+    /// <summary>
+    ///     The leases step 6 took, and the amounts they will commit to.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Both halves, because the delete path cannot recompute the second one and the create
+    ///     path can.</b> The lease ids are what step 9 needs in order to commit or release; the
+    ///     amounts are what a <i>delete</i> needs in order to give back exactly what was committed
+    ///     (<see cref="QuotaCommitment" />). They are produced by the same loop, from the same body,
+    ///     so they cannot disagree.
+    /// </remarks>
+    readonly record struct Reservation(ImmutableArray<Guid> Leases, ImmutableArray<QuotaCommitment> Committed);
+
+    async Task<Result<Reservation>> ReserveAsync(WriteTarget target, JsonElement body, Guid operationId) {
         if (target.Registration.Meters.IsDefaultOrEmpty) {
-            return Result<ImmutableArray<Guid>>.Success([]);
+            return Result<Reservation>.Success(new([], []));
         }
 
         var quota = grains
@@ -858,6 +991,7 @@ public sealed class ResourceManagerService(
             .GetGrain<IQuotaGrain>(GrainKeys.Subscription(target.Id.SubscriptionId));
 
         var taken = ImmutableArray.CreateBuilder<Guid>(target.Registration.Meters.Length);
+        var amounts = ImmutableArray.CreateBuilder<QuotaCommitment>(target.Registration.Meters.Length);
 
         foreach (var meter in target.Registration.Meters) {
             var amount = AmountFor(meter, body);
@@ -871,13 +1005,63 @@ public sealed class ResourceManagerService(
                     _ = await quota.ReleaseAsync(leaseId);
                 }
 
-                return Result<ImmutableArray<Guid>>.Failure(quotaError);
+                return Result<Reservation>.Failure(quotaError);
             }
 
             taken.Add(reserved.GetValueOrThrow().LeaseId);
+            amounts.Add(new() { Meter = meter.Meter, Amount = amount });
         }
 
-        return Result<ImmutableArray<Guid>>.Success(taken.DrainToImmutable());
+        return Result<Reservation>.Success(new(taken.DrainToImmutable(), amounts.DrainToImmutable()));
+    }
+
+    /// <summary>
+    ///     What a resource of this type committed, re-derived for the delete path.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>The same function over the same body the create used, which is what makes it
+    ///         exact rather than an approximation.</b> <see cref="AmountFor" /> reads the meter's
+    ///         declared pointer, and the body handed in here is the resource grain's stored
+    ///         <i>superset</i> — <c>BeginDeleteAsync</c> projects with an empty pointer list, which is
+    ///         the whole stored shape rather than one api-version's view of it. For a resource that
+    ///         was created and not updated the two are the same JSON, so the delete returns the exact
+    ///         number the create reserved and committed.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>An update that moves a metered value is a gap, and it is an older one than this.</b>
+    ///         Step 6 reserves only for a create — <i>"an update does not draw new quota"</i> — so
+    ///         committed usage already does not track a body that grew. Closing that needs quota to be
+    ///         re-evaluated on update, which is a change to step 6 and not to the delete path; what
+    ///         this method must not do is invent a different number, so it derives the same way step 6
+    ///         does and inherits step 6's answer.
+    ///     </para>
+    /// </remarks>
+    static ImmutableArray<QuotaCommitment> CommittedBy(ResourceTypeRegistration registration, string properties) {
+        if (registration.Meters.IsDefaultOrEmpty) {
+            return [];
+        }
+
+        JsonDocument body;
+        try {
+            body = JsonDocument.Parse(properties.Length == 0 ? "{}" : properties);
+        }
+        catch (JsonException) {
+            // Grain state that is not JSON is a platform fault. Returning nothing means the delete
+            // gives nothing back, which is the behaviour that existed before this method — a drift
+            // upward — rather than a wrong credit, which would be worse.
+            return [];
+        }
+
+        using (body) {
+            var amounts = ImmutableArray.CreateBuilder<QuotaCommitment>(registration.Meters.Length);
+
+            foreach (var meter in registration.Meters) {
+                amounts.Add(new() { Meter = meter.Meter, Amount = AmountFor(meter, body.RootElement) });
+            }
+
+            return amounts.DrainToImmutable();
+        }
     }
 
     /// <summary>How much of a meter this body draws — from the declared pointer, or the fallback.</summary>

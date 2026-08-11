@@ -8,6 +8,11 @@ global using ErrorCode = CyberCloud.Core.ErrorCode;
 global using CyberCloud.Core;
 global using CyberCloud.Core.Resources;
 
+// SecretRef. docs/plan/00 § Non-negotiables writes the rule platform-wide, so the type is
+// platform-wide; it used to be declared in this assembly and a provider that references this one
+// still names it unqualified.
+global using CyberCloud.Core.Contracts;
+
 // docs/plan/06 § Tags, locks, and the small stuff that is not small makes ProvisioningState the one
 // vocabulary every provider uses. It is named on nearly every type here, so it is imported globally
 // rather than repeated.

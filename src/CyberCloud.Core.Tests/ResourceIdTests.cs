@@ -259,6 +259,44 @@ public class ResourceIdTests {
         GrainKeys.TryParse("res/ 0a1b2c3d4e5f40718293a4b5c6d7e8f9", out _).ShouldBeFalse();
     }
 
+    /// <summary>
+    ///     ⚠ <b>The rule has to be reachable from outside this assembly, or it gets copied.</b>
+    /// </summary>
+    /// <remarks>
+    ///     <see cref="GuidFormat" /> was <c>internal</c>, and the gateway — which needs the rule one
+    ///     segment at a time, <i>before</i> a whole path is parsed — carried a byte-for-byte copy of
+    ///     <see cref="GuidFormat.TryParseD" /> called <c>GatewayGuid</c>. Two implementations of a
+    ///     round-trip rule is one implementation that eventually drifts, and the drift would be
+    ///     invisible: the gateway's tenant check would accept a spelling
+    ///     <see cref="ResourceId.TryParsePath" /> rejects, which is a check that can be walked around.
+    ///     <para>
+    ///         This test is what fails if the accessibility is ever taken back. The <i>behaviour</i>
+    ///         it must keep is asserted by
+    ///         <see cref="GuidTryParseExactIsNotActuallyExactAndThatIsWhyGuidFormatExists" />; this
+    ///         one only asserts that one copy is reachable.
+    ///     </para>
+    /// </remarks>
+    [Fact]
+    public void GuidFormatIsPublicSoNobodyHasToCopyIt() {
+        typeof(GuidFormat).IsPublic.ShouldBeTrue(
+            "the gateway needs the D-only rule before a path is parsed, and an internal GuidFormat "
+            + "is why it had a copy. docs/plan/06 § Identifiers fixes the form for every id in a "
+            + "path; one rule, one implementation."
+        );
+
+        // And the length guard survived the move out of `internal`. Whitespace is the whole point.
+        GuidFormat.TryParseD(" 2b4a1c66-2e70-4a9d-9d0a-1f7ec1f1a4b3", out _).ShouldBeFalse();
+        GuidFormat.TryParseD("{2b4a1c66-2e70-4a9d-9d0a-1f7ec1f1a4b3}", out _).ShouldBeFalse();
+        GuidFormat.TryParseD("2b4a1c662e704a9d9d0a1f7ec1f1a4b3", out _).ShouldBeFalse();
+        GuidFormat.TryParseD(null, out _).ShouldBeFalse();
+        GuidFormat.TryParseD("2b4a1c66-2e70-4a9d-9d0a-1f7ec1f1a4b3", out var parsed).ShouldBeTrue();
+        parsed.ShouldBe(Sample.TenantId);
+
+        GuidFormat.TryParseN(" 2b4a1c662e704a9d9d0a1f7ec1f1a4b3", out _).ShouldBeFalse();
+        GuidFormat.TryParseN("2b4a1c662e704a9d9d0a1f7ec1f1a4b3", out var bare).ShouldBeTrue();
+        bare.ShouldBe(Sample.TenantId);
+    }
+
     [Fact]
     public void GuidCaseIsNotCanonicalisedByTheParserButIsByTheFormatter() {
         // Guid.ToString("D") always emits lower case, so Path and CanonicalPath are already

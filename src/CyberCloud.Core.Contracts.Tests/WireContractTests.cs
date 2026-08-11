@@ -66,7 +66,15 @@ public sealed class WireContractTests {
         ("ResourceIdSurrogate", 2, "ResourceGroup"),
         ("ResourceIdSurrogate", 3, "Type"),
         ("ResourceIdSurrogate", 4, "Name"),
-        ("ResourceIdSurrogate", 5, "Id")
+        ("ResourceIdSurrogate", 5, "Id"),
+
+        // ⚠ APPENDED BY A MOVE, NOT BY A NEW TYPE. SecretRef came here from
+        // CyberCloud.ResourceManager.Contracts with its [Id(n)] numbers and its [Alias] untouched —
+        // the numbers below are the ones it published there. A move that renumbered would be
+        // indistinguishable on the wire from a rewrite.
+        ("SecretRef", 0, "Path"),
+        ("SecretRef", 1, "Field"),
+        ("SecretRef", 2, "Version")
 
         // ⚠ ResourceKeySurrogate's four entries were REMOVED, not burned, and that is the one
         // exception this list's own rule allows. The append-only rule protects numbers that a
@@ -89,7 +97,14 @@ public sealed class WireContractTests {
         ("ResultSurrogate", "CyberCloud.Core.Result"),
         ("ResultSurrogate`1", "CyberCloud.Core.Result`1"),
         ("ResourceTypeNameSurrogate", "CyberCloud.Core.ResourceTypeName"),
-        ("ResourceIdSurrogate", "CyberCloud.Core.ResourceId")
+        ("ResourceIdSurrogate", "CyberCloud.Core.ResourceId"),
+
+        // ⚠ NOT "CyberCloud.Core.SecretRef", AND THE MISMATCH IS THE POINT. The type moved here from
+        // CyberCloud.ResourceManager.Contracts; the alias records where the concept was published, and
+        // a silo that has already stored or sent one looks it up by this string. Re-spelling it to
+        // match the new namespace would be a rename that silently fails to deserialize every payload
+        // written before it — docs/plan/04 § Failure and upgrade.
+        ("SecretRef", "CyberCloud.ResourceManager.SecretRef")
     ];
 
     static IEnumerable<Type> GeneratedSerializerTypes =>
@@ -182,11 +197,27 @@ public sealed class WireContractTests {
         }
     }
 
+    /// <summary>
+    ///     Every <i>surrogate</i> has a converter.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Surrogates only, and the narrowing is load-bearing rather than a loosening.</b> This
+    ///     assembly used to hold nothing but surrogates, so "every <c>[GenerateSerializer]</c> type"
+    ///     and "every surrogate" were the same set and the test said the first. <see cref="SecretRef" />
+    ///     is the first ordinary wire type here — it stands in for nothing, so it has no converter and
+    ///     must not be required to have one. The <c>Surrogate</c> suffix is the discriminator because
+    ///     it is also the naming convention <c>Serialization/</c> follows without exception; a surrogate
+    ///     that broke it would be caught by <see cref="TheAliasesAreTheOnesRecordedHere" /> instead,
+    ///     which names every type in this assembly explicitly.
+    /// </remarks>
     [Fact]
     public void EveryConverterIsRegistered() {
         // A surrogate with no [RegisterConverter] compiles, publishes an alias, passes every test
         // above, and silently never participates in serialization.
-        var surrogates = GeneratedSerializerTypes.Select(t => t.Name).ToHashSet(StringComparer.Ordinal);
+        var surrogates = GeneratedSerializerTypes
+            .Where(t => t.Name.Contains("Surrogate", StringComparison.Ordinal))
+            .Select(t => t.Name)
+            .ToHashSet(StringComparer.Ordinal);
 
         var converted = Contracts.GetTypes()
             .Where(t => t.GetCustomAttribute<RegisterConverterAttribute>() is not null)
@@ -198,6 +229,17 @@ public sealed class WireContractTests {
         surrogates.Except(converted).ShouldBeEmpty("surrogate types with no registered converter.");
     }
 
+    /// <summary>
+    ///     Every <i>settable</i> public property carries an <c>[Id(n)]</c>.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Settable, because a computed property is not state and numbering one would be the
+    ///     mistake rather than the fix.</b> The bug this catches is a <c>{ get; init; }</c> added
+    ///     without a number: it holds data, the far side never receives it, and nothing says so. A
+    ///     get-only property — <see cref="SecretRef.IsEmpty" /> is the first one in this assembly —
+    ///     has nothing to serialize <i>into</i>, so Orleans could not populate it even if it were
+    ///     numbered; it is a function of the numbered members, written as a property.
+    /// </remarks>
     [Fact]
     public void TheBaselineNamesEveryPublicMemberOfEverySurrogate() {
         // The direction the manifest test cannot cover on its own: a member added WITHOUT an [Id]
@@ -205,7 +247,7 @@ public sealed class WireContractTests {
         var unnumbered = GeneratedSerializerTypes
             .SelectMany(type => type
                 .GetProperties(BindingFlags.Public | BindingFlags.Instance)
-                .Where(p => p.GetCustomAttribute<IdAttribute>() is null)
+                .Where(p => p.SetMethod is not null && p.GetCustomAttribute<IdAttribute>() is null)
                 .Select(p => string.Create(
                         CultureInfo.InvariantCulture,
                         $"{type.Name}.{p.Name}"

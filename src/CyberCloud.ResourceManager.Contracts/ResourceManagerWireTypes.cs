@@ -3,37 +3,14 @@ using System.Globalization;
 
 namespace CyberCloud.ResourceManager.Contracts;
 
-/// <summary>
-///     A handle to a secret. The value lives in OpenBao and never in grain state.
-/// </summary>
-/// <remarks>
-///     docs/plan/00 § Non-negotiables, the "Secrets never reach grain state" row:
-///     <i>"secrets are <c>SecretRef</c> handles resolved at the data plane"</i>. ⚠ Every member here
-///     is an address, and there is deliberately no member that could hold a value — the same absence
-///     argument <see cref="Error" /> makes about stack traces.
-/// </remarks>
-[GenerateSerializer]
-[Alias("CyberCloud.ResourceManager.SecretRef")]
-public sealed record SecretRef {
-    /// <summary>The vault path, for example <c>tenants/{tenantId}/postgres/main</c>.</summary>
-    [Id(0)]
-    public string Path { get; init; } = string.Empty;
-
-    /// <summary>Which field at that path, for example <c>adminPassword</c>.</summary>
-    [Id(1)]
-    public string Field { get; init; } = string.Empty;
-
-    /// <summary>
-    ///     The version to read, or empty for the current one. Pinning a version is what makes a
-    ///     reconcile pass reproducible across a rotation.
-    /// </summary>
-    [Id(2)]
-    public string Version { get; init; } = string.Empty;
-
-    /// <inheritdoc />
-    public override string ToString() =>
-        Version.Length == 0 ? $"{Path}#{Field}" : $"{Path}#{Field}@{Version}";
-}
+// ⚠ SecretRef LIVED HERE AND NOW LIVES IN CyberCloud.Core.Contracts, WITH ITS ALIAS UNCHANGED.
+// docs/plan/00 § Non-negotiables writes "secrets are SecretRef handles resolved at the data plane"
+// platform-wide, and a platform-wide concept in one module's contracts is a concept every other
+// module either takes a dependency for or re-declares — CyberCloud.Identity.Contracts re-declared it.
+// The alias is still "CyberCloud.ResourceManager.SecretRef" because an [Alias] is a wire identifier
+// (docs/plan/04 § Failure and upgrade) and re-spelling one on a move is a data-loss bug wearing a
+// refactor's clothes. It is imported through this assembly's GlobalUsings, so every provider that
+// named it still does.
 
 /// <summary>
 ///     What an observation saw. The hot-tier half of a resource's state — docs/plan/05 § Hot lists
@@ -472,6 +449,70 @@ public sealed record OperationSpec {
     /// </summary>
     [Id(12)]
     public Guid ParentOperationId { get; init; }
+
+    /// <summary>
+    ///     The committed usage this operation is accountable for: what a create's leases turn into,
+    ///     and what a delete gives back.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>This exists because a delete has no leases and the amounts were committed.</b>
+    ///         <c>OperationGrain</c> gave committed quota back by calling
+    ///         <c>IQuotaGrain.ReleaseAsync</c>, which releases a <i>reservation</i>; a delete holds
+    ///         none, so the call did nothing and a subscription's committed usage drifted upward on
+    ///         every delete — allowance the tenant paid for and never got back.
+    ///         <c>IQuotaGrain.ReturnAsync</c> is the method that unwinds committed usage, and it needs
+    ///         a meter and an amount, which nothing carried. Now the spec does.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Empty means "as before", which is what makes appending it safe.</b>
+    ///         docs/plan/05 § Serialization and schema evolution: a new member is optional and its
+    ///         default means what the absence used to. An operation started by a peer that predates
+    ///         this member carries nothing here and returns nothing — the old behaviour, not a wrong
+    ///         new one. ⚠ And the durable tier is JSON, where the <b>property name</b> is the
+    ///         persisted contract rather than the <c>[Id(n)]</c>: renaming this member breaks
+    ///         re-drives of in-flight operations even though the number is untouched.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Numbered 13, never by renumbering.</b> The twelve above keep the numbers they were
+    ///         published under.
+    ///     </para>
+    /// </remarks>
+    [Id(13)]
+    public ImmutableArray<QuotaCommitment> CommittedQuota { get; init; } = [];
+}
+
+/// <summary>
+///     One meter's committed amount, as an operation records it.
+/// </summary>
+/// <remarks>
+///     <para>
+///         ⚠ <b>Not a <c>QuotaLease</c> and not a <c>QuotaUsage</c>, because it is neither.</b> A lease
+///         is a reservation that has not landed and is gone the moment it commits; a usage is the
+///         subscription's running totals. This is the amount <i>one operation</i> put on <i>one
+///         meter</i> — the only thing a delete needs in order to give back exactly what the create
+///         took, rather than an approximation re-derived from a body that may have moved.
+///     </para>
+///     <para>
+///         ⚠ <b>A record rather than a tuple or two parallel arrays.</b> Two arrays that must stay the
+///         same length is a wire type that can be internally inconsistent, and the first re-drive after
+///         a partial write is where that shows up.
+///     </para>
+/// </remarks>
+[GenerateSerializer]
+[Alias("CyberCloud.ResourceManager.QuotaCommitment")]
+public sealed record QuotaCommitment {
+    /// <summary>Which limit. ⚠ <see cref="QuotaMeter.Unknown" /> is not a meter and is not returned.</summary>
+    [Id(0)]
+    public QuotaMeter Meter { get; init; } = QuotaMeter.Unknown;
+
+    /// <summary>How much. ⚠ Must be positive; <c>IQuotaGrain.ReturnAsync</c> refuses anything else.</summary>
+    [Id(1)]
+    public decimal Amount { get; init; }
+
+    /// <inheritdoc />
+    public override string ToString() =>
+        string.Create(CultureInfo.InvariantCulture, $"{Meter}={Amount}");
 }
 
 /// <summary>One entry in an operation's progress array. docs/plan/08 § Long-running operations.</summary>
@@ -571,6 +612,30 @@ public sealed record OperationStatus {
     /// <summary>Child operations, for a nested operation. Empty otherwise.</summary>
     [Id(12)]
     public ImmutableArray<Guid> Children { get; init; } = [];
+
+    /// <summary>
+    ///     The GUID of the resource this operation is driving, or <see cref="Guid.Empty" /> for an
+    ///     operation that was never started.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>Added so that <see cref="IResourceManager.GetOperationAsync" /> can authorize a
+    ///         poll without reading the resource.</b> <see cref="ResourcePath" /> alone is an address
+    ///         with <see cref="Guid.Empty" /> for its id, and the ReBAC object of a resource is its
+    ///         GUID — so a check built from the path alone would fall back to the parent resource
+    ///         group, which is a <i>different</i> question. Resolving the GUID from the path costs an
+    ///         index-grain call per poll; the operation grain already knows it, so it says it.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Appended at 13, and the number is never reused.</b> docs/plan/05 § Serialization
+    ///         and schema evolution. A peer that predates this member sends nothing for it and reads
+    ///         <see cref="Guid.Empty" />, which is exactly "as before" — and
+    ///         <c>GetOperationAsync</c> treats <see cref="Guid.Empty" /> the way it treats an empty
+    ///         path: as an operation there is nothing to authorize against, which is a <c>404</c>.
+    ///     </para>
+    /// </remarks>
+    [Id(13)]
+    public Guid ResourceId { get; init; }
 
     /// <summary>Whether the operation has reached a terminal state.</summary>
     public bool IsTerminal =>

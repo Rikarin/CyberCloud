@@ -69,14 +69,14 @@ static class TenantSmuggling {
         }
 
         if (request.Headers.TryGetValue(Http.GatewayHeaders.TenantIdHint, out var header)
-            && GatewayGuid.TryParseD(header.ToString(), out var fromHeader)
+            && GuidFormat.TryParseD(header.ToString(), out var fromHeader)
             && fromHeader != tokenTenant) {
             surface = "the " + Http.GatewayHeaders.TenantIdHint + " header";
             return true;
         }
 
         if (request.Query.TryGetValue(TenantQueryParameter, out var queried)
-            && GatewayGuid.TryParseD(queried.ToString(), out var fromQuery)
+            && GuidFormat.TryParseD(queried.ToString(), out var fromQuery)
             && fromQuery != tokenTenant) {
             surface = "the " + TenantQueryParameter + " query parameter";
             return true;
@@ -107,7 +107,7 @@ static class TenantSmuggling {
         var slash = rest.IndexOf('/', StringComparison.Ordinal);
         var segment = slash < 0 ? rest : rest[..slash];
 
-        return GatewayGuid.TryParseD(segment, out var tenant) ? tenant : null;
+        return GuidFormat.TryParseD(segment, out var tenant) ? tenant : null;
     }
 
     static bool BodyTenantDisagrees(string body, Guid tokenTenant, ref string surface) {
@@ -133,7 +133,7 @@ static class TenantSmuggling {
             foreach (var property in BodyProperties) {
                 if (document.RootElement.TryGetProperty(property, out var value)
                     && value.ValueKind == JsonValueKind.String
-                    && GatewayGuid.TryParseD(value.GetString() ?? "", out var fromBody)
+                    && GuidFormat.TryParseD(value.GetString() ?? "", out var fromBody)
                     && fromBody != tokenTenant) {
                     surface = $"the '{property}' property of the request body";
                     return true;

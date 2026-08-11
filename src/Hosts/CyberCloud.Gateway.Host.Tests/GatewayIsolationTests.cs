@@ -176,6 +176,49 @@ public sealed class GatewayIsolationTests {
     }
 
     /// <summary>
+    ///     ⚠ <b>The gateway declares no grain — neither an implementation nor a contract.</b>
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         docs/plan/03 § Hosts and docs/plan/10 § Shape: the gateway is an Orleans <b>client</b>
+    ///         (<c>CreateClient</c>), <i>"not a silo"</i>. A client's <c>IGrainFactory</c> hands out
+    ///         references to grains a silo activates, so a <c>Grain</c> subclass declared in this
+    ///         assembly is a grain <b>no silo can load</b>: the type is simply not in the silo's
+    ///         application-parts, and the first call to it fails at runtime in a deployment rather
+    ///         than in a build.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>This is not hypothetical — it is what <c>ConnectionGrain</c> was.</b>
+    ///         docs/plan/10 § SignalR names the connection grain and never says where it runs, so the
+    ///         interface and the implementation shipped here, and the arrangement survived because the
+    ///         tests constructed the class with <c>new</c> — which worked precisely because the grain
+    ///         used no grain infrastructure, a constraint the file recorded as if it were a design.
+    ///         Both now live in <c>CyberCloud.ResourceManager(.Contracts)</c>, where a silo composes
+    ///         them and the interest set's authorization seam already is.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The interface half matters as much as the implementation half.</b> A grain
+    ///         <i>contract</i> declared in a host is a contract no other component can name without
+    ///         referencing a host — inverting docs/plan/00 § Layer discipline — and
+    ///         docs/plan/03 § src puts grain interfaces in <c>*.Contracts</c> for exactly that reason.
+    ///     </para>
+    /// </remarks>
+    [Fact]
+    public void TheGatewayDeclaresNoGrainInterfaceAndNoGrainImplementation() {
+        var offenders = Gateway.GetTypes()
+            .Where(type => typeof(IGrain).IsAssignableFrom(type) || typeof(Grain).IsAssignableFrom(type))
+            .Select(type => type.FullName ?? type.Name)
+            .OrderBy(x => x, StringComparer.Ordinal)
+            .ToList();
+
+        offenders.ShouldBeEmpty(
+            "docs/plan/10 § Shape: the gateway is an Orleans CLIENT, not a silo. A grain declared "
+            + "here is one no silo can activate — grain contracts belong in a *.Contracts assembly "
+            + "and grain implementations in the module assembly a silo composes."
+        );
+    }
+
+    /// <summary>
     ///     ⚠ Raw <c>IGrainFactory.GetGrain</c> is banned here. <c>CC1006</c> is the real gate and it
     ///     fails the build; this reads the source so the rule is also stated where a reader looks.
     /// </summary>

@@ -207,6 +207,59 @@ public sealed class RecordingChangeSink : IResourceChangedSink {
     }
 }
 
+/// <summary>
+///     An <see cref="IInterestAuthorizer" /> a test flips at will. Stands in for the enforcement seam
+///     the connection grain asks.
+/// </summary>
+/// <remarks>
+///     ⚠ <b>Static, like every other double here, because the silo resolves its own services.</b> The
+///     grain runs inside the <c>TestCluster</c> and the test drives it from outside; the two share a
+///     process and nothing else, which is the same constraint <see cref="TestClock" /> documents.
+///     <para>
+///         ⚠ It stands in for <c>ResourceManagerInterestAuthorizer</c>, whose own behaviour —
+///         forwarding to <see cref="IResourceManager.ReadAsync" /> and copying the answer — is a
+///         property of the read path and is asserted by the tests of the read path. Standing up a
+///         ReBAC schema to get a "no" here would make a re-check failure look like an
+///         authorization-schema failure.
+///     </para>
+/// </remarks>
+public sealed class ScriptedInterestAuthorizer : IInterestAuthorizer {
+    /// <summary>Which paths are readable. Everything else answers the canonical <c>404</c>.</summary>
+    public static ConcurrentDictionary<string, bool> Readable { get; } = new(StringComparer.Ordinal);
+
+    /// <summary>How many times the seam was asked.</summary>
+    public static int Asked { get; private set; }
+
+    /// <summary>Forgets every grant and the count.</summary>
+    public static void Reset() {
+        Readable.Clear();
+        Asked = 0;
+    }
+
+    /// <summary>Makes a path readable.</summary>
+    /// <param name="resourcePath">The path.</param>
+    public static void Grant(string resourcePath) => Readable[resourcePath] = true;
+
+    /// <summary>Takes a path away — the relation change a re-check has to notice.</summary>
+    /// <param name="resourcePath">The path.</param>
+    public static void Revoke(string resourcePath) => Readable.TryRemove(resourcePath, out _);
+
+    /// <inheritdoc />
+    public Task<Result> CanReadAsync(
+        CallerContext caller,
+        string resourcePath,
+        CancellationToken cancellationToken = default
+    ) {
+        Asked++;
+
+        return Task.FromResult(
+            Readable.ContainsKey(resourcePath)
+                ? Result.Success
+                : Result.Failure(ErrorCode.ResourceNotFound, $"'{resourcePath}' does not exist.")
+        );
+    }
+}
+
 /// <summary>The clock the silo reads, shared with the test so it can be advanced.</summary>
 /// <remarks>
 ///     ⚠ Static for the same reason <c>CyberCloud.Kubernetes.Tests</c>'s is: the silo runs in this
@@ -293,6 +346,18 @@ public sealed class ResourceManagerCluster : IAsyncLifetime {
     public IOperationGrain Operation(Guid tenant, Guid operationId) =>
         For(tenant).GetGrain<IOperationGrain>(GrainKeys.Operation(operationId));
 
+    /// <summary>
+    ///     A SignalR connection's grain. docs/plan/10 § SignalR.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ Reached the way the gateway's hub reaches it — <c>ForTenant</c> from the token's tenant,
+    ///     then the key <c>ConnectionGrainKeys</c> builds. That the suite can do this at all is the
+    ///     change: while the type was declared in <c>CyberCloud.Gateway.Host</c> no silo could
+    ///     activate it, and the only way to exercise it was to construct the class directly.
+    /// </remarks>
+    public IConnectionGrain Connection(Guid tenant, string connectionId) =>
+        For(tenant).GetGrain<IConnectionGrain>(ConnectionGrainKeys.Connection(connectionId));
+
     /// <summary>Builds an address in the test tenant and subscription.</summary>
     /// <param name="name">The resource name. DNS-1123, per docs/plan/06 § Identifiers.</param>
     /// <param name="group">The resource group.</param>
@@ -319,6 +384,7 @@ public sealed class ResourceManagerCluster : IAsyncLifetime {
         SwitchableLockResolver.Reset();
         RecordingRelationWriter.Reset();
         RecordingChangeSink.Reset();
+        ScriptedInterestAuthorizer.Reset();
         TestClock.Instance.Reset();
     }
 
@@ -397,6 +463,14 @@ public sealed class ResourceManagerCluster : IAsyncLifetime {
                     services.AddSingleton<ILockResolver, SwitchableLockResolver>();
                     services.AddSingleton<IResourceChangedSink, RecordingChangeSink>();
                     services.AddSingleton<IResourceRelationWriter, RecordingRelationWriter>();
+
+                    // The connection grain's seam. docs/plan/10 § SignalR — per-subscribe, never
+                    // per-connect, and re-checked on relation changes.
+                    services.AddSingleton<IInterestAuthorizer, ScriptedInterestAuthorizer>();
+
+                    // A cap of two, so the interest limit is reachable in a test rather than after
+                    // 200 subscribes. docs/plan/10 § Rate limiting.
+                    services.AddSingleton(new ConnectionLimits { StreamsPerConnection = 2 });
 
                     services.AddSingleton<ConformingReconciler>();
                     services.AddSingleton<IResourceProvider, TestingProvider>();

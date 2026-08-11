@@ -100,7 +100,7 @@ static class GatewayRouter {
 
             // The `D` form only — the same rule ResourceId applies to every GUID it parses, and for
             // the same reason: five spellings of one id are five cache entries and five audit rows.
-            return GatewayGuid.TryParseD(rest, out var operationId)
+            return GuidFormat.TryParseD(rest, out var operationId)
                 ? Result<GatewayRoute>.Success(new(RouteKind.Operation, default, "", operationId, ""))
                 : Result<GatewayRoute>.Failure(GatewayErrors.NotFound(path));
         }

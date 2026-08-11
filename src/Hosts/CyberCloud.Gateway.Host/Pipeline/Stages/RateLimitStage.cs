@@ -79,6 +79,6 @@ sealed class RateLimitStage(GatewayRateLimiter limiter) : IGatewayStage {
         var slash = rest.IndexOf('/', StringComparison.Ordinal);
         var segment = slash < 0 ? rest : rest[..slash];
 
-        return GatewayGuid.TryParseD(segment, out var subscription) ? subscription : Guid.Empty;
+        return GuidFormat.TryParseD(segment, out var subscription) ? subscription : Guid.Empty;
     }
 }

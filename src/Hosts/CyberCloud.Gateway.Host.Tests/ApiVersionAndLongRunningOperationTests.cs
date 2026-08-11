@@ -1,4 +1,5 @@
 using CyberCloud.Gateway.Host.Http;
+using CyberCloud.Gateway.Host.Operations;
 using CyberCloud.Gateway.Host.Tests.Infrastructure;
 
 namespace CyberCloud.Gateway.Host.Tests;
@@ -228,5 +229,79 @@ public sealed class LongRunningOperationTests {
 
         response.Status.ShouldBe(StatusCodes.Status404NotFound);
         response.Body.ShouldNotContain("may not read");
+    }
+
+    /// <summary>
+    ///     ⚠ <b>A poll costs one call into the seam, and does not read the operation's resource.</b>
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         <c>IResourceManager</c> had no <c>GetOperationAsync</c> while
+    ///         docs/plan/10 § Long-running operations described the endpoint, so the gateway's reader
+    ///         asked the only question the interface could answer: <c>ReadAsync</c> on the operation's
+    ///         <i>resource</i>. That was the right refusal to decide anything here and the wrong cost —
+    ///         an index resolve, a check, a resource-grain read and an api-version projection on every
+    ///         poll, and <c>cyc --wait</c> polls a nine-minute cluster create continuously.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>This asserts the property rather than the shape.</b>
+    ///         <c>RecordingResourceManager.Paths</c> records every <i>resource</i> the manager was
+    ///         asked about; an empty list is "no resource was read". Put the old two-step back into
+    ///         <c>TenantScopedOperationReader</c> and this goes red on that list, not on a signature.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ The other half — that the gateway still decides nothing — is
+    ///         <c>GatewayIsolationTests</c>' business and stays there: this reader names no permission,
+    ///         no check and no engine, it forwards a caller and copies an answer.
+    ///     </para>
+    /// </remarks>
+    [Fact]
+    public async Task PollingAnOperationAsksTheSeamOnceAndNeverReadsTheResource() {
+        var manager = new RecordingResourceManager();
+        var reader = new TenantScopedOperationReader(manager);
+
+        var caller = new CallerContext {
+            TenantId = GatewayHarness.TenantA,
+            SubjectType = "user",
+            SubjectId = "alice"
+        };
+
+        var status = await reader.ReadAsync(caller, TheOperation, TestContext.Current.CancellationToken);
+
+        status.IsSuccess.ShouldBeTrue(status.Error?.Message);
+        status.GetValueOrThrow().OperationId.ShouldBe(TheOperation);
+
+        manager.Operations.ShouldHaveSingleItem().ShouldBe(TheOperation);
+        manager.Paths.ShouldBeEmpty(
+            "a poll must not cost a resource read. IResourceManager.GetOperationAsync runs the "
+            + "enforcement seam once, inside the manager, which is where docs/plan/07 § The "
+            + "enforcement seam puts it."
+        );
+    }
+
+    /// <summary>
+    ///     Whatever the seam answered, unchanged — including the <c>404</c> that does not disclose
+    ///     existence.
+    /// </summary>
+    [Fact]
+    public async Task TheReaderCopiesTheSeamsRefusalRatherThanReinterpretingIt() {
+        var manager = new RecordingResourceManager {
+            OnGetOperation = id => Result<OperationStatus>.Failure(
+                ErrorCode.ResourceNotFound,
+                $"Operation {id:D} does not exist."
+            )
+        };
+
+        var reader = new TenantScopedOperationReader(manager);
+
+        var status = await reader.ReadAsync(
+            new() { TenantId = GatewayHarness.TenantA, SubjectType = "user", SubjectId = "alice" },
+            TheOperation,
+            TestContext.Current.CancellationToken
+        );
+
+        status.IsFailure.ShouldBeTrue();
+        status.Error!.Code.ShouldBe(ErrorCode.ResourceNotFound);
+        manager.Paths.ShouldBeEmpty();
     }
 }

@@ -39,11 +39,15 @@
         <OutputType>Exe</OutputType>
         <IsPublishable>true</IsPublishable>
         <!--
-          CA1515 — "an application's API isn't typically referenced from outside the assembly". Two
-          reasons it is wrong here: IConnectionGrain and its wire types are an Orleans grain contract,
-          which the runtime and a silo both bind by name, and the hub classes are instantiated by
-          SignalR. Directory.Build.targets grants InternalsVisibleTo to the sibling test project, so
-          everything that does NOT have one of those two reasons stays internal.
+          CA1515 — "an application's API isn't typically referenced from outside the assembly". The
+          reason it is wrong here is the hub classes, which SignalR instantiates by type.
+          Directory.Build.targets grants InternalsVisibleTo to the sibling test project, so everything
+          that does not have that reason stays internal.
+
+          ⚠ It used to say "IConnectionGrain and its wire types are an Orleans grain contract, which
+          the runtime and a silo both bind by name" — which was true of the type and false of its
+          location: a silo cannot bind a type declared only in an Orleans client's assembly. Both have
+          moved to CyberCloud.ResourceManager(.Contracts).
         -->
         <NoWarn>$(NoWarn);CA1515</NoWarn>
     </PropertyGroup>
@@ -56,8 +60,16 @@
     <ItemGroup>
         <!-- IGrainFactory.ForTenant. Every grain reference in this assembly goes through it. -->
         <PackageReference Include="Orleans.Multitenant"/>
-        <!-- The connection grain of docs/plan/10 § SignalR. See ConnectionGrain on where it runs. -->
-        <PackageReference Include="Microsoft.Orleans.Server"/>
+        <!--
+          ⚠ Microsoft.Orleans.Server IS DELIBERATELY ABSENT, AND IT USED TO BE HERE.
+          It was referenced for one reason: ConnectionGrain derived from Orleans' `Grain`. That grain
+          is a grain, and this host is an Orleans CLIENT (docs/plan/10 § Shape, "not a silo") — so no
+          silo could ever have activated it. IConnectionGrain and its implementation now live in
+          CyberCloud.ResourceManager(.Contracts), where a silo composes them, and this project has
+          nothing left that needs the server assembly. GatewayIsolationTests
+          .TheGatewayDeclaresNoGrainInterfaceAndNoGrainImplementation is the gate; this line's absence
+          is the second, cheaper one.
+        -->
         <!-- Stage 5's counters. docs/plan/10 § Request pipeline: "Redis-backed sliding window". -->
         <PackageReference Include="StackExchange.Redis"/>
         <PackageReference Include="Volo.Abp.Autofac"/>

@@ -80,6 +80,53 @@ public interface IResourceManager {
     ///     "appears only for actions on an existing resource … never for creation".
     /// </returns>
     Task<Result<WriteAccepted>> ActionAsync(WriteRequest request, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Reads a long-running operation's status. The <c>GET /operations/{opId}</c> of
+    ///     docs/plan/10 § Long-running operations and docs/plan/08 § Long-running operations.
+    /// </summary>
+    /// <param name="operationId">The operation.</param>
+    /// <param name="caller">
+    ///     Who is asking. ⚠ Its tenant came from the token and selects the grain — the gateway is an
+    ///     Orleans client, so <c>ForTenant</c> is the <i>only</i> thing closing the cross-tenant read
+    ///     (docs/plan/00 § The tenant-separation row, corrected).
+    /// </param>
+    /// <param name="cancellationToken">Cancels the read.</param>
+    /// <returns>
+    ///     The status, or <see cref="ErrorCode.ResourceNotFound" /> — for an operation that does not
+    ///     exist, one belonging to another tenant, and one whose resource the caller may not read,
+    ///     which are the same answer on purpose. docs/plan/07 § The enforcement seam: <b>404, never
+    ///     403</b>.
+    /// </returns>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>This exists because polling is the hot path and the alternative cost a full
+    ///         resource read per poll.</b> docs/plan/10 § Long-running operations gives the endpoint;
+    ///         this interface had no method for it, so the gateway built its own reader — correctly
+    ///         refusing to decide authorization itself, and therefore asking the only question it
+    ///         could: <see cref="ReadAsync" /> on the operation's resource. That is an index-grain
+    ///         resolve, a check, a resource-grain read and an api-version projection, on every poll of
+    ///         a nine-minute cluster create that <c>cyc --wait</c> polls continuously.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The gateway still decides nothing, and that property is the constraint this method
+    ///         was written under.</b> The check happens here, in the one seam docs/plan/07 § The
+    ///         enforcement seam names, against the same <see cref="IResourceAuthorizer" /> and the same
+    ///         read permission a <c>GET</c> of the resource would use. What the gateway gains is one
+    ///         call instead of two; what it does not gain is a decision.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Not a <see cref="WriteRequest" />, because there is no path and no api-version.</b>
+    ///         An operation is addressed by its GUID alone — docs/plan/10's URL is
+    ///         <c>/operations/{opId}</c> — and the api-version on that URL selects the response
+    ///         <i>rendering</i>, which is the gateway's job, not a projection of stored state.
+    ///     </para>
+    /// </remarks>
+    Task<Result<OperationStatus>> GetOperationAsync(
+        Guid operationId,
+        CallerContext caller,
+        CancellationToken cancellationToken = default
+    );
 }
 
 /// <summary>

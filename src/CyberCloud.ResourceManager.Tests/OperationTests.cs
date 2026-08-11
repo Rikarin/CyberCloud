@@ -367,6 +367,99 @@ public sealed class OperationTests(ResourceManagerCluster cluster) {
         status.Error!.Code.ShouldBe(ErrorCode.ResourceNotFound);
     }
 
+    // ── The poll. docs/plan/08 § Long-running operations, GET /operations/{opId} ─────────────────
+
+    /// <summary>
+    ///     ⚠ <b>The check happens, and it is the resource's read permission.</b>
+    /// </summary>
+    /// <remarks>
+    ///     <c>IResourceManager</c> had no method for docs/plan/10 § Long-running operations' endpoint,
+    ///     so the gateway asked its own question — <c>ReadAsync</c> on the operation's resource, which
+    ///     is a full read per poll. The method exists now and the check moved <i>into</i> it, so this
+    ///     is the test that the move did not lose the check: the operation is real and in the caller's
+    ///     own tenant, and a caller without the type's read permission still gets the canonical
+    ///     <c>404</c>.
+    /// </remarks>
+    [Fact]
+    public async Task PollingAnOperationRunsTheReadCheckAndAnswers404WhenItRefuses() {
+        ResourceManagerCluster.ResetDoubles();
+
+        var accepted = await Create(ResourceManagerCluster.Address("polled"));
+        accepted.IsSuccess.ShouldBeTrue(accepted.Error?.Message);
+
+        var operationId = accepted.GetValueOrThrow().OperationId;
+
+        // Readable: the status comes back, and it names the resource the operation drives.
+        var allowed = await cluster.Manager.GetOperationAsync(
+            operationId,
+            ResourceManagerCluster.Caller(),
+            TestContext.Current.CancellationToken
+        );
+
+        allowed.IsSuccess.ShouldBeTrue(allowed.Error?.Message);
+        allowed.GetValueOrThrow().OperationId.ShouldBe(operationId);
+        allowed.GetValueOrThrow().ResourceId.ShouldBe(accepted.GetValueOrThrow().Resource.Id);
+
+        // ⚠ And the seam was asked with the READ permission, not the write one the create used.
+        SwitchableAuthorizer.Asked.ShouldContain("read");
+
+        // Revoked: the same operation, the same tenant, and a 404 that says nothing else.
+        SwitchableAuthorizer.GrantOnly("write");
+
+        var refused = await cluster.Manager.GetOperationAsync(
+            operationId,
+            ResourceManagerCluster.Caller(),
+            TestContext.Current.CancellationToken
+        );
+
+        refused.IsFailure.ShouldBeTrue();
+        refused.Error!.Code.ShouldBe(
+            ErrorCode.ResourceNotFound,
+            "docs/plan/07 § The enforcement seam: 404, never 403 — there is no third case for a GET"
+        );
+    }
+
+    /// <summary>
+    ///     Another tenant's operation reads as absent, and <c>ForTenant</c> is what makes it so.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ The tenant in the key comes from the <see cref="CallerContext" />, which the gateway built
+    ///     from the token — docs/plan/00 § The tenant-separation row, corrected. Nothing else closes
+    ///     this: <c>IResourceManager</c> is held by an Orleans client, so
+    ///     <c>Orleans.Multitenant</c>'s call filter never runs.
+    /// </remarks>
+    [Fact]
+    public async Task AnotherTenantsOperationIsTheCanonical404() {
+        ResourceManagerCluster.ResetDoubles();
+
+        var accepted = await Create(ResourceManagerCluster.Address("not-yours"));
+        var operationId = accepted.GetValueOrThrow().OperationId;
+
+        var stolen = await cluster.Manager.GetOperationAsync(
+            operationId,
+            ResourceManagerCluster.Caller(ResourceManagerCluster.OtherTenant, "mallory"),
+            TestContext.Current.CancellationToken
+        );
+
+        stolen.IsFailure.ShouldBeTrue();
+        stolen.Error!.Code.ShouldBe(ErrorCode.ResourceNotFound);
+        stolen.Error.Message.ShouldNotContain("not-yours", Case.Insensitive);
+    }
+
+    [Fact]
+    public async Task AnOperationNobodyStartedIsTheSame404AsOneYouMayNotSee() {
+        ResourceManagerCluster.ResetDoubles();
+
+        var absent = await cluster.Manager.GetOperationAsync(
+            Guid.NewGuid(),
+            ResourceManagerCluster.Caller(),
+            TestContext.Current.CancellationToken
+        );
+
+        absent.IsFailure.ShouldBeTrue();
+        absent.Error!.Code.ShouldBe(ErrorCode.ResourceNotFound);
+    }
+
     Task<Result<WriteAccepted>> Create(ResourceId address, int size = 2) =>
         cluster.Manager.WriteAsync(
             new() {
