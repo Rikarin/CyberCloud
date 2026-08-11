@@ -3,10 +3,24 @@
 //
 // The pipeline, once, for every chart under charts/:
 //
+//   provider registry ──emit──►  the non-@internal @param block   (ADR-012's FIFTH surface)
+//                                            │
+//                                            ▼  rewritten into, @internal rows untouched
 //   values.yaml (annotated)  ──parse──►  a tree of typed, described values
 //                                            │
-//                                            ├──emit──►  values.schema.json   (checked in, diffed)
-//                                            └──►  the shape a ResourceSchema would be built from
+//                                            └──emit──►  values.schema.json   (checked in, diffed)
+//
+// ⚠ THAT TOP ARROW LANDED 2026-08-11 AND REVERSED THE ONE THAT USED TO BE DRAWN HERE. This file's
+// diagram ended "the shape a ResourceSchema would be built from" — chart to registry. ADR-010
+// § Which end authors the schema decided the other direction: the C# ResourceSchema is authored and
+// the chart's @param block is generated from it. The seam was seen and left open here, and it went
+// unnoticed because the overlap is zero resource types wide — no type in the tree has both a chart
+// and a registry declaration, so nothing had ever compared the two files.
+//
+// ⚠ THE ORDER OF THE TWO STEPS IS THE ROUND TRIP AND IS NOT AN ACCIDENT. The block is written first
+// and then parsed by the reader below. An emitter that produced anything outside the values subset
+// would fail this target on its own output, with a line number, on the very run that produced it —
+// rather than a fortnight later when somebody edited the file by hand.
 //
 // Three things this file is deliberate about, each matching Build.Generate.cs rather than inventing
 // a second convention:
@@ -95,6 +109,9 @@ partial class Build
         var apiValues = 0;
         var internalValues = 0;
 
+        // First, because everything below reads values.yaml and this is what may have rewritten it.
+        RegenerateChartAnnotations(failures);
+
         foreach (var chart in charts)
         {
             var relative = RootDirectory.GetRelativePathTo(chart);
@@ -147,6 +164,93 @@ partial class Build
             + "values.schema.json regenerates byte-identically",
             charts.Count,
             totalValues);
+    }
+
+    // ── ADR-012's fifth surface ───────────────────────────────────────────────────────────────
+
+    /// <summary>
+    ///     Rewrites every paired chart's <c>@param</c> block from the provider registry and fails on
+    ///     drift — ADR-010 § Which end authors the schema, DECIDED 2026-08-11.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>This target owns the verdict and owns no emission logic</b>, exactly as
+    ///         <c>Build.Generate.cs</c> does. The emitter is
+    ///         <c>CyberCloud.ResourceManager.Contracts.Generation.ChartAnnotationEmitter</c> and it runs
+    ///         inside <c>CyberCloud.ResourceManager.Generator</c>, because generating from the registry
+    ///         means running a provider's <c>Describe</c>, which means loading Orleans into somebody's
+    ///         process — and <c>build/_build.csproj</c> deliberately references nothing from
+    ///         <c>src/</c> so that it is never this one.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Zero pairs is a warning with the two counts in it, not a pass.</b> No resource type
+    ///         in the tree currently has both a chart and a registry declaration: the one managed chart
+    ///         names <c>CyberCloud.DBforPostgreSQL/servers</c>, which no provider declares, and
+    ///         <c>CyberCloud.Providers.Sample</c> renders no chart on purpose. So the honest report is
+    ///         "one chart, zero types naming one, zero pairs compared" — the <c>GateStatus.Vacuous</c>
+    ///         distinction this file's own header draws, and the failure mode
+    ///         <c>Build.Generate.cs</c>'s provider discovery has already had once. Both halves of every
+    ///         mismatch are named individually, so "no pair" never arrives without which end is
+    ///         missing.
+    ///     </para>
+    /// </remarks>
+    void RegenerateChartAnnotations(List<string> failures)
+    {
+        if (!SolutionHasProjects)
+        {
+            Log.Warning(
+                "Charts: {Solution} has no projects, so no provider registry could be built and no "
+                + "chart's @param block was compared against one. Every chart below is hand-written "
+                + "and nothing checked it against an API — ADR-010 § Which end authors the schema. "
+                + "○, not ✔.",
+                SolutionFile.Name);
+
+            return;
+        }
+
+        var report = RunGenerator(write: true, charts: true);
+
+        Log.Information(
+            "Charts: {Managed} managed chart(s), {Types} registry type(s) naming a chart, "
+            + "{Pairs} pair(s) compared",
+            report.ManagedCharts,
+            report.TypesNamingAChart,
+            report.ChartAnnotations.Count);
+
+        foreach (var unpaired in report.ChartUnpaired)
+            Log.Warning("Charts: {Unpaired}", unpaired);
+
+        if (report.ChartAnnotations.Count == 0)
+        {
+            Log.Warning(
+                "Charts: 0 registry-to-chart pair(s), so no @param block was generated and no drift "
+                + "could have been detected. That is a pass and it is worth nobody's trust yet — "
+                + "ADR-012's fifth surface has an emitter and this gate, and nothing to point them "
+                + "at until a provider declares .Chart(...) for a chart that is in the tree. "
+                + "○, not ✔.");
+
+            return;
+        }
+
+        foreach (var annotation in report.ChartAnnotations)
+        {
+            foreach (var problem in annotation.Problems)
+            {
+                failures.Add(
+                    $"{ChartsDirectory.Name}/{annotation.File} cannot be generated from "
+                    + $"'{annotation.ResourceType}' at {annotation.ApiVersion}: {problem}");
+            }
+
+            if (annotation.Drifted && annotation.Published)
+            {
+                failures.Add(
+                    $"{ChartsDirectory.Name}/{annotation.File}'s @param block was not what "
+                    + $"'{annotation.ResourceType}' generates at {annotation.ApiVersion}. It has been "
+                    + "rewritten in place — review the diff and commit it. The @internal rows were not "
+                    + "touched; ADR-010 § Which end authors the schema makes the C# ResourceSchema the "
+                    + "author of the other 26.");
+            }
+        }
     }
 
     // ── helm ──────────────────────────────────────────────────────────────────────────────────

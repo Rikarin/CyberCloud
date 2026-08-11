@@ -455,6 +455,9 @@ diffed.** A new tenant-facing field is added in C# by the provider author; `Buil
 annotated block in `values.yaml` and fails on drift, exactly as `Build.Generate` already does for the
 four ADR-012 surfaces.
 
+**Built 2026-08-12** — see the note under the ADR-012 table for what landed, what is refused rather
+than dropped, and why the gate is currently vacuous.
+
 **What the audit found, because two of the three obvious reasons for this decision are wrong.**
 
 - ✗ *"The chart holds facts the registry cannot."* **Refuted.** Every annotation kind
@@ -517,13 +520,36 @@ versions, and a JSON Schema per version. From that registry a build step generat
 | `cyc` CLI | Verb tree, flags, help, completion |
 | .NET SDK | Clients, models, `Operation<T>` pollers |
 | Portal forms | Angular reactive forms + xUI controls from the schema, with `x-cybercloud-*` hints for widgets (a `storageclass` picker, a region picker) |
-| Chart `@param` annotations | The non-`@internal` block of a managed chart's `values.yaml`, rewritten in place and diffed — ADR-010 § Which end authors the schema, DECIDED 2026-08-11. **Not built.** The first four have emitters and a drift gate; this one has a decision and neither |
+| Chart `@param` annotations | The non-`@internal` block of a managed chart's `values.yaml`, rewritten in place and diffed — ADR-010 § Which end authors the schema, DECIDED 2026-08-11. `ChartAnnotationEmitter` + `ChartSurfaces`, gated by `Build.Charts` |
 
 > ⚠ **CORRECTED 2026-08-11.** The heading said *four* surfaces and the table listed four. ADR-010
 > clause 2 separately made the chart's annotations the source that generates "the OpenAPI body, the
 > CLI flags and the SDK model", which is a fifth surface pointing the other way. Both clauses claimed
 > to be the one source; neither cited the other. Found by auditing each against the code — the chart
 > and the registry have never been compared by anything, because no resource type has both.
+
+> **BUILT 2026-08-12.** The emitter is
+> `src/CyberCloud.ResourceManager.Contracts/Generation/ChartAnnotationEmitter.cs` and the gate is
+> `build/Build.Charts.cs`. Three things about it are worth knowing before reading the code:
+>
+> * **It reads the registry, not the OpenAPI document**, and it is the only one of the five that
+>   does. docs/plan/21 § Generation's one hop exists so the compatibility diff over the published
+>   document covers the CLI, the SDK and the forms. It cannot cover this one: the pairing fact is
+>   `ResourceTypeRegistration.Chart`, which no emitted document carries, so there is nothing to read
+>   a pairing back out of. Reading the registry also keeps *declaration order*, which every document
+>   destroys by sorting `properties` ordinally — a `values.yaml` opening with `backup` and closing
+>   with `version` is a configuration file nobody can read.
+> * **Seven `SchemaProperty` members are refused rather than dropped.** `Format`, `Pattern`,
+>   `MinLength`, `MaxLength`, `ExampleJson`, `Nullable` and a non-text `ElementKind` have no
+>   annotation syntax — the gap this ADR already names — so a schema declaring one is a *generation
+>   failure* naming the property and the directive that would close it. The vocabulary was
+>   deliberately not grown for them: six new directives in `build/Build.Charts.cs`, a project with no
+>   test suite, serving zero current consumers, is untested code that nothing exercises. It grows
+>   with the first provider that needs it, at which point there is a chart to exercise it against.
+> * **The gate is loud at zero pairs, which is the state it is in today.** No resource type in the
+>   tree has both a chart and a registry declaration, so `Build.Charts` reports "1 managed chart, 0
+>   registry types naming a chart, 0 pairs compared" as a warning with both halves of the mismatch
+>   named — the `GateStatus.Vacuous` convention. It is a pass and it is worth nobody's trust yet.
 
 **Rationale.** Four hand-written surfaces over twenty providers is eighty artifacts that drift. This is
 the mechanism behind the *2 engineer-weeks per managed service* target; without it that number is

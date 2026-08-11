@@ -69,8 +69,8 @@ sealed partial class Build : NukeBuild
     //                         ├──► E2E            (blocks: no suite, no staging, no cyc)
     //                         ├──► Chaos          (blocks: no suite, no cluster)
     //                         ├──► Load           (blocks: no suite, no environment)
-    //                         └──► Images ────────┐ (blocks: no registry, no syft, no cosign)
-    //   Charts ───────────────────────────────────┴──► Licence (stub)
+    //                         ├──► Charts ────────┐
+    //                         └──► Images ────────┴──► Licence (stub)
     //   Portal (stub)
     //
     //   Publish ──► Test, Generate, Architecture, Portal, Licence   (blocks: no version, no feeds, no cyc)
@@ -134,7 +134,12 @@ sealed partial class Build : NukeBuild
         .Executes(CheckArchitecture);
 
     Target Charts => _ => _
-        .Description("helm lint, values.schema.json generation, drift check, package.")
+        .Description("Registry → chart @param block, helm lint, values.schema.json, drift check, package.")
+        // ⚠ This edge landed with ADR-012's fifth surface. A chart's @param block is now generated
+        // from the provider registry (ADR-010 § Which end authors the schema), and building that
+        // registry means running each provider's Describe — so this target needs the same compiled
+        // assemblies Generate does. Before that, `Charts` needed only `helm`.
+        .DependsOn(Compile)
         .Executes(BuildCharts);
 
     Target Images => _ => _

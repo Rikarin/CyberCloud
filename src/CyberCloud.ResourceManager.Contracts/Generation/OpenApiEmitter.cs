@@ -7,14 +7,20 @@ using System.Text.Json.Nodes;
 namespace CyberCloud.ResourceManager.Contracts.Generation;
 
 /// <summary>
-///     The first of ADR-012's four surfaces: the provider registry rendered as an OpenAPI 3.1
+///     The first of ADR-012's five surfaces: the provider registry rendered as an OpenAPI 3.1
 ///     document, one per api-version.
 /// </summary>
 /// <remarks>
 ///     <para>
-///         docs/plan/02 § ADR-012 makes this the surface the other three are generated <i>from</i>
-///         (docs/plan/21 § Generation), so this type is the load-bearing one: a fact that cannot be
-///         expressed here cannot reach the CLI, the SDK or a portal form either.
+///         docs/plan/02 § ADR-012 makes this the surface the CLI, the SDK and the portal forms are
+///         generated <i>from</i> (docs/plan/21 § Generation), so this type is the load-bearing one: a
+///         fact that cannot be expressed here cannot reach any of those three either.
+///     </para>
+///     <para>
+///         ⚠ <b>The fifth surface is the exception and says so on itself.</b>
+///         <see cref="ChartAnnotationEmitter" /> reads the registry directly, because the chart a type
+///         renders is <c>ResourceTypeRegistration.Chart</c> — a registry fact this document does not
+///         carry, so there is no pairing to be read back out of one.
 ///     </para>
 ///     <para>
 ///         ⚠ <b>There are exactly two sources, and the line between them is the whole design.</b>

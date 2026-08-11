@@ -20,10 +20,17 @@ charts/managed/postgres/
 └── conformance.yaml      # what the conformance suite asserts for this type
 ```
 
-**The annotated `values.yaml` is the single description of a managed service's configuration
-surface.** `Build.Charts` generates `values.schema.json` from it; `Build.Generate` turns that into
-the resource type's OpenAPI body, the CLI flags, the SDK model and the portal form. A chart whose
-generated schema differs from the checked-in one fails CI.
+**The annotated `values.yaml` is the description of a managed service's configuration surface, and
+26 of its 36 rows are themselves generated.** `Build.Charts` rewrites the non-`@internal` `@param`
+block from the provider registry and then generates `values.schema.json` from the whole file. A chart
+whose block or whose schema differs from the checked-in one fails CI.
+
+> ⚠ **CORRECTED 2026-08-12.** This paragraph read: "`Build.Generate` turns that into the resource
+> type's OpenAPI body, the CLI flags, the SDK model and the portal form" — the chart authoring the
+> API. [ADR-010 § Which end authors the schema](../docs/plan/02-technology-decisions.md) decided the
+> opposite on 2026-08-11 and ADR-012 always said the registry was the one source. Nothing had caught
+> it because no resource type has both a chart and a registry declaration, so the two files had never
+> been compared by anything. **The direction is registry → chart.**
 
 `charts/managed/postgres/` is the worked example. Everything below is implemented in
 `build/Build.Charts.cs` and exercised by that chart.
@@ -134,20 +141,37 @@ YAML, `helm` reads the same file with a real parser and would disagree loudly if
 
 ## What `Build.Charts` does
 
-`./build.sh Charts`, per chart, in this order:
+`./build.sh Charts`, in this order:
 
-1. read `Chart.yaml` — the name must match the directory;
-2. parse `values.yaml` and emit `values.schema.json`; **rewrite it in place and fail** if it differs
+1. build the provider registry and, for every type that names a chart, **rewrite that chart's
+   non-`@internal` `@param` block in place and fail** if it differs — ADR-012's fifth surface. The
+   `@internal` rows are copied through as bytes and never regenerated;
+2. then, per chart: read `Chart.yaml` — the name must match the directory;
+3. parse `values.yaml` and emit `values.schema.json`; **rewrite it in place and fail** if it differs
    from the checked-in file, the same way `Build.Generate` treats a drifted OpenAPI document;
-3. for a chart under `charts/managed/`, require `SOURCE`, `conformance.yaml`, and the
+4. for a chart under `charts/managed/`, require `SOURCE`, `conformance.yaml`, and the
    `cybercloud.io/resource-type` and `cybercloud.io/api-version` annotations;
-4. `helm lint --strict` — which also validates `values.yaml` against the schema just generated, using
+5. `helm lint --strict` — which also validates `values.yaml` against the schema just generated, using
    Helm's JSON Schema implementation rather than ours;
-5. `helm package` into `artifacts/charts/`, only once every chart has passed.
+6. `helm package` into `artifacts/charts/`, only once every chart has passed.
 
-With no chart present the target reports "inspected 0 chart(s)" as a warning and passes — the
-`Vacuous` convention from `Build.Architecture`, ○ rather than ✔. A target that inspected nothing is
-green because it found nothing, not because the tree is clean.
+**Step 1 before step 3 is the round trip and is not an accident.** The block is written and then
+parsed by the reader below, with line numbers, on the same run — so an emitter that produced anything
+outside the values subset fails the build on its own output rather than a fortnight later.
+
+⚠ **Step 1 is why this target now depends on `Compile`.** Building the registry means running each
+provider's `Describe`. Before ADR-012's fifth surface, `Charts` needed only `helm`.
+
+Two vacuous states, each a warning rather than a silent pass — the `Vacuous` convention from
+`Build.Architecture`, ○ rather than ✔:
+
+* **no chart at all** — "inspected 0 chart(s)";
+* **no registry-to-chart pair** — "N managed chart(s), M registry type(s) naming a chart, 0 pair(s)
+  compared", with every unclaimed chart and every type naming a missing chart listed by name. This is
+  the state the tree is in today: `charts/managed/postgres` declares
+  `CyberCloud.DBforPostgreSQL/servers`, no C# provider declares that type, and the one provider in
+  the tree renders no chart. A target that inspected nothing is green because it found nothing, not
+  because the tree is clean.
 
 The generated file is deterministic: keys sorted ordinally, `InvariantCulture` throughout, LF
 newlines, no timestamps, no paths, no machine names. Declaration order is not lost to the sort — it
@@ -162,21 +186,48 @@ ADR-010's rule is unenforceable otherwise: "there is no SOURCE file" would be a 
 is indistinguishable from "somebody forked a chart and forgot". `vendored: none` is an answer to
 "where did this come from"; a missing file is not.
 
-## What a chart cannot say, and what the registry cannot read
+## What a chart cannot say
 
-The generated schema is deliberately shaped like a `ResourceSchema` — every property carries an RFC
-6901 `x-cybercloud-pointer`, and `type`/`description`/`required`/secret line up one-to-one with
-`SchemaProperty`. It is **not** wired to the provider registry yet; a provider still hand-writes its
-`ResourceSchema` in C#. Two gaps stand between them, and both are real:
+The generated schema is shaped like a `ResourceSchema` — every property carries an RFC 6901
+`x-cybercloud-pointer`, and `type`/`description`/`required`/secret line up one-to-one with
+`SchemaProperty`. Since 2026-08-12 the two are wired together: a chart's root key `version` is the
+registry's `/properties/version`, and `ChartAnnotationEmitter` writes the block from the schema.
 
-* **A chart cannot express `ReadOnly`.** A values key is by construction something the chart's caller
-  sets, whereas `SchemaProperty.ReadOnly` describes server-owned state that never appears in a values
-  file at all. Server-owned properties have no home in `values.yaml` and need a second source.
-* **`ResourceSchema` cannot carry `enum`, `minimum`/`maximum`, `default`, `items`, or any
-  `x-cybercloud-*` hint.** `SchemaProperty` is `(pointer, kind, required, readOnly, secret,
-  description)`, so a schema round-tripped through the registry today would lose the allow-list that
-  makes `extensions` safe and the range that makes `replicas` sane — and lose them silently, which is
-  the worst way to lose a constraint.
+> ⚠ **CORRECTED 2026-08-12.** This section claimed "`ResourceSchema` cannot carry `enum`,
+> `minimum`/`maximum`, `default`, `items`, or any `x-cybercloud-*` hint" and that `SchemaProperty` is
+> "`(pointer, kind, required, readOnly, secret, description)`". **All of that is refuted by the
+> type.** `SchemaProperty` carries `AllowedValues`, `Minimum`/`Maximum`, `DefaultJson`, `ElementKind`
+> and `Widget`, alongside `Format`, `Pattern`, `MinLength`/`MaxLength`, `ExampleJson`, `Nullable` and
+> `Immutable`. The six positional parameters are the six every property has an opinion about; the
+> rest are init-only and were added later. Read the type before repeating a list of its members.
+
+The gap runs the other way, and it is where a fact can be lost:
+
+* **`ReadOnly` is excluded rather than lost.** A values key is by construction something the chart's
+  caller sets, whereas `SchemaProperty.ReadOnly` describes server-owned state that never appears in a
+  values file at all. The emitter drops those properties, exactly as the generated CLI drops
+  `--provisioning-state`.
+* **Seven members have no annotation syntax, and generation *fails* rather than dropping them.**
+  `Format`, `Pattern`, `MinLength`, `MaxLength`, `ExampleJson`, `Nullable` and a non-text
+  `ElementKind`. A schema declaring one produces a build failure naming the property and the
+  directive that would close it — `@format`, `@pattern`, `@length`, `@example`, `@nullable`,
+  `@element`. Closing one means four edits: the `Directives` table in `build/Build.Charts.cs`, its
+  emission in `PropertyNode`, a row in the table above, and a case in `ChartAnnotationEmitter`.
+  They were deliberately not added ahead of a chart that uses them.
+* **A text element kind is the one array shape the vocabulary reaches**, because `@enum` on an array
+  becomes `items: {type: string, enum: […]}` and that `string` is hard-coded.
+* **A number or a boolean with no `DefaultJson` is refused.** Every values key carries a value — a
+  `null` is refused by the reader and by `helm` — and there is no empty spelling of a number, so the
+  emitter will not invent a `0` that may also sit outside the property's own `@range`.
+* **`@range` takes both ends.** `1..` and `..5` are *malformed directives*, not open ranges — the
+  pattern is `<min>..<max>` and the reader refuses anything else. A `SchemaProperty` with a `Minimum`
+  and no `Maximum` is therefore refused, naming the regex that would have to grow. Both bounds are
+  **inclusive**.
+* **`@enum` members are split on `|` and trimmed**, so an allowed value carrying a pipe or leading
+  space is refused rather than emitted as two members or as a different string.
+* **`@secret` is a string's directive and `@widget` renders one scalar field.** `SchemaProperty` does
+  not enforce either — `Incoherences` permits a `WidgetHint` on an array — so the emitter refuses
+  what the chart reader would.
 
 ## Forking discipline
 

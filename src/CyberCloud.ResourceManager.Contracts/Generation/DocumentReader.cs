@@ -88,8 +88,16 @@ public sealed record DocumentAction(
 ///         docs/plan/21 § Generation's rule rather than a convenience.</b> That document says
 ///         <c>Build.Generate</c> walks "the provider registry → OpenAPI 3.1 → the SDK's models,
 ///         clients and pollers" — one hop, so the compatibility gate that protects the published
-///         OpenAPI protects all four surfaces at once. A CLI generated straight from the registry
+///         OpenAPI protects those four surfaces at once. A CLI generated straight from the registry
 ///         could describe a flag the published contract does not have, and no gate would notice.
+///     </para>
+///     <para>
+///         ⚠ <b>ADR-012's fifth surface does not come through here, and that is stated on it rather
+///         than left to be discovered.</b> <see cref="ChartAnnotationEmitter" /> reads the registry,
+///         because the chart a type renders is <c>ResourceTypeRegistration.Chart</c> and no emitted
+///         document carries it — there is nothing here to read a pairing back from. It also keeps
+///         declaration order, which every document deliberately destroys by sorting
+///         <c>properties</c> ordinally.
 ///     </para>
 ///     <para>
 ///         ⚠ <b>This reader is the price of that rule and it is worth naming.</b> Reading a document
