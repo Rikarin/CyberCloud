@@ -19,7 +19,7 @@ public sealed class ProviderRegistryTests {
         // registry that generates the CLI is the one that validates the request body." This asserts
         // that everything an emitter needs is on the same object the write path resolves — the
         // versions, the schemas with their pointers, kinds and requiredness, the permissions, the
-        // actions and the meters. The EMITTERS are ADR-012 and are not written.
+        // actions and the meters — and all four of ADR-012's emitters now read exactly this object.
         var resolved = Built.Resolve(ConformingReconciler.TypeName, TestingProvider.V2026);
 
         resolved.IsSuccess.ShouldBeTrue(resolved.Error?.Message);

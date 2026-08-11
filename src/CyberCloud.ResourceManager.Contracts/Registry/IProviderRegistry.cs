@@ -324,10 +324,11 @@ public sealed record ResourceTypeRegistration {
 ///         one would be the drift.
 ///     </para>
 ///     <para>
-///         <b>The emitters are not written.</b> The registry is <i>shaped</i> so they are possible:
-///         every type carries its versions, schemas, permissions, actions and meters, and every schema
-///         property carries its pointer, kind, requiredness and description. Writing the OpenAPI, CLI,
-///         SDK and form emitters is ADR-012 and a separate task.
+///         <b>All four emitters are written and read this object.</b> The OpenAPI emitter reads it
+///         directly; the <c>cyc</c> verb tree, the .NET SDK and the portal forms are generated from
+///         the document it produces — docs/plan/21 § Generation's one hop, so the compatibility gate
+///         on a published api-version protects all four at once. What is <i>not</i> written is the
+///         TypeScript, Python and Go SDKs and the Terraform provider (docs/plan/21 § Other SDKs).
 ///     </para>
 /// </remarks>
 public interface IProviderRegistry {

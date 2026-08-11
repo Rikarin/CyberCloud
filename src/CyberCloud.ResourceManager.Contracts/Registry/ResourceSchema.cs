@@ -466,11 +466,14 @@ public readonly record struct SchemaProperty(
 ///         is exactly where drift comes back.
 ///     </para>
 ///     <para>
-///         ⚠ <b>The generation pipeline itself is ADR-012 and is not here.</b> This type is
-///         <i>shaped</i> so the emitters are possible — every property carries its pointer, kind,
-///         requiredness and description, which is what an OpenAPI schema, a CLI flag, an SDK member
-///         and a portal form field each need. Writing the emitters is a separate task and none of
-///         them exists yet.
+///         ⚠ <b>All four of ADR-012's surfaces read this type, and every member on
+///         <see cref="SchemaProperty" /> reaches all four.</b> A property's pointer, kind,
+///         requiredness, closed set, element kind, nullability, format, bounds, widget hint, default
+///         and example become an OpenAPI schema
+///         (<c>CyberCloud.ResourceManager.Contracts.Generation.OpenApiEmitter</c>), a <c>cyc</c> flag
+///         (<c>CliEmitter</c>), an SDK member (<c>SdkEmitter</c>) and a portal control
+///         (<c>FormsEmitter</c>). Adding a member here without teaching those to read it is the
+///         failure to watch for: a registry field nothing reads is not a closed gap, it is a field.
 ///     </para>
 ///     <para>
 ///         ⚠ <b><see cref="Project" /> is the other half of the immutable-date rule.</b> The grain's

@@ -19,13 +19,15 @@ namespace CyberCloud.Providers.Sample.Contracts;
 ///         platform has one.
 ///     </para>
 ///     <para>
-///         ⚠ <b><c>/properties/clusterId</c> is declared here and required, and nothing links it to
-///         <c>RequiresCluster()</c>.</b> <c>IResourceTypeBuilder.RequiresCluster</c> makes the reconcile
-///         driver refuse a pass with no connection, but the connection is resolved from
-///         <c>ClusterFrom(body)</c>, which reads this exact pointer out of the body. The two live in
-///         different files and nothing checks that a type declaring <c>RequiresCluster</c> also
-///         declares the property that supplies it — so forgetting the property is a per-resource
-///         runtime failure rather than a silo-start one.
+///         ⚠ <b><c>/properties/clusterId</c> is declared here and required, and
+///         <c>RequiresCluster()</c> now names it.</b> This provider is where that gap was found: the
+///         reconcile driver refused a pass with no cluster connection, the manager resolved one by
+///         reading a hard-coded <c>/properties/clusterId</c> out of the body, and nothing checked that
+///         a type declaring the flag also declared the property — so forgetting it was a per-resource
+///         runtime failure, after the caller had been told <c>202</c>, rather than a silo-start one.
+///         <c>ProviderBuilder.CheckClusterPlacement</c> now refuses such a type at silo start and
+///         <c>ResourceManagerService.ClusterFrom</c> reads the registered pointer, so the flag and the
+///         shape can no longer disagree.
 ///     </para>
 /// </remarks>
 public static class SampleWidgets {
