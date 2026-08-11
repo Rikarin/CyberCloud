@@ -1,0 +1,107 @@
+{
+  "$schema": "./node_modules/@angular/cli/lib/config/schema.json",
+  "version": 1,
+  "cli": {
+    "packageManager": "pnpm",
+    "analytics": false,
+    "schematicCollections": ["angular-eslint"]
+  },
+  "newProjectRoot": "apps",
+  "schematics": {
+    "@schematics/angular:component": {
+      "changeDetection": "OnPush",
+      "style": "css",
+      "standalone": true
+    }
+  },
+  "projects": {
+    "portal": {
+      "projectType": "application",
+      "root": "apps/portal",
+      "sourceRoot": "apps/portal/src",
+      "prefix": "cc",
+      "i18n": {
+        "sourceLocale": "en-US"
+      },
+      "architect": {
+        "build": {
+          "builder": "@angular/build:application",
+          "options": {
+            "outputPath": "dist/portal",
+            "index": "apps/portal/src/index.html",
+            "browser": "apps/portal/src/main.ts",
+            "server": "apps/portal/src/main.server.ts",
+            "ssr": {
+              "entry": "apps/portal/src/server.ts"
+            },
+            "outputMode": "server",
+            "polyfills": ["@angular/localize/init"],
+            "tsConfig": "apps/portal/tsconfig.app.json",
+            "inlineStyleLanguage": "css",
+            "styles": ["apps/portal/src/styles.css"],
+            "localize": false,
+            "security": {
+              "allowedHosts": ["127.0.0.1", "localhost"]
+            },
+            "assets": [
+              {
+                "glob": "**/*",
+                "input": "apps/portal/public"
+              }
+            ]
+          },
+          "configurations": {
+            "production": {
+              "optimization": true,
+              "extractLicenses": true,
+              "sourceMap": false,
+              "namedChunks": false,
+              "outputHashing": "all",
+              "budgets": [
+                {
+                  "type": "initial",
+                  "maximumWarning": "700kB",
+                  "maximumError": "900kB"
+                },
+                {
+                  "type": "anyComponentStyle",
+                  "maximumWarning": "6kB",
+                  "maximumError": "12kB"
+                }
+              ]
+            },
+            "development": {
+              "optimization": false,
+              "sourceMap": true,
+              "extractLicenses": false,
+              "namedChunks": true
+            }
+          },
+          "defaultConfiguration": "production"
+        },
+        "serve": {
+          "builder": "@angular/build:dev-server",
+          "configurations": {
+            "production": { "buildTarget": "portal:build:production" },
+            "development": { "buildTarget": "portal:build:development" }
+          },
+          "defaultConfiguration": "development"
+        },
+        "extract-i18n": {
+          "builder": "@angular/build:extract-i18n",
+          "options": {
+            "buildTarget": "portal:build:development",
+            "format": "xlf2",
+            "outputPath": "apps/portal/src/locale"
+          }
+        },
+        "lint": {
+          "builder": "@angular-eslint/builder:lint",
+          "options": {
+            "lintFilePatterns": ["apps/portal/**/*.ts", "apps/portal/**/*.html"]
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,42 @@
+{
+  "compileOnSave": false,
+  "compilerOptions": {
+    // No `baseUrl`: TypeScript 6 deprecates it, and since TS 5 `paths` entries resolve relative to
+    // the file that declares them — this one — which is `portal/`. That is what the mappings below
+    // are relative to.
+    "target": "ES2022",
+    "module": "preserve",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022", "dom"],
+    "importHelpers": true,
+    "skipLibCheck": true,
+    "declaration": false,
+    "experimentalDecorators": false,
+    "emitDecoratorMetadata": false,
+    "isolatedModules": true,
+    "strict": true,
+    "noImplicitOverride": true,
+    "noPropertyAccessFromIndexSignature": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "exactOptionalPropertyTypes": true,
+    "useDefineForClassFields": false,
+    "forceConsistentCasingInFileNames": true,
+    "paths": {
+      "@cybercloud/shell": ["./libs/shell/src/index.ts"],
+      "@cybercloud/charts": ["./libs/charts/src/index.ts"],
+      "@cybercloud/resource-forms": ["./libs/resource-forms/src/index.ts"],
+      "@cybercloud/resource-forms-overrides": ["./libs/resource-forms-overrides/src/index.ts"]
+    }
+  },
+  "angularCompilerOptions": {
+    "enableI18nLegacyMessageIdFormat": false,
+    "strictInjectionParameters": true,
+    "strictInputAccessModifiers": true,
+    "strictTemplates": true,
+    "typeCheckHostBindings": true
+  },
+  "exclude": ["node_modules", "dist"]
+}
