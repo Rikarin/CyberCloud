@@ -1,0 +1,345 @@
+using CyberCloud.Core.Contracts;
+using CyberCloud.Core.Time;
+using CyberCloud.ResourceManager.Registry;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
+using Orleans.Multitenant;
+using Orleans.TestingHost;
+using System.Collections.Concurrent;
+using System.Globalization;
+
+namespace CyberCloud.ResourceManager.Tests.Infrastructure;
+
+/// <summary>
+///     An <see cref="IResourceAuthorizer" /> a test can drive — the enforcement seam, switchable.
+/// </summary>
+/// <remarks>
+///     <para>
+///         ⚠ <b>The real <c>ReBacResourceAuthorizer</c> is <i>not</i> what most of these tests use, and
+///         the reason is what they are testing.</b> The property under test in the write path is
+///         <b>when</b> the check happens relative to quota and the index claim, and <b>which answer</b>
+///         a refusal produces. Standing up a whole ReBAC schema and tuple set to get a "no" would test
+///         docs/plan/07's engine, which has its own suite, and would make a step-ordering failure look
+///         like an authorization-schema failure.
+///     </para>
+///     <para>
+///         The one thing this must reproduce exactly is the 404-versus-403 rule, and it does: it takes
+///         the same two permissions, and it answers <see cref="ErrorCode.ResourceNotFound" /> unless
+///         the caller can read. <c>EnforcementSeamTests</c> asserts both branches against
+///         <i>this</i> and the shape of the rule against <c>ReBacResourceAuthorizer</c>'s own message.
+///     </para>
+/// </remarks>
+public sealed class SwitchableAuthorizer : IResourceAuthorizer {
+    /// <summary>Permissions the caller holds. Empty means they hold everything.</summary>
+    public static ConcurrentDictionary<string, bool> Granted { get; } = new(StringComparer.Ordinal);
+
+    /// <summary>Whether <see cref="Granted" /> is consulted at all.</summary>
+    public static bool Restricted { get; set; }
+
+    /// <summary>Every <c>(actionPermission, readPermission)</c> pair the write path asked about.</summary>
+    public static ConcurrentQueue<string> Asked { get; } = new();
+
+    /// <summary>Lets everything through again.</summary>
+    public static void Reset() {
+        Granted.Clear();
+        Asked.Clear();
+        Restricted = false;
+    }
+
+    /// <summary>Grants exactly these permissions and refuses everything else.</summary>
+    /// <param name="permissions">What the caller holds.</param>
+    public static void GrantOnly(params string[] permissions) {
+        Granted.Clear();
+        foreach (var permission in permissions) {
+            Granted[permission] = true;
+        }
+
+        Restricted = true;
+    }
+
+    /// <inheritdoc />
+    public Task<Result> AuthorizeAsync(
+        ResourceId id,
+        string actionPermission,
+        string readPermission,
+        CallerContext caller,
+        bool fullyConsistent = false,
+        CancellationToken cancellationToken = default
+    ) {
+        Asked.Enqueue(actionPermission);
+
+        if (!Restricted || Granted.ContainsKey(actionPermission)) {
+            return Task.FromResult(Result.Success);
+        }
+
+        // ⚠ THE RULE, REPRODUCED EXACTLY. 404 unless the caller can read; 403 only when they can read
+        // but not act — docs/plan/07 § The enforcement seam.
+        if (Granted.ContainsKey(readPermission)) {
+            return Task.FromResult(
+                Result.Failure(
+                    ErrorCode.AuthorizationFailed,
+                    $"'{caller}' can read '{id.Path}' but does not have '{actionPermission}' on it."
+                )
+            );
+        }
+
+        return Task.FromResult(Result.Failure(ErrorCode.ResourceNotFound, $"'{id.Path}' does not exist."));
+    }
+}
+
+/// <summary>An <see cref="IPolicyEvaluator" /> a test can make deny or modify.</summary>
+public sealed class SwitchablePolicyEvaluator : IPolicyEvaluator {
+    /// <summary>What to decide. Defaults to the honest "no engine ran".</summary>
+    public static PolicyDecision Next { get; set; } = PolicyDecision.NotSupported;
+
+    /// <summary>How many times the write path asked.</summary>
+    public static int Asked { get; private set; }
+
+    /// <summary>Back to the default.</summary>
+    public static void Reset() {
+        Next = PolicyDecision.NotSupported;
+        Asked = 0;
+    }
+
+    /// <inheritdoc />
+    public Task<PolicyDecision> EvaluateAsync(
+        ResourceId id,
+        string apiVersion,
+        string body,
+        CallerContext caller,
+        CancellationToken cancellationToken = default
+    ) {
+        Asked++;
+        return Task.FromResult(Next);
+    }
+}
+
+/// <summary>An <see cref="ILockResolver" /> a test can set a lock on.</summary>
+/// <remarks>
+///     ⚠ Stands in for the inherited scopes the shipped <c>ResourceScopeLockResolver</c> cannot read —
+///     see that type's remarks on what is stubbed. A lock set here is what a resource-group or
+///     subscription lock <i>would</i> resolve to once those grains carry one.
+/// </remarks>
+public sealed class SwitchableLockResolver : ILockResolver {
+    /// <summary>The lock every scope reports.</summary>
+    public static LockLevel Level { get; set; } = LockLevel.None;
+
+    /// <summary>Clears it.</summary>
+    public static void Reset() => Level = LockLevel.None;
+
+    /// <inheritdoc />
+    public Task<Result<LockLevel>> ResolveAsync(ResourceId id, CancellationToken cancellationToken = default) =>
+        Task.FromResult(Result<LockLevel>.Success(Level));
+}
+
+/// <summary>Records every <c>resource-changed</c> event step 10 emitted.</summary>
+public sealed class RecordingChangeSink : IResourceChangedSink {
+    /// <summary>Everything published.</summary>
+    public static ConcurrentQueue<ResourceChangedEvent> Published { get; } = new();
+
+    /// <summary>Whether publishing fails, so the "a failed publish does not fail the write" rule can be checked.</summary>
+    public static bool Fail { get; set; }
+
+    /// <summary>Forgets everything.</summary>
+    public static void Reset() {
+        Published.Clear();
+        Fail = false;
+    }
+
+    /// <inheritdoc />
+    public Task<Result> PublishAsync(ResourceChangedEvent change, CancellationToken cancellationToken = default) {
+        if (Fail) {
+            return Task.FromResult(Result.Failure(ErrorCode.InternalError, "the projector is down"));
+        }
+
+        Published.Enqueue(change);
+        return Task.FromResult(Result.Success);
+    }
+}
+
+/// <summary>The clock the silo reads, shared with the test so it can be advanced.</summary>
+/// <remarks>
+///     ⚠ Static for the same reason <c>CyberCloud.Kubernetes.Tests</c>'s is: the silo runs in this
+///     process but resolves its own services, and the 60-minute timeout is caused by <i>time
+///     passing</i> — there is nothing to call to make it happen, and the alternative is a test nobody
+///     runs. Advancing is monotonic and forward only.
+/// </remarks>
+public sealed class TestClock : IClock {
+    /// <summary>The one instance the silo resolves.</summary>
+    public static TestClock Instance { get; } = new();
+
+    /// <inheritdoc />
+    public DateTimeOffset UtcNow { get; private set; } = new(2026, 8, 11, 12, 0, 0, TimeSpan.Zero);
+
+    /// <summary>Moves time forward.</summary>
+    /// <param name="by">How far.</param>
+    public void Advance(TimeSpan by) => UtcNow += by;
+
+    /// <summary>Puts time back to the start of a test.</summary>
+    public void Reset() => UtcNow = new(2026, 8, 11, 12, 0, 0, TimeSpan.Zero);
+}
+
+/// <summary>
+///     An in-process Orleans cluster with the resource manager wired as production wires it.
+/// </summary>
+/// <remarks>
+///     ⚠ <b>In-memory storage and in-memory reminders, which is a deviation from ADR-018.</b> See this
+///     project's <c>.csproj</c> for exactly what that costs and what is owed. Everything else —
+///     grains, the call filter, the write path, the registry — is the production wiring.
+/// </remarks>
+public sealed class ResourceManagerCluster : IAsyncLifetime {
+    TestCluster cluster = null!;
+
+    /// <summary>The tenant every test writes into.</summary>
+    public static Guid Tenant { get; } = Guid.Parse("11111111-1111-4111-8111-111111111111");
+
+    /// <summary>A second tenant, for the cross-tenant 404.</summary>
+    public static Guid OtherTenant { get; } = Guid.Parse("22222222-2222-4222-8222-222222222222");
+
+    /// <summary>The subscription every test writes into.</summary>
+    public static Guid Subscription { get; } = Guid.Parse("33333333-3333-4333-8333-333333333333");
+
+    /// <summary>The cluster's grain factory. ⚠ Tenant-unaware — a client, in the filter's terms.</summary>
+    public IGrainFactory Grains => cluster.GrainFactory;
+
+    /// <summary>
+    ///     The write path, constructed on the <b>client</b> side of the cluster.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Built here rather than resolved from the silo, and that is the faithful shape rather
+    ///     than a convenience.</b> <c>IResourceManager</c> is documented as a service held by the
+    ///     gateway, and docs/plan/03 and docs/plan/10 make the gateway an Orleans <i>client</i> — so
+    ///     the grain factory it holds is <c>TestCluster.GrainFactory</c>, not the silo's.
+    ///     <c>TestCluster.ServiceProvider</c> is the client's container and never sees what
+    ///     <c>ISiloBuilder.ConfigureServices</c> registered, which is why resolving from it fails.
+    ///     <para>
+    ///         The silo still runs <c>AddCyberCloudResourceManager</c>, because
+    ///         <c>OperationGrain</c> resolves <c>ReconcileDriver</c> from the silo's container. So both
+    ///         halves of the production wiring are exercised, on the side each really lives on.
+    ///     </para>
+    /// </remarks>
+    public IResourceManager Manager { get; private set; } = null!;
+
+    /// <summary>The built registry.</summary>
+    public IProviderRegistry Registry { get; private set; } = null!;
+
+    /// <summary>A tenant-qualified grain factory.</summary>
+    public TenantGrainFactory For(Guid tenant) =>
+        Grains.ForTenant(tenant.ToString("D", CultureInfo.InvariantCulture));
+
+    /// <summary>The quota grain steps 6 and 9 use.</summary>
+    public IQuotaGrain Quota(Guid tenant, Guid subscription) =>
+        For(tenant).GetGrain<IQuotaGrain>(GrainKeys.Subscription(subscription));
+
+    /// <summary>The path index step 7 claims in.</summary>
+    public IResourceIndexGrain Index(ResourceId address) =>
+        For(address.TenantId).GetGrain<IResourceIndexGrain>(GrainKeys.PathIndex(address));
+
+    /// <summary>The resource grain.</summary>
+    public IResourceGrain Resource(Guid tenant, Guid resourceId) =>
+        For(tenant).GetGrain<IResourceGrain>(GrainKeys.Resource(resourceId));
+
+    /// <summary>The operation grain.</summary>
+    public IOperationGrain Operation(Guid tenant, Guid operationId) =>
+        For(tenant).GetGrain<IOperationGrain>(GrainKeys.Operation(operationId));
+
+    /// <summary>Builds an address in the test tenant and subscription.</summary>
+    /// <param name="name">The resource name. DNS-1123, per docs/plan/06 § Identifiers.</param>
+    /// <param name="group">The resource group.</param>
+    /// <param name="tenant">The tenant, defaulting to <see cref="Tenant" />.</param>
+    public static ResourceId Address(string name, string group = "prod", Guid? tenant = null) =>
+        new(tenant ?? Tenant, Subscription, group, ConformingReconciler.TypeName, name, Guid.Empty);
+
+    /// <summary>A caller in the test tenant.</summary>
+    /// <param name="tenant">The tenant, defaulting to <see cref="Tenant" />.</param>
+    /// <param name="subject">The subject id.</param>
+    public static CallerContext Caller(Guid? tenant = null, string subject = "alice") =>
+        new() {
+            TenantId = tenant ?? Tenant,
+            SubjectType = "user",
+            SubjectId = subject,
+            CorrelationId = "test"
+        };
+
+    /// <summary>Puts every switchable double back to its default.</summary>
+    public static void ResetDoubles() {
+        FakeWorld.Reset();
+        SwitchableAuthorizer.Reset();
+        SwitchablePolicyEvaluator.Reset();
+        SwitchableLockResolver.Reset();
+        RecordingChangeSink.Reset();
+        TestClock.Instance.Reset();
+    }
+
+    /// <inheritdoc />
+    public async ValueTask InitializeAsync() {
+        var builder = new TestClusterBuilder(1);
+        builder.AddSiloBuilderConfigurator<SiloConfigurator>();
+        cluster = builder.Build();
+        await cluster.DeployAsync();
+
+        Registry = ProviderRegistry.Build([new TestingProvider()]);
+
+        Manager = new ResourceManagerService(
+            Registry,
+            new SwitchableAuthorizer(),
+            new SwitchableLockResolver(),
+            new SwitchablePolicyEvaluator(),
+            new RecordingChangeSink(),
+            cluster.GrainFactory,
+            NullLogger<ResourceManagerService>.Instance
+        );
+    }
+
+    /// <inheritdoc />
+    public async ValueTask DisposeAsync() {
+        if (cluster is not null) {
+            await cluster.StopAllSilosAsync();
+            await cluster.DisposeAsync();
+        }
+    }
+
+    sealed class SiloConfigurator : ISiloConfigurator {
+        public void Configure(ISiloBuilder silo) {
+            silo.AddMemoryGrainStorage(StorageTiers.Durable);
+            silo.AddMemoryGrainStorage(StorageTiers.Hot);
+
+            // ⚠ The operation grain is IRemindable and RegisterOrUpdateReminder throws without a
+            // reminder service. In-memory rather than Redis (docs/plan/04 § Reminders) — see the
+            // .csproj on what that does and does not prove.
+            silo.UseInMemoryReminderService();
+
+            silo.ConfigureServices(services => {
+                    services.AddSingleton<IClock>(TestClock.Instance);
+
+                    // The doubles go in FIRST so the production wiring's TryAdd keeps them.
+                    services.AddSingleton<IResourceAuthorizer, SwitchableAuthorizer>();
+                    services.AddSingleton<IPolicyEvaluator, SwitchablePolicyEvaluator>();
+                    services.AddSingleton<ILockResolver, SwitchableLockResolver>();
+                    services.AddSingleton<IResourceChangedSink, RecordingChangeSink>();
+
+                    services.AddSingleton<ConformingReconciler>();
+                    services.AddSingleton<IResourceProvider, TestingProvider>();
+                    services.TryAddSingleton<ILoggerFactory>(_ => NullLoggerFactory.Instance);
+                }
+            );
+
+            silo.AddCyberCloudResourceManager();
+
+            // Orleans' own separation is deliberately NOT wired here. The write path is a client and
+            // is therefore outside TenantSeparatingCallFilter by construction — see
+            // CyberCloud.Tenancy/TenancySiloBuilderExtensions.cs § the residue. Cross-tenant refusal is
+            // the manager's own check (ResolveAsync's tenant comparison), and
+            // WritePathTests.ACrossTenantPathIs404 is what proves it rather than proving Orleans'.
+        }
+    }
+}
+
+/// <summary>Binds <see cref="ResourceManagerCluster" /> to the classes that share it.</summary>
+[CollectionDefinition(Name)]
+public sealed class ResourceManagerSuite : ICollectionFixture<ResourceManagerCluster> {
+    /// <summary>The collection name.</summary>
+    public const string Name = "resource-manager-cluster";
+}

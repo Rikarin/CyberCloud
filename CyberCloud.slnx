@@ -66,6 +66,10 @@
         <Project Path="src/CyberCloud.Kubernetes.Contracts.Tests/CyberCloud.Kubernetes.Contracts.Tests.csproj"/>
         <Project Path="src/CyberCloud.Kubernetes/CyberCloud.Kubernetes.csproj"/>
         <Project Path="src/CyberCloud.Kubernetes.Tests/CyberCloud.Kubernetes.Tests.csproj"/>
+        <Project Path="src/CyberCloud.ResourceManager.Contracts/CyberCloud.ResourceManager.Contracts.csproj"/>
+        <Project Path="src/CyberCloud.ResourceManager.Contracts.Tests/CyberCloud.ResourceManager.Contracts.Tests.csproj"/>
+        <Project Path="src/CyberCloud.ResourceManager/CyberCloud.ResourceManager.csproj"/>
+        <Project Path="src/CyberCloud.ResourceManager.Tests/CyberCloud.ResourceManager.Tests.csproj"/>
     </Folder>
     <Folder Name="/src/Providers/"/>
     <Folder Name="/src/Hosts/">

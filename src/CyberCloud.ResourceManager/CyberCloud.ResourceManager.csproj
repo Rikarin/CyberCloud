@@ -1,0 +1,56 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      docs/plan/03 § src — the resource manager (docs/plan/08). The write path, the resource and
+      operation grains, the provider registry, the reconcile scheduler and the drift diff.
+
+      ⚠ THIS IS THE ONE ASSEMBLY THAT MAY CALL THE AUTHORIZATION ENGINE.
+      docs/plan/07 § The enforcement seam: "Exactly one place in the request path calls the engine …
+      Providers never call the engine. A provider that does is failing a review, because authorization
+      scattered across twenty providers is twenty places to get it wrong and one place to miss."
+      CyberCloud.ResourceManager.Contracts — which every provider references — deliberately does not
+      reference CyberCloud.Authorization.Contracts, so the rule is mechanical for providers and a
+      review rule only here, where there is one file to review.
+
+      ⚠ IT REFERENCES CyberCloud.Kubernetes AND NOT ONLY ITS .Contracts, for one reason: the reconcile
+      driver has to hand a reconciler a live IKubeClusterConnection, and IClusterConnectionGrain is
+      the only thing that produces one. It still names no k8s.Models type — docs/plan/03
+      § Assembly graph rules, rule 3 is about the Kubernetes model types, not about the assembly.
+    -->
+
+    <ItemGroup>
+        <!-- Grain implementations, [PersistentState], reminders. -->
+        <PackageReference Include="Microsoft.Orleans.Server"/>
+        <!--
+          ⚠ IRemindable and TickStatus are NOT in Microsoft.Orleans.Server. Verified against
+          microsoft.orleans.server.10.2.2.nuspec — its dependencies are Persistence.Memory, Runtime and
+          Sdk, and the reminder abstractions are in neither. The operation grain is IRemindable, so
+          this is explicit. Which reminder STORAGE the silo uses is the host's choice
+          (docs/plan/04 § Reminders says Redis; a test says in-memory) and is not decided here.
+        -->
+        <PackageReference Include="Microsoft.Orleans.Reminders"/>
+        <!-- IGrainFactory.ForTenant, which is how every grain reference here is taken. -->
+        <PackageReference Include="Orleans.Multitenant"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../CyberCloud.Core/CyberCloud.Core.csproj"/>
+        <ProjectReference Include="../CyberCloud.Core.Contracts/CyberCloud.Core.Contracts.csproj"/>
+        <ProjectReference Include="../CyberCloud.ResourceManager.Contracts/CyberCloud.ResourceManager.Contracts.csproj"/>
+        <ProjectReference Include="../CyberCloud.Tenancy.Contracts/CyberCloud.Tenancy.Contracts.csproj"/>
+        <ProjectReference Include="../CyberCloud.Authorization.Contracts/CyberCloud.Authorization.Contracts.csproj"/>
+        <ProjectReference Include="../CyberCloud.Kubernetes.Contracts/CyberCloud.Kubernetes.Contracts.csproj"/>
+    </ItemGroup>
+
+    <ItemGroup Label="CyberCloud.Analyzers — see CyberCloud.Core.csproj for why this is not a reference">
+        <!--
+          CC1006 is the rule that earns its keep here: ResourceManager is a plain service held by the
+          gateway, which is an Orleans client, so every grain reference it takes must go through
+          ForTenant. The analyzer is what keeps that true after the next edit.
+        -->
+        <ProjectReference Include="../CyberCloud.Analyzers/CyberCloud.Analyzers.csproj"
+                          OutputItemType="Analyzer"
+                          ReferenceOutputAssembly="false"/>
+    </ItemGroup>
+
+</Project>
