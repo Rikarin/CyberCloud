@@ -1,3 +1,4 @@
+using CyberCloud.Core.Contracts;
 using CyberCloud.Identity.Contracts;
 using CyberCloud.Identity.Tests.Infrastructure;
 using System.Reflection;
@@ -362,12 +363,12 @@ public sealed class ManagedIdentityTests(IdentityCluster cluster) {
             }
         }
 
-        // ⚠ And there is no VaultSecretRef either, which is the sharper version of the claim. A
+        // ⚠ And there is no SecretRef either, which is the sharper version of the claim. A
         // service principal holds a handle to a secret — the best a shared secret can be, and still a
         // secret somewhere. A managed identity holds no handle, because there is nothing to point at.
         foreach (var type in stateTypes) {
             foreach (var member in type.GetProperties(BindingFlags.Public | BindingFlags.Instance)) {
-                member.PropertyType.ShouldNotBe(typeof(VaultSecretRef), $"{type.Name}.{member.Name}");
+                member.PropertyType.ShouldNotBe(typeof(SecretRef), $"{type.Name}.{member.Name}");
             }
         }
 

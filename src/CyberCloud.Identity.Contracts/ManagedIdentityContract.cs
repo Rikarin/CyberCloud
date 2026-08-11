@@ -1,5 +1,6 @@
 using CyberCloud.Authorization.Contracts;
 using CyberCloud.Core;
+using CyberCloud.Core.Contracts;
 using System.Globalization;
 
 namespace CyberCloud.Identity.Contracts;
@@ -352,7 +353,7 @@ public sealed record ValidatedServiceAccount(
 ///         EM: "no secret is ever stored, on either side … it removes an entire incident class". The
 ///         binding says <i>who may present a token</i>; the issuer record says <i>whose signature to
 ///         trust</i>, and a JWKS is public. Compare <see cref="IServicePrincipalGrain" />, which holds
-///         a <see cref="VaultSecretRef" /> — a handle rather than a value, which is the best a shared
+///         a <see cref="SecretRef" /> — a handle rather than a value, which is the best a shared
 ///         secret can be, and still worse than not having one.
 ///     </para>
 ///     <para>

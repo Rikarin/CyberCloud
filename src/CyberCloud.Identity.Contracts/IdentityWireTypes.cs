@@ -1,57 +1,48 @@
+// ── Where the secret handles went, and why the window to move them was open ─────────────────────
+//
+// This file used to declare `VaultSecretRef`, a three-field record identical to
+// CyberCloud.Core.Contracts.SecretRef, under its own published alias
+// "CyberCloud.Identity.VaultSecretRef". It was retired on 2026-08-11 and the three properties that
+// held one — ApplicationRegistration.ClientSecretRef, ServicePrincipalDescriptor.CredentialSecretRef
+// and TotpEnrollment.SecretRef — now hold the shared type. The reason for the duplicate (reusing the
+// shared record would drag CyberCloud.ResourceManager.Contracts, and through it the Kubernetes and
+// tenancy contracts, into identity for one record) stopped being true earlier the same day, when
+// SecretRef was lifted into CyberCloud.Core.Contracts carrying the alias
+// "CyberCloud.ResourceManager.SecretRef" unchanged.
+//
+// ⚠ RETIRING AN ALIAS IS A ONE-WAY DOOR AND THIS ONE CLOSES AT THE FIRST RELEASE TAG. Two aliases
+// cannot name one type, so switching the properties over necessarily retired
+// "CyberCloud.Identity.VaultSecretRef". docs/plan/04 § Failure and upgrade makes the alias — not the
+// CLR name — what a silo of version N looks up in a payload from a silo of version N+1, so a
+// retired alias is a payload nothing can read. It was safe at this moment for one reason and it is
+// worth naming precisely, because the reason expires:
+//
+//   `git tag` is empty. Nothing has been released, no silo has ever run this assembly, and
+//   therefore no PostgreSQL row, no stream event and no in-flight message anywhere carries a
+//   payload written under that alias. build/Build.Architecture.cs says the same thing from the
+//   other side: the Wire compatibility gate is Blocked precisely because there is no released
+//   contract assembly to round-trip against.
+//
+// ⚠ AFTER THE FIRST TAG THE SAME CHANGE IS A DATA-LOSS BUG, NOT A CLEANUP. From then on the correct
+// move is to keep the retired record as a burned alias with a comment, exactly as
+// CyberCloud.Core.Contracts.Tests.WireContractTests describes for ResourceKeySurrogate — the numbers
+// and the alias stay out of circulation forever rather than being deleted. The swap was safe on the
+// wire in the narrower sense too: both records numbered the same three members identically (0 Path,
+// 1 Field, 2 Version), which
+// CyberCloud.Identity.Contracts.Tests.IdentitySerializationTests.TheSecretBearingWireTypesKeepTheIdNumbersTheyPublished
+// pins so the equivalence cannot quietly stop holding.
+//
+// ⚠ THE ABSENCE THAT MATTERS SURVIVED THE MOVE. Neither record has a member a value could ride in:
+// a nullable `Value` "for convenience" would be populated by the first caller who found resolving
+// inconvenient, and from then on every backup of the durable tier would contain it. That is
+// asserted about the shared type, from this assembly, by
+// TheSharedSecretRefIsAnAddressAndHasNowhereToPutAValue.
+
 using CyberCloud.Core;
+using CyberCloud.Core.Contracts;
 using System.Diagnostics.CodeAnalysis;
 
 namespace CyberCloud.Identity.Contracts;
-
-/// <summary>
-///     An address in the vault, never a value. docs/plan/00 § Non-negotiables:
-///     <i>"secrets are <c>SecretRef</c> handles resolved at the data plane"</i>.
-/// </summary>
-/// <remarks>
-///     <para>
-///         ⚠ <b>This duplicates <c>CyberCloud.Core.Contracts.SecretRef</c>, and the duplication is
-///         now debt rather than a decision.</b> That type is the same idea with the same three
-///         fields. The reason given here — that reusing it would drag
-///         <c>CyberCloud.ResourceManager.Contracts</c>, and through it the Kubernetes and tenancy
-///         contracts, into identity for one record — <b>stopped being true on 2026-08-11</b>, when
-///         <c>SecretRef</c> was lifted into <c>CyberCloud.Core.Contracts</c> carrying its published
-///         alias <c>CyberCloud.ResourceManager.SecretRef</c> unchanged. Both modules already look
-///         there.
-///     </para>
-///     <para>
-///         Switching the three properties over is a one-file change plus a
-///         <c>WireContractTests</c> baseline edit, and it is cheapest before the first release tag
-///         exists, because <c>CyberCloud.Identity.VaultSecretRef</c> below is itself a published wire
-///         identifier. It is not done here only because this file was outside the owning task.
-///     </para>
-///     <para>
-///         ⚠ <b>There is no member a value could ride in, and that is the design.</b> A nullable
-///         <c>Value</c> "for convenience" would be populated by the first caller who found resolving
-///         inconvenient, and from then on every backup of the durable tier would contain it.
-///     </para>
-/// </remarks>
-[GenerateSerializer]
-[Alias("CyberCloud.Identity.VaultSecretRef")]
-public sealed record VaultSecretRef {
-    /// <summary>The vault path — <c>tenants/{tenantId}/users/{userId}/totp</c>.</summary>
-    [Id(0)]
-    public string Path { get; init; } = string.Empty;
-
-    /// <summary>The field within that path.</summary>
-    [Id(1)]
-    public string Field { get; init; } = string.Empty;
-
-    /// <summary>The version, or empty for "current". Pinning a version makes rotation observable.</summary>
-    [Id(2)]
-    public string Version { get; init; } = string.Empty;
-
-    /// <summary>Whether this handle names something.</summary>
-    public bool IsEmpty => Path.Length == 0 || Field.Length == 0;
-
-    /// <inheritdoc />
-    public override string ToString() =>
-        Version.Length == 0 ? $"{Path}#{Field}" : $"{Path}#{Field}@{Version}";
-}
 
 /// <summary>
 ///     A user, as everything outside the identity module sees one. docs/plan/11 § The object model.
@@ -262,7 +253,7 @@ public sealed record ApplicationRegistration {
     ///     Where the client secret lives, for a confidential client. Empty for a public one.
     /// </summary>
     [Id(9)]
-    public VaultSecretRef ClientSecretRef { get; init; } = new();
+    public SecretRef ClientSecretRef { get; init; } = new();
 
     /// <summary>When it was registered.</summary>
     [Id(10)]
@@ -303,7 +294,7 @@ public sealed record ServicePrincipalDescriptor {
 
     /// <summary>Where its client secret lives.</summary>
     [Id(5)]
-    public VaultSecretRef CredentialSecretRef { get; init; } = new();
+    public SecretRef CredentialSecretRef { get; init; } = new();
 
     /// <summary>
     ///     The SHA-256 thumbprints of certificates it may present, for mTLS. ⚠ M2 — the seam is here
@@ -453,7 +444,7 @@ public sealed record RecoveryCodeBatch {
 public sealed record TotpEnrollment {
     /// <summary>Where the shared secret lives. ⚠ Never the secret — docs/plan/11 § Credentials.</summary>
     [Id(0)]
-    public VaultSecretRef SecretRef { get; init; } = new();
+    public SecretRef SecretRef { get; init; } = new();
 
     /// <summary>The number of digits a code carries. Six, per RFC 6238's common profile.</summary>
     [Id(1)]

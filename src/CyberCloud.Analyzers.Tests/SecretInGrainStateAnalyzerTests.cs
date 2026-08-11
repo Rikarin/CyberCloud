@@ -150,6 +150,56 @@ public sealed class SecretInGrainStateAnalyzerTests {
         );
 
     /// <summary>
+    ///     ⚠ A <c>*SecretRef</c> member is silent, and the <c>Ref</c> is doing the work.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         <b>This is the shape the non-negotiable asks for, not a hole in the rule.</b>
+    ///         docs/plan/00 § Non-negotiables bans a member that holds a secret and prescribes the
+    ///         replacement in the same sentence: <i>"secrets are <c>SecretRef</c> handles resolved at
+    ///         the data plane"</i>. So the analyzer must fire on <c>ClientSecret</c> and must not
+    ///         fire on <c>ClientSecretRef</c> — a rule that reported both would be suppressed at
+    ///         every correct site, and a rule suppressed everywhere protects nothing.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The consequence is worth stating plainly, because it is easy to assume the
+    ///         opposite:</b> CC1005 does not <i>cover</i>
+    ///         <c>ApplicationRegistration.ClientSecretRef</c>,
+    ///         <c>ServicePrincipalDescriptor.CredentialSecretRef</c> or
+    ///         <c>TotpEnrollment.SecretRef</c> — it is silent on all three and always has been. What
+    ///         it guards is the edit that turns one of them back into a value: drop the <c>Ref</c>,
+    ///         or add a sibling <c>ClientSecret</c>, and the build stops. That is why this pair of
+    ///         cases is one test — the silence is only worth having if the report next to it is real.
+    ///     </para>
+    /// </remarks>
+    [Fact]
+    public Task AHandleToASecretIsSilentButTheValueBesideItIsNot() =>
+        AnalyzerHarness.ReportsAsync<SecretInGrainStateAnalyzer>(
+            """
+            using Orleans;
+
+            [GenerateSerializer]
+            [Alias("CyberCloud.Probe.SecretRef")]
+            public sealed record SecretRef
+            {
+                [Id(0)] public string Path { get; init; } = "";
+                [Id(1)] public string Field { get; init; } = "";
+            }
+
+            [GenerateSerializer]
+            [Alias("CyberCloud.Probe.Registration")]
+            public sealed record ApplicationRegistration
+            {
+                [Id(0)] public SecretRef ClientSecretRef { get; init; } = new();
+                [Id(1)] public SecretRef CredentialSecretRef { get; init; } = new();
+                [Id(2)] public SecretRef SecretRef { get; init; } = new();
+
+                [Id(3)] public string {|CC1005:ClientSecret|} { get; init; } = "";
+            }
+            """
+        );
+
+    /// <summary>
     ///     <c>CyberCloud.Vault</c> is the one assembly allowed to hold the value — docs/plan/00
     ///     § Non-negotiables, docs/plan/18. It does not exist yet; the exemption is written so that
     ///     it does not have to be revisited when it lands.

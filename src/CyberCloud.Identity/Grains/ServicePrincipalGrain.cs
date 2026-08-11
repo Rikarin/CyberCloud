@@ -7,7 +7,7 @@ namespace CyberCloud.Identity.Grains;
 ///     <see cref="IServicePrincipalGrain" /> — Entity, Durable, key <c>sp/{servicePrincipalId:N}</c>.
 /// </summary>
 /// <remarks>
-///     ⚠ <b>The credential is a <see cref="VaultSecretRef" />, never a value.</b> That is the whole
+///     ⚠ <b>The credential is a <see cref="SecretRef" />, never a value.</b> That is the whole
 ///     difference between this and the "client secret in a Kubernetes <c>Secret</c>" that
 ///     docs/plan/11 § Managed identity calls the bad answer — the platform's own copy is a handle,
 ///     so a durable-tier backup carries no credential.
@@ -69,7 +69,7 @@ public sealed class ServicePrincipalGrain(
     }
 
     /// <inheritdoc />
-    public async Task<Result<ServicePrincipalDescriptor>> RotateCredentialAsync(VaultSecretRef credentialSecretRef) {
+    public async Task<Result<ServicePrincipalDescriptor>> RotateCredentialAsync(SecretRef credentialSecretRef) {
         ArgumentNullException.ThrowIfNull(credentialSecretRef);
 
         if (state.State.Descriptor is not { } descriptor) {

@@ -11,8 +11,10 @@ namespace CyberCloud.Communication.Contracts;
 ///         docs/plan/00 § Non-negotiables, the "Secrets never reach grain state" row:
 ///         <i>"secrets are <c>SecretRef</c> handles resolved at the data plane"</i>. Every member here
 ///         is an address and there is deliberately no member a value could ride in — the same absence
-///         argument <c>CyberCloud.ResourceManager.Contracts.SecretRef</c> and
-///         <c>CyberCloud.Identity.Contracts.VaultSecretRef</c> make, in this module's vocabulary.
+///         argument <c>CyberCloud.Core.Contracts.SecretRef</c> makes, in this module's vocabulary.
+///         (That type lives in <c>CyberCloud.Core.Contracts</c> and keeps the alias
+///         <c>CyberCloud.ResourceManager.SecretRef</c> it was published under; identity's own
+///         duplicate, <c>VaultSecretRef</c>, was retired into it.)
 ///     </para>
 ///     <para>
 ///         ⚠ <b>This matters more here than almost anywhere else in the platform.</b> BYO is offered
