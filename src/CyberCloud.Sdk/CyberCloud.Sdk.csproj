@@ -1,0 +1,120 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      The hand-written half of the .NET SDK — docs/plan/21 § Generation:
+
+          "Hand-written on top: the credential types, the pipeline policies, the convenience methods
+           (GetConnectionStringAsync), and the tests. Everything else is regenerated per release and
+           never edited."
+
+      ⚠ NOTHING NAMED Azure.* IS IN THIS GRAPH, AND THAT IS THE DECISION OF 2026-08-11.
+      docs/plan/21 § The .NET SDK: "Do we depend on Azure.Core or reimplement it? ~~Decision: depend
+      on it.~~ DECIDED 2026-08-11: reimplement it. We take the shapes and own the code." The
+      conventions table there now has a third column reading "Ours" on every row. `Response<T>`,
+      `Operation<T>`, `WaitUntil`, `AsyncPageable<T>` and the `TokenCredential`-shaped credential in
+      this assembly are those shapes, in this namespace, over Polly and HttpClient.
+
+      ⚠ ONE PACKAGE, AND IT WAS ALREADY IN THE REGISTER. `Polly` 8.6.5 is pinned in
+      Directory.Packages.props § "Mapping and resilience" for the fabric's cluster connections; the
+      SDK's retry strategy is the second consumer, not a new dependency. Everything else —
+      HttpClient, System.Text.Json and its source generator, System.Security.Cryptography — is in the
+      net10.0 shared framework.
+    -->
+
+    <PropertyGroup Label="Packing — this one ships">
+        <!--
+          docs/plan/03 § Top level keeps `cli/` out of src/ "because it ships separately"; the SDK
+          ships separately too and that document places it nowhere. It is here because it is .NET
+          library code the generator writes into. ⚠ Reported as a docs/plan/03 gap.
+        -->
+        <IsPackable>true</IsPackable>
+        <PackageId>CyberCloud.Sdk</PackageId>
+        <Description>The Cyber Cloud SDK for .NET — credentials, pipeline and long-running operations.</Description>
+        <PackageTags>cybercloud;cloud;sdk</PackageTags>
+    </PropertyGroup>
+
+    <PropertyGroup Label="Trimming and AOT — docs/plan/21 § cyc and § The .NET SDK">
+        <!--
+          ⚠ THESE TWO LINES ARE THE POINT OF DROPPING Azure.Core.
+
+          docs/plan/21 § `cyc` requires the CLI to be "single-file AOT-published per RID so there is
+          no runtime prerequisite", and § The .NET SDK makes the CLI depend on this assembly so there
+          is one pipeline rather than two. Those two requirements were in tension for as long as the
+          graph contained a trim-hostile package. They are not any more, and IsAotCompatible turns the
+          claim into a build gate: it enables the IL trim, single-file and AOT analysers on every
+          compilation of this project, so a reflective call added here fails the build rather than
+          failing `cyc` at run time on a customer's machine.
+
+          Consequences, all of them enforced by the analysers rather than by review:
+            * every JSON type goes through SdkJsonContext (source-generated System.Text.Json);
+            * no JsonSerializer overload that takes a Type without a JsonTypeInfo;
+            * P/Invoke uses [LibraryImport], not [DllImport] with marshalling the AOT compiler
+              cannot see.
+        -->
+        <IsAotCompatible>true</IsAotCompatible>
+        <EnableAotAnalyzer>true</EnableAotAnalyzer>
+
+        <!--
+          ⚠ Required by [LibraryImport], and required BECAUSE of the line above rather than despite it.
+          The source-generated interop marshalling in
+          Identity/Cache/TokenCache.cs (Windows Credential Manager) is `unsafe` by construction, and
+          SYSLIB1062 is a hard error without this. The alternative is [DllImport], whose runtime
+          marshalling is exactly what IsAotCompatible exists to keep out — so "no unsafe" and "AOT
+          clean" are in direct tension here and this is the side to come down on. No hand-written
+          `unsafe` appears anywhere in this assembly; the only unsafe code is generated.
+        -->
+        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    </PropertyGroup>
+
+    <PropertyGroup Label="Analyzer suppressions — four, each argued">
+        <!--
+          CA1515 "Consider making public types internal". docs/plan/00 § Coding standards makes
+          `internal` the default and `public` something that needs a reason; a published SDK is that
+          reason, the same one Directory.Build.targets § "Contracts project conventions" already
+          accepts for the .Contracts assemblies. Every public type here is either called by a tenant's
+          application or emitted against by the generator, and the emitter-facing part of the surface
+          is enumerated in EmitterContract.cs.
+
+          CA1000 "Do not declare static members on generic types" — `Response<T>.FromValue`,
+          `NullableResponse<T>.FromNoValue`, `AsyncPageable<T>.Create`. The same exception
+          CyberCloud.Core.csproj already argues for `Result<T>`: the rule exists because `Foo<T>.Bar()`
+          forces a caller to name T, and for a factory that is exactly what the caller wants. The BCL
+          takes the same exception (`Task<T>.FromResult`, `ImmutableArray<T>.Empty`), and so does the
+          shape docs/plan/21 § The .NET SDK borrows.
+
+          CA1707 "Remove the underscores from member name … ServiceVersion.V2026_08_01". ⚠ The
+          underscores ARE the api-version. docs/plan/10 § API versioning makes a version a date and
+          makes it immutable; `V20260801` is the same information rendered unreadable, and
+          `V2026_08_01` is the spelling every Azure SDK's ServiceVersion enum uses for the same reason.
+          Renaming it later would be a binary breaking change made for a naming rule.
+
+          CA1001 "Type owns disposable field(s) but is not disposable" — three types hold a
+          `SemaphoreSlim` they never dispose: AccessTokenCache, SigningKeyCache and OperationPoller.
+          ⚠ This is deliberate and each one says why at the field. SemaphoreSlim allocates a kernel
+          handle only when `AvailableWaitHandle` is read, which none of them does, so undisposed it is
+          pure managed state. Making them disposable would push `IDisposable` onto `Operation<T>` and
+          onto every credential — a public contract callers would have to honour, added to satisfy a
+          rule about a handle that is never allocated.
+        -->
+        <NoWarn>$(NoWarn);CA1515;CA1000;CA1707;CA1001</NoWarn>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Polly"/>
+    </ItemGroup>
+
+    <ItemGroup Label="CyberCloud.Analyzers — see CyberCloud.Core.csproj for why this is not a reference">
+        <!--
+          docs/plan/00 § Coding standards, § Non-negotiables, and the Analyzer coverage gate in
+          build/Build.Architecture.cs, which fails any shipping project that omits this.
+
+          CC1001 and CC1002 are the two that bite in a client library: an SDK that blocks on its own
+          async path deadlocks a caller with a synchronization context, and this assembly's answer is
+          that there is no synchronous path to block from — see EmitterContract.cs § "Async only".
+        -->
+        <ProjectReference Include="../CyberCloud.Analyzers/CyberCloud.Analyzers.csproj"
+                          OutputItemType="Analyzer"
+                          ReferenceOutputAssembly="false"/>
+    </ItemGroup>
+
+</Project>
