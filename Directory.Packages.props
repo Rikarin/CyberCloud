@@ -52,9 +52,19 @@
       the Orleans 9 surface and nothing here proves it loads. Do NOT attempt to reconcile it with
       Orleans 10 in this file — bumping the package to a 10.x build is a scheduled task in
       docs/plan/24, with the ADR-005 fallback (direct NATS.Client.JetStream) if it slips.
+      Verified by restoring the whole register together: it resolves alongside Orleans 10.2.2 with
+      no downgrade — Microsoft.Orleans.Streaming, .Analyzers and .CodeGenerator all land on 10.2.2,
+      because the package's dependency "9.1.0" is a minimum, not a pin. Restore and compile are
+      therefore NOT evidence that it works; the assembly was compiled against the Orleans 9 surface
+      and whether it binds at runtime is untested and out of scope here.
+
+      ⚠ The published package id is `Rikarin.Orleans.Streaming.NATS` (upper-case S). docs/plan/02:31
+      writes `…NATs`. NuGet ids are case-insensitive so both restore, but the id below is spelled as
+      published so the lock file and the doc agree.
+
       No project references this yet.
     -->
-    <PackageVersion Include="Rikarin.Orleans.Streaming.NATs" Version="9.1.0-alpha.1" />
+    <PackageVersion Include="Rikarin.Orleans.Streaming.NATS" Version="9.1.0-alpha.1" />
   </ItemGroup>
 
   <!-- ══════════════ ABP — docs/plan/02 § ABP, ADR-006 ══════════════ -->
