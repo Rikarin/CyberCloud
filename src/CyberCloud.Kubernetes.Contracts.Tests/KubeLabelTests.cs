@@ -374,6 +374,9 @@ sealed class NullConnection : IKubeClusterConnection {
     public Task<Result<ApplyOutcome>> ApplyAsync(KubeCommand command, CancellationToken cancellationToken = default) =>
         throw new NotSupportedException("This connection exists to be passed to KubeCommand.For, not used.");
 
+    public Task<Result<KubeObject>> GetAsync(ObjectRef target, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException("This connection exists to be passed to KubeCommand.For, not used.");
+
     public Task<Result> DeleteAsync(
         KubeCommand command,
         CascadePolicy policy = CascadePolicy.Background,

@@ -182,19 +182,41 @@ public sealed record ResourceSchema {
     ///     patch legitimately omits everything it is not changing, and the merged result is validated
     ///     with <c>true</c> afterwards.
     /// </param>
+    /// <param name="allowTags">
+    ///     Whether a root-level <c>tags</c> object is accepted. Pass the type's
+    ///     <c>SupportsTags</c> — see the remarks.
+    /// </param>
     /// <returns>
     ///     Success, or an <see cref="ErrorCode.InvalidRequestBody" /> whose
     ///     <see cref="Error.Target" /> is the offending property's pointer and whose
     ///     <see cref="Error.Details" /> carries every other problem found.
     /// </returns>
     /// <remarks>
-    ///     ⚠ <b>Every problem is reported, not just the first.</b> A portal form that has to be fixed
-    ///     one field per round trip is a form nobody finishes. The first problem is the top-level
-    ///     error so the response still has one <c>target</c> to highlight; the rest are
-    ///     <see cref="Error.Details" />, which is what that field is for
-    ///     (docs/plan/08 § Errors).
+    ///     <para>
+    ///         ⚠ <b>Every problem is reported, not just the first.</b> A portal form that has to be
+    ///         fixed one field per round trip is a form nobody finishes. The first problem is the
+    ///         top-level error so the response still has one <c>target</c> to highlight; the rest are
+    ///         <see cref="Error.Details" />, which is what that field is for (docs/plan/08 § Errors).
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b><paramref name="allowTags" /> exists because <c>SupportsTags</c> was otherwise
+    ///         undeliverable, and the first provider found that out.</b>
+    ///         <c>IResourceTypeBuilder.SupportsTags</c> declares that a type carries tags, and the
+    ///         write path reads them out of a root-level <c>tags</c> object — but a schema declares
+    ///         only the type's own properties, and <see cref="RejectsUnknownProperties" /> defaults to
+    ///         refusing, so <c>/tags</c> was rejected as an unknown property before the write path ever
+    ///         looked at it. Every declaring provider would have had to add <c>/tags</c> to <i>every</i>
+    ///         api-version's schema by hand: platform boilerplate copied twenty times, which is exactly
+    ///         the failure docs/plan/25 § R1 describes.
+    ///     </para>
+    ///     <para>
+    ///         The flag rather than an unconditional exemption, because
+    ///         <c>IResourceTypeBuilder.SupportsTags</c>' own remarks require the other half: <i>"A type
+    ///         that does not declare this refuses a body with tags rather than accepting and dropping
+    ///         them."</i> Both branches are now real.
+    ///     </para>
     /// </remarks>
-    public Result Validate(JsonElement body, bool requireRequired = true) {
+    public Result Validate(JsonElement body, bool requireRequired = true, bool allowTags = false) {
         var problems = new List<Error>();
 
         if (body.ValueKind != JsonValueKind.Object) {
@@ -249,8 +271,12 @@ public sealed record ResourceSchema {
             }
         }
 
+        if (allowTags) {
+            problems.AddRange(TagProblems(body));
+        }
+
         if (RejectsUnknownProperties) {
-            problems.AddRange(UnknownProperties(body));
+            problems.AddRange(UnknownProperties(body, allowTags));
         }
 
         if (problems.Count == 0) {
@@ -394,19 +420,72 @@ public sealed record ResourceSchema {
     ///     per leaf inside it. A caller who sent a whole unrecognised section wants one message
     ///     naming it, not forty naming its contents.
     /// </remarks>
-    List<Error> UnknownProperties(JsonElement body) {
+    List<Error> UnknownProperties(JsonElement body, bool allowTags) {
         var problems = new List<Error>();
-        Walk(body, string.Empty, problems);
+        Walk(body, string.Empty, problems, allowTags);
         return problems;
     }
 
-    void Walk(JsonElement node, string prefix, List<Error> problems) {
+    /// <summary>The root-level <c>tags</c> object — docs/plan/06 § Tags, locks.</summary>
+    const string TagsPointer = "/tags";
+
+    /// <summary>
+    ///     Checks the shape of a tag bag, for a type that declares <c>SupportsTags</c>.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ Shape only. The cap of 50 pairs and the key and value rules are the resource grain's, and
+    ///     they stay there because they apply to the <i>merged</i> tag set rather than to one request's
+    ///     — a <c>PATCH</c> adding one tag to forty-nine is the request that crosses the cap.
+    /// </remarks>
+    static List<Error> TagProblems(JsonElement body) {
+        var problems = new List<Error>();
+
+        if (!body.TryGetProperty("tags", out var tags)) {
+            return problems;
+        }
+
+        if (tags.ValueKind != JsonValueKind.Object) {
+            problems.Add(
+                new(
+                    ErrorCode.InvalidRequestBody,
+                    $"'{TagsPointer}' must be an object of string values and is a {Describe(tags.ValueKind)}.",
+                    TagsPointer
+                )
+            );
+
+            return problems;
+        }
+
+        foreach (var tag in tags.EnumerateObject()) {
+            if (tag.Value.ValueKind != JsonValueKind.String) {
+                problems.Add(
+                    new(
+                        ErrorCode.InvalidRequestBody,
+                        // ⚠ Refused rather than coerced. The write path keeps only string values, so a
+                        // number here would be silently dropped — and "I set that tag and it did not
+                        // take" is the bug report nobody can act on.
+                        $"'{TagsPointer}/{tag.Name}' must be a string and is a {Describe(tag.Value.ValueKind)}.",
+                        TagsPointer + "/" + tag.Name
+                    )
+                );
+            }
+        }
+
+        return problems;
+    }
+
+    void Walk(JsonElement node, string prefix, List<Error> problems, bool allowTags) {
         if (node.ValueKind != JsonValueKind.Object) {
             return;
         }
 
         foreach (var member in node.EnumerateObject()) {
             var jsonPointer = prefix + "/" + Escape(member.Name);
+
+            // The tag bag is free-form by design, so neither it nor its members are walked.
+            if (allowTags && string.Equals(jsonPointer, TagsPointer, StringComparison.Ordinal)) {
+                continue;
+            }
 
             if (!Declares(jsonPointer)) {
                 problems.Add(
@@ -423,7 +502,7 @@ public sealed record ResourceSchema {
                 continue;
             }
 
-            Walk(member.Value, jsonPointer, problems);
+            Walk(member.Value, jsonPointer, problems, allowTags);
         }
     }
 

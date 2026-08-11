@@ -12,6 +12,25 @@ providers, or that need a deployed platform, live here.
 | `CyberCloud.Load` | the docs/plan/00 § quality-bar numbers, as a gate |
 | `CyberCloud.Isolation` | the cross-tenant suite: every provider, every verb, wrong tenant → 404 |
 
+## What exists, and what is deferred
+
+`CyberCloud.Conformance` and `CyberCloud.Isolation` are built. `CyberCloud.E2E`, `CyberCloud.Chaos`
+and `CyberCloud.Load` are not.
+
+⚠ **The conformance suite is split by what it needs, and the deferred half is present by name.**
+`ProviderConformanceTests` runs against `Orleans.TestingHost` with in-memory storage and an in-memory
+API server; `ClusterBackedConformanceTests` holds the tests that need a k3s container, real
+PostgreSQL or a multi-silo cluster, and each one **skips loudly** with a message naming what it needs
+and what it would prove. Neither project references `Testcontainers`, deliberately — a package
+reference would make the whole suite refuse to run without a Docker daemon.
+
+**Therefore [24 § Phase 1](../docs/plan/24-roadmap.md)'s exit criterion 3 — kill a silo mid-provision,
+the resource converges — is written and unrun, and must not be claimed.**
+
+`CyberCloud.Isolation` drives the **real** `ReBacResourceAuthorizer` over the real ReBAC schema, which
+no other suite in the repository does. That is where its value is: a double reproduces the rule its
+author believed.
+
 ## Why `CyberCloud.Isolation` is its own project
 
 It is the one suite that must be written by someone who is *trying to break in*, and mixing it with

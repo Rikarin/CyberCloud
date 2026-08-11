@@ -331,6 +331,9 @@ sealed class UnusedConnection : IKubeClusterConnection {
     public Task<Result<ApplyOutcome>> ApplyAsync(KubeCommand command, CancellationToken cancellationToken = default) =>
         throw new NotSupportedException();
 
+    public Task<Result<KubeObject>> GetAsync(ObjectRef target, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException();
+
     public Task<Result> DeleteAsync(
         KubeCommand command,
         CascadePolicy policy = CascadePolicy.Background,

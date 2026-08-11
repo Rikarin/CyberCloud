@@ -101,7 +101,15 @@ public sealed class ResourceManagerService(
             // everything it is not changing. The MERGED result is what must satisfy them, and the
             // resource grain is where the merge happens, so this validates shape and leaves
             // requiredness to the PUT case. That asymmetry is the whole difference between the verbs.
-            var validated = target.Schema.Validate(body.RootElement, request.Verb == WriteVerb.Put);
+            // ⚠ SupportsTags is passed through, and it has to be. The schema declares the type's own
+            // properties; the tag bag is the platform's envelope and is not any type's property, so a
+            // validator that did not know about the declaration would refuse '/tags' as unknown —
+            // which it did, until the first provider that declared SupportsTags tried to use it.
+            var validated = target.Schema.Validate(
+                body.RootElement,
+                request.Verb == WriteVerb.Put,
+                target.Registration.SupportsTags
+            );
             if (validated.TryGetError(out var schemaError)) {
                 return Result<WriteAccepted>.Failure(schemaError);
             }
@@ -207,6 +215,29 @@ public sealed class ResourceManagerService(
                 + "deleted. Locks are inherited from the resource group, the subscription and the "
                 + "management group — docs/plan/06 § Tags, locks, and the small stuff that is not "
                 + "small."
+            );
+        }
+
+        // ── The single-writer refusal, BEFORE anything is released ──────────────────────────────
+        //
+        // ⚠ THIS READ EXISTS BECAUSE THE INDEX RELEASE BELOW IS IRREVERSIBLE, AND THE ORDER IS FIXED.
+        // docs/plan/06 § Two-phase create: "release the index first (so the name is immediately
+        // reusable), then tear down the data plane, then delete the grain state." So by the time
+        // BeginDeleteAsync could answer OperationInProgress — docs/plan/03 § Providers' "delete while
+        // an operation is running → 409" — the name would already be free, and a refused delete would
+        // have handed somebody else the right to claim a name that is still in use. The grain keeps
+        // the guard as well, because it is the single writer and a direct caller must not be able to
+        // walk past it; this is the same rule read one step earlier so that a 409 costs nothing.
+        var live = await Resource(target).GetAsync(target.ApiVersion.Value, []);
+        if (live.IsSuccess
+            && live.GetValueOrThrow().ProvisioningState
+                is ProvisioningState.Creating or ProvisioningState.Updating or ProvisioningState.Deleting) {
+            return Result<WriteAccepted>.Failure(
+                ErrorCode.OperationInProgress,
+                $"Operation {live.GetValueOrThrow().OperationId:D} is already driving "
+                + $"'{request.Path}' and it is {live.GetValueOrThrow().ProvisioningState}. Poll that "
+                + "operation, or cancel it, before deleting — a delete that raced a live create would "
+                + "tear down objects the create is still applying."
             );
         }
 
@@ -437,7 +468,11 @@ public sealed class ResourceManagerService(
             // otherwise reach the provider unchecked, which is a policy engine granting itself the
             // right to bypass the schema.
             using var modified = JsonDocument.Parse(effectiveBody);
-            var revalidated = target.Schema.Validate(modified.RootElement, request.Verb == WriteVerb.Put);
+            var revalidated = target.Schema.Validate(
+                modified.RootElement,
+                request.Verb == WriteVerb.Put,
+                target.Registration.SupportsTags
+            );
             if (revalidated.TryGetError(out var modifiedError)) {
                 return Result<WriteAccepted>.Failure(
                     ErrorCode.PolicyViolation,

@@ -1,0 +1,61 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      docs/plan/03 § test/ — "the shared provider suite (parameterised, referenced by providers)".
+
+      ⚠ IT REFERENCES NO PROVIDER, AND THAT IS WHAT MAKES IT SHARED. Everything a provider has to say
+      about itself arrives as a ProviderConformanceCase, so adding the twentieth provider is a case
+      object and two class declarations in that provider's own .Conformance project — never an edit
+      here. The reference provider in Reference/ exists so this project has something to run against
+      and so the suite can be shown to REJECT as well as accept; it is not a real provider and is
+      registered nowhere.
+
+      ⚠ NO Testcontainers AND NO Aspire.Hosting, AND THE HALF THAT NEEDS THEM IS NOT SILENTLY MISSING.
+      docs/plan/03 § Providers lists five things every provider must pass, and two of them — "reconcile
+      after a manual cluster mutation → drift corrected" against a real API server, and "kill the silo
+      mid-create → resource still converges" — cannot be honestly claimed without a real cluster and
+      real storage. Those live in ClusterBackedConformanceTests, which SKIPS LOUDLY with a message
+      naming what it needs and what it would prove. A suite that is quietly empty is exactly the
+      failure the runner's minimum-expected-tests switch exists to prevent, and a suite that quietly
+      asserts a weaker thing under the same test name is worse.
+
+      What the Docker-free half DOES prove, against Orleans.TestingHost with in-memory storage and an
+      in-memory API server: the eleven-step write path end to end for a real provider, the operation
+      lifecycle to Succeeded, read-back and api-version projection, tags, locks, delete, the
+      cross-tenant 404, the 409 on a delete that races an operation, drift correction against the fake
+      cluster, all four reconciler clauses, and — for the first time in this repository — ADR-013's
+      seven mandatory labels asserted against output a real reconciler actually rendered.
+    -->
+
+    <PropertyGroup>
+        <!--
+          ⚠ CA1000, "do not declare static members on generic types", is suppressed HERE ONLY and the
+          reason is the design rather than convenience. The harness is generic on the provider case
+          source precisely so that per-provider state is bound to a TYPE instead of to a mutable
+          global — see ProviderTestCluster's remarks. Every static it declares is per-provider by
+          construction, which is the thing CA1000 warns you will be confusing, and which is exactly
+          what is wanted. The alternative the rule pushes toward is one mutable static shared by every
+          provider's harness, plus a lock and an ordering rule.
+        -->
+        <NoWarn>$(NoWarn);CA1000</NoWarn>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="xunit.v3"/>
+        <PackageReference Include="Shouldly"/>
+        <PackageReference Include="Microsoft.Orleans.TestingHost"/>
+        <PackageReference Include="Microsoft.Orleans.Reminders"/>
+        <PackageReference Include="Orleans.Multitenant"/>
+    </ItemGroup>
+
+    <ItemGroup Label="Global usings">
+        <Using Include="Xunit"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../../src/CyberCloud.ResourceManager/CyberCloud.ResourceManager.csproj"/>
+        <!-- The real quota and index grains — steps 6 and 7 run against them, not against fakes. -->
+        <ProjectReference Include="../../src/CyberCloud.Tenancy/CyberCloud.Tenancy.csproj"/>
+    </ItemGroup>
+
+</Project>

@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      docs/plan/03 § Providers — the fourth project: "TestCluster + k3s".
+
+      ⚠ NEITHER, HERE, AND THE REASON IS THE SPLIT THIS TASK IS ABOUT. The TestCluster half is
+      test/CyberCloud.Conformance's, because a provider's lifecycle is the SHARED suite's assertion and
+      a per-provider copy of it is the drift docs/plan/03 § Providers warns about. The k3s half needs a
+      container and is a named, loudly-skipped test in ClusterBackedConformanceTests. What is left for
+      this project is what only this provider can be wrong about: its schema, its ConfigMap
+      projection, and its reconciler's behaviour against a connection it does not control.
+
+      ⚠ NO Testcontainers. Adding it here would make the provider's own tests refuse to run without a
+      Docker daemon, which is exactly the coupling the deferred half exists to avoid.
+    -->
+
+    <ItemGroup>
+        <PackageReference Include="xunit.v3"/>
+        <PackageReference Include="Shouldly"/>
+    </ItemGroup>
+
+    <ItemGroup Label="Global usings">
+        <Using Include="Xunit"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../CyberCloud.Providers.Sample/CyberCloud.Providers.Sample.csproj"/>
+        <!-- ProviderRegistry.Build, so the declaration is checked the way a silo checks it at start. -->
+        <ProjectReference Include="../../../CyberCloud.ResourceManager/CyberCloud.ResourceManager.csproj"/>
+    </ItemGroup>
+
+</Project>

@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      docs/plan/03 § Providers — the first of the five projects every provider has: "grain interfaces,
+      resource models, the JSON Schemas".
+
+      ⚠ THERE ARE NO GRAIN INTERFACES HERE, AND THAT IS THE POINT OF THIS PROVIDER.
+      docs/plan/24 § Phase 1's exit criterion 1 asks for "a trivial provider (CyberCloud.Sample/widgets,
+      a ConfigMap)", and docs/plan/25 § R1 says it is written first and deliberately trivial "so its
+      friction is unmistakably the platform's". A widget's desired state is held by
+      CyberCloud.ResourceManager's ResourceGrain; adding a grain of our own would be a second copy of
+      state the manager already owns — exactly the "manager's missing half inside the provider" R1
+      names. So this assembly carries the schema and the addressing constants and nothing else, and a
+      provider that DOES need a grain is the signal that the manager is short of something.
+
+      ⚠ IT REFERENCES ONLY CyberCloud.ResourceManager.Contracts AND CyberCloud.Kubernetes.Contracts.
+      That is the whole reference set docs/plan/03 § The .Contracts split allows a provider, and
+      docs/plan/03 § Assembly graph rules rule 2 — "no Providers.* assembly references another
+      Providers.* assembly, not even .Contracts" — has been passing vacuously with zero candidates
+      until this assembly existed. It is now a real rule with real candidates.
+    -->
+
+    <ItemGroup>
+        <ProjectReference Include="../../../CyberCloud.ResourceManager.Contracts/CyberCloud.ResourceManager.Contracts.csproj"/>
+        <ProjectReference Include="../../../CyberCloud.Kubernetes.Contracts/CyberCloud.Kubernetes.Contracts.csproj"/>
+    </ItemGroup>
+
+    <ItemGroup Label="CyberCloud.Analyzers — see CyberCloud.Core.csproj for why this is not a reference">
+        <ProjectReference Include="../../../CyberCloud.Analyzers/CyberCloud.Analyzers.csproj"
+                          OutputItemType="Analyzer"
+                          ReferenceOutputAssembly="false"/>
+    </ItemGroup>
+
+</Project>

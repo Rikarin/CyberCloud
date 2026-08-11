@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      docs/plan/03 § Providers — the third of the five projects: "ABP application services the gateway
+      routes to".
+
+      ⚠ IT HOLDS THE ABP MODULE AND NO APPLICATION SERVICE, AND THAT IS HONEST RATHER THAN UNFINISHED.
+      docs/plan/03 § Providers says "Each is an ABP module ([DependsOn])" and also puts ABP application
+      services in this project rather than in the implementation assembly. The two together put the
+      module here, which is also what keeps Volo.Abp out of the reconciler's reference set — a
+      reconciler is resolved by CyberCloud.ResourceManager's ReconcileDriver from the plain
+      IServiceProvider and needs no ABP at all.
+
+      There is no application service because there is nothing for one to do: CyberCloud.Gateway.Host
+      does not exist (docs/plan/03 § Hosts), and every widget operation is a generic resource-manager
+      verb — PUT, GET, DELETE, POST ping — which the gateway routes from the provider registry rather
+      than from a per-provider controller. docs/plan/02 § ADR-012 is what makes that true: the registry
+      is the routing source. A provider whose surface is entirely generic legitimately has an empty
+      application layer, and writing a service here to fill the folder would be a service nothing calls.
+
+      ⚠ docs/plan/03 § Assembly graph rules, rule 4 — "Nothing references a *.Application assembly
+      except its own host" — has been passing vacuously with zero candidates. This assembly is the
+      first candidate it has ever had.
+    -->
+
+    <ItemGroup>
+        <PackageReference Include="Volo.Abp.Ddd.Application"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../CyberCloud.Providers.Sample.Contracts/CyberCloud.Providers.Sample.Contracts.csproj"/>
+    </ItemGroup>
+
+    <ItemGroup Label="CyberCloud.Analyzers — see CyberCloud.Core.csproj for why this is not a reference">
+        <ProjectReference Include="../../../CyberCloud.Analyzers/CyberCloud.Analyzers.csproj"
+                          OutputItemType="Analyzer"
+                          ReferenceOutputAssembly="false"/>
+    </ItemGroup>
+
+</Project>

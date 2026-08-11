@@ -65,3 +65,17 @@ CyberCloud.ResourceManager.Grains.ResourceGrain
 # lease, the index claim, the step cursor". Losing it strands a resource mid-provision in exactly
 # the Creating-forever state the chaos suite exists to forbid.
 CyberCloud.ResourceManager.Grains.OperationGrain
+
+# ── Providers — docs/plan/03 § Providers ───────────────────────────────────────────────────────
+# NOTHING, and the absence is the reviewed decision rather than an omission.
+#
+# CyberCloud.Providers.Sample is the first provider (docs/plan/24 § Phase 1, exit criterion 1) and
+# it declares no grain of its own. A widget's desired state is held by ResourceGrain above, which is
+# already on this list; its observed state is a ConfigMap in a cluster, which ADR-001 makes
+# rebuildable from that desired state by construction — "the cluster can be wiped and rebuilt from
+# grain state; grain state cannot be rebuilt from the cluster".
+#
+# ⚠ Read this as a measurement, not as a note. docs/plan/25 § R1's leading indicator is how much a
+# provider has to add to the platform, and a provider that needed durable state of its own would be
+# holding something the resource manager should have been holding for it. The day a provider does
+# need a line here, the first question is what the manager is missing.

@@ -55,7 +55,26 @@ public sealed class ReBacResourceAuthorizer(IGrainFactory grains, ILogger<ReBacR
     public const string ResourceObjectType = "resource";
 
     /// <summary>The ReBAC object type of a resource group — what a create is checked against.</summary>
-    public const string ResourceGroupObjectType = "resourcegroup";
+    /// <remarks>
+    ///     ⚠ <b><c>resourceGroup</c>, lower-camel, and the capital <c>G</c> is load-bearing.</b> This
+    ///     read <c>resourcegroup</c> and the schema
+    ///     (<c>CyberCloud.Authorization.ObjectTypes.ResourceGroup</c>) reads <c>resourceGroup</c>;
+    ///     <c>AuthorizationSchema</c> looks a type up through a <c>FrozenDictionary</c> keyed
+    ///     <c>StringComparer.Ordinal</c>, so the two never met. The consequence was not a subtle one:
+    ///     <b>every create failed</b>. A resource that does not exist is checked against its parent
+    ///     group, the evaluator answered <c>SchemaInvalid</c> for an unknown object type, and this
+    ///     class correctly renders an unanswerable check as <c>404</c> — so a <c>PUT</c> to a fresh
+    ///     name came back "does not exist" with the reason only in a log line.
+    ///     <para>
+    ///         It survived because every existing test of the write path substitutes a double for this
+    ///         class, so nothing had ever driven a create through the real engine. The two constants
+    ///         still cannot be shared: <c>ObjectTypes</c> lives in <c>CyberCloud.Authorization</c>, and
+    ///         <c>CyberCloud.ResourceManager</c> references only its <c>.Contracts</c>. Moving the
+    ///         vocabulary into <c>CyberCloud.Authorization.Contracts</c> would make the mismatch a
+    ///         compile error instead of a spelling one, and is the real fix.
+    ///     </para>
+    /// </remarks>
+    public const string ResourceGroupObjectType = "resourceGroup";
 
     /// <inheritdoc />
     public async Task<Result> AuthorizeAsync(

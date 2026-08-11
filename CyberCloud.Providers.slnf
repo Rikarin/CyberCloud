@@ -1,6 +1,22 @@
 {
   "solution": {
     "path": "CyberCloud.slnx",
-    "projects": []
+    "projects": [
+      "src/CyberCloud.Analyzers/CyberCloud.Analyzers.csproj",
+      "src/CyberCloud.Core/CyberCloud.Core.csproj",
+      "src/CyberCloud.Core.Contracts/CyberCloud.Core.Contracts.csproj",
+      "src/CyberCloud.Tenancy.Contracts/CyberCloud.Tenancy.Contracts.csproj",
+      "src/CyberCloud.Tenancy/CyberCloud.Tenancy.csproj",
+      "src/CyberCloud.Authorization.Contracts/CyberCloud.Authorization.Contracts.csproj",
+      "src/CyberCloud.Kubernetes.Contracts/CyberCloud.Kubernetes.Contracts.csproj",
+      "src/CyberCloud.ResourceManager.Contracts/CyberCloud.ResourceManager.Contracts.csproj",
+      "src/CyberCloud.ResourceManager/CyberCloud.ResourceManager.csproj",
+      "src/Providers/CyberCloud.Providers.Sample/CyberCloud.Providers.Sample.Contracts/CyberCloud.Providers.Sample.Contracts.csproj",
+      "src/Providers/CyberCloud.Providers.Sample/CyberCloud.Providers.Sample/CyberCloud.Providers.Sample.csproj",
+      "src/Providers/CyberCloud.Providers.Sample/CyberCloud.Providers.Sample.Application/CyberCloud.Providers.Sample.Application.csproj",
+      "src/Providers/CyberCloud.Providers.Sample/CyberCloud.Providers.Sample.Tests/CyberCloud.Providers.Sample.Tests.csproj",
+      "src/Providers/CyberCloud.Providers.Sample/CyberCloud.Providers.Sample.Conformance/CyberCloud.Providers.Sample.Conformance.csproj",
+      "test/CyberCloud.Conformance/CyberCloud.Conformance.csproj"
+    ]
   }
 }

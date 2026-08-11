@@ -42,6 +42,10 @@ public sealed class ClusterConnectionHandle(IGrainFactory grains, Guid clusterId
         Grain.ApplyAsync(command);
 
     /// <inheritdoc />
+    public Task<Result<KubeObject>> GetAsync(ObjectRef target, CancellationToken cancellationToken = default) =>
+        Grain.GetAsync(target);
+
+    /// <inheritdoc />
     public Task<Result> DeleteAsync(
         KubeCommand command,
         CascadePolicy policy = CascadePolicy.Background,

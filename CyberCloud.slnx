@@ -78,12 +78,40 @@
         <Project Path="src/CyberCloud.ResourceManager/CyberCloud.ResourceManager.csproj"/>
         <Project Path="src/CyberCloud.ResourceManager.Tests/CyberCloud.ResourceManager.Tests.csproj"/>
     </Folder>
-    <Folder Name="/src/Providers/"/>
+    <!--
+      docs/plan/03 § Providers — the five projects every provider has. CyberCloud.Sample is the first
+      and, per docs/plan/24 § Phase 1's exit criterion 1 and docs/plan/25 § R1, is deliberately
+      trivial: it exists to measure the platform, not to be a feature.
+
+      ⚠ Its arrival makes two assembly-graph rules real. Rule 2 ("no Providers.* assembly references
+      another Providers.* assembly") and rule 4 ("nothing references a *.Application assembly except
+      its own host") had zero candidates and passed vacuously; this folder is the first candidate
+      either has ever had.
+    -->
+    <Folder Name="/src/Providers/">
+        <Project Path="src/Providers/CyberCloud.Providers.Sample/CyberCloud.Providers.Sample.Contracts/CyberCloud.Providers.Sample.Contracts.csproj"/>
+        <Project Path="src/Providers/CyberCloud.Providers.Sample/CyberCloud.Providers.Sample/CyberCloud.Providers.Sample.csproj"/>
+        <Project Path="src/Providers/CyberCloud.Providers.Sample/CyberCloud.Providers.Sample.Application/CyberCloud.Providers.Sample.Application.csproj"/>
+        <Project Path="src/Providers/CyberCloud.Providers.Sample/CyberCloud.Providers.Sample.Tests/CyberCloud.Providers.Sample.Tests.csproj"/>
+        <Project Path="src/Providers/CyberCloud.Providers.Sample/CyberCloud.Providers.Sample.Conformance/CyberCloud.Providers.Sample.Conformance.csproj"/>
+    </Folder>
     <Folder Name="/src/Hosts/">
         <Project Path="src/Hosts/CyberCloud.Silo.Host/CyberCloud.Silo.Host.csproj"/>
         <Project Path="src/Hosts/CyberCloud.AppHost/CyberCloud.AppHost.csproj"/>
         <Project Path="src/Hosts/CyberCloud.AppHost.Tests/CyberCloud.AppHost.Tests.csproj"/>
     </Folder>
     <Folder Name="/cli/"/>
-    <Folder Name="/test/"/>
+
+    <!--
+      docs/plan/03 § test/ — the cross-cutting suites. Two of the five exist.
+
+      ⚠ CyberCloud.Conformance is a test project AND a library other test projects reference — that is
+      docs/plan/03's own description of it, "parameterised, referenced by providers". Both roles are
+      live: it runs the suite against its own reference provider, and
+      CyberCloud.Providers.Sample.Conformance references it to run the same suite against a real one.
+    -->
+    <Folder Name="/test/">
+        <Project Path="test/CyberCloud.Conformance/CyberCloud.Conformance.csproj"/>
+        <Project Path="test/CyberCloud.Isolation/CyberCloud.Isolation.csproj"/>
+    </Folder>
 </Solution>

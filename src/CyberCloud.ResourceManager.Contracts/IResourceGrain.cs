@@ -142,10 +142,20 @@ public interface IResourceGrain : IGrainWithStringKey {
     /// <param name="operationId">The operation that will drive the teardown.</param>
     /// <param name="ifMatch">The <c>If-Match</c> etag, or empty.</param>
     /// <returns>
-    ///     The snapshot in <see cref="ProvisioningState.Deleting" />, or
+    ///     The snapshot in <see cref="ProvisioningState.Deleting" />;
     ///     <see cref="ErrorCode.ScopeLocked" /> when a <see cref="LockLevel.CanNotDelete" /> or
-    ///     <see cref="LockLevel.ReadOnly" /> lock is in force.
+    ///     <see cref="LockLevel.ReadOnly" /> lock is in force; or
+    ///     <see cref="ErrorCode.OperationInProgress" /> when a <i>different</i> operation is already
+    ///     driving the resource.
     /// </returns>
+    /// <remarks>
+    ///     ⚠ <b>The single-writer guard is the same one <see cref="SubmitDesiredAsync" /> applies, and
+    ///     it is here because docs/plan/03 § Providers requires it.</b> That section's conformance list
+    ///     includes <i>"delete while an operation is running → 409"</i>. A delete that raced a live
+    ///     create would tear down objects the create is still applying, and would leave the create's
+    ///     quota lease and index claim owned by an operation whose resource is on its way out. A
+    ///     re-drive of the <i>same</i> operation is not a conflict — that is the resumable path.
+    /// </remarks>
     Task<Result<ResourceSnapshot>> BeginDeleteAsync(Guid operationId, string ifMatch);
 
     /// <summary>

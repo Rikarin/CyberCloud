@@ -39,6 +39,32 @@ public interface IKubeClusterConnection {
     /// </returns>
     Task<Result<ApplyOutcome>> ApplyAsync(KubeCommand command, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    ///     Reads one object back, as JSON.
+    /// </summary>
+    /// <param name="target">Which object. A reconciler builds this from its own resource id.</param>
+    /// <param name="cancellationToken">The reconcile's token.</param>
+    /// <returns>
+    ///     The object, or <see cref="ErrorCode.ResourceNotFound" /> when the API server has no such
+    ///     object. ⚠ Absence is a <b>failure</b> carrying that code rather than a successful
+    ///     <see langword="null" />, so that "the object is gone" and "the read did not happen" stay
+    ///     distinguishable — the first converges a delete, the second must not.
+    /// </returns>
+    /// <remarks>
+    ///     ⚠ <b>This member is what makes clause 4 of the reconciler contract satisfiable, and it was
+    ///     added by the first provider that tried.</b> docs/plan/08 § The reconcile loop: <i>"Observes,
+    ///     never assumes. <c>Converged</c> means it read back the desired shape, not that the apply
+    ///     returned 200."</i> Before this, the only members here were
+    ///     <see cref="ApplyAsync" /> and <see cref="DeleteAsync" /> — both writes — so a reconciler
+    ///     given nothing but this connection could only report <c>Converged</c> by remembering that an
+    ///     apply had succeeded, which is the exact violation the clause names and which
+    ///     <c>ReconcilerConformance</c> exists to reject. <c>IClusterConnectionGrain.GetAsync</c>
+    ///     already existed; a reconciler is not allowed to reach the grain
+    ///     (docs/plan/03 § Assembly graph rules, rule 3 is why the handle exists at all), so the read
+    ///     had to appear here.
+    /// </remarks>
+    Task<Result<KubeObject>> GetAsync(ObjectRef target, CancellationToken cancellationToken = default);
+
     /// <summary>Deletes the object a command addresses.</summary>
     /// <param name="command">The built command; only its target and identity are used.</param>
     /// <param name="policy">How to cascade.</param>

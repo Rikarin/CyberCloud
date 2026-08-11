@@ -182,6 +182,31 @@ public sealed class ResourceGrain(
             );
         }
 
+        // ⚠ ADDED BY THE CONFORMANCE SUITE. docs/plan/03 § Providers lists "delete while an operation
+        // is running → 409" among the things every provider must pass, and this grain was accepting
+        // the delete instead: SubmitDesiredAsync had the single-writer guard and BeginDeleteAsync did
+        // not, so a DELETE arriving mid-create flipped a Creating resource straight to Deleting while
+        // the create's reconcile pass was still applying objects. The teardown and the create then
+        // raced on the same objects, which is the exact race the guard on the write side exists to
+        // prevent — and it left the create's quota lease and index claim owned by an operation whose
+        // resource was on its way out.
+        //
+        // A re-drive of the SAME operation is not a conflict: that is the resumable path
+        // (docs/plan/08 § Long-running operations), and refusing it would strand every delete that
+        // outlived a silo.
+        if (state.State.OperationId != Guid.Empty
+            && state.State.OperationId != operationId
+            && state.State.ProvisioningState
+                is ProvisioningState.Creating or ProvisioningState.Updating or ProvisioningState.Deleting) {
+            return Result<ResourceSnapshot>.Failure(
+                ErrorCode.OperationInProgress,
+                $"Operation {state.State.OperationId:D} is already driving '{state.State.Path}' and it "
+                + $"is {state.State.ProvisioningState}. Poll that operation, or cancel it, before "
+                + "deleting — a delete that raced a live create would tear down objects the create is "
+                + "still applying."
+            );
+        }
+
         state.State.ProvisioningState = ProvisioningState.Deleting;
         state.State.OperationId = operationId;
         state.State.ModifiedAt = clock.UtcNow;

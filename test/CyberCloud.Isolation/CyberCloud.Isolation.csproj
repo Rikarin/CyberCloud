@@ -1,0 +1,45 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      docs/plan/03 § test/ — "the cross-tenant suite: every provider, every verb, wrong tenant → 404".
+
+      ⚠ WHY IT IS ITS OWN PROJECT, IN THE DOCUMENT'S OWN WORDS: "it is the one suite that must be
+      written by someone who is *trying to break in*, and mixing it with a provider's happy-path tests
+      dilutes that intent."
+
+      ⚠ IT DRIVES THE REAL ReBacResourceAuthorizer AND THE REAL ReBAC ENGINE, AND THAT IS THE WHOLE
+      DIFFERENCE BETWEEN THIS PROJECT AND THE CONFORMANCE SUITE. Every other test of the write path in
+      this repository substitutes a double for the enforcement seam — reasonably, because they are
+      testing step ordering rather than authorization. The consequence is that until this project
+      existed, no test had ever driven a create through the real engine, and two defects were sitting
+      in that gap. Both are recorded on the tests that found them.
+
+      It references CyberCloud.Conformance for the in-memory API server and the reference provider, so
+      "every provider" is a list rather than a copy, and CyberCloud.Providers.Sample for the real one.
+
+      ⚠ NO Testcontainers. An attacker's suite that only runs when a Docker daemon is up is an
+      attacker's suite that does not run.
+    -->
+
+    <ItemGroup>
+        <PackageReference Include="xunit.v3"/>
+        <PackageReference Include="Shouldly"/>
+        <PackageReference Include="Microsoft.Orleans.TestingHost"/>
+        <PackageReference Include="Microsoft.Orleans.Reminders"/>
+        <PackageReference Include="Orleans.Multitenant"/>
+    </ItemGroup>
+
+    <ItemGroup Label="Global usings">
+        <Using Include="Xunit"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../CyberCloud.Conformance/CyberCloud.Conformance.csproj"/>
+        <ProjectReference Include="../../src/CyberCloud.ResourceManager/CyberCloud.ResourceManager.csproj"/>
+        <!-- The real engine, not its contracts: this suite needs the grains, the schema and the evaluator. -->
+        <ProjectReference Include="../../src/CyberCloud.Authorization/CyberCloud.Authorization.csproj"/>
+        <ProjectReference Include="../../src/CyberCloud.Tenancy/CyberCloud.Tenancy.csproj"/>
+        <ProjectReference Include="../../src/Providers/CyberCloud.Providers.Sample/CyberCloud.Providers.Sample/CyberCloud.Providers.Sample.csproj"/>
+    </ItemGroup>
+
+</Project>
