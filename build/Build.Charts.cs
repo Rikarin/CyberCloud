@@ -1389,8 +1389,8 @@ partial class Build
                 case "string" when literal is not LiteralKind.String:
                     problems.Add(
                         $"{value.Line}: '{value.Name}' is declared `{{string}}` and its value reads as "
-                        + $"a {literal.ToString().ToLowerInvariant()}. Quote it — `\"17\"`, not `17` — "
-                        + "or correct the declared type.");
+                        + $"{Article(literal)}. Quote it — `\"17\"`, not `17` — or correct the "
+                        + "declared type.");
 
                     break;
 
@@ -1418,6 +1418,19 @@ partial class Build
             CheckChoices(value, annotation, problems);
             Validate(value.Children, problems);
         }
+    }
+
+    /// <summary>"an integer", "a boolean" — the diagnostic reads as a sentence or it does not read.</summary>
+    static string Article(LiteralKind kind)
+    {
+        var name = kind switch
+        {
+            LiteralKind.EmptyObject => "empty map",
+            LiteralKind.Missing => "key with no value",
+            _ => kind.ToString().ToLowerInvariant(),
+        };
+
+        return (name[0] is 'a' or 'e' or 'i' or 'o' or 'u' ? "an " : "a ") + name;
     }
 
     static LiteralKind LiteralKindOf(ChartValue value) =>
