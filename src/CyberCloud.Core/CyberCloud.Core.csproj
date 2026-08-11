@@ -43,4 +43,25 @@
     <NoWarn>$(NoWarn);CA1716;CA1000</NoWarn>
   </PropertyGroup>
 
+  <ItemGroup Label="CyberCloud.Analyzers — docs/plan/00 § Coding standards, § Non-negotiables">
+    <!--
+      ⚠ THIS IS NOT A REFERENCE AND DOES NOT VIOLATE THE "NO PACKAGES HERE" RULE ABOVE.
+      `OutputItemType="Analyzer"` puts CyberCloud.Analyzers.dll on the compiler's analyzer list;
+      `ReferenceOutputAssembly="false"` keeps it off the compile line and out of the output
+      directory. Nothing from it reaches this assembly's metadata, which is what
+      `AssemblyGraphTests.CoreReferencesNothingButTheSharedFramework` asserts —
+      `GetReferencedAssemblies()` does not see an analyzer, and that test still passes with this
+      line in place.
+
+      ⚠ Most of the rules are inert here on purpose: CyberCloud.Core has no Orleans reference, so
+      the [Alias], [Id], GetGrain and grain-key rules all fail their
+      `GetTypeByMetadataName("Orleans.…")` lookup and register nothing. CC1001, CC1002 and CC1007
+      are language-level and do apply. Referencing the analyzer anyway is what makes "every project
+      is policed" a property of the tree rather than of whoever remembered.
+    -->
+    <ProjectReference Include="../CyberCloud.Analyzers/CyberCloud.Analyzers.csproj"
+                      OutputItemType="Analyzer"
+                      ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
 </Project>

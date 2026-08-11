@@ -79,6 +79,29 @@ framework we live inside.**
 | `Testcontainers` | latest at bring-up — real Redis/Postgres/NATS/`k3s` in integration tests |
 | `Nuke.Common` | 10.1.0 |
 | `Aspire.Hosting.*` | 13.4.6 — ADR-014, **local development only** |
+| `Microsoft.CodeAnalysis.CSharp` | 5.6.0 — `CyberCloud.Analyzers` builds against it |
+| `Microsoft.CodeAnalysis.Analyzers` | 5.6.0 — the RS1xxx analyzer-authoring rules |
+| `Microsoft.CodeAnalysis.CSharp.Analyzer.Testing` | 1.1.4 — the analyzer test harness |
+| `Microsoft.CodeAnalysis.CSharp.Workspaces` | 5.6.0 — **transitive pin only**, see below |
+
+⚠ **These four rows were missing, and their absence was a real gap rather than an oversight in
+transcription.** Four documents assert "analyzer-enforced" — [00 § Coding standards](00-vision-and-principles.md),
+[00 § Non-negotiables](00-vision-and-principles.md), ADR-002 below, and
+[04 § Failure and upgrade](04-orleans-topology.md) — and this register listed no
+analyzer-authoring or analyzer-testing package at all, so nothing in it could have been written.
+
+⚠ **The version rule is a ceiling, not a preference.** `Microsoft.CodeAnalysis.*` must not exceed
+the compiler that loads the analyzer. `global.json` rolls forward to SDK 10.0.302, whose `csc`
+reports `5.6.0-2.26329.109`; 5.6.0 is the released build of that same compiler and is therefore the
+pin. A newer Roslyn produces an analyzer the SDK silently fails to load.
+
+⚠ **`Microsoft.CodeAnalysis.CSharp.Workspaces` is not referenced by anything.** It is pinned so that
+central transitive pinning can lift it: `…Analyzer.Testing` 1.1.4 declares its Roslyn dependency as
+a *floor* of 1.0.1, NuGet resolves a floor to the floor, and the .NET Framework-only 1.0.1 package
+produces four `NU1701` warnings — which `MSBuildTreatWarningsAsErrors` makes fatal.
+
+⚠ **Not `…Analyzer.Testing.XUnit`.** That variant binds to xUnit v2 and ADR-018 makes this
+repository `xunit.v3`. The base package ships `DefaultVerifier`, which needs no test framework.
 
 ### Rejected / reference-only
 
@@ -191,6 +214,15 @@ index entries for one name and defeat the two-phase create in
 
 Nothing else in the codebase may concatenate a grain key, enforced by an analyzer that flags string
 literals containing `|` in `GetGrain` arguments.
+
+✅ **That analyzer exists: `CC1004`, in `src/CyberCloud.Analyzers`.** It covers interpolated strings
+as well as literals, because `$"{tenant}|{key}"` is the same defect in the spelling somebody
+actually writes, and it fires on the tenant-qualified `ForTenant(t).GetGrain(…)` overload too — the
+qualification is applied *on top of* whatever is passed, so a `|` there still lands inside a
+physical key. Only the literal text is inspected; a `|` arriving at run time through an
+interpolation hole is out of reach of any compile-time rule, which is what
+`GrainKeys.IsTenantQualificationSafe` and `GrainKeysTests.EveryGeneratedKeyIsSafeForTenantQualification`
+are for.
 
 ⚠ `ResourceId` remains a separate type and keeps subscription, resource group, type and name — it is
 the *address*, and [06 § Identifiers](06-tenancy-and-resource-model.md) is explicit that the address

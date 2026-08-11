@@ -16,8 +16,11 @@
        "'/' is invalid after a value" ──
 
       CyberCloud.Core.slnf       src/CyberCloud.Core*, src/CyberCloud.Tenancy*,
-                                 src/CyberCloud.Authorization*, src/CyberCloud.Kubernetes*
-                                 (+ their .Tests siblings)  — the fast IDE load
+                                 src/CyberCloud.Authorization*, src/CyberCloud.Kubernetes*,
+                                 src/CyberCloud.Analyzers* (+ their .Tests siblings)
+                                 — the fast IDE load. The analyzers are in this filter because
+                                 every project in it references them, and an analyzer you cannot
+                                 open is an analyzer you edit by guessing.
       CyberCloud.Providers.slnf  src/Providers/** (+ .Contracts/.Application/.Tests/.Conformance)
       CyberCloud.Hosts.slnf      src/Hosts/**
 
@@ -38,6 +41,14 @@
   <Folder Name="/build/" />
 
   <Folder Name="/src/">
+    <!--
+      ⚠ CyberCloud.Analyzers is the ONE netstandard2.0 project in the tree (docs/plan/02 § Platform
+      baseline's single-TFM rule has this one documented exception — a Roslyn analyzer is loaded by
+      the compiler, which may be running on .NET Framework). The five projects it polices reference
+      it with OutputItemType="Analyzer", not as an ordinary reference.
+    -->
+    <Project Path="src/CyberCloud.Analyzers/CyberCloud.Analyzers.csproj" />
+    <Project Path="src/CyberCloud.Analyzers.Tests/CyberCloud.Analyzers.Tests.csproj" />
     <Project Path="src/CyberCloud.Core/CyberCloud.Core.csproj" />
     <Project Path="src/CyberCloud.Core.Tests/CyberCloud.Core.Tests.csproj" />
     <Project Path="src/CyberCloud.Core.Contracts/CyberCloud.Core.Contracts.csproj" />

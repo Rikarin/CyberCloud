@@ -116,9 +116,9 @@ Checked by CI, not by good intentions. See [23 — Build, CI and Testing](23-bui
 | No Kubernetes object without tenant/subscription/resource labels | The command builder is a type-state chain; `Build()` does not exist until `WithTenantId` and `WithResourceId` have been called. Plus an admission policy on every managed cluster that rejects unlabelled objects in a tenant namespace |
 | No shared single-writer store on a tenant-rate path | An architecture test walks the grain graph and fails on a `[PersistentState]` bound to the platform-global provider from a grain whose key carries a tenant id |
 | Every resource type is reachable from the generated OpenAPI, CLI and SDK | The provider registry is the source; a build gate diffs generated surfaces against the registry and fails on drift |
-| Secrets never reach grain state | Analyzer bans `[Id]`-annotated members named `*Password`, `*Secret`, `*Token`, `*Key` outside `CyberCloud.Vault`; secrets are `SecretRef` handles resolved at the data plane |
+| Secrets never reach grain state | Analyzer bans `[Id]`-annotated members named `*Password`, `*Secret`, `*Token`, `*Key` outside `CyberCloud.Vault`; secrets are `SecretRef` handles resolved at the data plane. ✅ `CC1005`. The suffix match is ordinal and case-sensitive, which makes it a word match; `*Key` is the loose one, and a legitimate `PartitionKey` is answered with a `[SuppressMessage]` carrying the argument rather than by widening the rule |
 | Every long-running operation is resumable | Operation grains are `durable`-tier and re-drive on activation; a chaos test kills silos mid-provision and asserts the resource reaches `Succeeded` or `Failed`, never `Creating` forever |
-| Warnings are errors | `TreatWarningsAsErrors`, `AnalysisLevel=latest-recommended`, nullable enabled, no `#pragma warning disable` without a linked issue |
+| Warnings are errors | `TreatWarningsAsErrors`, `AnalysisLevel=latest-recommended`, nullable enabled, no `#pragma warning disable` without a linked issue. ✅ `CC1007` — a URL, a `#123` or a `PROJ-123` on the pragma's own line or the line above. It covers the C# half only; `<NoWarn>` in a project file is MSBuild and is still review-enforced |
 | Every module has tests | xUnit v3 + `Orleans.TestingHost` + NSubstitute + Shouldly; a provider without a conformance-suite pass is not registered |
 
 ### ⚠ The tenant-separation row, corrected — an Orleans client is exempt by construction
@@ -157,10 +157,30 @@ gateway is the single most important caller in the system.
 | Grain → grain | `AddMultitenantCommunicationSeparation`. Verified: throws `UnauthorizedAccessException` naming both tenant ids |
 | Gateway, CLI, worker, anything with an `IGrainFactory` outside a grain | **The gateway establishes the tenant from the caller's token and selects `ForTenant(t)`.** Nothing below it re-checks. A code path that reaches `IGrainFactory.GetGrain` with a caller-influenced key, rather than going through the tenant-qualified factory, is a cross-tenant read |
 
-That second row is currently **unenforced** — it is a discipline, not a gate. Making it one is a
-named task: an analyzer or architecture test forbidding raw `IGrainFactory.GetGrain` outside grain
-code. Until that exists, this non-negotiable is upheld by review, and this note is here so nobody
-reads the first row and believes the library covers it.
+✅ **That second row is now a gate: `CC1006`, in `src/CyberCloud.Analyzers`.** It fails a build on a
+raw `IGrainFactory.GetGrain` from code that is not a grain. The discriminator is a *type*, not a
+syntax shape: `Orleans.Multitenant`'s `ForTenant(t)` returns `TenantGrainFactory`, a distinct class
+with its own `GetGrain` overloads and no interfaces, so the rule cannot be defeated by hiding
+`ForTenant` behind a local, a field or a helper — and you cannot land on the tenant-qualified
+overload by accident either.
+
+⚠ **Read literally, the sentence this replaces bans two correct call sites, and running the rule
+found them.** `ClusterHealthCheck` and `SiloReadinessHealthCheck` both call
+`GetGrain<IManagementGrain>(0)` from an `IHealthCheck`, which is not grain code. `IManagementGrain`
+is Orleans' own **integer-keyed** system grain, and § Coding standards below makes
+`IGrainWithStringKey` "the only key kind `Orleans.Multitenant` can carry a tenant in" — so a
+non-string-keyed grain has nowhere to put a tenant and reaching it without one cannot cross a
+tenant. The rule is therefore scoped to string-keyed grains. It is also silent for a **null-tenant
+platform grain** reached through one of `GrainKeys`'s null-tenant builders (`ShardMap`,
+`TenantDirectory`, `PlatformSingleton`, `ClusterConnection`), which is what `ITenantDirectoryGrain`'s
+own remarks instruct — *"reach it with a plain `IGrainFactory.GetGrain` — **not** `ForTenant`"* —
+and what `TenantDirectoryCache` and `ShardMapRefresher` do.
+
+⚠ **The gate is a compile-time rule, so it covers only assemblies that reference the analyzer.**
+Today that is `CyberCloud.Core`, `.Core.Contracts`, `.ServiceDefaults`, `.Tenancy.Contracts` and
+`.Tenancy`. **The gateway does not exist yet**, and when it does, adding the analyzer reference to
+it is what makes this row true *for the caller it is actually about*. Until then this is a gate over
+the code that exists, not over the code that matters most.
 
 ## Layer discipline
 
@@ -213,11 +233,18 @@ The intent, in full in `.editorconfig` and `Directory.Build.props`:
   error body; a thrown exception maps to `500` and pages someone.
 - **`[GenerateSerializer]`, `[Alias]` and explicit `[Id(n)]` on every wire type**, with `[Alias]`
   strings that are stable across renames — Survival's convention, and the reason a rolling silo upgrade
-  works. An analyzer fails a `[GenerateSerializer]` type with no `[Alias]`.
+  works. An analyzer fails a `[GenerateSerializer]` type with no `[Alias]` — ✅ `CC1003`. The
+  *stability* of the strings is a different claim and stays with the reflection tests, which check
+  them against a checked-in list.
 - **`readonly record struct` for identifiers and value objects**; `sealed` by default; `internal` by
   default, `public` needs a reason.
 - **No `async void`, no `.Result`, no `.Wait()`** — analyzer-enforced. Grain code is single-threaded
-  per activation and blocking it deadlocks the silo.
+  per activation and blocking it deadlocks the silo. ✅ `CC1002` and `CC1001`. ⚠ `CA1849`, which
+  people reach for, only reports a blocking call inside an *already-*`async` method — not the shape
+  that deadlocks an activation; `CC1001` is the synchronous half and does not overlap it. Two
+  provably non-blocking shapes are exempt and tested: a `GetAwaiter().GetResult()` on a
+  `ContinueWith` continuation's own parameter, and a read guarded by `IsCompletedSuccessfully` on
+  the same expression.
 - **`ValueTask` on grain interfaces only where Orleans supports it**; `Task` elsewhere. Do not
   micro-optimize the wire.
 - **Naming: PascalCase for anything a caller can name; camelCase, no `_` prefix, for private state.**

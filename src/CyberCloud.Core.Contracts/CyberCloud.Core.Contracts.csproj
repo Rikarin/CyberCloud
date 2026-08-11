@@ -23,4 +23,15 @@
     <ProjectReference Include="../CyberCloud.Core/CyberCloud.Core.csproj" />
   </ItemGroup>
 
+  <ItemGroup Label="CyberCloud.Analyzers — see CyberCloud.Core.csproj for why this is not a reference">
+    <!--
+      CC1003 lands here with the most force: this is the assembly WireContractTests reflects over,
+      and every [GenerateSerializer] type in it now fails at the declaration rather than in a test
+      log. The reflection tests stay — they assert the alias *strings*, which is a different claim.
+    -->
+    <ProjectReference Include="../CyberCloud.Analyzers/CyberCloud.Analyzers.csproj"
+                      OutputItemType="Analyzer"
+                      ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
 </Project>

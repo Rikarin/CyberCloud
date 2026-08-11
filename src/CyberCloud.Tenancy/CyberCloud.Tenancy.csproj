@@ -32,4 +32,17 @@
     <ProjectReference Include="../CyberCloud.ServiceDefaults/CyberCloud.ServiceDefaults.csproj" />
   </ItemGroup>
 
+  <ItemGroup Label="CyberCloud.Analyzers — see CyberCloud.Core.csproj for why this is not a reference">
+    <!--
+      All seven rules are live here: this is the only assembly in the tree that has grains,
+      grain state with [GenerateSerializer]/[Id(n)], and non-grain host-side objects that hold an
+      IGrainFactory. CC1006 is the one that matters — TenantDirectoryCache and ShardMapRefresher are
+      exactly the shape it polices, and both are correct because they name a null-tenant platform
+      grain through GrainKeys.
+    -->
+    <ProjectReference Include="../CyberCloud.Analyzers/CyberCloud.Analyzers.csproj"
+                      OutputItemType="Analyzer"
+                      ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
 </Project>

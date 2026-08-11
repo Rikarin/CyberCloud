@@ -266,27 +266,68 @@ dotnet_naming_rule.locals_and_parameters_are_camel.severity = error
 # docs/plan/00 § Coding standards: "No `async void`, no `.Result`, no `.Wait()` — analyzer-enforced.
 # Grain code is single-threaded per activation and blocking it deadlocks the silo."
 #
-# ⚠ HONEST STATUS — none of the three is fully covered by a rule that ships with the .NET SDK:
+# ⚠ HONEST STATUS — none of the three is covered by a rule that ships with the .NET SDK:
 #
 #   * `async void`  — NO built-in rule. The rule people think of is VSTHRD100, which lives in
 #                     Microsoft.VisualStudio.Threading.Analyzers, a package we do not reference.
 #                     Adding that package pulls in ~20 other VSTHRD rules with their own opinions.
-#                     STATUS: needs a CyberCloud.Analyzers rule. Not covered below. Do not assume it is.
+#                     STATUS: covered by CC1002 (src/CyberCloud.Analyzers).
 #
 #   * `.Result` / `.Wait()`
 #                   — PARTIALLY covered by CA1849, which fires only when the blocking call appears
 #                     inside a method that is *already* `async`. A synchronous method that calls
 #                     `grain.DoAsync().Result` — the exact shape that deadlocks a silo — is NOT
 #                     flagged by anything built in (that is VSTHRD002, same missing package).
-#                     STATUS: CA1849 is on as an error below; the sync-method case needs the same
-#                     custom analyzer.
+#                     STATUS: CA1849 is on as an error below and keeps the async half; CC1001
+#                     covers the synchronous half, and deliberately does not overlap it.
 #
 #   * `#pragma warning disable` without a linked issue (docs/plan/00 § Non-negotiables)
-#                   — NO analyzer, built-in or otherwise. Needs a custom rule or a CI grep.
+#                   — NO analyzer, built-in or otherwise. STATUS: covered by CC1007.
 #
-# The three custom rules above, plus the `[GenerateSerializer]`-without-`[Alias]` rule and the
-# grain-key-literal rule from ADR-002, are the initial contents of a CyberCloud.Analyzers project.
-# Until that exists, the bans are review-enforced. Saying so here is the point.
+# ══════════════════════════════════════════════════════════════════════════════════════════════
+# CyberCloud.Analyzers — CC1001..CC1007
+# ══════════════════════════════════════════════════════════════════════════════════════════════
+#
+# The paragraph that used to stand here said these rules "are the initial contents of a
+# CyberCloud.Analyzers project. Until that exists, the bans are review-enforced." That project now
+# exists (src/CyberCloud.Analyzers), and the five projects under src/ reference it with
+# OutputItemType="Analyzer". Rule-by-rule documentation is in src/CyberCloud.Analyzers/Rules.cs;
+# the plan citation for each is in its own analyzer file.
+#
+# ⚠ WHY EVERY ONE OF THEM IS `error`, AND WHY THAT IS A SMALLER DECISION THAN IT LOOKS.
+#
+# Directory.Build.props sets TreatWarningsAsErrors, so in this repository `warning` and `error` are
+# the SAME outcome — a red build. The only real choice a severity makes here is between "breaks the
+# build" (warning/error) and "does not" (suggestion/silent). Writing `error` says which of those two
+# was chosen, rather than leaving a reader to work it out from a property in another file.
+#
+# ⚠ EACH WAS RUN OVER THE WHOLE TREE BEFORE BEING SET. All seven report ZERO hits on
+# CyberCloud.Core, .Core.Contracts, .ServiceDefaults, .Tenancy.Contracts and .Tenancy — and two of
+# them only after a genuine finding was fed back into the rule rather than into the code:
+#
+#   * CC1001 fired on HotTierConfigurator's `ContinueWith` continuation and on its guarded
+#     `Dispose`. Neither blocks. Both are now tested exemptions.
+#   * CC1006 fired on ClusterHealthCheck and SiloReadinessHealthCheck, which call
+#     GetGrain<IManagementGrain>(0) — Orleans' own INTEGER-keyed system grain — from an IHealthCheck.
+#     docs/plan/00 § Coding standards makes IGrainWithStringKey "the only key kind
+#     Orleans.Multitenant can carry a tenant in", so a non-string-keyed grain cannot be a
+#     cross-tenant read. The rule is scoped to string-keyed grains; read literally, the plan's
+#     sentence bans two correct call sites.
+#
+# ⚠ ESCAPE HATCH, and it is deliberately not a #pragma. A rule that is right 99 times and wrong once
+# needs a way to say so; use [SuppressMessage("<category>", "CC100n", Justification = "…")] with the
+# argument written out. CC1007 polices `#pragma warning disable` and does not police
+# [SuppressMessage], because an attribute carries a Justification field and a pragma carries nothing.
+# CC1005's `*Key` suffix is the one most likely to need this — `PartitionKey` is not a secret, and
+# making somebody write down why is the point.
+
+dotnet_diagnostic.CC1001.severity = error   # blocking on a task from a synchronous method
+dotnet_diagnostic.CC1002.severity = error   # async void
+dotnet_diagnostic.CC1003.severity = error   # [GenerateSerializer] with no [Alias]
+dotnet_diagnostic.CC1004.severity = error   # a grain-key literal containing the tenant separator
+dotnet_diagnostic.CC1005.severity = error   # an [Id] member named *Password/*Secret/*Token/*Key
+dotnet_diagnostic.CC1006.severity = error   # raw IGrainFactory.GetGrain outside grain code
+dotnet_diagnostic.CC1007.severity = error   # #pragma warning disable with no linked issue
 
 # What IS covered, and is therefore an error:
 dotnet_diagnostic.CA1849.severity = error   # Call async methods when in an async method (partial .Result/.Wait cover)

@@ -1,0 +1,85 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The Roslyn analyzers behind the bans in docs/plan/00 § Coding standards and § Non-negotiables,
+    docs/plan/02 ADR-002 and docs/plan/04 § Failure and upgrade. Each of those documents asserts
+    "analyzer-enforced"; .editorconfig § "The docs/plan/00 bans" and
+    CyberCloud.Core.Contracts.Tests/WireContractTests both record that the claim was false. This
+    assembly is what makes it true. The rule-by-rule map is in Diagnostics.cs.
+
+    ⚠ THIS IS THE ONE PROJECT IN THE REPOSITORY THAT IS NOT net10.0, and it is a genuine exception
+    to docs/plan/02 § Platform baseline ("Single TFM everywhere. No multi-targeting, no netstandard"),
+    not an oversight. A Roslyn analyzer is loaded by the *compiler*, not by the build's own runtime,
+    and the compiler that loads it may be running on .NET Framework (Visual Studio's msbuild,
+    devenv's design-time build) or on .NET (`dotnet build`, `csc`). netstandard2.0 is the only TFM
+    both hosts can load, and Microsoft.CodeAnalysis.Analyzers enforces that with RS1041.
+
+    ⚠ VERIFIED, not assumed, against the SDK actually in use (global.json rolls to 10.0.302, whose
+    compiler reports version 5.6.0-2.26329.109):
+
+        $ ls ~/.nuget/packages/microsoft.codeanalysis.csharp/5.6.0/lib/
+        net10.0  net8.0  netstandard2.0
+
+      Roslyn 5.6.0 — the version of the compiler this SDK ships — still publishes a netstandard2.0
+      target, so the requirement has NOT changed. If a future Roslyn drops it, this project moves to
+      whatever TFM replaces it and this comment is the record of why.
+
+    The guard in Directory.Build.targets (CyberCloudGuardAgainstMultiTargeting) is not tripped: it
+    fires on `TargetFrameworks` (plural), and this is still a single-TFM project.
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+
+    <!--
+      Switches on the RS1xxx analyzer-authoring rules that only make sense for a compiler extension:
+      RS1035 (do not call APIs banned inside an analyzer — File, Environment, Console…), RS1041
+      (a compiler extension must not target a runtime the compiler cannot load). Both are exactly
+      the kind of mistake this project should not be allowed to make.
+    -->
+    <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
+    <IsRoslynComponent>true</IsRoslynComponent>
+
+    <!-- Nothing consumes this as a library; it is loaded by the compiler as an analyzer asset. -->
+    <IncludeBuildOutput>false</IncludeBuildOutput>
+    <ProduceReferenceAssembly>false</ProduceReferenceAssembly>
+  </PropertyGroup>
+
+  <PropertyGroup Label="Analyzer suppressions — three, each scoped to this project and argued">
+    <!--
+      ⚠ Per the brief: relaxations are scoped HERE, never in Directory.Build.props or .editorconfig.
+
+      CA1515 "make the type internal". Every DiagnosticAnalyzer in this assembly is instantiated by
+      the compiler through Activator.CreateInstance after a metadata scan — nothing in this
+      repository references the type by name, so CA1515 can prove nothing consumes it and fires on
+      all seven. A public analyzer type IS the assembly's contract with the compiler.
+
+      CA1054/CA1056 (URI parameters/properties should be System.Uri) — DiagnosticDescriptor's
+      helpLinkUri parameter is a string; that is Roslyn's signature, not ours.
+
+      RS1026 "enable concurrent execution": NOT suppressed — every analyzer here calls
+      EnableConcurrentExecution().
+    -->
+    <NoWarn>$(NoWarn);CA1515;CA1054;CA1056</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!--
+      ⚠ PrivateAssets="all" on both. An analyzer must not flow Roslyn into the projects that
+      reference it — they reference this project with OutputItemType="Analyzer" and
+      ReferenceOutputAssembly="false", so nothing should arrive at their compile line at all.
+    -->
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.CodeAnalysis.Analyzers" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      RS2008: an analyzer package tracks its diagnostics in these two files so that adding, removing
+      or re-categorising a rule is a reviewable diff rather than a silent behaviour change.
+    -->
+    <AdditionalFiles Include="AnalyzerReleases.Shipped.md" />
+    <AdditionalFiles Include="AnalyzerReleases.Unshipped.md" />
+  </ItemGroup>
+
+</Project>
