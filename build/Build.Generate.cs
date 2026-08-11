@@ -6,7 +6,7 @@ partial class Build
     void GenerateSurfaces()
         => NotImplementedYet(
             nameof(Generate),
-            "walk the provider registry, emit the OpenAPI document, the `cc` CLI verbs, the .NET and "
+            "walk the provider registry, emit the OpenAPI document, the `cyc` CLI verbs, the .NET and "
             + "TypeScript SDKs and the portal resource forms, then diff them against what is checked "
             + "in and fail on any drift",
             "docs/plan/23 § Build (row `Generate`) and docs/plan/02 ADR-012. Depends on the first "

@@ -19,7 +19,12 @@ CyberCloud/
 │   ├── Build.Charts.cs           # helm lint/package/push, values.schema.json generation
 │   ├── Build.Images.cs           # container images, SBOM, cosign signatures
 │   ├── Build.Architecture.cs     # the gates in 00 § Non-negotiables
-│   └── Build.Licence.cs          # ADR-011 scan over charts + images
+│   ├── Build.Licence.cs          # ADR-011 scan over charts + images
+│   ├── Build.Portal.cs           # pnpm install/lint/test/build, performance budget, axe
+│   ├── Build.E2E.cs              # ─┐
+│   ├── Build.Chaos.cs            #  ├ against a real deployment; nightly and weekly, not per-PR
+│   ├── Build.Load.cs             # ─┘
+│   └── Build.Publish.cs          # NuGet, npm, charts, `cyc` binaries per RID
 ├── src/                          # ── all .NET ──
 ├── charts/                       # ── Helm charts we own or have forked ──
 ├── portal/                       # ── Angular 22 + xUI ──
@@ -44,6 +49,10 @@ CyberCloud/
 ├── CyberCloud.Providers.slnf
 └── CyberCloud.Hosts.slnf
 ```
+
+`build/` is one partial per Nuke target, named after it, and the list above is therefore the list in
+[23 § Build](23-build-ci-and-testing.md) — if the two ever disagree, 23 is right and a target has
+gone missing here.
 
 `references/` is excluded from every glob and never restored. It exists so "how did Cozystack wire
 CloudNativePG" is a `grep` away rather than a browser tab away.

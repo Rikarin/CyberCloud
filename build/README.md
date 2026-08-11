@@ -10,7 +10,12 @@ build/
 ├── Build.Charts.cs           # helm lint/package/push, values.schema.json generation
 ├── Build.Images.cs           # container images, SBOM, cosign signatures
 ├── Build.Architecture.cs     # the gates in docs/plan/00 § Non-negotiables
-└── Build.Licence.cs          # ADR-011 scan over charts + images
+├── Build.Licence.cs          # ADR-011 scan over charts + images
+├── Build.Portal.cs           # pnpm install/lint/test/build, performance budget, axe
+├── Build.E2E.cs              # ─┐
+├── Build.Chaos.cs            #  ├ against a real deployment; nightly and weekly, not per-PR
+├── Build.Load.cs             # ─┘
+└── Build.Publish.cs          # NuGet, npm, charts, `cyc` binaries per RID
 ```
 
 Nuke is pinned in [`.config/dotnet-tools.json`](../.config/dotnet-tools.json) (`dotnet nuke`) and
@@ -44,13 +49,27 @@ Clean
 Restore ──► Compile ──┬──► Test
                       ├──► Generate       (stub)
                       ├──► Architecture   (stub)
+                      ├──► E2E            (stub)
+                      ├──► Chaos          (stub)
+                      ├──► Load           (stub)
                       └──► Images ────────┐ (stub)
 Charts (stub) ────────────────────────────┴──► Licence (stub)
+Portal (stub)
+
+Publish (stub) ──► Test, Generate, Architecture, Portal, Licence
 ```
 
-`Generate`, `Charts`, `Images`, `Architecture` and `Licence` are wired with their real dependencies
-but log "not implemented yet — tracked in …" and succeed. A stub that fails the build is worse than
-no stub: it trains everyone to ignore a red target.
+Everything except `Clean`, `Restore`, `Compile` and `Test` is wired with its real dependencies but
+logs "not implemented yet — tracked in …" and succeeds. A stub that fails the build is worse than no
+stub: it trains everyone to ignore a red target.
+
+Three of those edges are missing on purpose, and each is the first thing a reader goes looking for:
+
+| Missing edge | Why |
+|---|---|
+| `E2E` `Chaos` `Load` → a deploy | There is no `Deploy` target. They run "against a real deployment" (docs/plan/23 § Build) — standing staging nightly, a deployed candidate pre-release. The deployment is an input to the run, not something the graph produces, and as an edge it would mean every local `./build.sh E2E` tried to deploy something. They depend on `Compile`, which builds the suites in `test/` and the `cyc` they drive. |
+| `Portal` → `Generate` | `Generate` emits `portal/libs/api` and the resource forms, but those are generated **and committed**, and `Generate`'s job in the graph is to fail on drift rather than to feed a later target. The edge would drag `Compile` in behind it and make the .NET SDK a prerequisite for running `eslint`. |
+| `Publish` → `E2E` `Chaos` `Load` | A release *is* gated on all three (docs/plan/23 § Test layers, "green before release"), but they run against the deployed candidate. The order is gate → deploy → suites → publish, the deploy in the middle is not a target, so `release.yml` owns that sequencing and this edge would invert it. |
 
 ## Why the analyser exemptions are where they are
 

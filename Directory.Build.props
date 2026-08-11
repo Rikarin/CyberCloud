@@ -94,7 +94,16 @@
   </PropertyGroup>
 
   <PropertyGroup Label="Project role detection">
-    <!-- Consumed by Directory.Build.targets, which is imported after the project body. -->
+    <!--
+      Consumed by Directory.Build.targets, which is imported after the project body.
+
+      IsTestProject answers ONE question: does this build as an xunit.v3 / Microsoft.Testing.Platform
+      host? It is true for the deployment-driven suites too. It does NOT say which Nuke target runs
+      the project, or how often — build/Build.Test.cs § SuiteOwning answers that, with one arm per
+      rule below, because docs/plan/23 § Test layers runs E2E and Chaos nightly and Load weekly,
+      none of them per-PR. Adding a rule here means adding an arm there; a project under test/ that
+      neither file claims fails the Test target by design.
+    -->
     <IsTestProject Condition="$(MSBuildProjectName.EndsWith('.Tests'))">true</IsTestProject>
     <IsTestProject Condition="$(MSBuildProjectName.EndsWith('.Conformance'))">true</IsTestProject>
     <IsTestProject Condition="'$(MSBuildProjectName)' == 'CyberCloud.E2E'">true</IsTestProject>

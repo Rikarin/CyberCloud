@@ -1,6 +1,12 @@
 // docs/plan/03 § build/ — the target graph. Everything a target actually does lives in a sibling
 // partial: Build.Compile.cs, Build.Test.cs, Build.Generate.cs, Build.Charts.cs, Build.Images.cs,
-// Build.Architecture.cs, Build.Licence.cs.
+// Build.Architecture.cs, Build.Licence.cs, Build.Portal.cs, Build.E2E.cs, Build.Chaos.cs,
+// Build.Load.cs, Build.Publish.cs.
+//
+// One partial per target, named after it. docs/plan/03 § Top level stopped at Build.Licence.cs and
+// has been extended to list all of them: doc 03's tree describes this directory, docs/plan/23
+// § Build is the authority on which targets exist, and the two disagreeing is how a target goes
+// missing.
 
 using System.Collections.Generic;
 using System.Linq;
@@ -58,12 +64,36 @@ sealed partial class Build : NukeBuild
     //   Restore ──► Compile ──┬──► Test
     //                         ├──► Generate       (stub)
     //                         ├──► Architecture   (stub)
+    //                         ├──► E2E            (stub)
+    //                         ├──► Chaos          (stub)
+    //                         ├──► Load           (stub)
     //                         └──► Images ────────┐ (stub)
     //   Charts (stub) ────────────────────────────┴──► Licence (stub)
+    //   Portal (stub)
     //
-    // The five stubs are wired with their real dependencies so the graph is right from day one, and
+    //   Publish (stub) ──► Test, Generate, Architecture, Portal, Licence
+    //
+    // Publish's fan-in is written out rather than drawn: it reaches five nodes from three different
+    // rows above, and the lines needed to show that cost more than they explain.
+    //
+    // The ten stubs are wired with their real dependencies so the graph is right from day one, and
     // each logs where its implementation is tracked. They succeed: a stub that fails the build is
     // worse than no stub, because it trains everyone to ignore a red target.
+    //
+    // ⚠ Three edges that are missing on purpose, because each is the first thing a reader looks for:
+    //
+    // * There is no `Deploy` target, so `E2E`, `Chaos` and `Load` — docs/plan/23 § Build, "against a
+    //   real deployment" — depend only on `Compile`, which builds the suites in test/ and the `cyc`
+    //   they drive. The deployment is an input to the run, not something the graph produces: the
+    //   nightly suites run against standing staging (docs/plan/23 § Environments and rollout) and
+    //   the pre-release ones against a deployed candidate. Encoding "deploy first" as an edge would
+    //   mean every local `./build.sh E2E` tried to deploy something.
+    //
+    // * `Portal` depends on nothing — see Build.Portal.cs, which is about keeping the pnpm and .NET
+    //   toolchains independently invocable.
+    //
+    // * `Publish` does not depend on `E2E`/`Chaos`/`Load`, even though a release is gated on them —
+    //   see Build.Publish.cs. They run against the deployed candidate, which is after the gate.
 
     Target Clean => _ => _
         .Description("Delete every build output. Never touches references/.")
@@ -106,6 +136,30 @@ sealed partial class Build : NukeBuild
         .Description("ADR-011 licence scan over charts and images.")
         .DependsOn(Charts, Images)
         .Executes(ScanLicences);
+
+    Target Portal => _ => _
+        .Description("pnpm install/lint/test/build over portal/, performance budget, axe.")
+        .Executes(BuildPortal);
+
+    Target E2E => _ => _
+        .Description("Playwright + `cyc` against a real deployment. docs/plan/23 § Test layers.")
+        .DependsOn(Compile)
+        .Executes(RunE2ETests);
+
+    Target Chaos => _ => _
+        .Description("The seven chaos invariants against a real deployment. docs/plan/23.")
+        .DependsOn(Compile)
+        .Executes(RunChaosTests);
+
+    Target Load => _ => _
+        .Description("The six load scenarios against a real deployment. docs/plan/23.")
+        .DependsOn(Compile)
+        .Executes(RunLoadTests);
+
+    Target Publish => _ => _
+        .Description("NuGet, npm, charts and `cyc` binaries per RID, behind the full gate.")
+        .DependsOn(Test, Generate, Architecture, Portal, Licence)
+        .Executes(PublishArtefacts);
 
     // ── Shared helpers ────────────────────────────────────────────────────────────────────────
 
