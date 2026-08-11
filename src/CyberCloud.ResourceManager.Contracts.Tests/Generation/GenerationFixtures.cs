@@ -119,6 +119,13 @@ static class Fixtures {
                 Immutable = true
             },
             new("/properties", SchemaKind.Nested, Required: true),
+            // ⚠ The property RequiresCluster names. ProviderBuilder refuses a type that declares the
+            // flag without it, so a fixture that claims RequiresCluster must carry it too.
+            new("/properties/clusterId", SchemaKind.Text, Required: true, Description: "The cluster.") {
+                Format = SchemaFormat.Uuid,
+                Widget = WidgetHint.Cluster,
+                Immutable = true
+            },
             new("/properties/sku", SchemaKind.Nested, Required: true),
             new("/properties/sku/name", SchemaKind.Text, Required: true, Description: "The sku.") {
                 AllowedValues = ["s1.small", "s1.large", "c1.large", "m1.large"],
@@ -135,6 +142,12 @@ static class Fixtures {
                 DefaultJson = "32"
             },
             new("/properties/highAvailability", SchemaKind.Boolean) { DefaultJson = "false" },
+            // ⚠ A closed set with NO widget hint, so the portal emitter's shape-based fallback is
+            // exercised as well as the declared-hint path. `sku/name` declares WidgetHint.Sku and
+            // takes the picker; this one has to fall through to docs/plan/20's "≤ 8 is a select".
+            new("/properties/tier", SchemaKind.Text, Description: "Support tier.") {
+                AllowedValues = ["free", "standard", "premium"]
+            },
             new("/properties/adminPassword", SchemaKind.Text, Secret: true, Description: "The password.") {
                 MinLength = 12,
                 Widget = WidgetHint.SecretRef
