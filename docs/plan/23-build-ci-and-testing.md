@@ -58,14 +58,26 @@ time.
 | **Load** | The [00](00-vision-and-principles.md) quality bar, at scale | Weekly + pre-release | Budgets met |
 | **Security** | CodeQL, `NuGetAudit`, Trivy on images, secret scanning, ZAP against staging | Every PR + nightly | No criticals |
 
-### Written but unrun — the assertions waiting on a server
+### Skipped by default — the assertions that need a server, and what running them proved
 
-Tracked here rather than left in a commit message, because an unrun test that nobody knows is unrun
-is worse than a missing one.
+Tracked here rather than left in a commit message, because a test that nobody knows is skipped is
+worse than a missing one.
 
-| Where | What is unrun | What it needs |
+| Where | What is skipped without a server | What it needs |
 |---|---|---|
 | `CyberCloud.ServiceDefaults.Tests.Storage.OrleansAdoNetSchemaTests` | Five assertions about the durable schema on a real PostgreSQL: a half-applied schema is completed, a complete one is a no-op that takes no advisory lock, four concurrent appliers produce one winner and three clean no-ops, a hand-torn schema is refused with an inventory, and a reachable shard reports reachable | `CYBERCLOUD_TEST_SHARD` set to a **scratch** database — every test starts by running the recovery SQL from `deploy/README.md § Idempotence`, which drops both tables. Deliberately a connection string rather than Testcontainers, so the same assertions run against a container, a local server, or a staging shard |
+
+⚠ **These five were written unrun and have since been run.** On 2026-08-11 all five passed against a
+scratch PostgreSQL 17, and the concurrency one was sabotage-tested rather than merely observed
+passing: replacing `pg_advisory_xact_lock` with a `SELECT` of the same two integers — leaving the
+transaction, the re-probe inside it and every assertion in place — makes
+`TwoConcurrentAppliersDoNotCorrupt` fail with a real `23505` on `pg_type_typname_nsp_index`, which is
+two appliers running `CREATE TABLE` at once. The other four still passed under the sabotage, which is
+the right shape: they are single-applier scenarios and the lock is not what they are about. So the
+lock is load-bearing and the test is what holds it.
+
+They remain skipped in CI, which has no shard. Nothing above changes that; what changed is that
+"skipped" no longer means "never once observed to pass".
 
 Everything else about that pair of gaps runs everywhere and needs nothing:
 `DurableSchemaPlanTests` decides what to apply from an observed set of objects,
