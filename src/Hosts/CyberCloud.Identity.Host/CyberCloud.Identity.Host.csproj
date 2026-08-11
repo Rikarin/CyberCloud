@@ -1,0 +1,69 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      docs/plan/03 § Hosts and docs/plan/11 § Hosts — the OAuth 2.1 / OIDC authorization server.
+
+      ⚠ THIS HOST SERVES COOKIES AND THE GATEWAY SERVES BEARER TOKENS, AND THE SPLIT IS A SECURITY
+      BOUNDARY RATHER THAN A SCALING ONE.
+
+      docs/plan/11 § Hosts: "a session cookie must never be a credential the resource API accepts. If
+      it is, every CSRF becomes a control-plane write. Separate hosts on separate origins makes that
+      structural instead of a middleware configuration somebody will change."
+
+      The structure is in the REFERENCE SET, which is why it is worth reading this list carefully:
+
+        * This project references OpenIddict.Server.AspNetCore — it ISSUES tokens.
+        * It does NOT reference OpenIddict.Validation.AspNetCore, and must not. That package is the
+          bearer-token VALIDATION handler; referencing it here is the single edit that would make a
+          bearer token an accepted credential on the cookie origin, and the absence is what makes
+          IdentityHostAuthenticationTests' "exactly one scheme, and it is a cookie" assertion an
+          assertion about the assembly rather than about one registration call.
+        * Symmetrically, the gateway references Validation and not Server.
+
+      A middleware setting can be changed in one line by somebody who does not know why it is there.
+      A missing package reference produces a compile error with a name in it.
+    -->
+
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <IsPublishable>true</IsPublishable>
+        <!--
+          CA1515 — "an application's API isn't typically referenced from outside the assembly". It is
+          here: CyberCloud.Identity.Host.Tests builds this host's authentication and OpenIddict
+          registrations against a real ServiceCollection and asserts on what came out, which needs
+          the extension methods to be public. That test is the cookie/bearer boundary's only
+          mechanical check, so making it possible is worth the rule.
+        -->
+        <NoWarn>$(NoWarn);CA1515</NoWarn>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <FrameworkReference Include="Microsoft.AspNetCore.App"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <!-- ADR-015. ⚠ 7.6.0, not docs/plan/02's 7.3.0 — see Directory.Packages.props § Identity. -->
+        <PackageReference Include="OpenIddict.AspNetCore"/>
+        <PackageReference Include="OpenIddict.Server.AspNetCore"/>
+        <PackageReference Include="OpenIddict.Abstractions"/>
+        <!--
+          ⚠ 4.0.1 STABLE, not the 4.0.0-beta9 docs/plan/02's register names. Wrapped behind
+          IPasskeyService (declared in CyberCloud.Identity.Contracts in OUR types) so replacing the
+          library is this one file — Credentials/Fido2PasskeyService.cs.
+        -->
+        <PackageReference Include="Fido2.AspNet"/>
+        <PackageReference Include="Fido2.Models"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../../CyberCloud.Identity/CyberCloud.Identity.csproj"/>
+        <ProjectReference Include="../../CyberCloud.Identity.Contracts/CyberCloud.Identity.Contracts.csproj"/>
+    </ItemGroup>
+
+    <ItemGroup Label="CyberCloud.Analyzers — docs/plan/00 § Coding standards, § Non-negotiables">
+        <ProjectReference Include="../../CyberCloud.Analyzers/CyberCloud.Analyzers.csproj"
+                          OutputItemType="Analyzer"
+                          ReferenceOutputAssembly="false"/>
+    </ItemGroup>
+
+</Project>

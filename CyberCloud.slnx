@@ -77,12 +77,18 @@
         <Project Path="src/CyberCloud.ResourceManager.Contracts.Tests/CyberCloud.ResourceManager.Contracts.Tests.csproj"/>
         <Project Path="src/CyberCloud.ResourceManager/CyberCloud.ResourceManager.csproj"/>
         <Project Path="src/CyberCloud.ResourceManager.Tests/CyberCloud.ResourceManager.Tests.csproj"/>
+        <Project Path="src/CyberCloud.Identity.Contracts/CyberCloud.Identity.Contracts.csproj"/>
+        <Project Path="src/CyberCloud.Identity.Contracts.Tests/CyberCloud.Identity.Contracts.Tests.csproj"/>
+        <Project Path="src/CyberCloud.Identity/CyberCloud.Identity.csproj"/>
+        <Project Path="src/CyberCloud.Identity.Tests/CyberCloud.Identity.Tests.csproj"/>
     </Folder>
     <Folder Name="/src/Providers/"/>
     <Folder Name="/src/Hosts/">
         <Project Path="src/Hosts/CyberCloud.Silo.Host/CyberCloud.Silo.Host.csproj"/>
         <Project Path="src/Hosts/CyberCloud.AppHost/CyberCloud.AppHost.csproj"/>
         <Project Path="src/Hosts/CyberCloud.AppHost.Tests/CyberCloud.AppHost.Tests.csproj"/>
+        <Project Path="src/Hosts/CyberCloud.Identity.Host/CyberCloud.Identity.Host.csproj"/>
+        <Project Path="src/Hosts/CyberCloud.Identity.Host.Tests/CyberCloud.Identity.Host.Tests.csproj"/>
     </Folder>
     <Folder Name="/cli/"/>
     <Folder Name="/test/"/>

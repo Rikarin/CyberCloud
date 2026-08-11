@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      The pure half of the identity tests: the wire types through a real Orleans serializer, the
+      access-token claim contract, and the lockout key and ladder.
+
+      ⚠ NO Testcontainers AND NONE IS NEEDED. Nothing here touches a grain, so ADR-018's "real
+      storage" rule does not reach it — that rule is about grain behaviour, and these are value types.
+      The grain-backed half is CyberCloud.Identity.Tests, which does have something to say about it.
+
+      ⚠ THE SERIALIZATION TESTS ARE NOT REDUNDANT WITH THAT PROJECT, AND THE REASON IS THE SAME ONE
+      CyberCloud.ResourceManager.Contracts.Tests RECORDS. The grain suite runs against in-memory grain
+      storage, which keeps the object graph rather than serializing it — so a type with a missing
+      codec or a member Orleans cannot round-trip would pass every test there and fail on the first
+      real silo. Putting the bytes through the type manifest here is what covers it.
+    -->
+
+    <ItemGroup>
+        <PackageReference Include="xunit.v3"/>
+        <PackageReference Include="Shouldly"/>
+    </ItemGroup>
+
+    <ItemGroup Label="Global usings">
+        <Using Include="Xunit"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../CyberCloud.Identity.Contracts/CyberCloud.Identity.Contracts.csproj"/>
+    </ItemGroup>
+
+</Project>

@@ -78,7 +78,27 @@ public enum GrainKeyKind {
     ///     <c>ITupleStoreGrain</c> — <c>rel/store/{tenantId:N}</c>. See
     ///     <see cref="GrainKeys.TupleStore" />.
     /// </summary>
-    TupleStore
+    TupleStore,
+
+    /// <summary><c>IGroupGrain</c> — <c>group/{groupId:N}</c>. See <see cref="GrainKeys.Group" />.</summary>
+    Group,
+
+    /// <summary>
+    ///     <c>IApplicationGrain</c> — <c>app/{applicationId:N}</c>. See
+    ///     <see cref="GrainKeys.Application" />.
+    /// </summary>
+    Application,
+
+    /// <summary>
+    ///     <c>IServicePrincipalGrain</c> — <c>sp/{servicePrincipalId:N}</c>. See
+    ///     <see cref="GrainKeys.ServicePrincipal" />.
+    /// </summary>
+    ServicePrincipal,
+
+    /// <summary>
+    ///     <c>ISessionGrain</c> — <c>session/{sessionId:N}</c>. See <see cref="GrainKeys.Session" />.
+    /// </summary>
+    Session
 }
 
 /// <summary>
@@ -206,6 +226,10 @@ public readonly record struct GrainKey {
             GrainKeyKind.SubjectRelations => GrainKeys.SubjectRelations(ObjectType, ObjectId),
             GrainKeyKind.CheckCache => GrainKeys.CheckCache(ObjectType, ObjectId),
             GrainKeyKind.TupleStore => GrainKeys.TupleStore(Id),
+            GrainKeyKind.Group => GrainKeys.Group(Id),
+            GrainKeyKind.Application => GrainKeys.Application(Id),
+            GrainKeyKind.ServicePrincipal => GrainKeys.ServicePrincipal(Id),
+            GrainKeyKind.Session => GrainKeys.Session(Id),
             _ => string.Empty
         };
 }
@@ -222,11 +246,12 @@ public readonly record struct GrainKey {
 ///         contains them. Nothing else in the codebase may concatenate one.
 ///     </para>
 ///     <para>
-///         <b>The fourteen shapes.</b> Eight of them are the table at docs/plan/06 § Grain keys; two
+///         <b>The eighteen shapes.</b> Eight of them are the table at docs/plan/06 § Grain keys; two
 ///         more — <see cref="Tenant" /> and <see cref="PlatformSingleton" /> — are the rows that
 ///         table is <i>missing</i> for grains docs/plan/04 § Grain taxonomy names in its Entity and
-///         Platform rows; the last four are docs/plan/07 § Storage's authorization grains. See the
-///         remarks on each. Every one of them is formatted <i>and</i> parsed —
+///         Platform rows; four are docs/plan/07 § Storage's authorization grains; the last four are
+///         the rows that same table is missing for the grains docs/plan/11 § The object model names.
+///         See the remarks on each. Every one of them is formatted <i>and</i> parsed —
 ///         a key that can
 ///         be built but not decoded is half a type, and routing a physical key back to a grain type
 ///         (in a log, in a repair tool, in a dead-letter handler) needs the other half.
@@ -330,6 +355,30 @@ public readonly record struct GrainKey {
 ///             </term>
 ///             <description><c>rel/store/{tenantId:N}</c> — not in docs/plan/07's table</description>
 ///         </item>
+///         <item>
+///             <term>
+///                 <see cref="Group" />
+///             </term>
+///             <description><c>group/{groupId:N}</c> — not in docs/plan/06's table</description>
+///         </item>
+///         <item>
+///             <term>
+///                 <see cref="Application" />
+///             </term>
+///             <description><c>app/{applicationId:N}</c> — not in docs/plan/06's table</description>
+///         </item>
+///         <item>
+///             <term>
+///                 <see cref="ServicePrincipal" />
+///             </term>
+///             <description><c>sp/{servicePrincipalId:N}</c> — not in docs/plan/06's table</description>
+///         </item>
+///         <item>
+///             <term>
+///                 <see cref="Session" />
+///             </term>
+///             <description><c>session/{sessionId:N}</c> — <b>hot tier</b>, not in docs/plan/06's table</description>
+///         </item>
 ///     </list>
 ///     <para>
 ///         The four <c>rel/</c> shapes are docs/plan/07 § Storage's, plus the two that document
@@ -382,7 +431,8 @@ public readonly record struct GrainKey {
 ///     <para>
 ///         <b>The shapes cannot collide, and that is a property rather than a coincidence.</b> Each
 ///         shape is fixed by its first segment (<c>sub</c>, <c>res</c>, <c>user</c>, <c>op</c>,
-///         <c>cluster</c>, <c>idx</c>) and its segment count, and the one caller-controlled component
+///         <c>cluster</c>, <c>group</c>, <c>app</c>, <c>sp</c>, <c>session</c>, <c>idx</c>) and its
+///         segment count, and the one caller-controlled component
 ///         — the resource group name in <see cref="ResourceGroup" /> — is validated by
 ///         <see cref="ResourceNaming" />, which forbids <c>/</c>. A name that somehow carried a
 ///         <c>/</c> would change the segment count and be rejected on the way back in rather than
@@ -401,6 +451,18 @@ public static class GrainKeys {
 
     /// <summary><c>op/</c> — an operation.</summary>
     public const string OperationPrefix = "op/";
+
+    /// <summary><c>group/</c> — a group, docs/plan/11 § The object model.</summary>
+    public const string GroupPrefix = "group/";
+
+    /// <summary><c>app/</c> — an OAuth client registration, docs/plan/11 § The object model.</summary>
+    public const string ApplicationPrefix = "app/";
+
+    /// <summary><c>sp/</c> — a service principal, docs/plan/11 § The object model.</summary>
+    public const string ServicePrincipalPrefix = "sp/";
+
+    /// <summary><c>session/</c> — a sign-in session, docs/plan/11 § Sessions and revocation.</summary>
+    public const string SessionPrefix = "session/";
 
     /// <summary><c>cluster/</c> — a cluster connection. Null tenant.</summary>
     public const string ClusterConnectionPrefix = "cluster/";
@@ -660,6 +722,76 @@ public static class GrainKeys {
 
     /// <summary><c>op/{operationId:N}</c> — <c>IOperationGrain</c>, docs/plan/06 § Grain keys.</summary>
     public static string Operation(Guid operationId) => OperationPrefix + N(operationId);
+
+    // ── The identity shapes — docs/plan/11 § The object model ──────────────────────────────────
+    //
+    // ⚠ DOC DEFECT, and these four rows are the repair. docs/plan/11 § The object model names six
+    // grains — IUserGrain, IGroupGrain, IServicePrincipalGrain, IApplicationGrain,
+    // IManagedIdentityGrain and ISessionGrain — and the grain-key table at docs/plan/06 § Grain keys
+    // carries a row for exactly one of them, IUserGrain. That table's own ⚠ says what the
+    // consequence is: "a grain missing from it is a grain that cannot be addressed … If you add a
+    // grain, add its row here first." Four of the five missing grains are built here, so four rows
+    // are added; IManagedIdentityGrain is deliberately not, because docs/plan/11 § Managed identity
+    // is a seam rather than an implementation and a key shape with no grain behind it is a shape
+    // nothing can hold to its meaning — the same argument this type already makes for the Leopard
+    // membership index.
+    //
+    // All four are two-segment GUID keys and tenant-qualified, which is what makes them cheap: the
+    // shape rules, the parser, the canonicity guard and the collision argument on this type all
+    // already cover that form, so nothing about the closed set had to be loosened to admit them.
+
+    /// <summary><c>group/{groupId:N}</c> — <c>IGroupGrain</c>, docs/plan/11 § The object model.</summary>
+    /// <remarks>
+    ///     ⚠ <b>A group's key carries no name, and the grain holds no member list.</b> docs/plan/11
+    ///     § The object model: membership is the ReBAC tuple <c>group:X#member@user:Y</c>, so "is
+    ///     Alice in Eng" is a <c>Check</c> and "who is in Eng" is an <c>Expand</c>. Keying by GUID
+    ///     rather than by name is the same decision as <see cref="Resource" />'s — a rename would
+    ///     otherwise be a grain migration — and it matters more here, because the ReBAC object id is
+    ///     this GUID and re-keying a group would orphan every tuple naming it.
+    /// </remarks>
+    public static string Group(Guid groupId) => GroupPrefix + N(groupId);
+
+    /// <summary>
+    ///     <c>app/{applicationId:N}</c> — <c>IApplicationGrain</c>, the OAuth client registration.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Not keyed by <c>client_id</c>, and that is the trap worth naming.</b> The obvious key
+    ///     is the client id, because that is what arrives on <c>/token</c>. It is wrong twice: the
+    ///     client id is caller-controlled text on the hottest unauthenticated path in the platform,
+    ///     so it would put an attacker in charge of which activation a request creates; and a client
+    ///     id is per tenant, so <c>portal</c> in two tenants would be two activations whose keys
+    ///     differ only by the qualification. The GUID is the identity and the client id is an
+    ///     attribute resolved through the application's own tenant, exactly as an email is resolved
+    ///     for a user.
+    /// </remarks>
+    public static string Application(Guid applicationId) => ApplicationPrefix + N(applicationId);
+
+    /// <summary>
+    ///     <c>sp/{servicePrincipalId:N}</c> — <c>IServicePrincipalGrain</c>, a machine identity.
+    /// </summary>
+    public static string ServicePrincipal(Guid servicePrincipalId) => ServicePrincipalPrefix + N(servicePrincipalId);
+
+    /// <summary>
+    ///     <c>session/{sessionId:N}</c> — <c>ISessionGrain</c>, docs/plan/11 § Sessions and
+    ///     revocation. <b>Hot tier</b>, unlike every other identity grain.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>The session id is not the refresh token, and the two must never be conflated.</b>
+    ///         docs/plan/11 § Sessions and revocation: "refresh tokens carry a session id; refresh
+    ///         checks the session is live". The session id therefore appears inside a token that
+    ///         travels to a client, so it is an identifier an attacker can learn — which is fine,
+    ///         because reaching this grain proves nothing on its own. Keying by the refresh token
+    ///         instead would make the grain key a bearer secret, put that secret in every log line
+    ///         and trace that prints a grain id, and defeat rotation, since a rotated token would be
+    ///         a different grain and the chain would have nowhere to live.
+    ///     </para>
+    ///     <para>
+    ///         <b>Cardinality</b> is one activation per sign-in session, which is the high-cardinality
+    ///         answer docs/plan/04 § Grain taxonomy asks new grains for.
+    ///     </para>
+    /// </remarks>
+    public static string Session(Guid sessionId) => SessionPrefix + N(sessionId);
 
     /// <summary>
     ///     <c>cluster/{clusterId:N}</c> — <c>IClusterConnectionGrain</c>, docs/plan/06 § Grain keys.
@@ -922,10 +1054,11 @@ public static class GrainKeys {
             return Invalid(
                 "A grain key within a tenant is required. It is one of 'sub/{id}', "
                 + "'sub/{id}/rg/{name}', 'res/{id}', 'user/{id}', 'op/{id}', 'cluster/{id}', "
-                + "'tenant/{id}', 'platform/{singleton}', 'idx/path/{digest}', "
+                + "'tenant/{id}', 'group/{id}', 'app/{id}', 'sp/{id}', 'session/{id}', "
+                + "'platform/{singleton}', 'idx/path/{digest}', "
                 + "'idx/email/{digest}', 'rel/store/{tenantId}', 'rel/obj/{type}/{id}', "
-                + "'rel/sub/{type}/{id}' or 'rel/check/{type}/{id}' — see docs/plan/06 § Grain keys "
-                + "and docs/plan/07 § Storage."
+                + "'rel/sub/{type}/{id}' or 'rel/check/{type}/{id}' — see docs/plan/06 § Grain keys, "
+                + "docs/plan/07 § Storage and docs/plan/11 § The object model."
             );
         }
 
@@ -1011,14 +1144,19 @@ public static class GrainKeys {
             "op" => GrainKeyKind.Operation,
             "cluster" => GrainKeyKind.ClusterConnection,
             "tenant" => GrainKeyKind.Tenant,
+            "group" => GrainKeyKind.Group,
+            "app" => GrainKeyKind.Application,
+            "sp" => GrainKeyKind.ServicePrincipal,
+            "session" => GrainKeyKind.Session,
             _ => GrainKeyKind.None
         };
 
         if (kind == GrainKeyKind.None) {
             return Invalid(
                 $"'{key}' is not a grain key: '{segments[0]}' is not one of 'sub', 'res', 'user', "
-                + "'op', 'cluster', 'tenant' or 'platform'. The prefix is matched case-sensitively — "
-                + "see docs/plan/06 § Grain keys."
+                + "'op', 'cluster', 'tenant', 'group', 'app', 'sp', 'session' or 'platform'. The "
+                + "prefix is matched case-sensitively — see docs/plan/06 § Grain keys and "
+                + "docs/plan/11 § The object model."
             );
         }
 
