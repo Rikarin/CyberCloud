@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The fast half of the authorization suite: the wire contract (docs/plan/05 § Serialization and
+    schema evolution), the tuple grammar, and the reference/naming rules. No containers, no silo —
+    everything here is a pure function of its input.
+  -->
+
+  <PropertyGroup>
+    <!-- See CyberCloud.Authorization.Contracts.csproj — "object" is docs/plan/07's noun. -->
+    <NoWarn>$(NoWarn);CA1720</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="xunit.v3" />
+    <PackageReference Include="Shouldly" />
+  </ItemGroup>
+
+  <ItemGroup Label="Global usings">
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../CyberCloud.Authorization.Contracts/CyberCloud.Authorization.Contracts.csproj" />
+  </ItemGroup>
+
+</Project>

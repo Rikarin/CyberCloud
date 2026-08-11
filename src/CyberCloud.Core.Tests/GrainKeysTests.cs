@@ -866,4 +866,136 @@ public class GrainKeysTests
         // docs/plan/06:171 — the platform tenant is Guid.Empty. Nothing here may special-case it.
         GrainKeys.Subscription(Guid.Empty)
             .ShouldBe("sub/00000000000000000000000000000000");
+
+    // ── The four ReBAC shapes — docs/plan/07 § Storage ─────────────────────────────────────────
+
+    /// <summary>
+    ///     The four <c>rel/</c> shapes, each with the kind it must decode to.
+    /// </summary>
+    /// <remarks>
+    ///     Kept as a member rather than inline so that adding a shape means adding a row here, which
+    ///     is the same discipline <c>Corpus.EveryGrainKeyShapeFor</c> applies to the other ten.
+    /// </remarks>
+    public static TheoryData<string, GrainKeyKind> RelationShapes => new()
+    {
+        { GrainKeys.ObjectRelations("resourceGroup", "prod"), GrainKeyKind.ObjectRelations },
+        { GrainKeys.SubjectRelations("user", "alice"), GrainKeyKind.SubjectRelations },
+        { GrainKeys.CheckCache("resourceGroup", "prod"), GrainKeyKind.CheckCache },
+        { GrainKeys.TupleStore(Tenant), GrainKeyKind.TupleStore },
+    };
+
+    [Theory]
+    [MemberData(nameof(RelationShapes))]
+    public void EveryRelationShapeRoundTripsToTheKindThatBuiltIt(string key, GrainKeyKind expected)
+    {
+        var parsed = GrainKeys.Parse(key);
+
+        parsed.IsSuccess.ShouldBeTrue(parsed.Error?.Message);
+        parsed.GetValueOrThrow().Kind.ShouldBe(expected);
+        parsed.GetValueOrThrow().ToString().ShouldBe(key);
+        GrainKeys.IsTenantQualificationSafe(key).ShouldBeTrue();
+    }
+
+    [Fact]
+    public void ARelationKeyCarriesItsObjectTypeAndIdSeparately()
+    {
+        // The payload must survive, not just the string: a key that round-trips but decodes to the
+        // wrong object would route a tuple read to another entity's grain.
+        var parsed = GrainKeys.Parse(GrainKeys.ObjectRelations("resourceGroup", "prod"))
+            .GetValueOrThrow();
+
+        parsed.ObjectType.ShouldBe("resourceGroup");
+        parsed.ObjectId.ShouldBe("prod");
+        parsed.Id.ShouldBe(Guid.Empty);
+        parsed.Name.ShouldBeEmpty();
+        parsed.Digest.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void ATupleStoreKeyCarriesItsTenantId()
+    {
+        GrainKeys.Parse(GrainKeys.TupleStore(Tenant)).GetValueOrThrow().Id.ShouldBe(Tenant);
+    }
+
+    [Fact]
+    public void AGuidIsAnObjectIdBecauseTheNFormIsAValidName()
+    {
+        // docs/plan/07 § The model says "ids are GUIDs"; the N form satisfies ResourceNaming, so
+        // the ordinary case needs no special rule.
+        var key = GrainKeys.ObjectRelations("resource", Tenant.ToString("N", CultureInfo.InvariantCulture));
+
+        GrainKeys.Parse(key).GetValueOrThrow().ObjectId
+            .ShouldBe(Tenant.ToString("N", CultureInfo.InvariantCulture));
+    }
+
+    [Theory]
+    [InlineData("ResourceGroup", "prod", "the type starts upper-case")]
+    [InlineData("resource-group", "prod", "the type contains a hyphen")]
+    [InlineData("resource:group", "prod", "the type contains the type/id separator")]
+    [InlineData("resource/group", "prod", "the type contains the key separator")]
+    [InlineData("resource#group", "prod", "the type contains the tuple separator")]
+    [InlineData("", "prod", "the type is empty")]
+    [InlineData("resourceGroup", "PROD", "the id is upper-case")]
+    [InlineData("resourceGroup", "-prod", "the id starts with a hyphen")]
+    [InlineData("resourceGroup", "pr od", "the id contains a space")]
+    [InlineData("resourceGroup", "pr/od", "the id contains the key separator")]
+    [InlineData("resourceGroup", "", "the id is empty")]
+    public void AnIllegalRelationKeyComponentIsRefusedAtConstruction(
+        string type, string id, string why) =>
+        Should.Throw<ArgumentException>(
+            () => GrainKeys.ObjectRelations(type, id),
+            $"'{type}':'{id}' — {why}");
+
+    [Theory]
+    [InlineData("rel/obj/resourceGroup", "three segments is not an object-relations key")]
+    [InlineData("rel/obj/resourceGroup/prod/extra", "trailing junk")]
+    [InlineData("rel/idx/group/eng", "the Leopard index shape is M2 and must not parse yet")]
+    [InlineData("rel/store/not-a-guid", "the tenant id must be the N form")]
+    [InlineData("rel/store", "the store key needs a tenant")]
+    [InlineData("rel/store/7f2d4e88-1a3b-4c5d-8e9f-0a1b2c3d4e5f", "the D form is not the N form")]
+    [InlineData("rel/check/resourceGroup", "three segments is not a check key")]
+    [InlineData("rel/nope/resourceGroup/prod", "an unknown authorization shape")]
+    public void AMalformedRelationKeyIsRefused(string key, string why) =>
+        GrainKeys.Parse(key).IsFailure.ShouldBeTrue($"'{key}' — {why}");
+
+    [Fact]
+    public void NoRelationShapeCanProduceAStringAnotherShapeCouldAlsoProduce()
+    {
+        // The same property the other ten shapes are held to, extended across the boundary: a key
+        // that two factories could both mint is two unrelated entities sharing one activation —
+        // here, one object's tuples answering for another's.
+        Dictionary<string, GrainKeyKind> seen = new(StringComparer.Ordinal);
+
+        foreach (var type in new[] { "resourceGroup", "user", "group", "sub", "res", "idx", "rel" })
+        {
+            foreach (var id in new[] { "prod", "rg", "path", "email", "store", "obj", "check" })
+            {
+                foreach (var key in new[]
+                         {
+                             GrainKeys.ObjectRelations(type, id),
+                             GrainKeys.SubjectRelations(type, id),
+                             GrainKeys.CheckCache(type, id),
+                         })
+                {
+                    var kind = GrainKeys.Parse(key).GetValueOrThrow().Kind;
+
+                    if (seen.TryGetValue(key, out var already))
+                    {
+                        already.ShouldBe(kind, $"'{key}' is produced by two different shapes");
+                    }
+
+                    seen[key] = kind;
+                }
+            }
+        }
+
+        // …and none of them collides with any of the original ten either.
+        foreach (var id in Corpus.ResourceIds(200, seed: 707))
+        {
+            foreach (var other in Corpus.EveryGrainKeyShapeFor(id))
+            {
+                seen.ShouldNotContainKey(other);
+            }
+        }
+    }
 }

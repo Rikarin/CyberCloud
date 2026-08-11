@@ -1,0 +1,67 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    docs/plan/02 ADR-018: grain behaviour is tested against a real in-process TestCluster with real
+    storage providers backed by Testcontainers, not against mocked IGrainFactory. Everything in
+    Infrastructure/ obeys that: one real silo, one real Redis, three real PostgreSQL servers.
+
+    ⚠ The property suite (Property/) does NOT use the cluster, and that is deliberate rather than a
+    shortcut. It runs the SAME CheckEvaluator the grains run, over an in-memory IRelationReader, tens
+    of thousands of times. Routing 20 000 generated graphs through Redis and PostgreSQL would test
+    Testcontainers' throughput, not the evaluator, and would not fit the per-PR budget in
+    docs/plan/23 § CI shape. What the cluster suite tests is everything the in-memory reader cannot:
+    the two-grain write, the cache, the tokens, the tenant boundary.
+  -->
+
+  <PropertyGroup>
+    <!-- See CyberCloud.Authorization.Contracts.csproj — "object" is docs/plan/07's noun. -->
+    <NoWarn>$(NoWarn);CA1720</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="xunit.v3" />
+    <PackageReference Include="Shouldly" />
+    <!-- CreateSilo calls UseAutofac(), which demands an IModuleContainer at Build() time. -->
+    <PackageReference Include="Volo.Abp.Autofac" />
+  </ItemGroup>
+
+  <ItemGroup Label="Real storage — ADR-018, docs/plan/23 § Test layers (the Grain row)">
+    <PackageReference Include="Testcontainers.Redis" />
+    <PackageReference Include="Testcontainers.PostgreSql" />
+    <PackageReference Include="Npgsql" />
+    <!-- GrainId/tenant extensions, and ForTenant on the factory. -->
+    <PackageReference Include="Orleans.Multitenant" />
+  </ItemGroup>
+
+  <ItemGroup Label="Orleans' own PostgreSQL DDL">
+    <!--
+      ⚠ COPIES of dotnet/orleans at tag v10.2.2 — the same two files CyberCloud.Tenancy.Tests and
+      CyberCloud.ServiceDefaults.Tests carry, for the same reason: the package ships no SQL and
+      nothing in this repository creates the schema on a real shard.
+    -->
+    <EmbeddedResource Include="Infrastructure/PostgreSQL-Main.sql" />
+    <EmbeddedResource Include="Infrastructure/PostgreSQL-Persistence.sql" />
+  </ItemGroup>
+
+  <ItemGroup Label="Global usings">
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../CyberCloud.Authorization/CyberCloud.Authorization.csproj" />
+    <!--
+      ⚠ CyberCloud.Tenancy is referenced by the TESTS and not by CyberCloud.Authorization.
+
+      AddCyberCloudTenancy is what wires AddMultitenantCommunicationSeparation, and the cross-tenant
+      suite here has to run against the separation a deployed silo actually has — asserting tenant
+      isolation on a silo that has no separation wired would assert nothing. The production
+      assembly still has no dependency on tenancy; see its .csproj.
+    -->
+    <ProjectReference Include="../CyberCloud.Tenancy/CyberCloud.Tenancy.csproj" />
+  </ItemGroup>
+
+</Project>

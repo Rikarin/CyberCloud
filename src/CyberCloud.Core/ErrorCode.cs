@@ -114,6 +114,21 @@ public sealed class ErrorCode : IEquatable<ErrorCode>
     /// <summary>A lock forbids the write or the delete. docs/plan/06:201.</summary>
     public static readonly ErrorCode ScopeLocked = new("ScopeLocked");
 
+    /// <summary>
+    ///     A check or a tuple named an object type, relation or permission the authorization schema
+    ///     does not define. docs/plan/07 § The model.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>A distinguishable failure — never a denial, never an allow.</b> docs/plan/07 § The
+    ///     model: <i>"A typo'd permission name in a text DSL is a silent allow-nothing or, worse in
+    ///     the wrong evaluator, a silent allow-everything."</i> Returning a denial would be the
+    ///     first and returning <c>Success(allowed: true)</c> the second, so the engine returns this
+    ///     instead: an outcome that can be alerted on rather than served. The enforcement seam
+    ///     (docs/plan/07 § The enforcement seam) still renders it to the caller as <c>404</c>; the
+    ///     difference is that it also appears on a dashboard.
+    /// </remarks>
+    public static readonly ErrorCode SchemaInvalid = new("SchemaInvalid");
+
     /// <summary>The subscription does not exist. docs/plan/06:10.</summary>
     public static readonly ErrorCode SubscriptionNotFound = new("SubscriptionNotFound");
 
@@ -160,6 +175,7 @@ public sealed class ErrorCode : IEquatable<ErrorCode>
         ResourceAlreadyExists,
         ResourceGroupNotFound,
         ResourceNotFound,
+        SchemaInvalid,
         ScopeLocked,
         SubscriptionNotFound,
         TenantNotFound,
