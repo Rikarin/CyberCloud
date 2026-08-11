@@ -46,6 +46,14 @@ namespace CyberCloud.ServiceDefaults.HealthChecks;
 ///         for this reason.
 ///     </para>
 ///     <para>
+///         <b>Not probed here does not mean not reported.</b>
+///         <see cref="DurableShardHealthCheck" /> names every unreachable durable shard on
+///         <c>/api/health</c> and carries no tag at all, so it tells an operator without telling the
+///         load balancer. That check's remarks argue why the obvious alternative — a
+///         <see cref="HealthStatus.Degraded" /> result on a <c>ready</c>-tagged check — is worse than
+///         both options.
+///     </para>
+///     <para>
 ///         ⚠ <b><see cref="SiloStatus.Joining" /> is Unhealthy, not Degraded.</b> Degraded still
 ///         passes the default Kubernetes readiness predicate
 ///         (<c>HealthStatus.Degraded &gt; Unhealthy</c> and only <c>Unhealthy</c> maps to 503), so a
