@@ -9,16 +9,20 @@ namespace CyberCloud.Identity.Contracts;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>This duplicates <c>CyberCloud.ResourceManager.Contracts.SecretRef</c>, and the
-///         duplication is deliberate rather than an oversight.</b> That type is the same idea with
-///         the same three fields, and reusing it would make <c>CyberCloud.Identity.Contracts</c>
-///         reference <c>CyberCloud.ResourceManager.Contracts</c> — identity depending on the resource
-///         manager, and through it on the Kubernetes and tenancy contracts, for one record.
-///         docs/plan/00 § Non-negotiables and docs/plan/05 § What is not in a grain both write the
-///         rule platform-wide, so the type belongs in <c>CyberCloud.Core.Contracts</c> where both
-///         modules already look. Lifting it there is the fix and is not done here: the alias
-///         <c>CyberCloud.ResourceManager.SecretRef</c> is a wire identifier, so the move has to
-///         carry that alias unchanged, and it touches an assembly this task does not own.
+///         ⚠ <b>This duplicates <c>CyberCloud.Core.Contracts.SecretRef</c>, and the duplication is
+///         now debt rather than a decision.</b> That type is the same idea with the same three
+///         fields. The reason given here — that reusing it would drag
+///         <c>CyberCloud.ResourceManager.Contracts</c>, and through it the Kubernetes and tenancy
+///         contracts, into identity for one record — <b>stopped being true on 2026-08-11</b>, when
+///         <c>SecretRef</c> was lifted into <c>CyberCloud.Core.Contracts</c> carrying its published
+///         alias <c>CyberCloud.ResourceManager.SecretRef</c> unchanged. Both modules already look
+///         there.
+///     </para>
+///     <para>
+///         Switching the three properties over is a one-file change plus a
+///         <c>WireContractTests</c> baseline edit, and it is cheapest before the first release tag
+///         exists, because <c>CyberCloud.Identity.VaultSecretRef</c> below is itself a published wire
+///         identifier. It is not done here only because this file was outside the owning task.
 ///     </para>
 ///     <para>
 ///         ⚠ <b>There is no member a value could ride in, and that is the design.</b> A nullable

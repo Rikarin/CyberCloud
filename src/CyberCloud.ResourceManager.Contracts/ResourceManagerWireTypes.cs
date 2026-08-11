@@ -94,7 +94,18 @@ public sealed record CallerContext {
     [Id(0)]
     public Guid TenantId { get; init; }
 
-    /// <summary>The ReBAC subject type, for example <c>user</c> or <c>serviceprincipal</c>.</summary>
+    /// <summary>
+    ///     The ReBAC subject type — one of <c>user</c>, <c>servicePrincipal</c> or
+    ///     <c>managedIdentity</c>.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>The spelling is <c>servicePrincipal</c>, and it is matched <i>ordinally</i>.</b> This
+    ///     summary said <c>serviceprincipal</c> until 2026-08-11, which is not a typo with no
+    ///     consequence: it names a subject no tuple mentions, so every <c>Check</c> denies and the
+    ///     symptom presents as a permissions bug rather than as a bad value. The closed set is
+    ///     <c>SubjectTypes</c> in <c>CyberCloud.Identity.Contracts</c>, which refuses anything outside
+    ///     it rather than correcting a known-bad spelling.
+    /// </remarks>
     [Id(1)]
     public string SubjectType { get; init; } = "user";
 
