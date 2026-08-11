@@ -8,7 +8,7 @@ using System.Text.Json;
 namespace CyberCloud.ResourceManager;
 
 /// <summary>
-///     The write path. docs/plan/08 § The write path, end to end, all eleven steps, in order.
+///     The write path. docs/plan/08 § The write path, end to end, all twelve steps, in order.
 /// </summary>
 /// <remarks>
 ///     <para>
@@ -33,6 +33,15 @@ namespace CyberCloud.ResourceManager;
 ///         counted). Neither the reservation at 6 nor the claim at 7 moves.
 ///     </para>
 ///     <para>
+///         ⚠ <b>Step 8 writes a ReBAC tuple, and it is the only step that writes to the authorization
+///         store.</b> docs/plan/07 § The model makes a resource's permissions inherit through
+///         <c>From("parent", …)</c>, which follows a <c>resource:X#parent@resourceGroup:Y</c> edge —
+///         and nothing wrote one, so a create used to succeed and the creator then got <c>404</c> on
+///         what they had just made. The step sits between the index claim and the durable write for
+///         reasons set out at the call site; the short version is that before the durable write a
+///         failure is a clean refusal, and after it a failure is a resource nobody can see.
+///     </para>
+///     <para>
 ///         ⚠ <b>Every grain reference goes through <c>ForTenant</c>.</b> This is a plain service held
 ///         by the gateway, which is an Orleans <i>client</i>, and
 ///         <c>Orleans.Multitenant</c>'s call filter never sees a caller that is not a grain — see
@@ -43,6 +52,7 @@ namespace CyberCloud.ResourceManager;
 public sealed class ResourceManagerService(
     IProviderRegistry registry,
     IResourceAuthorizer authorizer,
+    IResourceRelationWriter relations,
     ILockResolver locks,
     IPolicyEvaluator policy,
     IResourceChangedSink changes,
@@ -392,7 +402,7 @@ public sealed class ResourceManagerService(
         );
     }
 
-    // ── Steps 3 through 11 of the write path ───────────────────────────────────────────────────
+    // ── Steps 3 through 12 of the write path ───────────────────────────────────────────────────
 
     async Task<Result<WriteAccepted>> ContinueWriteAsync(
         WriteRequest request,
@@ -518,7 +528,48 @@ public sealed class ResourceManagerService(
             return Result<WriteAccepted>.Failure(claimError);
         }
 
-        // ── 8. Write durable desired state ──────────────────────────────────────────────────────
+        // ── 8. The ReBAC parent edge — BEFORE the resource is durable ───────────────────────────
+        //
+        // ⚠ THE STEP AND ITS POSITION ARE THE DECISION, AND THE POSITION IS THE HALF THAT MATTERS.
+        //
+        // CyberCloudSchema gives a resource `Role(owner, This | From(parent, owner))`, so a resource
+        // is reachable from the role assignments on its group only through a
+        // `resource:{id}#parent@resourceGroup:{sub}-{rg}` tuple. Nothing wrote one, so a create
+        // succeeded and the creator then got 404 on what they had just created.
+        //
+        // It goes HERE, between the index claim and the durable write, because:
+        //
+        //   • the resource GUID already exists — step 6 minted it — and the name is already ours,
+        //     so there is nothing left to wait for;
+        //   • AFTER SubmitDesiredAsync there is a window in which the resource is durable and
+        //     unreadable. A silo lost inside that window leaves it durable and unreadable FOREVER,
+        //     and no reminder exists to notice: the operation grain has not been started yet either;
+        //   • before it, a failure is a clean refusal. Nothing durable was written, the quota lease
+        //     is released below, the index claim expires on its own, and the caller gets an error
+        //     rather than a 202 for a resource they cannot see.
+        //
+        // The cost is the mirror-image leak: a silo lost between this line and the durable write
+        // leaves a parent tuple pointing at a GUID no path will ever resolve to. That tuple grants
+        // nothing — `resource:{unreachable}` is not addressable, the index claim expires and the next
+        // create of the same path mints a different GUID — so it is inert storage rather than an
+        // authorization defect. Trading a permanent correctness failure for an inert row is the whole
+        // argument, and the row is swept on the failure paths below.
+        //
+        // ⚠ NOT DEFERRED TO THE OPERATION GRAIN, which is the other candidate and is a worse one.
+        // The operation grain is durable and re-drivable — genuinely the right home for work that has
+        // to converge — but it does not exist until step 10, which is after step 9. Putting the edge
+        // there is putting it after the durable write by construction, which is the window this step
+        // exists to close. The operation grain does own the DELETE side, where there is no such
+        // ordering problem and where re-drivability is exactly what is needed.
+        trace.Enter(WriteStep.LinkParent);
+
+        var linked = await relations.LinkToParentAsync(addressed, cancellationToken);
+        if (linked.TryGetError(out var linkError)) {
+            await ReleaseAsync(resolvedTarget, leases);
+            return Result<WriteAccepted>.Failure(linkError);
+        }
+
+        // ── 9. Write durable desired state ──────────────────────────────────────────────────────
         trace.Enter(WriteStep.SubmitDesired);
 
         var submitted = await Resource(resolvedTarget)
@@ -540,6 +591,26 @@ public sealed class ResourceManagerService(
 
         if (submitted.TryGetError(out var submitError)) {
             await ReleaseAsync(resolvedTarget, leases);
+
+            // ⚠ THE ONLY FAILURE THAT UNWRITES THE EDGE, AND THE RULE IS "did a resource survive?".
+            //
+            // This branch is the one place after step 8 where nothing durable exists: the desired
+            // write is what creates the resource, and it did not happen. So the tuple written a
+            // moment ago points at a GUID that will never be a resource, and it goes.
+            //
+            // Every LATER failure — StartAsync, the index confirm — is past the durable write, and
+            // there the edge STAYS. A resource that exists with a dangling-looking parent is a
+            // resource its owner can still see, delete and clean up; a resource that exists with no
+            // parent is invisible to everyone including the reaper's operator, which is the defect
+            // this step was added to fix. Inert tuple over invisible resource, at every fork.
+            //
+            // ⚠ Only for a CREATE. On an update the edge was already there and belongs to a resource
+            // that is still alive; removing it because this write failed would take an existing
+            // resource away from its owner.
+            if (!target.Exists) {
+                _ = await relations.UnlinkFromParentAsync(addressed, cancellationToken);
+            }
+
             return Result<WriteAccepted>.Failure(submitError);
         }
 
@@ -568,7 +639,7 @@ public sealed class ResourceManagerService(
             );
         }
 
-        // ── 9. Start the operation, then confirm the claim ──────────────────────────────────────
+        // ── 10. Start the operation, then confirm the claim ─────────────────────────────────────
         trace.Enter(WriteStep.StartOperation);
 
         var started = await Operation(resolvedTarget, operationId)
@@ -611,7 +682,7 @@ public sealed class ResourceManagerService(
             return Result<WriteAccepted>.Failure(confirmError);
         }
 
-        // ── 10. Emit resource-changed ───────────────────────────────────────────────────────────
+        // ── 11. Emit resource-changed ───────────────────────────────────────────────────────────
         trace.Enter(WriteStep.EmitChanged);
 
         await EmitAsync(
@@ -621,7 +692,7 @@ public sealed class ResourceManagerService(
             cancellationToken
         );
 
-        // ── 11. 202 Accepted ────────────────────────────────────────────────────────────────────
+        // ── 12. 202 Accepted ────────────────────────────────────────────────────────────────────
         trace.Enter(WriteStep.Accepted);
 
         return Result<WriteAccepted>.Success(
@@ -638,8 +709,16 @@ public sealed class ResourceManagerService(
     // ── Step 1's parts ─────────────────────────────────────────────────────────────────────────
 
     /// <summary>
-    ///     Parses the path, resolves the identity through the index, and looks the type and version up.
+    ///     Parses the path, checks the tenant and the subscription, resolves the identity through the
+    ///     index, and looks the type and version up.
     /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>The two ownership checks are the first two things that happen and they are in this
+    ///     order on purpose.</b> Everything below them describes the platform to the caller — the
+    ///     registry names api-versions, the index says whether a name is taken — and a description
+    ///     handed out through a path the caller does not own is an oracle even when no data comes
+    ///     with it. The isolation suite's <c>OracleTests</c> drive exactly that.
+    /// </remarks>
     async Task<Result<WriteTarget>> ResolveAsync(WriteRequest request, WriteTraceBuilder trace) {
         _ = trace;
 
@@ -654,6 +733,37 @@ public sealed class ResourceManagerService(
             // ⚠ 404 rather than 403, for the same enumeration-oracle reason as the ReBAC seam: a
             // cross-tenant path that answered "forbidden" would confirm the other tenant's resource
             // exists. The isolation suite (docs/plan/03) drives exactly this.
+            return NotFound<WriteTarget>(request.Path);
+        }
+
+        // ── The subscription is real, and it is one of THIS tenant's ────────────────────────────
+        //
+        // ⚠ THE PATH'S SUBSCRIPTION USED TO BE ACCEPTED WITHOUT BEING LOOKED AT.
+        // /tenants/{mine}/subscriptions/{theirs}/… parsed, passed the tenant comparison, and ran the
+        // whole write path against a subscription GUID that was somebody else's label. It leaked
+        // nothing — every grain below here is reached through ForTenant(caller), so the quota, the
+        // index and the resource all landed in the CALLER's tenant under a foreign-looking id, and
+        // the isolation suite proved that. What it meant is that subscription ids were never
+        // validated at all, which stops being survivable the moment billing or quota reporting reads
+        // one: an invoice line, a usage report or a quota dashboard keyed on an id nobody checked is
+        // a number attributed to a subscription that does not exist.
+        //
+        // ⚠ THE ANSWER IS 404 AND IS THE SAME 404 AS "no such resource" — byte for byte, from the
+        // same helper. docs/plan/07 § The enforcement seam: "404, never 403 … A 403 confirms the
+        // resource exists, which is an enumeration oracle." A subscription is exactly as enumerable
+        // as a resource: SubscriptionNotFound here would tell an attacker which GUIDs are live
+        // subscriptions in someone else's tenant, one probe at a time. A subscription in another
+        // tenant and one that never existed are indistinguishable, and that identity is the property.
+        //
+        // ⚠ The grain is reached through ForTenant(caller's tenant), which is what makes "belongs to
+        // this tenant" and "exists" the same question — ADR-002 puts the tenant in the key, so the
+        // victim's subscription grain is simply not addressable from here and reads as absent.
+        var subscription = await grains
+            .ForTenant(address.TenantId.ToString("D", CultureInfo.InvariantCulture))
+            .GetGrain<ISubscriptionGrain>(GrainKeys.Subscription(address.SubscriptionId))
+            .GetAsync();
+
+        if (subscription.IsFailure) {
             return NotFound<WriteTarget>(request.Path);
         }
 
@@ -752,7 +862,7 @@ public sealed class ResourceManagerService(
         }
     }
 
-    // ── Step 10's parts ────────────────────────────────────────────────────────────────────────
+    // ── Step 11's parts ────────────────────────────────────────────────────────────────────────
 
     async Task EmitAsync(
         ResourceChangeKind change,

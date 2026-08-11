@@ -40,6 +40,22 @@ public interface IResourceGroupGrain : IGrainWithStringKey {
     /// <summary>The group's record, or <c>ResourceGroupNotFound</c>.</summary>
     Task<Result<ResourceGroupDescriptor>> GetAsync();
 
+    /// <summary>Sets or clears the lock at this scope.</summary>
+    /// <param name="level">The lock. <see cref="LockLevel.None" /> clears it.</param>
+    /// <remarks>
+    ///     ⚠ <b>Only the lock <i>at this scope</i>, and it is the middle link of the chain.</b>
+    ///     docs/plan/06 § Tags, locks makes a lock "inherited down the hierarchy", so a lock set here
+    ///     covers every resource in this group and is itself covered by the subscription's.
+    ///     <c>ILockResolver</c> in the resource manager is what walks the three and takes the
+    ///     strongest; this grain holds one link and knows nothing about the others.
+    ///     <para>
+    ///         ⚠ <b>Setting a lock does not refuse the delete of the group itself.</b> That is the
+    ///         group lifecycle's business, and a lock read by the write path only covers the resources
+    ///         inside it.
+    ///     </para>
+    /// </remarks>
+    Task<Result> SetLockAsync(LockLevel level);
+
     /// <summary>
     ///     Step 2 of docs/plan/06 § Two-phase create, from the group's side: records the resource as
     ///     a member in <see cref="ProvisioningState.Creating" />.

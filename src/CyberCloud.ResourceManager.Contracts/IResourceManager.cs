@@ -30,12 +30,12 @@ namespace CyberCloud.ResourceManager.Contracts;
 /// </remarks>
 public interface IResourceManager {
     /// <summary>
-    ///     The write path, all eleven steps. <c>PUT</c> and <c>PATCH</c>.
+    ///     The write path, all twelve steps. <c>PUT</c> and <c>PATCH</c>.
     /// </summary>
     /// <param name="request">The request, as the gateway parsed it off the URL and the body.</param>
     /// <param name="cancellationToken">Cancels the request. ⚠ Not the operation it starts.</param>
     /// <returns>
-    ///     <see cref="WriteAccepted" /> — the <c>202</c> of step 11 — or the first step's failure.
+    ///     <see cref="WriteAccepted" /> — the <c>202</c> of step 12 — or the first step's failure.
     ///     ⚠ A failure at step 3 is <see cref="ErrorCode.ResourceNotFound" /> and never
     ///     <see cref="ErrorCode.AuthorizationFailed" /> when the caller cannot read the resource:
     ///     docs/plan/07 § The enforcement seam, <b>404, never 403</b>.
@@ -87,16 +87,22 @@ public interface IResourceManager {
 /// </summary>
 /// <remarks>
 ///     ⚠ <b>A seam rather than a walk, because the walk crosses assemblies.</b> The inheritance chain
-///     is resource → resource group → subscription → management group, and management groups are
-///     docs/plan/06 § The hierarchy's optional tree which nothing implements yet. The default
-///     implementation reads the resource's own lock and its group's, and returns
-///     <see cref="LockLevel.None" /> for the two scopes above — <b>which is a stub</b>, stated here
-///     rather than discovered when a subscription-level lock fails to stop a delete.
+///     is resource → resource group → subscription → management group. The shipped
+///     <c>ResourceScopeLockResolver</c> walks the first three and takes the strongest lock found;
+///     <b>the management group is not walked because there is nothing to walk</b> — docs/plan/06
+///     § The hierarchy makes that tree optional and docs/plan/01 puts it at M2, so no grain, no key
+///     and no parent pointer exist. A lock at that level cannot be set, let alone missed.
 /// </remarks>
 public interface ILockResolver {
     /// <summary>The strongest lock in force at a resource's scope, inherited included.</summary>
     /// <param name="id">The resource, or the address of one that does not exist yet.</param>
     /// <param name="cancellationToken">Cancels the walk.</param>
+    /// <returns>
+    ///     The strongest of the locks set on the resource, its group and its subscription. ⚠
+    ///     "Strongest" is <c>LockLevels.Strongest</c> and is <b>not</b> the enum's numeric maximum:
+    ///     <see cref="LockLevel.ReadOnly" /> outranks <see cref="LockLevel.CanNotDelete" /> while
+    ///     carrying the smaller value.
+    /// </returns>
     Task<Result<LockLevel>> ResolveAsync(ResourceId id, CancellationToken cancellationToken = default);
 }
 
@@ -150,7 +156,7 @@ public interface IPolicyEvaluator {
 }
 
 /// <summary>
-///     Where step 10's <c>resource-changed</c> events go.
+///     Where step 11's <c>resource-changed</c> events go.
 /// </summary>
 /// <remarks>
 ///     ⚠ <b>The projector is out of scope and this is the seam it attaches to.</b>
@@ -221,6 +227,72 @@ public interface IResourceAuthorizer {
         bool fullyConsistent = false,
         CancellationToken cancellationToken = default
     );
+}
+
+/// <summary>
+///     Where the resource manager records a resource's place in the authorization hierarchy —
+///     the <c>parent</c> edge docs/plan/07 § The model's <c>From("parent", …)</c> rewrites follow.
+/// </summary>
+/// <remarks>
+///     <para>
+///         ⚠ <b>This exists because the write path used to have no step that wrote a tuple, and a
+///         create therefore produced a resource its own creator could not read.</b>
+///         <c>CyberCloudSchema</c> gives a resource
+///         <c>Role(owner, This | From(parent, owner))</c>, so the only thing that makes a resource
+///         reachable from the role assignments on its group is a
+///         <c>resource:{id}#parent@resourceGroup:{sub}-{rg}</c> tuple. Nobody wrote one. The
+///         isolation suite wrote its own and said so in its remarks; docs/plan/08 § The write path,
+///         end to end now has the step, and this is the seam it calls.
+///     </para>
+///     <para>
+///         ⚠ <b>An interface here rather than an <c>ITupleStoreGrain</c> call, for the same reason
+///         <see cref="IResourceAuthorizer" /> is an interface.</b>
+///         <c>CyberCloud.ResourceManager.Contracts</c> deliberately does not reference
+///         <c>CyberCloud.Authorization.Contracts</c>, so a provider referencing this assembly cannot
+///         name a tuple type — docs/plan/07 § The enforcement seam, <i>"Providers never call the
+///         engine."</i> A provider that could <i>write</i> tuples would be worse than one that could
+///         read them.
+///     </para>
+///     <para>
+///         ⚠ <b>The parent is the resource GROUP and not the subscription, and
+///         <c>CyberCloudSchema</c> is what decides that.</b> Its rewrite chain is
+///         resource → resourceGroup → subscription → tenant: pointing a resource's <c>parent</c> at
+///         the subscription would skip the group, and every <c>resourceGroup:…#contributor</c>
+///         assignment — the second row of docs/plan/07 § Azure RBAC, expressed in it — would grant
+///         nothing on the resources inside it.
+///     </para>
+/// </remarks>
+public interface IResourceRelationWriter {
+    /// <summary>
+    ///     Records <c>resource:{id}#parent@resourceGroup:{subscription}-{group}</c>. Idempotent.
+    /// </summary>
+    /// <param name="id">
+    ///     The resource, with <see cref="ResourceId.Id" /> set. ⚠ The GUID is minted at the quota step
+    ///     and the name is claimed at the index step, both <i>before</i> durable state exists — which
+    ///     is what lets this run before the resource does.
+    /// </param>
+    /// <param name="cancellationToken">Cancels the write.</param>
+    /// <returns>
+    ///     Success, or the failure that stopped it. ⚠ The write path <b>fails the request</b> on a
+    ///     failure here, which it can only do honestly because the call happens before
+    ///     <c>SubmitDesiredAsync</c> — see the write path's step 8.
+    /// </returns>
+    Task<Result> LinkToParentAsync(ResourceId id, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Removes the <c>parent</c> tuple. Idempotent — removing one that is not there succeeds.
+    /// </summary>
+    /// <param name="id">The resource, with <see cref="ResourceId.Id" /> set.</param>
+    /// <param name="cancellationToken">Cancels the write.</param>
+    /// <remarks>
+    ///     ⚠ <b>Called when the resource is <i>gone</i>, not when a delete is requested.</b> A
+    ///     resource being torn down stays visible in <c>Deleting</c> (docs/plan/06 § Two-phase create)
+    ///     and its owner has to be able to watch that happen, so unlinking at the request would blind
+    ///     them to their own delete. <c>OperationGrain</c> calls this after
+    ///     <c>CompleteDeleteAsync</c>, and retries it from its reminder if it fails — a tuple pointing
+    ///     at an object that no longer exists is a slow leak in the tenant's tuple store.
+    /// </remarks>
+    Task<Result> UnlinkFromParentAsync(ResourceId id, CancellationToken cancellationToken = default);
 }
 
 /// <summary>

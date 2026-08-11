@@ -277,7 +277,7 @@ public sealed class ResourceSchemaTests {
 /// <summary>Everything the write path records about which steps ran, and in which order.</summary>
 public sealed class WriteTraceTests {
     [Fact]
-    public void TheCanonicalOrderIsTheDocumentsElevenSteps() {
+    public void TheCanonicalOrderIsTheDocumentsTwelveSteps() {
         // ⚠ Pinned as a literal so that reordering the enum does not quietly reorder the assertion.
         WriteTrace.Canonical.ShouldBe(
             [
@@ -288,6 +288,7 @@ public sealed class WriteTraceTests {
                 WriteStep.Policy,
                 WriteStep.Quota,
                 WriteStep.IndexClaim,
+                WriteStep.LinkParent,
                 WriteStep.SubmitDesired,
                 WriteStep.StartOperation,
                 WriteStep.EmitChanged,
@@ -295,7 +296,7 @@ public sealed class WriteTraceTests {
             ]
         );
 
-        WriteTrace.Canonical.Length.ShouldBe(11);
+        WriteTrace.Canonical.Length.ShouldBe(12);
     }
 
     [Fact]
@@ -307,9 +308,16 @@ public sealed class WriteTraceTests {
         ((int)WriteStep.Quota).ShouldBe(6);
         ((int)WriteStep.IndexClaim).ShouldBe(7);
 
+        // ⚠ AND THE PARENT EDGE IS STEP 8, WHICH IS BEFORE THE DURABLE WRITE AND AFTER THE CLAIM.
+        // Both bounds are the decision: after the durable write there is a window in which a resource
+        // exists and its own creator cannot read it, and before the claim a lost name race would leave
+        // a tuple for a resource that never existed.
+        ((int)WriteStep.LinkParent).ShouldBe(8);
+
         (WriteStep.AuthorizationCheck < WriteStep.Quota).ShouldBeTrue();
         (WriteStep.Quota < WriteStep.IndexClaim).ShouldBeTrue();
-        (WriteStep.IndexClaim < WriteStep.SubmitDesired).ShouldBeTrue();
+        (WriteStep.IndexClaim < WriteStep.LinkParent).ShouldBeTrue();
+        (WriteStep.LinkParent < WriteStep.SubmitDesired).ShouldBeTrue();
     }
 
     [Fact]

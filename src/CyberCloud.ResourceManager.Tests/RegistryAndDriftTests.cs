@@ -2,6 +2,7 @@ using CyberCloud.Kubernetes.Contracts;
 using CyberCloud.ResourceManager.Drift;
 using CyberCloud.ResourceManager.Registry;
 using CyberCloud.ResourceManager.Tests.Infrastructure;
+using Microsoft.Extensions.Logging.Abstractions;
 using System.Collections.Immutable;
 
 namespace CyberCloud.ResourceManager.Tests;
@@ -308,19 +309,41 @@ public sealed class StubbedSeamTests {
     }
 
     [Fact]
-    public async Task TheShippedLockResolverReadsOnlyTheResourcesOwnLock() {
-        // ⚠ Stated as a stub rather than discovered: the inherited scopes (group, subscription,
-        // management group) have no lock member on their grains, so a subscription-level lock does not
-        // currently stop a delete. This asserts the current, honest behaviour so a change to it is
-        // visible.
-        var resolver = new ResourceScopeLockResolver(NullGrainFactory.Instance);
-        var level = await resolver.ResolveAsync(
-            ResourceManagerCluster.Address("unresolvable"),
+    public void TheStrongestOfTwoLocksIsNotTheirNumericMaximum() {
+        // ⚠ THE TRAP IN THE INHERITED LOCK, AND IT IS A ONE-CHARACTER TRAP. The enum reads
+        // None = 0, ReadOnly = 1, CanNotDelete = 2 — so `Math.Max` or `>` would rank CanNotDelete
+        // above ReadOnly, and a resource carrying CanNotDelete inside a subscription locked ReadOnly
+        // would resolve to CanNotDelete and let the write through. That is the exact incident
+        // docs/plan/06 § Tags, locks says a lock exists to prevent, arrived at by an operator who set
+        // the STRONGER lock at the HIGHER scope, which is the sensible thing to do.
+        LockLevels.Strongest(LockLevel.CanNotDelete, LockLevel.ReadOnly).ShouldBe(LockLevel.ReadOnly);
+        LockLevels.Strongest(LockLevel.ReadOnly, LockLevel.CanNotDelete).ShouldBe(LockLevel.ReadOnly);
+        LockLevels.Strongest(LockLevel.None, LockLevel.CanNotDelete).ShouldBe(LockLevel.CanNotDelete);
+        LockLevels.Strongest(LockLevel.CanNotDelete, LockLevel.None).ShouldBe(LockLevel.CanNotDelete);
+        LockLevels.Strongest(LockLevel.None, LockLevel.None).ShouldBe(LockLevel.None);
+
+        // And the numbers really are the wrong way round, so the test above is not vacuous.
+        ((int)LockLevel.ReadOnly).ShouldBeLessThan((int)LockLevel.CanNotDelete);
+    }
+
+    [Fact]
+    public async Task TheShippedRelationWriterRefusesAnAddressWithNoIdentity() {
+        // ⚠ A resource that has not been assigned a GUID has no ReBAC object, and answering "success"
+        // would silently skip the parent edge — which is the failure mode the whole step exists to
+        // close, arrived at from the other side. docs/plan/06 § Identifiers: a parsed path yields
+        // Guid.Empty.
+        var writer = new ReBacResourceRelationWriter(
+            NullGrainFactory.Instance,
+            NullLogger<ReBacResourceRelationWriter>.Instance
+        );
+
+        var refused = await writer.LinkToParentAsync(
+            ResourceManagerCluster.Address("no-identity"),
             TestContext.Current.CancellationToken
         );
 
-        level.IsSuccess.ShouldBeTrue();
-        level.GetValueOrThrow().ShouldBe(LockLevel.None);
+        refused.IsFailure.ShouldBeTrue("an address with no GUID was linked to a parent");
+        refused.Error!.Code.ShouldBe(ErrorCode.InvalidResourceId);
     }
 
     /// <summary>An <see cref="IGrainFactory" /> that is never reached, for the id-less lock path.</summary>

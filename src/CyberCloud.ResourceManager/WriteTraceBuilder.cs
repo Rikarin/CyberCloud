@@ -23,7 +23,7 @@ namespace CyberCloud.ResourceManager;
 ///     </para>
 /// </remarks>
 sealed class WriteTraceBuilder {
-    readonly ImmutableArray<WriteStep>.Builder reached = ImmutableArray.CreateBuilder<WriteStep>(11);
+    readonly ImmutableArray<WriteStep>.Builder reached = ImmutableArray.CreateBuilder<WriteStep>(12);
 
     /// <summary>Records entering a step.</summary>
     /// <param name="step">The step, which must be later than every step already recorded.</param>
@@ -33,7 +33,7 @@ sealed class WriteTraceBuilder {
     public void Enter(WriteStep step) {
         if (reached.Count > 0 && step <= reached[^1]) {
             throw new InvalidOperationException(
-                $"The write path entered {step} after {reached[^1]}. The eleven steps of "
+                $"The write path entered {step} after {reached[^1]}. The twelve steps of "
                 + "docs/plan/08 § The write path, end to end run in order and the order is the "
                 + "security property: the ReBAC check is step 3 precisely so that it happens before "
                 + "quota is reserved, before a name is claimed and before any provider is reached. A "

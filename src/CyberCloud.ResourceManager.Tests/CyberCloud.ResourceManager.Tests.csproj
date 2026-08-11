@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
     <!--
-      The grain-backed half of the resource manager's tests: the eleven-step write path and its
+      The grain-backed half of the resource manager's tests: the twelve-step write path and its
       ordering, 404-versus-403, PUT idempotency, operation resumability, cancellation that completes,
       quota lease release, a teardown that fails, and the reconciler conformance suite.
 

@@ -203,6 +203,18 @@ public sealed record SubscriptionDescriptor {
     /// <summary>The concurrency stamp.</summary>
     [Id(6)]
     public long Version { get; init; }
+
+    /// <summary>
+    ///     The lock set <b>at this subscription</b> — docs/plan/06 § Tags, locks, "inherited down the
+    ///     hierarchy".
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ This is the lock set <i>here</i>, not the effective one. Combining it with the resource
+    ///     group's and the resource's own is <c>ILockResolver</c>'s job and happens in the write
+    ///     path's lock step, because inheritance is a walk and the walk crosses assemblies.
+    /// </remarks>
+    [Id(7)]
+    public LockLevel Lock { get; init; } = LockLevel.None;
 }
 
 /// <summary>
@@ -238,6 +250,17 @@ public sealed record ResourceGroupDescriptor {
     /// <summary>The concurrency stamp.</summary>
     [Id(6)]
     public long Version { get; init; }
+
+    /// <summary>
+    ///     The lock set <b>at this resource group</b> — docs/plan/06 § Tags, locks, "inherited down
+    ///     the hierarchy".
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ The lock set <i>here</i>, not the effective one; the subscription's is inherited on top
+    ///     of it by <c>ILockResolver</c>.
+    /// </remarks>
+    [Id(7)]
+    public LockLevel Lock { get; init; } = LockLevel.None;
 }
 
 /// <summary>

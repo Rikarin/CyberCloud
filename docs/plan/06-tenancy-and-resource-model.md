@@ -249,6 +249,19 @@ incident.
 | **`provisioningState`** | `Creating` · `Updating` · `Deleting` · `Succeeded` · `Failed` · `Canceled` | The Azure vocabulary exactly. Every provider uses it and none invents its own |
 | **Soft delete** | 7 days for resources carrying data (Vault, Storage, databases) | A dropped production database is not a support ticket you want to have to say no to |
 
+**"Inherited down the hierarchy" reaches three scopes and not four.** `ILockResolver` walks
+resource → resource group → subscription and takes the *strongest* lock found — `ReadOnly` outranks
+`CanNotDelete`, which is not the enum's numeric order and is the one trap in the walk. It does **not**
+walk the management group, because there is no management-group grain, no key for one and no parent
+pointer from a subscription to one: § The hierarchy makes that tree optional and
+[01](01-azure-parity-catalogue.md) puts it at M2. So a lock at that level is not merely unread — **it
+cannot be set at all**, and the day the tree lands, closing the gap is one more scope on the same walk.
+A scope with no record contributes no lock rather than failing the walk, deliberately: the group and
+subscription records are created by an admin path the resource manager does not drive, and a walk that
+fail-closed on a missing record would be a platform in which nothing can be created. Whether the
+*subscription itself exists* is a separate question, asked at step 1 of
+[08](08-resource-manager.md) § The write path, end to end, and answered with `404` rather than a lock.
+
 ## Quota
 
 Enforced at the subscription, checked **before** the provider is called, in the resource manager.

@@ -1,7 +1,7 @@
 namespace CyberCloud.ResourceManager.Contracts;
 
 /// <summary>
-///     The eleven steps of docs/plan/08 § The write path, end to end, numbered as that document
+///     The twelve steps of docs/plan/08 § The write path, end to end, numbered as that document
 ///     numbers them.
 /// </summary>
 /// <remarks>
@@ -53,17 +53,31 @@ public enum WriteStep {
     /// <summary>The two-phase create's name claim. <c>409</c> if taken.</summary>
     IndexClaim = 7,
 
+    /// <summary>
+    ///     Write the ReBAC <c>parent</c> edge — <c>resource:{id}#parent@resourceGroup:{sub}-{rg}</c>.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Before <see cref="SubmitDesired" />, and the ordering is the entire decision.</b> The
+    ///     resource's GUID exists from <see cref="Quota" /> and its name is claimed at
+    ///     <see cref="IndexClaim" />, so the edge can be written before any durable resource state
+    ///     does. Written <i>after</i> <see cref="SubmitDesired" /> there would be a window in which the
+    ///     resource exists and is invisible to the person who just created it, and a silo lost inside
+    ///     that window would leave it invisible permanently. Written here, a failure is a clean refusal:
+    ///     nothing durable has been written, the quota lease is released and the index claim expires.
+    /// </remarks>
+    LinkParent = 8,
+
     /// <summary>Write durable desired state and register the reconcile reminder.</summary>
-    SubmitDesired = 8,
+    SubmitDesired = 9,
 
     /// <summary>Start the long-running operation.</summary>
-    StartOperation = 9,
+    StartOperation = 10,
 
     /// <summary>Emit <c>resource-changed</c>.</summary>
-    EmitChanged = 10,
+    EmitChanged = 11,
 
     /// <summary><c>202 Accepted</c>, with the operation URL and a <c>Retry-After</c>.</summary>
-    Accepted = 11
+    Accepted = 12
 }
 
 /// <summary>
@@ -176,21 +190,18 @@ public enum WriteVerb {
     Delete = 4
 }
 
-/// <summary>
-///     A lock level, inherited down the hierarchy — docs/plan/06 § Tags, locks, and the small stuff
-///     that is not small.
-/// </summary>
-[Alias("CyberCloud.ResourceManager.LockLevel")]
-public enum LockLevel {
-    /// <summary>No lock.</summary>
-    None = 0,
-
-    /// <summary>Writes and deletes are both refused.</summary>
-    ReadOnly = 1,
-
-    /// <summary>Writes are allowed; deletes are refused.</summary>
-    CanNotDelete = 2
-}
+// ⚠ LockLevel USED TO LIVE HERE AND NOW LIVES IN CyberCloud.Tenancy.Contracts.
+//
+// The move is not tidying. docs/plan/06 § Tags, locks makes a lock a property of the HIERARCHY —
+// "inherited down" it — and the hierarchy is docs/plan/06's, not this document's: the scopes that
+// carry a lock are the resource group and the subscription, whose grains live in
+// CyberCloud.Tenancy.Contracts. That assembly cannot reference this one (this one references it), so
+// as long as the enum lived here a resource group could not name its own lock and
+// ResourceScopeLockResolver had nothing above the resource to read. That was defect 3.
+//
+// The [Alias] is unchanged — "CyberCloud.ResourceManager.LockLevel" — so the move is invisible on the
+// wire (docs/plan/04 § Failure and upgrade). Every consumer already imports CyberCloud.Tenancy.Contracts
+// globally, which is why nothing else in the repository had to change.
 
 /// <summary>How an action is invoked. docs/plan/08 § The provider registry.</summary>
 [Alias("CyberCloud.ResourceManager.ActionKind")]

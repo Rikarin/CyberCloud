@@ -59,6 +59,27 @@ public sealed class SubscriptionGrain(
         );
 
     /// <inheritdoc />
+    public async Task<Result> SetLockAsync(LockLevel level) {
+        if (state.State.Descriptor is not { } descriptor) {
+            return Result.Failure(
+                TenancyGrainKeys.NotCreated(
+                    ErrorCode.SubscriptionNotFound,
+                    "Subscription",
+                    subscriptionId.ToString("D")
+                )
+            );
+        }
+
+        if (descriptor.Lock == level) {
+            return Result.Success;
+        }
+
+        state.State.Descriptor = descriptor with { Lock = level, Version = descriptor.Version + 1 };
+        await state.WriteStateAsync();
+        return Result.Success;
+    }
+
+    /// <inheritdoc />
     public async Task<Result<ResourceGroupDescriptor>> CreateResourceGroupAsync(string name, string region) {
         if (state.State.Descriptor is null) {
             return Result<ResourceGroupDescriptor>.Failure(

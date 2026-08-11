@@ -27,8 +27,30 @@ public interface ISubscriptionGrain : IGrainWithStringKey {
     /// <param name="displayName">The display name.</param>
     Task<Result<SubscriptionDescriptor>> CreateAsync(string displayName);
 
-    /// <summary>The subscription's record, or <c>SubscriptionNotFound</c>.</summary>
+    /// <summary>
+    ///     The subscription's record, or <c>SubscriptionNotFound</c>.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Step 1 of the write path calls this on every request, and the answer is the
+    ///     subscription's <i>existence</i> as much as its content.</b> A path may name any GUID as a
+    ///     subscription; only this grain can say whether the caller's tenant has one. See
+    ///     <c>ResourceManagerService.ResolveAsync</c> — a subscription that does not exist and one
+    ///     that belongs to another tenant are answered identically, and both as <c>404</c> on the
+    ///     resource path (docs/plan/07 § The enforcement seam).
+    /// </remarks>
     Task<Result<SubscriptionDescriptor>> GetAsync();
+
+    /// <summary>Sets or clears the lock at this scope.</summary>
+    /// <param name="level">The lock. <see cref="LockLevel.None" /> clears it.</param>
+    /// <remarks>
+    ///     ⚠ <b>The top of the chain that exists.</b> docs/plan/06 § Tags, locks makes a lock
+    ///     "inherited down the hierarchy", and the hierarchy above a subscription is the management
+    ///     group — docs/plan/01 puts management groups at M2 and there is no grain for one, so a lock
+    ///     set here is the highest lock the platform can currently express.
+    ///     <c>ResourceScopeLockResolver</c> says so out loud rather than implying that the walk is
+    ///     complete.
+    /// </remarks>
+    Task<Result> SetLockAsync(LockLevel level);
 
     /// <summary>
     ///     Creates a resource group in this subscription, and records it here.

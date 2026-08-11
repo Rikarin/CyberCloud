@@ -3,7 +3,7 @@ using CyberCloud.ResourceManager.Tests.Infrastructure;
 namespace CyberCloud.ResourceManager.Tests;
 
 /// <summary>
-///     The eleven steps of docs/plan/08 § The write path, end to end, and the order that is the whole
+///     The twelve steps of docs/plan/08 § The write path, end to end, and the order that is the whole
 ///     reason the manager is one component.
 /// </summary>
 [Collection(ResourceManagerSuite.Name)]
@@ -419,7 +419,7 @@ public sealed class WritePathTests(ResourceManagerCluster cluster) {
         result.Error!.Code.ShouldBe(ErrorCode.InvalidApiVersion);
     }
 
-    // ── Tenancy, locks, and step 10 ─────────────────────────────────────────────────────────────
+    // ── Tenancy, locks, and step 11 ─────────────────────────────────────────────────────────────
 
     [Fact]
     public async Task ACrossTenantPathIs404() {

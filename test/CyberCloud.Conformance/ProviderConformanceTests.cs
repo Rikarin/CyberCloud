@@ -92,7 +92,7 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
 
     [Fact]
     public async Task CreateAnswers202WithAnOperationToPollAndTheResourceIsCreating() {
-        // Step 11 of docs/plan/08 § The write path, end to end.
+        // Step 12 of docs/plan/08 § The write path, end to end.
         ProviderTestCluster<TSource>.Reset();
 
         var accepted = await CreateAsync("lifecycle-accepted");
@@ -315,6 +315,42 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
 
         var entry = await Cluster.Index(ProviderTestCluster<TSource>.Address("goodbye")).GetAsync();
         entry.GetValueOrThrow().State.ShouldBe(IndexEntryState.Free, "the name comes back");
+
+        // ⚠ AND THE AUTHORIZATION EDGE COMES BACK TOO. docs/plan/08 § The write path, end to end's
+        // step 8 writes `resource:{id}#parent@resourceGroup:{sub}-{rg}` so the resource is visible to
+        // whoever holds a role on its group; a delete that left it behind would be a row per resource
+        // ever deleted, in every tenant, granting nothing and noticed by nobody.
+        Cluster.Relations.Edges.ShouldNotContainKey(
+            accepted.Resource.Id,
+            "the resource is gone and its ReBAC parent tuple is not"
+        );
+    }
+
+    [Fact]
+    public async Task ACreateWritesTheParentEdgeBeforeItWritesDurableState() {
+        // ⚠ THE STEP THAT MAKES A CREATED RESOURCE VISIBLE TO ITS CREATOR, AND ITS POSITION.
+        //
+        // A conformance run doubles the ReBAC engine on purpose — the isolation suite is where the
+        // real one is driven — so what is asserted here is what a provider's lifecycle depends on:
+        // that the edge is written at all, and that it is written BEFORE the durable resource. Any
+        // other order leaves a window in which the resource exists and nobody can read it, and a silo
+        // lost inside that window leaves it that way permanently.
+        ProviderTestCluster<TSource>.Reset();
+
+        var accepted = (await CreateAsync("linked")).GetValueOrThrow();
+
+        Cluster.Relations.Edges.ShouldContainKey(
+            accepted.Resource.Id,
+            "the create wrote no parent edge, so the resource inherits nothing from its resource "
+            + "group and is invisible to the caller who just created it"
+        );
+
+        var reached = accepted.Trace.Reached;
+
+        reached.IndexOf(WriteStep.LinkParent).ShouldBeLessThan(
+            reached.IndexOf(WriteStep.SubmitDesired),
+            "the parent edge was written after the durable resource"
+        );
     }
 
     // ── create with another tenant's ids → 404 ──────────────────────────────────────────────────

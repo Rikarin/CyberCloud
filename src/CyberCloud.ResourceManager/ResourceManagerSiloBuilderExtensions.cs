@@ -63,6 +63,7 @@ public static class ResourceManagerSiloBuilderExtensions {
                 services.TryAddSingleton<IClusterConnectionFactory, NoClusterConnectionFactory>();
                 services.TryAddSingleton<IClusterObjectInventory, UnavailableClusterObjectInventory>();
                 services.TryAddSingleton<IResourceAuthorizer, ReBacResourceAuthorizer>();
+                services.TryAddSingleton<IResourceRelationWriter, ReBacResourceRelationWriter>();
 
                 services.TryAddSingleton<DriftScanner>();
                 services.TryAddSingleton<ReconcileDriver>();

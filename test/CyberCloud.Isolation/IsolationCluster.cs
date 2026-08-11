@@ -92,15 +92,18 @@ public static class IsolationCatalog {
 ///         that found them.
 ///     </para>
 ///     <para>
-///         ⚠ <b>The harness writes the resource → group <c>parent</c> tuple itself, and it should not
-///         have to.</b> <c>CyberCloudSchema</c> gives every resource
+///         ⚠ <b>The harness no longer writes the resource → group <c>parent</c> tuple, and the
+///         deletion of the method that did is this suite's second finding.</b>
+///         <c>CyberCloudSchema</c> gives every resource
 ///         <c>Role(owner, This | From(parent, owner))</c>, so a resource is readable by its group's
-///         owner <i>only if</i> a <c>resource:{id}#parent@resourceGroup:{group}</c> tuple exists.
-///         Nothing in docs/plan/08 § The write path, end to end writes one — the eleven steps go
-///         check, locks, policy, quota, index, desired state, operation, emit — and nothing else does
-///         either. So after a successful create the resource is invisible to the person who created
-///         it. <see cref="LinkToParentAsync" /> is this harness papering over that, out loud, because
-///         an isolation suite that could not read anything back would be asserting 404 against 404.
+///         owner <i>only if</i> a <c>resource:{id}#parent@resourceGroup:{group}</c> tuple exists —
+///         and the write path never wrote one, so a create succeeded and its own creator then got
+///         <c>404</c>. <c>LinkToParentAsync</c> used to sit here papering over that, with remarks
+///         saying in capitals that the platform should be doing it. docs/plan/08 § The write path,
+///         end to end has the step now (step 8, between the index claim and the durable write), the
+///         helper is gone, and <see cref="ParentsOfAsync" /> reads the tuple back instead of writing
+///         it. A harness that has to fix the system under test before it can attack it is itself the
+///         bug report.
 ///     </para>
 ///     <para>
 ///         ⚠ In-memory storage and in-memory reminders. The isolation properties are about which
@@ -192,31 +195,40 @@ public sealed class IsolationCluster : IAsyncLifetime {
         );
 
     /// <summary>
-    ///     Writes the <c>parent</c> tuple that makes a created resource reachable from its group.
+    ///     Reads a resource's <c>parent</c> tuples straight out of the tenant's forward index.
     /// </summary>
-    /// <param name="tenant">The tenant.</param>
-    /// <param name="subscription">The subscription the group belongs to.</param>
+    /// <param name="tenant">Whose store.</param>
     /// <param name="resourceId">The resource's GUID.</param>
+    /// <returns>The subjects of every <c>parent</c> tuple on that resource. Empty when there is none.</returns>
     /// <remarks>
-    ///     ⚠ <b>THE PLATFORM SHOULD BE DOING THIS AND DOES NOT.</b> See this class's remarks: the
-    ///     eleven-step write path never writes a ReBAC tuple, so a resource created through it
-    ///     inherits nothing from its resource group and is invisible to its own creator. This method
-    ///     exists so the suite has something to attack; it is not a fixture convenience and it should
-    ///     be deleted the day the write path grows the step.
+    ///     ⚠ <b>This replaced a method that WROTE the tuple, and the replacement is the finding.</b>
+    ///     <c>LinkToParentAsync</c> used to live here, with remarks saying in capitals that the
+    ///     platform should be doing it and did not. docs/plan/08 § The write path, end to end now has
+    ///     the step — step 8, between the index claim and the durable write — so the harness's job
+    ///     turned from papering over a defect into checking that the platform does it, and this reads
+    ///     the tuple rather than writing it.
+    ///     <para>
+    ///         It goes through <c>IObjectRelationsGrain</c>, which is the <i>forward</i> index and the
+    ///         authority (docs/plan/07 § Storage, row 1) — the same direction <c>Check</c> walks. A
+    ///         test that read the reverse index would be asserting against the half that is allowed to
+    ///         be stale.
+    ///     </para>
     /// </remarks>
-    public Task LinkToParentAsync(Guid tenant, Guid subscription, Guid resourceId) =>
-        WriteTupleAsync(
-            tenant,
-            Authorization.Contracts.ObjectRef.Of(
-                ObjectTypes.Resource,
-                resourceId.ToString("N", CultureInfo.InvariantCulture)
-            ),
-            Relations.Parent,
-            SubjectRef.Of(
-                ObjectTypes.ResourceGroup,
-                subscription.ToString("N", CultureInfo.InvariantCulture) + "-" + Group
+    public async Task<IReadOnlyList<SubjectRef>> ParentsOfAsync(Guid tenant, Guid resourceId) {
+        var snapshot = await For(tenant)
+            .GetGrain<IObjectRelationsGrain>(
+                GrainKeys.ObjectRelations(
+                    ObjectTypes.Resource,
+                    resourceId.ToString("N", CultureInfo.InvariantCulture)
+                )
             )
-        );
+            .ReadDurableAsync();
+
+        return snapshot.IsSuccess
+            && snapshot.GetValueOrThrow().ByRelation.TryGetValue(Relations.Parent, out var parents)
+                ? parents
+                : [];
+    }
 
     /// <summary>Writes one tuple into a tenant's store.</summary>
     /// <param name="tenant">Whose store.</param>
@@ -273,8 +285,9 @@ public sealed class IsolationCluster : IAsyncLifetime {
         );
 
         var resourceId = accepted.GetValueOrThrow().Resource.Id;
-        await LinkToParentAsync(tenant, subscription, resourceId);
 
+        // ⚠ Nothing is linked here. The write path's step 8 did it, and OracleTests asserts that it
+        // did — see this class's remarks on the helper that used to be on this line.
         var operation = For(tenant).GetGrain<IOperationGrain>(GrainKeys.Operation(accepted.GetValueOrThrow().OperationId));
 
         for (var i = 0; i < 6; i++) {
@@ -305,6 +318,15 @@ public sealed class IsolationCluster : IAsyncLifetime {
             // call filter" position IResourceManager's remarks describe, and therefore the position an
             // attacker's request actually arrives at.
             new ReBacResourceAuthorizer(cluster.GrainFactory, NullLogger<ReBacResourceAuthorizer>.Instance),
+            // ⚠ AND THE REAL WRITE HALF OF IT. Step 8's tuple goes into the same store the check
+            // walks, through the real ReBacResourceRelationWriter over the real CyberCloudSchema. A
+            // double here would let the suite pass with a tuple the schema cannot follow — which is
+            // precisely the class of defect this project exists to catch, and precisely how the
+            // resourcegroup/resourceGroup casing bug survived everywhere else.
+            new ReBacResourceRelationWriter(
+                cluster.GrainFactory,
+                NullLogger<ReBacResourceRelationWriter>.Instance
+            ),
             new ResourceScopeLockResolver(cluster.GrainFactory),
             new NotSupportedPolicyEvaluator(),
             new LoggingResourceChangedSink(NullLogger<LoggingResourceChangedSink>.Instance),
@@ -312,8 +334,32 @@ public sealed class IsolationCluster : IAsyncLifetime {
             NullLogger<ResourceManagerService>.Instance
         );
 
+        // ⚠ The subscriptions and their groups are real records now, because step 1 of the write path
+        // reads ISubscriptionGrain and answers 404 for a subscription the caller's tenant does not
+        // have. That check is what closes the /tenants/{mine}/subscriptions/{theirs}/… hole
+        // BelowTheManagerTests used to document from the safe side.
+        await CreateScopesAsync(Victim, VictimSubscription);
+        await CreateScopesAsync(Attacker, AttackerSubscription);
+
         await GrantGroupOwnerAsync(Victim, VictimSubscription, VictimUser);
         await GrantGroupOwnerAsync(Attacker, AttackerSubscription, AttackerUser);
+    }
+
+    /// <summary>Creates a tenant's subscription and its <c>prod</c> group.</summary>
+    /// <param name="tenant">The tenant.</param>
+    /// <param name="subscription">The subscription.</param>
+    async Task CreateScopesAsync(Guid tenant, Guid subscription) {
+        var created = await For(tenant)
+            .GetGrain<ISubscriptionGrain>(GrainKeys.Subscription(subscription))
+            .CreateAsync("isolation");
+
+        created.IsSuccess.ShouldBeTrue(created.Error?.Message);
+
+        var group = await For(tenant)
+            .GetGrain<IResourceGroupGrain>(GrainKeys.ResourceGroup(subscription, Group))
+            .CreateAsync(tenant, "eu-west-1");
+
+        group.IsSuccess.ShouldBeTrue(group.Error?.Message);
     }
 
     /// <inheritdoc />

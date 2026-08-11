@@ -35,7 +35,7 @@ public sealed class NotSupportedPolicyEvaluator : IPolicyEvaluator {
 ///     ⚠ <b>The projector is out of scope and this is what stands in for it.</b>
 ///     docs/plan/08 § The resource-graph projection routes <c>resource-changed</c> to a per-tenant
 ///     ClickHouse table. Nothing here writes to ClickHouse. What is real is the <i>emission</i> — the
-///     event is built with the projection's columns and published at step 10 — so landing a projector
+///     event is built with the projection's columns and published at step 11 — so landing a projector
 ///     is adding a consumer rather than changing the write path.
 /// </remarks>
 public sealed class LoggingResourceChangedSink(ILogger<LoggingResourceChangedSink> logger) : IResourceChangedSink {
@@ -56,39 +56,87 @@ public sealed class LoggingResourceChangedSink(ILogger<LoggingResourceChangedSin
 }
 
 /// <summary>
-///     Resolves the effective lock at a resource's scope by walking as far as the model reaches.
+///     Resolves the effective lock at a resource's scope by walking the hierarchy upwards.
 /// </summary>
 /// <remarks>
 ///     <para>
 ///         docs/plan/06 § Tags, locks makes locks <c>CanNotDelete</c> / <c>ReadOnly</c>, <i>"inherited
 ///         down the hierarchy"</i>, and docs/plan/08 § The write path, end to end's step 4 reads
-///         <i>"locks: CanNotDelete / ReadOnly inherited from rg, sub, mg"</i>.
+///         <i>"locks: CanNotDelete / ReadOnly inherited from rg, sub, mg"</i>. This walks
+///         <b>resource → resource group → subscription</b> and takes the strongest lock found at any
+///         of the three.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Only the resource's own lock is implemented, and the three inherited scopes are
-///         stubs.</b> <c>IResourceGroupGrain</c>, <c>ISubscriptionGrain</c> and the management-group
-///         tree have no lock member — management groups have no grain at all — so there is nothing to
-///         read. The consequence, stated rather than discovered: <b>a subscription-level lock does not
-///         currently stop a delete.</b> Closing it is three members on two existing grain interfaces
-///         plus the management-group tree, all of which belong to docs/plan/06's owner rather than to
-///         the resource manager.
+///         ⚠ <b>The management group is the one scope that is still missing, and it is missing
+///         because it does not exist.</b> docs/plan/06 § The hierarchy makes the management-group tree
+///         optional and docs/plan/01 puts it at M2: there is no <c>IManagementGroupGrain</c>, no
+///         grain key for one and no parent pointer from a subscription to one. So this walk stops at
+///         the subscription, and <b>a lock set on a management group is not merely unread — it cannot
+///         be set at all.</b> Stated here so that the day the tree lands, the missing link is a known
+///         one line rather than a discovered incident. Adding it is one more <c>Strongest</c> above
+///         the subscription read; nothing else about this class changes.
+///     </para>
+///     <para>
+///         ⚠ <b>A create walks too.</b> A resource that does not exist yet has no lock of its own,
+///         but the group and the subscription above it do — and a subscription-wide
+///         <see cref="LockLevel.ReadOnly" /> that stopped updates while still allowing new resources
+///         would be a strange kind of read-only. The resource's own read is skipped when there is no
+///         resource, and the two ancestors are read exactly as they are for an update.
+///     </para>
+///     <para>
+///         ⚠ <b>A scope that does not exist contributes <see cref="LockLevel.None" /> rather than
+///         failing the walk.</b> Fail-closed sounds safer and is wrong here: the resource group and
+///         subscription grains are created by an admin path that the resource manager does not drive,
+///         so a platform whose lock walk refused every write against an unrecorded group would be a
+///         platform where nothing could be created. Absence of a lock record is absence of a lock.
+///         The <i>existence</i> of the subscription is checked separately and much earlier, at step 1
+///         of the write path, where its answer is a 404 rather than a lock.
 ///     </para>
 /// </remarks>
 public sealed class ResourceScopeLockResolver(IGrainFactory grains) : ILockResolver {
     /// <inheritdoc />
     public async Task<Result<LockLevel>> ResolveAsync(ResourceId id, CancellationToken cancellationToken = default) {
-        if (id.Id == Guid.Empty) {
-            // A resource that does not exist yet carries no lock of its own, and the scopes above it
-            // are the stub. A create is therefore never lock-refused today — see the remarks.
-            return Result<LockLevel>.Success(LockLevel.None);
+        var tenant = grains.ForTenant(id.TenantId.ToString("D", CultureInfo.InvariantCulture));
+        var effective = LockLevel.None;
+
+        // ── The resource's own, when there is a resource ────────────────────────────────────────
+        if (id.Id != Guid.Empty) {
+            var snapshot = await tenant.GetGrain<IResourceGrain>(GrainKeys.Resource(id.Id)).GetAsync(string.Empty, []);
+            if (snapshot.IsSuccess) {
+                effective = LockLevels.Strongest(effective, snapshot.GetValueOrThrow().Lock);
+            }
         }
 
-        var resource = grains
-            .ForTenant(id.TenantId.ToString("D", CultureInfo.InvariantCulture))
-            .GetGrain<IResourceGrain>(GrainKeys.Resource(id.Id));
+        // ⚠ ReadOnly is the strongest lock there is, so nothing above can raise it further. The two
+        // grain calls below are skipped rather than made and discarded — the walk is on the hot path
+        // of every write and every delete.
+        if (effective == LockLevel.ReadOnly) {
+            return Result<LockLevel>.Success(effective);
+        }
 
-        var snapshot = await resource.GetAsync(string.Empty, []);
-        return Result<LockLevel>.Success(snapshot.IsSuccess ? snapshot.GetValueOrThrow().Lock : LockLevel.None);
+        // ── The resource group ─────────────────────────────────────────────────────────────────
+        var group = await tenant
+            .GetGrain<IResourceGroupGrain>(GrainKeys.ResourceGroup(id.SubscriptionId, id.ResourceGroup))
+            .GetAsync();
+
+        if (group.IsSuccess) {
+            effective = LockLevels.Strongest(effective, group.GetValueOrThrow().Lock);
+        }
+
+        if (effective == LockLevel.ReadOnly) {
+            return Result<LockLevel>.Success(effective);
+        }
+
+        // ── The subscription — the top of the chain that exists. See the remarks on the mg. ─────
+        var subscription = await tenant
+            .GetGrain<ISubscriptionGrain>(GrainKeys.Subscription(id.SubscriptionId))
+            .GetAsync();
+
+        if (subscription.IsSuccess) {
+            effective = LockLevels.Strongest(effective, subscription.GetValueOrThrow().Lock);
+        }
+
+        return Result<LockLevel>.Success(effective);
     }
 }
 

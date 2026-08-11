@@ -27,6 +27,7 @@ namespace CyberCloud.ResourceManager.Grains;
 public sealed class OperationGrain(
     [PersistentState("operation", StorageTiers.Durable)] IPersistentState<OperationGrainState> state,
     ReconcileDriver driver,
+    IResourceRelationWriter relations,
     IGrainFactory grains,
     IClock clock
 )
@@ -272,6 +273,38 @@ public sealed class OperationGrain(
                 return;
             }
 
+            // ⚠ AND THE ReBAC PARENT EDGE GOES WITH IT. THIS IS THE OTHER HALF OF THE WRITE PATH'S
+            // STEP 8, AND IT LIVES HERE RATHER THAN IN ResourceManagerService.DeleteAsync.
+            //
+            // Two reasons, and both are about *when* the resource stops existing:
+            //
+            //   • A delete is accepted long before it converges. The resource stays visible in
+            //     Deleting the whole time — docs/plan/06 § Two-phase create insists on that, calling
+            //     it "a billing-dispute prevention measure as much as a correctness one" — and a
+            //     resource its owner cannot READ is a resource they cannot watch being deleted.
+            //     Unlinking at the request would blind them to their own teardown, and a teardown
+            //     that then failed would leave a live, billed, invisible resource. So the edge
+            //     survives until the resource does not, which is this line.
+            //   • It has to be able to fail and be retried. A dangling tuple pointing at a GUID that
+            //     no longer names anything is a slow leak in the tenant's tuple store, so "best
+            //     effort, log and move on" is not good enough. This grain is durable and is
+            //     re-driven from a reminder, which is exactly the machinery that leak needs.
+            //
+            // ⚠ THE RETRY CONVERGES, AND THAT IS CHECKABLE RATHER THAN HOPED FOR. On the next drive
+            // ReconcileDriver reads a resource grain that is now empty and — because tearingDown is
+            // true — reports Converged rather than Failed ("a resource that is gone during a teardown
+            // is a teardown that succeeded"). Control reaches this branch again, CompleteDeleteAsync
+            // returns Success because it is idempotent on an already-cleared grain, and the unlink is
+            // attempted again. TupleStoreGrain.DeleteAsync is idempotent too, so a partially applied
+            // previous attempt is not a problem either. The loop ends the way every other one does:
+            // at ReconcileSchedule's sixty-minute ceiling, with a Failed operation that names the
+            // reason — which is the actionable outcome, and is what a stuck operation is for.
+            var unlinked = await relations.UnlinkFromParentAsync(Address(spec));
+            if (unlinked.TryGetError(out var unlinkError)) {
+                await ScheduleAsync(ReconcileOutcome.Failed(unlinkError, true));
+                return;
+            }
+
             await ReturnCommittedQuotaAsync(spec);
             await TerminateAsync(Contracts.OperationState.Succeeded, null);
             return;
@@ -454,6 +487,22 @@ public sealed class OperationGrain(
         };
 
     IResourceGrain Resource(OperationSpec spec) => Tenant(spec).GetGrain<IResourceGrain>(GrainKeys.Resource(spec.ResourceId));
+
+    /// <summary>
+    ///     The operation's resource as an address, for the ReBAC unlink.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ Re-parsed from <see cref="OperationSpec.ResourcePath" /> rather than carried as a field:
+    ///     the path is what the spec durably records, and a second copy of the resource group on the
+    ///     spec would be a second thing that can disagree with it. The path was produced by
+    ///     <c>ResourceId.Path</c> and is parsed by its inverse, so a failure here is unreachable — and
+    ///     if it ever were reachable, an address of <c>default</c> carries <see cref="Guid.Empty" />
+    ///     as its id, which <c>IResourceRelationWriter</c> refuses rather than acting on.
+    /// </remarks>
+    static ResourceId Address(OperationSpec spec) {
+        var parsed = ResourceId.ParsePath(spec.ResourcePath);
+        return parsed.IsSuccess ? parsed.GetValueOrThrow().WithId(spec.ResourceId) : default;
+    }
 
     IQuotaGrain Quota(OperationSpec spec) =>
         Tenant(spec).GetGrain<IQuotaGrain>(GrainKeys.Subscription(spec.SubscriptionId));
