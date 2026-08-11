@@ -1,0 +1,43 @@
+<Project>
+
+  <!--
+    ══ OPT-OUT BARRIER — do not delete, do not add an Import of the parent ══
+
+    docs/plan/03: "`references/` is excluded from every glob and never restored."
+
+    The repository-root Directory.Build.props applies to every descendant directory. MSBuild finds
+    the NEAREST Directory.Build.props by walking up from the project directory and stops at the first
+    one it finds; because this file does not `<Import Project="$([MSBuild]::GetPathOfFileAbove(...))" />`,
+    the search terminates here and the root file never applies to anything under references/.
+
+    Without this file, cloning a reference repository into references/ would silently graft
+    net10.0 / TreatWarningsAsErrors / Central Package Management onto someone else's source tree —
+    and a `dotnet build` at the repository root would then try to build it.
+
+    references/Directory.Build.targets and references/Directory.Packages.props exist for the same
+    reason. All three must stay.
+  -->
+
+  <PropertyGroup>
+    <!--
+      CPM is off here. If it were left on, a reference repo's `PackageReference Version="…"` would
+      be NU1008 and even `dotnet restore` on it would fail.
+    -->
+    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+    <CentralPackageTransitivePinningEnabled>false</CentralPackageTransitivePinningEnabled>
+    <ImportDirectoryPackagesProps>false</ImportDirectoryPackagesProps>
+
+    <!-- Belt and braces: keep reference trees out of the repository's own build and artifacts. -->
+    <IsPackable>false</IsPackable>
+    <IsPublishable>false</IsPublishable>
+    <UseArtifactsOutput>false</UseArtifactsOutput>
+    <EnableDefaultItems Condition="'$(EnableDefaultItems)' == ''">true</EnableDefaultItems>
+  </PropertyGroup>
+
+  <Target Name="CyberCloudReferencesAreNotBuilt"
+          BeforeTargets="Restore;CollectPackageReferences;PrepareForBuild">
+    <Warning Code="CC0002"
+             Text="$(MSBuildProjectFullPath) is under references/, which docs/plan/03 declares read-only and never restored. Building it is not supported; nothing in src/ may reference it." />
+  </Target>
+
+</Project>

@@ -1,0 +1,20 @@
+# ══ OPT-OUT BARRIER — see references/Directory.Build.props ══
+#
+# `root = true` terminates EditorConfig's upward search, so the repository-root .editorconfig never
+# applies under references/.
+#
+# This file is NOT redundant with the MSBuild opt-out beside it. EditorConfig and MSBuild are two
+# independent inheritance chains: Directory.Build.props stops at references/, but a root
+# .editorconfig keeps applying regardless. Verified during bring-up — with only the MSBuild barrier
+# in place, a reference project still failed with `error CS0219` because the root .editorconfig had
+# raised CS0219 to error, even though TreatWarningsAsErrors was not applied here.
+#
+# docs/plan/03: references/ is read-only, not built, not restored. Nothing in it is our code and
+# nothing in it is held to our standards.
+
+root = true
+
+[*]
+charset = utf-8
+insert_final_newline = false
+trim_trailing_whitespace = false

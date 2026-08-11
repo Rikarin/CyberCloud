@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "isRoot": true,
+  "tools": {
+    "nuke.globaltool": {
+      "version": "10.1.0",
+      "commands": [
+        "nuke"
+      ],
+      "rollForward": false
+    },
+    "dotnet-ef": {
+      "version": "10.0.10",
+      "commands": [
+        "dotnet-ef"
+      ],
+      "rollForward": false
+    },
+    "dotnet-counters": {
+      "version": "9.0.661903",
+      "commands": [
+        "dotnet-counters"
+      ],
+      "rollForward": true
+    },
+    "dotnet-trace": {
+      "version": "9.0.661903",
+      "commands": [
+        "dotnet-trace"
+      ],
+      "rollForward": true
+    },
+    "dotnet-coverage": {
+      "version": "18.9.0",
+      "commands": [
+        "dotnet-coverage"
+      ],
+      "rollForward": true
+    }
+  }
+}

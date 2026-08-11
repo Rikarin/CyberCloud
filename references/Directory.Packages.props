@@ -1,0 +1,15 @@
+<Project>
+
+  <!--
+    ══ OPT-OUT BARRIER — see references/Directory.Build.props ══
+
+    Terminates the upward search for Directory.Packages.props and switches Central Package
+    Management OFF, so a reference repository's own `PackageReference Version="…"` is legal here
+    instead of NU1008.
+  -->
+
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+
+</Project>

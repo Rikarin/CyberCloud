@@ -1,0 +1,47 @@
+<Solution>
+
+  <!--
+    docs/plan/03 § Top level. The XML solution format (SDK 9.0.200+, the default in SDK 10).
+
+    Verified on SDK 10.0.302: `dotnet sln CyberCloud.slnx list` and `dotnet build CyberCloud.slnx`
+    both work, and a `.slnf` filter CAN name a `.slnx` in its "solution.path" — `dotnet sln <f>.slnf
+    list` and `dotnet build <f>.slnf` were both exercised against this file with a real project in it.
+
+    There are no <Project> entries yet — this repository currently contains build infrastructure
+    only. The folders below are the shape the first assemblies drop into. Solution folders mirror
+    the repository tree; add a project under the folder that matches its location on disk.
+
+    ── Filter membership (docs/plan/03), recorded here because .slnf is strict JSON and rejects
+       comments — verified: a `//` comment makes `dotnet sln … list` fail with
+       "'/' is invalid after a value" ──
+
+      CyberCloud.Core.slnf       src/CyberCloud.Core*, src/CyberCloud.Tenancy*,
+                                 src/CyberCloud.Authorization*, src/CyberCloud.Kubernetes*
+                                 (+ their .Tests siblings)  — the fast IDE load
+      CyberCloud.Providers.slnf  src/Providers/** (+ .Contracts/.Application/.Tests/.Conformance)
+      CyberCloud.Hosts.slnf      src/Hosts/**
+
+    All three filters are currently empty ("projects": []), which loads and builds cleanly. Populate
+    each as its projects land — a filter naming a project that is not in this .slnx will not load.
+  -->
+
+  <Folder Name="/solution items/">
+    <File Path=".editorconfig" />
+    <File Path=".gitignore" />
+    <File Path="Directory.Build.props" />
+    <File Path="Directory.Build.targets" />
+    <File Path="Directory.Packages.props" />
+    <File Path="global.json" />
+    <File Path=".config/dotnet-tools.json" />
+  </Folder>
+
+  <Folder Name="/build/" />
+
+  <Folder Name="/src/" />
+  <Folder Name="/src/Providers/" />
+  <Folder Name="/src/Hosts/" />
+
+  <Folder Name="/cli/" />
+  <Folder Name="/test/" />
+
+</Solution>

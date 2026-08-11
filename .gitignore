@@ -1,0 +1,213 @@
+# ══════════════════════════════════════════════════════════════════════════════════════════════
+# .NET
+# ══════════════════════════════════════════════════════════════════════════════════════════════
+[Bb]in/
+[Oo]bj/
+[Oo]ut/
+[Ll]og/
+[Ll]ogs/
+
+# .NET SDK artifacts output — Directory.Build.props sets ArtifactsPath to <repo>/artifacts.
+artifacts/
+
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.userprefs
+*.svclog
+*.pidb
+*.dbmdl
+*.dbproj.schemaview
+*.jfm
+*.publishsettings
+
+# Build results
+[Dd]ebug/
+[Dd]ebugPublic/
+[Rr]elease/
+[Rr]eleases/
+x64/
+x86/
+[Ww][Ii][Nn]32/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+bld/
+[Ll]og/
+msbuild.log
+msbuild.err
+msbuild.wrn
+*.binlog
+
+# Test and coverage
+[Tt]est[Rr]esult*/
+[Bb]uild[Ll]og.*
+*.trx
+*.coverage
+*.coveragexml
+*.cobertura.xml
+coverage*.json
+coverage*.xml
+coverage*.info
+TestResults/
+.coverlet/
+
+# NuGet
+*.nupkg
+*.snupkg
+**/[Pp]ackages/*
+!**/[Pp]ackages/build/
+*.nuget.props
+*.nuget.targets
+.nuget/
+project.lock.json
+project.fragment.lock.json
+packages.lock.json
+
+# Nuke
+.nuke/temp/
+.tmp/
+
+# Publish / containers
+[Pp]ublish/
+PublishScripts/
+*.[Pp]ublish.xml
+*.azurePubxml
+*.pubxml
+*.pubxml.user
+
+# ReSharper / dotCover / dotTrace
+_ReSharper*/
+*.[Rr]e[Ss]harper
+*.DotSettings.user
+*.dotCover
+*.dotMemory
+*.dotTrace
+
+# Crash dumps and profiling output
+*.dmp
+*.nettrace
+*.speedscope.json
+*.gcdump
+
+# ══════════════════════════════════════════════════════════════════════════════════════════════
+# Node / Angular / pnpm — portal/ (docs/plan/20)
+# ══════════════════════════════════════════════════════════════════════════════════════════════
+node_modules/
+.pnpm-store/
+.pnpm-debug.log*
+npm-debug.log*
+yarn-error.log*
+.npmrc.local
+
+# Angular / Nx build output
+portal/dist/
+portal/tmp/
+portal/out-tsc/
+portal/.angular/
+.angular/
+.nx/cache/
+.nx/workspace-data/
+dist/
+out-tsc/
+.astro/
+
+# Angular SSR
+portal/**/.output/
+portal/**/.vercel/
+
+# Tailwind / Vite / test caches
+.vite/
+.turbo/
+*.tsbuildinfo
+.eslintcache
+.stylelintcache
+coverage/
+playwright-report/
+test-results/
+blob-report/
+.playwright/
+
+# ══════════════════════════════════════════════════════════════════════════════════════════════
+# JetBrains (Rider, WebStorm) and Visual Studio / VS Code
+# ══════════════════════════════════════════════════════════════════════════════════════════════
+.idea/
+!.idea/runConfigurations/
+*.iml
+*.ipr
+*.iws
+.fleet/
+
+.vs/
+*.vsp
+*.vspx
+*.sap
+*.VC.db
+*.VC.VC.opendb
+*.opendb
+*.opensdf
+*.sdf
+*.cachefile
+.vshistory/
+.localhistory/
+
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+!.vscode/*.code-snippets
+
+# ══════════════════════════════════════════════════════════════════════════════════════════════
+# Secrets and local environment — never committed
+# ══════════════════════════════════════════════════════════════════════════════════════════════
+*.env
+.env
+.env.*
+!.env.example
+appsettings.Local.json
+appsettings.*.Local.json
+secrets.json
+*.pfx
+*.p12
+*.key
+!charts/**/*.key
+kubeconfig
+kubeconfig.*
+*.kubeconfig
+
+# ══════════════════════════════════════════════════════════════════════════════════════════════
+# Helm — charts/ (docs/plan/03)
+# ══════════════════════════════════════════════════════════════════════════════════════════════
+charts/**/charts/
+charts/**/*.tgz
+charts/**/Chart.lock
+.helm/
+
+# ══════════════════════════════════════════════════════════════════════════════════════════════
+# references/ — read-only clones and the Survival symlink (docs/plan/03).
+# Nothing under references/ is our source. The directory itself, its README and its opt-out
+# barrier files are tracked; everything cloned into it is not.
+# ══════════════════════════════════════════════════════════════════════════════════════════════
+references/*
+!references/.gitkeep
+!references/README.md
+!references/.editorconfig
+!references/Directory.Build.props
+!references/Directory.Build.targets
+!references/Directory.Packages.props
+
+# ══════════════════════════════════════════════════════════════════════════════════════════════
+# OS
+# ══════════════════════════════════════════════════════════════════════════════════════════════
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+*~
+*.swp
+*.swo

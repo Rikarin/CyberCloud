@@ -1,0 +1,61 @@
+<Project>
+
+  <!--
+    Imported AFTER the project body, so everything here can react to what the project declared.
+    Anything that a project must be able to override belongs in Directory.Build.props instead.
+  -->
+
+  <PropertyGroup Label="Test project conventions" Condition="'$(IsTestProject)' == 'true'">
+    <!-- docs/plan/02 ADR-018: tests are siblings, xUnit v3 + Orleans.TestingHost is the default. -->
+    <IsPackable>false</IsPackable>
+    <!-- xunit.v3 test projects are executables (Microsoft.Testing.Platform), not libraries. -->
+    <OutputType>Exe</OutputType>
+    <!--
+      Test code legitimately does things production code must not: public fixtures that are never
+      sealed, unused parameters in theory data, assertions on the result of an async call.
+      CA1515 (make public types internal) is wrong for xUnit collection fixtures.
+    -->
+    <NoWarn>$(NoWarn);CA1515;CA1707;CA2007</NoWarn>
+  </PropertyGroup>
+
+  <PropertyGroup Label="Contracts project conventions" Condition="'$(IsContractsProject)' == 'true'">
+    <!--
+      docs/plan/03 § The .Contracts split: these assemblies are the wire surface referenced by the
+      gateway, the CLI, the SDK and the tests. Their public types are public on purpose.
+    -->
+    <NoWarn>$(NoWarn);CA1515</NoWarn>
+  </PropertyGroup>
+
+  <PropertyGroup Label="Nuke build project" Condition="'$(IsBuildProject)' == 'true'">
+    <NoWarn>$(NoWarn);CA1515;CA1822;CS0649</NoWarn>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+  <ItemGroup Label="InternalsVisibleTo for the sibling test project"
+             Condition="'$(IsTestProject)' != 'true' AND '$(IsBuildProject)' != 'true'">
+    <!--
+      docs/plan/00 § Coding standards: `internal` by default, `public` needs a reason. That rule is
+      only livable if the sibling test project (ADR-018) can see internals.
+    -->
+    <InternalsVisibleTo Include="$(MSBuildProjectName).Tests" />
+  </ItemGroup>
+
+  <ItemGroup Label="Editor and analysis config visible to the IDE">
+    <None Include="$(RepositoryRoot).editorconfig" Link=".editorconfig" Visible="false" />
+  </ItemGroup>
+
+  <Target Name="CyberCloudGuardAgainstMultiTargeting"
+          BeforeTargets="CoreCompile"
+          Condition="'$(TargetFrameworks)' != ''">
+    <!-- docs/plan/02 § Platform baseline: "Single TFM everywhere. No multi-targeting". -->
+    <Error Code="CC0001"
+           Text="$(MSBuildProjectName) declares TargetFrameworks='$(TargetFrameworks)'. Cyber Cloud is single-TFM (net10.0) — see docs/plan/02 § Platform baseline." />
+  </Target>
+
+  <!--
+    There is deliberately no guard here for `references/`. A project under references/ never imports
+    this file: references/Directory.Build.targets terminates the upward search first. The guard that
+    actually fires lives in references/Directory.Build.props.
+  -->
+
+</Project>

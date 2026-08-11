@@ -1,0 +1,166 @@
+<Project>
+
+  <!--
+    Central Package Management — docs/plan/02 § Dependency register.
+
+    Rules:
+      * Every version lives here. A `PackageReference` in a .csproj carries NO `Version=` attribute;
+        with CPM on, one is NU1008 and a hard restore failure.
+      * No floating versions, no wildcards, no version ranges (docs/plan/02 § Platform baseline).
+      * A package that is not in docs/plan/02's register needs an ADR before it is added here.
+
+    The three corrections below are marked ⚠ CORRECTED and each says why. They are audit findings
+    against docs/plan/02, not drift — fix the doc, do not "fix" this file back.
+  -->
+
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
+    <CentralPackageVersionOverrideEnabled>false</CentralPackageVersionOverrideEnabled>
+  </PropertyGroup>
+
+  <PropertyGroup Label="Version groups">
+    <OrleansVersion>10.2.2</OrleansVersion>
+    <AbpVersion>10.6.0</AbpVersion>
+    <OpenTelemetryVersion>1.17.0</OpenTelemetryVersion>
+    <AspireVersion>13.4.6</AspireVersion>
+  </PropertyGroup>
+
+  <!-- ══════════════ Orleans and hosting — docs/plan/02 § Orleans and hosting ══════════════ -->
+  <ItemGroup Label="Orleans">
+    <PackageVersion Include="Microsoft.Orleans.Sdk" Version="$(OrleansVersion)" />
+    <PackageVersion Include="Microsoft.Orleans.Server" Version="$(OrleansVersion)" />
+    <PackageVersion Include="Microsoft.Orleans.Client" Version="$(OrleansVersion)" />
+    <PackageVersion Include="Microsoft.Orleans.Clustering.Redis" Version="$(OrleansVersion)" />
+    <PackageVersion Include="Microsoft.Orleans.Persistence.Redis" Version="$(OrleansVersion)" />
+    <PackageVersion Include="Microsoft.Orleans.Reminders.Redis" Version="$(OrleansVersion)" />
+    <PackageVersion Include="Microsoft.Orleans.Streaming" Version="$(OrleansVersion)" />
+    <PackageVersion Include="Microsoft.Orleans.Serialization.SystemTextJson" Version="$(OrleansVersion)" />
+    <PackageVersion Include="Microsoft.Orleans.TestingHost" Version="$(OrleansVersion)" />
+
+    <!-- ⚠ CORRECTED: docs/plan/02:27 pins 10.0.0. 10.0.1 is published and is the latest 10.x. -->
+    <PackageVersion Include="Orleans.Clustering.Kubernetes" Version="10.0.1" />
+
+    <!-- ADR-002. Tenant id lives in the grain key. -->
+    <PackageVersion Include="Orleans.Multitenant" Version="4.0.0" />
+
+    <!--
+      ⚠ UNRESOLVED, deliberately. docs/plan/02:31 and ADR-005 both flag this.
+      `Rikarin.Orleans.Streaming.NATs` has exactly ONE published version — 9.1.0-alpha.1 — and it
+      declares a dependency on `Microsoft.Orleans.Streaming [9.1.0,)`. That range's lower bound is
+      satisfied by our Orleans 10.2.2, so NuGet will resolve it, but the assembly is compiled against
+      the Orleans 9 surface and nothing here proves it loads. Do NOT attempt to reconcile it with
+      Orleans 10 in this file — bumping the package to a 10.x build is a scheduled task in
+      docs/plan/24, with the ADR-005 fallback (direct NATS.Client.JetStream) if it slips.
+      No project references this yet.
+    -->
+    <PackageVersion Include="Rikarin.Orleans.Streaming.NATs" Version="9.1.0-alpha.1" />
+  </ItemGroup>
+
+  <!-- ══════════════ ABP — docs/plan/02 § ABP, ADR-006 ══════════════ -->
+  <ItemGroup Label="ABP">
+    <PackageVersion Include="Volo.Abp.Autofac" Version="$(AbpVersion)" />
+    <PackageVersion Include="Volo.Abp.AspNetCore.Mvc" Version="$(AbpVersion)" />
+    <PackageVersion Include="Volo.Abp.AspNetCore.SignalR" Version="$(AbpVersion)" />
+    <PackageVersion Include="Volo.Abp.Ddd.Domain" Version="$(AbpVersion)" />
+    <PackageVersion Include="Volo.Abp.Ddd.Application" Version="$(AbpVersion)" />
+    <!-- ⚠ Attribute plumbing only — the policy source is CyberCloud.Authorization (ADR-007). -->
+    <PackageVersion Include="Volo.Abp.Authorization" Version="$(AbpVersion)" />
+    <PackageVersion Include="Volo.Abp.EntityFrameworkCore.PostgreSql" Version="$(AbpVersion)" />
+    <PackageVersion Include="Volo.Abp.AspNetCore.Serilog" Version="$(AbpVersion)" />
+    <PackageVersion Include="Volo.Abp.TestBase" Version="$(AbpVersion)" />
+  </ItemGroup>
+
+  <!-- ══════════════ Data, transport, Kubernetes — docs/plan/02 § Data, transport, Kubernetes ══════════════ -->
+  <ItemGroup Label="Data and transport">
+    <PackageVersion Include="StackExchange.Redis" Version="3.1.13" />
+    <PackageVersion Include="Npgsql" Version="10.0.3" />
+    <PackageVersion Include="NATS.Client.Core" Version="3.1.0" />
+    <PackageVersion Include="NATS.Client.JetStream" Version="3.1.0" />
+  </ItemGroup>
+
+  <ItemGroup Label="Kubernetes">
+    <!-- ⚠ Survival pins 18.0.13; 19 changed the generic client surface — docs/plan/02:62. -->
+    <PackageVersion Include="KubernetesClient" Version="19.0.2" />
+  </ItemGroup>
+
+  <ItemGroup Label="Surfaces">
+    <PackageVersion Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.10" />
+    <PackageVersion Include="System.CommandLine" Version="2.0.10" />
+  </ItemGroup>
+
+  <ItemGroup Label="Identity — ADR-015">
+    <!--
+      ⚠ CORRECTED: docs/plan/02:65 and ADR-015 (docs/plan/02:433) pin 7.3.0, reasoning
+      "7.3.0, not the 8.0 preview — an auth server is the last place to run a preview".
+      7.4.0, 7.5.0 and 7.6.0 are all published STABLE releases, and 8.0 is still preview
+      (latest: 8.0.0-preview.2.26365.61). The doc's own reasoning — newest stable, never a
+      preview — therefore points at 7.6.0, not at 7.3.0. The 7.3.0 pin was a snapshot of
+      "newest stable on 2026-08-08", not a decision to stay on 7.3.x.
+    -->
+    <PackageVersion Include="OpenIddict.AspNetCore" Version="7.6.0" />
+    <PackageVersion Include="OpenIddict.Abstractions" Version="7.6.0" />
+    <PackageVersion Include="OpenIddict.Core" Version="7.6.0" />
+    <PackageVersion Include="OpenIddict.Server.AspNetCore" Version="7.6.0" />
+    <PackageVersion Include="OpenIddict.Validation.AspNetCore" Version="7.6.0" />
+
+    <!--
+      ⚠ CORRECTED: docs/plan/02:66 pins 4.0.0-beta9 and justifies it with "it is a beta with no
+      stable successor". That justification is REFUTED — Fido2.AspNet 4.0.0 and 4.0.1 are both
+      published stable releases. Pinned at 4.0.1, the newest. Still wrapped behind IPasskeyService
+      so replacing the library is one file, per the same doc line.
+    -->
+    <PackageVersion Include="Fido2.AspNet" Version="4.0.1" />
+    <PackageVersion Include="Fido2.Models" Version="4.0.1" />
+  </ItemGroup>
+
+  <ItemGroup Label="Mapping and resilience">
+    <PackageVersion Include="Riok.Mapperly" Version="4.3.1" />
+    <PackageVersion Include="Polly" Version="8.6.5" />
+  </ItemGroup>
+
+  <!-- ══════════════ Observability — docs/plan/02, ADR-016 ══════════════ -->
+  <ItemGroup Label="Serilog">
+    <PackageVersion Include="Serilog.AspNetCore" Version="10.0.0" />
+    <PackageVersion Include="Serilog.Sinks.OpenTelemetry" Version="4.2.0" />
+  </ItemGroup>
+
+  <ItemGroup Label="OpenTelemetry">
+    <PackageVersion Include="OpenTelemetry" Version="$(OpenTelemetryVersion)" />
+    <PackageVersion Include="OpenTelemetry.Extensions.Hosting" Version="$(OpenTelemetryVersion)" />
+    <PackageVersion Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="$(OpenTelemetryVersion)" />
+    <PackageVersion Include="OpenTelemetry.Instrumentation.AspNetCore" Version="$(OpenTelemetryVersion)" />
+    <PackageVersion Include="OpenTelemetry.Instrumentation.Http" Version="$(OpenTelemetryVersion)" />
+    <PackageVersion Include="OpenTelemetry.Instrumentation.Runtime" Version="$(OpenTelemetryVersion)" />
+  </ItemGroup>
+
+  <!-- ══════════════ Test and build — docs/plan/02 § Test and build, ADR-018 ══════════════ -->
+  <ItemGroup Label="Test">
+    <PackageVersion Include="xunit.v3" Version="3.2.2" />
+    <PackageVersion Include="NSubstitute" Version="5.3.0" />
+    <PackageVersion Include="Shouldly" Version="4.3.0" />
+    <!--
+      docs/plan/02:79 says "Testcontainers — latest at bring-up". CPM forbids a floating version, so
+      it is pinned here and re-evaluated when the first integration test lands. 4.13.0 is the newest
+      published version at the time this file was written.
+    -->
+    <PackageVersion Include="Testcontainers" Version="4.13.0" />
+    <PackageVersion Include="Testcontainers.Redis" Version="4.13.0" />
+    <PackageVersion Include="Testcontainers.PostgreSql" Version="4.13.0" />
+    <PackageVersion Include="Testcontainers.K3s" Version="4.13.0" />
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.8.1" />
+  </ItemGroup>
+
+  <ItemGroup Label="Build">
+    <PackageVersion Include="Nuke.Common" Version="10.1.0" />
+  </ItemGroup>
+
+  <!-- ══════════════ Aspire — ADR-014, LOCAL DEVELOPMENT ONLY ══════════════ -->
+  <ItemGroup Label="Aspire">
+    <PackageVersion Include="Aspire.Hosting.AppHost" Version="$(AspireVersion)" />
+    <PackageVersion Include="Aspire.Hosting.Redis" Version="$(AspireVersion)" />
+    <PackageVersion Include="Aspire.Hosting.PostgreSQL" Version="$(AspireVersion)" />
+    <PackageVersion Include="Aspire.Hosting.NATS" Version="$(AspireVersion)" />
+  </ItemGroup>
+
+</Project>

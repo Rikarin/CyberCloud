@@ -1,0 +1,10 @@
+<Project>
+
+  <!--
+    ══ OPT-OUT BARRIER — see references/Directory.Build.props ══
+
+    Intentionally empty. Its only job is to terminate MSBuild's upward search for
+    Directory.Build.targets so the repository-root file never applies under references/.
+  -->
+
+</Project>
