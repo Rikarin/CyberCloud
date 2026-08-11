@@ -1,4 +1,5 @@
 using CyberCloud.Authorization;
+using CyberCloud.Core;
 using CyberCloud.Core.Contracts;
 using CyberCloud.Core.Resources;
 using CyberCloud.Core.Time;
@@ -13,7 +14,10 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Orleans.Multitenant;
 using Orleans.Runtime;
 using Orleans.TestingHost;
+using System.Buffers.Text;
 using System.Globalization;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace CyberCloud.Identity.Tests.Infrastructure;
 
@@ -58,6 +62,192 @@ public static class CheapArgon2 {
 
     /// <summary>A hasher at <see cref="Options" />, with no pepper.</summary>
     public static Argon2idPasswordHasher Hasher { get; } = new(Options);
+}
+
+/// <summary>
+///     A tenant cluster's signing key, and the ability to mint tokens with it — the test's stand-in
+///     for a Kubernetes API server's service-account issuer.
+/// </summary>
+/// <remarks>
+///     <para>
+///         ⚠ <b>Real ECDSA over real JWS, not a fake validator.</b> The property under test is that a
+///         token signed by a key the platform does not trust is refused, and that is only a property
+///         of a validator that actually verifies signatures. A stub that answered from a lookup table
+///         would pass every assertion in <c>ManagedIdentityTests</c> and prove nothing about the
+///         thing docs/plan/11 § Managed identity actually asks for.
+///     </para>
+///     <para>
+///         P-256 because that is what <c>AccessTokenPolicy.SigningAlgorithm</c> pins for our own
+///         tokens; a real Kubernetes API server usually signs with RS256, which
+///         <c>ProjectedTokenValidator</c> also verifies and which
+///         <c>ARsaSignedTokenAlsoVerifies</c> covers.
+///     </para>
+/// </remarks>
+public sealed class ClusterSigner : IDisposable {
+    readonly ECDsa key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+    readonly RSA rsa = RSA.Create(2048);
+
+    /// <summary>The issuer this cluster advertises.</summary>
+    public string Issuer { get; init; } = "https://oidc.cluster.example";
+
+    /// <summary>The key id both keys are published under.</summary>
+    public string KeyId { get; init; } = "test-key-1";
+
+    /// <summary>The key set this cluster would serve at its <c>jwks_uri</c>.</summary>
+    public string KeySetJson {
+        get {
+            var ec = key.ExportParameters(false);
+            var r = rsa.ExportParameters(false);
+
+            return $$"""
+                {"keys":[
+                  {"kty":"EC","crv":"P-256","use":"sig","alg":"ES256","kid":"{{KeyId}}",
+                   "x":"{{B64(ec.Q.X!)}}","y":"{{B64(ec.Q.Y!)}}"},
+                  {"kty":"RSA","use":"sig","alg":"RS256","kid":"{{KeyId}}-rsa",
+                   "n":"{{B64(r.Modulus!)}}","e":"{{B64(r.Exponent!)}}"}
+                ]}
+                """;
+        }
+    }
+
+    /// <summary>What <c>IClusterOidcDiscovery</c> would have recorded for this cluster.</summary>
+    /// <param name="at">When it was read.</param>
+    public ClusterOidcIssuer AsRecorded(DateTimeOffset at) =>
+        new() {
+            Issuer = Issuer,
+            KeySetUri = Issuer + "/openid/v1/jwks",
+            PublicKeySetJson = KeySetJson,
+            ReadAt = at
+        };
+
+    /// <summary>Mints a projected service-account token the way a kubelet would.</summary>
+    /// <param name="namespace">The namespace.</param>
+    /// <param name="serviceAccount">The service account.</param>
+    /// <param name="expiresAt">The <c>exp</c>.</param>
+    /// <param name="issuer">Override the <c>iss</c>, for the untrusted-issuer test.</param>
+    /// <param name="subject">Override the whole <c>sub</c>, for the malformed-subject tests.</param>
+    public string ProjectedToken(
+        string @namespace,
+        string serviceAccount,
+        DateTimeOffset expiresAt,
+        string? issuer = null,
+        string? subject = null
+    ) {
+        var header = $$"""{"alg":"ES256","kid":"{{KeyId}}","typ":"JWT"}""";
+
+        var payload = $$"""
+            {"iss":"{{issuer ?? Issuer}}",
+             "sub":"{{subject ?? "system:serviceaccount:" + @namespace + ":" + serviceAccount}}",
+             "aud":["cybercloud"],
+             "exp":{{expiresAt.ToUnixTimeSeconds()}}}
+            """;
+
+        return Sign(header, payload, signed => key.SignData(signed, HashAlgorithmName.SHA256));
+    }
+
+    /// <summary>The same token signed with the RSA half of the key set.</summary>
+    /// <param name="namespace">The namespace.</param>
+    /// <param name="serviceAccount">The service account.</param>
+    /// <param name="expiresAt">The <c>exp</c>.</param>
+    public string RsaProjectedToken(string @namespace, string serviceAccount, DateTimeOffset expiresAt) {
+        var header = $$"""{"alg":"RS256","kid":"{{KeyId}}-rsa","typ":"JWT"}""";
+
+        var payload = $$"""
+            {"iss":"{{Issuer}}",
+             "sub":"system:serviceaccount:{{@namespace}}:{{serviceAccount}}",
+             "exp":{{expiresAt.ToUnixTimeSeconds()}}}
+            """;
+
+        return Sign(
+            header,
+            payload,
+            signed => rsa.SignData(signed, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1)
+        );
+    }
+
+    /// <summary>
+    ///     A token whose header says <c>alg: none</c> and which carries no signature at all.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ The oldest JWT attack there is. It is spelled out here rather than described so that
+    ///     "the validator has no arm for it" is demonstrated on the exact bytes an attacker sends.
+    /// </remarks>
+    public string UnsignedToken(string @namespace, string serviceAccount, DateTimeOffset expiresAt) {
+        var header = """{"alg":"none","typ":"JWT"}""";
+
+        var payload = $$"""
+            {"iss":"{{Issuer}}",
+             "sub":"system:serviceaccount:{{@namespace}}:{{serviceAccount}}",
+             "exp":{{expiresAt.ToUnixTimeSeconds()}}}
+            """;
+
+        return B64(Encoding.UTF8.GetBytes(header)) + "." + B64(Encoding.UTF8.GetBytes(payload)) + ".";
+    }
+
+    /// <inheritdoc />
+    public void Dispose() {
+        key.Dispose();
+        rsa.Dispose();
+    }
+
+    static string Sign(string header, string payload, Func<byte[], byte[]> sign) {
+        var signing = B64(Encoding.UTF8.GetBytes(header)) + "." + B64(Encoding.UTF8.GetBytes(payload));
+        return signing + "." + B64(sign(Encoding.ASCII.GetBytes(signing)));
+    }
+
+    static string B64(byte[] bytes) => Base64Url.EncodeToString(bytes);
+}
+
+/// <summary>
+///     An <see cref="IClusterOidcDiscovery" /> a test drives: only the clusters it was told about are
+///     reachable, and everything else is refused exactly as an unreachable BYO cluster would be.
+/// </summary>
+/// <remarks>
+///     ⚠ <b>Its default answer is "unreachable", which is the honest default.</b> docs/plan/11
+///     § Managed identity: a publicly reachable OIDC discovery document "for BYO clusters is not
+///     automatic". A stub that succeeded unless told otherwise would make the binding-time refusal —
+///     the behaviour that document specifically asks for — the path nothing exercised.
+/// </remarks>
+public sealed class ScriptedClusterOidcDiscovery : IClusterOidcDiscovery {
+    /// <summary>The one instance the silo resolves.</summary>
+    public static ScriptedClusterOidcDiscovery Instance { get; } = new();
+
+    /// <summary>Issuer URL to what reading it produces.</summary>
+    public Dictionary<string, ClusterOidcIssuer> Reachable { get; } = new(StringComparer.Ordinal);
+
+    /// <summary>How many times a cluster was read. "Read once, refreshed" is a claim about this.</summary>
+    public int Reads { get; private set; }
+
+    /// <summary>Back to nothing reachable.</summary>
+    public void Reset() {
+        Reachable.Clear();
+        Reads = 0;
+    }
+
+    /// <summary>Makes a cluster reachable.</summary>
+    /// <param name="signer">The cluster.</param>
+    /// <param name="at">When its document was read.</param>
+    public void Publish(ClusterSigner signer, DateTimeOffset at) {
+        ArgumentNullException.ThrowIfNull(signer);
+        Reachable[signer.Issuer] = signer.AsRecorded(at);
+    }
+
+    /// <inheritdoc />
+    public Task<Result<ClusterOidcIssuer>> DiscoverAsync(
+        string issuerUrl,
+        CancellationToken cancellationToken = default
+    ) {
+        Reads++;
+
+        return Task.FromResult(
+            Reachable.TryGetValue(issuerUrl ?? "", out var issuer)
+                ? Result<ClusterOidcIssuer>.Success(issuer)
+                : Result<ClusterOidcIssuer>.Failure(
+                    ErrorCode.InvalidRequestBody,
+                    ManagedIdentityFailures.Unreachable + $" Specifically: '{issuerUrl}' did not respond."
+                )
+        );
+    }
 }
 
 /// <summary>
@@ -269,6 +459,12 @@ public sealed class IdentityCluster : IAsyncLifetime {
     public IServicePrincipalGrain ServicePrincipal(Guid servicePrincipalId, Guid? tenant = null) =>
         For(tenant ?? Tenant).GetGrain<IServicePrincipalGrain>(GrainKeys.ServicePrincipal(servicePrincipalId));
 
+    /// <summary>A managed-identity grain.</summary>
+    /// <param name="managedIdentityId">Which identity.</param>
+    /// <param name="tenant">The tenant, defaulting to <see cref="Tenant" />.</param>
+    public IManagedIdentityGrain ManagedIdentity(Guid managedIdentityId, Guid? tenant = null) =>
+        For(tenant ?? Tenant).GetGrain<IManagedIdentityGrain>(GrainKeys.ManagedIdentity(managedIdentityId));
+
     /// <summary>The real per-tenant email index.</summary>
     /// <param name="email">The address.</param>
     /// <param name="tenant">The tenant, defaulting to <see cref="Tenant" />.</param>
@@ -357,6 +553,13 @@ public sealed class IdentityCluster : IAsyncLifetime {
                     services.AddSingleton<IClock>(TestClock.Instance);
                     services.AddSingleton<IPasswordHasher>(CheapArgon2.Hasher);
                     services.TryAddSingleton<ILoggerFactory>(_ => NullLoggerFactory.Instance);
+
+                    // ⚠ Only the DISCOVERY is scripted. IProjectedTokenValidator is left to the
+                    // module's own TryAdd, so the real ProjectedTokenValidator verifies real
+                    // signatures — substituting it would leave the one thing worth testing untested.
+                    // Reading a cluster's document needs a cluster, and there is not one; verifying a
+                    // token against a recorded key set needs neither.
+                    services.AddSingleton<IClusterOidcDiscovery>(ScriptedClusterOidcDiscovery.Instance);
                 }
             );
 

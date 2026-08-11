@@ -24,7 +24,7 @@ configuration somebody will change.
 | **Group** | `IGroupGrain` | Membership is ReBAC tuples ([07](07-rebac-authorization.md)), not a list in the grain — so nesting, inheritance and `ListObjects` come free |
 | **Service principal** | `IServicePrincipalGrain` | Machine identity with client credentials or a certificate |
 | **Application** | `IApplicationGrain` | OAuth client registration: redirect URIs, grant types, scopes, secrets |
-| **Managed identity** | `IManagedIdentityGrain` | A workload identity bound to a cluster + namespace + service account |
+| **Managed identity** | `IManagedIdentityGrain` (durable) | A workload identity bound to a cluster + namespace + service account. Its grain key is `mi/{managedIdentityId:N}` — [06 § Grain keys](06-tenancy-and-resource-model.md) |
 | **Credential** | *(inside the user)* | Password hash, TOTP secret ref, passkey credentials, recovery codes |
 | **Session** | `ISessionGrain` (**hot**) | Device, IP, issued-at, refresh chain, revocation |
 
@@ -49,6 +49,19 @@ OpenIddict 7.3.0 (ADR-015), OAuth 2.1 + OIDC.
 **Tokens.** Access tokens are JWTs, 10 minutes, signed with a rotating key set (30-day rotation, both
 keys published for 60). `aud` names the API, `tid` the tenant, `sub` the GUID, plus `scp`, `azp`, and
 an `auth_time`/`amr` pair so step-up authentication can be required for sensitive actions.
+
+⚠ **That sentence is short by two claims, and the gateway cannot do its job without either of them.**
+Both were discovered when `AccessTokenClaims.Permitted` — a *closed* allow-list built from the
+sentence above — met the requirements the gateway had written down independently in
+`ICallerContextResolver`:
+
+| Claim | Why the token needs it |
+|---|---|
+| `sub_typ` | The **subject type**, one of `user`, `servicePrincipal`, `managedIdentity`. ReBAC subjects are typed ([07 § The model](07-rebac-authorization.md)), so `user:abc` and `servicePrincipal:abc` are different subjects and `sub` alone does not identify one. ⚠ A dedicated claim, never a `type:id` prefix on `sub` — a prefix makes the type a substring of a value that is also a key, an audit field and a log line, and every consumer then needs the same splitting rule |
+| `act_sub` | The **impersonating operator**, for [06 § Platform administration](06-tenancy-and-resource-model.md). The flattened `act.sub` of RFC 8693 § 4.1, absent entirely on an ordinary token. ⚠ Minted by the identity host and read from no request surface: that document says the value rides in an `X-CyberCloud-Impersonated-By` header, which is correct on the internal gateway→resource-manager hop and **wrong at the public edge**, where a caller sets their own headers and could therefore name any operator in the audit trail |
+
+The set is still closed — fourteen claims, and adding a fifteenth is an edit in two assemblies plus
+an assertion on both sides, which is what closure is for.
 
 ⚠ **Roles and permissions are *not* in the token.** They are looked up per request from ReBAC. Putting
 role claims in a 10-minute token means a revoke takes up to 10 minutes, and packing a large user's
@@ -109,9 +122,23 @@ answer is a client secret in a Kubernetes `Secret`. The good answer:
 2. They bind it to `(cluster, namespace, serviceAccount)`.
 3. The platform records the cluster's OIDC issuer URL and JWKS (read once, refreshed).
 4. The workload's projected SA token is presented to `/token` with `grant_type=token-exchange`.
-5. The gateway validates the SA token against that issuer, matches the binding, and issues a platform
-   token for the managed identity.
+5. The **identity host** validates the SA token against that issuer, matches the binding, and issues
+   a platform token for the managed identity.
 6. ReBAC grants are made to `managedIdentity:{id}` like any other subject.
+
+⚠ **Step 5 used to say "the gateway", and that was a defect rather than a wording preference.**
+Step 4 puts the exchange at `/token`, and [§ Hosts](#hosts) above puts `/token` on
+`CyberCloud.Identity.Host`. The gateway serves bearer tokens and mints none — it references
+`OpenIddict.Validation.AspNetCore` and deliberately not `OpenIddict.Server.AspNetCore`, which is the
+package-level expression of that boundary. A gateway that could issue a token would be a second
+authorization server on the origin whose entire job is to accept them.
+
+⚠ **`managedIdentity` is a third subject type, and it only works because the subject type is a
+claim.** The token minted at step 5 carries `sub_typ: managedIdentity` beside `sub`, so step 6's
+`managedIdentity:{id}` is an ordinary `SubjectRef` the gateway can build — see
+[§ Protocol](#protocol) and `AccessTokenClaims.SubjectType`. Had the type been a prefix convention on
+`sub`, this step would need the checker to know that a workload's subject is spelled differently from
+a user's.
 
 No secret is ever stored, on either side. This is exactly Azure Workload Identity and it is worth the
 1.2 EM because it removes an entire incident class.

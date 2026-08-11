@@ -119,53 +119,61 @@ public sealed record PasskeyAssertionChallenge {
 }
 
 /// <summary>
-///     ⚠ <b>A seam, not an implementation.</b> RFC 8693 token exchange for workload identity —
-///     docs/plan/11 § Managed identity.
+///     RFC 8693 token exchange for workload identity — docs/plan/11 § Managed identity. The
+///     <c>/token</c> endpoint's one entry point into it.
 /// </summary>
 /// <remarks>
 ///     <para>
-///         <b>Why it is only a seam.</b> Step 3 of docs/plan/11 § Managed identity is "the platform
-///         records the cluster's OIDC issuer URL and JWKS (read once, refreshed)", and step 5 is "the
-///         gateway validates the SA token against that issuer". Both need a <i>tenant cluster's</i>
-///         OIDC issuer to validate against, and there is no tenant cluster in this repository to read
-///         one from — <c>CyberCloud.Kubernetes</c> has the connection grain but nothing provisions a
-///         cluster whose discovery document is reachable. Implementing against a fabricated issuer
-///         would produce a validator nobody has ever seen accept a real token, which is worse than an
-///         honest hole.
+///         ⚠ <b>This was a seam and is no longer one, and the thing that changed is worth stating.</b>
+///         The earlier note said the exchange could not be implemented because steps 3 and 5 of
+///         docs/plan/11 § Managed identity need a <i>tenant cluster's</i> OIDC issuer to validate
+///         against, and nothing in this repository provisions a cluster whose discovery document is
+///         reachable — so a validator would have been written against a fabricated issuer and never
+///         seen a real token. That reasoning confused two things: <b>reading</b> an issuer, which does
+///         need a cluster, and <b>trusting</b> one, which does not. The issuer is now a recorded fact
+///         on <see cref="IManagedIdentityGrain" />, read through <see cref="IClusterOidcDiscovery" />
+///         at binding time and refused there when the cluster does not publish one. Everything after
+///         that is arithmetic over a JWS and a stored key set.
 ///     </para>
 ///     <para>
-///         ⚠ <b>The hard part is not the code, it is reachability.</b> docs/plan/11 § Managed identity
-///         says so directly: the exchange "requires the tenant's cluster to expose a <b>publicly
-///         reachable</b> OIDC discovery document, or that we fetch the JWKS through the
+///         ⚠ <b>The reachability constraint did not go away; it moved to where the document puts
+///         it.</b> docs/plan/11 § Managed identity: the flow "requires the tenant's cluster to expose
+///         a <b>publicly reachable</b> OIDC discovery document, or that we fetch the JWKS through the
 ///         <c>AgentInitiated</c> tunnel", and "for BYO clusters that is not automatic, and the portal
-///         must say so at binding time rather than failing at token exchange". Whoever implements
-///         this owes the binding-time check before they owe the token endpoint.
+///         must say so <b>at binding time</b> rather than failing at token exchange". The tunnel is
+///         M2. So a BYO cluster that publishes nothing fails
+///         <see cref="IManagedIdentityGrain.BindAsync" /> with
+///         <see cref="ManagedIdentityFailures.Unreachable" />, in front of an administrator who can
+///         fix it — not at 3am in front of a workload that deployed cleanly.
 ///     </para>
 ///     <para>
-///         What is settled here so the shape does not move: the exchange takes a subject token and
-///         its type, names the managed identity being assumed, and returns a
-///         <see cref="SignInOutcome" />-shaped answer rather than a token — because minting the token
-///         is OpenIddict's job and this interface must not become a second token factory.
+///         What this returns is an <see cref="ExchangedSubject" /> and never a token: minting the
+///         token is OpenIddict's job (ADR-015), and a second token factory in this module would be a
+///         second opinion about the claim set.
 ///     </para>
 /// </remarks>
-public interface ITokenExchangeSeam {
+public interface ITokenExchange {
     /// <summary>
     ///     Exchanges a workload's projected service-account token for a platform identity.
     /// </summary>
+    /// <param name="tenantId">The tenant that owns the managed identity.</param>
+    /// <param name="managedIdentityId">Which managed identity the workload claims to be.</param>
     /// <param name="subjectToken">The projected service-account token, verbatim.</param>
     /// <param name="subjectTokenType">
-    ///     The RFC 8693 token type URI. Only <c>urn:ietf:params:oauth:token-type:jwt</c> is meaningful
-    ///     for a projected service-account token.
+    ///     The RFC 8693 token type URI. Only <see cref="TokenExchange.JwtSubjectTokenType" /> is
+    ///     meaningful for a projected service-account token.
     /// </param>
-    /// <param name="managedIdentityId">Which managed identity the workload claims to be.</param>
     /// <returns>
-    ///     ⚠ The default implementation fails with <see cref="ErrorCode.InternalError" /> and says
-    ///     what is missing. A seam that silently succeeded would be an authentication bypass.
+    ///     The identity to mint a token for, or the uniform
+    ///     <see cref="ManagedIdentityFailures.Exchange" /> refusal. ⚠ One message for every reason,
+    ///     because the caller is unauthenticated and a distinguishable refusal enumerates a tenant's
+    ///     identities and their bindings from the token endpoint.
     /// </returns>
-    Task<Result<SignInOutcome>> ExchangeAsync(
+    Task<Result<ExchangedSubject>> ExchangeAsync(
+        Guid tenantId,
+        Guid managedIdentityId,
         string subjectToken,
-        string subjectTokenType,
-        Guid managedIdentityId
+        string subjectTokenType
     );
 }
 
