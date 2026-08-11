@@ -52,6 +52,10 @@ static class ResourceVerb {
         ArgumentNullException.ThrowIfNull(bindings);
         ArgumentNullException.ThrowIfNull(parse);
 
+        // ⚠ Everything the command line alone can be wrong about is settled before a socket is
+        // opened. A contradictory --wait/--no-wait that was noticed only after the write had been
+        // accepted would be exit 2 reported over a resource that now exists.
+        var noWait = waitOptions is not null && waitOptions.NoWait(parse);
         var tenant = Address(invocation, bindings, parse, "--tenant", "tenant", required: false);
         var path = ResolvePath(invocation, verb, bindings, parse);
         var body = RequestBody.Build(bindings, parse);
@@ -85,7 +89,7 @@ static class ResourceVerb {
         // status rather than on the tree keeps a no-op create from waiting on a poll URL that was
         // never sent.
         if (verb.LongRunning && response.Status == 202) {
-            return await WaitAsync(invocation, verb, context, uri, response, waitOptions, parse, cancellationToken)
+            return await WaitAsync(invocation, verb, context, uri, response, noWait, cancellationToken)
                 .ConfigureAwait(false);
         }
 
@@ -119,10 +123,9 @@ static class ResourceVerb {
         CyberCloudClientContext context,
         Uri uri,
         Response accepted,
-        WaitOptions? waitOptions,
-        ParseResult parse,
+        bool noWait,
         CancellationToken cancellationToken) {
-        if (waitOptions is not null && waitOptions.NoWait(parse)) {
+        if (noWait) {
             invocation.Render(Accepted(accepted));
 
             return (int)ExitCode.Ok;

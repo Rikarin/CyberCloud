@@ -103,8 +103,15 @@ static class RestCommand {
     ///     <c>https://example.com/</c> is a token that has left the building.
     /// </exception>
     static Uri Resolve(Uri endpoint, string value) {
-        if (!Uri.TryCreate(value, UriKind.Absolute, out var absolute))
+        // ⚠ The scheme test is not belt-and-braces. On Unix, Uri.TryCreate("/tenants/t/subscriptions",
+        // UriKind.Absolute, …) SUCCEEDS, producing file:///tenants/t/subscriptions with an empty
+        // host — so the ordinary spelling of --uri, the one docs/plan/21 § Grammar puts in its own
+        // example, was refused as "pointing at another host" until this checked the scheme. Found by
+        // the test below.
+        if (!Uri.TryCreate(value, UriKind.Absolute, out var absolute)
+            || (absolute.Scheme != Uri.UriSchemeHttp && absolute.Scheme != Uri.UriSchemeHttps)) {
             return new Uri(endpoint, value);
+        }
 
         if (!string.Equals(absolute.Host, endpoint.Host, StringComparison.OrdinalIgnoreCase))
             throw new CycUsageException(

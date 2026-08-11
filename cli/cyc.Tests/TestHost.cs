@@ -18,11 +18,12 @@ namespace CyberCloud.Cli.Tests;
 sealed class TestHost : IDisposable {
     readonly string stateDirectory;
 
-    TestHost(CycHost host, StringWriter output, StringWriter error, string stateDirectory) {
+    TestHost(CycHost host, StringWriter output, StringWriter error, string stateDirectory, List<Uri> browsed) {
         Host = host;
         Output = output;
         Error = error;
         this.stateDirectory = stateDirectory;
+        Browsed = browsed;
     }
 
     /// <summary>The host under test.</summary>
@@ -41,7 +42,7 @@ sealed class TestHost : IDisposable {
     public string Stderr => Error.ToString();
 
     /// <summary>Every URL the browser callback was handed.</summary>
-    public List<Uri> Browsed { get; } = [];
+    public IReadOnlyList<Uri> Browsed { get; }
 
     /// <summary>The temporary <c>~/.cyc</c>.</summary>
     public string StateDirectory => stateDirectory;
@@ -55,12 +56,18 @@ sealed class TestHost : IDisposable {
     /// <param name="config">The contents of <c>~/.cyc/config</c>, or <c>null</c> for none.</param>
     /// <param name="credential">The credential, or <c>null</c> for one that hands out a fixed token.</param>
     /// <param name="time">The clock.</param>
+    /// <param name="credentialOptions">
+    ///     The options `cyc login` hands the SDK's credentials. ⚠ Supply one with
+    ///     <c>TokenCache.CreateInMemory()</c> in any test that signs in, or the run writes into the
+    ///     developer's real keychain.
+    /// </param>
     public static TestHost Create(
         HttpMessageHandler? transport = null,
         IReadOnlyDictionary<string, string>? environment = null,
         string? config = null,
         TokenCredential? credential = null,
-        TimeProvider? time = null) {
+        TimeProvider? time = null,
+        Func<CyberCloudCredentialOptions>? credentialOptions = null) {
         var output = new StringWriter();
         var error = new StringWriter();
         var state = Path.Combine(Path.GetTempPath(), "cyc-tests", Guid.NewGuid().ToString("N"));
@@ -93,12 +100,12 @@ sealed class TestHost : IDisposable {
                 return Task.CompletedTask;
             }) {
             CreateCredential = () => token,
+            CreateCredentialOptions = credentialOptions ?? (() => new CyberCloudCredentialOptions { TokenCache = TokenCache.CreateInMemory() }),
             StateDirectory = state,
             Time = time ?? TimeProvider.System,
         };
 
-        var built = new TestHost(host, output, error, state);
-        built.Browsed.AddRange(browsed);
+        var built = new TestHost(host, output, error, state, browsed);
 
         return built;
     }
@@ -138,6 +145,26 @@ sealed class TestHost : IDisposable {
             // A leftover temporary directory is not worth failing a passing test over.
         }
     }
+}
+
+/// <summary>
+///     A clock a test moves by hand.
+/// </summary>
+/// <remarks>
+///     ⚠ Written here rather than taken from <c>Microsoft.Extensions.TimeProvider.Testing</c>: that
+///     package is not in Directory.Packages.props, and adding a pin for six lines would touch a file
+///     every project in the repository shares. Only <see cref="GetUtcNow" /> is overridden, which is
+///     all the update check reads.
+/// </remarks>
+sealed class TestClock(DateTimeOffset now) : TimeProvider {
+    DateTimeOffset current = now;
+
+    /// <inheritdoc />
+    public override DateTimeOffset GetUtcNow() => current;
+
+    /// <summary>Moves the clock forward.</summary>
+    /// <param name="by">How far.</param>
+    public void Advance(TimeSpan by) => current += by;
 }
 
 /// <summary>A credential that hands out one token and never talks to anything.</summary>

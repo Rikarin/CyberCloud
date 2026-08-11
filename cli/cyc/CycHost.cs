@@ -75,6 +75,17 @@ sealed class CycHost {
     /// </remarks>
     public Func<TokenCredential> CreateCredential { get; init; } = CycDefaults.SignedInCredential;
 
+    /// <summary>
+    ///     Builds the options <c>cyc login</c> hands the SDK's credentials.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>The default is the SDK's own default, which means the OS keychain.</b> The tests
+    ///     replace it with <c>TokenCache.CreateInMemory()</c> and a scripted identity transport —
+    ///     without that seam a test run would sign a developer's real keychain in and out, and
+    ///     <c>cyc login</c> would be the one command with no test at all.
+    /// </remarks>
+    public Func<CyberCloudCredentialOptions> CreateCredentialOptions { get; init; } = () => new CyberCloudCredentialOptions();
+
     /// <summary>The clock, so a test can decide that a day has passed without waiting one.</summary>
     public TimeProvider Time { get; init; } = TimeProvider.System;
 

@@ -109,7 +109,14 @@ static class JmesPath {
     ///     misses. Built by the parser whenever <c>[]</c>, <c>[*]</c>, <c>[?…]</c> or <c>.*</c> is
     ///     followed by more of the chain.
     /// </summary>
-    sealed class ProjectionNode(Node source, Node projected) : Node {
+    /// <remarks>
+    ///     ⚠ <paramref name="flatten" /> is what makes <c>a[].b[]</c> mean what JMESPath says it
+    ///     means. A trailing <c>[]</c> flattens the <i>projection</i> rather than each element of it,
+    ///     so <c>value[].properties.cidrs[]</c> is one list of CIDRs and not a list of lists. Without
+    ///     it the expression parses, runs and quietly answers the wrong shape — which is worse than
+    ///     refusing it.
+    /// </remarks>
+    sealed class ProjectionNode(Node source, Node projected, bool flatten) : Node {
         public override Payload Evaluate(Payload current) {
             var value = source.Evaluate(current);
 
@@ -121,7 +128,12 @@ static class JmesPath {
             foreach (var item in value.Items) {
                 var result = projected.Evaluate(item);
 
-                if (!result.IsMissing)
+                if (result.IsMissing)
+                    continue;
+
+                if (flatten && result.IsArray)
+                    results.AddRange(result.Items);
+                else
                     results.Add(result);
             }
 
@@ -512,7 +524,9 @@ static class JmesPath {
             if (position >= text.Length || text[position] is ']' or ')' or ',' or '}' || Peek('|'))
                 return source;
 
-            return new ProjectionNode(source, ParseChain(new CurrentNode(), root: false));
+            var projected = ParseChain(new CurrentNode(), root: false);
+
+            return new ProjectionNode(source, projected, flatten: projected is FlattenNode);
         }
 
         Node ParsePrimary(Node current) {

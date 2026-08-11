@@ -1,4 +1,5 @@
 using System.CommandLine;
+using System.CommandLine.Completions;
 
 namespace CyberCloud.Cli.Commands;
 
@@ -66,10 +67,8 @@ static class CompletionCommand {
         command.Hidden = true;
 
         command.SetAction(parse => {
-            var typed = parse.GetValue(words) ?? [];
-
-            foreach (var completion in root().Parse(typed).GetCompletions())
-                host.Console.Out.WriteLine(completion.Label);
+            foreach (var completion in Complete(root(), parse.GetValue(words) ?? []))
+                host.Console.Out.WriteLine(completion);
 
             host.Console.Out.Flush();
 
@@ -77,6 +76,71 @@ static class CompletionCommand {
         });
 
         return command;
+    }
+
+    /// <summary>
+    ///     The completions for a partial command line.
+    /// </summary>
+    /// <param name="root">The command surface, built from the verb tree.</param>
+    /// <param name="words">The words typed so far, the partial one last.</param>
+    /// <remarks>
+    ///     ⚠ <b>The value branch is here because <c>System.CommandLine</c> 2.0.10 does not take
+    ///     it.</b> <see cref="ParseResult.GetCompletions" /> on <c>… create --tier ⎵</c> answers with
+    ///     the <i>sibling flag names</i> — <c>--allowed-cidrs</c>, <c>--api-version</c>, … — rather
+    ///     than with <c>free basic standard premium</c>. Measured against 2.0.10, not assumed. That
+    ///     would throw away the most useful completion the platform has: <c>CliEmitter</c> carries a
+    ///     schema's closed set into the tree's <c>choices</c> precisely so a shell can offer it. So
+    ///     when the word before the cursor names an option, its own completion sources are asked
+    ///     directly — which is still the library's data, through
+    ///     <see cref="Symbol.GetCompletions" />, rather than a second list.
+    /// </remarks>
+    internal static IEnumerable<string> Complete(RootCommand root, IReadOnlyList<string> words) {
+        ArgumentNullException.ThrowIfNull(root);
+        ArgumentNullException.ThrowIfNull(words);
+
+        var parse = root.Parse(words);
+        var context = parse.GetCompletionContext();
+
+        // `--tier ⎵` and `--tier fr⎵`: the option is the word before the cursor.
+        if (words.Count >= 2 && TakesAValue(parse, words[^2]) is { } pending)
+            return Values(pending, context, words[^1]);
+
+        // `--tier⎵` with no trailing word, which is what a shell that does not append an empty token
+        // sends.
+        if (words.Count >= 1 && TakesAValue(parse, words[^1]) is { } named)
+            return Values(named, context, string.Empty);
+
+        return parse.GetCompletions().Select(x => x.Label);
+    }
+
+    static IEnumerable<string> Values(Option option, CompletionContext context, string prefix)
+        => option
+            .GetCompletions(context)
+            .Select(x => x.Label)
+            .Where(x => x.StartsWith(prefix, StringComparison.Ordinal));
+
+    /// <summary>
+    ///     The option a word names, if it is one that takes a value.
+    /// </summary>
+    /// <remarks>
+    ///     Walks up from the command the parse settled on, so a recursive global such as
+    ///     <c>--api-version</c> is found from anywhere in the tree.
+    /// </remarks>
+    static Option? TakesAValue(ParseResult parse, string word) {
+        if (!word.StartsWith('-'))
+            return null;
+
+        for (var command = parse.CommandResult.Command; command is not null; command = command.Parents.OfType<Command>().FirstOrDefault()) {
+            foreach (var option in command.Options) {
+                if (option.Arity.MaximumNumberOfValues == 0)
+                    continue;
+
+                if (string.Equals(option.Name, word, StringComparison.Ordinal) || option.Aliases.Contains(word, StringComparer.Ordinal))
+                    return option;
+            }
+        }
+
+        return null;
     }
 
     /// <summary>The shim for one shell.</summary>

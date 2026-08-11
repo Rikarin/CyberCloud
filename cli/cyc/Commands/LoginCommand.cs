@@ -70,7 +70,7 @@ static class LoginCommand {
 
             var credential = parse.GetValue(servicePrincipal)
                 ? ServicePrincipal(invocation, parse.GetValue(clientId), tenantId, parse.GetValue(certificate), parse.GetValue(certificatePassword))
-                : Interactive(invocation, parse.GetValue(deviceCode), cancellationToken);
+                : Interactive(invocation, parse.GetValue(deviceCode));
 
             try {
                 var token = await AuthenticateAsync(invocation, credential, tenantId, cancellationToken).ConfigureAwait(false);
@@ -138,8 +138,9 @@ static class LoginCommand {
     ///     interactive flow. No implicit, no hybrid"</i> and its device-authorization row,
     ///     <i>"<c>cyc login</c> on a headless box"</i>.
     /// </summary>
-    static TokenCredential Interactive(CycInvocation invocation, bool deviceCode, CancellationToken cancellationToken) {
-        var options = new CyberCloudCredentialOptions { AuthorityHost = Authority(invocation) };
+    static TokenCredential Interactive(CycInvocation invocation, bool deviceCode) {
+        var options = invocation.Host.CreateCredentialOptions();
+        options.AuthorityHost = Authority(invocation);
 
         if (deviceCode || CycDefaults.LooksHeadless(invocation.Host.Environment))
             return new DeviceCodeCredential(CyberCloudCliCredential.CliClientId, (info, token) => PromptAsync(invocation, info, token), options);
@@ -188,13 +189,13 @@ static class LoginCommand {
             throw new CycUsageException(
                 "--service-principal needs --client-id and --tenant (or CYC_CLIENT_ID and CYC_TENANT_ID).");
 
-        var options = new CyberCloudCredentialOptions {
-            AuthorityHost = Authority(invocation),
-            TenantId = tenantId,
-            // ⚠ Nothing cached. A CI runner using client credentials has nothing worth keeping
-            // between processes and everything to lose by writing it somewhere.
-            TokenCache = TokenCache.None,
-        };
+        var options = invocation.Host.CreateCredentialOptions();
+        options.AuthorityHost = Authority(invocation);
+        options.TenantId = tenantId;
+
+        // ⚠ Nothing cached. A CI runner using client credentials has nothing worth keeping between
+        // processes and everything to lose by writing it somewhere.
+        options.TokenCache = TokenCache.None;
 
         if (!string.IsNullOrEmpty(certificatePath)) {
             var password = passwordFromEnvironment
