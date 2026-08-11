@@ -11,30 +11,10 @@
     <!-- xunit.v3 test projects are executables (Microsoft.Testing.Platform), not libraries. -->
     <OutputType>Exe</OutputType>
     <!--
-      ⚠ Without these two, `dotnet test` FINDS NO TESTS AND STILL EXITS 0.
-
-      OutputType=Exe above already says "Microsoft.Testing.Platform", but saying it is not enough:
-      `dotnet test` defaults to the VSTest host, which cannot discover xunit.v3 tests because
-      xunit.v3 ships an MTP entry point and no VSTest adapter. Observed against a throwaway
-      CyberCloud.Probe.Tests with one passing [Fact]:
-
-        $ dotnet test src/CyberCloud.Probe.Tests/…csproj (with no rebuild)
-        A total of 1 test files matched the specified pattern.
-        No test is available in …/CyberCloud.Probe.Tests.dll. Make sure that test discoverer &
-        executors are registered …
-        $ echo $?
-        0
-
-      A green `Test` that ran nothing is the worst possible state for a gate — docs/plan/23 § CI
-      shape gates every PR on it. With these properties the same command reports
-      "Passed! - Failed: 0, Passed: 1" and the exit code means something.
-
-      Corollary: test projects must NOT reference Microsoft.NET.Test.Sdk. It is the VSTest bridge
-      and pulls the runner back to the mode that finds nothing. The pin stays in
-      Directory.Packages.props for any project that genuinely needs VSTest.
+      ⚠ The Microsoft.Testing.Platform runner switches that belong with OutputType=Exe are NOT
+      here — they are in Directory.Build.props § Test runner, because setting them in this file is
+      too late to have any effect. See the comment there.
     -->
-    <TestingPlatformDotnetTestSupport>true</TestingPlatformDotnetTestSupport>
-    <UseMicrosoftTestingPlatformRunner>true</UseMicrosoftTestingPlatformRunner>
     <!--
       Test code legitimately does things production code must not: public fixtures that are never
       sealed, unused parameters in theory data, assertions on the result of an async call.
