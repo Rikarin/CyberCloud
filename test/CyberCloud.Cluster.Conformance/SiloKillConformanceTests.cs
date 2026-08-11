@@ -190,7 +190,19 @@ public abstract class SiloKillConformanceTests<TSource>
 
             OperationStatus? last = null;
             for (var i = 0; i < 12; i++) {
-                last = (await operation.DriveAsync()).GetValueOrThrow();
+                var driven = await operation.DriveAsync();
+
+                // ⚠ Unwrapped by hand rather than with GetValueOrThrow, because the failure this
+                // catches is the whole point of the test and deserves to say so. ResourceNotFound
+                // here means the successor's grain activated over an empty durable row: the create
+                // was accepted, the silos died, and the operation is simply gone.
+                driven.IsSuccess.ShouldBeTrue(
+                    "the operation does not exist on the successor cluster, so nothing was recovered "
+                    + "and docs/plan/24 § Phase 1's exit criterion 3 is NOT met: "
+                    + driven.Error?.Message
+                );
+
+                last = driven.GetValueOrThrow();
 
                 if (last.IsTerminal) {
                     break;
