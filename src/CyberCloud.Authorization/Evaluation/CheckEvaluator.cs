@@ -52,7 +52,7 @@ public sealed record CheckEvaluation {
 ///         on <c>a</c>. Evaluating <c>a</c> descends into <c>b</c>, which loops back to <c>a</c> and
 ///         gets the in-progress false, so <c>b</c> concludes false; then <c>a</c>'s
 ///         <c>This</c> succeeds and <c>a</c> is true — at which point <c>b</c> is true as well, and
-///         a memoized <c>b = false</c> is simply wrong. It would surface as
+///         a memoized <c>b = false</c> is wrong. It would surface as
 ///         <c>Permission(p, Rel(a) &amp; Rel(b))</c> denying a subject who has both.
 ///     </para>
 ///     <para>

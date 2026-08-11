@@ -13,14 +13,14 @@ namespace CyberCloud.Core;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>No exception details, ever</b> (docs/plan/08:190). This type has no field that could
+///         ⚠ <b>No exception details, ever</b> (docs/plan/08 § Errors). This type has no field that could
 ///         carry a stack trace, and that absence is deliberate — a stack trace in an error body is
 ///         an information leak and a support-cost multiplier. The correlation id goes in a response
 ///         header and the detail goes to the trace.
 ///     </para>
 ///     <para>
 ///         The JSON serialisation itself lives in <c>CyberCloud.Core.Contracts</c> / the gateway,
-///         not here: docs/plan/03:226 keeps Core free of wire concerns.
+///         not here: docs/plan/03 § Assembly graph rules keeps Core free of wire concerns.
 ///     </para>
 /// </remarks>
 public sealed record Error {
@@ -39,7 +39,7 @@ public sealed record Error {
     /// <summary>Creates an error.</summary>
     /// <param name="code">A registered code. See <see cref="ErrorCode" />.</param>
     /// <param name="message">
-    ///     A human-readable message that <b>names the actual values</b> — docs/plan/08:187:
+    ///     A human-readable message that <b>names the actual values</b> — docs/plan/08 § Errors:
     ///     <i>
     ///         "Quota exceeded" without the meter, the request and the remainder is a support ticket
     ///         by construction.
@@ -47,7 +47,7 @@ public sealed record Error {
     /// </param>
     /// <param name="target">
     ///     An optional RFC 6901 JSON Pointer into the request body, so the portal can highlight the
-    ///     field (docs/plan/08:188). Either <c>""</c> (the whole document) or a string of
+    ///     field (docs/plan/08 § Errors). Either <c>""</c> (the whole document) or a string of
     ///     <c>"/"</c>-prefixed reference tokens.
     /// </param>
     /// <param name="details">Optional nested errors. A default array is normalised to empty.</param>
@@ -55,7 +55,7 @@ public sealed record Error {
     /// <exception cref="ArgumentException">
     ///     <paramref name="message" /> is blank, or <paramref name="target" /> is not a JSON
     ///     Pointer. Both are programmer errors, not domain outcomes, so they throw rather than
-    ///     returning a <see cref="Result" /> — docs/plan/00:171.
+    ///     returning a <see cref="Result" /> — docs/plan/00 § Coding standards.
     /// </exception>
     public Error(
         ErrorCode code,
@@ -70,7 +70,7 @@ public sealed record Error {
             throw new ArgumentException(
                 $"'{target}' is not an RFC 6901 JSON Pointer. A target is either \"\" (the whole "
                 + "document) or a sequence of \"/\"-prefixed reference tokens, for example "
-                + "\"/properties/sku\". docs/plan/08:188.",
+                + "\"/properties/sku\". docs/plan/08 § Errors.",
                 nameof(target)
             );
         }

@@ -6,12 +6,12 @@ namespace CyberCloud.Core.Tests;
 
 /// <summary>
 ///     The error-code registry is a closed, checked-in set, and this is the gate on additions —
-///     docs/plan/08:184-186.
+///     docs/plan/08 § Errors.
 /// </summary>
 public class ErrorCodeRegistryTests {
     /// <summary>
     ///     ⚠ <b>THE GOLDEN SET. Changing a line here is changing the public API contract.</b>
-    ///     docs/plan/08:184:
+    ///     docs/plan/08 § Errors:
     ///     <i>
     ///         "code is a stable, documented, greppable identifier. It is part of
     ///         the API contract; changing one is a breaking change."
@@ -56,7 +56,7 @@ public class ErrorCodeRegistryTests {
         actual.ShouldBe(
             Golden.Order(StringComparer.Ordinal).ToImmutableArray(),
             "the error-code registry changed. Every code is part of the public API contract "
-            + "(docs/plan/08:184) — if this is an addition, add it to the golden set above in the "
+            + "(docs/plan/08 § Errors) — if this is an addition, add it to the golden set above in the "
             + "same commit; if it is a rename or a removal, it is a breaking change and needs a "
             + "deprecation, not an edit."
         );

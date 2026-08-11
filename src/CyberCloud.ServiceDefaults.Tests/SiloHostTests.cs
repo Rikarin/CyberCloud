@@ -74,7 +74,7 @@ public sealed class SiloHostFixture : IAsyncLifetime {
             ]
         );
 
-        // ⚠ Not optional, and not obvious from docs/plan/04:41-68. CreateSilo calls
+        // ⚠ Not optional, and not obvious from docs/plan/04 § Silo composition. CreateSilo calls
         // builder.Host.UseAutofac(), and ABP's service-provider factory resolves IModuleContainer
         // during Build(). Without a module registered first, Build() throws
         // "Could not find singleton service: Volo.Abp.Modularity.IModuleContainer" — a message that
@@ -181,7 +181,7 @@ public sealed class SiloHostTests(SiloHostFixture silo) : IClassFixture<SiloHost
         names.ShouldContain("silo-participants");
         names.ShouldContain("cluster");
 
-        // docs/plan/08:190 — no exception detail in a body a caller can read. The health endpoint
+        // docs/plan/08 § Errors — no exception detail in a body a caller can read. The health endpoint
         // is reachable from the cluster network, so "at" frames leaking here is an information
         // disclosure, not a cosmetic issue.
         body.ShouldNotContain("   at ");
@@ -190,7 +190,7 @@ public sealed class SiloHostTests(SiloHostFixture silo) : IClassFixture<SiloHost
 
     [Fact]
     public void ActivityPropagationIsWiredOrTracingStopsAtTheGateway() {
-        // docs/plan/04:78. There is no public "is it on?" flag, so this asserts the observable
+        // docs/plan/04 § Silo composition. There is no public "is it on?" flag, so this asserts the observable
         // consequence: AddActivityPropagation registers its filters as IIncomingGrainCallFilter and
         // IOutgoingGrainCallFilter in the silo's container. Without the call, both are empty.
         silo.Services.GetServices<IIncomingGrainCallFilter>().ShouldNotBeEmpty();

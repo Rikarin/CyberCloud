@@ -8,7 +8,7 @@ namespace CyberCloud.Core.Contracts;
 ///     <para>
 ///         These strings are the ones in <c>[PersistentState("state", StorageTiers.Hot)]</c>
 ///         (docs/plan/02 § ADR-003, the tier table) and in <c>AddMultitenantGrainStorage…(StorageTiers.Durable, …)</c>
-///         (docs/plan/04:50-53). They live in <c>.Contracts</c> rather than in
+///         (docs/plan/04 § Silo composition). They live in <c>.Contracts</c> rather than in
 ///         <c>ServiceDefaults</c> because <b>both ends need them</b>: the silo names a provider when
 ///         it registers one, and a grain names the same provider from a provider-implementation
 ///         assembly that must not reference the host.
@@ -18,7 +18,7 @@ namespace CyberCloud.Core.Contracts;
 ///         resolves a storage provider by name at activation; an unregistered name is a runtime
 ///         failure on first use of that grain, in production, on the grain nobody activated during
 ///         testing. That is the whole reason these are <c>const</c>s and not literals — and it is
-///         why <c>docs/plan/05:107</c>'s architecture test walks <c>[PersistentState]</c> rather
+///         why <c>docs/plan/05 § Choosing a tier</c>'s architecture test walks <c>[PersistentState]</c> rather
 ///         than trusting review.
 ///     </para>
 ///     <para>
@@ -31,7 +31,7 @@ namespace CyberCloud.Core.Contracts;
 public static class StorageTiers {
     /// <summary>
     ///     Redis Cluster. Sessions, live status, observed cluster state, caches, rate counters,
-    ///     terminal sessions, metric pre-aggregates. Loss costs a warm-up (docs/plan/05:68-72).
+    ///     terminal sessions, metric pre-aggregates. Loss costs a warm-up (docs/plan/05 § Hot).
     /// </summary>
     public const string Hot = "Hot";
 

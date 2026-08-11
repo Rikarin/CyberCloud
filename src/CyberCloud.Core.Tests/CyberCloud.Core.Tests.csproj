@@ -11,7 +11,7 @@
       assert against was verified by decompiling and executing the shipped 4.0.0 assembly out of tree
       (see OrleansMultitenantEncodingTests) — but CyberCloud.Core must not acquire an Orleans
       dependency through the back door of its own test project, because that is how assembly-graph
-      rule 1 (docs/plan/03:226) gets eroded one "just for the test" at a time.
+      rule 1 (docs/plan/03 § Assembly graph rules) gets eroded one "just for the test" at a time.
     -->
 
     <ItemGroup>

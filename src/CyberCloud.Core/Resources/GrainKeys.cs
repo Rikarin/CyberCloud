@@ -212,7 +212,7 @@ public readonly record struct GrainKey {
 
 /// <summary>
 ///     The <b>only</b> type in Cyber Cloud allowed to format or parse a grain key — ADR-002
-///     (docs/plan/02:161-188) and the grain-key table at docs/plan/06:101-110.
+///     (docs/plan/02 § ADR-002) and the grain-key table at docs/plan/06 § Grain keys.
 /// </summary>
 /// <remarks>
 ///     <para>
@@ -339,11 +339,11 @@ public readonly record struct GrainKey {
 ///         shape with no grain behind it is a shape nothing can hold to its meaning.
 ///     </para>
 ///     <para>
-///         ⚠ <b><see cref="Resource" /> is keyed by the resource GUID alone</b> — docs/plan/06:112-114.
-///         ADR-002 once showed <c>{sub:N}/{rg}/{type}/{res:N}</c> and docs/plan/02:153-159 records
+///         ⚠ <b><see cref="Resource" /> is keyed by the resource GUID alone</b> — docs/plan/06 § Grain keys.
+///         ADR-002 once showed <c>{sub:N}/{rg}/{type}/{res:N}</c> and docs/plan/02 § ADR-002 records
 ///         that 06 won: a key carrying the name would make a <i>rename</i> a grain migration, and one
 ///         carrying the resource group would make a <i>move</i> one too. The address stays in
-///         <see cref="ResourceId" />, which is a different question — docs/plan/06:41-45.
+///         <see cref="ResourceId" />, which is a different question — docs/plan/06 § Identifiers.
 ///     </para>
 ///     <para>
 ///         <b>Where this key ends up.</b> These are the <i>within-tenant</i> halves.
@@ -443,7 +443,7 @@ public static class GrainKeys {
 
     /// <summary>
     ///     The number of hexadecimal characters an index digest carries — <c>sha256(x)[..16]</c>,
-    ///     docs/plan/06:106 and :108.
+    ///     docs/plan/06 § Grain keys.
     /// </summary>
     /// <remarks>
     ///     ⚠ 16 hex characters is <b>64 bits</b>, not 128. Two consequences, both worth stating
@@ -479,15 +479,15 @@ public static class GrainKeys {
 
     // ── Formatting ─────────────────────────────────────────────────────────────────────────────
 
-    /// <summary><c>sub/{subscriptionId:N}</c> — <c>ISubscriptionGrain</c>, docs/plan/06:103.</summary>
+    /// <summary><c>sub/{subscriptionId:N}</c> — <c>ISubscriptionGrain</c>, docs/plan/06 § Grain keys.</summary>
     public static string Subscription(Guid subscriptionId) => SubscriptionPrefix + N(subscriptionId);
 
     /// <summary>
-    ///     <c>sub/{subscriptionId:N}/rg/{name}</c> — <c>IResourceGroupGrain</c>, docs/plan/06:104.
+    ///     <c>sub/{subscriptionId:N}/rg/{name}</c> — <c>IResourceGroupGrain</c>, docs/plan/06 § Grain keys.
     /// </summary>
     /// <remarks>
     ///     The key nests under the subscription because a resource group name is unique within its
-    ///     subscription, not within the tenant (docs/plan/06:10-11). <paramref name="name" /> is the
+    ///     subscription, not within the tenant (docs/plan/06 § The hierarchy). <paramref name="name" /> is the
     ///     only caller-controlled text in any grain key, and it is validated here rather than
     ///     trusted: see the remarks on <see cref="GrainKeys" /> § collision.
     /// </remarks>
@@ -497,7 +497,7 @@ public static class GrainKeys {
         return SubscriptionPrefix + N(subscriptionId) + "/" + ResourceGroupSegment + "/" + validated;
     }
 
-    /// <summary><c>res/{resourceId:N}</c> — <c>IResourceGrain</c>, docs/plan/06:105.</summary>
+    /// <summary><c>res/{resourceId:N}</c> — <c>IResourceGrain</c>, docs/plan/06 § Grain keys.</summary>
     public static string Resource(Guid resourceId) => ResourcePrefix + N(resourceId);
 
     /// <summary><c>tenant/{tenantId:N}</c> — <c>ITenantGrain</c>.</summary>
@@ -655,17 +655,17 @@ public static class GrainKeys {
     /// </remarks>
     public static string TupleStore(Guid tenantId) => TupleStorePrefix + N(tenantId);
 
-    /// <summary><c>user/{userId:N}</c> — <c>IUserGrain</c>, docs/plan/06:107.</summary>
+    /// <summary><c>user/{userId:N}</c> — <c>IUserGrain</c>, docs/plan/06 § Grain keys.</summary>
     public static string User(Guid userId) => UserPrefix + N(userId);
 
-    /// <summary><c>op/{operationId:N}</c> — <c>IOperationGrain</c>, docs/plan/06:109.</summary>
+    /// <summary><c>op/{operationId:N}</c> — <c>IOperationGrain</c>, docs/plan/06 § Grain keys.</summary>
     public static string Operation(Guid operationId) => OperationPrefix + N(operationId);
 
     /// <summary>
-    ///     <c>cluster/{clusterId:N}</c> — <c>IClusterConnectionGrain</c>, docs/plan/06:110.
+    ///     <c>cluster/{clusterId:N}</c> — <c>IClusterConnectionGrain</c>, docs/plan/06 § Grain keys.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>This key is NOT tenant-qualified.</b> docs/plan/06:116-122 makes
+    ///     ⚠ <b>This key is NOT tenant-qualified.</b> docs/plan/06 § Grain keys makes
     ///     <c>IClusterConnectionGrain</c> a <i>null-tenant</i> grain on purpose: a cluster connection
     ///     holds a live client and a set of watches, there must be exactly one activation per cluster
     ///     platform-wide, and a cluster shared between a tenant and the platform (which every
@@ -673,7 +673,7 @@ public static class GrainKeys {
     ///     carries its owning tenant as <i>state</i> and checks it on every call; this is the single
     ///     place tenancy is enforced by code rather than by key.
     ///     <para>
-    ///         The encoding consequence, from ADR-002's corrected table (docs/plan/02:143): the
+    ///         The encoding consequence, from ADR-002's corrected table (docs/plan/02 § ADR-002): the
     ///         null-tenant branch of <c>Orleans.Multitenant</c> is a <b>different</b> encoding — no
     ///         tenant prefix, no <c>'~'</c> rule, and the whole key has its <c>'|'</c> doubled. This
     ///         key contains no <c>'|'</c>, so it passes through as itself, and because the doubling
@@ -686,16 +686,16 @@ public static class GrainKeys {
 
     /// <summary>
     ///     <c>idx/path/{sha256(canonicalPath)[..16]}</c> — <c>IResourceIndexGrain</c>,
-    ///     docs/plan/06:106.
+    ///     docs/plan/06 § Grain keys.
     /// </summary>
     /// <remarks>
     ///     ⚠ <b>This takes a <see cref="Resources.ResourceId" /> and not a string, deliberately.</b>
     ///     The digest must be over <see cref="Resources.ResourceId.CanonicalPath" /> and never over
-    ///     <see cref="Resources.ResourceId.Path" /> — docs/plan/06:73-78 and docs/plan/02:182-185.
+    ///     <see cref="Resources.ResourceId.Path" /> — docs/plan/06 § Identifiers and docs/plan/02 § ADR-002.
     ///     The provider namespace is case-preserving on the wire (<c>CyberCloud.Cache</c> reads
     ///     better than <c>cybercloud.cache</c>), so one resource has two <c>Path</c> spellings;
     ///     hashing <c>Path</c> would let both claim the name and defeat the two-phase create at
-    ///     docs/plan/06:124-140, which is the one place a duplicate claim is a correctness bug rather
+    ///     docs/plan/06 § Two-phase create, which is the one place a duplicate claim is a correctness bug rather
     ///     than a cosmetic one. A <c>string</c> overload would accept <c>Path</c> exactly as readily
     ///     as <c>CanonicalPath</c>, and the difference between them <i>is</i> the bug — so there
     ///     isn't one. ADR-002's sketch spells the parameter <c>canonicalPath</c>; this is the same
@@ -711,7 +711,7 @@ public static class GrainKeys {
 
     /// <summary>
     ///     <c>idx/email/{sha256(tenantId + normalizedEmail)[..16]}</c> — <c>IEmailIndexGrain</c>,
-    ///     docs/plan/06:108.
+    ///     docs/plan/06 § Grain keys.
     /// </summary>
     /// <remarks>
     ///     <para>
@@ -719,7 +719,7 @@ public static class GrainKeys {
     ///             The tenant id is in the digest as well as in the tenant qualification, and that is
     ///             not redundant.
     ///         </b>
-    ///         docs/plan/11:99-101 —
+    ///         docs/plan/11 § Sign-up and tenant creation —
     ///         <i>
     ///             "email uniqueness is per tenant; global
     ///             email uniqueness would be a global index — the thing we do not have and do not
@@ -781,7 +781,7 @@ public static class GrainKeys {
     ///         an ASCII letter — which is the equivalence every mail provider actually implements, and
     ///         merges nothing else. The related trap in the other direction is U+0130 LATIN CAPITAL
     ///         LETTER I WITH DOT ABOVE, whose invariant lower-casing is <i>not</i> <c>"i"</c>; under
-    ///         this rule it is simply left alone and stays a different address. Both are asserted by
+    ///         this rule it is left alone and stays a different address. Both are asserted by
     ///         <c>GrainKeysTests</c> § email normalization. This is the same argument, for the same
     ///         reason, as <see cref="ResourceTypeName.AsciiLower" />.
     ///     </para>
@@ -1064,7 +1064,7 @@ public static class GrainKeys {
         if (kind == GrainKeyKind.None) {
             return Invalid(
                 $"'{key}' is not a grain key: '{segments[1]}' is not an index. The two indexes are "
-                + "'idx/path' (docs/plan/06:106) and 'idx/email' (docs/plan/06:108)."
+                + "'idx/path' (docs/plan/06 § Grain keys) and 'idx/email' (docs/plan/06 § Grain keys)."
             );
         }
 
@@ -1088,7 +1088,7 @@ public static class GrainKeys {
             || !string.Equals(segments[2], ResourceGroupSegment, StringComparison.Ordinal)) {
             return Invalid(
                 $"'{key}' is not a grain key: the four-segment shapes are "
-                + "'sub/{subscriptionId}/rg/{name}' (docs/plan/06:104) and 'rel/{obj|sub|check}/"
+                + "'sub/{subscriptionId}/rg/{name}' (docs/plan/06 § Grain keys) and 'rel/{obj|sub|check}/"
                 + "{type}/{id}' (docs/plan/07 § Storage)."
             );
         }

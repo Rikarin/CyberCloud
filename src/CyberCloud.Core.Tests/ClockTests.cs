@@ -3,7 +3,7 @@ using Shouldly;
 
 namespace CyberCloud.Core.Tests;
 
-/// <summary><see cref="IClock" /> and <see cref="SystemClock" /> — docs/plan/03:60.</summary>
+/// <summary><see cref="IClock" /> and <see cref="SystemClock" /> — docs/plan/03 § Foundation.</summary>
 public class ClockTests {
     [Fact]
     public void TheSystemClockReadsTheSystemClock() {

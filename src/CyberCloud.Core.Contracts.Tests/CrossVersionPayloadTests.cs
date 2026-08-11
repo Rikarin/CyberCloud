@@ -16,7 +16,7 @@ namespace CyberCloud.Core.Contracts.Tests;
 ///         approximation of it.
 ///     </para>
 ///     <para>
-///         docs/plan/04:179-181 asks for the real version of this: a CI gate that loads the previous
+///         docs/plan/04 § Failure and upgrade asks for the real version of this: a CI gate that loads the previous
 ///         three releases' contract assemblies and round-trips every wire type through both. That
 ///         gate cannot exist until there is a previous release. This file is the part of it that can
 ///         be written on day one.

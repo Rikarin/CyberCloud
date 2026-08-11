@@ -7,15 +7,15 @@ namespace CyberCloud.ServiceDefaults;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         docs/plan/04:6-14 — there are <b>three</b> clusters and conflating them is named as the
+///         docs/plan/04 § The clusters, plural — there are <b>three</b> clusters and conflating them is named as the
 ///         first mistake to avoid: a regional control plane per region, one global directory, and a
 ///         tenant's own Kubernetes cluster (which is not an Orleans cluster at all). A process joins
 ///         exactly one of the first two, and <see cref="ClusterId" /> is what says which.
 ///     </para>
 ///     <para>
 ///         ⚠ <b><see cref="ServiceId" /> is part of the physical storage key.</b> Orleans' ADO.NET
-///         grain-storage schema has a <c>ServiceId</c> column (docs/plan/05:80-82), so changing it
-///         orphans every stored grain in the durable tier. It is separate from
+///         grain-storage schema has a <c>ServiceId</c> column (docs/plan/05 § Durable), so changing
+///         it orphans every stored grain in the durable tier. It is separate from
 ///         <see cref="ClusterId" /> for that reason: a cluster can be rebuilt, renamed or replaced
 ///         and keep its state, which is what makes a blue/green cluster swap possible at all.
 ///     </para>
@@ -46,7 +46,7 @@ public sealed class CyberCloudClusterOptions {
     /// <summary>The grain-storage provider bound to <see cref="StorageTiers.Durable" />.</summary>
     public string DurableStorageProvider { get; set; } = StorageTiers.Durable;
 
-    /// <summary>The stream provider — docs/plan/04:129, one provider named <c>Events</c>.</summary>
+    /// <summary>The stream provider — docs/plan/04 § Streams, one provider named <c>Events</c>.</summary>
     public string EventStreamProvider { get; set; } = StreamProviders.Events;
 
     /// <summary>
@@ -59,7 +59,7 @@ public sealed class CyberCloudClusterOptions {
     ///             These two exist because Orleans' defaults are not free ports on a developer's
     ///             machine.
     ///         </b>
-    ///         docs/plan/04:60 writes <c>b.UseLocalhostClustering()</c> with no
+    ///         docs/plan/04 § Silo composition writes <c>b.UseLocalhostClustering()</c> with no
     ///         arguments, which binds <b>11111</b> and <b>30000</b>. 30000 in particular is a
     ///         popular port — it was already taken by an unrelated process on the machine this was
     ///         written on, and the failure is <c>AddressInUseException</c> out of a socket bind deep

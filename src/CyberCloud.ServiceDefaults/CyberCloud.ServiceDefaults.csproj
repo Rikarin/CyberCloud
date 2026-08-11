@@ -1,15 +1,15 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
     <!--
-      docs/plan/03:82 — "CyberCloud.ServiceDefaults/  # AddServiceDefaults, health checks, Orleans host
-      builders", and docs/plan/03:85: "the direct descendant of Survival's OrleansApplication …
+      docs/plan/03 § Foundation — "CyberCloud.ServiceDefaults/  # AddServiceDefaults, health checks, Orleans host
+      builders", and docs/plan/03 § Foundation: "the direct descendant of Survival's OrleansApplication …
       copied in shape, not in code, because the membership and storage wiring differ".
   
       ⚠ THIS IS THE FIRST ASSEMBLY IN THE TREE ALLOWED ORLEANS HOSTING. Everything below it —
       CyberCloud.Core (zero packages) and CyberCloud.Core.Contracts (Microsoft.Orleans.Sdk only) —
       stays hostable-from-anywhere on purpose, which is what lets the gateway, the CLI and the SDK
       reference the contracts without acquiring a silo. Adding a package here is cheap; adding one
-      there is an assembly-graph change (docs/plan/03:231-241).
+      there is an assembly-graph change (docs/plan/03 § Assembly graph rules).
   
       ⚠ WHAT SURVIVAL HAS THAT THIS DOES NOT, all deliberate:
         * Microsoft.Extensions.ServiceDiscovery / .Http.Resilience — Aspire's, and Aspire is local
@@ -31,7 +31,7 @@
         <PackageReference Include="Microsoft.Orleans.Client"/>
         <!-- UseKubeMembership / UseKubeGatewayListProvider — the contrib membership provider. -->
         <PackageReference Include="Orleans.Clustering.Kubernetes"/>
-        <!-- UseKubernetesHosting — pod identity becomes silo identity (docs/plan/04:76). -->
+        <!-- UseKubernetesHosting — pod identity becomes silo identity (docs/plan/04 § Silo composition). -->
         <PackageReference Include="Microsoft.Orleans.Hosting.Kubernetes"/>
     </ItemGroup>
 

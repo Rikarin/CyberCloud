@@ -6,7 +6,7 @@ namespace CyberCloud.Core.Tests;
 
 /// <summary>
 ///     <see cref="GrainKeys" /> — the only type allowed to format or parse a grain key (ADR-002,
-///     docs/plan/02:161-188; the shape table, docs/plan/06:101-110).
+///     docs/plan/02 § ADR-002; the shape table, docs/plan/06 § Grain keys).
 /// </summary>
 public class GrainKeysTests {
     static readonly Guid Subscription = Guid.Parse("7f2d4e88-1a3b-4c5d-8e9f-0a1b2c3d4e5f");
@@ -39,7 +39,7 @@ public class GrainKeysTests {
             { GrainKeys.TupleStore(Tenant), GrainKeyKind.TupleStore }
         };
 
-    // ── The eight shapes docs/plan/06:101-110 specifies ────────────────────────────────────────
+    // ── The eight shapes docs/plan/06 § Grain keys specifies ────────────────────────────────────────
 
     [Fact]
     public void EveryShapeIsExactlyWhatTheTableSays() {
@@ -67,7 +67,7 @@ public class GrainKeysTests {
 
     [Fact]
     public void TheResourceKeyIsTheGuidAloneSoARenameAndAMoveAreMetadata() {
-        // docs/plan/06:112-114 and the correction at docs/plan/02:153-159. This is the whole reason
+        // docs/plan/06 § Grain keys and the correction at docs/plan/02 § ADR-002. This is the whole reason
         // ResourceKey was deleted rather than ported: a key carrying the name would make a rename a
         // grain migration, and one carrying the resource group would make a move one too.
         var renamed = Sample with { Name = "billing-db" };
@@ -346,7 +346,7 @@ public class GrainKeysTests {
 
     [Fact]
     public void EveryGeneratedKeyIsSafeForTenantQualification() {
-        // ADR-002's corrected encoding table (docs/plan/02:138-143): Orleans.Multitenant copies the
+        // ADR-002's corrected encoding table (docs/plan/02 § ADR-002): Orleans.Multitenant copies the
         // key within the tenant VERBATIM and prefixes '~' only when it starts with '|' or '~'. So a
         // '|' is not corrupted — but the physical key in Redis, in a log line and in a trace stops
         // reading as the key we constructed. Every key here is trivially clean, so one that is not
@@ -378,8 +378,8 @@ public class GrainKeysTests {
 
     [Fact]
     public void TheClusterKeyIsANullTenantKeyAndCannotBeMistakenForATenantedOne() {
-        // docs/plan/06:110 and :116-122 — IClusterConnectionGrain is the one null-tenant grain, and
-        // ADR-002's table (docs/plan/02:143) records that the null-tenant branch is a DIFFERENT
+        // docs/plan/06 § Grain keys — IClusterConnectionGrain is the one null-tenant grain, and
+        // ADR-002's table (docs/plan/02 § ADR-002) records that the null-tenant branch is a DIFFERENT
         // encoding: no tenant prefix, no '~' rule, and the whole key has its '|' doubled.
         foreach (var id in Corpus.ResourceIds(200, 3).Select(x => x.Id)) {
             var key = GrainKeys.ClusterConnection(id);
@@ -401,7 +401,7 @@ public class GrainKeysTests {
         // The failure mode the null-tenant note prevents: if somebody tenant-qualified this grain,
         // the same cluster would have one activation per tenant, each holding its own client and
         // its own watches — which is precisely the "two connections to one cluster" that
-        // docs/plan/06:116-122 exists to stop. Recorded as an assertion so the distinction is
+        // docs/plan/06 § Grain keys exists to stop. Recorded as an assertion so the distinction is
         // visible rather than folkloric.
         var key = GrainKeys.ClusterConnection(Resource);
 
@@ -413,10 +413,10 @@ public class GrainKeysTests {
 
     [Fact]
     public void TwoCaseDifferingPathsProduceTheSameIndexKey() {
-        // ⚠ docs/plan/06:73-78 and docs/plan/02:182-185. The provider namespace and type are
+        // ⚠ docs/plan/06 § Identifiers and docs/plan/02 § ADR-002. The provider namespace and type are
         // case-preserving on the wire, so one resource has more than one Path spelling. Hashing
         // Path would let each spelling claim the name and defeat the two-phase create at
-        // docs/plan/06:124-140 — the one place a duplicate claim is a correctness bug rather than
+        // docs/plan/06 § Two-phase create — the one place a duplicate claim is a correctness bug rather than
         // a cosmetic one.
         var mixed = Sample with { Type = new("CyberCloud.Cache", "Redis") };
         var lower = Sample with { Type = new("cybercloud.cache", "redis") };
@@ -449,7 +449,7 @@ public class GrainKeysTests {
 
     [Fact]
     public void TheIndexKeyIgnoresTheResourceGuidBecauseTheGuidIsTheAnswerNotTheQuestion() {
-        // The index maps path -> GUID (docs/plan/06:44). An id parsed from a path carries
+        // The index maps path -> GUID (docs/plan/06 § Identifiers). An id parsed from a path carries
         // Guid.Empty until the index resolves it, and it must hash to the same entry as the
         // resolved one or the claim could never be looked up.
         ResourceId.TryParsePath(Sample.Path, out var unresolved).ShouldBeTrue();
@@ -490,8 +490,8 @@ public class GrainKeysTests {
 
     [Fact]
     public void EmailUniquenessIsPerTenant() {
-        // docs/plan/11:99-101 — "email uniqueness is per tenant; global email uniqueness would be a
-        // global index — the thing we do not have and do not want."
+        // docs/plan/11 § Sign-up and tenant creation — "email uniqueness is per tenant; global
+        // email uniqueness would be a global index — the thing we do not have and do not want."
         var a = GrainKeys.EmailIndex(Tenant, "alice@example.com");
         var b = GrainKeys.EmailIndex(Subscription, "alice@example.com");
 
@@ -538,7 +538,7 @@ public class GrainKeysTests {
 
         // The trap in the other direction: U+0130 LATIN CAPITAL LETTER I WITH DOT ABOVE does NOT
         // lower-case to "i" — it produces two code points — so a rule that assumed it did would
-        // canonicalise inconsistently. Here it is simply left alone and stays a different address.
+        // canonicalise inconsistently. Here it is left alone and stays a different address.
         "İ".ToLowerInvariant().ShouldNotBe("i");
 
         GrainKeys.EmailIndex(Tenant, "İrem@example.com")
@@ -811,7 +811,7 @@ public class GrainKeysTests {
 
     [Fact]
     public void TheEmptyGuidIsAKeyLikeAnyOtherBecauseItIsTheNullTenantsId() =>
-        // docs/plan/06:171 — the platform tenant is Guid.Empty. Nothing here may special-case it.
+        // docs/plan/06 § Platform administration — the platform tenant is Guid.Empty. Nothing here may special-case it.
         GrainKeys.Subscription(Guid.Empty)
             .ShouldBe("sub/00000000000000000000000000000000");
 
@@ -828,7 +828,7 @@ public class GrainKeysTests {
 
     [Fact]
     public void ARelationKeyCarriesItsObjectTypeAndIdSeparately() {
-        // The payload must survive, not just the string: a key that round-trips but decodes to the
+        // The payload must survive, not only the string: a key that round-trips but decodes to the
         // wrong object would route a tuple read to another entity's grain.
         var parsed = GrainKeys.Parse(GrainKeys.ObjectRelations("resourceGroup", "prod"))
             .GetValueOrThrow();

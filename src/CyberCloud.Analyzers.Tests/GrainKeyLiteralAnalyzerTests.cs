@@ -115,7 +115,7 @@ public sealed class GrainKeyLiteralAnalyzerTests {
             """
         );
 
-    /// <summary>A pipe in a string that is not a <c>GetGrain</c> argument is just a pipe.</summary>
+    /// <summary>A pipe in a string that is not a <c>GetGrain</c> argument is only a pipe.</summary>
     [Fact]
     public Task APipeElsewhereIsNotAGrainKey() =>
         AnalyzerHarness.IsSilentAsync<GrainKeyLiteralAnalyzer>(

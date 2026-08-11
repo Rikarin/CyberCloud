@@ -11,7 +11,7 @@
       Microsoft.NETCore.App, so the frozen error-code registry costs no dependency.
   
       Rule 3 ("no assembly above CyberCloud.Kubernetes references k8s.Models") is satisfied for free
-      by the same emptiness. Before adding a package here, read docs/plan/03:222-232 — an addition
+      by the same emptiness. Before adding a package here, read docs/plan/03 § Assembly graph rules — an addition
       that pulls in Orleans, KubernetesClient or Volo.Abp.* is a build-gate failure by design, not an
       inconvenience.
   
@@ -38,7 +38,7 @@
           Task<T>.FromResult, Nullable<T> helpers).
     
           ⚠ These are the ONLY two suppressions in this assembly and neither is a #pragma
-          (docs/plan/00:121). Adding a third needs the same standard of argument.
+          (docs/plan/00 § Non-negotiables). Adding a third needs the same standard of argument.
         -->
         <NoWarn>$(NoWarn);CA1716;CA1000</NoWarn>
     </PropertyGroup>

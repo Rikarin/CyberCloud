@@ -12,7 +12,7 @@ namespace CyberCloud.ServiceDefaults.HealthChecks;
 ///             This is the check a rolling upgrade depends on, and the one it is easiest to write
 ///             a lie for.
 ///         </b>
-///         docs/plan/00:197 budgets <i>zero</i> failed tenant requests across a
+///         docs/plan/00 § The quality bar, concretely budgets <i>zero</i> failed tenant requests across a
 ///         rolling upgrade of a 30-silo cluster. Kubernetes adds a pod to a Service's endpoints the
 ///         moment its readiness probe passes and removes it the moment the probe fails, so a
 ///         readiness check that answers "the process is running" hands traffic to a silo that has
@@ -89,13 +89,15 @@ sealed class SiloReadinessHealthCheck(
             // Startup. Reporting anything but Unhealthy here is what admits traffic to a silo that
             // cannot serve it — see the remarks.
             SiloStatus.Created or SiloStatus.Joining => HealthCheckResult.Unhealthy(
-                $"This silo is {status} and is not serving yet. docs/plan/00:196 budgets 20 s from "
+                $"This silo is {status} and is not serving yet. docs/plan/00 § The quality bar, "
+                + "concretely budgets 20 s from "
                 + "cold start to serving; if this persists past that, membership is the place to "
                 + "look."
             ),
 
             // Shutdown. The pod must leave the Service's endpoints BEFORE Orleans stops accepting,
-            // or the requests in flight during the gap are the failed ones docs/plan/00:197 forbids.
+            // or the requests in flight during the gap are the failed ones that
+            // docs/plan/00 § The quality bar, concretely forbids.
             SiloStatus.ShuttingDown or SiloStatus.Stopping or SiloStatus.Dead =>
                 HealthCheckResult.Unhealthy(
                     $"This silo is {status} and is draining. Remove it from the load balancer."

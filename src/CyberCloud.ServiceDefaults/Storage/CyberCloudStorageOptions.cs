@@ -1,7 +1,7 @@
 namespace CyberCloud.ServiceDefaults.Storage;
 
 /// <summary>
-///     Everything the two grain-storage tiers of docs/plan/05 § The two tiers need in order to be
+///     Everything the two grain-storage tiers of docs/plan/05 § The two tiers need to be
 ///     wired: the hot Redis Cluster, the durable Postgres shards, and the pins that override the
 ///     default placement for one outsized tenant.
 /// </summary>
@@ -30,7 +30,7 @@ public sealed class CyberCloudStorageOptions {
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>This is the part of docs/plan/05 § Hot that is easy to read the wrong way.</b> The
+///         ⚠ <b>This is the part of docs/plan/05 § Hot that is most often read the wrong way.</b> The
 ///         document says the hot tier is "sharded by tenant, 12+ shards", which reads as though the
 ///         wiring picks a shard the way the durable tier does. It does not, and the document says so
 ///         two sentences later: the hash tag "makes shard assignment automatic from the tenant id

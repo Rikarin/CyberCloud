@@ -1,13 +1,14 @@
 namespace CyberCloud.Core.Time;
 
 /// <summary>
-///     The one source of "now". docs/plan/03:60 lists the clock under <c>CyberCloud.Core</c>.
+///     The one source of "now". docs/plan/03 § Foundation lists the clock under <c>CyberCloud.Core</c>.
 /// </summary>
 /// <remarks>
 ///     <para>
-///         Everything that stamps time — <c>createdAt</c>/<c>modifiedAt</c> (docs/plan/06:173), the
-///         5-minute index claim lease (docs/plan/06:101), the reconcile backoff schedule
-///         (docs/plan/08:77), the 60-minute operation timeout, the 30-day tenant tombstone, the
+///         Everything that stamps time — <c>createdAt</c>/<c>modifiedAt</c> (docs/plan/06 § Tags,
+///         locks, and the small stuff that is not small), the 5-minute index claim lease
+///         (docs/plan/06 § Two-phase create), the reconcile backoff schedule (docs/plan/08 § The
+///         reconcile loop), the 60-minute operation timeout, the 30-day tenant tombstone, the
 ///         7-day soft delete — takes this rather than <see cref="DateTimeOffset.UtcNow" />. A lease
 ///         you cannot advance the clock past is a lease you cannot test, and every one of those
 ///         durations is measured in minutes to days.

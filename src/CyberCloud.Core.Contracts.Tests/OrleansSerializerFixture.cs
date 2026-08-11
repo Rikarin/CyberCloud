@@ -17,7 +17,7 @@ namespace CyberCloud.Core.Contracts.Tests;
 ///         instantiate the <i>open generic</i> <c>ResultSurrogateConverter&lt;T&gt;</c>, which is
 ///         the part of this design most likely to be the thing that does not work. Everything here
 ///         goes through <see cref="Serializer.SerializeToArray{T}" /> and
-///         <see cref="Serializer.Deserialize{T}(byte[])" />, i.e. bytes.
+///         <see cref="Serializer.Deserialize{T}(byte[])" />, that is, bytes.
 ///     </para>
 ///     <para>
 ///         The assembly is named explicitly rather than left to ambient discovery so that the test

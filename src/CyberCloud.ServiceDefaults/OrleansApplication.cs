@@ -11,13 +11,13 @@ using System.Net;
 namespace CyberCloud.ServiceDefaults;
 
 /// <summary>
-///     The two host builders every Cyber Cloud process starts from — docs/plan/04:41-68, descended
-///     in shape from Survival's <c>Survival.Host.OrleansApplication</c> (docs/plan/03:85).
+///     The two host builders every Cyber Cloud process starts from — docs/plan/04 § Silo composition, descended
+///     in shape from Survival's <c>Survival.Host.OrleansApplication</c> (docs/plan/03 § Foundation).
 /// </summary>
 /// <remarks>
 ///     <para>
 ///         ⚠ <b>The silo and the gateway are separate processes</b> and this class is where that
-///         shows. Survival co-hosts them; docs/plan/03:153-158 says why Cyber Cloud does not — the
+///         shows. Survival co-hosts them; docs/plan/03 § Hosts says why Cyber Cloud does not — the
 ///         gateway is I/O bound and scales with request rate, the silo is memory bound and scales
 ///         with resident grains, so co-hosting means one of them is always the wrong size, and a
 ///         gateway deploy would move grains.
@@ -32,9 +32,9 @@ namespace CyberCloud.ServiceDefaults;
 ///     await app.InitializeApplicationAsync();
 ///     </code>
 ///     <para>
-///         docs/plan/04:41-68 shows <c>CreateSilo</c> returning a builder and stops there, which
+///         docs/plan/04 § Silo composition shows <c>CreateSilo</c> returning a builder and stops there, which
 ///         reads as though <c>Build()</c> follows directly. It does not work:
-///         <c>builder.Host.UseAutofac()</c> (docs/plan/04:44) installs ABP's service-provider
+///         <c>builder.Host.UseAutofac()</c> (docs/plan/04 § Silo composition) installs ABP's service-provider
 ///         factory, and that factory calls <c>services.GetSingletonInstance&lt;IModuleContainer&gt;()</c>
 ///         during <c>Build()</c>. With no module registered the host dies with
 ///     </para>
@@ -46,13 +46,13 @@ namespace CyberCloud.ServiceDefaults;
 ///         — a message that names neither <c>UseAutofac</c> nor the missing call. Survival gets this
 ///         right (<c>Survival.Backend.Host/Program.cs</c>:12-15 puts
 ///         <c>AddApplicationAsync&lt;BackendHostModule&gt;</c> between the two) and docs/plan/04's
-///         excerpt simply omits the line. <c>SiloHostTests</c> exercises the whole sequence so the
+///         excerpt omits the line. <c>SiloHostTests</c> exercises the whole sequence so the
 ///         constraint is checked rather than remembered.
 ///     </para>
 /// </remarks>
 public static class OrleansApplication {
     /// <summary>
-    ///     A silo host. docs/plan/04:41.
+    ///     A silo host. docs/plan/04 § Silo composition.
     /// </summary>
     /// <param name="args">The process arguments.</param>
     /// <param name="configureCluster">
@@ -61,7 +61,7 @@ public static class OrleansApplication {
     /// </param>
     /// <remarks>
     ///     <para>
-    ///         Three things in the body are decisions rather than boilerplate (docs/plan/04:71-79):
+    ///         Three things in the body are decisions rather than boilerplate (docs/plan/04 § Silo composition):
     ///         <c>AddActivityPropagation()</c>, <c>UseKubernetesHosting()</c>, and — pending, see
     ///         below — <c>AddMultitenantCommunicationSeparation</c>.
     ///     </para>
@@ -98,7 +98,7 @@ public static class OrleansApplication {
                     }
                 );
 
-                // ⚠ NOT OPTIONAL — docs/plan/04:78. Without this, an Activity does not cross a grain
+                // ⚠ NOT OPTIONAL — docs/plan/04 § Silo composition. Without this, an Activity does not cross a grain
                 // call: distributed tracing stops at the gateway and every latency investigation
                 // becomes archaeology. ConfigureOpenTelemetry() collecting
                 // "Microsoft.Orleans.Application" is the other half and is useless without this one.
@@ -165,7 +165,7 @@ public static class OrleansApplication {
 
                     // Pod identity becomes silo identity, so a SIGTERM from a rolling update is a
                     // graceful StopAsync with grain migration rather than a 60-second gap
-                    // (docs/plan/04:76). This one is on Services, not on the silo builder — that is
+                    // (docs/plan/04 § Silo composition). This one is on Services, not on the silo builder — that is
                     // the package's shape, not a mistake.
                     builder.Services.UseKubernetesHosting();
                 }
@@ -176,7 +176,7 @@ public static class OrleansApplication {
     }
 
     /// <summary>
-    ///     A gateway host — an Orleans <i>client</i>. docs/plan/03:158.
+    ///     A gateway host — an Orleans <i>client</i>. docs/plan/03 § Hosts.
     /// </summary>
     /// <param name="args">The process arguments.</param>
     /// <param name="configureClient">Extra client wiring, if the host needs any.</param>
@@ -205,7 +205,7 @@ public static class OrleansApplication {
                     }
                 );
 
-                // The gateway end of docs/plan/04:78. A trace that reaches the gateway and stops there
+                // The gateway end of docs/plan/04 § Silo composition. A trace that reaches the gateway and stops there
                 // is the exact symptom this prevents, and the gateway is where it would be missed.
                 client.AddActivityPropagation();
 
@@ -225,7 +225,7 @@ public static class OrleansApplication {
     }
 
     /// <summary>
-    ///     The host wiring both builders share — docs/plan/04:44.
+    ///     The host wiring both builders share — docs/plan/04 § Silo composition.
     /// </summary>
     /// <remarks>
     ///     <para>
@@ -237,7 +237,7 @@ public static class OrleansApplication {
     ///     </para>
     ///     <para>
     ///         ⚠ Serilog is wired through <c>builder.Services.AddSerilog</c>, not
-    ///         <c>builder.Host.UseSerilog()</c> as docs/plan/04:44 and Survival both write it.
+    ///         <c>builder.Host.UseSerilog()</c> as docs/plan/04 § Silo composition and Survival both write it.
     ///         <c>UseSerilog</c> is <c>[Obsolete]</c> in Serilog.AspNetCore 10, and
     ///         <c>TreatWarningsAsErrors</c> (docs/plan/00 § Non-negotiables) makes an obsolete call
     ///         a build failure. The two are equivalent; only the spelling changed.

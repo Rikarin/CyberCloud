@@ -47,7 +47,7 @@ public sealed record GroupVersionKind {
     /// <summary>Whether this is the core group, whose paths are <c>/api/…</c> not <c>/apis/…</c>.</summary>
     public bool IsCoreGroup => Group.Length == 0;
 
-    /// <summary>The object's <c>apiVersion</c> field: <c>group/version</c>, or just <c>version</c> for core.</summary>
+    /// <summary>The object's <c>apiVersion</c> field: <c>group/version</c>, or bare <c>version</c> for core.</summary>
     public string ApiVersion => IsCoreGroup ? Version : Group + "/" + Version;
 
     /// <summary>Whether every component needed to address this kind is present.</summary>

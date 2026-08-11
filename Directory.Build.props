@@ -87,7 +87,7 @@
         <!--
           NU1901-NU1904 are package-vulnerability advisories. They are warnings that TreatWarningsAsErrors
           would turn into build breaks on a day a CVE is published against a transitive dependency —
-          i.e. a red build caused by someone else's release. CI runs `Build.Licence`/audit separately.
+          that is, a red build caused by someone else's release. CI runs `Build.Licence`/audit separately.
         -->
         <WarningsNotAsErrors>$(WarningsNotAsErrors);NU1901;NU1902;NU1903;NU1904</WarningsNotAsErrors>
     </PropertyGroup>
@@ -141,7 +141,7 @@
           and pulls the runner back. The pin stays in Directory.Packages.props for anything that
           genuinely needs VSTest.
     
-          Note that `build/Build.Test.cs` does not rely on any of this — it runs the test executables
+          `build/Build.Test.cs` does not rely on any of this — it runs the test executables
           directly and never invokes `dotnet test`. These properties exist so that a developer or an
           IDE running `dotnet test` by hand gets the same answer as CI.
         -->

@@ -74,7 +74,7 @@ public sealed class ResultSurrogateConverter : IConverter<Result, ResultSurrogat
 ///     <para>
 ///         The alias carries the arity (<c>`1</c>) because that is how Orleans names an open
 ///         generic in the type manifest; it is what makes the alias stable across a rename of the
-///         CLR type (docs/plan/04:177).
+///         CLR type (docs/plan/04 § Failure and upgrade).
 ///     </para>
 /// </remarks>
 [GenerateSerializer]

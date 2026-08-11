@@ -32,7 +32,7 @@ public enum CallerKind {
 ///         <c>IClusterConnectionGrain</c> is null-tenant (docs/plan/06 § Grain keys), so its key
 ///         carries no tenant and Orleans' separation cannot decide anything for it. The grain must
 ///         therefore ask "who is calling" — and if the answer were a method parameter, tenant B would
-///         simply pass tenant A's GUID. A parameter is a claim; this is a fact, derived from
+///         pass tenant A's GUID. A parameter is a claim; this is a fact, derived from
 ///         <c>IGrainCallContext.SourceId</c>, which is the calling <i>activation's</i> identity and
 ///         is set by the runtime.
 ///     </para>

@@ -106,7 +106,7 @@ public sealed class KubeLabelTests {
 
     [Fact]
     public void AKeyNamePartMayNotBeEmptyEvenThoughAValueMay() {
-        // The single place the two rules diverge on emptiness, and it is easy to get backwards.
+        // The single place the two rules diverge on emptiness, and the two are routinely got backwards.
         LabelSyntax.IsValidValue(string.Empty).ShouldBeTrue();
         KubernetesAcceptsValue(string.Empty).ShouldBeTrue();
 

@@ -8,18 +8,20 @@ namespace CyberCloud.Core.Contracts.Serialization;
 ///         <b>Every one of these resolves to a failure, never to a success.</b> That is the whole
 ///         rule this class exists to enforce. A deserialiser that cannot make sense of a
 ///         <see cref="Result" /> has exactly two safe options — throw, or produce a failure — and
-///         it has one unsafe one, which is to produce a success. docs/plan/00:170 makes every grain
-///         method return a <see cref="Result" />, so "the payload was odd, so the call succeeded"
-///         would be a silent wrong answer on every call in the platform.
+///         it has one unsafe one, which is to produce a success. docs/plan/00 § Coding standards
+///         makes every grain method return a <see cref="Result" />, so "the payload was odd, so the
+///         call succeeded" would be a silent wrong answer on every call in the platform.
 ///     </para>
 ///     <para>
-///         <b>Why substitute rather than throw.</b> docs/plan/00:197 budgets <i>zero</i> failed
-///         tenant requests across a rolling upgrade of a 30-silo cluster, and the payloads that land
+///         <b>Why substitute rather than throw.</b> docs/plan/00 § The quality bar, concretely
+///         budgets <i>zero</i> failed tenant requests across a rolling upgrade of a 30-silo cluster,
+///         and the payloads that land
 ///         here are precisely the cross-version ones: a field a peer did not write, an error code a
 ///         newer silo knows and this one does not. Throwing turns each of those into a failed
 ///         request; substituting turns them into a failed <i>operation</i>, which is a shape the
-///         gateway already renders (docs/plan/00:172). Malformed <i>identifiers</i> are the
-///         exception and still throw — see <c>ResourceTypeNameSurrogate</c>.
+///         gateway already renders — docs/plan/00 § Coding standards. Malformed
+///         <i>identifiers</i> are the exception and still throw — see
+///         <c>ResourceTypeNameSurrogate</c>.
 ///     </para>
 /// </remarks>
 static class WireErrors {
@@ -33,7 +35,7 @@ static class WireErrors {
     /// </remarks>
     internal const string MissingMessage =
         "An error arrived over the wire with no message. The peer that produced it is out of "
-        + "contract: docs/plan/08:187 requires a message that names the actual values.";
+        + "contract: docs/plan/08 § Errors requires a message that names the actual values.";
 
     /// <summary>
     ///     A <see cref="Result" /> arrived saying "failure" and carrying no error.
@@ -75,7 +77,7 @@ static class WireErrors {
     ///     <para>
     ///         ⚠ <see cref="ErrorCode" /> is a <b>closed</b> registry — its constructor is private,
     ///         so a code this build does not know cannot be manufactured here. During a rolling
-    ///         upgrade (docs/plan/04:177) an N+1 silo can return a code an N silo has never heard
+    ///         upgrade (docs/plan/04 § Failure and upgrade) an N+1 silo can return a code an N silo has never heard
     ///         of, and that is the case this method exists for.
     ///     </para>
     ///     <para>

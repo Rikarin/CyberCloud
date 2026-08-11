@@ -7,11 +7,11 @@ using System.Reflection;
 namespace CyberCloud.ServiceDefaults.Tests;
 
 /// <summary>
-///     The assembly-graph rules of docs/plan/03:231-241, as far as they can be checked from here.
+///     The assembly-graph rules of docs/plan/03 § Assembly graph rules, as far as they can be checked from here.
 /// </summary>
 /// <remarks>
 ///     <para>
-///         These belong in <c>build/Build.Architecture.cs</c>, which docs/plan/03:233 says enforces
+///         These belong in <c>build/Build.Architecture.cs</c>, which docs/plan/03 § Assembly graph rules says enforces
 ///         them and which does not implement them yet. Until it does, the three rules that bite this
 ///         part of the tree are asserted here, where they are at least run on every PR.
 ///     </para>
@@ -23,7 +23,7 @@ public sealed class AssemblyGraphTests {
 
     [Fact]
     public void CoreReferencesNothingButTheSharedFramework() {
-        // Rule 1 (docs/plan/03:235). The package-level version of this is `dotnet list package`
+        // Rule 1 (docs/plan/03 § Assembly graph rules). The package-level version of this is `dotnet list package`
         // reporting "No packages were found for this framework"; this is the assembly-level one,
         // which also catches a reference acquired through a ProjectReference.
         ReferencesOf(Core)
@@ -32,7 +32,7 @@ public sealed class AssemblyGraphTests {
             )
             .ShouldBeEmpty(
                 "CyberCloud.Core is contracts, identifiers, error codes and pure "
-                + "functions. docs/plan/03:235."
+                + "functions. docs/plan/03 § Assembly graph rules."
             );
     }
 
@@ -47,7 +47,7 @@ public sealed class AssemblyGraphTests {
 
     [Fact]
     public void NothingHereReferencesTheKubernetesClient() {
-        // Rule 3 (docs/plan/03:238) — "no assembly above CyberCloud.Kubernetes references
+        // Rule 3 (docs/plan/03 § Assembly graph rules) — "no assembly above CyberCloud.Kubernetes references
         // k8s.Models".
         //
         // ⚠ READ THE FAILURE CAREFULLY IF THIS EVER FIRES. The rule as written is about *using*
@@ -80,7 +80,7 @@ public sealed class AssemblyGraphTests {
     [Fact]
     public void TheStorageTierAndStreamProviderNamesAreWhereBothEndsCanSeeThem() {
         // A grain in a provider assembly and the silo host both name these, and the provider
-        // assembly must not reference the host. Asserting the assembly, not just the value, is what
+        // assembly must not reference the host. Asserting the assembly, not only the value, is what
         // stops somebody "tidying" them into ServiceDefaults.
         typeof(StorageTiers).Assembly.ShouldBe(Contracts);
         typeof(StreamProviders).Assembly.ShouldBe(Contracts);

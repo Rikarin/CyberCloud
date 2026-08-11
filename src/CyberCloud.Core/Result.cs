@@ -7,7 +7,7 @@ namespace CyberCloud.Core;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         docs/plan/00:170-173:
+///         docs/plan/00 § Coding standards:
 ///         <i>
 ///             "Every grain interface method returns <c>Task&lt;Result&lt;T&gt;&gt;</c>
 ///             or <c>Task&lt;Result&gt;</c>, never throws for a domain outcome. Exceptions are for bugs and

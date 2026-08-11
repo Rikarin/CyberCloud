@@ -103,7 +103,7 @@ public sealed class TenancySerializationTests : IDisposable {
 
     [Fact]
     public void AQuotaLeaseRoundTripsIncludingItsDecimal() {
-        // decimal is the one primitive here whose codec is easy to get wrong, and a quota figure
+        // decimal is the one primitive here whose codec is routinely got wrong, and a quota figure
         // that came back as a double would be a billing figure that does not add up.
         var value = new QuotaLease {
             LeaseId = Guid.NewGuid(),

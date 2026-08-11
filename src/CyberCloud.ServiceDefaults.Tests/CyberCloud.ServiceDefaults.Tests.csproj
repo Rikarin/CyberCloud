@@ -18,7 +18,7 @@
         <PackageReference Include="xunit.v3"/>
         <PackageReference Include="Shouldly"/>
         <!--
-          ABP, for one reason only: CreateSilo calls builder.Host.UseAutofac() per docs/plan/04:44, and
+          ABP, for one reason only: CreateSilo calls builder.Host.UseAutofac() per docs/plan/04 § Silo composition, and
           ABP's service-provider factory demands an IModuleContainer at Build() time. SiloHostTests
           therefore has to register a real (empty) AbpModule, which is also what makes the test a proof
           of the documented startup sequence rather than of a convenient subset of it.

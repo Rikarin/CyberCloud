@@ -16,7 +16,7 @@ namespace CyberCloud.Kubernetes.Connections;
 ///         no setter, and moves on — leaving an empty dictionary and no error anywhere. For
 ///         <see cref="InformerCursors" /> that would mean every reactivation quietly losing every
 ///         resume cursor and doing a full list, which is the exact stampede docs/plan/09 § Observing
-///         is trying to avoid, and it would look like the feature simply not working.
+///         is trying to avoid, and it would look like the feature not working.
 ///     </para>
 ///     <para>
 ///         <see cref="ClusterConnectionDescriptor" /> is a wire record with <c>init</c> setters,

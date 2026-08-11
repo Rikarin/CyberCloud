@@ -10,9 +10,9 @@ namespace CyberCloud.Core.Resources;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         docs/plan/00:76-80 — every capability is a resource type in a provider namespace.
-///         docs/plan/08:116-137 shows both the flat and the nested form in one provider's
-///         <c>Describe</c>.
+///         docs/plan/00 § 4. Everything a resource, everything a provider — every capability is a
+///         resource type in a provider namespace. docs/plan/08 § The provider registry shows both
+///         the flat and the nested form in one provider's <c>Describe</c>.
 ///     </para>
 ///     <para>
 ///         <b>Case.</b> Provider namespaces and type names are mixed-case by design
@@ -24,7 +24,7 @@ namespace CyberCloud.Core.Resources;
 ///     </para>
 ///     <para>
 ///         <b>Depth is capped at <see cref="MaxDepth" />.</b> An uncapped type path would make the
-///         resource id grammar (docs/plan/06:36-39) unboundedly greedy — the parser cannot tell
+///         resource id grammar (docs/plan/06 § Identifiers) unboundedly greedy — the parser cannot tell
 ///         where the type ends and the name begins except by counting, and an attacker who controls
 ///         a segment would like that ambiguity. Azure's own deepest types are two levels; three is
 ///         headroom.
@@ -68,7 +68,7 @@ public readonly record struct ResourceTypeName {
     }
 
     /// <summary>
-    ///     The lower-cased form, for hashing and indexing. docs/plan/06:77 keys the path index on
+    ///     The lower-cased form, for hashing and indexing. docs/plan/06 § Grain keys keys the path index on
     ///     <c>sha256(path)</c>, and a hash is only stable if what goes into it is canonical.
     /// </summary>
     public ResourceTypeName Canonical =>
@@ -86,8 +86,8 @@ public readonly record struct ResourceTypeName {
     /// <exception cref="ArgumentException">Either part is malformed.</exception>
     /// <remarks>
     ///     Throws rather than returning a <see cref="Result" /> because a malformed type in code is
-    ///     a bug (docs/plan/00:171). <see cref="Create" /> is the <see cref="Result" />-returning
-    ///     form for input that came from a request.
+    ///     a bug (docs/plan/00 § Coding standards). <see cref="Create" /> is the
+    ///     <see cref="Result" />-returning form for input that came from a request.
     /// </remarks>
     public ResourceTypeName(string providerNamespace, string typePath) {
         var problem = DescribeNamespace(providerNamespace) ?? DescribeTypePath(typePath);

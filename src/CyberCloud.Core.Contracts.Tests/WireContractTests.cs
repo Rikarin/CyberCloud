@@ -31,7 +31,7 @@ public sealed class WireContractTests {
     static readonly Assembly Contracts = typeof(ResultSurrogate).Assembly;
 
     /// <summary>
-    ///     The <c>[Id(n)]</c> baseline. docs/plan/05:183 —
+    ///     The <c>[Id(n)]</c> baseline. docs/plan/05 § Serialization and schema evolution —
     ///     <i>
     ///         "numbers are never reused, never
     ///         reordered. Removing a member leaves its number burned."
@@ -73,13 +73,13 @@ public sealed class WireContractTests {
         // deployed peer might send; nothing has shipped, ResourceKey no longer exists (a grain key
         // is now built by CyberCloud.Core.Resources.GrainKeys and never travels as a value), and its
         // alias "CyberCloud.Core.ResourceKey" is retired with it. If any silo had ever run, this
-        // would instead be a burned group with a comment. See ADR-002, docs/plan/02:161-188.
+        // would instead be a burned group with a comment. See ADR-002, docs/plan/02 § ADR-002.
     ];
 
     /// <summary>The aliases this assembly publishes. Changing one is a wire break.</summary>
     /// <remarks>
     ///     The alias, not the CLR name, is what a silo of version N looks up when a silo of version
-    ///     N+1 sends it a payload (docs/plan/04:177). The strings are therefore chosen to survive a
+    ///     N+1 sends it a payload (docs/plan/04 § Failure and upgrade). The strings are therefore chosen to survive a
     ///     rename of the surrogate <i>and</i> of the type it stands in for: they name the Core type
     ///     by its full name, since that is the concept, and carry no "Surrogate" suffix, since the
     ///     surrogate is an implementation detail that the far side never sees.
@@ -104,7 +104,7 @@ public sealed class WireContractTests {
             .ToList();
 
         missing.ShouldBeEmpty(
-            "docs/plan/04:177 makes a rolling upgrade depend on every [GenerateSerializer] type "
+            "docs/plan/04 § Failure and upgrade makes a rolling upgrade depend on every [GenerateSerializer] type "
             + "having a stable [Alias]. A type without one is renamed-into-a-data-loss-bug waiting "
             + "to happen."
         );
@@ -162,7 +162,8 @@ public sealed class WireContractTests {
 
         actual.ShouldBe(
             Baseline.OrderBy(x => x.Type, StringComparer.Ordinal).ThenBy(x => x.Id).ToList(),
-            "docs/plan/05:183: [Id(n)] numbers are never reused and never reordered. If this fails "
+            "docs/plan/05 § Serialization and schema evolution: [Id(n)] numbers are never reused and "
+            + "never reordered. If this fails "
             + "because a member was added, append it to Baseline with the next unused number. If it "
             + "fails for any other reason, the wire contract just broke."
         );
@@ -216,7 +217,7 @@ public sealed class WireContractTests {
 
         unnumbered.ShouldBeEmpty(
             "a public property on a [GenerateSerializer] type with no [Id(n)] is not serialised. "
-            + "docs/plan/00:173 requires an explicit [Id(n)] on every member of every wire type."
+            + "docs/plan/00 § Coding standards requires an explicit [Id(n)] on every member of every wire type."
         );
     }
 }

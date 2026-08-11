@@ -139,7 +139,7 @@ public sealed class HotTierAndWiringTests(StorageFixture fixture) {
     [Fact]
     public async Task TheDurableConnectionCountPerShardStaysWithinMaxPoolSizeUnderLoad() {
         // ⚠ The observable half of docs/plan/05 § Storage provider wiring's arithmetic. Setting
-        // MaxPoolSize is easy; proving the setting reaches the connection string the PROVIDER uses,
+        // MaxPoolSize is trivial; proving the setting reaches the connection string the PROVIDER uses,
         // and that it is per shard rather than per tenant, is the thing that goes wrong.
         var token = TestContext.Current.CancellationToken;
 

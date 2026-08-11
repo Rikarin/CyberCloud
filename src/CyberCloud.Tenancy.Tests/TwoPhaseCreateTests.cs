@@ -379,7 +379,7 @@ public sealed class TwoPhaseCreateTests(TenancyCluster cluster) {
     ///     it must complete first. Without this pause the next call can arrive at the <i>same</i>
     ///     activation and the test would assert against memory rather than against PostgreSQL —
     ///     which is the one thing these tests must not do. The state assertions still hold if the
-    ///     pause is too short (the grain simply has not died yet), so this is a sharpener, not a
+    ///     pause is too short (the grain has not died yet), so this is a sharpener, not a
     ///     correctness crutch: <see cref="StateSurvivedDeactivation" /> is the check that it worked.
     /// </remarks>
     static Task WaitForDeactivation() =>

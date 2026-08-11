@@ -7,16 +7,16 @@ namespace CyberCloud.Core.Contracts.Serialization;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         <b>Why a surrogate and not a mirror type.</b> docs/plan/03:70 offers this assembly for
+///         <b>Why a surrogate and not a mirror type.</b> docs/plan/03 § Foundation offers this assembly for
 ///         "wire types shared by grains, gateway, SDK", and the obvious reading is a parallel
 ///         <c>ErrorDto</c> that grains return instead of <see cref="Error" />. That reading loses
-///         the property docs/plan/00:170 depends on: <i>every</i> grain method returns
+///         the property docs/plan/00 § Coding standards depends on: <i>every</i> grain method returns
 ///         <c>Task&lt;Result&lt;T&gt;&gt;</c>, so a mirror would put a mapping call on both sides of
 ///         every grain boundary in the platform, and the two types would drift the first time
 ///         somebody added a member to one of them. An Orleans surrogate keeps <b>one</b> type on
 ///         both sides — the caller and the callee both hold <c>CyberCloud.Core.Error</c> — and
 ///         leaves <c>CyberCloud.Core</c> at zero package references, which assembly-graph rule 1
-///         (docs/plan/03:235) requires.
+///         (docs/plan/03 § Assembly graph rules) requires.
 ///     </para>
 ///     <para>
 ///         ⚠ <b><see cref="Details" /> is recursive.</b> An <see cref="Error" /> nests

@@ -14,7 +14,7 @@
       global.json's msbuild-sdks. It is kept equal to $(AspireVersion) by hand; docs/plan/02
       § Dependency register pins the Aspire.Hosting.* family at 13.4.6 and this must not drift from
       it. Survival drifted (SDK 9.1.0 against packages 13.1.0) and still builds, which is exactly why
-      the drift is easy to miss.
+      the drift goes unnoticed.
     -->
     <Sdk Name="Aspire.AppHost.Sdk" Version="13.4.6"/>
 

@@ -3,10 +3,10 @@ using Shouldly;
 
 namespace CyberCloud.Core.Tests;
 
-/// <summary>The naming rule from docs/plan/06:87-90.</summary>
+/// <summary>The naming rule from docs/plan/06 § Identifiers.</summary>
 public class ResourceNamingTests {
     // ── Boundary lengths: 0, 1, 63, 64 ─────────────────────────────────────────────────────────
-    // docs/plan/09 caps a Kubernetes label value at 63, and docs/plan/08:84 puts the resource id in
+    // docs/plan/09 caps a Kubernetes label value at 63, and docs/plan/08 § The reconcile loop puts the resource id in
     // a label, so 63 must pass and 64 must not. The off-by-one here is the difference between "a
     // name you can use" and "an object the API server rejects at apply time, in production".
 
@@ -105,7 +105,7 @@ public class ResourceNamingTests {
     [InlineData("0-9")]
     public void AHyphenInTheMiddleIsAccepted(string name) => ResourceNaming.IsValid(name).ShouldBeTrue();
 
-    // ── The message is the mitigation (docs/plan/06:92-94) ─────────────────────────────────────
+    // ── The message is the mitigation (docs/plan/06 § Identifiers) ─────────────────────────────────────
 
     [Fact]
     public void TheMessageStatesTheRuleTheLimitAndWhyWeDoNotMangle() {

@@ -82,7 +82,7 @@ public sealed class ClusterHealthTests {
     [Fact]
     public void TheDegradedTransitionHappensWithNoFailuresRecordedAtAll() {
         // ⚠ THE CASE A FAILURE COUNTER WOULD MISS, and the reason the rule is elapsed time.
-        // A silo that simply stops pinging — busy, or a timer that did not fire — records zero
+        // A silo that stops pinging — busy, or a timer that did not fire — records zero
         // failures. A count-based rule would call that cluster Healthy indefinitely while nothing
         // had confirmed it for an hour.
         var (tracker, clock) = New();

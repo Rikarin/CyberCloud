@@ -26,7 +26,7 @@ namespace CyberCloud.Kubernetes.Contracts;
 ///         forgotten.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Why this is not simply <c>IPlatformOperatorAuthority</c>.</b> That interface lives in
+///         ⚠ <b>Why this is not <c>IPlatformOperatorAuthority</c>.</b> That interface lives in
 ///         <c>CyberCloud.Tenancy</c> — an <i>implementation</i> assembly — and its own remarks say it
 ///         is expected to move to <c>CyberCloud.Authorization</c> when the ReBAC engine lands
 ///         (ADR-007). Binding the Kubernetes fabric to it would make that move a rewrite here rather

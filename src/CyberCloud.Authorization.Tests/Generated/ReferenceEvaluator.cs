@@ -26,7 +26,7 @@ namespace CyberCloud.Authorization.Tests.Generated;
 ///     <para>
 ///         <b>How it handles cycles: it does not have to.</b> Naive iteration to a fixed point over
 ///         a monotone rule set is the textbook definition of the least fixed point, and a cycle is
-///         simply a set of facts that never become true. That is precisely the semantics
+///         a set of facts that never become true. That is precisely the semantics
 ///         <c>CheckEvaluator</c>'s in-progress-false is trying to reproduce with a stack, and
 ///         comparing the two is the point.
 ///     </para>

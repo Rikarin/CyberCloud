@@ -77,7 +77,7 @@ public class ErrorTests {
 
     [Fact]
     public void ThereIsNoPlaceToPutAStackTrace() {
-        // docs/plan/08:190 — "No exception details, ever." Asserted structurally rather than by
+        // docs/plan/08 § Errors — "No exception details, ever." Asserted structurally rather than by
         // review: if someone adds an Exception-shaped member, this fails.
         var members = typeof(Error)
             .GetProperties()

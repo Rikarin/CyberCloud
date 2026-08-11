@@ -1,12 +1,12 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
     <!--
-      docs/plan/03:70 — "CyberCloud.Core.Contracts/  # wire types shared by grains, gateway, SDK —
+      docs/plan/03 § Foundation — "CyberCloud.Core.Contracts/  # wire types shared by grains, gateway, SDK —
       [GenerateSerializer]".
   
       ⚠ ONE PACKAGE, AND IT IS DELIBERATE. `Microsoft.Orleans.Sdk` is the code generator plus
       `Orleans.Serialization`; it carries no hosting, no clustering, no storage, no Kubernetes and no
-      ABP. That keeps assembly-graph rules 1 and 3 (docs/plan/03:235-238) true one level up from
+      ABP. That keeps assembly-graph rules 1 and 3 (docs/plan/03 § Assembly graph rules) true one level up from
       CyberCloud.Core: the gateway, the CLI and the SDK reference this assembly, and none of them
       acquires a silo by doing so. `CyberCloud.ServiceDefaults` is the first assembly in the tree
       allowed Orleans *hosting*.

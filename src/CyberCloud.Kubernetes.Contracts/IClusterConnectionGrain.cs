@@ -33,7 +33,7 @@ namespace CyberCloud.Kubernetes.Contracts;
 ///         <b>The caller's tenant is not a parameter.</b> It is read from the ambient grain-call
 ///         context, stamped by <c>ClusterConnectionTenantFilter</c> from
 ///         <c>IIncomingGrainCallContext.SourceId</c>, because a caller-supplied tenant id is a claim
-///         and not a fact — tenant B would simply pass tenant A's GUID. See that filter's remarks for
+///         and not a fact — tenant B would pass tenant A's GUID. See that filter's remarks for
 ///         what happens when the source is a client rather than a grain.
 ///     </para>
 ///     <para>

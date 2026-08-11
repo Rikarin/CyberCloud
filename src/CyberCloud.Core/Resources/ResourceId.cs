@@ -3,7 +3,7 @@ using System.Globalization;
 namespace CyberCloud.Core.Resources;
 
 /// <summary>
-///     The address of an addressable thing, in the Azure shape docs/plan/06:36-39 specifies:
+///     The address of an addressable thing, in the Azure shape docs/plan/06 § Identifiers specifies:
 ///     <code>
 ///     /tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{rgName}
 ///       /providers/{providerNamespace}/{resourceType}/{resourceName}
@@ -11,7 +11,7 @@ namespace CyberCloud.Core.Resources;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         docs/plan/06:41-45 — the GUID and the path answer different questions. The GUID is the
+///         docs/plan/06 § Identifiers — the GUID and the path answer different questions. The GUID is the
 ///         identity, stable across renames, used in tuples, metering records and grain keys. The
 ///         path is the address: human-readable, hierarchical, what appears in a URL, what a role
 ///         assignment scopes to, and what a support engineer pastes into a ticket.
@@ -23,7 +23,7 @@ namespace CyberCloud.Core.Resources;
 ///             <see cref="TryParsePath" /> cannot recover it and returns
 ///             <see cref="Guid.Empty" />.
 ///         </b>
-///         This is not an omission here — it is what docs/plan/06:44
+///         This is not an omission here — it is what docs/plan/06 § Identifiers
 ///         says the system does: <c>IResourceIndexGrain</c> maps path to GUID, the mapping changes
 ///         when a resource is renamed, and the GUID does not. A parsed <see cref="ResourceId" /> is
 ///         therefore an <i>address</i> awaiting resolution; call <see cref="WithId" /> once the
@@ -42,9 +42,9 @@ namespace CyberCloud.Core.Resources;
 ///         <c>ResourceIdTests</c> § separator injection.
 ///     </para>
 /// </remarks>
-/// <param name="TenantId">The owning tenant. docs/plan/06:8.</param>
-/// <param name="SubscriptionId">The billing and quota boundary. docs/plan/06:10.</param>
-/// <param name="ResourceGroup">The lifecycle boundary's name. docs/plan/06:11.</param>
+/// <param name="TenantId">The owning tenant. docs/plan/06 § The hierarchy.</param>
+/// <param name="SubscriptionId">The billing and quota boundary. docs/plan/06 § The hierarchy.</param>
+/// <param name="ResourceGroup">The lifecycle boundary's name. docs/plan/06 § The hierarchy.</param>
 /// <param name="Type">The provider namespace and resource type.</param>
 /// <param name="Name">The resource's name within its group.</param>
 /// <param name="Id">
@@ -82,7 +82,7 @@ public readonly record struct ResourceId(
     } = EnsureType(Type);
 
     /// <summary>
-    ///     The address, exactly as docs/plan/06:52-53 defines it. Both GUIDs use the <c>D</c>
+    ///     The address, exactly as docs/plan/06 § Identifiers defines it. Both GUIDs use the <c>D</c>
     ///     format (hyphenated, no braces).
     /// </summary>
     public string Path =>
@@ -96,7 +96,7 @@ public readonly record struct ResourceId(
     ///     The path with the provider namespace and type lower-cased, for hashing and indexing.
     /// </summary>
     /// <remarks>
-    ///     docs/plan/06:77 keys <c>IResourceIndexGrain</c> on <c>idx/path/{sha256(path)[..16]}</c>.
+    ///     docs/plan/06 § Grain keys keys <c>IResourceIndexGrain</c> on <c>idx/path/{sha256(path)[..16]}</c>.
     ///     It does not say <i>which</i> path, and it matters: the resource group and the resource
     ///     name are already forced lower-case by <see cref="ResourceNaming" />, but the provider
     ///     namespace and type are case-preserving, so <c>Path</c> alone is not a canonical form and
@@ -129,8 +129,8 @@ public readonly record struct ResourceId(
     ///         <c>resourceGroups</c>, <c>providers</c> — are matched case-insensitively, because a
     ///         support engineer pasting <c>/ResourceGroups/</c> out of a document should not get a
     ///         parse error. The <i>values</i> are not folded: <c>/resourceGroups/PROD</c> fails,
-    ///         because <c>PROD</c> is not a legal name (docs/plan/06:88) and folding it to
-    ///         <c>prod</c> would be exactly the mangling docs/plan/06:92-94 forbids. Use
+    ///         because <c>PROD</c> is not a legal name (docs/plan/06 § Identifiers) and folding it to
+    ///         <c>prod</c> would be exactly the mangling docs/plan/06 § Identifiers forbids. Use
     ///         <see cref="ParsePath" /> to get a message that says so. Round-tripping is unaffected:
     ///         <see cref="Path" /> always emits the canonical literals and the values are already
     ///         lower-case.
@@ -163,7 +163,7 @@ public readonly record struct ResourceId(
 
     /// <summary>
     ///     <see cref="TryParsePath" /> with an explanation. The message names the offending value,
-    ///     per docs/plan/08:187.
+    ///     per docs/plan/08 § Errors.
     /// </summary>
     public static Result<ResourceId> ParsePath(string? path) {
         if (string.IsNullOrEmpty(path)) {

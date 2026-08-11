@@ -21,8 +21,8 @@ partial class Build
     ///         <c>.nuke/temp/build-attempt.log</c> during the very run that would be deleting it.
     ///         Observed — <c>./build.sh Clean</c> failed with
     ///         <c>DirectoryNotFoundException: Could not find a part of the path
-    ///         '…/.nuke/temp/build-attempt.log'</c> thrown from <c>BuildExecutor.Execute</c>, i.e.
-    ///         after the target had already succeeded. It is gitignored; leave it alone.
+    ///         '…/.nuke/temp/build-attempt.log'</c> thrown from <c>BuildExecutor.Execute</c>, that
+    ///         is, after the target had already succeeded. It is gitignored; leave it alone.
     ///     </para>
     /// </summary>
     IEnumerable<AbsolutePath> CleanableDirectories =>

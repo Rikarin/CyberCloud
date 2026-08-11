@@ -35,7 +35,7 @@ namespace CyberCloud.Analyzers;
 static class GrainFactories {
     /// <summary>
     ///     True for a <c>GetGrain</c> declared by <c>Orleans.IGrainFactory</c> or by Orleans's own
-    ///     extension class over it — i.e. the <b>un</b>qualified factory.
+    ///     extension class over it — that is, the <b>un</b>qualified factory.
     /// </summary>
     /// <remarks>
     ///     Deliberately false for <c>Orleans.Multitenant.TenantGrainFactory.GetGrain</c>: that one

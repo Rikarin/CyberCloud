@@ -29,7 +29,7 @@ namespace CyberCloud.Core;
 ///         <c>ErrorCodeRegistryTests</c> asserts (a) that it matches the declared fields exactly and
 ///         (b) that it matches a golden set of code strings. Adding a code therefore requires
 ///         editing three places in one commit, all of them reviewable. Wiring the same assertion
-///         into <c>build/Build.Architecture.cs</c> is the remaining half of docs/plan/08:184-186 and
+///         into <c>build/Build.Architecture.cs</c> is the remaining half of docs/plan/08 § Errors and
 ///         belongs with that file, not this one.
 ///     </para>
 ///     <para>
@@ -41,24 +41,27 @@ public sealed class ErrorCode : IEquatable<ErrorCode> {
     // ── The registry. Every code below cites the document that requires it. ────────────────────
     // Ordering is alphabetical so that a diff on this block is readable.
 
-    /// <summary>The caller is not permitted to perform this operation. docs/plan/08:20.</summary>
+    /// <summary>
+    ///     The caller is not permitted to perform this operation. docs/plan/08 § The write path,
+    ///     end to end.
+    /// </summary>
     /// <remarks>
-    ///     ⚠ Never returned to a caller who may not read the resource — docs/plan/00:115 requires
+    ///     ⚠ Never returned to a caller who may not read the resource — docs/plan/00 § Non-negotiables requires
     ///     <c>404</c>, not <c>403</c>, because existence is not disclosed. Use
     ///     <see cref="ResourceNotFound" /> there.
     /// </remarks>
     public static readonly ErrorCode AuthorizationFailed = new("AuthorizationFailed");
 
-    /// <summary>A concurrent change lost. docs/plan/06:129 (<c>409</c> on a taken name).</summary>
+    /// <summary>A concurrent change lost. docs/plan/06 § Two-phase create (<c>409</c> on a taken name).</summary>
     public static readonly ErrorCode Conflict = new("Conflict");
 
-    /// <summary>An unexpected fault. Carries no exception detail — docs/plan/08:190.</summary>
+    /// <summary>An unexpected fault. Carries no exception detail — docs/plan/08 § Errors.</summary>
     public static readonly ErrorCode InternalError = new("InternalError");
 
-    /// <summary>The <c>api-version</c> is unknown or retired. docs/plan/08:144-148.</summary>
+    /// <summary>The <c>api-version</c> is unknown or retired. docs/plan/08 § The provider registry.</summary>
     public static readonly ErrorCode InvalidApiVersion = new("InvalidApiVersion");
 
-    /// <summary>A grain key within a tenant is malformed. ADR-002, docs/plan/02:127-141.</summary>
+    /// <summary>A grain key within a tenant is malformed. ADR-002, docs/plan/02 § ADR-002.</summary>
     /// <remarks>
     ///     Also carried by <c>GrainKeys.NormalizeEmail</c>, whose failure means "no email index key
     ///     can be minted for this string". A user-facing sign-up validator should say so in its own
@@ -66,14 +69,14 @@ public sealed class ErrorCode : IEquatable<ErrorCode> {
     /// </remarks>
     public static readonly ErrorCode InvalidGrainKey = new("InvalidGrainKey");
 
-    /// <summary>The request body failed the type's JSON Schema. docs/plan/08:22.</summary>
+    /// <summary>The request body failed the type's JSON Schema. docs/plan/08 § The write path, end to end.</summary>
     public static readonly ErrorCode InvalidRequestBody = new("InvalidRequestBody");
 
-    /// <summary>A resource id path is malformed. docs/plan/06:34-56.</summary>
+    /// <summary>A resource id path is malformed. docs/plan/06 § Identifiers.</summary>
     public static readonly ErrorCode InvalidResourceId = new("InvalidResourceId");
 
     /// <summary>
-    ///     A resource group or resource name breaks the naming rules. docs/plan/06:87-90.
+    ///     A resource group or resource name breaks the naming rules. docs/plan/06 § Identifiers.
     /// </summary>
     /// <remarks>
     ///     The message for this code is the mitigation the document asks for: it names the offending
@@ -81,39 +84,45 @@ public sealed class ErrorCode : IEquatable<ErrorCode> {
     /// </remarks>
     public static readonly ErrorCode InvalidResourceName = new("InvalidResourceName");
 
-    /// <summary>A provider namespace or resource type is malformed. docs/plan/08:116-137.</summary>
+    /// <summary>A provider namespace or resource type is malformed. docs/plan/08 § The provider registry.</summary>
     public static readonly ErrorCode InvalidResourceType = new("InvalidResourceType");
 
-    /// <summary>The operation was cancelled by a caller. docs/plan/08:108-111.</summary>
+    /// <summary>The operation was cancelled by a caller. docs/plan/08 § Long-running operations.</summary>
     public static readonly ErrorCode OperationCanceled = new("OperationCanceled");
 
-    /// <summary>Another operation holds the resource. docs/plan/03:126 (<c>409</c>).</summary>
+    /// <summary>Another operation holds the resource. docs/plan/03 § Providers (<c>409</c>).</summary>
     public static readonly ErrorCode OperationInProgress = new("OperationInProgress");
 
-    /// <summary>An operation exceeded its budget. docs/plan/08:77-79 (60 minutes).</summary>
+    /// <summary>An operation exceeded its budget. docs/plan/08 § The reconcile loop (60 minutes).</summary>
     public static readonly ErrorCode OperationTimeout = new("OperationTimeout");
 
-    /// <summary>Policy evaluation denied the request. docs/plan/08:25.</summary>
+    /// <summary>Policy evaluation denied the request. docs/plan/08 § The write path, end to end.</summary>
     public static readonly ErrorCode PolicyViolation = new("PolicyViolation");
 
-    /// <summary>An <c>If-Match</c> etag did not match. docs/plan/06:202.</summary>
+    /// <summary>
+    ///     An <c>If-Match</c> etag did not match. docs/plan/06 § Tags, locks, and the small stuff
+    ///     that is not small.
+    /// </summary>
     public static readonly ErrorCode PreconditionFailed = new("PreconditionFailed");
 
-    /// <summary>Reconciliation failed terminally. docs/plan/08:60 (<c>Failed</c>).</summary>
+    /// <summary>Reconciliation failed terminally. docs/plan/08 § The reconcile loop (<c>Failed</c>).</summary>
     public static readonly ErrorCode ProvisioningFailed = new("ProvisioningFailed");
 
-    /// <summary>The name is already claimed in this scope. docs/plan/06:129.</summary>
+    /// <summary>The name is already claimed in this scope. docs/plan/06 § Two-phase create.</summary>
     public static readonly ErrorCode ResourceAlreadyExists = new("ResourceAlreadyExists");
 
-    /// <summary>The resource group does not exist. docs/plan/06:11.</summary>
+    /// <summary>The resource group does not exist. docs/plan/06 § The hierarchy.</summary>
     public static readonly ErrorCode ResourceGroupNotFound = new("ResourceGroupNotFound");
 
     /// <summary>
-    ///     The resource does not exist <i>or</i> the caller may not see it. docs/plan/00:115.
+    ///     The resource does not exist <i>or</i> the caller may not see it. docs/plan/00 § Non-negotiables.
     /// </summary>
     public static readonly ErrorCode ResourceNotFound = new("ResourceNotFound");
 
-    /// <summary>A lock forbids the write or the delete. docs/plan/06:201.</summary>
+    /// <summary>
+    ///     A lock forbids the write or the delete. docs/plan/06 § Tags, locks, and the small stuff
+    ///     that is not small.
+    /// </summary>
     public static readonly ErrorCode ScopeLocked = new("ScopeLocked");
 
     /// <summary>
@@ -135,20 +144,20 @@ public sealed class ErrorCode : IEquatable<ErrorCode> {
     /// </remarks>
     public static readonly ErrorCode SchemaInvalid = new("SchemaInvalid");
 
-    /// <summary>The subscription does not exist. docs/plan/06:10.</summary>
+    /// <summary>The subscription does not exist. docs/plan/06 § The hierarchy.</summary>
     public static readonly ErrorCode SubscriptionNotFound = new("SubscriptionNotFound");
 
-    /// <summary>The tenant does not exist. docs/plan/06:8.</summary>
+    /// <summary>The tenant does not exist. docs/plan/06 § The hierarchy.</summary>
     public static readonly ErrorCode TenantNotFound = new("TenantNotFound");
 
     /// <summary>
-    ///     The tenant is <c>Suspended</c> and control-plane writes are rejected. docs/plan/06:155.
+    ///     The tenant is <c>Suspended</c> and control-plane writes are rejected. docs/plan/06 § Tenant lifecycle.
     /// </summary>
     public static readonly ErrorCode TenantSuspended = new("TenantSuspended");
 
     /// <summary>
-    ///     A quota meter would be exceeded. docs/plan/08:23 and the worked example at
-    ///     docs/plan/08:176-179.
+    ///     A quota meter would be exceeded. docs/plan/08 § The write path, end to end and the worked example at
+    ///     docs/plan/08 § Errors.
     /// </summary>
     public static readonly ErrorCode QuotaExceeded = new("QuotaExceeded");
 

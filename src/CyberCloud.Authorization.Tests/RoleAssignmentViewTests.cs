@@ -111,7 +111,7 @@ public sealed class RoleAssignmentViewTests(AuthorizationCluster cluster) {
     [Fact]
     public async Task NestedGroupMembershipIsWalkedBecauseThereIsNoIndexInM1() {
         // docs/plan/07 § The Leopard index is M2. Until then the walk is the answer, and it is
-        // correct — just not fast at ten thousand members. This asserts the correctness half.
+        // correct — but not fast at ten thousand members. This asserts the correctness half.
         var tenant = AuthorizationCluster.Tenant(404);
         var scope = ObjectRef.Of(ObjectTypes.ResourceGroup, "rge");
 

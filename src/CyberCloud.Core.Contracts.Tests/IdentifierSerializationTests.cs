@@ -73,7 +73,7 @@ public sealed class IdentifierSerializationTests(OrleansSerializerFixture orlean
 
     [Fact]
     public void AnUnresolvedResourceIdKeepsItsEmptyGuid() {
-        // docs/plan/06:44 — an id parsed from a path carries Guid.Empty until the index resolves it.
+        // docs/plan/06 § Identifiers — an id parsed from a path carries Guid.Empty until the index resolves it.
         // Guid.Empty here is a value, not an absence, and must not be confused with default(ResourceId).
         ResourceId.TryParsePath(
                 "/tenants/2b4a1c66-2e70-4a9d-9d0a-1f7ec1f1a4b3"
@@ -118,7 +118,7 @@ public sealed class IdentifierSerializationTests(OrleansSerializerFixture orlean
     public void AGrainKeyIsDerivedFromTheArrivedIdentifierAndNotCarriedAsAValue() {
         // ⚠ There is no grain-key surrogate, deliberately: ResourceKey and ResourceKeySurrogate were
         // deleted rather than ported when ADR-002 settled IResourceGrain on res/{resourceId:N}
-        // (docs/plan/02:153-163). A grain key travelling on the wire as a value is exactly the
+        // (docs/plan/02 § ADR-002). A grain key travelling on the wire as a value is exactly the
         // coupling that removes — a peer on an older build would be sending an address it composed
         // itself. What crosses is the ResourceId; GrainKeys composes the key on the far side. This
         // test is that contract: same key either side, composed twice, never transmitted.

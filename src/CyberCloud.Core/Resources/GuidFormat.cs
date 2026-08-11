@@ -2,7 +2,7 @@ namespace CyberCloud.Core.Resources;
 
 /// <summary>
 ///     Strict GUID parsing for the two formats the identifiers use — <c>D</c> in a resource id path
-///     (docs/plan/06:52) and <c>N</c> in a grain key (docs/plan/06:101-110).
+///     (docs/plan/06 § Identifiers) and <c>N</c> in a grain key (docs/plan/06 § Grain keys).
 /// </summary>
 /// <remarks>
 ///     ⚠ <b><see cref="Guid.TryParseExact(string, string, out Guid)" /> is not exact.</b> It trims

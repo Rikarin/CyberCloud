@@ -5,7 +5,7 @@ namespace CyberCloud.Core.Resources;
 
 /// <summary>
 ///     The naming rule for resource groups and resources, decided once so that no provider
-///     re-litigates it — docs/plan/06:87-90.
+///     re-litigates it — docs/plan/06 § Identifiers.
 /// </summary>
 /// <remarks>
 ///     <para>
@@ -16,21 +16,21 @@ namespace CyberCloud.Core.Resources;
 ///     </para>
 ///     <para>
 ///         <b>Why 63 and not something rounder.</b> docs/plan/09 notes that a Kubernetes label value
-///         caps at 63 characters, and docs/plan/08:84 puts the resource id in the
+///         caps at 63 characters, and docs/plan/08 § The reconcile loop puts the resource id in the
 ///         <c>cybercloud.io/resource-id</c> label that makes drift detection a hash join. A name
 ///         that passes here must therefore be usable as a label value unchanged.
 ///     </para>
 ///     <para>
-///         <b>Case is not folded, it is rejected.</b> docs/plan/06:88 says names are
+///         <b>Case is not folded, it is rejected.</b> docs/plan/06 § Identifiers says names are
 ///         case-insensitive-unique; the character class in the same sentence already forbids
 ///         upper-case. Rejecting <c>PROD</c> rather than silently lowering it to <c>prod</c> is what
 ///         makes uniqueness trivially true (no two stored names can differ only by case) and keeps
-///         the promise in docs/plan/06:92-94 that we do not mangle. The consequence for path
+///         the promise in docs/plan/06 § Identifiers that we do not mangle. The consequence for path
 ///         parsing is stated on <see cref="ResourceId.TryParsePath" />.
 ///     </para>
 ///     <para>
-///         ⚠ <b>This rule is load-bearing for identifier integrity, not just for aesthetics.</b>
-///         The resource id path (docs/plan/06:36-39) is <c>/</c>-delimited and resource types nest
+///         ⚠ <b>This rule is load-bearing for identifier integrity, not only for aesthetics.</b>
+///         The resource id path (docs/plan/06 § Identifiers) is <c>/</c>-delimited and resource types nest
 ///         (<c>servers/databases</c>), so its grammar is only unambiguous while names contain no
 ///         <c>/</c>. The grain key (ADR-002) is embedded in a <c>|</c>-delimited tenant-qualified
 ///         key. Excluding <c>/</c>, <c>|</c>, <c>~</c>, <c>\</c>, whitespace, control characters and
@@ -47,7 +47,7 @@ public static class ResourceNaming {
     /// </summary>
     public const int MaxLength = 63;
 
-    /// <summary>The rule, as the regular expression docs/plan/06:88 states it.</summary>
+    /// <summary>The rule, as the regular expression docs/plan/06 § Identifiers states it.</summary>
     public const string Pattern = "[a-z0-9]([-a-z0-9]*[a-z0-9])?";
 
     /// <summary>Whether <paramref name="name" /> satisfies the rule.</summary>
@@ -66,7 +66,7 @@ public static class ResourceNaming {
     ///     An optional RFC 6901 JSON Pointer at the offending field, so the portal can highlight it.
     /// </param>
     /// <remarks>
-    ///     docs/plan/06:92-94 is explicit that the message <i>is</i> the mitigation: Azure accepts a
+    ///     docs/plan/06 § Identifiers is explicit that the message <i>is</i> the mitigation: Azure accepts a
     ///     wide character set and mangles it at the fabric, and the mangling is where the "why is my
     ///     resource called <c>pg-a7f3</c>" support tickets come from. So the message states the
     ///     rule, points at the character that broke it, and says why we are stricter.
@@ -184,7 +184,8 @@ public static class ResourceNaming {
 
     /// <summary>
     ///     Throws if <paramref name="name" /> is invalid. For constructors of identifier types,
-    ///     where an invalid component is a bug rather than a domain outcome (docs/plan/00:171).
+    ///     where an invalid component is a bug rather than a domain outcome (docs/plan/00 § Coding
+    ///     standards).
     /// </summary>
     /// <exception cref="ArgumentException">The name breaks the rule.</exception>
     internal static string EnsureValid(string? name, string parameterName, string kind) {

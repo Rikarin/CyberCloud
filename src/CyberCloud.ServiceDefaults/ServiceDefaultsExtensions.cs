@@ -17,7 +17,7 @@ namespace CyberCloud.ServiceDefaults;
 
 /// <summary>
 ///     The cross-cutting host wiring every Cyber Cloud process shares — descended in shape from
-///     Survival's <c>Survival.ServiceDefaults.Extensions</c> (docs/plan/03:85).
+///     Survival's <c>Survival.ServiceDefaults.Extensions</c> (docs/plan/03 § Foundation).
 /// </summary>
 public static class ServiceDefaultsExtensions {
     /// <summary>The activity/meter source names Cyber Cloud emits under.</summary>
@@ -55,15 +55,15 @@ public static class ServiceDefaultsExtensions {
     }
 
     /// <summary>
-    ///     Traces and metrics. docs/plan/02:70 — the OTLP exporter, Orleans' own sources, and
-    ///     everything under <see cref="TelemetrySourcePrefix" />.
+    ///     Traces and metrics. docs/plan/02 § Data, transport, Kubernetes — the OTLP exporter,
+    ///     Orleans' own sources, and everything under <see cref="TelemetrySourcePrefix" />.
     /// </summary>
     /// <remarks>
     ///     ⚠ This is only half of what makes a trace survive a grain call. The other half is
     ///     <c>AddActivityPropagation()</c> on the Orleans builder — see
     ///     <see cref="OrleansApplication.CreateSilo" />. Collecting
     ///     <c>Microsoft.Orleans.Application</c> here without it produces a trace that stops at the
-    ///     gateway (docs/plan/04:78), which looks like working tracing until somebody needs it.
+    ///     gateway (docs/plan/04 § Silo composition), which looks like working tracing until somebody needs it.
     /// </remarks>
     public static IHostApplicationBuilder ConfigureOpenTelemetry(this IHostApplicationBuilder builder) {
         ArgumentNullException.ThrowIfNull(builder);
@@ -110,7 +110,7 @@ public static class ServiceDefaultsExtensions {
     ///     The one check that is safe to put behind a liveness probe.
     /// </summary>
     /// <remarks>
-    ///     <c>self</c> answers "is this process able to run a callback", i.e. is it wedged. It is
+    ///     <c>self</c> answers "is this process able to run a callback", that is, is it wedged. It is
     ///     tagged <see cref="HealthCheckTags.Live" /> and nothing else ever should be — see the
     ///     remarks on <see cref="HealthCheckTags" />.
     /// </remarks>
@@ -133,7 +133,7 @@ public static class ServiceDefaultsExtensions {
     }
 
     /// <summary>
-    ///     The silo's health checks. docs/plan/04:46.
+    ///     The silo's health checks. docs/plan/04 § Silo composition.
     /// </summary>
     /// <remarks>
     ///     <para>
@@ -184,8 +184,9 @@ public static class ServiceDefaultsExtensions {
     ///     A gateway is ready when it can reach the cluster, and "can reach the cluster" is what
     ///     <see cref="ClusterHealthCheck" /> measures — but it is registered <b>untagged</b> here
     ///     too, for the same cascading-eviction reason: an Orleans client reconnects on its own, and
-    ///     evicting every gateway pod during a silo rollout is precisely the failure docs/plan/00:197
-    ///     forbids. A gateway's readiness is its HTTP listener, which the <c>self</c> check covers.
+    ///     evicting every gateway pod during a silo rollout is precisely the failure that
+    ///     docs/plan/00 § The quality bar, concretely forbids. A gateway's readiness is its HTTP
+    ///     listener, which the <c>self</c> check covers.
     /// </remarks>
     public static IHostApplicationBuilder AddOrleansClientHealthChecks(
         this IHostApplicationBuilder builder

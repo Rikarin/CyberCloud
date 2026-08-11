@@ -38,7 +38,7 @@ namespace CyberCloud.Core.Tests;
 ///     <para>
 ///     </para>
 ///     <para>
-///         <b>What ADR-002 (docs/plan/02:127-135) gets right and wrong.</b> The ADR says the
+///         <b>What ADR-002 (docs/plan/02 § ADR-002) gets right and wrong.</b> The ADR says the
 ///         physical key is <c>{tenantId}|{keyWithinTenant}</c> and that <c>'|'</c> is the separator,
 ///         <i>"doubled to escape"</i>, with <c>'~'</c> prefixed when the inner key starts with
 ///         either character.
@@ -56,13 +56,13 @@ namespace CyberCloud.Core.Tests;
 ///         <item>
 ///             <b>NOT IN THE ADR</b> — the null-tenant branch is a different encoding entirely: no
 ///             prefix, no <c>'~'</c> rule, and the <i>whole key</i> has its <c>'|'</c> doubled.
-///             docs/plan/06:116-122 makes <c>IClusterConnectionGrain</c> a null-tenant grain, so this
+///             docs/plan/06 § Grain keys makes <c>IClusterConnectionGrain</c> a null-tenant grain, so this
 ///             branch is live, not theoretical.
 ///         </item>
 ///     </list>
 ///     <para>
 ///         ⚠ This file is a <i>model</i>, not the package. <c>CyberCloud.Core</c> must not acquire
-///         an Orleans dependency (docs/plan/03:226) and neither must its tests. The model is here so
+///         an Orleans dependency (docs/plan/03 § Assembly graph rules) and neither must its tests. The model is here so
 ///         that the properties <see cref="GrainKeys" /> relies on are asserted in CI rather than
 ///         asserted once in a scratch directory; the correspondence between the model and the
 ///         package was established by execution, as described above.
@@ -166,7 +166,7 @@ public class OrleansMultitenantEncodingTests {
 
     [Fact]
     public void ANullTenantKeyCanNeverBeMistakenForATenantedOne() {
-        // docs/plan/06:116-122 keeps IClusterConnectionGrain in the null tenant. If a null-tenant
+        // docs/plan/06 § Grain keys keeps IClusterConnectionGrain in the null tenant. If a null-tenant
         // physical key could parse as tenanted, that grain's key space would overlap a tenant's.
         // It cannot: the null-tenant branch doubles every '|', so no undoubled one survives.
         string[] inners = ["cluster/0a1b2c3d", "a|b", "|lead", "t1|sub/abc", "||", "|"];

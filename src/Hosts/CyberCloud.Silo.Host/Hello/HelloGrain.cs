@@ -34,7 +34,7 @@ public sealed class HelloGrain(
     public override Task OnActivateAsync(CancellationToken cancellationToken) {
         // ⚠ The refusal, not a default. A null tenant here means the caller used a bare
         // IGrainFactory.GetGrain, so the storage layer would place this grain on the null-tenant
-        // shard and under the null-tenant Redis hash tag — i.e. in the platform's own state, under a
+        // shard and under the null-tenant Redis hash tag — that is, in the platform's own state, under a
         // key that looks tenant-scoped. ADR-002.
         tenantId = this.GetTenantId()
             ?? throw new InvalidOperationException(

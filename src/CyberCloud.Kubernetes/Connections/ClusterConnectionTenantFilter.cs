@@ -16,7 +16,7 @@ namespace CyberCloud.Kubernetes.Connections;
 ///         it, exactly as that library's own <c>TenantSeparatingCallFilter</c> does.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Registered for all grain calls, not just this one grain type.</b> Narrowing it to
+///         ⚠ <b>Registered for all grain calls, not only this one grain type.</b> Narrowing it to
 ///         <c>IClusterConnectionGrain</c> by interface name would be a filter whose correctness
 ///         depends on a string, and the cost of the general form is one
 ///         <see cref="AsyncLocal{T}" /> assignment per call. The <i>use</i> is narrow; the

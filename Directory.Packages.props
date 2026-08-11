@@ -67,20 +67,20 @@
         <PackageVersion Include="Microsoft.Orleans.Serialization.SystemTextJson" Version="$(OrleansVersion)"/>
         <PackageVersion Include="Microsoft.Orleans.TestingHost" Version="$(OrleansVersion)"/>
 
-        <!-- ⚠ CORRECTED: docs/plan/02:27 pins 10.0.0. 10.0.1 is published and is the latest 10.x. -->
+        <!-- ⚠ CORRECTED: docs/plan/02 § Orleans and hosting pins 10.0.0. 10.0.1 is published and is the latest 10.x. -->
         <PackageVersion Include="Orleans.Clustering.Kubernetes" Version="10.0.1"/>
 
         <!--
           ⚠ MISSING FROM docs/plan/02 § Orleans and hosting, and required by ADR-004.
     
-          ADR-004 (docs/plan/02:272) makes `UseKubernetesHosting()` a condition of the membership
+          ADR-004 (docs/plan/02 § ADR-004) makes `UseKubernetesHosting()` a condition of the membership
           decision — "the silo needs RBAC to read/write its membership CRs, and UseKubernetesHosting()
-          so Orleans learns its pod identity" — and docs/plan/04:64 puts the call in the CreateSilo
+          so Orleans learns its pod identity" — and docs/plan/04 § Silo composition puts the call in the CreateSilo
           block. The extension lives in this package, which the dependency register does not list.
           Orleans.Clustering.Kubernetes (above) is a DIFFERENT package by a different author and does
           NOT provide it: that one is the contrib membership provider (`UseKubeMembership`), this one is
           first-party Microsoft and is what maps SIGTERM to a graceful StopAsync with grain migration
-          rather than a 60-second gap (docs/plan/04:76). Survival references both, for the same reason.
+          rather than a 60-second gap (docs/plan/04 § Silo composition). Survival references both, for the same reason.
         -->
         <PackageVersion Include="Microsoft.Orleans.Hosting.Kubernetes" Version="$(OrleansVersion)"/>
 
@@ -88,10 +88,10 @@
         <PackageVersion Include="Orleans.Multitenant" Version="4.0.0"/>
 
         <!--
-          ⚠ SUPERSEDES docs/plan/02:31 and ADR-005 (docs/plan/02:277-293).
+          ⚠ SUPERSEDES docs/plan/02 § Orleans and hosting and ADR-005 (docs/plan/02 § ADR-005).
     
           The plan names `Rikarin.Orleans.Streaming.NATs` as "ours, and on Orleans 9", and schedules a
-          0.4 EM Phase-0 task in docs/plan/24:18 to bump it to Orleans 10. That task is DROPPED: the
+          0.4 EM Phase-0 task in docs/plan/24 § Phase 0 to bump it to Orleans 10. That task is DROPPED: the
           Rikarin package is not relevant. Orleans now ships a first-party NATS stream provider,
           `Microsoft.Orleans.Streaming.NATS`, built against Orleans 10 and targeting net10.0.
           ADR-005's stated fallback (a hand-rolled adapter over NATS.Client.JetStream) is not needed.
@@ -106,7 +106,7 @@
           So the pin tracks $(OrleansVersion) with an `-alpha.1` suffix, NOT the highest version.
     
           ⚠ It is still a prerelease and it also pulls NATS.Net [2.7.2,), a different client package
-          from the NATS.Client.Core/.JetStream pair named in docs/plan/02:61. Whether both can coexist
+          from the NATS.Client.Core/.JetStream pair named in docs/plan/02 § Data, transport, Kubernetes. Whether both can coexist
           is untested — no project references this yet.
         -->
         <PackageVersion Include="Microsoft.Orleans.Streaming.NATS" Version="$(OrleansVersion)-alpha.1"/>
@@ -135,7 +135,7 @@
     </ItemGroup>
 
     <ItemGroup Label="Kubernetes">
-        <!-- ⚠ Survival pins 18.0.13; 19 changed the generic client surface — docs/plan/02:62. -->
+        <!-- ⚠ Survival pins 18.0.13; 19 changed the generic client surface — docs/plan/02 § Data, transport, Kubernetes. -->
         <PackageVersion Include="KubernetesClient" Version="19.0.2"/>
     </ItemGroup>
 
@@ -146,7 +146,7 @@
 
     <ItemGroup Label="Identity — ADR-015">
         <!--
-          ⚠ CORRECTED: docs/plan/02:65 and ADR-015 (docs/plan/02:481) pin 7.3.0, reasoning
+          ⚠ CORRECTED: docs/plan/02 § Data, transport, Kubernetes and ADR-015 (docs/plan/02 § ADR-015) pin 7.3.0, reasoning
           "7.3.0, not the 8.0 preview — an auth server is the last place to run a preview".
           7.4.0, 7.5.0 and 7.6.0 are all published STABLE releases, and 8.0 is still preview
           (latest: 8.0.0-preview.2.26365.61). The doc's own reasoning — newest stable, never a
@@ -160,7 +160,7 @@
         <PackageVersion Include="OpenIddict.Validation.AspNetCore" Version="7.6.0"/>
 
         <!--
-          ⚠ CORRECTED: docs/plan/02:66 pins 4.0.0-beta9 and justifies it with "it is a beta with no
+          ⚠ CORRECTED: docs/plan/02 § Data, transport, Kubernetes pins 4.0.0-beta9 and justifies it with "it is a beta with no
           stable successor". That justification is REFUTED — Fido2.AspNet 4.0.0 and 4.0.1 are both
           published stable releases. Pinned at 4.0.1, the newest. Still wrapped behind IPasskeyService
           so replacing the library is one file, per the same doc line.
@@ -195,7 +195,7 @@
         <PackageVersion Include="NSubstitute" Version="5.3.0"/>
         <PackageVersion Include="Shouldly" Version="4.3.0"/>
         <!--
-          docs/plan/02:79 says "Testcontainers — latest at bring-up". CPM forbids a floating version, so
+          docs/plan/02 § Test and build says "Testcontainers — latest at bring-up". CPM forbids a floating version, so
           it is pinned here and re-evaluated when the first integration test lands. 4.13.0 is the newest
           published version at the time this file was written.
         -->

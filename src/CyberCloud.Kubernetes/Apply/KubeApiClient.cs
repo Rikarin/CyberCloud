@@ -36,7 +36,7 @@ namespace CyberCloud.Kubernetes.Apply;
 ///         </b>
 ///         — in 18.0.13 and in 19.0.2 alike, verified against both
 ///         assemblies. The API server <i>requires</i> <c>fieldManager</c> on an apply patch, so
-///         server-side apply is simply not expressible through <c>GenericClient</c>. ADR-013 makes a
+///         server-side apply is not expressible through <c>GenericClient</c>. ADR-013 makes a
 ///         stable per-provider field manager the whole basis of conflict detection, so the choice
 ///         made itself.
 ///     </para>

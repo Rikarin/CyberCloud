@@ -2,7 +2,7 @@
 // The coverage floor is not enforced here yet; see the note at the bottom of this file.
 //
 // The discovery half of this file is shared: it decides which target runs each test project, not
-// just what `Test` runs. See TestSuite below.
+// only what `Test` runs. See TestSuite below.
 
 using System;
 using System.Collections.Generic;

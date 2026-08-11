@@ -4,13 +4,13 @@ namespace CyberCloud.Core.Contracts;
 ///     The names of the Orleans stream providers. docs/plan/04 § Streams and ADR-005.
 /// </summary>
 /// <remarks>
-///     docs/plan/04:129 —
+///     docs/plan/04 § Streams —
 ///     <i>
 ///         "One stream provider, <c>Events</c>, over NATS JetStream,
 ///         multitenant-wrapped so a stream id carries the tenant."
 ///     </i>
 ///     There is deliberately only one:
-///     the namespaces in docs/plan/04:132-138 (<c>resource-changed</c>, <c>operation-progress</c>,
+///     the namespaces in docs/plan/04 § Streams (<c>resource-changed</c>, <c>operation-progress</c>,
 ///     <c>cluster-observed</c>, <c>metering</c>, <c>platform</c>) are stream <i>namespaces</i>
 ///     within this provider, not providers of their own.
 /// </remarks>
@@ -24,10 +24,10 @@ public static class StreamProviders {
 
 /// <summary>
 ///     The stream namespaces carried by <see cref="StreamProviders.Events" />.
-///     docs/plan/04:132-138.
+///     docs/plan/04 § Streams.
 /// </summary>
 /// <remarks>
-///     ⚠ <b>Delivery is at-least-once and per-subject-ordered only</b> (docs/plan/04:145). Every
+///     ⚠ <b>Delivery is at-least-once and per-subject-ordered only</b> (docs/plan/04 § Streams). Every
 ///     consumer of every namespace below must be idempotent, and anything requiring global order
 ///     does not use a stream at all.
 /// </remarks>
@@ -59,7 +59,7 @@ public static class StreamNamespaces {
 
     /// <summary>
     ///     <c>cc.platform.{topic}</c> — null-tenant. Carries the tenant-directory deltas
-    ///     docs/plan/05:38 has every gateway subscribe to.
+    ///     docs/plan/05 § The tenant directory has every gateway subscribe to.
     /// </summary>
     public const string Platform = "platform";
 }

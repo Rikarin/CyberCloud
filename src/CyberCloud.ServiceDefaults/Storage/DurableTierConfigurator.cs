@@ -77,8 +77,8 @@ public sealed class DurableTierConfigurator {
     ///         <c>AddAdoNetGrainStorage</c>. <c>Orleans.Multitenant</c> does not go through the
     ///         options system for per-tenant providers at all — it <c>new</c>s the options object and
     ///         hands it to <c>configureTenantOptions</c> — so <b>every</b> Orleans default that
-    ///         arrives via <c>IPostConfigureOptions</c> or <c>IConfigureNamedOptions</c> is simply
-    ///         absent on the tenant instances. The observed failure is
+    ///         arrives via <c>IPostConfigureOptions</c> or <c>IConfigureNamedOptions</c> is absent
+    ///         on the tenant instances. The observed failure is
     ///         <c>
     ///             OrleansConfigurationException: Invalid AdoNetGrainStorageOptions values for
     ///             AdoNetGrainStorage &lt;tenantId&gt;. HashPicker is required.

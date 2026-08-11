@@ -17,7 +17,7 @@ public class ResourceTypeNameTests {
 
     [Fact]
     public void TheNestedWorkedExampleFromTheDocumentParses() {
-        // docs/plan/08:134 — `.ResourceType("servers/databases")`.
+        // docs/plan/08 § The provider registry — `.ResourceType("servers/databases")`.
         var type = new ResourceTypeName("CyberCloud.DBforPostgreSQL", "servers/databases");
 
         type.Depth.ShouldBe(2);

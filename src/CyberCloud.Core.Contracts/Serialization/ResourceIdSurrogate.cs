@@ -21,7 +21,7 @@ namespace CyberCloud.Core.Contracts.Serialization;
 ///     </para>
 ///     <para>
 ///         <see cref="ResourceId.Id" /> is <see cref="Guid.Empty" /> for an id that came from a path
-///         and has not been resolved through the index yet (docs/plan/06:44). That is a legitimate
+///         and has not been resolved through the index yet (docs/plan/06 § Identifiers). That is a legitimate
 ///         value and is preserved as-is; it is not the same thing as the empty payload above, which
 ///         is why the null check is on <see cref="ResourceGroup" /> and <see cref="Name" />.
 ///     </para>

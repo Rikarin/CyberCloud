@@ -51,7 +51,7 @@ static class Corpus {
         ("е", "CYRILLIC SMALL LETTER IE — a look-alike for 'e'"),
         ("​", "ZERO WIDTH SPACE — invisible everywhere"),
         ("﻿", "ZERO WIDTH NO-BREAK SPACE — invisible everywhere"),
-        ("A", "upper case, which docs/plan/06:88 forbids"),
+        ("A", "upper case, which docs/plan/06 § Identifiers forbids"),
         ("_", "legal in a Kubernetes annotation, illegal in a DNS-1123 label")
     ];
 
@@ -155,7 +155,7 @@ static class Corpus {
     }
 
     /// <summary>
-    ///     Every one of the eight grain-key shapes at docs/plan/06:101-110, built from one
+    ///     Every one of the eight grain-key shapes at docs/plan/06 § Grain keys, built from one
     ///     <paramref name="id" /> plus GUIDs derived from it.
     /// </summary>
     /// <remarks>

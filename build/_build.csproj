@@ -44,7 +44,7 @@
       home directory would meet the question again. `build.sh` / `build.cmd` additionally export
       NUKE_TELEMETRY_OPTOUT=1 for anyone invoking `dotnet run` or `dotnet nuke` by hand.
 
-      ⚠ Note that this string does NOT appear in Nuke.Common.dll — Nuke 10 is componentised and the
+      ⚠ This string does NOT appear in Nuke.Common.dll — Nuke 10 is componentised and the
       telemetry lives in Nuke.Build.dll. Grepping the wrong assembly is how you conclude, wrongly,
       that there is no telemetry to opt out of.
     -->

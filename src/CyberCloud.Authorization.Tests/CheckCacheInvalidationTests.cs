@@ -82,7 +82,7 @@ public sealed class CheckCacheInvalidationTests(AuthorizationCluster cluster) {
         (await cluster.Check(b, scope).CachedEntryCountAsync()).GetValueOrThrow().ShouldBe(1);
 
         // …while tenant A's own entry is no longer fresh enough for A's latest token, which is what
-        // says the two counters really are independent rather than both simply never moving.
+        // says the two counters really are independent rather than both never moving.
         var stillStale = await Ask(a, scope, "alice", Consistency.MinimizeLatency);
         stillStale.FromCache.ShouldBeTrue(
             "MinimizeLatency takes any cached result, so the stale entry is still served — see "

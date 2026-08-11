@@ -173,7 +173,7 @@ public sealed class LocalTopology : IAsyncLifetime {
     ///     <para>
     ///         The <c>ClusterId</c>/<c>ServiceId</c> are <c>CyberCloudClusterOptions</c>' defaults,
     ///         which is what the silos run with because the AppHost overrides neither. Getting them
-    ///         wrong does not fail loudly: the client simply never finds a gateway it is allowed to
+    ///         wrong does not fail loudly: the client never finds a gateway it is allowed to
     ///         talk to and times out.
     ///     </para>
     /// </remarks>

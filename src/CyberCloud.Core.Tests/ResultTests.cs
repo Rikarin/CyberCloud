@@ -3,7 +3,7 @@ using Shouldly;
 
 namespace CyberCloud.Core.Tests;
 
-/// <summary><see cref="Result" /> and <see cref="Result{T}" /> — docs/plan/00:170-173.</summary>
+/// <summary><see cref="Result" /> and <see cref="Result{T}" /> — docs/plan/00 § Coding standards.</summary>
 public class ResultTests {
     [Fact]
     public void SuccessIsSuccessful() {

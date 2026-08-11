@@ -85,7 +85,7 @@ sealed record HealthEntry {
     ///     The exception <i>message</i>, if the check threw.
     /// </summary>
     /// <remarks>
-    ///     ⚠ The message only — never <c>ToString()</c>, never the stack. docs/plan/08:190 forbids
+    ///     ⚠ The message only — never <c>ToString()</c>, never the stack. docs/plan/08 § Errors forbids
     ///     exception detail in any body a caller can read, and <c>/api/health</c> is reachable from
     ///     the cluster network. The stack goes to the trace.
     /// </remarks>

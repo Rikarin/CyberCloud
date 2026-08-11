@@ -12,8 +12,8 @@ namespace CyberCloud.Kubernetes.Tests;
 ///         The assertion the task set is "the stagger actually spreads re-establishment rather than
 ///         being a constant", and that is what the distribution tests below check.
 ///     </b>
-///     It is an easy
-///     thing to get wrong in a way that still looks implemented: a function that returns a fixed
+///     It goes wrong
+///     in a way that still looks implemented: a function that returns a fixed
 ///     delay, or one seeded by something that does not vary per cluster, produces code that reads as
 ///     staggered and behaves as a stampede with a pause in front of it.
 /// </remarks>

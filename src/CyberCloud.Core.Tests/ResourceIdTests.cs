@@ -19,7 +19,7 @@ public class ResourceIdTests {
         Guid.Parse("0a1b2c3d-4e5f-4071-8293-a4b5c6d7e8f9")
     );
 
-    // ── The shape docs/plan/06:52-53 specifies, character for character ────────────────────────
+    // ── The shape docs/plan/06 § Identifiers specifies, character for character ────────────────────────
 
     [Fact]
     public void PathIsExactlyTheShapeTheDocumentSpecifies() =>
@@ -40,9 +40,9 @@ public class ResourceIdTests {
 
             ResourceId.TryParsePath(id.Path, out var parsed).ShouldBeTrue($"'{id.Path}' should parse");
 
-            // ⚠ Everything except Id. The path carries no resource GUID — docs/plan/06:52-53 —
+            // ⚠ Everything except Id. The path carries no resource GUID — docs/plan/06 § Identifiers —
             // so TryParsePath cannot invent one and returns Guid.Empty. That is the documented
-            // behaviour, not a rounding error: docs/plan/06:44 makes IResourceIndexGrain the thing
+            // behaviour, not a rounding error: docs/plan/06 § Identifiers makes IResourceIndexGrain the thing
             // that maps path -> GUID.
             parsed.TenantId.ShouldBe(id.TenantId);
             parsed.SubscriptionId.ShouldBe(id.SubscriptionId);
@@ -119,7 +119,7 @@ public class ResourceIdTests {
     //     matched CASE-INSENSITIVELY — a support engineer pasting /ResourceGroups/ gets a parse,
     //     not an error;
     //   * the VALUES are not folded. /resourceGroups/PROD FAILS, because PROD is not a legal name
-    //     (docs/plan/06:88) and lower-casing it would be exactly the mangling docs/plan/06:92-94
+    //     (docs/plan/06 § Identifiers) and lower-casing it would be exactly the mangling docs/plan/06 § Identifiers
     //     forbids;
     //   * provider namespaces and type names ARE compared case-insensitively, because they are
     //     mixed-case by design (CyberCloud.DBforPostgreSQL) and Azure treats them that way.
@@ -269,7 +269,7 @@ public class ResourceIdTests {
 
     [Fact]
     public void TheKeyUsesNAndThePathUsesDAndBothParse() {
-        // docs/plan/06:52 spells GUIDs `D` in a path; docs/plan/06:101-110 spells them `N` in a key.
+        // docs/plan/06 § Identifiers spells GUIDs `D` in a path; docs/plan/06 § Grain keys spells them `N` in a key.
         var key = GrainKeys.Resource(Sample.Id);
 
         Sample.Path.ShouldContain(Sample.TenantId.ToString("D", CultureInfo.InvariantCulture));
@@ -425,8 +425,8 @@ public class ResourceIdTests {
     [Fact]
     public void AnInjectedValueCanNeverProduceADifferentValidId() {
         // The strongest statement available: for every injected value, either the path fails to
-        // parse, or it parses to something whose own Path is byte-identical to the input (i.e. it
-        // is not a forgery, it is just a path). Nothing in between.
+        // parse, or it parses to something whose own Path is byte-identical to the input (that is,
+        // it is not a forgery, it is only a path). Nothing in between.
         foreach (var (value, _) in Corpus.InjectionCharacters) {
             foreach (var slot in new[] { "group", "name" }) {
                 var group = slot == "group" ? "pr" + value + "od" : "prod";
