@@ -1,0 +1,102 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    docs/plan/03 § build/ — Nuke, the single entry point for every build action.
+
+    This project is deliberately NOT a member of CyberCloud.slnx. If it were, `Compile` would build
+    the build system while the build system is building it. See docs/plan/23 § Build.
+  -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <IsPublishable>false</IsPublishable>
+
+    <!--
+      Nuke's convention: the build definition lives in the global namespace so `Build.cs` reads the
+      same in every Nuke repository. The root Directory.Build.props sets RootNamespace to the project
+      name, which would be `_build` — not a namespace we want in the generated assembly attributes.
+    -->
+    <RootNamespace></RootNamespace>
+    <AssemblyName>_build</AssemblyName>
+
+    <!--
+      Where Nuke considers the repository root and where it writes the bootstrapping scripts.
+      Both are the repository root, one level up.
+    -->
+    <NukeRootDirectory>..</NukeRootDirectory>
+    <NukeScriptDirectory>..</NukeScriptDirectory>
+
+    <!--
+      ⚠ TELEMETRY: this property is what stops Nuke asking on the console.
+
+      Verified by extracting the UTF-16 string literals from Nuke.Build.dll 10.1.0 — the notice and
+      its escape hatches are all there:
+
+        "NUKE collects anonymous usage data in order to help us improve your experience."
+        "Read more about scope, data points, and opt-out: https://nuke.build/telemetry"
+        "Press <Enter> to " + "create awareness cookie for " / "set the NukeTelemetryVersion property"
+        "Run in interactive console to fix this warning"
+        "NUKE_TELEMETRY_OPTOUT"
+
+      Nuke's own remedy is either a per-user cookie file or this MSBuild property. The property is
+      the one that belongs in the repository: a cookie is per-machine, so a CI runner with a clean
+      home directory would meet the question again. `build.sh` / `build.cmd` additionally export
+      NUKE_TELEMETRY_OPTOUT=1 for anyone invoking `dotnet run` or `dotnet nuke` by hand.
+
+      ⚠ Note that this string does NOT appear in Nuke.Common.dll — Nuke 10 is componentised and the
+      telemetry lives in Nuke.Build.dll. Grepping the wrong assembly is how you conclude, wrongly,
+      that there is no telemetry to opt out of.
+    -->
+    <NukeTelemetryVersion>1</NukeTelemetryVersion>
+
+    <!--
+      Nuke's target fields are assigned by reflection and its own generated members are not all
+      consumed, which trips a family of "this is never used / could be static" diagnostics across
+      the whole build definition.
+
+      Directory.Build.targets already scopes `TreatWarningsAsErrors=false` and
+      `NoWarn=CA1515;CA1822;CS0649` to this project (IsBuildProject). The additions below are the
+      ones that survived that and were observed failing a real `dotnet build build/_build.csproj`:
+
+        CS0169  — private field is never used            (`[Parameter]` fields read by reflection)
+        CA1812  — internal class is never instantiated   (the Build class is instantiated by Nuke)
+        IDE0044 — make field readonly                    (Nuke assigns [Parameter] fields post-ctor)
+        IDE0051 — private member is unused               (same reflection story as CS0169)
+
+        CA1707  — "Remove the underscores from assembly name _build". `_build` is Nuke's fixed
+                  convention for the build project; `nuke`'s own tooling and every Nuke repository
+                  expect it. This one is suppressed here rather than in build/.editorconfig because
+                  it is an assembly-level diagnostic with no meaningful source file to scope to —
+                  it was reported against whichever .cs file happened to sort first.
+
+      ⚠ NoWarn alone is not enough for the rules the root .editorconfig sets to `severity = error`
+      (IDE1006, IDE0005, …) — that severity is applied regardless. Those are handled in
+      build/.editorconfig, which says which rule and why for each.
+
+      This relaxation is scoped to build/ on purpose. Do NOT move any of it into the root
+      Directory.Build.props — product code must keep every one of these as an error.
+    -->
+    <NoWarn>$(NoWarn);CS0169;CA1812;IDE0044;IDE0051;CA1707</NoWarn>
+
+    <!--
+      Directory.Build.targets scopes `TreatWarningsAsErrors=false` to this project, but
+      Directory.Build.props also sets `CodeAnalysisTreatWarningsAsErrors=true`, which is a separate
+      switch covering the CAxxxx family and is NOT overridden there. Without this line the exemption
+      build/README.md advertises only half works — verified: `dotnet build build/_build.csproj`
+      failed with `error CA1707` and `error CA1852` while TreatWarningsAsErrors was already false.
+    -->
+    <CodeAnalysisTreatWarningsAsErrors>false</CodeAnalysisTreatWarningsAsErrors>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!--
+      ⚠ NO Version= ATTRIBUTE. Central Package Management is on repo-wide
+      (Directory.Packages.props), and an inline version is NU1008 and a hard restore failure.
+      Nuke's own `nuke :setup` template writes the version inline — if you regenerate this file from
+      a template, strip it again. The pin lives in Directory.Packages.props § Build.
+    -->
+    <PackageReference Include="Nuke.Common" />
+  </ItemGroup>
+
+</Project>

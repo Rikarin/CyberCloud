@@ -1,0 +1,45 @@
+# ══════════════════════════════════════════════════════════════════════════════════════════════
+# build/ — analyser overrides for the Nuke build definition, and NOWHERE ELSE.
+#
+# The root .editorconfig sets several diagnostics to `error` outright. That severity is applied by
+# the compiler regardless of `TreatWarningsAsErrors`, so the `TreatWarningsAsErrors=false` that
+# Directory.Build.targets scopes to this project (IsBuildProject) does NOT relax them — verified:
+# with only that property set, `dotnet build build/_build.csproj` failed with
+#
+#   error IDE1006 : Naming rule violation: The first word, 'Configuration', must begin with a
+#                   lower case character                                     (Build.cs:24)
+#   error CA1852  : Type 'Build' can be sealed …                             (Build.cs)
+#   error EnableGenerateDocumentationFile : Set MSBuild property 'GenerateDocumentationFile' to
+#                   'true' … to enable IDE0005
+#
+# Each override below is a rule that Nuke's own conventions make unsatisfiable, not a rule we
+# disagree with. NONE of this belongs in the root .editorconfig — product code keeps all of it.
+# ══════════════════════════════════════════════════════════════════════════════════════════════
+
+[*.cs]
+
+# IDE1006 — naming rule violation.
+#
+# The root .editorconfig (§ Naming) requires camelCase with no prefix for private state. Nuke binds
+# command-line arguments to fields by name: `[Parameter] readonly string Configuration` is what
+# makes `./build.sh Compile --configuration Release` work, and renaming the field renames the
+# parameter. The naming convention and the tool's binding contract cannot both be satisfied, and
+# the binding contract is the one with observable behaviour.
+dotnet_diagnostic.IDE1006.severity = none
+
+# IDE0005 — remove unnecessary usings.
+#
+# Not a disagreement: IDE0005 only runs on build when `GenerateDocumentationFile` is true
+# (dotnet/roslyn#41640), and Directory.Build.props § Documentation deliberately turns the doc file
+# off for this project — "nobody reads the Nuke build's IntelliSense". With the root's
+# `severity = error` and no doc file, every build fails with `error EnableGenerateDocumentationFile`
+# before a single line is analysed. Unused usings here are caught in the IDE, not at build time.
+dotnet_diagnostic.IDE0005.severity = none
+
+# CA1852 — type can be sealed.
+#
+# Left at the root's `error`. Nuke instantiates the build class by reflection and does not subclass
+# it, so `sealed partial class Build : NukeBuild` satisfies the rule — verified: the build compiles
+# and `./build.sh Compile` runs to completion with the class sealed. Recorded here because sealing a
+# Nuke build class looks wrong and the next person will be tempted to unseal it; unseal only
+# together with a suppression, and say why.

@@ -11,11 +11,58 @@
     <!-- xunit.v3 test projects are executables (Microsoft.Testing.Platform), not libraries. -->
     <OutputType>Exe</OutputType>
     <!--
+      ⚠ Without these two, `dotnet test` FINDS NO TESTS AND STILL EXITS 0.
+
+      OutputType=Exe above already says "Microsoft.Testing.Platform", but saying it is not enough:
+      `dotnet test` defaults to the VSTest host, which cannot discover xunit.v3 tests because
+      xunit.v3 ships an MTP entry point and no VSTest adapter. Observed against a throwaway
+      CyberCloud.Probe.Tests with one passing [Fact]:
+
+        $ dotnet test src/CyberCloud.Probe.Tests/…csproj (with no rebuild)
+        A total of 1 test files matched the specified pattern.
+        No test is available in …/CyberCloud.Probe.Tests.dll. Make sure that test discoverer &
+        executors are registered …
+        $ echo $?
+        0
+
+      A green `Test` that ran nothing is the worst possible state for a gate — docs/plan/23 § CI
+      shape gates every PR on it. With these properties the same command reports
+      "Passed! - Failed: 0, Passed: 1" and the exit code means something.
+
+      Corollary: test projects must NOT reference Microsoft.NET.Test.Sdk. It is the VSTest bridge
+      and pulls the runner back to the mode that finds nothing. The pin stays in
+      Directory.Packages.props for any project that genuinely needs VSTest.
+    -->
+    <TestingPlatformDotnetTestSupport>true</TestingPlatformDotnetTestSupport>
+    <UseMicrosoftTestingPlatformRunner>true</UseMicrosoftTestingPlatformRunner>
+    <!--
       Test code legitimately does things production code must not: public fixtures that are never
       sealed, unused parameters in theory data, assertions on the result of an async call.
       CA1515 (make public types internal) is wrong for xUnit collection fixtures.
     -->
     <NoWarn>$(NoWarn);CA1515;CA1707;CA2007</NoWarn>
+    <!--
+      ⚠ Without this, NO TEST PROJECT IN THIS REPOSITORY COMPILES.
+
+      .editorconfig sets `dotnet_diagnostic.IDE0005.severity = error`, and IDE0005 only runs on
+      build when GenerateDocumentationFile is true (dotnet/roslyn#41640). Directory.Build.props
+      § Documentation deliberately sets GenerateDocumentationFile=false for test projects. The two
+      decisions are individually reasonable and jointly fatal: the compiler refuses to build and
+      emits `error EnableGenerateDocumentationFile` instead of analysing anything.
+
+      Observed with a throwaway CyberCloud.Probe.Tests project against this exact tree:
+
+        CSC : error EnableGenerateDocumentationFile: Set MSBuild property
+              'GenerateDocumentationFile' to 'true' in project file to enable IDE0005
+              (Remove unnecessary usings/imports) on build
+
+      docs/plan/23 § CI shape gates every PR on `Test`, so this would have surfaced as "the first
+      test project anyone writes does not build". Turning IDE0005 off for test projects only —
+      unused usings in test code are an IDE concern, not a build gate — is the smaller loss than
+      either producing .xml doc files nobody reads or demoting IDE0005 repository-wide.
+      build/.editorconfig makes the same trade for the Nuke build project, for the same reason.
+    -->
+    <NoWarn>$(NoWarn);IDE0005</NoWarn>
   </PropertyGroup>
 
   <PropertyGroup Label="Contracts project conventions" Condition="'$(IsContractsProject)' == 'true'">

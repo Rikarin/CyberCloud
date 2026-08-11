@@ -1,0 +1,145 @@
+// docs/plan/03 § build/ — the target graph. Everything a target actually does lives in a sibling
+// partial: Build.Compile.cs, Build.Test.cs, Build.Generate.cs, Build.Charts.cs, Build.Images.cs,
+// Build.Architecture.cs, Build.Licence.cs.
+
+using System.Collections.Generic;
+using System.Linq;
+using Nuke.Common;
+using Nuke.Common.IO;
+using Nuke.Common.ProjectModel;
+using Serilog;
+
+/// <summary>
+///     The Cyber Cloud build. <c>./build.sh &lt;Target&gt;</c> is the single entry point for every
+///     build action, locally and in CI — docs/plan/23 § Build.
+/// </summary>
+sealed partial class Build : NukeBuild
+{
+    public static int Main() => Execute<Build>(x => x.Compile);
+
+    // ── Parameters ────────────────────────────────────────────────────────────────────────────
+
+    [Parameter("Build configuration. Debug locally, Release on CI.")]
+    readonly string Configuration = IsLocalBuild ? "Debug" : "Release";
+
+    // ── Well-known paths ──────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    ///     The solution, read from <c>.nuke/parameters.json</c> and overridable with
+    ///     <c>--solution</c>.
+    ///     <para>
+    ///         ✔ Verified that Nuke 10.1.0 parses the <c>.slnx</c> XML solution format — it depends
+    ///         on <c>Microsoft.VisualStudio.SolutionPersistence</c>, and a probe target printed
+    ///         <c>Parsed solution: …/CyberCloud.slnx</c> and <c>Project count: 0</c>. This is worth
+    ///         recording because <c>.slnx</c> is new enough that a build tool not supporting it is
+    ///         the obvious thing to fear.
+    ///     </para>
+    /// </summary>
+    // `= null!` because Nuke assigns injected fields by reflection after construction, and
+    // .editorconfig makes CS8618 (uninitialised non-nullable field) an error.
+    [Solution] readonly Solution Solution = null!;
+
+    AbsolutePath SolutionFile => Solution.Path!;
+
+    AbsolutePath ArtifactsDirectory => RootDirectory / "artifacts";
+    AbsolutePath TestResultsDirectory => ArtifactsDirectory / "test-results";
+
+    /// <summary>
+    ///     The directories that contain buildable .NET code. <c>references/</c> is excluded on
+    ///     purpose — docs/plan/03 § Top level: "read-only, not built, not restored".
+    /// </summary>
+    IEnumerable<AbsolutePath> SourceRoots =>
+        new[] { RootDirectory / "src", RootDirectory / "test", RootDirectory / "cli" }
+            .Where(x => x.DirectoryExists());
+
+    // ── Target graph ──────────────────────────────────────────────────────────────────────────
+    //
+    //   Clean
+    //   Restore ──► Compile ──┬──► Test
+    //                         ├──► Generate       (stub)
+    //                         ├──► Architecture   (stub)
+    //                         └──► Images ────────┐ (stub)
+    //   Charts (stub) ────────────────────────────┴──► Licence (stub)
+    //
+    // The five stubs are wired with their real dependencies so the graph is right from day one, and
+    // each logs where its implementation is tracked. They succeed: a stub that fails the build is
+    // worse than no stub, because it trains everyone to ignore a red target.
+
+    Target Clean => _ => _
+        .Description("Delete every build output. Never touches references/.")
+        .Executes(CleanOutputs);
+
+    Target Restore => _ => _
+        .Description("dotnet restore over CyberCloud.slnx, with CPM.")
+        .Executes(RestoreSolution);
+
+    Target Compile => _ => _
+        .Description("dotnet build over CyberCloud.slnx — deterministic, warnings are errors.")
+        .DependsOn(Restore)
+        .Executes(CompileSolution);
+
+    Target Test => _ => _
+        .Description("Unit and grain tests. docs/plan/23 § Test layers.")
+        .DependsOn(Compile)
+        .Executes(RunTests);
+
+    Target Generate => _ => _
+        .Description("Provider registry → OpenAPI → CLI verbs → SDK → portal forms (ADR-012). Fails on drift.")
+        .DependsOn(Compile)
+        .Executes(GenerateSurfaces);
+
+    Target Architecture => _ => _
+        .Description("The ten architecture gates. docs/plan/23 § The architecture gates.")
+        .DependsOn(Compile)
+        .Executes(CheckArchitecture);
+
+    Target Charts => _ => _
+        .Description("helm lint, values.schema.json generation, drift check, package.")
+        .Executes(BuildCharts);
+
+    Target Images => _ => _
+        .Description("Container images, SBOM (Syft), signatures (cosign), push by digest.")
+        .DependsOn(Compile)
+        .Executes(BuildImages);
+
+    Target Licence => _ => _
+        .Description("ADR-011 licence scan over charts and images.")
+        .DependsOn(Charts, Images)
+        .Executes(ScanLicences);
+
+    // ── Shared helpers ────────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    ///     Logs that a target is wired but not implemented, naming where the work is tracked, and
+    ///     returns normally. See the note on the target graph above for why this does not throw.
+    /// </summary>
+    static void NotImplementedYet(string target, string what, string trackedIn)
+    {
+        // No "{Target}:" prefix on the warning — Nuke already prefixes the target name in both the
+        // "Errors & Warnings" summary and the build.log line format, and three copies of it on one
+        // line reads like a bug.
+        Log.Warning("Not implemented yet — tracked in {TrackedIn}", trackedIn);
+        Log.Information("When implemented, {Target} will: {What}", target, what);
+    }
+
+    /// <summary>
+    ///     Whether the solution currently contains any project.
+    ///     <para>
+    ///         The repository legitimately has zero projects right now (docs/plan/03 — the directory
+    ///         skeleton landed before the assemblies). Verified on SDK 10.0.302 that
+    ///         <c>dotnet restore</c>, <c>dotnet build</c> and <c>dotnet test</c> against the empty
+    ///         <c>CyberCloud.slnx</c> all exit 0, emitting only
+    ///         <c>warning : Unable to find a project to restore!</c>. Relying on that staying true
+    ///         across SDK releases would be a gate that silently flips red on an SDK bump, so the
+    ///         emptiness is detected here and the .NET invocation is skipped explicitly instead.
+    ///     </para>
+    /// </summary>
+    bool SolutionHasProjects => Solution.AllProjects.Count > 0;
+
+    void SkippingEmptySolution(string target)
+        => Log.Information(
+            "{Target}: {Solution} contains no projects yet — nothing to do, and that is a pass, not a "
+            + "skipped gate. docs/plan/03 § Top level.",
+            target,
+            SolutionFile.Name);
+}
