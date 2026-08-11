@@ -80,6 +80,8 @@
     </Folder>
     <Folder Name="/src/Providers/"/>
     <Folder Name="/src/Hosts/">
+        <Project Path="src/Hosts/CyberCloud.Gateway.Host/CyberCloud.Gateway.Host.csproj"/>
+        <Project Path="src/Hosts/CyberCloud.Gateway.Host.Tests/CyberCloud.Gateway.Host.Tests.csproj"/>
         <Project Path="src/Hosts/CyberCloud.Silo.Host/CyberCloud.Silo.Host.csproj"/>
         <Project Path="src/Hosts/CyberCloud.AppHost/CyberCloud.AppHost.csproj"/>
         <Project Path="src/Hosts/CyberCloud.AppHost.Tests/CyberCloud.AppHost.Tests.csproj"/>

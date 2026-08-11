@@ -1,0 +1,47 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      The gateway's suite. docs/plan/10.
+
+      ⚠ NO TestServer, NO WebApplicationFactory, NO CONTAINER — and that is a choice with a reason
+      rather than a limitation being worked around.
+
+      The gateway's nine stages are composed by GatewayPipeline out of eight IGatewayStage objects
+      that take an HttpContext and return an outcome. DefaultHttpContext is in the ASP.NET Core
+      shared framework, so the WHOLE pipeline — not a slice of it — runs in-process against a real
+      HttpContext with no server, no socket and no Kestrel. What that buys:
+
+        * The tests drive the same object graph production does, in the same order, including the
+          response writer. A TestServer would add a socket and change nothing else.
+        * `Microsoft.AspNetCore.TestHost` is not in Directory.Packages.props, so this avoids adding
+          a package to a central file three other branches are editing right now.
+
+      What it costs, stated so it can be paid: nothing exercises Kestrel's own limits (request body
+      size, header count) or the routing table's endpoint matching. Both are framework behaviour
+      rather than ours, and the gateway's own body cap is asserted here directly.
+
+      The connection grain is exercised by direct instantiation rather than through a TestCluster,
+      which ConnectionGrain's own remarks explain and constrain: it uses no grain infrastructure.
+    -->
+
+    <ItemGroup>
+        <FrameworkReference Include="Microsoft.AspNetCore.App"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Include="xunit.v3"/>
+        <PackageReference Include="Shouldly"/>
+        <PackageReference Include="NSubstitute"/>
+        <PackageReference Include="Orleans.Multitenant"/>
+        <PackageReference Include="Microsoft.Orleans.Server"/>
+    </ItemGroup>
+
+    <ItemGroup Label="Global usings">
+        <Using Include="Xunit"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../CyberCloud.Gateway.Host/CyberCloud.Gateway.Host.csproj"/>
+    </ItemGroup>
+
+</Project>

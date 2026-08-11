@@ -47,28 +47,62 @@ public static class ResourceManagerSiloBuilderExtensions {
     public static ISiloBuilder AddCyberCloudResourceManager(this ISiloBuilder silo) {
         ArgumentNullException.ThrowIfNull(silo);
 
-        return silo.ConfigureServices(services => {
-                services.TryAddSingleton<IClock, SystemClock>();
+        return silo.ConfigureServices(services => services.AddCyberCloudResourceManager());
+    }
 
-                // Built from whatever providers the container holds at first resolve — see the
-                // remarks on ordering.
-                services.TryAddSingleton<IProviderRegistry>(
-                    provider => ProviderRegistry.Build(provider.GetServices<IResourceProvider>())
-                );
+    /// <summary>
+    ///     The same registrations, for a host that has no <see cref="ISiloBuilder" /> to hang them on.
+    /// </summary>
+    /// <param name="services">The container.</param>
+    /// <returns>The same collection, for chaining.</returns>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>This exists because the gateway is an Orleans <i>client</i>, and the reason it is
+    ///         <i>here</i> rather than in the gateway is the enforcement seam.</b> docs/plan/08 § The
+    ///         write path, end to end makes <see cref="IResourceManager" /> "a service held by the
+    ///         gateway", and docs/plan/10 § Request pipeline dispatches to it at stage 8 — but
+    ///         <see cref="AddCyberCloudResourceManager(ISiloBuilder)" /> takes a silo builder, which a
+    ///         client host does not have.
+    ///     </para>
+    ///     <para>
+    ///         The gateway could have repeated these ten lines in its own composition root. It must
+    ///         not: one of them names <see cref="ReBacResourceAuthorizer" />, and docs/plan/10 § What
+    ///         the gateway must never do puts authorization in one seam, in this assembly.
+    ///         <c>GatewayIsolationTests.NoGatewaySourceFileCallsAnAuthorizationEngine</c> reads the
+    ///         gateway's source for that name and fails on it — which is how this method came to
+    ///         exist rather than by foresight.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ Everything is <c>TryAdd</c>, and the silo-only pieces (<see cref="DriftScanner" />,
+    ///         <see cref="ReconcileDriver" />) are registered but never resolved in a client. A
+    ///         registration is not an instantiation; splitting the list would mean two lists to keep
+    ///         in step.
+    ///     </para>
+    /// </remarks>
+    public static IServiceCollection AddCyberCloudResourceManager(this IServiceCollection services) {
+        ArgumentNullException.ThrowIfNull(services);
 
-                services.TryAddSingleton<IPolicyEvaluator, NotSupportedPolicyEvaluator>();
-                services.TryAddSingleton<IResourceChangedSink, LoggingResourceChangedSink>();
-                services.TryAddSingleton<ILockResolver, ResourceScopeLockResolver>();
-                services.TryAddSingleton<ISecretResolver, UnavailableSecretResolver>();
-                services.TryAddSingleton<IClusterConnectionFactory, NoClusterConnectionFactory>();
-                services.TryAddSingleton<IClusterObjectInventory, UnavailableClusterObjectInventory>();
-                services.TryAddSingleton<IResourceAuthorizer, ReBacResourceAuthorizer>();
+        services.TryAddSingleton<IClock, SystemClock>();
 
-                services.TryAddSingleton<DriftScanner>();
-                services.TryAddSingleton<ReconcileDriver>();
-                services.TryAddSingleton<IResourceManager, ResourceManagerService>();
-            }
+        // Built from whatever providers the container holds at first resolve — see the remarks on
+        // ordering.
+        services.TryAddSingleton<IProviderRegistry>(
+            provider => ProviderRegistry.Build(provider.GetServices<IResourceProvider>())
         );
+
+        services.TryAddSingleton<IPolicyEvaluator, NotSupportedPolicyEvaluator>();
+        services.TryAddSingleton<IResourceChangedSink, LoggingResourceChangedSink>();
+        services.TryAddSingleton<ILockResolver, ResourceScopeLockResolver>();
+        services.TryAddSingleton<ISecretResolver, UnavailableSecretResolver>();
+        services.TryAddSingleton<IClusterConnectionFactory, NoClusterConnectionFactory>();
+        services.TryAddSingleton<IClusterObjectInventory, UnavailableClusterObjectInventory>();
+        services.TryAddSingleton<IResourceAuthorizer, ReBacResourceAuthorizer>();
+
+        services.TryAddSingleton<DriftScanner>();
+        services.TryAddSingleton<ReconcileDriver>();
+        services.TryAddSingleton<IResourceManager, ResourceManagerService>();
+
+        return services;
     }
 
     /// <summary>
