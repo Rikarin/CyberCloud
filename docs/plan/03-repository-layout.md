@@ -79,8 +79,25 @@ src/
 ├── CyberCloud.Metering/                 # usage events, aggregation, quota enforcement (22)
 ├── CyberCloud.Billing/                  # rating, ledger, invoices (22)
 ├── CyberCloud.Telemetry/                # our own OTel wiring + the ingest path for tenants (16)
-└── CyberCloud.ServiceDefaults/          # AddServiceDefaults, health checks, Orleans host builders
+├── CyberCloud.ServiceDefaults/          # AddServiceDefaults, health checks, Orleans host builders
+└── CyberCloud.Analyzers/                # ⚠ netstandard2.0 — CC1001..CC1007, the compile-time half of 00
 ```
+
+⚠ **`CyberCloud.Analyzers` is the one project in the repository that is not `net10.0`**, and it is a
+documented exception to [02 § Platform baseline](02-technology-decisions.md)'s single-TFM rule rather
+than drift. A Roslyn analyzer is loaded by the *compiler*, which may be running on .NET Framework
+(Visual Studio's design-time build) or on .NET (`dotnet build`); `netstandard2.0` is the only target
+both can load, and `Microsoft.CodeAnalysis.Analyzers`' `RS1041` enforces it. Re-checked against the
+SDK in use rather than assumed: `Microsoft.CodeAnalysis.CSharp` 5.6.0 — the version of the compiler
+SDK 10.0.302 ships — still publishes a `netstandard2.0` lib.
+
+⚠ **Nothing *references* it in the ordinary sense.** The projects it polices name it with
+`OutputItemType="Analyzer" ReferenceOutputAssembly="false"`, so it never reaches their compile line,
+their output directory or their assembly metadata — which is why
+`AssemblyGraphTests.CoreReferencesNothingButTheSharedFramework` still passes with `CyberCloud.Core`
+referencing it. **Adding that four-line `ItemGroup` is what puts a new assembly under the rules**;
+there is no automatic wiring, deliberately, because a repository-wide analyzer injection in
+`Directory.Build.targets` would also try to make the analyzer analyse itself.
 
 `CyberCloud.ServiceDefaults` is the direct descendant of Survival's — `OrleansApplication.CreateServer`
 / `CreateClient`, health checks, Serilog, OTel. It is copied in shape, not in code, because the

@@ -20,4 +20,10 @@
     <ProjectReference Include="../CyberCloud.Core.Contracts/CyberCloud.Core.Contracts.csproj" />
   </ItemGroup>
 
+  <ItemGroup Label="CyberCloud.Analyzers — see CyberCloud.Core.csproj for why this is not a reference">
+    <ProjectReference Include="../CyberCloud.Analyzers/CyberCloud.Analyzers.csproj"
+                      OutputItemType="Analyzer"
+                      ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
 </Project>

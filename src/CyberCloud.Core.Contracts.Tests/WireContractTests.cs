@@ -10,12 +10,21 @@ namespace CyberCloud.Core.Contracts.Tests;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         docs/plan/00:173-175 and docs/plan/04:177 both say an <b>analyzer</b> enforces these.
-///         There is no such analyzer in this repository yet, and there is no
-///         <c>build/Build.Architecture.cs</c> rule for it either. Until one exists these tests are
-///         the gate, and they are written to fail on the <i>next</i> type somebody adds, not merely
-///         on the ones that exist today — which is why they reflect over the assembly rather than
-///         listing what they know about.
+///         docs/plan/00 § Coding standards and docs/plan/04 § Failure and upgrade both say an
+///         <b>analyzer</b> enforces these. One now does — <c>CC1003</c> in
+///         <c>src/CyberCloud.Analyzers</c>, which <c>CyberCloud.Core.Contracts</c> (the assembly
+///         these tests reflect over, not this one) references as an analyzer asset. So
+///         <see cref="EveryGenerateSerializerTypeHasAnAlias" /> should never fail again: a type
+///         declared without an alias stops compiling first.
+///     </para>
+///     <para>
+///         ⚠ <b>These tests are kept anyway, and not because they are hard to delete.</b> The
+///         analyzer answers "is there an alias?". Everything else here is a different question that
+///         a compile-time rule cannot answer: are the alias <i>strings</i> the ones recorded in this
+///         file (a rename must not change them), is every alias unique, and is the <c>[Id(n)]</c>
+///         baseline still append-only. <see cref="EveryGenerateSerializerTypeHasAnAlias" /> stays as
+///         the belt to the analyzer's braces — it is what would notice if the analyzer reference
+///         were ever dropped from this project.
 ///     </para>
 /// </remarks>
 public sealed class WireContractTests

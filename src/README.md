@@ -14,7 +14,13 @@ Tests are siblings (ADR-018): assume `X.Tests` next to every `X`.
 `CyberCloud.Core`, `CyberCloud.Core.Contracts`, `CyberCloud.Tenancy(.Contracts)`,
 `CyberCloud.Authorization(.Contracts)`, `CyberCloud.Kubernetes`, `CyberCloud.Kubernetes.Charts`,
 `CyberCloud.ResourceManager(.Contracts)`, `CyberCloud.Metering`, `CyberCloud.Billing`,
-`CyberCloud.Telemetry`, `CyberCloud.ServiceDefaults`.
+`CyberCloud.Telemetry`, `CyberCloud.ServiceDefaults`, `CyberCloud.Analyzers`.
+
+⚠ `CyberCloud.Analyzers` breaks the naming convention's twin, the single-TFM rule: it targets
+`netstandard2.0`, because that is what a Roslyn analyzer must target to be loadable by every
+compiler host. It is referenced with `OutputItemType="Analyzer"`, never as an ordinary reference —
+copy the `ItemGroup` from `CyberCloud.Core.csproj` into any new assembly that should be policed.
+
 
 Providers go in [`Providers/`](Providers); hosts go in [`Hosts/`](Hosts).
 

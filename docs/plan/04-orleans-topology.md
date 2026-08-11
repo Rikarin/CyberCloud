@@ -209,14 +209,19 @@ tags, not just the previous one, because a hotfix branch will eventually be olde
 
 ⚠ **Two corrections to that sentence, both found by building it.**
 
-*"analyzer-enforced" is not true yet.* No analyzer requires `[Alias]` on a `[GenerateSerializer]`
-type; nothing shipping with the SDK does this. It is currently enforced by a test that reflects over
-the contracts assembly and fails on the next type added without one. That is a real gate, but it
-lives in the test suite rather than the compiler, and [23](23-build-ci-and-testing.md)'s gate table
-should say so until a `CyberCloud.Analyzers` project exists. The same caveat applies to
-[00](00-vision-and-principles.md)'s claim that `async void` / `.Result` / `.Wait()` are
-analyzer-banned: `CA1849` covers only the case where a blocking call sits inside an already-`async`
-method, which is not the shape that deadlocks a silo.
+*"analyzer-enforced" was not true when this was written, and is now.* ✅ `CyberCloud.Analyzers`
+exists (`src/CyberCloud.Analyzers`), and `CC1003` fails a `[GenerateSerializer]` type with no
+`[Alias]` at the declaration. The reflection tests are **kept, not replaced**: `WireContractTests`
+and `TenancyWireContractTests` also assert the alias *strings* against a checked-in list, which is
+the different claim that a rename must not change them, and a compile-time rule cannot make it. What
+the analyzer adds is reach — the reflection tests each cover one `.Contracts` assembly, and
+`CyberCloud.Tenancy`'s seven grain-state types in `TenancyState.cs` were covered by neither.
+
+The same caveat applied to [00](00-vision-and-principles.md)'s claim that `async void` / `.Result` /
+`.Wait()` are analyzer-banned — `CA1849` covers only the case where a blocking call sits inside an
+already-`async` method, which is not the shape that deadlocks a silo. ✅ `CC1001` covers the
+synchronous-method half and deliberately does *not* overlap `CA1849`; `CC1002` covers `async void`,
+including the lambda form that binds to a `void` delegate without the word appearing in the source.
 
 *The cross-release half is unimplementable until there is a release.* "Loads the previous release's
 contract assembly" needs a tag, and there is none. What **can** be written on day one — and is —

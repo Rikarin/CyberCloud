@@ -1,0 +1,59 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    docs/plan/02 ADR-018: tests are siblings. OutputType=Exe, the Microsoft.Testing.Platform
+    switches, IsPackable=false and the NoWarn set come from the repository-root
+    Directory.Build.props / Directory.Build.targets § Test project conventions.
+
+    ⚠ THIS PROJECT IS net10.0 WHILE THE PROJECT IT TESTS IS netstandard2.0, and that is correct: the
+    analyzer has to be loadable by a .NET Framework-hosted compiler, its tests only have to run here.
+    A net10.0 project may reference a netstandard2.0 one, and this reference is an ORDINARY one —
+    the tests instantiate the analyzer types directly. The five production projects reference the
+    same project with OutputItemType="Analyzer" instead; see CyberCloud.Core.csproj.
+  -->
+
+  <ItemGroup>
+    <PackageReference Include="xunit.v3" />
+    <PackageReference Include="Shouldly" />
+    <!--
+      The Roslyn analyzer test harness. ⚠ The BASE package, not `…Analyzer.Testing.XUnit`: that
+      variant binds to xUnit v2 and this repository is xunit.v3 (ADR-018). The base package ships
+      Microsoft.CodeAnalysis.Testing.DefaultVerifier, which depends on no test framework at all —
+      failures surface as exceptions, which is what an xUnit assertion is anyway.
+
+      ⚠ Microsoft.CodeAnalysis.CSharp.Workspaces is pinned in Directory.Packages.props so that CPM's
+      transitive pinning can lift this package's 1.0.1 floor off .NET Framework. Without that pin
+      the restore emits NU1701 four times and MSBuildTreatWarningsAsErrors fails the build.
+    -->
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Analyzer.Testing" />
+  </ItemGroup>
+
+  <ItemGroup Label="Metadata the analysed snippets compile against">
+    <!--
+      ⚠ These are here to be *metadata*, not to be used. AnalyzerHarness feeds every managed
+      assembly in this project's output directory to the test compilation, so a snippet in a test
+      can say `[GenerateSerializer]`, `IGrainFactory`, `Grain`, `ForTenant` and `GrainKeys` and mean
+      the real ones.
+
+      That choice is deliberate and it is the difference between a test and a tautology. Every rule
+      here binds by metadata name — "Orleans.GenerateSerializerAttribute",
+      "Orleans.IGrainWithStringKey", "Orleans.Multitenant.TenantGrainFactory". Hand-written stubs
+      with those names would prove the analyzer matches the strings it was written against; the
+      shipped assemblies prove it matches Orleans.
+    -->
+    <PackageReference Include="Microsoft.Orleans.Sdk" />
+    <PackageReference Include="Orleans.Multitenant" />
+  </ItemGroup>
+
+  <ItemGroup Label="Global usings">
+    <!-- xunit.v3 ships no implicit using for its own namespace — same as every other .Tests here. -->
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../CyberCloud.Analyzers/CyberCloud.Analyzers.csproj" />
+    <!-- GrainKeys — CC1004's and CC1006's legitimate-key cases name the real one. -->
+    <ProjectReference Include="../CyberCloud.Core/CyberCloud.Core.csproj" />
+  </ItemGroup>
+
+</Project>

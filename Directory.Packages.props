@@ -210,6 +210,51 @@
     <PackageVersion Include="Nuke.Common" Version="10.1.0" />
   </ItemGroup>
 
+  <!-- ══════════════ Roslyn — CyberCloud.Analyzers and its tests ══════════════ -->
+  <ItemGroup Label="Roslyn">
+    <!--
+      ⚠ MISSING FROM docs/plan/02's dependency register, all four of them, and that is a doc gap
+      rather than drift: docs/plan/00 § Coding standards, docs/plan/00 § Non-negotiables,
+      docs/plan/02 ADR-002 and docs/plan/04 § Failure and upgrade each assert "analyzer-enforced",
+      and § Test and build lists no analyzer-authoring or analyzer-testing package at all. An
+      analyzer cannot be written, and certainly cannot be tested, without these. Register them in
+      docs/plan/02 § Test and build.
+
+      ⚠ VERSION RULE: Microsoft.CodeAnalysis.* must not exceed the compiler that loads the analyzer.
+      global.json rolls forward to SDK 10.0.302, whose csc reports 5.6.0-2.26329.109, so 5.6.0 —
+      the released build of that same compiler — is the ceiling and is what is pinned. Taking a
+      newer Roslyn than the SDK's would produce an analyzer the SDK cannot load, and the symptom is
+      a build warning about a missing analyzer assembly rather than an error.
+
+      ⚠ netstandard2.0 is still the required analyzer TFM at 5.6.0 — checked, not assumed:
+      ~/.nuget/packages/microsoft.codeanalysis.csharp/5.6.0/lib/ contains net10.0, net8.0 AND
+      netstandard2.0. See the header of src/CyberCloud.Analyzers/CyberCloud.Analyzers.csproj.
+    -->
+    <PackageVersion Include="Microsoft.CodeAnalysis.CSharp" Version="5.6.0" />
+
+    <!-- The RS1xxx analyzer-authoring rules. Referenced by CyberCloud.Analyzers as an analyzer. -->
+    <PackageVersion Include="Microsoft.CodeAnalysis.Analyzers" Version="5.6.0" />
+
+    <!--
+      The analyzer test harness — docs/plan/02 § Test and build has no equivalent, which is the doc
+      gap noted above. This is the base package, NOT `…Analyzer.Testing.XUnit`: that variant binds
+      to xUnit v2, and ADR-018 makes this repository xunit.v3. The base package ships
+      Microsoft.CodeAnalysis.Testing.DefaultVerifier, which needs no test framework at all.
+    -->
+    <PackageVersion Include="Microsoft.CodeAnalysis.CSharp.Analyzer.Testing" Version="1.1.4" />
+
+    <!--
+      ⚠ NOT A DIRECT REFERENCE — a transitive pin, and it is load-bearing.
+      Microsoft.CodeAnalysis.CSharp.Analyzer.Testing 1.1.4 declares its Roslyn dependency as a
+      *floor* of 1.0.1, and NuGet resolves a floor to the floor. Restoring it alone drags in
+      Microsoft.CodeAnalysis.CSharp.Workspaces 1.0.1, a .NET Framework-only package, and produces
+      four NU1701 warnings — which MSBuildTreatWarningsAsErrors turns into a failed build. Verified
+      both ways in a scratch project. CentralPackageTransitivePinningEnabled (Directory.Build.props)
+      lifts it to 5.6.0 because this line exists.
+    -->
+    <PackageVersion Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="5.6.0" />
+  </ItemGroup>
+
   <!-- ══════════════ Aspire — ADR-014, LOCAL DEVELOPMENT ONLY ══════════════ -->
   <ItemGroup Label="Aspire">
     <PackageVersion Include="Aspire.Hosting.AppHost" Version="$(AspireVersion)" />

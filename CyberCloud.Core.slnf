@@ -2,6 +2,8 @@
   "solution": {
     "path": "CyberCloud.slnx",
     "projects": [
+      "src/CyberCloud.Analyzers/CyberCloud.Analyzers.csproj",
+      "src/CyberCloud.Analyzers.Tests/CyberCloud.Analyzers.Tests.csproj",
       "src/CyberCloud.Core/CyberCloud.Core.csproj",
       "src/CyberCloud.Core.Tests/CyberCloud.Core.Tests.csproj",
       "src/CyberCloud.Core.Contracts/CyberCloud.Core.Contracts.csproj",
