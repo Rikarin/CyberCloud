@@ -112,7 +112,7 @@ Checked by CI, not by good intentions. See [23 — Build, CI and Testing](23-bui
 
 | Principle | Enforcement |
 |---|---|
-| No cross-tenant read is possible without an explicit, logged authorization | `AddMultitenantCommunicationSeparation` + `ICrossTenantAuthorizer`; an integration test suite that drives every provider's API as tenant A with tenant B's resource ids and asserts 404 (never 403 — existence is not disclosed) |
+| No cross-tenant read is possible without an explicit, logged authorization | ⚠ **Two mechanisms, because one is not enough — see below.** `AddMultitenantCommunicationSeparation` + `ICrossTenantAuthorizer` for **grain-to-grain** calls, **and** tenant establishment at the gateway for every call that originates outside a grain. Plus an integration test suite that drives every provider's API as tenant A with tenant B's resource ids and asserts 404 (never 403 — existence is not disclosed) |
 | No Kubernetes object without tenant/subscription/resource labels | The command builder is a type-state chain; `Build()` does not exist until `WithTenantId` and `WithResourceId` have been called. Plus an admission policy on every managed cluster that rejects unlabelled objects in a tenant namespace |
 | No shared single-writer store on a tenant-rate path | An architecture test walks the grain graph and fails on a `[PersistentState]` bound to the platform-global provider from a grain whose key carries a tenant id |
 | Every resource type is reachable from the generated OpenAPI, CLI and SDK | The provider registry is the source; a build gate diffs generated surfaces against the registry and fails on drift |
@@ -120,6 +120,47 @@ Checked by CI, not by good intentions. See [23 — Build, CI and Testing](23-bui
 | Every long-running operation is resumable | Operation grains are `durable`-tier and re-drive on activation; a chaos test kills silos mid-provision and asserts the resource reaches `Succeeded` or `Failed`, never `Creating` forever |
 | Warnings are errors | `TreatWarningsAsErrors`, `AnalysisLevel=latest-recommended`, nullable enabled, no `#pragma warning disable` without a linked issue |
 | Every module has tests | xUnit v3 + `Orleans.TestingHost` + NSubstitute + Shouldly; a provider without a conformance-suite pass is not registered |
+
+### ⚠ The tenant-separation row, corrected — an Orleans client is exempt by construction
+
+The first row used to name `AddMultitenantCommunicationSeparation` as *the* mechanism. It is not
+sufficient, and the reason is structural rather than a matter of wiring it correctly. From
+`Orleans.Multitenant` 4.0.0's `TenantSeparatingCallFilter`, decompiled:
+
+```csharp
+GrainId? sourceId = context.SourceId;
+if (sourceId.HasValue)                                  // ← no source: no check at all
+{
+    var type = sourceId.Value.Type;
+    if (!GrainTypePrefix.IsClient(ref type)             // ← a CLIENT is skipped
+     && !GrainTypePrefix.IsSystemTarget(ref type))      // ← a system target is skipped
+    { /* only here is the authorizer consulted */ }
+}
+```
+
+The filter is an `IIncomingGrainCallFilter` and it attributes a call to the *calling grain's*
+tenant. A caller that is not a grain has no tenant to attribute, so **the authorizer is never
+consulted**. Three categories are therefore outside it: anything holding an `IGrainFactory` that is
+not a grain, anything Orleans classifies as a client, and system targets.
+
+⚠ **The gateway is an Orleans client** — [03](03-repository-layout.md) and
+[10](10-gateway-and-api.md) both specify `CreateClient`, deliberately, so a gateway deploy does not
+move grains. That decision is right and is not being revisited. Its consequence is that **the
+gateway's grain calls can never be protected by this filter**, no matter how it is configured. It
+is not "unprotected until the gateway is built"; it is unprotected by design of the library, and the
+gateway is the single most important caller in the system.
+
+**So tenancy is enforced in two places, and both are load-bearing:**
+
+| Caller | Mechanism |
+|---|---|
+| Grain → grain | `AddMultitenantCommunicationSeparation`. Verified: throws `UnauthorizedAccessException` naming both tenant ids |
+| Gateway, CLI, worker, anything with an `IGrainFactory` outside a grain | **The gateway establishes the tenant from the caller's token and selects `ForTenant(t)`.** Nothing below it re-checks. A code path that reaches `IGrainFactory.GetGrain` with a caller-influenced key, rather than going through the tenant-qualified factory, is a cross-tenant read |
+
+That second row is currently **unenforced** — it is a discipline, not a gate. Making it one is a
+named task: an analyzer or architecture test forbidding raw `IGrainFactory.GetGrain` outside grain
+code. Until that exists, this non-negotiable is upheld by review, and this note is here so nobody
+reads the first row and believes the library covers it.
 
 ## Layer discipline
 

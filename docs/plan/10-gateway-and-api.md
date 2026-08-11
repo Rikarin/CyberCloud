@@ -40,6 +40,22 @@ Steps 5 and 8 are the load-bearing ones. Rate limiting before dispatch means a f
 the gateway cannot be bypassed by a future internal caller, and there is exactly one enforcement seam
 ([07](07-rebac-authorization.md)).
 
+⚠ **Step 3 is a security boundary, not a routing convenience, and this was not obvious.** The
+gateway is an Orleans **client**, and `Orleans.Multitenant`'s call filter skips clients entirely
+([00 § The tenant-separation row, corrected](00-vision-and-principles.md) has the decompiled proof).
+So the runtime will **not** stop a gateway code path from reaching another tenant's grain by naming
+its key — the tenant resolved at step 3 is the only thing that does.
+
+Concretely, and this is a review rule with teeth:
+
+- Every grain reference the gateway obtains comes from `IGrainFactory.ForTenant(t)` where `t` is the
+  tenant resolved from the **token**, never from the path, the body or a header. A path segment that
+  disagrees with the token is a `404`, resolved before dispatch.
+- **Raw `IGrainFactory.GetGrain(key)` is banned in gateway code.** A caller-influenced key reaching
+  it is a cross-tenant read with no exception and no log line. This needs an analyzer or an
+  architecture-test gate; until it has one it is upheld by review, which is weaker than every other
+  isolation claim in this plan and should not be left that way for long.
+
 ## Rate limiting
 
 | Bucket | Default | Rationale |
@@ -132,7 +148,7 @@ cloud-credential incident, and a 10-minute token with a refresh flow costs the S
 | Query a database directly | Every read is a grain call or the resource-graph projection. A gateway with a `DbContext` is a second write path within a year |
 | Hold per-request state across pods | It is stateless by construction; SignalR connection state lives in a grain |
 | Expose an internal route the portal uses and the SDK does not | [00](00-vision-and-principles.md) — one API, or the SDK is a second-class citizen |
-| Perform authorization itself | One seam, in the resource manager |
+| Perform *authorization* itself | One seam, in the resource manager. ⚠ **Tenant establishment is a different thing and it IS the gateway's job** — see below |
 | Proxy raw Kubernetes | A tenant who wants `kubectl` gets a kubeconfig for *their* cluster from the cluster resource's `listCredentials` action. The gateway is not a Kubernetes proxy, and turning it into one would put the fabric's credentials on the request path |
 
 ## Effort

@@ -89,7 +89,17 @@ Three things in that block are decisions, not boilerplate:
 
 - **`AddMultitenantCommunicationSeparation` is not optional.** Without it, a bug in one provider can
   read another tenant's grain and nothing complains. With it, that is an `UnauthorizedAccessException`
-  with both tenant ids in the message.
+  with both tenant ids in the message. Verified against a real cluster: the message is
+  `Tenant "{source}" attempted to access tenant "{target}"`.
+
+  ⚠ **It covers grain-to-grain calls only, and that is a property of the mechanism, not of our
+  wiring.** `TenantSeparatingCallFilter` returns without consulting the authorizer when the call has
+  no source grain, when the source is a **client**, or when it is a system target. Since the gateway
+  is an Orleans *client* by design (§ [03](03-repository-layout.md)), it is permanently outside this
+  filter. The sentence above stays true as written — a provider runs inside a grain — but it must
+  not be read as "no code can reach another tenant's grain". See
+  [00 § The tenant-separation row, corrected](00-vision-and-principles.md) for the two-mechanism
+  statement.
 - **`UseKubernetesHosting()`** makes the silo's identity its pod identity, so a `SIGTERM` from a
   rolling update becomes a graceful `StopAsync` with grain migration rather than a 60-second gap.
 - **`AddActivityPropagation()`** is what makes a trace survive a grain call. Without it, distributed
