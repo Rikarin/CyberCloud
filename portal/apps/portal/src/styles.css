@@ -1,0 +1,65 @@
+@import 'tailwindcss';
+
+/*
+  ⚠ Theming is tokens, not `dark:` classes — docs/plan/20 § Accessibility, i18n, theming:
+  "Light and dark both work by construction (ADR-017), and a white-label per tenant is a token
+  override rather than a fork."
+
+  `@xui/core/styles/theme.css` is the token layer. Every semantic colour is a raw custom property
+  mapped into Tailwind's namespace through `@theme inline`, so `bg-surface` compiles to a rule that
+  references `var(--surface)` rather than baking its value. Two things follow, and both are the
+  reason this is the mechanism rather than `dark:`:
+
+    1. Switching `.dark` on the root re-colours the whole app without rebuilding CSS.
+    2. A tenant white-label is a handful of overridden custom properties, not a second build.
+
+  A `dark:` utility in a portal template would hard-code a colour pair at build time and silently
+  opt out of both. `apps/portal/src/app/theming.spec.ts` fails the build if one appears.
+*/
+@import '@xui/core/styles/theme.css';
+
+/*
+  Popovers, tooltips, menus, dialogs, the omnibar overlay and the dock manager's floating panes all
+  render through the CDK overlay container, which needs its positioning styles to float rather than
+  sit in the document flow.
+*/
+@import '@angular/cdk/overlay-prebuilt.css';
+
+@plugin 'tailwindcss-animate';
+
+/* Tailwind 4 scans sources rather than reading a config. The libs carry most of the shell's markup. */
+@source '../../../libs';
+@source './app';
+@source './pages';
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  @apply bg-background text-foreground antialiased;
+  /* A portal is a full-height application surface; the dock manager sizes against it. */
+  height: 100svh;
+  overflow: hidden;
+}
+
+/*
+  Visible only once focused, so a keyboard user can jump the chrome without a visual change for
+  everyone else — docs/plan/20 § Accessibility, i18n, theming.
+*/
+.skip-link {
+  @apply sr-only;
+}
+
+.skip-link:focus {
+  @apply bg-surface-raised text-foreground ring-focus not-sr-only absolute start-4 top-4 z-50 rounded-md px-4 py-2 ring-2;
+}
+
+/*
+  The routed view and the blade stack must not scroll the document — they scroll themselves. A
+  document-level scroll under a fixed context bar is how the "always visible" requirement in
+  docs/plan/20 § Information architecture gets broken by accident.
+*/
+#cc-main:focus-visible {
+  @apply ring-focus outline-none ring-2;
+}

@@ -1,0 +1,13 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "../../out-tsc/app",
+    "types": ["node", "@angular/localize"]
+  },
+  "files": ["src/main.ts", "src/main.server.ts", "src/server.ts"],
+  "include": ["src/**/*.d.ts", "../../libs/**/*.ts"],
+  // ⚠ Both globs are needed. `exclude` patterns resolve against this file's directory, so
+  // `**/*.spec.ts` alone covers `apps/portal` and leaves the libs' specs in the application
+  // compilation — where `expect` is undefined and the production build fails on the test suite.
+  "exclude": ["**/*.spec.ts", "../../libs/**/*.spec.ts"]
+}

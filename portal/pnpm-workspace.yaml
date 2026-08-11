@@ -1,0 +1,27 @@
+packages:
+  - 'apps/*'
+  - 'libs/*'
+
+# Build scripts are opt-in under pnpm 10+. These are the ones the Angular + Tailwind toolchain
+# genuinely needs — esbuild and @tailwindcss/oxide ship prebuilt native binaries that their install
+# script selects, and @parcel/watcher backs the dev server's file watching. Everything else stays
+# denied: an install script is arbitrary code execution at `pnpm install` time, and the default of
+# "no" is the right one for a dependency tree this size.
+allowBuilds:
+  '@parcel/watcher': true
+  '@tailwindcss/oxide': true
+  esbuild: true
+  # Pulled in transitively by the Angular CLI's caching layer, not by anything the portal calls.
+  lmdb: false
+  msgpackr-extract: false
+  unrs-resolver: false
+
+# ⚠ Single-version policy. Every @angular/*, @xui/* and peer package is declared once in the root
+# package.json and pinned exactly; workspace packages carry no runtime dependency ranges of their
+# own. Two copies of @angular/core in one tree is a broken app, and @xui/* peers on exact
+# @angular/* versions (docs/plan/02 § ADR-017) leave no room for a second resolution.
+#
+# @angular/common is pinned to 22.0.8 rather than the 22.x head because @xui/panel-stack,
+# @xui/popover, @xui/tooltip and @xui/breadcrumb at 2.2.0 peer on `"@angular/common": "22.0.8"` —
+# an EXACT version, not the major range ADR-017 records. @angular/cdk is pinned to 22.0.6 for the
+# same reason (@xui/echarts). See portal/README.md § The Angular pin.

@@ -1,0 +1,333 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<xliff version="2.0" xmlns="urn:oasis:names:tc:xliff:document:2.0" srcLang="en-US">
+  <file id="ngi18n" original="ng.template">
+    <unit id="home.heading">
+      <notes>
+        <note category="location">apps/portal/src/pages/home/home.ts:16,17</note>
+      </notes>
+      <segment>
+        <source>Home</source>
+      </segment>
+    </unit>
+    <unit id="home.body">
+      <notes>
+        <note category="location">apps/portal/src/pages/home/home.ts:18,22</note>
+      </notes>
+      <segment>
+        <source> The dashboard is a bespoke page and is not part of the M1 shell. Press Ctrl+K to search. </source>
+      </segment>
+    </unit>
+    <unit id="notFound.heading">
+      <notes>
+        <note category="location">apps/portal/src/pages/not-found/not-found.ts:8,9</note>
+      </notes>
+      <segment>
+        <source>Not found</source>
+      </segment>
+    </unit>
+    <unit id="notFound.body">
+      <notes>
+        <note category="location">apps/portal/src/pages/not-found/not-found.ts:10,14</note>
+      </notes>
+      <segment>
+        <source> That page does not exist. Press Ctrl+K to search for a resource. </source>
+      </segment>
+    </unit>
+    <unit id="resourceBlade.pending">
+      <notes>
+        <note category="location">apps/portal/src/pages/resources/resource-blade.ts:29,33</note>
+      </notes>
+      <segment>
+        <source> The generated form renderer is not part of the M1 shell. </source>
+      </segment>
+    </unit>
+    <unit id="resources.heading">
+      <notes>
+        <note category="location">apps/portal/src/pages/resources/resource-list.ts:21,23</note>
+      </notes>
+      <segment>
+        <source>Resources</source>
+      </segment>
+    </unit>
+    <unit id="resources.noSubscription">
+      <notes>
+        <note category="location">apps/portal/src/pages/resources/resource-list.ts:27,32</note>
+      </notes>
+      <segment>
+        <source> Select a subscription to list resources. </source>
+      </segment>
+    </unit>
+    <unit id="shell.breadcrumbs.label">
+      <notes>
+        <note category="location">libs/shell/src/lib/breadcrumbs/shell-breadcrumbs.ts:39</note>
+      </notes>
+      <segment>
+        <source>Breadcrumb</source>
+      </segment>
+    </unit>
+    <unit id="shell.contextBar.tenant">
+      <notes>
+        <note category="location">libs/shell/src/lib/context-bar/context-bar.ts:38,42</note>
+      </notes>
+      <segment>
+        <source> Tenant </source>
+      </segment>
+    </unit>
+    <unit id="shell.contextBar.subscription">
+      <notes>
+        <note category="location">libs/shell/src/lib/context-bar/context-bar.ts:55,59</note>
+      </notes>
+      <segment>
+        <source> Subscription </source>
+      </segment>
+    </unit>
+    <unit id="shell.contextBar.region">
+      <notes>
+        <note category="location">libs/shell/src/lib/context-bar/context-bar.ts:79</note>
+      </notes>
+      <segment>
+        <source>Tenant and subscription context</source>
+      </segment>
+    </unit>
+    <unit id="shell.contextBar.tenantLabel">
+      <notes>
+        <note category="location">libs/shell/src/lib/context-bar/context-bar.ts:80</note>
+      </notes>
+      <segment>
+        <source>Select tenant</source>
+      </segment>
+    </unit>
+    <unit id="shell.contextBar.subscriptionLabel">
+      <notes>
+        <note category="location">libs/shell/src/lib/context-bar/context-bar.ts:81</note>
+      </notes>
+      <segment>
+        <source>Select subscription</source>
+      </segment>
+    </unit>
+    <unit id="shell.contextBar.resolving">
+      <notes>
+        <note category="location">libs/shell/src/lib/context-bar/context-bar.ts:90</note>
+      </notes>
+      <segment>
+        <source>Resolving your context</source>
+      </segment>
+    </unit>
+    <unit id="shell.contextBar.tenantOnly">
+      <notes>
+        <note category="location">libs/shell/src/lib/context-bar/context-bar.ts:93</note>
+      </notes>
+      <segment>
+        <source>Acting in tenant <ph id="0" equiv="tenant" disp="tenant.displayName"/>, no subscription selected</source>
+      </segment>
+    </unit>
+    <unit id="shell.contextBar.acting">
+      <notes>
+        <note category="location">libs/shell/src/lib/context-bar/context-bar.ts:94</note>
+      </notes>
+      <segment>
+        <source>Acting in tenant <ph id="0" equiv="tenant" disp="tenant.displayName"/>, subscription <ph id="1" equiv="subscription" disp="subscription.displayName"/></source>
+      </segment>
+    </unit>
+    <unit id="shell.skipLink">
+      <notes>
+        <note category="location">libs/shell/src/lib/layout/shell-layout.ts:61,63</note>
+      </notes>
+      <segment>
+        <source>Skip to main content</source>
+      </segment>
+    </unit>
+    <unit id="shell.pane.workspace">
+      <notes>
+        <note category="location">libs/shell/src/lib/layout/shell-layout.ts:116</note>
+      </notes>
+      <segment>
+        <source>Workspace</source>
+      </segment>
+    </unit>
+    <unit id="shell.pane.blades">
+      <notes>
+        <note category="location">libs/shell/src/lib/layout/shell-layout.ts:124</note>
+      </notes>
+      <segment>
+        <source>Details</source>
+      </segment>
+    </unit>
+    <unit id="shell.blades.empty">
+      <notes>
+        <note category="location">libs/shell/src/lib/layout/shell-layout.ts:142</note>
+      </notes>
+      <segment>
+        <source>No resource selected</source>
+      </segment>
+    </unit>
+    <unit id="shell.blades.emptyHint">
+      <notes>
+        <note category="location">libs/shell/src/lib/layout/shell-layout.ts:158,162</note>
+      </notes>
+      <segment>
+        <source> Select a resource, or press Ctrl+K to search. </source>
+      </segment>
+    </unit>
+    <unit id="shell.notifications.heading">
+      <notes>
+        <note category="location">libs/shell/src/lib/notifications/notifications-tray.ts:53,56</note>
+      </notes>
+      <segment>
+        <source> Notifications </source>
+      </segment>
+    </unit>
+    <unit id="shell.notifications.empty">
+      <notes>
+        <note category="location">libs/shell/src/lib/notifications/notifications-tray.ts:61,63</note>
+      </notes>
+      <segment>
+        <source> No operations yet. </source>
+      </segment>
+    </unit>
+    <unit id="shell.notifications.panel">
+      <notes>
+        <note category="location">libs/shell/src/lib/notifications/notifications-tray.ts:100</note>
+      </notes>
+      <segment>
+        <source>Notifications</source>
+      </segment>
+    </unit>
+    <unit id="shell.notifications.triggerEmpty">
+      <notes>
+        <note category="location">libs/shell/src/lib/notifications/notifications-tray.ts:105</note>
+      </notes>
+      <segment>
+        <source>Notifications</source>
+      </segment>
+    </unit>
+    <unit id="shell.notifications.trigger">
+      <notes>
+        <note category="location">libs/shell/src/lib/notifications/notifications-tray.ts:106</note>
+      </notes>
+      <segment>
+        <source>Notifications, <ph id="0" equiv="count" disp="unread"/> unread</source>
+      </segment>
+    </unit>
+    <unit id="shell.notifications.running">
+      <notes>
+        <note category="location">libs/shell/src/lib/notifications/notifications-tray.ts:113</note>
+      </notes>
+      <segment>
+        <source><ph id="0" equiv="count" disp="running"/> operations in progress</source>
+      </segment>
+    </unit>
+    <unit id="shell.notifications.status.running">
+      <notes>
+        <note category="location">libs/shell/src/lib/notifications/notifications-tray.ts:129</note>
+      </notes>
+      <segment>
+        <source>Running</source>
+      </segment>
+    </unit>
+    <unit id="shell.notifications.status.runningPct">
+      <notes>
+        <note category="location">libs/shell/src/lib/notifications/notifications-tray.ts:130</note>
+      </notes>
+      <segment>
+        <source><ph id="0" equiv="pct" disp="item.percentComplete"/> per cent</source>
+      </segment>
+    </unit>
+    <unit id="shell.notifications.status.succeeded">
+      <notes>
+        <note category="location">libs/shell/src/lib/notifications/notifications-tray.ts:132</note>
+      </notes>
+      <segment>
+        <source>Succeeded</source>
+      </segment>
+    </unit>
+    <unit id="shell.notifications.status.failed">
+      <notes>
+        <note category="location">libs/shell/src/lib/notifications/notifications-tray.ts:134</note>
+      </notes>
+      <segment>
+        <source>Failed</source>
+      </segment>
+    </unit>
+    <unit id="shell.notifications.status.cancelled">
+      <notes>
+        <note category="location">libs/shell/src/lib/notifications/notifications-tray.ts:136</note>
+      </notes>
+      <segment>
+        <source>Cancelled</source>
+      </segment>
+    </unit>
+    <unit id="shell.omnibar.label">
+      <notes>
+        <note category="location">libs/shell/src/lib/omnibar/shell-omnibar.ts:44</note>
+      </notes>
+      <segment>
+        <source>Search resources, actions and documentation</source>
+      </segment>
+    </unit>
+    <unit id="shell.omnibar.placeholder">
+      <notes>
+        <note category="location">libs/shell/src/lib/omnibar/shell-omnibar.ts:45</note>
+      </notes>
+      <segment>
+        <source>Search resources, actions, docs…</source>
+      </segment>
+    </unit>
+    <unit id="shell.omnibar.empty">
+      <notes>
+        <note category="location">libs/shell/src/lib/omnibar/shell-omnibar.ts:46</note>
+      </notes>
+      <segment>
+        <source>Nothing matched</source>
+      </segment>
+    </unit>
+    <unit id="shell.omnibar.recent">
+      <notes>
+        <note category="location">libs/shell/src/lib/omnibar/shell-omnibar.ts:47</note>
+      </notes>
+      <segment>
+        <source>Recent</source>
+      </segment>
+    </unit>
+    <unit id="shell.omnibar.group.resources">
+      <notes>
+        <note category="location">libs/shell/src/lib/omnibar/shell-omnibar.ts:67</note>
+      </notes>
+      <segment>
+        <source>Resources</source>
+      </segment>
+    </unit>
+    <unit id="shell.omnibar.group.actions">
+      <notes>
+        <note category="location">libs/shell/src/lib/omnibar/shell-omnibar.ts:69</note>
+      </notes>
+      <segment>
+        <source>Actions</source>
+      </segment>
+    </unit>
+    <unit id="shell.omnibar.group.tenants">
+      <notes>
+        <note category="location">libs/shell/src/lib/omnibar/shell-omnibar.ts:71</note>
+      </notes>
+      <segment>
+        <source>Tenants</source>
+      </segment>
+    </unit>
+    <unit id="shell.omnibar.group.subscriptions">
+      <notes>
+        <note category="location">libs/shell/src/lib/omnibar/shell-omnibar.ts:73</note>
+      </notes>
+      <segment>
+        <source>Subscriptions</source>
+      </segment>
+    </unit>
+    <unit id="shell.omnibar.group.docs">
+      <notes>
+        <note category="location">libs/shell/src/lib/omnibar/shell-omnibar.ts:75</note>
+      </notes>
+      <segment>
+        <source>Documentation</source>
+      </segment>
+    </unit>
+  </file>
+</xliff>

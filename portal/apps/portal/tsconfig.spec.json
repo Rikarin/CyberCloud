@@ -1,0 +1,37 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "../../out-tsc/spec",
+    // ts-jest emits CommonJS, which pins `moduleResolution` to `node10` — and node10 predates
+    // package `exports` maps. Jest's own resolver understands them, so this only affects type
+    // resolution, and the `paths` entry below covers the one subpath export the suites import.
+    "module": "commonjs",
+    "moduleResolution": "node10",
+    "target": "ES2022",
+    // `@angular/localize` declares the global `$localize` the shell's templates and component
+    // labels call. It is in `types` rather than imported per file because it is a global.
+    "types": ["jest", "node", "@angular/localize"],
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "isolatedModules": false,
+    "paths": {
+      "@cybercloud/shell": ["../../libs/shell/src/index.ts"],
+      "@cybercloud/charts": ["../../libs/charts/src/index.ts"],
+      "@cybercloud/resource-forms": ["../../libs/resource-forms/src/index.ts"],
+      "@cybercloud/resource-forms-overrides": ["../../libs/resource-forms-overrides/src/index.ts"],
+      // Angular publishes its subpaths through `exports` maps, which node10 resolution cannot
+      // read. Each entry below points at the `types` target the map already declares, so these are
+      // restatements of Angular's own mapping rather than new policy.
+      "@angular/localize/init": ["../../node_modules/@angular/localize/types/init.d.ts"],
+      "@angular/core/testing": ["../../node_modules/@angular/core/types/testing.d.ts"],
+      "@angular/common/http": ["../../node_modules/@angular/common/types/http.d.ts"],
+      "@angular/common/http/testing": ["../../node_modules/@angular/common/types/http-testing.d.ts"],
+      "@angular/platform-browser/testing": [
+        "../../node_modules/@angular/platform-browser/types/testing.d.ts"
+      ],
+      "@angular/router/testing": ["../../node_modules/@angular/router/types/testing.d.ts"],
+      "@xui/core/*": ["../../node_modules/@xui/core/types/xui-core-*.d.ts"]
+    }
+  },
+  "include": ["src/**/*.ts", "../../libs/**/*.ts"]
+}
