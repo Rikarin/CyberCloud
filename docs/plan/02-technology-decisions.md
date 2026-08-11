@@ -128,8 +128,64 @@ grain state cannot be rebuilt from the cluster.
 
 **Decision.** Every tenant-scoped grain is `IGrainWithStringKey`, and its key is produced by
 `Orleans.Multitenant`'s `GetTenantGrainFactory(tenantId)`. The physical key is
-`{tenantId}|{keyWithinTenant}` (verified against `Orleans.Multitenant/Internal/Extensions.cs` — `|`
-is the separator, doubled to escape, `~` prefixed when the inner key starts with either).
+`{tenantId}|{keyWithinTenant}`.
+
+⚠ **The encoding was re-verified against `Orleans.Multitenant` 4.0.0 and this paragraph was partly
+wrong.** Checked three independent ways — the decompiled assembly, the upstream
+`Internal/Extensions.cs` at the commit the nuspec pins, and executing the package — with these
+results:
+
+| Claim | Verdict |
+|---|---|
+| `\|` is the separator | ✅ confirmed |
+| `\|` is **doubled to escape** | ⚠ **partly refuted** — doubling applies to the **tenant id**, not to the key within the tenant. The inner key is copied **verbatim**: `ForTenant("t1").GetGrain(_, "a\|b")` yields `t1\|a\|b`, not `t1\|a\|\|b` |
+| `~` prefixed when the inner key starts with `\|` or `~` | ✅ confirmed, and `~` elsewhere is untouched |
+| *(not previously documented)* | ⚠ the **null-tenant** branch is a different encoding — no prefix, no `~` rule, and the whole key has its `\|` doubled. [06 § Grain keys](06-tenancy-and-resource-model.md) makes `IClusterConnectionGrain` null-tenant, so this branch is live |
+
+The encoding is still lossless and injective — the terminator is the first *un*doubled `|`, and the
+tenant id cannot contain one — so no inner key can forge a different tenant. That was tested
+directly.
+
+**This is the reconciliation of two requirements that appear to conflict.** The brief says "GUID as
+ID"; `Orleans.Multitenant` only supports string keys. Both are satisfied: identifiers in the API, the
+database, the SDK and the URL are GUIDs. The *grain key* is a composed string that contains them.
+
+⚠ **Corrected: the key shapes are the table in [06 § Grain keys](06-tenancy-and-resource-model.md),
+not the code block that used to stand here.** That block showed `IResourceGrain` keyed by
+`{subscriptionId:N}/{resourceGroup}/{type}/{resourceId:N}`, which contradicted 06's
+`res/{resourceId:N}`. **06 wins**, for the reason 06 itself gives: a resource grain keyed by GUID
+makes a rename a metadata update rather than a grain migration, and a key containing the resource
+group would make *moving* a resource a migration too. It also referred to a type `ResourceType` that
+does not exist — the real one is `ResourceTypeName`.
+
+One type formats and parses **every** key shape in 06's table — not just the resource one. The
+earlier wording implied `ResourceKey` covered the lot while the block defined only a resource key,
+leaving `sub/…`, `rg/…`, `idx/path/…`, `user/…`, `idx/email/…`, `op/…` and `cluster/…` with no home.
+
+```csharp
+// Formats and parses the key WITHIN a tenant. The tenant qualification itself is
+// Orleans.Multitenant's job, per the encoding table above.
+public static class GrainKeys
+{
+    public static string Resource(Guid resourceId)              => $"res/{resourceId:N}";
+    public static string Subscription(Guid subscriptionId)      => $"sub/{subscriptionId:N}";
+    public static string ResourceGroup(Guid subscriptionId, string name)
+                                                                => $"sub/{subscriptionId:N}/rg/{name}";
+    public static string User(Guid userId)                      => $"user/{userId:N}";
+    public static string Operation(Guid operationId)            => $"op/{operationId:N}";
+    public static string ClusterConnection(Guid clusterId)      => $"cluster/{clusterId:N}";
+    public static string PathIndex(string canonicalPath)        => $"idx/path/{Sha256Prefix(canonicalPath)}";
+    public static string EmailIndex(Guid tenantId, string email) => $"idx/email/{Sha256Prefix(...)}";
+}
+```
+
+⚠ `PathIndex` hashes the **canonical** path, not `ResourceId.Path`. The provider namespace is
+case-preserving, so `CyberCloud.Cache/redis` and `cybercloud.cache/redis` would otherwise claim two
+index entries for one name and defeat the two-phase create in
+[06 § Two-phase create](06-tenancy-and-resource-model.md).
+
+Nothing else in the codebase may concatenate a grain key, enforced by an analyzer that flags string
+literals containing `|` in `GetGrain` arguments.
 
 **This is the reconciliation of two requirements that appear to conflict.** The brief says "GUID as
 ID"; `Orleans.Multitenant` only supports string keys. Both are satisfied: identifiers in the API, the
@@ -146,6 +202,11 @@ readonly record struct ResourceKey(Guid SubscriptionId, string ResourceGroup, Re
 
 Nothing else in the codebase may concatenate a grain key, enforced by an analyzer that flags string
 literals containing `|` in `GetGrain` arguments.
+
+⚠ `ResourceId` remains a separate type and keeps subscription, resource group, type and name — it is
+the *address*, and [06 § Identifiers](06-tenancy-and-resource-model.md) is explicit that the address
+and the identity answer different questions. What changed is only that the **grain key** is derived
+from the resource GUID alone.
 
 **Consequences.**
 - `AddMultitenantCommunicationSeparation` is on. Cross-tenant grain calls throw

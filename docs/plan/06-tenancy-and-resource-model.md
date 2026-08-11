@@ -51,9 +51,38 @@ readonly record struct ResourceId(
 {
     public string Path => $"/tenants/{TenantId:D}/subscriptions/{SubscriptionId:D}" +
                           $"/resourceGroups/{ResourceGroup}/providers/{Type.Namespace}/{Type.Type}/{Name}";
+
+    /// ⚠ Recovers five of the six fields. `Id` comes back `Guid.Empty` — see below.
     public static bool TryParsePath(string path, out ResourceId id) { … }
+
+    /// Resolves the parsed address to an identity, once the index has been consulted.
+    public ResourceId WithId(Guid id) => this with { Id = id };
+
+    /// Lower-cases the structural segments. Hash THIS for the index key, never `Path`.
+    public string CanonicalPath => …;
 }
 ```
+
+⚠ **`TryParsePath` cannot fully satisfy its own signature, and that is inherent rather than a
+defect to fix.** `Path` carries no resource GUID — by design, since the whole point of the split
+above is that the path is the address and the GUID is the identity. So parsing a path yields
+`Guid.Empty` for `Id`, and resolving it to a real identity is a lookup through
+`IResourceIndexGrain`. `WithId` is that resolution step. Round-tripping is exact for the five
+address fields; asserting a six-field round-trip is a test that cannot pass.
+
+⚠ **The index key must hash `CanonicalPath`, not `Path`.** The provider namespace is
+case-preserving on the wire (`CyberCloud.Cache` reads better than `cybercloud.cache`), so
+`CyberCloud.Cache/redis` and `cybercloud.cache/redis` are the same resource with two different
+`Path` strings. Hashing `Path` would let both claim the name and defeat
+[§ Two-phase create](#two-phase-create) — the one place a duplicate claim is a correctness bug
+rather than a cosmetic one.
+
+⚠ **The path grammar is ambiguous on its own, and the naming rule is what saves it.** Because
+resource types nest (`servers/databases`), type `servers` with name `databases/orders` and type
+`servers/databases` with name `orders` serialise to the *same* string. The naming rule below forbids
+`/` in a name, which is what makes the parse unique. That rule is therefore load-bearing for
+identifier integrity, not merely the ergonomics decision it is presented as — and the nesting depth
+needs a cap, or a greedy read of the type path is unbounded.
 
 **Naming rules**, decided once so every provider does not re-litigate them: resource group and
 resource names are 1–63 characters, `[a-z0-9]([-a-z0-9]*[a-z0-9])?`, case-insensitive-unique within
