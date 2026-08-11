@@ -86,6 +86,10 @@ partial class Build
     /// <summary>
     ///     Every test project under <see cref="SourceRoots" />, paired with the suite that runs it.
     ///     Ordered so the run order and the log are stable across machines.
+    ///     <para>
+    ///         Discovery walks the filesystem rather than the solution deliberately — see
+    ///         <see cref="AssertTestProjectsAreInSolution" />.
+    ///     </para>
     /// </summary>
     IReadOnlyCollection<(AbsolutePath Project, TestSuite Suite)> ClassifiedTestProjects =>
         SourceRoots
@@ -146,11 +150,62 @@ partial class Build
             + "which have to agree. docs/plan/03 § test/, docs/plan/23 § Test layers.");
     }
 
+    /// <summary>
+    ///     Fails the build if a test project exists on disk but is not a member of the solution.
+    ///     <para>
+    ///         <c>Compile</c> builds <c>CyberCloud.slnx</c>; discovery here walks the filesystem.
+    ///         Those two answers can disagree, and when they do the resulting failure is
+    ///         incoherent: the project is never built, <c>Test</c> runs it anyway, and the error
+    ///         names a missing <c>.dll</c> instead of the actual mistake, which was a line missing
+    ///         from the solution file.
+    ///     </para>
+    ///     <para>
+    ///         Three things could make that coherent — discover from the solution, build what is
+    ///         discovered, or fail loudly. This is the third. Discovering from the solution would
+    ///         mean a test project can be dropped out of CI by omitting one line, silently and
+    ///         permanently, which is precisely the property a gate must not have. Building what is
+    ///         discovered papers over the omission so it never gets fixed, and leaves the project
+    ///         outside every other solution-scoped gate regardless.
+    ///     </para>
+    /// </summary>
+    void AssertTestProjectsAreInSolution(IReadOnlyCollection<AbsolutePath> projects)
+    {
+        var inSolution = Solution.AllProjects
+            .Select(x => (AbsolutePath)x.Path)
+            .ToHashSet();
+
+        var orphans = projects.Where(x => !inSolution.Contains(x)).ToList();
+        if (orphans.Count == 0)
+            return;
+
+        foreach (var orphan in orphans)
+        {
+            Log.Error(
+                "{Project} is on disk but is not a member of {Solution}, so `Compile` never built "
+                + "it and there is nothing for `Test` to run. Add it with: dotnet sln {Solution} "
+                + "add {Project}",
+                orphan,
+                SolutionFile.Name);
+        }
+
+        Assert.Fail(
+            $"{orphans.Count} test project(s) on disk are missing from {SolutionFile.Name} — "
+            + "listed above.");
+    }
+
     void RunTests()
     {
-        // Before the empty check, not after: a repository whose only test project is one nobody
-        // owns has zero per-PR projects, and that must fail rather than read as "nothing to run".
+        // ⚠ Both guards run before the empty check, and both cover EVERY test project rather than
+        // the per-PR ones about to be run.
+        //
+        // Discovery is split by owning target, but "does any target run it?" and "is it in the
+        // solution?" are questions about all of them: a CyberCloud.Load missing from
+        // CyberCloud.slnx is exactly as broken for `Load` as it would be for `Test`. `Test` is the
+        // only one of the four that runs on every PR, so it is the only one positioned to notice —
+        // which also means neither may hide behind the early return below, or a repository whose
+        // only suites are E2E/Chaos/Load would report "nothing to run" over a real defect.
         AssertEveryTestProjectIsOwned();
+        AssertTestProjectsAreInSolution(ClassifiedTestProjects.Select(x => x.Project).ToList());
 
         var projects = TestProjects;
 
@@ -174,39 +229,48 @@ partial class Build
 
         Log.Information("Test: running {Count} test project(s)", projects.Count);
 
-        // ⚠ No .SetResultsDirectory() and no .AddLoggers("trx;…") here, however natural they look.
+        // ⚠ `dotnet run`, NOT `dotnet test`. This is the design of this target, not an accident.
         //
-        // Every option on Nuke's DotNetTestSettings is VSTest-shaped, and these test projects run on
-        // Microsoft.Testing.Platform (Directory.Build.targets § Test project conventions). MTP does
-        // not ignore VSTest options, it rejects them — observed:
+        // These are Microsoft.Testing.Platform hosts: OutputType=Exe, xunit.v3, no VSTest adapter.
+        // `dotnet test` inserts a runner-selection step in front of that, and when it selects VSTest
+        // the run does not fail cleanly — it aborts, with an error about the wrong thing entirely:
         //
-        //   error MTP0001: VSTest-specific properties are set but will be ignored when using
-        //   Microsoft.Testing.Platform. The following properties are set: VSTestLogger;
-        //   VSTestResultsDirectory;
+        //   An assembly specified in the application dependencies manifest (testhost.deps.json)
+        //   was not found: package: 'testhost', version: '18.6.0-release-26329-109'
+        //   Test Run Aborted.
         //
-        // MTP's own arguments go through the TestingPlatformCommandLineArguments property instead.
+        // Even when `dotnet test` selects correctly it summarises rather than reports: a failing
+        // assertion surfaces as "error run failed: Tests failed: '…_net10.0_arm64.log'", and the
+        // Shouldly message is only inside that log file. Running the host directly puts the
+        // assertion, its stack and its source line on stdout, and passes the process exit code
+        // (2 on failure) straight through.
         //
-        // The TRX switch is `--report-xunit-trx`, NOT the `--report-trx` that MTP documents: that
-        // one belongs to the Microsoft.Testing.Extensions.TrxReport package, which nothing here
-        // references, and using it fails the run with "Unknown option '--report-trx'". xunit.v3
-        // ships its own reporters. If the TrxReport package is ever added to
-        // Directory.Packages.props, this can move to the vendor-neutral spelling.
-        DotNetTasks.DotNetTest(s => s
+        // It also makes every option below a native MTP one, so none of Nuke's VSTest-shaped
+        // DotNetTestSettings (`--logger`, `--results-directory`) is in play — those produce
+        // `error MTP0001: VSTest-specific properties are set but will be ignored…`.
+        //
+        // Directory.Build.props § Test runner still configures `dotnet test` to pick MTP. Nothing
+        // here depends on that; it is there so a developer running `dotnet test` by hand, or an IDE
+        // doing it for them, gets the same answer as CI.
+        DotNetTasks.DotNetRun(s => s
                 .SetConfiguration(Configuration)
                 .EnableNoRestore()
                 .EnableNoBuild()
+                .EnableNoLaunchProfile()
                 .CombineWith(projects, (settings, project) => settings
                     .SetProjectFile(project)
-                    .SetProperty(
-                        "TestingPlatformCommandLineArguments",
-                        // ⚠ --minimum-expected-tests 1 is the guard against the worst outcome for
-                        // this target: a test project that discovers nothing, runs nothing and
-                        // reports success. Without it, breaking test discovery — a bad filter, a
-                        // missing runner reference, a project that stops being an MTP host — shows
-                        // up as a green build. With it, a project that finds no tests fails.
-                        "--minimum-expected-tests 1 --report-xunit-trx "
-                        + $"--report-xunit-trx-filename {project.NameWithoutExtension}.trx "
-                        + $"--results-directory {TestResultsDirectory}")),
+                    .SetApplicationArguments(
+                        // ⚠ --minimum-expected-tests 1 guards the worst outcome this target can
+                        // have: a project that discovers nothing, runs nothing and reports success.
+                        // Without it, broken discovery — a bad filter, a lost runner reference, a
+                        // project that stops being an MTP host — shows up as a green build.
+                        "--minimum-expected-tests", "1",
+                        // The TRX switch is xunit's `--report-xunit-trx`, not MTP's `--report-trx`:
+                        // the latter lives in Microsoft.Testing.Extensions.TrxReport, which nothing
+                        // here references, and using it fails with "Unknown option '--report-trx'".
+                        "--report-xunit-trx",
+                        "--report-xunit-trx-filename", $"{project.NameWithoutExtension}.trx",
+                        "--results-directory", TestResultsDirectory)),
             degreeOfParallelism: Environment.ProcessorCount,
             completeOnFailure: true);
 

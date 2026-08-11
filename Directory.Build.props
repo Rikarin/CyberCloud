@@ -114,6 +114,42 @@
     <IsBuildProject Condition="'$(MSBuildProjectName)' == '_build'">true</IsBuildProject>
   </PropertyGroup>
 
+  <PropertyGroup Label="Test runner" Condition="'$(IsTestProject)' == 'true'">
+    <!--
+      ⚠ THESE MUST BE IN Directory.Build.props, NOT Directory.Build.targets.
+
+      xunit.v3 is a Microsoft.Testing.Platform host and ships no VSTest adapter. `dotnet test`
+      selects VSTest unless told otherwise, and against an MTP-only assembly that ends as:
+
+        Testhost process for source(s) '…/CyberCloud.Sabotage.Tests.dll' exited with error: Error:
+          An assembly specified in the application dependencies manifest (testhost.deps.json) was
+          not found:
+            package: 'testhost', version: '18.6.0-release-26329-109'
+            path: 'testhost.dll'
+        Test Run Aborted.
+
+      ⚠ Placement is the whole trick, and it is not obvious. `dotnet msbuild -getProperty:` reports
+      TestingPlatformDotnetTestSupport=true whether these live here or in Directory.Build.targets —
+      the final evaluated value is identical. But .targets is imported after the package targets
+      that branch on it, so from there it is inert: the property is true and the runner is still
+      VSTest. Verified on SDK 10.0.302 by moving these two lines and nothing else:
+
+        in Directory.Build.targets → `dotnet test` aborts with the testhost error above
+        in the project body        → `Failed! - Failed: 1, Passed: 0, Total: 1`
+        in this file               → `Failed! - Failed: 1, Passed: 0, Total: 1`
+
+      Corollary: test projects must NOT reference Microsoft.NET.Test.Sdk. It is the VSTest bridge
+      and pulls the runner back. The pin stays in Directory.Packages.props for anything that
+      genuinely needs VSTest.
+
+      Note that `build/Build.Test.cs` does not rely on any of this — it runs the test executables
+      directly and never invokes `dotnet test`. These properties exist so that a developer or an
+      IDE running `dotnet test` by hand gets the same answer as CI.
+    -->
+    <TestingPlatformDotnetTestSupport>true</TestingPlatformDotnetTestSupport>
+    <UseMicrosoftTestingPlatformRunner>true</UseMicrosoftTestingPlatformRunner>
+  </PropertyGroup>
+
   <PropertyGroup Label="Documentation">
     <!--
       Doc XML where it is consumed: library assemblies under src/ and cli/. Not for tests, not for

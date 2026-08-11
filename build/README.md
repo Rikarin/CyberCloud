@@ -71,6 +71,53 @@ Three of those edges are missing on purpose, and each is the first thing a reade
 | `Portal` → `Generate` | `Generate` emits `portal/libs/api` and the resource forms, but those are generated **and committed**, and `Generate`'s job in the graph is to fail on drift rather than to feed a later target. The edge would drag `Compile` in behind it and make the .NET SDK a prerequisite for running `eslint`. |
 | `Publish` → `E2E` `Chaos` `Load` | A release *is* gated on all three (docs/plan/23 § Test layers, "green before release"), but they run against the deployed candidate. The order is gate → deploy → suites → publish, the deploy in the middle is not a target, so `release.yml` owns that sequencing and this edge would invert it. |
 
+## `Test` runs the test hosts directly
+
+`Test` invokes `dotnet run --project <test project> -- <MTP args>`, **not** `dotnet test`. Test
+projects are Microsoft.Testing.Platform hosts (`OutputType=Exe`, xunit.v3, no VSTest adapter), and
+`dotnet test` puts a runner-selection step in front of them that can pick VSTest and abort the run
+with an error about `testhost.deps.json` — nothing to do with the tests. Running the host directly
+removes the choice, puts the failing assertion and its source line on stdout, and passes the exit
+code through.
+
+Three guards, all of which have been shown to fire:
+
+* `--minimum-expected-tests 1` — a project that discovers zero tests exits 8 and fails the build,
+  instead of reporting success for having done nothing.
+* A test project on disk but absent from `CyberCloud.slnx` fails `Test` with a message naming the
+  project and the `dotnet sln … add` command to fix it. `Compile` builds the solution, so an
+  unlisted project is never built; without this the failure is a missing-`.dll` error that names
+  the wrong problem.
+* A project under `test/` that no target claims fails `Test` with the same shape of message. See
+  below — discovery is split by owning target, and this is what stops a suite falling between them.
+
+The last two run before the "no test projects, nothing to run" early return, and cover every test
+project rather than only the per-PR ones, because `Test` is the only one of the four suite-running
+targets that runs on every PR and so the only one positioned to notice.
+
+## Which target runs which test project
+
+`Directory.Build.props` § Project role detection decides what builds as an MTP host. It does **not**
+decide what runs per-PR: docs/plan/23 § Test layers puts E2E and Chaos on nightly and Load on
+weekly, against a real deployment. `Build.Test.cs` § `SuiteOwning` maps each project to its owning
+target, with one arm per props rule so a rule cannot be added without naming the target that runs
+it.
+
+| Project | Target | Runs |
+|---|---|---|
+| `*.Tests`, `*.Conformance`, `CyberCloud.Isolation` | `Test` | Every PR |
+| `CyberCloud.E2E` | `E2E` | Nightly + pre-release |
+| `CyberCloud.Chaos` | `Chaos` | Nightly |
+| `CyberCloud.Load` | `Load` | Weekly + pre-release |
+
+⚠ These were one list until the split, and `Test` would have run all of them on every PR — observed
+against three empty projects: `./build.sh Test` logged `running 3 test project(s)`. That is the
+nightly and weekly suites inside a 3-minute per-PR budget, against no deployment.
+
+`Directory.Build.props` § Test runner separately configures `dotnet test` to select MTP, so a
+developer or IDE running it by hand gets the same answer as CI. ⚠ Those two properties must live in
+`Directory.Build.props`, not `Directory.Build.targets` — see the comment there.
+
 ## Why the analyser exemptions are where they are
 
 `_build.csproj` is the one project exempted from warnings-as-errors, because Nuke's target fields are
