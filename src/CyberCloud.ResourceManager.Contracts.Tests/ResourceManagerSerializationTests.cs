@@ -307,8 +307,50 @@ public sealed class ResourceManagerSerializationTests : IDisposable {
 
         typeof(SecretRef)
             .GetProperties()
+            .Where(x => x.SetMethod is not null)
             .Select(x => x.Name)
             .ShouldBe(["Path", "Field", "Version"], ignoreOrder: true);
+
+        new SecretRef().IsEmpty.ShouldBeTrue();
+        new SecretRef { Path = "p" }.IsEmpty.ShouldBeTrue("an address with no field addresses nothing");
+        value.IsEmpty.ShouldBeFalse();
+    }
+
+    /// <summary>
+    ///     ⚠ <b>The move, asserted from the assembly that used to own it.</b>
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         <see cref="SecretRef" /> is a platform-wide concept — docs/plan/00 § Non-negotiables
+    ///         states the rule for the whole platform, not for the resource manager — and while it
+    ///         lived here, obeying it cost a module either a dependency on this assembly (and through
+    ///         it on the Kubernetes and tenancy contracts) or a copy.
+    ///         <c>CyberCloud.Identity.Contracts</c> took the copy, and its remarks say so.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ The second assertion is the one that matters more. The <c>[Alias]</c> is what a peer
+    ///         looks the type up by (docs/plan/04 § Failure and upgrade), so it records where the
+    ///         concept was <i>published</i> and not where the file currently sits. Re-spelling it to
+    ///         <c>CyberCloud.Core.SecretRef</c> would compile, pass a round-trip test, and fail to
+    ///         deserialize every payload written before the move.
+    ///     </para>
+    /// </remarks>
+    [Fact]
+    public void SecretRefLivesInCoreContractsAndKeptTheAliasItWasPublishedUnder() {
+        typeof(SecretRef).Assembly.GetName()
+            .Name.ShouldBe(
+                "CyberCloud.Core.Contracts",
+                "a platform-wide concept in one module's contracts is a concept every other module "
+                + "either takes a dependency for or re-declares"
+            );
+
+        typeof(SecretRef).GetCustomAttributes(typeof(AliasAttribute), false)
+            .Cast<AliasAttribute>()
+            .Single()
+            .Alias.ShouldBe(
+                "CyberCloud.ResourceManager.SecretRef",
+                "an alias is a wire identifier; changing it on a move is a data-loss bug"
+            );
     }
 
     [Fact]

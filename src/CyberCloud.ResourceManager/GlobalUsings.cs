@@ -11,6 +11,7 @@ global using ErrorCode = CyberCloud.Core.ErrorCode;
 // enforcement seam — so the simple name is pinned to the Kubernetes one and the seam spells the
 // other out in full.
 global using CyberCloud.Core;
+global using CyberCloud.Core.Contracts;
 global using CyberCloud.Core.Resources;
 global using CyberCloud.ResourceManager.Contracts;
 global using CyberCloud.Tenancy.Contracts;

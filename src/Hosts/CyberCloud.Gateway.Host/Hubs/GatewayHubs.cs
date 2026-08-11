@@ -24,7 +24,8 @@ namespace CyberCloud.Gateway.Host.Hubs;
 ///         resubscribe, so a portal tab that slept through a deploy catches up rather than showing
 ///         stale state forever."</i> The parameter is on <see cref="SubscribeAsync" /> and is passed
 ///         through to the stream replay; the replay itself needs the stream bridge that
-///         <see cref="ConnectionGrain" /> documents as owed.
+///         <see cref="IConnectionGrain" /> documents as owed — and which is now buildable, because
+///         the grain lives in a silo rather than in this client.
 ///     </para>
 /// </remarks>
 public abstract class InterestHub(IGrainFactory grains, IConcurrencyLimiter limiter) : Hub {
@@ -49,6 +50,12 @@ public abstract class InterestHub(IGrainFactory grains, IConcurrencyLimiter limi
     /// <inheritdoc />
     public override async Task OnDisconnectedAsync(Exception? exception) {
         limiter.ReleaseConnection(Caller().TenantId);
+
+        // ⚠ The interest set dies with the socket, which is what "no storage" means in practice —
+        // docs/plan/05 § Hot. The grain would drop out on idle anyway; saying so at the moment the
+        // connection goes means the pod does not hold an activation for a socket it has closed.
+        await Connection().DeactivateAsync();
+
         await base.OnDisconnectedAsync(exception);
     }
 
@@ -85,7 +92,7 @@ public abstract class InterestHub(IGrainFactory grains, IConcurrencyLimiter limi
     protected IConnectionGrain Connection() =>
         grains
             .ForTenant(Caller().TenantId.ToString("D", CultureInfo.InvariantCulture))
-            .GetGrain<IConnectionGrain>(GatewayGrainKeys.Connection(Context.ConnectionId));
+            .GetGrain<IConnectionGrain>(ConnectionGrainKeys.Connection(Context.ConnectionId));
 
     /// <summary>The caller the pipeline established for this connection.</summary>
     /// <exception cref="HubException">

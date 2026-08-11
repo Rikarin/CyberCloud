@@ -113,6 +113,29 @@ sealed class RecordingResourceManager : IResourceManager {
     public Task<Result<WriteAccepted>> ActionAsync(WriteRequest request, CancellationToken cancellationToken = default) =>
         Record(request, OnWrite);
 
+    /// <summary>Every operation this manager was asked about, in order.</summary>
+    public ConcurrentQueue<Guid> Operations { get; } = new();
+
+    /// <summary>What <see cref="GetOperationAsync" /> answers. Default: a running operation.</summary>
+    public Func<Guid, Result<OperationStatus>> OnGetOperation { get; set; } =
+        operationId => Result<OperationStatus>.Success(new() {
+            OperationId = operationId,
+            State = OperationState.Running,
+            ResourcePath = "/tenants/x/subscriptions/y/resourceGroups/prod/providers/N/t/main",
+            ResourceId = Guid.Parse("22222222-2222-2222-2222-222222222222")
+        });
+
+    /// <inheritdoc />
+    public Task<Result<OperationStatus>> GetOperationAsync(
+        Guid operationId,
+        CallerContext caller,
+        CancellationToken cancellationToken = default
+    ) {
+        ArgumentNullException.ThrowIfNull(caller);
+        Operations.Enqueue(operationId);
+        return Task.FromResult(OnGetOperation(operationId));
+    }
+
     Task<Result<T>> Record<T>(WriteRequest request, Func<WriteRequest, Result<T>> answer)
         where T : notnull {
         ArgumentNullException.ThrowIfNull(request);
@@ -122,29 +145,12 @@ sealed class RecordingResourceManager : IResourceManager {
     }
 }
 
-/// <summary>An interest authorizer a test flips at will. Stands in for the enforcement seam.</summary>
-sealed class ScriptedInterestAuthorizer : IInterestAuthorizer {
-    /// <summary>Which paths are readable. Everything else answers the canonical <c>404</c>.</summary>
-    public HashSet<string> Readable { get; } = new(StringComparer.Ordinal);
-
-    /// <summary>How many times the seam was asked.</summary>
-    public int Asked { get; private set; }
-
-    /// <inheritdoc />
-    public Task<Result> CanReadAsync(
-        CallerContext caller,
-        string resourcePath,
-        CancellationToken cancellationToken = default
-    ) {
-        Asked++;
-
-        return Task.FromResult(
-            Readable.Contains(resourcePath)
-                ? Result.Success
-                : Result.Failure(ErrorCode.ResourceNotFound, $"'{resourcePath}' does not exist.")
-        );
-    }
-}
+// ⚠ ScriptedInterestAuthorizer LIVED HERE AND NOW LIVES IN CyberCloud.ResourceManager.Tests.
+// It stood in for the enforcement seam while the connection grain was declared in the gateway host
+// and exercised by direct instantiation. The grain now has a silo to run in
+// (CyberCloud.ResourceManager.Grains.ConnectionGrain) and is driven through a real TestCluster there,
+// so the double moved to the suite that drives it. Nothing in this assembly asks the seam any more —
+// which is the shape docs/plan/10 § What the gateway must never do describes.
 
 /// <summary>
 ///     An operation reader a test scripts. Stands in for <c>TenantScopedOperationReader</c>, whose

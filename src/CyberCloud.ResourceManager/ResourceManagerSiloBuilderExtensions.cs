@@ -1,6 +1,7 @@
 using CyberCloud.Core.Time;
 using CyberCloud.ResourceManager.Contracts.Registry;
 using CyberCloud.ResourceManager.Drift;
+using CyberCloud.ResourceManager.Grains;
 using CyberCloud.ResourceManager.Reconcile;
 using CyberCloud.ResourceManager.Registry;
 using Microsoft.Extensions.DependencyInjection;
@@ -107,6 +108,22 @@ public static class ResourceManagerSiloBuilderExtensions {
         services.TryAddSingleton<DriftScanner>();
         services.TryAddSingleton<ReconcileDriver>();
         services.TryAddSingleton<IResourceManager, ResourceManagerService>();
+
+        // ── The SignalR connection grain's dependencies. docs/plan/10 § SignalR ──────────────────
+        //
+        // ⚠ IN THIS LIST BECAUSE THE GRAIN IS IN THIS ASSEMBLY, AND IT IS IN THIS ASSEMBLY BECAUSE
+        // THE GATEWAY IS A CLIENT. docs/plan/10 hands the connection grain to the gateway and says
+        // nothing about where it runs; docs/plan/03 § Hosts makes the gateway an Orleans client, and a
+        // client activates no grains. IConnectionGrain shipped in the gateway host, where no silo
+        // could load it and only direct instantiation could exercise it — see IConnectionGrain's
+        // remarks.
+        //
+        // ⚠ REGISTERED ON BOTH SIDES, AND ONLY ONE SIDE RESOLVES THEM. On a silo these are the
+        // grain's constructor arguments. In the gateway's client container they are registrations
+        // nothing asks for — the same arrangement DriftScanner and ReconcileDriver already have, for
+        // the same reason: one list that cannot drift beats two that can.
+        services.TryAddSingleton<ConnectionLimits>();
+        services.TryAddSingleton<IInterestAuthorizer, ResourceManagerInterestAuthorizer>();
 
         return services;
     }

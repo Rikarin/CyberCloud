@@ -170,26 +170,40 @@ public sealed class QuotaIntegrationTests(MeteringCluster cluster) {
     }
 
     /// <summary>
-    ///     ⚠ <b>THE KNOWN OPEN DEFECT, PINNED SO IT CANNOT BE FORGOTTEN.</b> Committed quota drifts
-    ///     upward across deletes: <c>OperationGrain.ReturnCommittedQuotaAsync</c> delegates to
-    ///     <c>ReleaseAsync</c>, which releases <i>leases</i>, and a delete has none — the amounts were
-    ///     committed. <c>IQuotaGrain.ReturnAsync</c> is the method that would unwind them and nothing
-    ///     calls it, because closing the gap needs the committed amounts recorded on the operation
-    ///     spec at commit time, which is a wire change to
-    ///     <c>CyberCloud.ResourceManager.Contracts</c> — outside this assembly's reach.
-    ///     <para>
-    ///         ⚠ <b>This test asserts the defect, not the fix.</b> When the wire change lands and the
-    ///         delete path returns committed quota, this test fails — and that failure is the signal
-    ///         to delete it and assert the correct behaviour instead. The metering consequence is
-    ///         bounded and worth stating: quota is a <i>limit</i>, not a bill, so the drift refuses
-    ///         creates that should have been allowed rather than charging for anything. Metering
-    ///         reads <see cref="IMeteredResourceSource" /> — what exists — and never reads committed
-    ///         quota, so a deleted resource stops being metered the moment it stops existing,
-    ///         regardless of this.
-    ///     </para>
+    ///     ⚠ <b>THE DEFECT THIS USED TO PIN, NOW ASSERTED CLOSED.</b> Committed quota came back to
+    ///     zero across a delete.
     /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         <b>What was wrong.</b> <c>OperationGrain.ReturnCommittedQuotaAsync</c> delegated to
+    ///         <c>ReleaseAsync</c>, which releases <i>leases</i> — and a delete holds none, because the
+    ///         amounts were <b>committed</b> by the create. <c>IQuotaGrain.ReturnAsync</c> was the
+    ///         method that unwinds committed usage and nothing called it, so a subscription's
+    ///         committed figure climbed by one resource's worth on every delete and never came down.
+    ///         Closing it needed the committed amounts on the operation spec — a wire change to
+    ///         <c>CyberCloud.ResourceManager.Contracts</c>, which is
+    ///         <c>OperationSpec.CommittedQuota</c>.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>This test was written to fail when the fix landed, and it did.</b> Its previous
+    ///         form asserted <c>Committed == 4</c> after a delete and said in as many words that the
+    ///         expectation should become <c>0</c>. It is now <c>0</c>. What is asserted here is the
+    ///         <i>quota half</i> of the fix, which is all this assembly can reach — it references
+    ///         <c>CyberCloud.Tenancy</c> and not the resource manager, so the delete is modelled the
+    ///         way the operation grain now performs it. The end-to-end assertion, driven through the
+    ///         real write and delete paths, is
+    ///         <c>CyberCloud.ResourceManager.Tests.DeletePathTests.ADeleteReturnsExactlyWhatTheCreateCommittedOnEveryMeter</c>.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The containment claim is kept because it is still true and still worth knowing.</b>
+    ///         Quota is a <i>limit</i>, not a bill, so the drift refused creates that should have been
+    ///         allowed rather than charging for anything. Metering reads
+    ///         <see cref="IMeteredResourceSource" /> — what exists — and never reads committed quota,
+    ///         so the meter was correct throughout, before and after.
+    ///     </para>
+    /// </remarks>
     [Fact]
-    public async Task CommittedQuotaIsNotReturnedOnDeleteAndTheDriftIsRealButDoesNotReachTheMeter() {
+    public async Task CommittedQuotaIsReturnedOnDeleteAndTheMeterWasNeverAffectedEitherWay() {
         var subscription = Fresh();
         MeteringCluster.ResetDoubles();
 
@@ -204,25 +218,33 @@ public sealed class QuotaIntegrationTests(MeteringCluster cluster) {
         (await cluster.Sampler(MeteringCluster.Tenant, subscription).SampleAsync()).GetValueOrThrow()
             .Emitted.ShouldBe(1);
 
-        // Delete: the resource goes. The operation grain releases leases — of which there are none.
+        // Delete: the resource goes, and the operation returns what the create committed. It holds no
+        // lease to release — this is exactly the call the delete path was missing.
         FakeResourceSource.Hold(subscription);
         TestClock.Instance.Advance(UsageWindow.SamplePeriod);
 
-        // ⚠ THE DEFECT: committed quota is still 4, for a resource that no longer exists.
+        (await quota.ListLeasesAsync()).GetValueOrThrow()
+            .ShouldBeEmpty("a committed lease is gone; there is nothing left for ReleaseAsync to do");
+
+        (await quota.ReturnAsync(QuotaMeter.Vcpu, 4m)).IsSuccess.ShouldBeTrue();
+
+        // ⚠ THE FIX: the allowance is back, in full and exactly.
         (await quota.GetUsageAsync(QuotaMeter.Vcpu)).GetValueOrThrow()
             .Committed.ShouldBe(
-                4m,
-                "the known open defect — nothing calls IQuotaGrain.ReturnAsync on the delete path. "
-                + "When that is fixed, this expectation becomes 0 and this test should be rewritten."
+                0m,
+                "committed quota comes back on delete — IQuotaGrain.ReturnAsync, which the operation "
+                + "grain now calls with the amounts carried on OperationSpec.CommittedQuota"
             );
 
-        // ⚠ THE CONTAINMENT: metering is unaffected, because it reads what exists rather than what
-        // quota thinks is committed.
+        // ⚠ And the subscription can use it again, which is what the drift was silently taking away.
+        var reused = await quota.TryReserveAsync(QuotaMeter.Vcpu, 4m, Guid.NewGuid());
+        reused.IsSuccess.ShouldBeTrue("returned quota is quota a create may draw on again");
+        _ = await quota.ReleaseAsync(reused.GetValueOrThrow().LeaseId);
+
+        // ⚠ THE CONTAINMENT, UNCHANGED: metering reads what exists rather than what quota thinks is
+        // committed, so it reported nothing for the deleted resource before the fix and after it.
         (await cluster.Sampler(MeteringCluster.Tenant, subscription).SampleAsync()).GetValueOrThrow()
             .Emitted.ShouldBe(0);
-
-        // And the mechanism that would close it exists and works — it is simply not called.
-        (await quota.ReturnAsync(QuotaMeter.Vcpu, 4m)).GetValueOrThrow().Committed.ShouldBe(0m);
     }
 
     static Guid Fresh() => Guid.NewGuid();

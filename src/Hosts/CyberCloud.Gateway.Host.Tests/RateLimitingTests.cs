@@ -156,11 +156,21 @@ public sealed class RateLimitingTests {
     }
 
     /// <summary>
-    ///     The exempt classes get connections per tenant and streams per connection instead.
+    ///     The exempt classes get a connection cap per tenant instead of a request count.
     /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>The other half of docs/plan/10 § Rate limiting's pair — streams per connection — is no
+    ///     longer asserted here, because it is no longer enforced here.</b> It bounds an interest set,
+    ///     which is <c>ConnectionGrain</c>'s own state, and the grain moved to
+    ///     <c>CyberCloud.ResourceManager</c> along with its cap
+    ///     (<c>ConnectionLimits.StreamsPerConnection</c>). A limiter on this side would have been
+    ///     checking a number it cannot see.
+    ///     <c>CyberCloud.ResourceManager.Tests.ConnectionGrainTests.AnInterestSetIsCappedByTheConcurrencyLimit</c>
+    ///     is where it is asserted now, against a real activation.
+    /// </remarks>
     [Fact]
-    public void TheConcurrencyLimiterCapsConnectionsPerTenantAndStreamsPerConnection() {
-        var limiter = new ProcessConcurrencyLimiter(new() { ConnectionsPerTenant = 2, StreamsPerConnection = 3 });
+    public void TheConcurrencyLimiterCapsConnectionsPerTenant() {
+        var limiter = new ProcessConcurrencyLimiter(new() { ConnectionsPerTenant = 2 });
 
         limiter.TryAcquireConnection(GatewayHarness.TenantA).ShouldBeTrue();
         limiter.TryAcquireConnection(GatewayHarness.TenantA).ShouldBeTrue();
@@ -171,9 +181,6 @@ public sealed class RateLimitingTests {
 
         limiter.ReleaseConnection(GatewayHarness.TenantA);
         limiter.TryAcquireConnection(GatewayHarness.TenantA).ShouldBeTrue();
-
-        limiter.PermitsStream(2).ShouldBeTrue();
-        limiter.PermitsStream(3).ShouldBeFalse();
     }
 
     [Fact]

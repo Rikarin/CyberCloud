@@ -1,5 +1,3 @@
-using CyberCloud.Gateway.Host.Http;
-using Orleans.Multitenant;
 using System.Globalization;
 
 namespace CyberCloud.Gateway.Host.Operations;
@@ -25,38 +23,38 @@ interface IOperationReader {
 }
 
 /// <summary>
-///     Reads the operation grain for the token's tenant, and asks the resource manager whether the
-///     caller may see it.
+///     Forwards the poll to the resource manager, which decides.
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>Two boundaries, and neither is an authorization decision made here.</b>
+///         ⚠ <b>This type performs no check of its own, which is the same property it had before and
+///         is the reason the seam survived the change.</b> docs/plan/10 § What the gateway must never
+///         do forbids the gateway from performing authorization; docs/plan/07 § The enforcement seam
+///         puts the one decision inside the resource manager. So the interface above is a
+///         <i>question</i> and this is a forwarder — it copies whatever answer comes back, including
+///         the <c>404</c> that does not disclose existence.
 ///     </para>
-///     <list type="number">
-///         <item>
-///             <b>Cross-tenant</b> is closed by <c>ForTenant</c> and by nothing else. The gateway is
-///             an Orleans client, so <c>Orleans.Multitenant</c>'s filter never runs for this call —
-///             docs/plan/00 § The tenant-separation row, corrected. The tenant in the key comes from
-///             the caller context, which stage 3 built from the token.
-///         </item>
-///         <item>
-///             <b>Within-tenant</b> is closed by asking the one seam. An operation names the resource
-///             it is driving, and "may this caller see that resource?" is precisely what
-///             <see cref="IResourceManager.ReadAsync" /> answers — with a <c>404</c> that does not
-///             disclose existence, decided inside the resource manager where docs/plan/07 § The
-///             enforcement seam puts it. So this type performs no check of its own; it forwards a
-///             question and copies the answer.
-///         </item>
-///     </list>
 ///     <para>
-///         ⚠ <b>What this costs, named rather than hidden:</b> polling an operation costs a resource
-///         read as well as the operation read. The alternative — a <c>GetOperationAsync</c> on
-///         <see cref="IResourceManager" /> that checks once — is the better design and is owed;
-///         docs/plan/08 § Long-running operations describes the endpoint but the interface has no
-///         method for it, which is a gap in the plan rather than a decision.
+///         ⚠ <b>What changed is the cost, not the boundary.</b> This used to hold the operation grain
+///         itself — <c>ForTenant(…).GetGrain&lt;IOperationGrain&gt;</c> — and then ask
+///         <see cref="IResourceManager.ReadAsync" /> about the operation's <i>resource</i>, because
+///         "may this caller see that resource?" was the only question the interface could answer. That
+///         is an index resolve, a check, a resource-grain read and an api-version projection <b>per
+///         poll</b>, and <c>cyc --wait</c> polls a nine-minute cluster create continuously.
+///         <see cref="IResourceManager.GetOperationAsync" /> is the method docs/plan/08 § Long-running
+///         operations always implied and the interface did not have; it reads the operation and runs
+///         the same check once, in the seam.
+///     </para>
+///     <para>
+///         ⚠ <b>Cross-tenant is still closed by <c>ForTenant</c> and by nothing else</b> — the gateway
+///         is an Orleans client, so <c>Orleans.Multitenant</c>'s filter never runs for this call
+///         (docs/plan/00 § The tenant-separation row, corrected). The <c>ForTenant</c> now happens
+///         inside <see cref="IResourceManager.GetOperationAsync" />, keyed on the same
+///         <see cref="CallerContext.TenantId" /> stage 3 built from the token and handed to it here.
+///         Moving the call did not move the token.
 ///     </para>
 /// </remarks>
-sealed class TenantScopedOperationReader(IGrainFactory grains, IResourceManager manager) : IOperationReader {
+sealed class TenantScopedOperationReader(IResourceManager manager) : IOperationReader {
     /// <inheritdoc />
     public async Task<Result<OperationStatus>> ReadAsync(
         CallerContext caller,
@@ -65,43 +63,8 @@ sealed class TenantScopedOperationReader(IGrainFactory grains, IResourceManager 
     ) {
         ArgumentNullException.ThrowIfNull(caller);
 
-        // ⚠ ForTenant, from the token's tenant. CC1006 fails the build on a raw GetGrain here, which
-        // is the whole reason this project references CyberCloud.Analyzers.
-        var operation = grains
-            .ForTenant(caller.TenantId.ToString("D", CultureInfo.InvariantCulture))
-            .GetGrain<IOperationGrain>(GrainKeys.Operation(operationId));
-
-        var status = await operation.GetAsync();
-        if (status.TryGetError(out var error)) {
-            return Result<OperationStatus>.Failure(error);
-        }
-
-        var value = status.GetValueOrThrow();
-
-        if (value.ResourcePath.Length == 0) {
-            // An operation with no resource is one that was never started. Same 404 as any other
-            // absent thing.
-            return NotFound(operationId);
-        }
-
-        // The one seam. A caller who cannot read the resource cannot read its operation, and the
-        // decision — including whether it is 404 or 403 — is made inside the resource manager.
-        var readable = await manager.ReadAsync(
-            new WriteRequest { Path = value.ResourcePath, ApiVersion = "", Caller = caller },
-            cancellationToken
-        );
-
-        if (readable.TryGetError(out var readError)) {
-            return Result<OperationStatus>.Failure(readError);
-        }
-
-        return Result<OperationStatus>.Success(value);
+        return await manager.GetOperationAsync(operationId, caller, cancellationToken);
     }
-
-    static Result<OperationStatus> NotFound(Guid operationId) =>
-        Result<OperationStatus>.Failure(GatewayErrors.NotFound(
-            GatewayRouterPaths.Operation(operationId)
-        ));
 }
 
 /// <summary>The URLs docs/plan/10 § Long-running operations gives, built in one place.</summary>

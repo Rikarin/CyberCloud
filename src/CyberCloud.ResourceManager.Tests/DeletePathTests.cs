@@ -232,6 +232,137 @@ public sealed class DeletePathTests(ResourceManagerCluster cluster) {
         }
     }
 
+    // ── Committed quota comes back. docs/plan/06 § Quota ────────────────────────────────────────
+
+    /// <summary>
+    ///     ⚠ <b>A delete returns exactly what the create committed — not an approximation, and not
+    ///     twice.</b>
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         <b>The defect this pins.</b> <c>OperationGrain.ReturnCommittedQuotaAsync</c> delegated
+    ///         to its own <c>ReleaseAsync</c>, which releases <i>leases</i>.
+    ///         <see cref="OperationSpec.QuotaLeaseIds" /> is empty on every delete spec — the amounts
+    ///         were <b>committed</b> by the create — so the call did nothing at all.
+    ///         <c>IQuotaGrain.ReturnAsync</c> was the method that unwinds committed usage and nothing
+    ///         called it, so a subscription's committed figure climbed by one resource's worth on
+    ///         every delete and the allowance never came back. Quota is a limit rather than a bill, so
+    ///         the damage is creates refused that should have been allowed — which is silent, and gets
+    ///         worse the longer a subscription is used.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The size is deliberately not the fallback.</b> <c>TestingProvider</c> declares
+    ///         <c>Vcpu</c> against the pointer <c>/properties/size</c>, so a create at <c>size: 5</c>
+    ///         commits five. A "return" that credited the meter's fallback, or one unit, or the
+    ///         current usage, would pass a test written against the default and fail here — which is
+    ///         what "exactly" means.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>And the second meter matters.</b> The type also declares <c>Resources</c> with no
+    ///         pointer, so a create draws on two meters and a delete has to unwind both. A fix that
+    ///         returned only the first would leave the drift on the second.
+    ///     </para>
+    /// </remarks>
+    [Fact]
+    public async Task ADeleteReturnsExactlyWhatTheCreateCommittedOnEveryMeter() {
+        ResourceManagerCluster.ResetDoubles();
+        var address = ResourceManagerCluster.Address("returns-its-quota");
+
+        var quota = cluster.Quota(ResourceManagerCluster.Tenant, ResourceManagerCluster.Subscription);
+        var vcpuBefore = (await quota.GetUsageAsync(QuotaMeter.Vcpu)).GetValueOrThrow().Committed;
+        var countBefore = (await quota.GetUsageAsync(QuotaMeter.Resources)).GetValueOrThrow().Committed;
+
+        var created = await CreateSized(address, 5);
+        created.IsSuccess.ShouldBeTrue(created.Error?.Message);
+        await Converge(created.GetValueOrThrow());
+
+        (await quota.GetUsageAsync(QuotaMeter.Vcpu)).GetValueOrThrow()
+            .Committed.ShouldBe(vcpuBefore + 5, "the create commits what the declared pointer says");
+        (await quota.GetUsageAsync(QuotaMeter.Resources)).GetValueOrThrow()
+            .Committed.ShouldBe(countBefore + 1);
+
+        var deleted = await cluster.Manager.DeleteAsync(
+            new() { Path = address.Path, ApiVersion = TestingProvider.V2026, Caller = ResourceManagerCluster.Caller() },
+            TestContext.Current.CancellationToken
+        );
+
+        deleted.IsSuccess.ShouldBeTrue(deleted.Error?.Message);
+
+        var operation = cluster.Operation(ResourceManagerCluster.Tenant, deleted.GetValueOrThrow().OperationId);
+        var status = await operation.DriveAsync();
+        status.GetValueOrThrow().State.ShouldBe(OperationState.Succeeded);
+
+        (await quota.GetUsageAsync(QuotaMeter.Vcpu)).GetValueOrThrow()
+            .Committed.ShouldBe(
+                vcpuBefore,
+                "a delete gives back exactly what the create committed — IQuotaGrain.ReturnAsync, "
+                + "which nothing used to call"
+            );
+
+        (await quota.GetUsageAsync(QuotaMeter.Resources)).GetValueOrThrow().Committed.ShouldBe(countBefore);
+
+        // ⚠ NOT TWICE. The operation is re-drivable from a reminder and it is already terminal, so a
+        // second drive must not credit the meter again — a delete that over-returned would hand a
+        // subscription free allowance for every stuck teardown that was later re-driven.
+        await operation.DriveAsync();
+
+        (await quota.GetUsageAsync(QuotaMeter.Vcpu)).GetValueOrThrow().Committed.ShouldBe(vcpuBefore);
+        (await quota.GetUsageAsync(QuotaMeter.Resources)).GetValueOrThrow().Committed.ShouldBe(countBefore);
+    }
+
+    /// <summary>
+    ///     The amounts ride on the delete's own spec, because by the time they are needed there is
+    ///     nothing left to derive them from.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <c>ReturnCommittedQuotaAsync</c> runs after <c>CompleteDeleteAsync</c> has cleared the
+    ///     resource grain, and a re-drive after a silo loss runs it with no resource and no registry
+    ///     lookup available. docs/plan/08 § Long-running operations: the state "includes everything
+    ///     needed to re-drive". <see cref="OperationSpec.CommittedQuota" /> is the member that makes
+    ///     that true of the quota return, and this asserts it is populated at accept time rather than
+    ///     at convergence time.
+    /// </remarks>
+    [Fact]
+    public async Task TheDeleteSpecCarriesTheCommittedAmountsBeforeTheTeardownRuns() {
+        ResourceManagerCluster.ResetDoubles();
+        var address = ResourceManagerCluster.Address("spec-carries-quota");
+
+        var created = await CreateSized(address, 4);
+        await Converge(created.GetValueOrThrow());
+
+        var resourceId = created.GetValueOrThrow().Resource.Id;
+        FakeWorld.FailTeardownWith[resourceId] = "the API server refused the delete";
+
+        var deleted = await cluster.Manager.DeleteAsync(
+            new() { Path = address.Path, ApiVersion = TestingProvider.V2026, Caller = ResourceManagerCluster.Caller() },
+            TestContext.Current.CancellationToken
+        );
+
+        deleted.IsSuccess.ShouldBeTrue(deleted.Error?.Message);
+
+        // The teardown has not converged and never will, so nothing has been returned yet — but the
+        // operation already knows what it owes.
+        var operation = cluster.Operation(ResourceManagerCluster.Tenant, deleted.GetValueOrThrow().OperationId);
+        await operation.DriveAsync();
+
+        var quota = cluster.Quota(ResourceManagerCluster.Tenant, ResourceManagerCluster.Subscription);
+        var stillCommitted = (await quota.GetUsageAsync(QuotaMeter.Vcpu)).GetValueOrThrow().Committed;
+
+        stillCommitted.ShouldBeGreaterThanOrEqualTo(
+            4,
+            "a resource whose teardown is stuck still exists and still counts — docs/plan/06 "
+            + "§ Two-phase create keeps it visible for exactly that reason"
+        );
+
+        // Now let it converge, from the same spec, and the credit lands.
+        FakeWorld.FailTeardownWith.TryRemove(resourceId, out _);
+        var finished = await operation.DriveAsync();
+
+        finished.GetValueOrThrow().State.ShouldBe(OperationState.Succeeded);
+        (await quota.GetUsageAsync(QuotaMeter.Vcpu)).GetValueOrThrow()
+            .Committed.ShouldBe(stillCommitted - 4);
+    }
+
     Task<Result<WriteAccepted>> Create(ResourceId address) =>
         cluster.Manager.WriteAsync(
             new() {
@@ -239,6 +370,18 @@ public sealed class DeletePathTests(ResourceManagerCluster cluster) {
                 ApiVersion = TestingProvider.V2026,
                 Verb = WriteVerb.Put,
                 Body = TestingProvider.Body(),
+                Caller = ResourceManagerCluster.Caller()
+            },
+            TestContext.Current.CancellationToken
+        );
+
+    Task<Result<WriteAccepted>> CreateSized(ResourceId address, int size) =>
+        cluster.Manager.WriteAsync(
+            new() {
+                Path = address.Path,
+                ApiVersion = TestingProvider.V2026,
+                Verb = WriteVerb.Put,
+                Body = TestingProvider.Body(size),
                 Caller = ResourceManagerCluster.Caller()
             },
             TestContext.Current.CancellationToken

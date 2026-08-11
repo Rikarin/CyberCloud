@@ -1,6 +1,5 @@
 using CyberCloud.Core.Time;
 using CyberCloud.Gateway.Host.Authentication;
-using CyberCloud.Gateway.Host.Hubs;
 using CyberCloud.Gateway.Host.Pipeline;
 using CyberCloud.Gateway.Host.Pipeline.Stages;
 using CyberCloud.Gateway.Host.RateLimiting;
@@ -35,13 +34,13 @@ static class GatewayServiceCollectionExtensions {
     ///         by the order of eight lines in a file is a rule one merge away from being wrong.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The resource manager is composed here rather than through
-    ///         <c>AddCyberCloudResourceManager</c>.</b> That extension takes an <c>ISiloBuilder</c>
-    ///         (docs/plan/04 § Silo composition) and the gateway is a client, so there is no builder
-    ///         to hand it. The registrations below are the subset a <i>caller</i> needs — the write
-    ///         path and its seams, without the reconcile driver or the drift scanner, which are
-    ///         silo-side. A client-side counterpart in <c>CyberCloud.ResourceManager</c> would be
-    ///         better than this duplication and is owed.
+    ///         ⚠ <b>The resource manager is composed by <b>one call into its own assembly</b> and not
+    ///         by a list repeated here.</b> <c>AddCyberCloudResourceManager</c> has an
+    ///         <c>IServiceCollection</c> overload for exactly this: the silo overload takes an
+    ///         <c>ISiloBuilder</c> (docs/plan/04 § Silo composition) and the gateway is a client, so
+    ///         there is no builder to hand it. Repeating the registrations here would mean naming
+    ///         <c>ReBacResourceAuthorizer</c> in gateway source, which
+    ///         <c>GatewayIsolationTests.NoGatewaySourceFileCallsAnAuthorizationEngine</c> refuses.
     ///     </para>
     /// </remarks>
     public static IServiceCollection AddCyberCloudGateway(
@@ -87,7 +86,12 @@ static class GatewayServiceCollectionExtensions {
         services.TryAddSingleton<IOperationReader, TenantScopedOperationReader>();
 
         // ── SignalR. docs/plan/10 § SignalR — no backplane product, by design. ──
-        services.TryAddSingleton<IInterestAuthorizer, ResourceManagerInterestAuthorizer>();
+        //
+        // ⚠ NOTHING TO REGISTER HERE ANY MORE, AND THE ABSENCE IS THE POINT. IConnectionGrain and its
+        // interest authorizer are activated by a SILO, not by this client, so their registrations are
+        // in AddCyberCloudResourceManager above — the same list that already registers the write
+        // path's grain-side dependencies. This host builds the key, holds the hubs, and takes grain
+        // references through ForTenant; it activates nothing.
 
         // ── The nine stages, in the order docs/plan/10 § Request pipeline gives them. ──
         services.AddSingleton<IGatewayStage, CorrelationStage>();

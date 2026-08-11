@@ -1,4 +1,3 @@
-using CyberCloud.Core.Contracts;
 using CyberCloud.Core.Time;
 using CyberCloud.ResourceManager.Reconcile;
 using Orleans.Multitenant;
@@ -435,15 +434,68 @@ public sealed class OperationGrain(
     ///     Gives committed quota back after a delete converged.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>Best effort, and the reason is that the alternative is worse.</b> The amounts were
-    ///     recorded on the leases, which are gone once committed, so a precise return needs the
-    ///     registry's meter declarations and the desired body — both of which the delete path has, and
-    ///     neither of which survives <c>CompleteDeleteAsync</c> clearing the grain. <b>This is a
-    ///     stub</b>: it releases the leases if any survive and does not re-derive committed amounts,
-    ///     so a subscription's committed usage drifts upward across deletes. Closing it needs the
-    ///     committed amounts recorded on the operation spec at commit time, which is a wire change.
+    ///     <para>
+    ///         ⚠ <b><c>ReturnAsync</c>, not <c>ReleaseAsync</c>, and the difference was a real defect
+    ///         rather than a naming preference.</b> This method used to delegate to
+    ///         <see cref="ReleaseAsync" />, which releases <i>leases</i> — and a delete holds none:
+    ///         <see cref="OperationSpec.QuotaLeaseIds" /> is empty on every delete spec, because the
+    ///         amounts were <b>committed</b> by the create that made the resource. So the call was a
+    ///         no-op, a subscription's committed usage climbed by one resource's worth on every
+    ///         delete, and the allowance a tenant had paid for never came back.
+    ///         <c>IQuotaGrain.ReturnAsync</c> is the method that unwinds committed usage; it existed,
+    ///         worked, and had no callers.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Exactly what the create committed, and exactly once.</b> The amounts come off
+    ///         <see cref="OperationSpec.CommittedQuota" />, which the delete path derived from the
+    ///         resource's stored body with the same function step 6 reserved with — not from the
+    ///         leases, which are gone, and not re-derived here, where the resource has already been
+    ///         cleared by <c>CompleteDeleteAsync</c>. No lease is released alongside it: a delete has
+    ///         none, and doing both would be the double credit.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Safe to run twice, because the delete path is re-driven from a reminder.</b> It is
+    ///         called after <c>CompleteDeleteAsync</c> and the unlink have both succeeded, and the
+    ///         very next line terminates the operation and unregisters the reminder — so the
+    ///         re-drivable window is between them. <c>IQuotaGrain.ReturnAsync</c> is not idempotent
+    ///         (it is an unconditional credit), which is why nothing above it may fail after it runs
+    ///         and why it is the last quota call the operation makes.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b><see cref="QuotaMeter.Unknown" /> and non-positive amounts are skipped rather than
+    ///         sent.</b> Both are refused by the grain, and a refusal logged per delete is noise that
+    ///         hides a real one. <see cref="QuotaMeter.Unknown" /> is the zero value a
+    ///         default-constructed wire type carries, which is what an operation started by a peer
+    ///         that predates <see cref="OperationSpec.CommittedQuota" /> would produce.
+    ///     </para>
     /// </remarks>
-    Task ReturnCommittedQuotaAsync(OperationSpec spec) => ReleaseAsync(spec);
+    async Task ReturnCommittedQuotaAsync(OperationSpec spec) {
+        if (spec.CommittedQuota.IsDefaultOrEmpty) {
+            return;
+        }
+
+        var quota = Quota(spec);
+
+        foreach (var commitment in spec.CommittedQuota) {
+            if (commitment.Meter == QuotaMeter.Unknown || commitment.Amount <= 0) {
+                continue;
+            }
+
+            var returned = await quota.ReturnAsync(commitment.Meter, commitment.Amount);
+            if (returned.TryGetError(out var error)) {
+                // Not fatal to the delete: the resource is gone and refusing to finish the operation
+                // would leave it Deleting forever over an accounting entry. It IS worth a line — an
+                // unreturned credit is quota a tenant paid for and did not get back.
+                Append(
+                    Progress(
+                        "quota",
+                        $"Returning {commitment.Amount} of {commitment.Meter} to subscription "
+                        + $"{spec.SubscriptionId:D} failed: {error.Message}"
+                    )
+                );
+            }
+        }
+    }
 
     // ── Internals ──────────────────────────────────────────────────────────────────────────────
 
@@ -474,6 +526,7 @@ public sealed class OperationGrain(
             OperationId = operationId,
             State = state.State.Status,
             ResourcePath = state.State.Spec?.ResourcePath ?? string.Empty,
+            ResourceId = state.State.Spec?.ResourceId ?? Guid.Empty,
             StartedAt = state.State.StartedAt,
             EndedAt = state.State.EndedAt,
             Progress = [.. state.State.Progress],
