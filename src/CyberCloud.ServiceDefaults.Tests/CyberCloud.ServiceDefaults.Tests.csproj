@@ -44,17 +44,13 @@
         <PackageReference Include="StackExchange.Redis"/>
     </ItemGroup>
 
-    <ItemGroup Label="Orleans' own PostgreSQL DDL">
-        <!--
-          ⚠ These two files are COPIES of dotnet/orleans at tag v10.2.2:
-              src/AdoNet/Shared/PostgreSQL-Main.sql
-              src/AdoNet/Orleans.Persistence.AdoNet/PostgreSQL-Persistence.sql
-          Microsoft.Orleans.Persistence.AdoNet ships no SQL and no embedded resources, and nothing in
-          this repository creates the schema on a real shard — see OrleansAdoNetSchema.cs.
-        -->
-        <EmbeddedResource Include="Storage/PostgreSQL-Main.sql"/>
-        <EmbeddedResource Include="Storage/PostgreSQL-Persistence.sql"/>
-    </ItemGroup>
+    <!--
+      ⚠ The two Orleans DDL scripts used to be embedded here as a SECOND copy, next to a test-local
+      OrleansAdoNetSchema that applied them. Both are gone: CyberCloud.ServiceDefaults embeds the
+      scripts and CyberCloud.ServiceDefaults.Storage.OrleansAdoNetSchema applies them, so the fixture
+      and the shipped one-shot job now run the same code against the same bytes. A second copy of a
+      file whose whole purpose is "this is verbatim upstream" is a second thing to keep verbatim.
+    -->
 
     <ItemGroup Label="Global usings">
         <Using Include="Xunit"/>

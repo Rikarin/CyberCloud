@@ -111,7 +111,9 @@ public sealed class StorageFixture : IAsyncLifetime {
         };
 
         foreach (var connectionString in connections.Values) {
-            await OrleansAdoNetSchema.CreateAsync(connectionString, token);
+            // The shipped applier, not a test-local copy of it. `--apply-durable-schema` runs this
+            // exact call, so a defect in it fails here rather than in a cluster.
+            await OrleansAdoNetSchema.ApplyAsync(connectionString, token);
         }
 
         SplitTenants = FindSplitPair(connections.Keys);

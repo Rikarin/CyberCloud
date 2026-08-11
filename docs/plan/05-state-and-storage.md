@@ -232,13 +232,30 @@ database that is `relation "orleansquery" does not exist`. The DDL is two files 
 repo at the matching tag (`Shared/PostgreSQL-Main.sql`, then
 `Orleans.Persistence.AdoNet/PostgreSQL-Persistence.sql`, in that order). So
 [§ The shard map](#the-shard-map)'s "a shard is added by starting a server and putting it in the map"
-is missing a step, and as of now **no chart, deploy script or plan document owns it**.
+is missing a step. **That step now has an owner:** `OrleansAdoNetSchema` embeds both scripts,
+`CyberCloud.Silo.Host --apply-durable-schema` is the one-shot job that runs them, and `deploy/`
+schedules it as a Helm `pre-install`/`pre-upgrade` hook before any silo starts.
+
+⚠ **Two files means a half-applied state, and the obvious probe cannot see it.** A run that dies
+*between* the scripts leaves `orleansquery` present and `orleansstorage` absent, so a probe that asks
+only `to_regclass('orleansquery')` answers "already applied" on every later run and the shard stays
+unusable forever. The applier therefore probes all five objects the two files create — both tables,
+the index, the `writetostorage` function, and the four `OrleansQuery` rows `Init` reads back — applies
+both scripts inside **one transaction**, and takes a transaction-scoped advisory lock so that two
+appliers on one shard produce a no-op for the loser rather than a `42P07`. A mixture no interrupted
+run can produce is refused with an inventory rather than guessed at, because the only way to force
+those scripts over it is to drop `orleansstorage`, which is the tenants' state.
 
 ⚠ **A silo starts healthy with an unreachable durable shard.** The bootstrap provider is never
 constructed, so nothing fails at startup: the silo joins, passes readiness, takes traffic, and only
-the affected shard's tenants error. If that is not wanted, shard reachability needs its own health
-check — the readiness probe in [§ Hot](#hot--redis-cluster)'s sibling deliberately does not probe
-storage, because an unreachable shard evicting a silo concentrates load on its neighbours.
+the affected shard's tenants error. Shard reachability therefore gets **its own health check**,
+`durable-shards`, and the decision that matters is that it carries **no tag at all**: it reports on
+`/api/health`, where a scrape and an alert read it, and the readiness probe never runs it. Readiness
+deliberately does not probe storage — an unreachable shard evicting its silos concentrates that
+shard's load on its neighbours, which turns one shard's outage into a cascade. The alternative,
+reporting `Degraded` from a `ready`-tagged check, is worse in both directions: ASP.NET treats
+`Degraded` as *passing* a probe, so it would change nothing today, and it would sit one word away from
+causing exactly that cascade tomorrow.
 
 ## Serialization and schema evolution
 

@@ -1,4 +1,5 @@
 using CyberCloud.Core.Contracts;
+using CyberCloud.ServiceDefaults.HealthChecks;
 using Microsoft.Extensions.DependencyInjection;
 using Orleans.Configuration;
 using Orleans.Multitenant;
@@ -44,7 +45,9 @@ public static class SiloBuilderStorageExtensions {
     ///             nothing here checks shard reachability before a
     ///             silo is declared ready
     ///         </b>
-    ///         , and if that is wanted it needs a per-shard health check.
+    ///         . That stays true and is now deliberate rather than unnoticed:
+    ///         <c>DurableShardHealthCheck</c>, registered below, names an unreachable shard on
+    ///         <c>/api/health</c>, and is untagged so that the readiness probe cannot act on it.
     ///         This is still not called for you —
     ///         <c>OrleansApplication.CreateSilo</c> calls it only when the configuration section is
     ///         present, so a silo with no such section has <b>no grain storage at all</b>.
@@ -109,6 +112,13 @@ public static class SiloBuilderStorageExtensions {
                 services.AddSingleton<IShardConnections>(connections);
                 services.AddSingleton(hot);
                 services.AddSingleton(durable);
+
+                // ⚠ Here rather than in AddOrleansHealthChecks, and untagged. This is the answer to
+                // the paragraph above: nothing else notices an unreachable shard, and readiness must
+                // not be what notices — an unreachable shard evicting its silos concentrates their
+                // load on the neighbours. It reports on /api/health only. DurableShardHealthCheck's
+                // remarks argue both halves, and HealthCheckWiringTests holds the tag counts.
+                services.AddDurableShardHealthCheck();
             }
         );
 

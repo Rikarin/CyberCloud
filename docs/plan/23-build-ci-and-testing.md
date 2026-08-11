@@ -58,6 +58,21 @@ time.
 | **Load** | The [00](00-vision-and-principles.md) quality bar, at scale | Weekly + pre-release | Budgets met |
 | **Security** | CodeQL, `NuGetAudit`, Trivy on images, secret scanning, ZAP against staging | Every PR + nightly | No criticals |
 
+### Written but unrun — the assertions waiting on a server
+
+Tracked here rather than left in a commit message, because an unrun test that nobody knows is unrun
+is worse than a missing one.
+
+| Where | What is unrun | What it needs |
+|---|---|---|
+| `CyberCloud.ServiceDefaults.Tests.Storage.OrleansAdoNetSchemaTests` | Five assertions about the durable schema on a real PostgreSQL: a half-applied schema is completed, a complete one is a no-op that takes no advisory lock, four concurrent appliers produce one winner and three clean no-ops, a hand-torn schema is refused with an inventory, and a reachable shard reports reachable | `CYBERCLOUD_TEST_SHARD` set to a **scratch** database — every test starts by running the recovery SQL from `deploy/README.md § Idempotence`, which drops both tables. Deliberately a connection string rather than Testcontainers, so the same assertions run against a container, a local server, or a staging shard |
+
+Everything else about that pair of gaps runs everywhere and needs nothing:
+`DurableSchemaPlanTests` decides what to apply from an observed set of objects,
+`DurableShardHealthCheckTests` probes closed ports and a socket that accepts and never answers, and
+`UnreachableShardReadinessTests` starts a real silo with both tiers pointed at closed ports and asks
+`/health` and `/api/health` over HTTP.
+
 ### The chaos invariants
 
 Each is an assertion, not an observation:

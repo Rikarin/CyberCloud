@@ -97,6 +97,33 @@ public sealed class HealthCheckWiringTests {
     }
 
     [Fact]
+    public void TheDurableShardCheckAddsNoTagsToASilo() {
+        // ⚠ The counts must hold once storage is wired, and storage is where `durable-shards` is
+        // registered (AddCyberCloudGrainStorage calls AddDurableShardHealthCheck). A silo with one
+        // unreachable shard out of sixteen still serves fifteen shards' worth of tenants, and
+        // evicting it concentrates that shard's load on its neighbours — the cascade
+        // SiloReadinessHealthCheck's remarks refuse by name. This is the assertion that keeps the
+        // refusal true through a future edit.
+        var registrations = Registrations(b => {
+                    b.AddServiceDefaults();
+                    b.AddOrleansHealthChecks();
+                    b.Services.AddDurableShardHealthCheck();
+                }
+            )
+            .Registrations;
+
+        registrations.Single(x => x.Name == "durable-shards").Tags.ShouldBeEmpty();
+
+        var ready = registrations.Where(x => x.Tags.Contains(HealthCheckTags.Ready)).ToList();
+        ready.Count.ShouldBe(1);
+        ready[0].Name.ShouldBe("silo-ready");
+
+        var live = registrations.Where(x => x.Tags.Contains(HealthCheckTags.Live)).ToList();
+        live.Count.ShouldBe(1);
+        live[0].Name.ShouldBe("self");
+    }
+
+    [Fact]
     public void TheParticipantsCheckIsASingletonBecauseItCarriesState() {
         // It remembers when it last ran and asks the participants about that window. Two instances
         // would each see half the window and neither would be right.

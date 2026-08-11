@@ -155,9 +155,14 @@ public static class ServiceDefaultsExtensions {
     ///         <c>[StatelessWorker(1)]</c> grain of its own, and a <c>StorageHealthCheck</c> that
     ///         calls a grain which touches storage. The first is subsumed — the readiness check's
     ///         <c>IManagementGrain</c> call already proves the grain runtime routes messages, using
-    ///         Orleans' own system grain rather than one this assembly has to declare. The second is
-    ///         deliberately absent; see the remarks on <see cref="SiloReadinessHealthCheck" /> for
-    ///         why a storage dependency must not gate readiness.
+    ///         Orleans' own system grain rather than one this assembly has to declare. The second has
+    ///         an answer that is deliberately not in this method: <see cref="DurableShardHealthCheck" />
+    ///         is registered by <c>AddCyberCloudGrainStorage</c>, because only a silo that has a
+    ///         durable tier can meaningfully report on one — and it is <b>untagged</b>, so a shard
+    ///         outage is visible on <c>/api/health</c> and cannot reach readiness. See the remarks on
+    ///         <see cref="SiloReadinessHealthCheck" /> for why a storage dependency must not gate
+    ///         readiness, and the remarks on <see cref="DurableShardHealthCheck" /> for why
+    ///         <c>Degraded</c>-plus-<c>ready</c> was rejected as the alternative.
     ///     </para>
     /// </remarks>
     public static IHostApplicationBuilder AddOrleansHealthChecks(this IHostApplicationBuilder builder) {

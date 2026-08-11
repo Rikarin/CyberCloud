@@ -101,11 +101,20 @@ public sealed class DurableTierOptions {
     ///     Defaults to the lexicographically first shard.
     /// </summary>
     /// <remarks>
-    ///     <c>Orleans.Multitenant</c> requires a "regular (tenant unaware) storage provider" that it
-    ///     initialises at silo start and never stores state in. For the ADO.NET provider that means
-    ///     one real connection and one <c>SELECT</c> against <c>OrleansQuery</c>, which is a useful
-    ///     accident: a silo that cannot reach the durable tier at all fails to start rather than
-    ///     failing on the first grain write.
+    ///     <para>
+    ///         <c>Orleans.Multitenant</c> requires a "regular (tenant unaware) storage provider" that
+    ///         it documents as initialising at silo start and never storing state in.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>It never opens the connection, so this shard is not a startup canary.</b> That
+    ///         was checked, not assumed: the bare provider registered under this name is overwritten
+    ///         in the container by <c>Orleans.Multitenant</c>'s own wrapper, so the lifecycle
+    ///         participant resolves the wrapper and the provider underneath is never constructed —
+    ///         <c>BootstrapProviderLivenessTests</c>. A silo whose durable tier is entirely
+    ///         unreachable therefore starts, passes readiness, and fails on the first grain write of
+    ///         each affected tenant. <c>DurableShardHealthCheck</c> is what reports that, on
+    ///         <c>/api/health</c> and deliberately not on the readiness probe.
+    ///     </para>
     /// </remarks>
     public string? BootstrapShard { get; set; }
 
@@ -126,6 +135,31 @@ public sealed class DurableTierOptions {
     ///     </para>
     /// </remarks>
     public int MaxPoolSize { get; set; } = 5;
+
+    /// <summary>
+    ///     How long the <c>durable-shards</c> health check reuses a probe result before probing
+    ///     again.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>This is the knob that decides what shard reachability costs.</b> The check opens one
+    ///     connection per shard per interval per silo — see <c>DurableShardHealthCheck</c> for the
+    ///     arithmetic at 16 shards and 30 silos. Shortening it multiplies that; the default of 30
+    ///     seconds is already far below any interval at which a human acts on the alert.
+    /// </remarks>
+    public TimeSpan HealthProbeInterval { get; set; } = TimeSpan.FromSeconds(30);
+
+    /// <summary>
+    ///     How long one shard gets to answer the <c>durable-shards</c> probe before it counts as
+    ///     unreachable.
+    /// </summary>
+    /// <remarks>
+    ///     Bounds the connect and the statement separately, so the total for one shard is at most
+    ///     twice this. Shards are probed in parallel, so it also bounds the whole check — and it has
+    ///     to stay under the five-second request timeout on the health endpoints
+    ///     (<c>ServiceDefaultsExtensions</c>) or a fully-dark tier times out the scrape instead of
+    ///     reporting itself dark.
+    /// </remarks>
+    public TimeSpan HealthProbeTimeout { get; set; } = TimeSpan.FromSeconds(2);
 
     /// <summary>
     ///     Whether the shard is reached through PgBouncer in <b>transaction</b> pooling mode —
