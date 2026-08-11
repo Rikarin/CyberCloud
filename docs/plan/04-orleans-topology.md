@@ -38,10 +38,22 @@ a data-plane workload in a cluster, which is where it belonged anyway.
 
 ```csharp
 // CyberCloud.ServiceDefaults — descended from Survival's OrleansApplication
-public static WebApplicationBuilder CreateSilo(string[] args)
+// ⚠ async, because AddApplicationAsync is. The earlier synchronous signature could not have
+// compiled once the required module registration below was added.
+public static async Task<WebApplicationBuilder> CreateSiloAsync<TSiloModule>(string[] args)
+    where TSiloModule : IAbpModule
 {
     var builder = WebApplication.CreateBuilder(args);
     builder.Host.AddAppSettingsSecretsJson().UseAutofac().UseSerilog();
+
+    // ⚠ REQUIRED, and an earlier draft of this block omitted it. `UseAutofac()` installs ABP's
+    // service-provider factory, which resolves IModuleContainer during Build(). Without a module
+    // registered, the caller's builder.Build() throws
+    //     InvalidOperationException: Could not find singleton service: Volo.Abp.Modularity.IModuleContainer
+    // — a message naming neither UseAutofac nor the missing call. Survival gets this right; this
+    // excerpt did not. Either register a module here or do not call UseAutofac.
+    await builder.AddApplicationAsync<TSiloModule>();
+
     builder.AddServiceDefaults();
     builder.AddOrleansHealthChecks();
 
@@ -57,7 +69,12 @@ public static WebApplicationBuilder CreateSilo(string[] args)
          .AddActivityPropagation();
 
         if (builder.Environment.IsDevelopment())
-            b.UseLocalhostClustering();
+            // ⚠ Ports are explicit, not defaulted. Bare UseLocalhostClustering() binds Orleans'
+            // defaults 11111/30000; 30000 collides with unrelated software often enough that it
+            // was hit on the first machine this ran on, and the failure is an AddressInUseException
+            // from a socket bind inside Orleans naming neither the port nor the holder. It also
+            // makes running two silos locally impossible without editing code.
+            b.UseLocalhostClustering(options.SiloPort, options.GatewayPort);
         else
         {
             b.UseKubeMembership();
@@ -179,6 +196,24 @@ every `[GenerateSerializer]` type has a stable `[Alias]`, analyzer-enforced), so
 N+1 coexist. The gate is a **serialization compatibility test** that loads the previous release's
 contract assembly and round-trips every wire type through both — run in CI against the last three
 tags, not just the previous one, because a hotfix branch will eventually be older than you think.
+
+⚠ **Two corrections to that sentence, both found by building it.**
+
+*"analyzer-enforced" is not true yet.* No analyzer requires `[Alias]` on a `[GenerateSerializer]`
+type; nothing shipping with the SDK does this. It is currently enforced by a test that reflects over
+the contracts assembly and fails on the next type added without one. That is a real gate, but it
+lives in the test suite rather than the compiler, and [23](23-build-ci-and-testing.md)'s gate table
+should say so until a `CyberCloud.Analyzers` project exists. The same caveat applies to
+[00](00-vision-and-principles.md)'s claim that `async void` / `.Result` / `.Wait()` are
+analyzer-banned: `CA1849` covers only the case where a blocking call sits inside an already-`async`
+method, which is not the shape that deadlocks a silo.
+
+*The cross-release half is unimplementable until there is a release.* "Loads the previous release's
+contract assembly" needs a tag, and there is none. What **can** be written on day one — and is —
+is the cross-*version* half: unwritten fields defaulting correctly, unknown error codes surviving,
+half-written payloads. The cross-release half switches on at the first tag, and the `[Id(n)]`
+baseline manifest is checked in now precisely so that it has something to compare against when it
+does.
 
 **Region loss.** Not solved, and said so plainly. A tenant homed in a lost region is down until the
 region returns. Multi-region active-active for a tenant requires either a globally consistent store
