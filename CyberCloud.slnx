@@ -116,10 +116,15 @@
       and, per docs/plan/24 § Phase 1's exit criterion 1 and docs/plan/25 § R1, is deliberately
       trivial: it exists to measure the platform, not to be a feature.
 
-      ⚠ Its arrival makes two assembly-graph rules real. Rule 2 ("no Providers.* assembly references
-      another Providers.* assembly") and rule 4 ("nothing references a *.Application assembly except
-      its own host") had zero candidates and passed vacuously; this folder is the first candidate
-      either has ever had.
+      ⚠ Its arrival made two assembly-graph rules non-vacuous. Rule 2 ("no Providers.* assembly
+      references another Providers.* assembly") and rule 4 ("nothing references a *.Application
+      assembly except its own host") had zero candidates and passed vacuously.
+
+      ⚠ CyberCloud.Providers.DBforPostgreSQL is the SECOND FAMILY, and that is what makes rule 2
+      VIOLABLE rather than merely non-vacuous. Rule 2 is read as cross-provider — a provider
+      referencing its OWN .Contracts is its internal seam — so with one family in the tree the rule
+      had three candidates and no constructible violation: there was no second family to reference.
+      There is now, and docs/plan/12 § The catalogue has nine more.
     -->
     <Folder Name="/src/Providers/">
         <Project Path="src/Providers/CyberCloud.Providers.Sample/CyberCloud.Providers.Sample.Contracts/CyberCloud.Providers.Sample.Contracts.csproj"/>
@@ -127,6 +132,11 @@
         <Project Path="src/Providers/CyberCloud.Providers.Sample/CyberCloud.Providers.Sample.Application/CyberCloud.Providers.Sample.Application.csproj"/>
         <Project Path="src/Providers/CyberCloud.Providers.Sample/CyberCloud.Providers.Sample.Tests/CyberCloud.Providers.Sample.Tests.csproj"/>
         <Project Path="src/Providers/CyberCloud.Providers.Sample/CyberCloud.Providers.Sample.Conformance/CyberCloud.Providers.Sample.Conformance.csproj"/>
+        <Project Path="src/Providers/CyberCloud.Providers.DBforPostgreSQL/CyberCloud.Providers.DBforPostgreSQL.Contracts/CyberCloud.Providers.DBforPostgreSQL.Contracts.csproj"/>
+        <Project Path="src/Providers/CyberCloud.Providers.DBforPostgreSQL/CyberCloud.Providers.DBforPostgreSQL/CyberCloud.Providers.DBforPostgreSQL.csproj"/>
+        <Project Path="src/Providers/CyberCloud.Providers.DBforPostgreSQL/CyberCloud.Providers.DBforPostgreSQL.Application/CyberCloud.Providers.DBforPostgreSQL.Application.csproj"/>
+        <Project Path="src/Providers/CyberCloud.Providers.DBforPostgreSQL/CyberCloud.Providers.DBforPostgreSQL.Tests/CyberCloud.Providers.DBforPostgreSQL.Tests.csproj"/>
+        <Project Path="src/Providers/CyberCloud.Providers.DBforPostgreSQL/CyberCloud.Providers.DBforPostgreSQL.Conformance/CyberCloud.Providers.DBforPostgreSQL.Conformance.csproj"/>
     </Folder>
     <Folder Name="/src/Hosts/">
         <Project Path="src/Hosts/CyberCloud.Gateway.Host/CyberCloud.Gateway.Host.csproj"/>

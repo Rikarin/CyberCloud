@@ -38,6 +38,648 @@
     "timeout": 5
   },
   "groups": {
+    "dbforpostgresql": {
+      "name": "dbforpostgresql",
+      "summary": "Commands for the CyberCloud.DBforPostgreSQL provider.",
+      "commands": {
+        "servers": {
+          "name": "servers",
+          "resourceType": "CyberCloud.DBforPostgreSQL/servers",
+          "title": "PostgreSQL server",
+          "plural": "PostgreSQL servers",
+          "summary": "A managed PostgreSQL cluster on CloudNativePG, with replication, PgBouncer and backup to the tenant's object store.",
+          "verbs": {
+            "create": {
+              "name": "create",
+              "summary": "Create or replace a PostgreSQL server.",
+              "method": "PUT",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.DBforPostgreSQL/servers/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": true,
+              "flags": [
+                {
+                  "name": "--backup-enabled",
+                  "type": "switch",
+                  "required": false,
+                  "summary": "Whether continuous backup and WAL archiving run.",
+                  "jsonPointer": "/properties/backup/enabled",
+                  "default": true
+                },
+                {
+                  "name": "--class",
+                  "type": "string",
+                  "required": false,
+                  "summary": "StorageClass name. Empty means the cluster default.",
+                  "jsonPointer": "/properties/storage/class",
+                  "immutable": true,
+                  "widget": "storageclass",
+                  "default": ""
+                },
+                {
+                  "name": "--cluster-id",
+                  "type": "string",
+                  "required": true,
+                  "alias": "--cluster",
+                  "summary": "The cluster whose namespace holds the CloudNativePG objects.",
+                  "jsonPointer": "/properties/clusterId",
+                  "immutable": true,
+                  "widget": "cluster"
+                },
+                {
+                  "name": "--cpu",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Explicit vCPU quantity in Kubernetes form, for example 500m or 2. Empty means take it from the preset.",
+                  "jsonPointer": "/properties/sizing/cpu",
+                  "default": ""
+                },
+                {
+                  "name": "--database",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Name of the application database created on first start.",
+                  "jsonPointer": "/properties/bootstrap/database",
+                  "default": "app"
+                },
+                {
+                  "name": "--destination-path",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Object-store URL for base backups and WAL, for example s3://tenant-bucket/postgres. Empty means the platform fills it in from the tenant's default bucket.",
+                  "jsonPointer": "/properties/backup/destinationPath",
+                  "default": "",
+                  "example": "s3://tenant-bucket/postgres"
+                },
+                {
+                  "name": "--extensions",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Extensions to install, from the platform allow-list. An arbitrary-extension escape hatch is a code-execution surface and is not offered.",
+                  "jsonPointer": "/properties/extensions",
+                  "repeated": true,
+                  "choices": [
+                    "pgvector",
+                    "postgis",
+                    "pg_stat_statements",
+                    "timescaledb"
+                  ],
+                  "default": [],
+                  "example": [
+                    "pgvector"
+                  ]
+                },
+                {
+                  "name": "--instances",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "Number of pooler pods.",
+                  "jsonPointer": "/properties/pooling/instances",
+                  "default": 2
+                },
+                {
+                  "name": "--location",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The region the server is billed in.",
+                  "jsonPointer": "/location",
+                  "immutable": true,
+                  "widget": "region",
+                  "example": "eu-central"
+                },
+                {
+                  "name": "--memory",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Explicit memory quantity in Kubernetes form, for example 4Gi. Empty means take it from the preset.",
+                  "jsonPointer": "/properties/sizing/memory",
+                  "default": ""
+                },
+                {
+                  "name": "--mode",
+                  "type": "string",
+                  "required": false,
+                  "summary": "PgBouncer pooling mode. Transaction pooling is the useful one and breaks session-scoped features such as prepared statements and advisory locks.",
+                  "jsonPointer": "/properties/pooling/mode",
+                  "choices": [
+                    "session",
+                    "transaction",
+                    "statement"
+                  ],
+                  "default": "transaction"
+                },
+                {
+                  "name": "--monitoring-enabled",
+                  "type": "switch",
+                  "required": false,
+                  "summary": "Whether CloudNativePG emits a PodMonitor for the platform's metrics stack.",
+                  "jsonPointer": "/properties/monitoring/enabled",
+                  "default": true
+                },
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group."
+                },
+                {
+                  "name": "--owner",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Role that owns the application database.",
+                  "jsonPointer": "/properties/bootstrap/owner",
+                  "default": "app"
+                },
+                {
+                  "name": "--pooling-enabled",
+                  "type": "switch",
+                  "required": false,
+                  "summary": "Whether to run a connection pooler. On by default — a managed Postgres without one fails at the first serverless workload, and adding it later changes the connection string.",
+                  "jsonPointer": "/properties/pooling/enabled",
+                  "default": true
+                },
+                {
+                  "name": "--preset",
+                  "type": "string",
+                  "required": false,
+                  "summary": "A sizing preset from docs/plan/12. Databases use the s1 family, which is 1 vCPU to 4 GiB.",
+                  "jsonPointer": "/properties/sizing/preset",
+                  "choices": [
+                    "s1.nano",
+                    "s1.micro",
+                    "s1.small",
+                    "s1.medium",
+                    "s1.large",
+                    "s1.xlarge",
+                    "s1.2xlarge",
+                    "s1.4xlarge"
+                  ],
+                  "widget": "cozy-preset",
+                  "default": "s1.small"
+                },
+                {
+                  "name": "--replicas",
+                  "type": "integer",
+                  "required": true,
+                  "summary": "Number of instances, including the primary. One is a single point of failure and is offered for development only.",
+                  "jsonPointer": "/properties/replicas",
+                  "default": 2
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy."
+                },
+                {
+                  "name": "--retention-days",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "How long base backups and WAL are kept. The point-in-time-recovery window is this number of days.",
+                  "jsonPointer": "/properties/backup/retentionDays",
+                  "default": 14
+                },
+                {
+                  "name": "--size",
+                  "type": "string",
+                  "required": true,
+                  "summary": "Data volume size in Kubernetes quantity form. Grows online; never shrinks.",
+                  "jsonPointer": "/properties/storage/size",
+                  "default": "20Gi",
+                  "example": "20Gi"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--synchronous-replication",
+                  "type": "switch",
+                  "required": false,
+                  "summary": "Whether commits wait for a replica. Costs write latency and removes the window in which a failover loses transactions.",
+                  "jsonPointer": "/properties/synchronousReplication",
+                  "default": false
+                },
+                {
+                  "name": "--tags",
+                  "type": "keyValue",
+                  "required": false,
+                  "summary": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+                  "jsonPointer": "/tags",
+                  "widget": "tag-input"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--version",
+                  "type": "string",
+                  "required": true,
+                  "summary": "Major PostgreSQL version. Minor upgrades are applied automatically in the maintenance window.",
+                  "jsonPointer": "/properties/version",
+                  "choices": [
+                    "16",
+                    "17",
+                    "18"
+                  ],
+                  "default": "17"
+                },
+                {
+                  "name": "--wal-size",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Size of the separate write-ahead-log volume. Empty means the WAL shares the data volume.",
+                  "jsonPointer": "/properties/storage/walSize",
+                  "default": ""
+                }
+              ],
+              "waitFlags": [
+                "--wait",
+                "--no-wait"
+              ]
+            },
+            "delete": {
+              "name": "delete",
+              "summary": "Delete a PostgreSQL server. Permanent.",
+              "method": "DELETE",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.DBforPostgreSQL/servers/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": true,
+              "flags": [
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group."
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy."
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "env": "CYC_TENANT"
+                }
+              ],
+              "waitFlags": [
+                "--wait",
+                "--no-wait"
+              ]
+            },
+            "list-keys": {
+              "name": "list-keys",
+              "summary": "listKeys a PostgreSQL server. ⚠ The response carries secret material — it is always audited and must not be written to a log or a shell history.",
+              "method": "POST",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.DBforPostgreSQL/servers/{resourceName}/listKeys",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group."
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy."
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "env": "CYC_TENANT"
+                }
+              ],
+              "action": "listKeys",
+              "permission": "listKeys",
+              "secret": true,
+              "rawBody": true
+            },
+            "show": {
+              "name": "show",
+              "summary": "Read a PostgreSQL server.",
+              "method": "GET",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.DBforPostgreSQL/servers/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group."
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy."
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "env": "CYC_TENANT"
+                }
+              ]
+            },
+            "update": {
+              "name": "update",
+              "summary": "Amend a PostgreSQL server. Only the flags given are changed.",
+              "method": "PATCH",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.DBforPostgreSQL/servers/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": true,
+              "flags": [
+                {
+                  "name": "--backup-enabled",
+                  "type": "switch",
+                  "required": false,
+                  "summary": "Whether continuous backup and WAL archiving run.",
+                  "jsonPointer": "/properties/backup/enabled",
+                  "default": true
+                },
+                {
+                  "name": "--class",
+                  "type": "string",
+                  "required": false,
+                  "summary": "StorageClass name. Empty means the cluster default.",
+                  "jsonPointer": "/properties/storage/class",
+                  "immutable": true,
+                  "widget": "storageclass",
+                  "default": ""
+                },
+                {
+                  "name": "--cluster-id",
+                  "type": "string",
+                  "required": false,
+                  "alias": "--cluster",
+                  "summary": "The cluster whose namespace holds the CloudNativePG objects.",
+                  "jsonPointer": "/properties/clusterId",
+                  "immutable": true,
+                  "widget": "cluster"
+                },
+                {
+                  "name": "--cpu",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Explicit vCPU quantity in Kubernetes form, for example 500m or 2. Empty means take it from the preset.",
+                  "jsonPointer": "/properties/sizing/cpu",
+                  "default": ""
+                },
+                {
+                  "name": "--database",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Name of the application database created on first start.",
+                  "jsonPointer": "/properties/bootstrap/database",
+                  "default": "app"
+                },
+                {
+                  "name": "--destination-path",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Object-store URL for base backups and WAL, for example s3://tenant-bucket/postgres. Empty means the platform fills it in from the tenant's default bucket.",
+                  "jsonPointer": "/properties/backup/destinationPath",
+                  "default": "",
+                  "example": "s3://tenant-bucket/postgres"
+                },
+                {
+                  "name": "--extensions",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Extensions to install, from the platform allow-list. An arbitrary-extension escape hatch is a code-execution surface and is not offered.",
+                  "jsonPointer": "/properties/extensions",
+                  "repeated": true,
+                  "choices": [
+                    "pgvector",
+                    "postgis",
+                    "pg_stat_statements",
+                    "timescaledb"
+                  ],
+                  "default": [],
+                  "example": [
+                    "pgvector"
+                  ]
+                },
+                {
+                  "name": "--instances",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "Number of pooler pods.",
+                  "jsonPointer": "/properties/pooling/instances",
+                  "default": 2
+                },
+                {
+                  "name": "--location",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The region the server is billed in.",
+                  "jsonPointer": "/location",
+                  "immutable": true,
+                  "widget": "region",
+                  "example": "eu-central"
+                },
+                {
+                  "name": "--memory",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Explicit memory quantity in Kubernetes form, for example 4Gi. Empty means take it from the preset.",
+                  "jsonPointer": "/properties/sizing/memory",
+                  "default": ""
+                },
+                {
+                  "name": "--mode",
+                  "type": "string",
+                  "required": false,
+                  "summary": "PgBouncer pooling mode. Transaction pooling is the useful one and breaks session-scoped features such as prepared statements and advisory locks.",
+                  "jsonPointer": "/properties/pooling/mode",
+                  "choices": [
+                    "session",
+                    "transaction",
+                    "statement"
+                  ],
+                  "default": "transaction"
+                },
+                {
+                  "name": "--monitoring-enabled",
+                  "type": "switch",
+                  "required": false,
+                  "summary": "Whether CloudNativePG emits a PodMonitor for the platform's metrics stack.",
+                  "jsonPointer": "/properties/monitoring/enabled",
+                  "default": true
+                },
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group."
+                },
+                {
+                  "name": "--owner",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Role that owns the application database.",
+                  "jsonPointer": "/properties/bootstrap/owner",
+                  "default": "app"
+                },
+                {
+                  "name": "--pooling-enabled",
+                  "type": "switch",
+                  "required": false,
+                  "summary": "Whether to run a connection pooler. On by default — a managed Postgres without one fails at the first serverless workload, and adding it later changes the connection string.",
+                  "jsonPointer": "/properties/pooling/enabled",
+                  "default": true
+                },
+                {
+                  "name": "--preset",
+                  "type": "string",
+                  "required": false,
+                  "summary": "A sizing preset from docs/plan/12. Databases use the s1 family, which is 1 vCPU to 4 GiB.",
+                  "jsonPointer": "/properties/sizing/preset",
+                  "choices": [
+                    "s1.nano",
+                    "s1.micro",
+                    "s1.small",
+                    "s1.medium",
+                    "s1.large",
+                    "s1.xlarge",
+                    "s1.2xlarge",
+                    "s1.4xlarge"
+                  ],
+                  "widget": "cozy-preset",
+                  "default": "s1.small"
+                },
+                {
+                  "name": "--replicas",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "Number of instances, including the primary. One is a single point of failure and is offered for development only.",
+                  "jsonPointer": "/properties/replicas",
+                  "default": 2
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy."
+                },
+                {
+                  "name": "--retention-days",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "How long base backups and WAL are kept. The point-in-time-recovery window is this number of days.",
+                  "jsonPointer": "/properties/backup/retentionDays",
+                  "default": 14
+                },
+                {
+                  "name": "--size",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Data volume size in Kubernetes quantity form. Grows online; never shrinks.",
+                  "jsonPointer": "/properties/storage/size",
+                  "default": "20Gi",
+                  "example": "20Gi"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--synchronous-replication",
+                  "type": "switch",
+                  "required": false,
+                  "summary": "Whether commits wait for a replica. Costs write latency and removes the window in which a failover loses transactions.",
+                  "jsonPointer": "/properties/synchronousReplication",
+                  "default": false
+                },
+                {
+                  "name": "--tags",
+                  "type": "keyValue",
+                  "required": false,
+                  "summary": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+                  "jsonPointer": "/tags",
+                  "widget": "tag-input"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--version",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Major PostgreSQL version. Minor upgrades are applied automatically in the maintenance window.",
+                  "jsonPointer": "/properties/version",
+                  "choices": [
+                    "16",
+                    "17",
+                    "18"
+                  ],
+                  "default": "17"
+                },
+                {
+                  "name": "--wal-size",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Size of the separate write-ahead-log volume. Empty means the WAL shares the data volume.",
+                  "jsonPointer": "/properties/storage/walSize",
+                  "default": ""
+                }
+              ],
+              "waitFlags": [
+                "--wait",
+                "--no-wait"
+              ]
+            }
+          },
+          "alias": "postgres"
+        }
+      }
+    },
     "sample": {
       "name": "sample",
       "summary": "Commands for the CyberCloud.Sample provider.",

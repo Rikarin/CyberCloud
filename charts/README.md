@@ -172,11 +172,22 @@ The generated schema is deliberately shaped like a `ResourceSchema` — every pr
 * **A chart cannot express `ReadOnly`.** A values key is by construction something the chart's caller
   sets, whereas `SchemaProperty.ReadOnly` describes server-owned state that never appears in a values
   file at all. Server-owned properties have no home in `values.yaml` and need a second source.
-* **`ResourceSchema` cannot carry `enum`, `minimum`/`maximum`, `default`, `items`, or any
-  `x-cybercloud-*` hint.** `SchemaProperty` is `(pointer, kind, required, readOnly, secret,
-  description)`, so a schema round-tripped through the registry today would lose the allow-list that
-  makes `extensions` safe and the range that makes `replicas` sane — and lose them silently, which is
-  the worst way to lose a constraint.
+* ~~**`ResourceSchema` cannot carry `enum`, `minimum`/`maximum`, `default`, `items`, or any
+  `x-cybercloud-*` hint.**~~ ⚠ **REFUTED 2026-08-12.** `SchemaProperty` is no longer
+  `(pointer, kind, required, readOnly, secret, description)`: it also carries `AllowedValues`,
+  `Minimum`/`Maximum`, `DefaultJson`, `ElementKind` and `Widget`, each enforced by
+  `ResourceSchema.Validate` and emitted by all four of ADR-012's built emitters. So `extensions`'
+  allow-list and `replicas`' range survive the registry. Checked against the type rather than against
+  this paragraph, by the provider that declares them.
+
+  **The gap runs the other way, and it is smaller than it was.** `SchemaProperty` also carries
+  `Format`, `Pattern`, `MinLength`/`MaxLength`, `ExampleJson` and `Nullable`, and the annotation
+  vocabulary above has no syntax for any of them. `CyberCloud.DBforPostgreSQL/servers` uses `Pattern`
+  on five rows (three Kubernetes quantities, a Postgres identifier pair and an `s3://` destination)
+  and `MinLength`/`MaxLength` on two, so the first managed service already needs `@pattern` and
+  `@minLength`/`@maxLength` before a generated `@param` block would be lossless. Those constraints
+  are declared in C#, where they are enforced; the chart simply does not carry them, and that is a
+  loss on exactly one surface — the one ADR-012 marks "Not built".
 
 ## Forking discipline
 

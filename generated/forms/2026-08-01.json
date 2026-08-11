@@ -4,6 +4,483 @@
   "generatedFrom": "openapi/2026-08-01.json",
   "description": "Portal form schemas at api-version 2026-08-01. Generated from the OpenAPI document — docs/plan/21 § Generation — and consumed by libs/resource-forms' schema-renderer (docs/plan/20).",
   "forms": {
+    "CyberCloud.DBforPostgreSQL/servers": {
+      "resourceType": "CyberCloud.DBforPostgreSQL/servers",
+      "apiVersion": "2026-08-01",
+      "title": "PostgreSQL server",
+      "plural": "PostgreSQL servers",
+      "summary": "A managed PostgreSQL cluster on CloudNativePG, with replication, PgBouncer and backup to the tenant's object store.",
+      "overrideKey": "CyberCloud.DBforPostgreSQL/servers@2026-08-01",
+      "coveredPointers": [
+        "/location",
+        "/properties",
+        "/properties/backup",
+        "/properties/backup/destinationPath",
+        "/properties/backup/enabled",
+        "/properties/backup/retentionDays",
+        "/properties/bootstrap",
+        "/properties/bootstrap/database",
+        "/properties/bootstrap/owner",
+        "/properties/clusterId",
+        "/properties/extensions",
+        "/properties/monitoring",
+        "/properties/monitoring/enabled",
+        "/properties/pooling",
+        "/properties/pooling/enabled",
+        "/properties/pooling/instances",
+        "/properties/pooling/mode",
+        "/properties/replicas",
+        "/properties/sizing",
+        "/properties/sizing/cpu",
+        "/properties/sizing/memory",
+        "/properties/sizing/preset",
+        "/properties/storage",
+        "/properties/storage/class",
+        "/properties/storage/size",
+        "/properties/storage/walSize",
+        "/properties/synchronousReplication",
+        "/properties/version",
+        "/tags"
+      ],
+      "supportsTags": true,
+      "requiresCluster": true,
+      "clusterIdPointer": "/properties/clusterId",
+      "softDeleteDays": 0,
+      "fields": [
+        {
+          "jsonPointer": "/location",
+          "name": "location",
+          "label": "Location",
+          "control": "xui-region",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "The region the server is billed in.",
+          "format": "cybercloud-region",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new PostgreSQL server to change it.",
+          "placeholder": "eu-central"
+        },
+        {
+          "jsonPointer": "/properties",
+          "name": "properties",
+          "label": "Properties",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "The server's own settings."
+        },
+        {
+          "jsonPointer": "/properties/backup",
+          "name": "backup",
+          "label": "Backup",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "Backup to the tenant's object store, using CloudNativePG's barman-cloud."
+        },
+        {
+          "jsonPointer": "/properties/backup/destinationPath",
+          "name": "destinationPath",
+          "label": "Destination path",
+          "control": "xui-input",
+          "type": "string",
+          "required": false,
+          "section": "backup",
+          "hint": "Object-store URL for base backups and WAL, for example s3://tenant-bucket/postgres. Empty means the platform fills it in from the tenant's default bucket.",
+          "pattern": "^(?:(s3://[a-z0-9][a-z0-9.\\-]*[a-z0-9](/[^\\s]*)?)?)$",
+          "default": "",
+          "placeholder": "s3://tenant-bucket/postgres"
+        },
+        {
+          "jsonPointer": "/properties/backup/enabled",
+          "name": "enabled",
+          "label": "Enabled",
+          "control": "xui-switch",
+          "type": "boolean",
+          "required": false,
+          "section": "backup",
+          "hint": "Whether continuous backup and WAL archiving run.",
+          "default": true
+        },
+        {
+          "jsonPointer": "/properties/backup/retentionDays",
+          "name": "retentionDays",
+          "label": "Retention days",
+          "control": "xui-slider",
+          "type": "integer",
+          "required": false,
+          "section": "backup",
+          "hint": "How long base backups and WAL are kept. The point-in-time-recovery window is this number of days.",
+          "minimum": 1,
+          "maximum": 365,
+          "default": 14
+        },
+        {
+          "jsonPointer": "/properties/bootstrap",
+          "name": "bootstrap",
+          "label": "Bootstrap",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "What exists in the database the moment it comes up."
+        },
+        {
+          "jsonPointer": "/properties/bootstrap/database",
+          "name": "database",
+          "label": "Database",
+          "control": "xui-input",
+          "type": "string",
+          "required": false,
+          "section": "bootstrap",
+          "hint": "Name of the application database created on first start.",
+          "minLength": 1,
+          "maxLength": 63,
+          "pattern": "^(?:[a-z_][a-z0-9_]*)$",
+          "default": "app"
+        },
+        {
+          "jsonPointer": "/properties/bootstrap/owner",
+          "name": "owner",
+          "label": "Owner",
+          "control": "xui-input",
+          "type": "string",
+          "required": false,
+          "section": "bootstrap",
+          "hint": "Role that owns the application database.",
+          "minLength": 1,
+          "maxLength": 63,
+          "pattern": "^(?:[a-z_][a-z0-9_]*)$",
+          "default": "app"
+        },
+        {
+          "jsonPointer": "/properties/clusterId",
+          "name": "clusterId",
+          "label": "Cluster id",
+          "control": "xui-cluster",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "The cluster whose namespace holds the CloudNativePG objects.",
+          "format": "uuid",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new PostgreSQL server to change it."
+        },
+        {
+          "jsonPointer": "/properties/extensions",
+          "name": "extensions",
+          "label": "Extensions",
+          "control": "xui-select",
+          "type": "array",
+          "required": false,
+          "section": "general",
+          "hint": "Extensions to install, from the platform allow-list. An arbitrary-extension escape hatch is a code-execution surface and is not offered.",
+          "choices": [
+            {
+              "value": "pgvector",
+              "label": "Pgvector"
+            },
+            {
+              "value": "postgis",
+              "label": "Postgis"
+            },
+            {
+              "value": "pg_stat_statements",
+              "label": "Pg stat statements"
+            },
+            {
+              "value": "timescaledb",
+              "label": "Timescaledb"
+            }
+          ],
+          "default": [],
+          "placeholder": [
+            "pgvector"
+          ]
+        },
+        {
+          "jsonPointer": "/properties/monitoring",
+          "name": "monitoring",
+          "label": "Monitoring",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "What the platform scrapes."
+        },
+        {
+          "jsonPointer": "/properties/monitoring/enabled",
+          "name": "enabled",
+          "label": "Enabled",
+          "control": "xui-switch",
+          "type": "boolean",
+          "required": false,
+          "section": "monitoring",
+          "hint": "Whether CloudNativePG emits a PodMonitor for the platform's metrics stack.",
+          "default": true
+        },
+        {
+          "jsonPointer": "/properties/pooling",
+          "name": "pooling",
+          "label": "Pooling",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "PgBouncer in front of the cluster."
+        },
+        {
+          "jsonPointer": "/properties/pooling/enabled",
+          "name": "enabled",
+          "label": "Enabled",
+          "control": "xui-switch",
+          "type": "boolean",
+          "required": false,
+          "section": "pooling",
+          "hint": "Whether to run a connection pooler. On by default — a managed Postgres without one fails at the first serverless workload, and adding it later changes the connection string.",
+          "default": true
+        },
+        {
+          "jsonPointer": "/properties/pooling/instances",
+          "name": "instances",
+          "label": "Instances",
+          "control": "xui-slider",
+          "type": "integer",
+          "required": false,
+          "section": "pooling",
+          "hint": "Number of pooler pods.",
+          "minimum": 1,
+          "maximum": 8,
+          "default": 2
+        },
+        {
+          "jsonPointer": "/properties/pooling/mode",
+          "name": "mode",
+          "label": "Mode",
+          "control": "xui-select",
+          "type": "string",
+          "required": false,
+          "section": "pooling",
+          "hint": "PgBouncer pooling mode. Transaction pooling is the useful one and breaks session-scoped features such as prepared statements and advisory locks.",
+          "choices": [
+            {
+              "value": "session",
+              "label": "Session"
+            },
+            {
+              "value": "transaction",
+              "label": "Transaction"
+            },
+            {
+              "value": "statement",
+              "label": "Statement"
+            }
+          ],
+          "default": "transaction"
+        },
+        {
+          "jsonPointer": "/properties/replicas",
+          "name": "replicas",
+          "label": "Replicas",
+          "control": "xui-slider",
+          "type": "integer",
+          "required": true,
+          "section": "general",
+          "hint": "Number of instances, including the primary. One is a single point of failure and is offered for development only.",
+          "minimum": 1,
+          "maximum": 5,
+          "default": 2
+        },
+        {
+          "jsonPointer": "/properties/sizing",
+          "name": "sizing",
+          "label": "Sizing",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "CPU and memory, either by preset or explicitly."
+        },
+        {
+          "jsonPointer": "/properties/sizing/cpu",
+          "name": "cpu",
+          "label": "Cpu",
+          "control": "xui-input",
+          "type": "string",
+          "required": false,
+          "section": "sizing",
+          "hint": "Explicit vCPU quantity in Kubernetes form, for example 500m or 2. Empty means take it from the preset.",
+          "pattern": "^(?:(\\d+(\\.\\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)?)$",
+          "default": ""
+        },
+        {
+          "jsonPointer": "/properties/sizing/memory",
+          "name": "memory",
+          "label": "Memory",
+          "control": "xui-input",
+          "type": "string",
+          "required": false,
+          "section": "sizing",
+          "hint": "Explicit memory quantity in Kubernetes form, for example 4Gi. Empty means take it from the preset.",
+          "pattern": "^(?:(\\d+(\\.\\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)?)$",
+          "default": ""
+        },
+        {
+          "jsonPointer": "/properties/sizing/preset",
+          "name": "preset",
+          "label": "Preset",
+          "control": "xui-cozy-preset",
+          "type": "string",
+          "required": false,
+          "section": "sizing",
+          "hint": "A sizing preset from docs/plan/12. Databases use the s1 family, which is 1 vCPU to 4 GiB.",
+          "choices": [
+            {
+              "value": "s1.nano",
+              "label": "S1 nano"
+            },
+            {
+              "value": "s1.micro",
+              "label": "S1 micro"
+            },
+            {
+              "value": "s1.small",
+              "label": "S1 small"
+            },
+            {
+              "value": "s1.medium",
+              "label": "S1 medium"
+            },
+            {
+              "value": "s1.large",
+              "label": "S1 large"
+            },
+            {
+              "value": "s1.xlarge",
+              "label": "S1 xlarge"
+            },
+            {
+              "value": "s1.2xlarge",
+              "label": "S1 2xlarge"
+            },
+            {
+              "value": "s1.4xlarge",
+              "label": "S1 4xlarge"
+            }
+          ],
+          "default": "s1.small"
+        },
+        {
+          "jsonPointer": "/properties/storage",
+          "name": "storage",
+          "label": "Storage",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "The data volume."
+        },
+        {
+          "jsonPointer": "/properties/storage/class",
+          "name": "class",
+          "label": "Class",
+          "control": "xui-storageclass",
+          "type": "string",
+          "required": false,
+          "section": "storage",
+          "hint": "StorageClass name. Empty means the cluster default.",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new PostgreSQL server to change it.",
+          "default": ""
+        },
+        {
+          "jsonPointer": "/properties/storage/size",
+          "name": "size",
+          "label": "Size",
+          "control": "xui-input",
+          "type": "string",
+          "required": true,
+          "section": "storage",
+          "hint": "Data volume size in Kubernetes quantity form. Grows online; never shrinks.",
+          "pattern": "^(?:\\d+(\\.\\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)$",
+          "default": "20Gi",
+          "placeholder": "20Gi"
+        },
+        {
+          "jsonPointer": "/properties/storage/walSize",
+          "name": "walSize",
+          "label": "Wal size",
+          "control": "xui-input",
+          "type": "string",
+          "required": false,
+          "section": "storage",
+          "hint": "Size of the separate write-ahead-log volume. Empty means the WAL shares the data volume.",
+          "pattern": "^(?:(\\d+(\\.\\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)?)$",
+          "default": ""
+        },
+        {
+          "jsonPointer": "/properties/synchronousReplication",
+          "name": "synchronousReplication",
+          "label": "Synchronous replication",
+          "control": "xui-switch",
+          "type": "boolean",
+          "required": false,
+          "section": "general",
+          "hint": "Whether commits wait for a replica. Costs write latency and removes the window in which a failover loses transactions.",
+          "default": false
+        },
+        {
+          "jsonPointer": "/properties/version",
+          "name": "version",
+          "label": "Version",
+          "control": "xui-select",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "Major PostgreSQL version. Minor upgrades are applied automatically in the maintenance window.",
+          "choices": [
+            {
+              "value": "16",
+              "label": "16"
+            },
+            {
+              "value": "17",
+              "label": "17"
+            },
+            {
+              "value": "18",
+              "label": "18"
+            }
+          ],
+          "default": "17"
+        },
+        {
+          "jsonPointer": "/tags",
+          "name": "tags",
+          "label": "Tags",
+          "control": "xui-tag-input",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+          "maxProperties": 50
+        }
+      ],
+      "actions": [
+        {
+          "name": "listKeys",
+          "label": "List keys",
+          "permission": "listKeys",
+          "longRunning": false,
+          "secret": true,
+          "fields": [],
+          "confirmOnly": true
+        }
+      ]
+    },
     "CyberCloud.Sample/widgets": {
       "resourceType": "CyberCloud.Sample/widgets",
       "apiVersion": "2026-08-01",

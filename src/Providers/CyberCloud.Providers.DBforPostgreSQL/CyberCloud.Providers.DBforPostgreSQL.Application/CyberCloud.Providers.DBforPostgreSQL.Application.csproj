@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      docs/plan/03 § Providers — the third of the five projects: "ABP application services the gateway
+      routes to".
+
+      ⚠ IT HOLDS THE ABP MODULE AND NO APPLICATION SERVICE, AND ON THIS PROVIDER THAT IS A RESULT
+      RATHER THAN A RESTATEMENT. CyberCloud.Providers.Sample.Application says the same thing and could
+      be dismissed as a consequence of the sample being trivial. A managed PostgreSQL server has
+      backup, pooling, extensions, a sizing preset and a secret-returning action, and it STILL has no
+      application service: PUT, GET, DELETE and POST listKeys are all generic resource-manager verbs
+      the gateway routes from the provider registry (ADR-012), so there is nothing for a per-provider
+      controller to do. That is evidence about the registry-as-routing-source decision, which is what
+      docs/plan/25 § R1 wants a provider to produce.
+
+      ⚠ This assembly makes rule 4 of docs/plan/03 § Assembly graph rules the SECOND candidate it has
+      ever had. The rule as enforced is weaker than the document's — Build.Architecture.cs
+      § AssemblyGraphGate, rule 4 says so in its own report — and a second candidate does not fix
+      that; it only makes the weaker rule non-vacuous in more than one place.
+    -->
+
+    <ItemGroup>
+        <PackageReference Include="Volo.Abp.Ddd.Application"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../CyberCloud.Providers.DBforPostgreSQL.Contracts/CyberCloud.Providers.DBforPostgreSQL.Contracts.csproj"/>
+    </ItemGroup>
+
+    <ItemGroup Label="CyberCloud.Analyzers — see CyberCloud.Core.csproj for why this is not a reference">
+        <ProjectReference Include="../../../CyberCloud.Analyzers/CyberCloud.Analyzers.csproj"
+                          OutputItemType="Analyzer"
+                          ReferenceOutputAssembly="false"/>
+    </ItemGroup>
+
+</Project>
