@@ -258,6 +258,66 @@ public sealed class ChartAnnotationTests {
         Subset.Problems("## @colour a\n## @param a {string} A.\na: \"\"\n").ShouldNotBeEmpty();
         Subset.Problems("## @param a {widget} A.\na: \"\"\n").ShouldNotBeEmpty();
         Subset.Problems("## @param a {string} A.\n   a: \"\"\n").ShouldNotBeEmpty();
+
+        // ⚠ Every directive's argument, not only `@param`'s. `@range 1..` is the one that got past an
+        // earlier version of this checker and would have failed the build on generated output.
+        Subset.Problems("## @param a {integer} A.\n## @range 1..\na: 2\n").ShouldNotBeEmpty();
+        Subset.Problems("## @param a {integer} A.\n## @range ..5\na: 2\n").ShouldNotBeEmpty();
+        Subset.Problems("## @param a {string} A.\n## @widget Storage Class\na: \"\"\n").ShouldNotBeEmpty();
+        Subset.Problems("## @param a {string} A.\n## @enum one | | two\na: one\n").ShouldNotBeEmpty();
+        Subset.Problems("## @param a {string} A.\n## @required yes\na: \"\"\n").ShouldNotBeEmpty();
+        Subset.Problems("## @param a {string} A.\n## @internal\na: \"\"\n").ShouldNotBeEmpty();
+
+        // …and the well-formed forms are still accepted, so the checker is not simply saying no.
+        Subset.Problems("## @param a {integer} A.\n## @range 1..5\na: 2\n").ShouldBeEmpty();
+        Subset.Problems("## @param a {string} A.\n## @widget storageclass\na: \"\"\n").ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void AOneSidedBoundIsRefusedBecauseRangeTakesBothEnds() {
+        // ⚠ THE BUG THIS CAUGHT IN THIS EMITTER. SchemaProperty lets a property declare a Minimum with
+        // no Maximum — Fixtures' own /properties/adminPassword does the string equivalent — and
+        // `@range`'s pattern requires both. The obvious emission, `## @range 1..`, is a malformed
+        // directive against a file this emitter had just written: the build would fail on its own
+        // output, with a line number, pointing at a generated file.
+        var block = ChartAnnotationEmitter.Emit(ResourceSchema.Of([
+            new("/properties", SchemaKind.Nested, Description: "The configuration."),
+            new("/properties/replicas", SchemaKind.WholeNumber, Description: "Instances.") {
+                Minimum = 1,
+                DefaultJson = "2"
+            }
+        ]));
+
+        block.Text.ShouldBeEmpty();
+        block.Problems.ShouldContain(x => x.Contains("one-sided numeric bound", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void ADirectiveArgumentThatCannotBeSpelledIsRefused() {
+        // `@enum` members are separated by `|` and trimmed, so a value carrying either would come back
+        // as a different string — or as two.
+        var piped = ChartAnnotationEmitter.Emit(ResourceSchema.Of([
+            new("/properties", SchemaKind.Nested, Description: "The configuration."),
+            new("/properties/mode", SchemaKind.Text, Description: "A mode.") {
+                AllowedValues = ["a|b"],
+                DefaultJson = "\"a|b\""
+            }
+        ]));
+
+        piped.Problems.ShouldContain(x => x.Contains("`@enum` cannot spell", StringComparison.Ordinal));
+
+        // `@widget` renders one scalar field, and build/Build.Charts.cs refuses it on an array — which
+        // SchemaProperty.Incoherences permits, so Fixtures' own /properties/allowedRanges is one.
+        var widget = ChartAnnotationEmitter.Emit(ResourceSchema.Of([
+            new("/properties", SchemaKind.Nested, Description: "The configuration."),
+            new("/properties/ranges", SchemaKind.Array, Description: "CIDR ranges.") {
+                ElementKind = SchemaKind.Text,
+                Widget = WidgetHint.Cidr,
+                DefaultJson = "[]"
+            }
+        ]));
+
+        widget.Problems.ShouldContain(x => x.Contains("renders one scalar field", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -647,6 +707,11 @@ public sealed class ChartAnnotationTests {
 
         static readonly Regex Key = new(@"^(?<key>[A-Za-z_][A-Za-z0-9_]*):[ ]*(?<value>.*)$");
 
+        /// <summary>⚠ Both bounds. `1..` is malformed, not an open range — build/Build.Charts.cs.</summary>
+        static readonly Regex Range = new(@"^-?\d+(?:\.\d+)?\.\.-?\d+(?:\.\d+)?$");
+
+        static readonly Regex Widget = new("^[a-z][a-z0-9-]*$");
+
         public static ImmutableArray<string> Problems(string block) {
             var problems = new List<string>();
             var lines = block.Split('\n');
@@ -682,16 +747,56 @@ public sealed class ChartAnnotationTests {
                     var body = trimmed[4..];
                     var verb = body.Split(' ')[0];
 
+                    var argument = body.Length > verb.Length ? body[(verb.Length + 1)..].Trim() : string.Empty;
+
                     if (!Directives.Contains(verb, StringComparer.Ordinal)) {
                         problems.Add($"{line}: `@{verb}` is not a directive.");
-                    } else if (verb == "param") {
-                        var parsed = Param.Match(body[(verb.Length + 1)..]);
+                    }
 
-                        if (!parsed.Success) {
-                            problems.Add($"{line}: malformed `@param`.");
-                        } else if (!Types.Contains(parsed.Groups["type"].Value, StringComparer.Ordinal)) {
-                            problems.Add($"{line}: `{{{parsed.Groups["type"].Value}}}` is not a type.");
-                        }
+                    // ⚠ Every directive's ARGUMENT is checked, not only its name. An earlier version of
+                    // this checker validated `@param` and waved the rest through, and it passed an
+                    // emitter that wrote `## @range 1..` for a one-sided bound — which the real reader
+                    // refuses as a malformed directive. A checker that only reads the verbs is a
+                    // checker that approves the arguments.
+                    switch (verb) {
+                        case "param":
+                            var parsed = Param.Match(argument);
+
+                            if (!parsed.Success) {
+                                problems.Add($"{line}: malformed `@param`.");
+                            } else if (!Types.Contains(parsed.Groups["type"].Value, StringComparer.Ordinal)) {
+                                problems.Add($"{line}: `{{{parsed.Groups["type"].Value}}}` is not a type.");
+                            }
+
+                            break;
+
+                        case "range" when !Range.IsMatch(argument):
+                            problems.Add($"{line}: malformed `@range`. Got `{argument}`.");
+                            break;
+
+                        case "widget" when !Widget.IsMatch(argument):
+                            problems.Add($"{line}: `@widget` takes one lower-case name. Got `{argument}`.");
+                            break;
+
+                        case "enum":
+                            var members = argument.Split('|').Select(x => x.Trim()).ToList();
+
+                            if (members.Any(x => x.Length == 0) || members.Distinct(StringComparer.Ordinal).Count() != members.Count) {
+                                problems.Add($"{line}: `@enum` has an empty or repeated member.");
+                            }
+
+                            break;
+
+                        case "required" or "secret" or "immutable" when argument.Length > 0:
+                            problems.Add($"{line}: `@{verb}` takes no argument. Got `{argument}`.");
+                            break;
+
+                        case "internal" when argument.Length == 0:
+                            problems.Add($"{line}: `@internal` needs a reason.");
+                            break;
+
+                        default:
+                            break;
                     }
 
                     pending++;

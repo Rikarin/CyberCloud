@@ -219,6 +219,15 @@ The gap runs the other way, and it is where a fact can be lost:
 * **A number or a boolean with no `DefaultJson` is refused.** Every values key carries a value — a
   `null` is refused by the reader and by `helm` — and there is no empty spelling of a number, so the
   emitter will not invent a `0` that may also sit outside the property's own `@range`.
+* **`@range` takes both ends.** `1..` and `..5` are *malformed directives*, not open ranges — the
+  pattern is `<min>..<max>` and the reader refuses anything else. A `SchemaProperty` with a `Minimum`
+  and no `Maximum` is therefore refused, naming the regex that would have to grow. Both bounds are
+  **inclusive**.
+* **`@enum` members are split on `|` and trimmed**, so an allowed value carrying a pipe or leading
+  space is refused rather than emitted as two members or as a different string.
+* **`@secret` is a string's directive and `@widget` renders one scalar field.** `SchemaProperty` does
+  not enforce either — `Incoherences` permits a `WidgetHint` on an array — so the emitter refuses
+  what the chart reader would.
 
 ## Forking discipline
 

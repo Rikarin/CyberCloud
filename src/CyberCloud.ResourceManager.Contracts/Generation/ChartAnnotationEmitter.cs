@@ -264,6 +264,7 @@ public static class ChartAnnotationEmitter {
 
         CheckName(node.Name, property.JsonPointer, problems);
         CheckInexpressible(property, problems);
+        CheckUnspellable(property, problems);
 
         var type = property.Kind is SchemaKind.Unknown
             ? string.Empty
@@ -358,6 +359,63 @@ public static class ChartAnnotationEmitter {
                 $"'{jsonPointer}' has the member name '{name}', which is not a values key. A key is a "
                 + "letter or underscore followed by letters, digits and underscores — charts/README.md "
                 + "§ The values subset."
+            );
+        }
+    }
+
+    /// <summary>
+    ///     The facts whose <i>spelling</i> the vocabulary cannot carry, as opposed to the members it
+    ///     has no word for at all.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Every one of these was found by reading <c>build/Build.Charts.cs</c>'s own regular
+    ///     expressions rather than its documentation.</b> A one-sided bound is the sharp one:
+    ///     <see cref="SchemaProperty" /> lets a property declare a <see cref="SchemaProperty.Minimum" />
+    ///     with no <see cref="SchemaProperty.Maximum" />, and <c>@range</c>'s pattern requires both —
+    ///     so the obvious emission, <c>## @range 1..</c>, is "malformed `@range`" against a file this
+    ///     emitter had just written. charts/README.md says <c>@range &lt;min&gt;..&lt;max&gt;</c> and
+    ///     says nothing about whether either side may be empty; the regex is the answer.
+    /// </remarks>
+    static void CheckUnspellable(SchemaProperty property, List<string> problems) {
+        var pointer = property.JsonPointer;
+
+        if (property.Minimum is null != (property.Maximum is null)) {
+            problems.Add(
+                $"'{pointer}' declares a one-sided numeric bound, and `@range` takes both — its pattern "
+                + "is `<min>..<max>` and `1..` is a malformed directive, not an open range. Declare the "
+                + "other bound, or grow `RangeDirective` in build/Build.Charts.cs to accept an open "
+                + "end and teach PropertyNode to emit only the keyword that was given."
+            );
+        }
+
+        foreach (var allowed in property.AllowedValues) {
+            if (allowed.Contains('|', StringComparison.Ordinal)
+                || allowed.Trim().Length != allowed.Length
+                || allowed.Length == 0) {
+                problems.Add(
+                    $"'{pointer}' declares the allowed value '{allowed}', which `@enum` cannot spell: "
+                    + "members are separated by `|` and are trimmed, so a member carrying a pipe or "
+                    + "leading space would come back as two members or as a different string."
+                );
+            }
+        }
+
+        // `@secret` is a string's directive and `@widget` renders one scalar field —
+        // build/Build.Charts.cs refuses both elsewhere. SchemaProperty.Incoherences does not, so a
+        // registry can legitimately hold what the chart cannot say.
+        if (property.Secret && property.Kind is not SchemaKind.Text) {
+            problems.Add(
+                $"'{pointer}' is Secret and is a {ResourceSchema.Describe(property.Kind)}. `@secret` "
+                + "applies to a string, and build/Build.Charts.cs refuses it anywhere else."
+            );
+        }
+
+        if (property.Widget is not WidgetHint.None
+            && property.Kind is SchemaKind.Nested or SchemaKind.Array) {
+            problems.Add(
+                $"'{pointer}' declares WidgetHint.{property.Widget} and is a "
+                + $"{ResourceSchema.Describe(property.Kind)}. `@widget` renders one scalar field, and "
+                + "build/Build.Charts.cs refuses it on an object or an array."
             );
         }
     }
