@@ -32,6 +32,14 @@
     <ItemGroup>
         <ProjectReference Include="../../CyberCloud.ServiceDefaults/CyberCloud.ServiceDefaults.csproj"/>
         <ProjectReference Include="../../CyberCloud.Tenancy/CyberCloud.Tenancy.csproj"/>
+        <!--
+          docs/plan/17's sending domain. Orleans DISCOVERS grains by scanning referenced assemblies,
+          so this line is what puts CyberCloud.Communication's seven grain types in the silo; the
+          AddCyberCloudCommunication() call in Program.cs is what registers the services their
+          constructors ask for. Either one without the other is a silo that fails at the first
+          activation rather than at start-up.
+        -->
+        <ProjectReference Include="../../CyberCloud.Communication/CyberCloud.Communication.csproj"/>
     </ItemGroup>
 
     <ItemGroup>

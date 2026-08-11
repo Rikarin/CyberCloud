@@ -24,6 +24,25 @@
       resource manager; what happens here is tuple WRITES, which is the same thing a role assignment
       is.
 
+      ⚠ IT REFERENCES CyberCloud.Communication.Contracts, AND THE DIRECTION IS THE POINT.
+      docs/plan/11 § Credentials routes email, SMS and WhatsApp one-time codes through
+      CyberCloud.Communication (docs/plan/17), and IOtpDeliverySeam is where that lands. The adapter —
+      Seams/CommunicationOtpDelivery.cs — lives HERE and not there, so that CyberCloud.Communication
+      keeps referencing nothing in identity, monitor or billing: a sending module that knew about
+      identity would make a carrier outage an identity outage, and would put a second module in the
+      dependency path of every sign-in.
+
+      ⚠ NO ARCHITECTURE GATE ENFORCES THAT DIRECTION, and pretending otherwise would be worse than
+      the gap. docs/plan/03 § Assembly graph rules has six rules; rule 2 ("no Providers.* assembly
+      references another") is the only one about sibling modules and it is scoped to
+      CyberCloud.Providers.* by name — Build.Architecture.cs's ProviderFamily() returns null for
+      anything else. So a future CyberCloud.Communication -> CyberCloud.Identity.Contracts reference
+      would compile and pass ./build.sh Architecture. The rule that would catch it does not exist yet.
+
+      It is .Contracts and never the implementation: IMessageSender and SendRequest are all this
+      needs, and referencing the grains would put the sending module's activation graph in identity's
+      silo whether or not the host asked for it.
+
       ⚠ IT REFERENCES CyberCloud.Tenancy.Contracts FOR IEmailIndexGrain AND NOTHING ELSE.
       docs/plan/06 § Grain keys already owns per-tenant email uniqueness and docs/plan/11 § Sign-up
       names that grain by name. Re-implementing the claim here would be a second uniqueness mechanism
@@ -56,6 +75,7 @@
         <ProjectReference Include="../CyberCloud.Core/CyberCloud.Core.csproj"/>
         <ProjectReference Include="../CyberCloud.Core.Contracts/CyberCloud.Core.Contracts.csproj"/>
         <ProjectReference Include="../CyberCloud.Identity.Contracts/CyberCloud.Identity.Contracts.csproj"/>
+        <ProjectReference Include="../CyberCloud.Communication.Contracts/CyberCloud.Communication.Contracts.csproj"/>
         <ProjectReference Include="../CyberCloud.Tenancy.Contracts/CyberCloud.Tenancy.Contracts.csproj"/>
         <ProjectReference Include="../CyberCloud.Authorization.Contracts/CyberCloud.Authorization.Contracts.csproj"/>
         <ProjectReference Include="../CyberCloud.Authorization/CyberCloud.Authorization.csproj"/>

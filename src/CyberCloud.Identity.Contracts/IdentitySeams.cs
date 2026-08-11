@@ -178,37 +178,101 @@ public interface ITokenExchange {
 }
 
 /// <summary>
-///     ⚠ <b>A seam, not an implementation.</b> Email, SMS and WhatsApp one-time codes —
-///     docs/plan/11 § Credentials.
+///     Email, SMS and WhatsApp one-time codes — docs/plan/11 § Credentials.
 /// </summary>
 /// <remarks>
 ///     <para>
-///         <b>Why it is only a seam.</b> All three rows in docs/plan/11 § Credentials route through
-///         <c>CyberCloud.Communication</c> (docs/plan/17), which does not exist. Delivery is the
-///         entire feature: generating six digits and checking them back is twenty lines, and every
-///         hard part — provider fan-out, per-tenant sender identity, bounce handling, WhatsApp
-///         template pre-approval — belongs to the module that is not written.
+///         <b>Still a seam, and no longer an unimplemented one.</b> All three rows in docs/plan/11
+///         § Credentials route through <c>CyberCloud.Communication</c> (docs/plan/17), which now
+///         exists; <c>CyberCloud.Identity.Seams.CommunicationOtpDelivery</c> is the adapter onto its
+///         <c>IMessageSender</c>. The interface stays because delivery is somebody else's module:
+///         generating six digits and checking them back is twenty lines, and every hard part —
+///         provider fan-out, per-tenant sender identity, bounce handling, WhatsApp template
+///         pre-approval — belongs on the other side of this line.
 ///     </para>
 ///     <para>
 ///         ⚠ <b>SMS is the weakest factor and the seam should not hide that.</b> docs/plan/11
 ///         § Credentials: "SIM swap. Offered, never the only factor for an admin." That rule belongs
-///         at enrolment, in whatever implements this — an interface cannot enforce it.
+///         at enrolment, in whatever calls this — an interface cannot enforce it.
 ///     </para>
 /// </remarks>
 public interface IOtpDeliverySeam {
     /// <summary>
-    ///     Delivers a one-time code by whichever channel <paramref name="kind" /> names.
+    ///     Delivers one one-time code.
     /// </summary>
-    /// <param name="kind">
-    ///     <see cref="CredentialKind.EmailOtp" />, <see cref="CredentialKind.SmsOtp" /> or
-    ///     <see cref="CredentialKind.WhatsAppOtp" />.
+    /// <param name="delivery">
+    ///     Who it is for, why, where it goes and what it says. ⚠ Every field is part of what makes a
+    ///     <b>retry</b> distinguishable from a <b>second code</b> — see <see cref="OtpDelivery" />.
     /// </param>
-    /// <param name="destination">The address or number, unredacted — this is the delivery path.</param>
-    /// <param name="code">The six digits.</param>
+    /// <param name="cancellationToken">Cancels the call.</param>
     /// <returns>
-    ///     ⚠ The default implementation fails and says <c>CyberCloud.Communication</c> is missing. It
-    ///     does <b>not</b> succeed quietly: an OTP factor that reports delivery and sends nothing
+    ///     ⚠ The default implementation fails and says <c>CyberCloud.Communication</c> is not wired.
+    ///     It does <b>not</b> succeed quietly: an OTP factor that reports delivery and sends nothing
     ///     locks every user who enrols in it out of their account.
     /// </returns>
-    Task<Result> DeliverAsync(CredentialKind kind, string destination, string code);
+    Task<Result> DeliverAsync(OtpDelivery delivery, CancellationToken cancellationToken = default);
+}
+
+/// <summary>
+///     One one-time code, on its way to one person.
+/// </summary>
+/// <remarks>
+///     <para>
+///         ⚠ <b>NOT a wire type, deliberately.</b> It carries a live credential in
+///         <see cref="Code" />, and a <c>[GenerateSerializer]</c> on it would make putting one in
+///         grain state or on a grain call a thing the compiler helps with. The seam is resolved from
+///         the container and called in-process; nothing about it crosses a silo.
+///     </para>
+///     <para>
+///         ⚠ <b>Why this is a record rather than four parameters, and it is the whole reason the
+///         signature changed.</b> An implementation over <c>CyberCloud.Communication</c> has to
+///         supply an idempotency key, and docs/plan/17 § The parts that are actually the work makes
+///         that key the mechanism rather than a detail: <i>"a retry after a timeout must not send
+///         twice"</i>. The key has to be a function of <b>the thing being notified about</b>, so
+///         everything that distinguishes one notification from the next has to be on this type.
+///         <c>(kind, destination, code)</c> alone was not enough to name a tenant, which
+///         <c>IMessageSender.SendAsync</c> requires, and not enough to keep a sign-in code apart
+///         from a password-reset code.
+///     </para>
+/// </remarks>
+public sealed record OtpDelivery {
+    /// <summary>
+    ///     The tenant the user belongs to. ⚠ Not necessarily the tenant the message is <i>sent</i>
+    ///     from — see <c>CyberCloud.Identity.Seams.CommunicationOtpDelivery</c>, which sends every
+    ///     platform OTP through one configured communication service. It is here because it is half
+    ///     of what identifies the user.
+    /// </summary>
+    public required Guid TenantId { get; init; }
+
+    /// <summary>The user the code is for. The other half.</summary>
+    public required Guid UserId { get; init; }
+
+    /// <summary>
+    ///     Why. ⚠ A closed set on purpose — <see cref="OtpPurpose" />'s remarks say what an open
+    ///     string would cost.
+    /// </summary>
+    public required OtpPurpose Purpose { get; init; }
+
+    /// <summary>
+    ///     Which channel. <see cref="CredentialKind.EmailOtp" />, <see cref="CredentialKind.SmsOtp" />
+    ///     or <see cref="CredentialKind.WhatsAppOtp" />; anything else is refused rather than guessed.
+    /// </summary>
+    public required CredentialKind Kind { get; init; }
+
+    /// <summary>The address or number, unredacted — this is the delivery path.</summary>
+    public required string Destination { get; init; }
+
+    /// <summary>
+    ///     The six digits.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>This value is what tells a retry apart from a resend, and it is the only thing on
+    ///     this type that does.</b> <see cref="TenantId" />, <see cref="UserId" />,
+    ///     <see cref="Purpose" />, <see cref="Kind" /> and <see cref="Destination" /> are all
+    ///     unchanged between one user's first code and their next one; a clock reading is not
+    ///     repeatable across the retry. So an implementation deriving an idempotency key has exactly
+    ///     one field available that changes when — and only when — the notification is genuinely a
+    ///     different one.
+    /// </remarks>
+    public required string Code { get; init; }
 }
