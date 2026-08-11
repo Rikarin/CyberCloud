@@ -1,3 +1,5 @@
+using System.Diagnostics;
+
 namespace CyberCloud.Cli.Output;
 
 /// <summary>
@@ -9,9 +11,18 @@ namespace CyberCloud.Cli.Output;
 ///         ⚠ <b>A documented subset, not the whole language, and it says so when it hits the
 ///         edge.</b> What is here covers what people actually type at a control plane: field access,
 ///         indexing and slicing, list and object projections, filters, multiselect lists and hashes,
-///         pipes, and eleven functions. What is not here — <c>map</c>, <c>merge</c>, <c>reverse</c>,
-///         arithmetic, <c>let</c> bindings — fails with the expression, the offset and the word that
-///         was not understood, which is a better answer than a silently empty result.
+///         pipes, and the thirteen functions in <see cref="Functions" />. What is not here —
+///         <c>map</c>, <c>merge</c>, <c>reverse</c>, arithmetic, <c>let</c> bindings — fails with the
+///         expression, the offset and the word that was not understood, which is a better answer than
+///         a silently empty result.
+///     </para>
+///     <para>
+///         ⚠ <b>Where this subset returns nothing, it returns nothing for a reason the spec gives.</b>
+///         A miss is <c>null</c>, a projection over a non-array is <c>null</c>, a filter that matches
+///         nothing is <c>[]</c>, and an ordering comparison between different types is <c>null</c> —
+///         all four are the language rather than shortcuts. What is <i>not</i> allowed is inventing an
+///         answer: a function handed a value outside its signature raises a usage error, because a
+///         wrong answer that typechecks is never investigated. See <see cref="FunctionNode" />.
 ///     </para>
 ///     <para>
 ///         ⚠ <b>Written here rather than taken from a package for the same reason as
@@ -270,33 +281,84 @@ static class JmesPath {
         public override Payload Evaluate(Payload current) => inner.Evaluate(current);
     }
 
+    /// <summary>
+    ///     A call to one of <see cref="Functions" />.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>An argument of the wrong type is a usage error, and an <i>absent</i> argument is
+    ///         not.</b> JMESPath's own rule is that every one of these functions raises
+    ///         <c>invalid-type</c> when handed something outside its signature, and the rule matters
+    ///         here for a reason a query language rarely gets credit for: the alternative is a wrong
+    ///         answer that looks right. <c>length(nextLink)</c> over a <c>null</c> answered <c>0</c> —
+    ///         indistinguishable from an empty page, so <c>cyc … --query "length(value)"</c> against an
+    ///         api-version that spells the field differently reported "no resources" instead of
+    ///         "wrong query". <c>starts_with(name, `3`)</c> coerced the number to <c>""</c> and every
+    ///         string starts with <c>""</c>, so the filter matched every element.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>A <see cref="Payload.Missing" /> argument propagates instead, and that is
+    ///         deliberate.</b> <c>[?starts_with(name, 'w')]</c> over a page where one resource has no
+    ///         <c>name</c> must not fail the whole query — the same property
+    ///         <see cref="ComparisonNode" /> preserves for ordering comparisons, and the reason
+    ///         <c>--query "[].{name:name, tier:properties.tier}"</c> works across resources that do not
+    ///         all have a tier. Missing is falsy, so such an element simply does not match. An
+    ///         explicit <c>null</c> is a <i>present</i> value of the wrong type and is refused.
+    ///     </para>
+    /// </remarks>
     sealed class FunctionNode(string name, IReadOnlyList<Node> arguments) : Node {
         public override Payload Evaluate(Payload current) {
             var values = arguments.Select(x => x.Evaluate(current)).ToList();
+
+            // ⚠ The name is checked before anything else, because the propagation rule below returns
+            // rather than throws: without this, `map(&name, value)` — a function this subset does not
+            // have — would answer null instead of naming the ones it does.
+            if (!Functions.Contains(name, StringComparer.Ordinal))
+                throw new CycUsageException(
+                    $"'{name}' is not a function cyc's --query understands. Available: {string.Join(", ", Functions)}.");
+
+            // ⚠ `not_null` is the one function whose whole job is to be handed absent values, and an
+            // &expression reference is a function rather than a value — sort_by(value, &name)
+            // evaluates its reference against each element, never against the document.
+            if (name is not "not_null") {
+                for (var i = 0; i < values.Count; i++) {
+                    if (arguments[i] is not ExpressionReferenceNode && values[i].IsMissing)
+                        return Payload.Missing;
+                }
+            }
 
             switch (name) {
                 case "length":
                     Arity(1, values.Count);
 
-                    return values[0].IsMissing ? Payload.Missing : Payload.Number(values[0].Count);
+                    // ⚠ Payload.Count answers 0 for a number, a boolean and a null, so the type test
+                    // has to come first — that 0 was the defect this rule exists for.
+                    if (values[0].ValueKind is not (JsonValueKind.String or JsonValueKind.Array or JsonValueKind.Object))
+                        throw TypeError(0, "a string, an array or an object", values[0]);
+
+                    return Payload.Number(values[0].Count);
 
                 case "keys":
                     Arity(1, values.Count);
 
-                    return values[0].IsObject
-                        ? Payload.Array([.. values[0].Members.Select(x => Payload.Text(x.Key))])
-                        : Payload.Missing;
+                    if (!values[0].IsObject)
+                        throw TypeError(0, "an object", values[0]);
+
+                    return Payload.Array([.. values[0].Members.Select(x => Payload.Text(x.Key))]);
 
                 case "values":
                     Arity(1, values.Count);
 
-                    return values[0].IsObject
-                        ? Payload.Array([.. values[0].Members.Select(x => x.Value)])
-                        : Payload.Missing;
+                    if (!values[0].IsObject)
+                        throw TypeError(0, "an object", values[0]);
+
+                    return Payload.Array([.. values[0].Members.Select(x => x.Value)]);
 
                 case "to_string":
                     Arity(1, values.Count);
 
+                    // Every type is legal here: to_string() is the escape hatch that makes a number or
+                    // an object printable, so it is the one function with no signature to violate.
                     return Payload.Text(values[0].ValueKind == JsonValueKind.String
                         ? values[0].AsString()!
                         : values[0].ToJson(indented: false));
@@ -304,37 +366,58 @@ static class JmesPath {
                 case "join": {
                     Arity(2, values.Count);
 
-                    var separator = values[0].AsString()
-                        ?? throw new CycUsageException("join()'s first argument must be a string.");
+                    var separator = values[0].AsString() ?? throw TypeError(0, "a string", values[0]);
 
-                    return Payload.Text(string.Join(separator, values[1].Items.Select(x => x.AsString() ?? x.ToCell())));
+                    if (!values[1].IsArray)
+                        throw TypeError(1, "an array of strings", values[1]);
+
+                    var parts = new List<string>();
+
+                    foreach (var item in values[1].Items) {
+                        // ⚠ Not ToCell(). Falling back to it joined the JSON encoding of each object
+                        // into one comma-riddled string that no `cut` pipeline could read back.
+                        parts.Add(item.AsString() ?? throw TypeError(1, "an array of strings", item));
+                    }
+
+                    return Payload.Text(string.Join(separator, parts));
                 }
 
                 case "contains":
                     Arity(2, values.Count);
 
-                    return Payload.Boolean(values[0].ValueKind == JsonValueKind.String
-                        ? values[0].AsString()!.Contains(values[1].AsString() ?? values[1].ToCell(), StringComparison.Ordinal)
-                        : values[0].Items.Any(x => x.SameAs(values[1])));
+                    if (values[0].ValueKind == JsonValueKind.String) {
+                        var needle = values[1].AsString() ?? throw TypeError(1, "a string when the subject is one", values[1]);
+
+                        return Payload.Boolean(values[0].AsString()!.Contains(needle, StringComparison.Ordinal));
+                    }
+
+                    if (!values[0].IsArray)
+                        throw TypeError(0, "a string or an array", values[0]);
+
+                    return Payload.Boolean(values[0].Items.Any(x => x.SameAs(values[1])));
 
                 case "starts_with":
+                case "ends_with": {
                     Arity(2, values.Count);
 
-                    return Payload.Boolean(
-                        (values[0].AsString() ?? string.Empty).StartsWith(values[1].AsString() ?? string.Empty, StringComparison.Ordinal));
+                    // ⚠ Both arguments, and the second is the one that mattered: coercing a non-string
+                    // to "" made starts_with() true for every subject, because every string starts
+                    // with the empty one.
+                    var subject = values[0].AsString() ?? throw TypeError(0, "a string", values[0]);
+                    var affix = values[1].AsString() ?? throw TypeError(1, "a string", values[1]);
 
-                case "ends_with":
-                    Arity(2, values.Count);
-
-                    return Payload.Boolean(
-                        (values[0].AsString() ?? string.Empty).EndsWith(values[1].AsString() ?? string.Empty, StringComparison.Ordinal));
+                    return Payload.Boolean(name == "starts_with"
+                        ? subject.StartsWith(affix, StringComparison.Ordinal)
+                        : subject.EndsWith(affix, StringComparison.Ordinal));
+                }
 
                 case "sort":
                     Arity(1, values.Count);
 
-                    return values[0].IsArray
-                        ? Payload.Array([.. values[0].Items.OrderBy(x => x.ToCell(), StringComparer.Ordinal)])
-                        : Payload.Missing;
+                    if (!values[0].IsArray)
+                        throw TypeError(0, "an array", values[0]);
+
+                    return Payload.Array([.. Ordered([.. values[0].Items], x => x)]);
 
                 case "sort_by": {
                     Arity(2, values.Count);
@@ -342,9 +425,10 @@ static class JmesPath {
                     if (arguments[1] is not ExpressionReferenceNode reference)
                         throw new CycUsageException("sort_by()'s second argument must be an expression reference, as in sort_by(@, &name).");
 
-                    return values[0].IsArray
-                        ? Payload.Array([.. values[0].Items.OrderBy(x => reference.Inner.Evaluate(x).ToCell(), StringComparer.Ordinal)])
-                        : Payload.Missing;
+                    if (!values[0].IsArray)
+                        throw TypeError(0, "an array", values[0]);
+
+                    return Payload.Array([.. Ordered([.. values[0].Items], reference.Inner.Evaluate)]);
                 }
 
                 case "not_null":
@@ -359,19 +443,56 @@ static class JmesPath {
                 case "max": {
                     Arity(1, values.Count);
 
-                    var numbers = values[0].Items.Select(x => x.AsNumber()).Where(x => x is not null).Select(x => x!.Value).ToList();
+                    if (!values[0].IsArray)
+                        throw TypeError(0, "an array of numbers or an array of strings", values[0]);
 
-                    if (numbers.Count == 0)
-                        return Payload.Missing;
+                    var sorted = Ordered([.. values[0].Items], x => x);
 
-                    return Payload.Number(name == "min" ? numbers.Min() : numbers.Max());
+                    // The spec's answer for an empty array, and the reason `max(value[*].replicas)` on
+                    // a page with no resources is null rather than an error.
+                    return sorted.Count == 0 ? Payload.Missing : sorted[name == "min" ? 0 : ^1];
                 }
 
                 default:
-                    throw new CycUsageException(
-                        $"'{name}' is not a function cyc's --query understands. Available: {string.Join(", ", Functions)}.");
+                    // Unreachable: the check at the top of this method rejects any name that is not
+                    // in Functions. Reaching it means Functions lists a name this switch does not
+                    // implement, which is a mistake in this file rather than in anybody's query.
+                    throw new UnreachableException(
+                        $"'{name}' is listed in {nameof(Functions)} but has no implementation.");
             }
         }
+
+        /// <summary>
+        ///     Sorts by the key <paramref name="key" /> projects, as JMESPath orders values.
+        /// </summary>
+        /// <remarks>
+        ///     ⚠ <b>Numbers compare as numbers.</b> Ordering by the rendered cell put <c>100</c> before
+        ///     <c>2</c>, so <c>sort_by(value, &amp;properties.replicas)</c> returned a list that looked
+        ///     sorted and was not — the worst shape a defect in a query language can take. The spec
+        ///     admits <c>array[number]</c> and <c>array[string]</c> and nothing else, so a mixed array
+        ///     is refused rather than ordered by a rule nobody could predict.
+        /// </remarks>
+        List<Payload> Ordered(List<Payload> items, Func<Payload, Payload> key) {
+            var keys = items.Select(key).ToList();
+
+            if (keys.TrueForAll(x => x.AsNumber() is not null))
+                return [.. items.Select((x, i) => (Item: x, Key: keys[i].AsNumber()!.Value)).OrderBy(x => x.Key).Select(x => x.Item)];
+
+            if (keys.TrueForAll(x => x.AsString() is not null))
+                return [
+                    .. items
+                        .Select((x, i) => (Item: x, Key: keys[i].AsString()!))
+                        .OrderBy(x => x.Key, StringComparer.Ordinal)
+                        .Select(x => x.Item),
+                ];
+
+            throw new CycUsageException(
+                $"{name}() orders an array of numbers or an array of strings, and this one holds "
+                + $"{string.Join(", ", keys.Select(Describe).Distinct(StringComparer.Ordinal))}.");
+        }
+
+        CycUsageException TypeError(int index, string expected, Payload actual)
+            => new($"{name}()'s argument {index + 1} must be {expected}, and this one is {Describe(actual)}.");
 
         void Arity(int expected, int actual) {
             if (expected != actual)
@@ -386,6 +507,18 @@ static class JmesPath {
     ];
 
     static Payload Coalesce(Payload value) => value.IsMissing ? Payload.Null : value;
+
+    /// <summary>Names a value's type for an <c>invalid-type</c> message, in the words the message needs.</summary>
+    static string Describe(Payload value)
+        => value.ValueKind switch {
+            JsonValueKind.String => "a string",
+            JsonValueKind.Number => "a number",
+            JsonValueKind.Array => "an array",
+            JsonValueKind.Object => "an object",
+            JsonValueKind.True or JsonValueKind.False => "a boolean",
+            JsonValueKind.Null => "null",
+            _ => "absent",
+        };
 
     // ── Parser ─────────────────────────────────────────────────────────────────────────────────
 
