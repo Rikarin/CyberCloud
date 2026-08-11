@@ -1,0 +1,156 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      `cyc` — docs/plan/21 § `cyc`. The hand-written half of the CLI: the host that reads the
+      generated verb tree, the output formats, the exit codes and the escape hatch.
+
+      ⚠ THE PROJECT FILE IS NAMED cyc.csproj AND THAT IS NOT A STYLE CHOICE.
+      Directory.Build.props § "Assembly and namespace naming" sets AssemblyName from the project
+      name, and build/Build.Architecture.cs § ShippingAssemblyPaths looks for
+      artifacts/bin/<project name>/<config>/<project name>.dll. Overriding AssemblyName to `cyc` on
+      a project called CyberCloud.Cli would produce cyc.dll in a directory named CyberCloud.Cli and
+      every architecture gate would report "no built assembly". Naming the project after the
+      executable keeps one name in all three places. RootNamespace is overridden below because
+      `namespace cyc;` is not a namespace anybody wants to type.
+
+      ⚠ Why not `cc`. `cc` is the POSIX name of the system C compiler (/usr/bin/cc) and `CC` is the
+      standard make variable, so a CLI called `cc` shadows a toolchain on every Unix box that
+      installs it. The config directory is ~/.cyc and the environment prefix is CYC_ for the same
+      reason. The platform's other uses of `cc` — the NATS subject prefix `cc.{tenant}.…` and the
+      Redis hash tag `{cc:t:<id>}` — are unrelated and are not renamed.
+    -->
+
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <RootNamespace>CyberCloud.Cli</RootNamespace>
+        <!--
+          docs/plan/21 § `cyc`: "single-file AOT-published per RID so there is no runtime
+          prerequisite". Publishing, not packing: the artifact is a native executable per RID, not a
+          NuGet package. cli/README.md used to claim IsPackable=true, which described a `dotnet tool`
+          this document never asks for.
+        -->
+        <IsPublishable>true</IsPublishable>
+        <IsPackable>false</IsPackable>
+    </PropertyGroup>
+
+    <PropertyGroup Label="Trimming and AOT — docs/plan/21 § cyc">
+        <!--
+          ⚠ The gate, not the aspiration. IsAotCompatible turns on the IL trim, single-file and AOT
+          analysers for every ordinary `dotnet build`, so a reflective call added here fails the
+          build instead of failing `cyc` at run time on a user's machine. src/CyberCloud.Sdk sets
+          the same two properties and publishes with zero IL2xxx/IL3xxx; this project is the other
+          half of that claim.
+
+          The consequences are the same ones EmitterContract.cs lists: every JSON type goes through
+          a source-generated JsonSerializerContext, and no JsonSerializer overload that takes a Type
+          without a JsonTypeInfo appears anywhere.
+        -->
+        <IsAotCompatible>true</IsAotCompatible>
+        <EnableAotAnalyzer>true</EnableAotAnalyzer>
+
+        <!--
+          ⚠ THESE LIVE HERE AND NOT ON THE COMMAND LINE, AND THAT IS FORCED RATHER THAN TIDY.
+
+          `dotnet publish … -p:PublishAot=true` sets a GLOBAL MSBuild property, and a global property
+          flows to every project in the graph — including CyberCloud.Analyzers, which every shipping
+          project must reference (build/Build.Architecture.cs § AnalyzerCoverageGate) and which is
+          the tree's one netstandard2.0 project (docs/plan/02 § Platform baseline's documented
+          exception, because a Roslyn analyzer is loaded by the compiler). Handed PublishAot=true it
+          fails before anything is compiled:
+
+            error NETSDK1207: Ahead-of-time compilation is not supported for the target framework.
+              [src/CyberCloud.Analyzers/CyberCloud.Analyzers.csproj]
+
+          A project cannot override a global property, and `GlobalPropertiesToRemove` on the
+          ProjectReference does not help: it is honoured by the build and NOT by NuGet's restore, so
+          the failure happens during restore either way. Verified both, and verified that
+          src/CyberCloud.Sdk fails identically — so this is a property of the repository rather than
+          of `cyc`.
+
+          As a project property it reaches only this project, restore pulls the ILCompiler package
+          for this project only, and the analyzer is left alone. The publish command is therefore:
+
+            dotnet publish cli/cyc/cyc.csproj -r <rid>
+
+          ⚠ The RuntimeIdentifier condition matters. PublishAot with no RID is an error, and a plain
+          `dotnet publish` of the solution is something CI does.
+        -->
+        <PublishAot Condition="'$(RuntimeIdentifier)' != ''">true</PublishAot>
+        <PublishTrimmed>true</PublishTrimmed>
+        <TrimMode>full</TrimMode>
+        <InvariantTimezone>true</InvariantTimezone>
+        <!--
+          ⚠ Off. It strips the resource strings System.CommandLine uses for its own parse errors,
+          and a usage error that reads as an empty string is exit code 2 with nothing to act on.
+        -->
+        <UseSystemResourceKeys>false</UseSystemResourceKeys>
+    </PropertyGroup>
+
+    <PropertyGroup Label="Analyzer suppressions — two, each argued">
+        <!--
+          CA1031 "Do not catch general exception types". Program.cs § Run is a process boundary: the
+          contract this CLI publishes is docs/plan/21 § Decisions' exit-code table, and a CLI that
+          answers an unexpected exception with a stack trace and exit code 134 has broken that
+          contract for every script branching on it. The catch is one method wide, it re-raises
+          nothing, and a verbose run prints the exception it mapped.
+
+          CA1849 is NOT suppressed. Console writes are synchronous by design — see CycConsole.
+        -->
+        <NoWarn>$(NoWarn);CA1031</NoWarn>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="System.CommandLine"/>
+    </ItemGroup>
+
+    <ItemGroup Label="Project references">
+        <!--
+          ⚠ GlobalPropertiesToRemove IS WHAT MAKES THE PUBLISH COMMAND WORK, and it took a failed
+          publish to find out.
+
+          `dotnet publish -p:PublishAot=true …` sets a GLOBAL MSBuild property, and a global property
+          flows to every project in the graph. CyberCloud.Analyzers is netstandard2.0 — docs/plan/02
+          § Platform baseline's one documented exception, because a Roslyn analyzer is loaded by the
+          compiler — and a netstandard2.0 project handed PublishAot=true fails restore outright:
+
+            error NETSDK1207: Ahead-of-time compilation is not supported for the target framework.
+              [src/CyberCloud.Analyzers/CyberCloud.Analyzers.csproj]
+
+          It reaches the analyzer by two paths — this reference and the SDK's — so both are stripped.
+          Nothing is lost: PublishAot, PublishTrimmed and TrimMode are properties of the published
+          ROOT. The trimmer walks the whole closure from here regardless, and CyberCloud.Sdk carries
+          its own IsAotCompatible so its analysers run on its own build.
+
+          ⚠ Reproduced on src/CyberCloud.Sdk with the same command, so this is not specific to `cyc`:
+          any project in this repository that is AOT-published from the command line hits it.
+        -->
+        <ProjectReference Include="../../src/CyberCloud.Analyzers/CyberCloud.Analyzers.csproj"
+                          OutputItemType="Analyzer"
+                          ReferenceOutputAssembly="false"
+                          GlobalPropertiesToRemove="PublishAot;PublishTrimmed;TrimMode"/>
+
+        <!--
+          ⚠ The CLI owns no HTTP and no OAuth. Every request `cyc` makes, including `cyc rest`, goes
+          through CyberCloudPipeline, so it is authenticated, retried and correlated by the same code
+          the SDK's own callers use. Raw means untyped, not unauthenticated.
+        -->
+        <ProjectReference Include="../../src/CyberCloud.Sdk/CyberCloud.Sdk.csproj"
+                          GlobalPropertiesToRemove="PublishAot;PublishTrimmed;TrimMode"/>
+    </ItemGroup>
+
+    <ItemGroup Label="The generated verb tree — ADR-012's second surface">
+        <!--
+          ⚠ EMBEDDED, NOT READ FROM DISK, and the reason is the line above about single-file AOT: a
+          published `cyc` is one file with no directory beside it to read a .json out of. The build
+          copies whatever ./build.sh Generate produced into the assembly, one resource per
+          api-version, and CommandTree reads them at start-up. See VerbTreeCatalog for why the tree
+          is built at run time rather than compiled into C#.
+
+          Link= keeps the logical name stable regardless of where the repository sits on disk.
+        -->
+        <EmbeddedResource Include="$(RepositoryRoot)generated/cli/*.json">
+            <LogicalName>cyc.VerbTrees.%(Filename).json</LogicalName>
+        </EmbeddedResource>
+    </ItemGroup>
+
+</Project>

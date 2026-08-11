@@ -137,7 +137,20 @@
         <Project Path="src/Hosts/CyberCloud.Identity.Host/CyberCloud.Identity.Host.csproj"/>
         <Project Path="src/Hosts/CyberCloud.Identity.Host.Tests/CyberCloud.Identity.Host.Tests.csproj"/>
     </Folder>
-    <Folder Name="/cli/"/>
+    <!--
+      docs/plan/03 § Top level keeps `cli/` out of src/ because it ships separately.
+
+      ⚠ The project is `cyc.csproj`, not `CyberCloud.Cli.csproj`, and the name is load-bearing:
+      Directory.Build.props § "Assembly and namespace naming" derives AssemblyName from the project
+      name, and build/Build.Architecture.cs § ShippingAssemblyPaths looks for
+      artifacts/bin/<project>/<config>/<project>.dll. An AssemblyName override would leave every
+      architecture gate reporting "no built assembly" for a project that built fine. Its
+      RootNamespace is CyberCloud.Cli — see cyc.csproj.
+    -->
+    <Folder Name="/cli/">
+        <Project Path="cli/cyc/cyc.csproj"/>
+        <Project Path="cli/cyc.Tests/cyc.Tests.csproj"/>
+    </Folder>
 
     <!--
       docs/plan/03 § test/ — the cross-cutting suites. Two of the five exist.
