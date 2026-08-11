@@ -79,9 +79,12 @@ Restating ADR-003 with the operational detail.
   putting it in the map.
 - **Schema.** The Orleans ADO.NET grain storage schema, one row per grain: `(GrainIdHash, GrainIdN0,
   GrainIdN1, GrainTypeHash, GrainTypeString, GrainIdExtensionString, ServiceId, PayloadBinary,
-  PayloadJson, ModifiedOn, Version)`. Plus, in the same database, the small number of genuinely
-  relational things that are not grain state: the billing ledger (append-only, needs `SUM` over a
-  period) and the audit index.
+  ModifiedOn, Version)`. ⚠ **There is no `PayloadJson` column** — an earlier draft of this list had
+  one, and the provider reads and writes `PayloadBinary` only, whatever serializer is configured.
+  Storing JSON means putting JSON *bytes* in `PayloadBinary`, which is what makes the `psql`
+  argument below work; it does not mean a second column. Asserted by a test that reads the live
+  schema. Plus, in the same database, the small number of genuinely relational things that are not
+  grain state: the billing ledger (append-only, needs `SUM` over a period) and the audit index.
 - **Why not one big Postgres with partitioning.** Because a partitioned table is still one server's
   WAL, one server's connection pool and one server's failover. Sixteen servers have sixteen. The cost
   is that there is no cross-tenant `JOIN`, ever — which is a feature, since a cross-tenant `JOIN` is
@@ -144,26 +147,79 @@ tenant, run deliberately. Budgeted at 0.5 EM in M2, not M1.
 `Orleans.Multitenant`'s `configureTenantOptions` callback is where the sharding actually happens, and
 it is worth showing because it is the load-bearing five lines of this document:
 
+⚠ **The version below is the corrected one. The original five lines did not compile or run** — four
+separate defects, all found by building them against `Orleans.Multitenant` 4.0.0 and Orleans 10.2.2.
+
 ```csharp
-static void ConfigureForTenant(IServiceProvider sp, AdoNetGrainStorageOptions o, string tenantId)
+// (options, tenantId) — TWO arguments. There is no IServiceProvider parameter.
+static void ConfigureForTenant(AdoNetGrainStorageOptions o, string tenantId)
 {
-    var map = sp.GetRequiredService<IShardMapCache>();          // in-process, version-stamped
-    var shard = map.DurableShardFor(Guid.Parse(tenantId));
-    o.ConnectionString = sp.GetRequiredService<IShardConnections>().Durable(shard);
+    // `tenantId` is the literal string "Null" for a null-tenant grain, so Guid.Parse throws.
+    var shard = shardMapCache.DurableShardFor(TenantId.Parse(tenantId));   // captured singleton
+    o.ConnectionString = shardConnections.Durable(shard);                  // MaxPoolSize=5, No Reset On Close=true
     o.Invariant = "Npgsql";
-    o.GrainStorageSerializer = new OrleansJsonGrainStorageSerializer();
+    o.GrainStorageSerializer = new SystemTextJsonGrainStorageSerializer(); // ours
+    o.HashPicker = new OrleansDefaultHasher();                             // ⚠ see below
 }
 ```
 
-Called once per tenant per silo, at first touch, and cached by the multitenant storage provider. The
-tenant id it receives is the one extracted from the grain key — so a grain physically *cannot* be
-stored on the wrong tenant's shard, because the key is what selects the connection.
+| Defect in the original | Reality |
+|---|---|
+| Signature `(sp, options, tenantId)` | The callback is `(options, tenantId)`. The service provider is reachable only through `getProviderParameters`, which runs **after** the callback — so dependencies are captured in singletons instead. There is also an undocumented third generic parameter, `TGrainStorageOptionsValidator`, with no default |
+| `Guid.Parse(tenantId)` | ⚠ **Throws for null-tenant grains** — `Orleans.Multitenant` passes the string `"Null"`. Every Platform grain in [04 § Grain taxonomy](04-orleans-topology.md) is null-tenant *and* durable, so this is a live path, not an edge case |
+| `OrleansJsonGrainStorageSerializer` | Does not exist in Orleans 10.2.2. Ours is a `System.Text.Json` implementation — ⚠ configured with `UnsafeRelaxedJsonEscaping`, because the default encoder escapes `'` and non-ASCII, so `Müller's database` persists as `'`/`ü`: valid JSON, unreadable in `psql`, which is the *entire* stated reason for choosing JSON below |
+| *(absent)* `HashPicker` | Orleans supplies it via `IPostConfigureOptions`, and **per-tenant providers never go through the options system** — so every post-configured default is silently missing. It surfaces as `OrleansConfigurationException: … HashPicker is required` on the first durable write. Set it explicitly to Orleans' own hasher so row hashes stay compatible |
+
+⚠ **One more, and it is the dangerous one because it fails silently.** `AdoNetGrainStorage` takes
+`IOptions<AdoNetGrainStorageOptions>`, not the raw options. Without `getProviderParameters` wrapping
+them, `ActivatorUtilities` resolves the options from the container and **every tenant quietly shares
+the bootstrap shard** — sharded storage, no error, no log line.
+
+Called once per tenant per silo, at first touch, and cached by the multitenant storage provider —
+**measured: 12 invocations for 12 tenants across 600 concurrent grain writes**, so the shard lookup
+is genuinely not on the hot path. The tenant id it receives is the one extracted from the grain key,
+so a grain physically *cannot* be stored on the wrong tenant's shard, because the key is what
+selects the connection. That was tested across seven attack routes; six are blocked by construction
+and the seventh (handing a raw physical grain key to `IGrainFactory`) is closed by
+`AddMultitenantCommunicationSeparation`, not by storage.
 
 ⚠ **Connection pool arithmetic, because this is where it bites.** 30 silos × 16 durable shards × a
 pool of 20 is 9 600 potential Postgres connections. Postgres tops out well below that. Two required
 mitigations: **PgBouncer in transaction mode in front of every shard** (non-negotiable), and a pool
 `MaxPoolSize` of 5 per silo per shard, which is ample because grain storage calls are short. This is
 the kind of number that is obvious in retrospect and fatal in production, so it is in the plan.
+
+Three corrections to that paragraph, none of which change the conclusion:
+
+- **The unit is per *tenant* per shard, not per silo per shard.** Npgsql pools by connection string,
+  and `Orleans.Multitenant` builds one provider per tenant, so a per-tenant connection string
+  multiplies the pool by tenant count. Measured: 24 tenants writing concurrently on one shard peaked
+  at ≤ 5 connections, because the string is byte-identical for every tenant on that shard — which is
+  now a test, since it is the property the arithmetic depends on.
+- **Transaction mode is compatible, and for a different reason than expected.** The provider never
+  calls `Prepare()`, uses no `LISTEN/NOTIFY`, no advisory locks, no session `SET`, and every
+  operation is a single statement. Npgsql's `MaxAutoPrepare` defaults to **0**, so the
+  "Npgsql auto-prepares" concern does not apply to a default connection string. The one setting that
+  *does* need changing is **`No Reset On Close=true`**, or Npgsql issues `DISCARD ALL` on return.
+- **The same arithmetic is never done for Redis, and it needs to be.** Naive per-tenant wiring opens
+  one multiplexer per tenant per silo. The hot tier shares a single multiplexer across tenants;
+  only the key prefix differs.
+
+⚠ **Nothing creates the durable schema, and that is a real gap rather than an omission from this
+paragraph.** `Microsoft.Orleans.Persistence.AdoNet` ships **zero** SQL and no driver — it loads
+Npgsql reflectively, so a typo in `Invariant` is a runtime `AggregateException`, not a compile error.
+`AdoNetGrainStorage.Init` runs `SELECT … FROM OrleansQuery` and expects four rows; against a fresh
+database that is `relation "orleansquery" does not exist`. The DDL is two files in the `dotnet/orleans`
+repo at the matching tag (`Shared/PostgreSQL-Main.sql`, then
+`Orleans.Persistence.AdoNet/PostgreSQL-Persistence.sql`, in that order). So
+[§ The shard map](#the-shard-map)'s "a shard is added by starting a server and putting it in the map"
+is missing a step, and as of now **no chart, deploy script or plan document owns it**.
+
+⚠ **A silo starts healthy with an unreachable durable shard.** The bootstrap provider is never
+constructed, so nothing fails at startup: the silo joins, passes readiness, takes traffic, and only
+the affected shard's tenants error. If that is not wanted, shard reachability needs its own health
+check — the readiness probe in [§ Hot](#hot--redis-cluster)'s sibling deliberately does not probe
+storage, because an unreachable shard evicting a silo concentrates load on its neighbours.
 
 ## Serialization and schema evolution
 
@@ -185,6 +241,20 @@ justifies it, because nobody debugs a session by reading it.
 4. A semantic change to an existing member is a **new member plus a migration on read**, never a
    reinterpretation. `OnActivateAsync` upgrades in place and writes back on next save.
 5. Renaming a type without `[Alias]` is a data-loss bug; the analyzer makes it a compile error.
+
+⚠ **Rules 1, 2 and 5 describe the Orleans *binary* format, and the durable tier is JSON.** Under a
+`System.Text.Json` grain storage serializer, neither `[Id(n)]` nor `[Alias]` is read at all — **the
+property name is the persisted contract.** So on this tier:
+
+- Renaming a *property* is the data-loss bug, not renaming a type. `[Alias]` protects the wire
+  (grain-to-grain calls, rolling upgrades), which is a different concern from what is at rest in
+  Postgres, and the two must both be honoured for different reasons.
+- Reordering members is harmless; renaming one is not. That is the exact inverse of the binary
+  format's failure mode, which is why stating one set of rules for both tiers is misleading.
+- The compatibility test therefore has to check **property names** for durable types, in addition to
+  the `[Id(n)]` manifest it checks for wire types. ⚠ Also note rule 5's "the analyzer makes it a
+  compile error" is still aspirational — see [04 § Failure and upgrade](04-orleans-topology.md); it
+  is a reflection test today, and no analyzer covers property renames on JSON state at all.
 
 ## What is deliberately *not* in either tier
 
