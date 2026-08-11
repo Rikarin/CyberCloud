@@ -106,6 +106,7 @@ tenant-qualified key. `GrainKeys` is the only type allowed to build the within-t
 | `IResourceGrain` | `res/{resourceId:N}` |
 | `IResourceIndexGrain` | `idx/path/{sha256(canonicalPath)[..16]}` |
 | `IUserGrain` | `user/{userId:N}` |
+| `IManagedIdentityGrain` | `mi/{managedIdentityId:N}` — [11 § Managed identity](11-identity.md) |
 | `IEmailIndexGrain` | `idx/email/{sha256(tenantId + normalizedEmail)[..16]}` |
 | `IOperationGrain` | `op/{operationId:N}` |
 | `IQuotaGrain` | `sub/{subscriptionId:N}` — same key string as the subscription, different grain **type** |
@@ -114,9 +115,27 @@ tenant-qualified key. `GrainKeys` is the only type allowed to build the within-t
 | `IClusterConnectionGrain` | *(null tenant)* `cluster/{clusterId:N}` — see below |
 
 ⚠ This table is the closed set that `GrainKeys` implements, so a grain missing from it is a grain
-that cannot be addressed. The first, ninth, tenth and eleventh rows were absent from an earlier
+that cannot be addressed. The first, tenth, eleventh and twelfth rows were absent from an earlier
 version while [04 § Grain taxonomy](04-orleans-topology.md) named the grains — which made those
 grains unbuildable until one document moved. If you add a grain, add its row here first.
+
+⚠ **The `IManagedIdentityGrain` row was the same defect, and it is worth recording how it was
+fixed rather than only that it was.** [11 § The object model](11-identity.md) names six identity
+grains and this table carried a row for one of them. `GrainKeys` added `group/`, `app/`, `sp/` and
+`session/` when those grains were built and deliberately left `mi/` out, on the argument that a key
+shape with no grain behind it is a shape nothing can hold to its meaning — the same argument that
+keeps the Leopard membership index of [07 § Storage](07-rebac-authorization.md) out of it. That was
+right while [11 § Managed identity](11-identity.md) was a seam. The row is here now because the
+grain is, which is the order this ⚠ asks for: the shape and the thing it addresses land together.
+
+⚠ **`IManagedIdentityGrain` is keyed by its GUID and not by `(cluster, namespace, serviceAccount)`.**
+The binding is what a token exchange arrives holding, so keying by it looks like the shape that
+saves a lookup. It is wrong three ways: the triple is caller-influenced text on an unauthenticated
+endpoint, so an attacker would choose which activation a request creates; a rebind — an ordinary
+operation — would become a grain migration and orphan every tuple naming the old key; and "at most
+one identity may hold a given triple" is a *uniqueness* question, which is an index's job. The GUID
+is also the ReBAC subject id in `managedIdentity:{id}` ([11 § Managed identity](11-identity.md),
+step 6), so re-keying would silently revoke every grant made to it.
 
 Resource grains are keyed by GUID, not by path, so a rename is a metadata update rather than a grain
 migration. The path index is a separate grain, and the two are updated in one flow with the index

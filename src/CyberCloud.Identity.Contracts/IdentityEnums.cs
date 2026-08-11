@@ -121,8 +121,9 @@ public enum GrantType {
     RefreshToken = 3,
 
     /// <summary>
-    ///     RFC 8693, for workload identity. ⚠ <b>Seam only</b> — see
-    ///     <see cref="ITokenExchangeSeam" />.
+    ///     RFC 8693, for workload identity — <see cref="ITokenExchange" /> and
+    ///     <see cref="IManagedIdentityGrain" />. ⚠ It is the only grant that authenticates the client
+    ///     with somebody else's signature, which is what makes it the grant with no stored secret.
     /// </summary>
     TokenExchange = 4
 }

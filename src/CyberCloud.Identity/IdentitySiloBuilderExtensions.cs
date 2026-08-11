@@ -1,7 +1,9 @@
 using CyberCloud.Core.Time;
 using CyberCloud.Identity.Credentials;
+using CyberCloud.Identity.ManagedIdentity;
 using CyberCloud.Identity.Seams;
 using CyberCloud.Identity.SignIn;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace CyberCloud.Identity;
@@ -51,8 +53,28 @@ public static class IdentitySiloBuilderExtensions {
         builder.Services.TryAddSingleton<IClock, SystemClock>();
         builder.Services.TryAddSingleton<IPasswordHasher>(hasher);
         builder.Services.TryAddSingleton<ILockoutCounter, InMemoryLockoutCounter>();
-        builder.Services.TryAddSingleton<ITokenExchangeSeam, UnavailableTokenExchange>();
         builder.Services.TryAddSingleton<IOtpDeliverySeam, UnavailableOtpDelivery>();
+
+        // ⚠ Managed identity — docs/plan/11 § Managed identity, "the feature that removes stored
+        // secrets". Three registrations and no configuration, because there is nothing to configure:
+        // the trust anchor is a fact recorded on each identity's own grain at binding time, not a
+        // list of issuers a silo is told about. A per-silo trusted-issuer list would be the thing
+        // that drifts between regions.
+        //
+        // ⚠ HttpClient as a singleton rather than through IHttpClientFactory. This assembly does not
+        // reference Microsoft.Extensions.Http, and the traffic here is control-plane — a binding, and
+        // an occasional issuer refresh — so the connection-recycling and DNS-staleness arguments for
+        // the factory do not bite. The timeout is short on purpose: an unreachable cluster is the
+        // EXPECTED answer for a BYO cluster with no public endpoint (docs/plan/11 § Managed identity),
+        // and a tenant sitting in front of a binding form should be told so in seconds.
+        builder.Services.TryAddSingleton<IProjectedTokenValidator, ProjectedTokenValidator>();
+        builder.Services.TryAddSingleton<IClusterOidcDiscovery>(
+            services => new HttpClusterOidcDiscovery(
+                new() { Timeout = TimeSpan.FromSeconds(10) },
+                services.GetRequiredService<IClock>()
+            )
+        );
+        builder.Services.TryAddSingleton<ITokenExchange, GrainTokenExchange>();
         builder.Services.TryAddSingleton<SignInOptions>(_ => SignInOptions.Default);
         builder.Services.TryAddSingleton<SignInService>();
 

@@ -134,6 +134,40 @@ public sealed class ServicePrincipalGrainState {
 }
 
 /// <summary>
+///     <c>ManagedIdentityGrain</c>'s durable state. docs/plan/11 § Managed identity.
+/// </summary>
+/// <remarks>
+///     <para>
+///         ⚠ <b>THERE IS NO CREDENTIAL HERE AND THERE IS NOWHERE TO PUT ONE, WHICH IS THE ENTIRE
+///         FEATURE.</b> docs/plan/11 § Managed identity calls this "the feature that removes stored
+///         secrets" and justifies 1.2 EM with "no secret is ever stored, on either side … it removes
+///         an entire incident class". Compare the three states above it: <c>UserGrainState</c> holds
+///         hashes and a vault handle, <c>ApplicationGrainState</c> and
+///         <c>ServicePrincipalGrainState</c> hold a <see cref="VaultSecretRef" />. This holds a
+///         binding — <i>who</i> may present a token — and a public key set. A stolen backup of this
+///         row lets an attacker learn which namespace a workload runs in, and nothing else.
+///     </para>
+///     <para>
+///         ⚠ <b>CC1005 does not fire on any member here, and that is a result rather than an
+///         accident.</b> The analyzer bans <c>[Id]</c> members named <c>*Password</c>, <c>*Secret</c>,
+///         <c>*Token</c> or <c>*Key</c> outside the vault assembly, and this is the module most likely
+///         to trip it — <c>PasskeyCredential.PublicKey</c> already carries a per-member suppression
+///         with its argument. Nothing here needs one: the key set is spelled
+///         <c>PublicKeySetJson</c> because that is what it is, and the presented service-account token
+///         is a method <i>parameter</i> that is read, verified and discarded rather than a serialized
+///         member. <c>NoSecretIsStoredAnywhereInTheFlow</c> asserts the absence by reflection instead
+///         of trusting the naming.
+///     </para>
+/// </remarks>
+[GenerateSerializer]
+[Alias("CyberCloud.Identity.ManagedIdentityGrainState")]
+public sealed class ManagedIdentityGrainState {
+    /// <summary>The identity, or <see langword="null" /> before <c>CreateAsync</c>.</summary>
+    [Id(0)]
+    public ManagedIdentityDescriptor? Descriptor { get; set; }
+}
+
+/// <summary>
 ///     <c>SessionGrain</c>'s <b>hot</b> state. docs/plan/05 § Hot lists sessions among what it holds.
 /// </summary>
 /// <remarks>

@@ -336,7 +336,8 @@ public interface IApplicationGrain : IGrainWithStringKey {
 ///         docs/plan/11 § Managed identity calls a client secret in a Kubernetes <c>Secret</c> "the
 ///         bad answer". This grain is the good-enough answer for CI and for third-party integrations
 ///         that cannot present a projected service-account token; a workload inside a tenant cluster
-///         should be a managed identity instead — see <see cref="ITokenExchangeSeam" />.
+///         should be a managed identity instead — see <see cref="IManagedIdentityGrain" />, which
+///         holds no credential at all rather than a handle to one.
 ///     </para>
 /// </remarks>
 [Alias("CyberCloud.Identity.IServicePrincipalGrain")]

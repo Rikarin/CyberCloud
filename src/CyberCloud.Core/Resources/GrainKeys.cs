@@ -98,7 +98,13 @@ public enum GrainKeyKind {
     /// <summary>
     ///     <c>ISessionGrain</c> — <c>session/{sessionId:N}</c>. See <see cref="GrainKeys.Session" />.
     /// </summary>
-    Session
+    Session,
+
+    /// <summary>
+    ///     <c>IManagedIdentityGrain</c> — <c>mi/{managedIdentityId:N}</c>. See
+    ///     <see cref="GrainKeys.ManagedIdentity" />.
+    /// </summary>
+    ManagedIdentity
 }
 
 /// <summary>
@@ -230,6 +236,7 @@ public readonly record struct GrainKey {
             GrainKeyKind.Application => GrainKeys.Application(Id),
             GrainKeyKind.ServicePrincipal => GrainKeys.ServicePrincipal(Id),
             GrainKeyKind.Session => GrainKeys.Session(Id),
+            GrainKeyKind.ManagedIdentity => GrainKeys.ManagedIdentity(Id),
             _ => string.Empty
         };
 }
@@ -246,10 +253,10 @@ public readonly record struct GrainKey {
 ///         contains them. Nothing else in the codebase may concatenate one.
 ///     </para>
 ///     <para>
-///         <b>The eighteen shapes.</b> Eight of them are the table at docs/plan/06 § Grain keys; two
+///         <b>The nineteen shapes.</b> Eight of them are the table at docs/plan/06 § Grain keys; two
 ///         more — <see cref="Tenant" /> and <see cref="PlatformSingleton" /> — are the rows that
 ///         table is <i>missing</i> for grains docs/plan/04 § Grain taxonomy names in its Entity and
-///         Platform rows; four are docs/plan/07 § Storage's authorization grains; the last four are
+///         Platform rows; four are docs/plan/07 § Storage's authorization grains; the last five are
 ///         the rows that same table is missing for the grains docs/plan/11 § The object model names.
 ///         See the remarks on each. Every one of them is formatted <i>and</i> parsed —
 ///         a key that can
@@ -379,6 +386,12 @@ public readonly record struct GrainKey {
 ///             </term>
 ///             <description><c>session/{sessionId:N}</c> — <b>hot tier</b>, not in docs/plan/06's table</description>
 ///         </item>
+///         <item>
+///             <term>
+///                 <see cref="ManagedIdentity" />
+///             </term>
+///             <description><c>mi/{managedIdentityId:N}</c> — docs/plan/11 § Managed identity</description>
+///         </item>
 ///     </list>
 ///     <para>
 ///         The four <c>rel/</c> shapes are docs/plan/07 § Storage's, plus the two that document
@@ -463,6 +476,9 @@ public static class GrainKeys {
 
     /// <summary><c>session/</c> — a sign-in session, docs/plan/11 § Sessions and revocation.</summary>
     public const string SessionPrefix = "session/";
+
+    /// <summary><c>mi/</c> — a managed identity, docs/plan/11 § Managed identity.</summary>
+    public const string ManagedIdentityPrefix = "mi/";
 
     /// <summary><c>cluster/</c> — a cluster connection. Null tenant.</summary>
     public const string ClusterConnectionPrefix = "cluster/";
@@ -725,18 +741,22 @@ public static class GrainKeys {
 
     // ── The identity shapes — docs/plan/11 § The object model ──────────────────────────────────
     //
-    // ⚠ DOC DEFECT, and these four rows are the repair. docs/plan/11 § The object model names six
+    // ⚠ DOC DEFECT, and these five rows are the repair. docs/plan/11 § The object model names six
     // grains — IUserGrain, IGroupGrain, IServicePrincipalGrain, IApplicationGrain,
     // IManagedIdentityGrain and ISessionGrain — and the grain-key table at docs/plan/06 § Grain keys
     // carries a row for exactly one of them, IUserGrain. That table's own ⚠ says what the
     // consequence is: "a grain missing from it is a grain that cannot be addressed … If you add a
-    // grain, add its row here first." Four of the five missing grains are built here, so four rows
-    // are added; IManagedIdentityGrain is deliberately not, because docs/plan/11 § Managed identity
-    // is a seam rather than an implementation and a key shape with no grain behind it is a shape
-    // nothing can hold to its meaning — the same argument this type already makes for the Leopard
-    // membership index.
+    // grain, add its row here first."
     //
-    // All four are two-segment GUID keys and tenant-qualified, which is what makes them cheap: the
+    // ⚠ ManagedIdentity was ABSENT here on purpose and is now present, and the reason it changed is
+    // worth keeping. The earlier note said a key shape with no grain behind it "is a shape nothing
+    // can hold to its meaning" — the same argument this type still makes for the Leopard membership
+    // index — and that was right while docs/plan/11 § Managed identity was a seam. It is no longer:
+    // IManagedIdentityGrain exists, holds the (cluster, namespace, serviceAccount) binding and the
+    // cluster's OIDC issuer, and refuses a binding whose discovery document is unreachable. The row
+    // was added WITH the grain rather than ahead of it, which is the order the ⚠ above asks for.
+    //
+    // All five are two-segment GUID keys and tenant-qualified, which is what makes them cheap: the
     // shape rules, the parser, the canonicity guard and the collision argument on this type all
     // already cover that form, so nothing about the closed set had to be loosened to admit them.
 
@@ -792,6 +812,38 @@ public static class GrainKeys {
     ///     </para>
     /// </remarks>
     public static string Session(Guid sessionId) => SessionPrefix + N(sessionId);
+
+    /// <summary>
+    ///     <c>mi/{managedIdentityId:N}</c> — <c>IManagedIdentityGrain</c>, docs/plan/11 § Managed
+    ///     identity.
+    /// </summary>
+    /// <param name="managedIdentityId">The managed identity.</param>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>Not keyed by <c>(cluster, namespace, serviceAccount)</c>, and that is the trap
+    ///         worth naming.</b> The binding is what a token exchange arrives holding, so keying by it
+    ///         looks like the shape that saves a lookup. It is wrong three ways: the triple is
+    ///         caller-influenced text on an unauthenticated endpoint, so an attacker would choose
+    ///         which activation a request creates; a rebind — pointing the same identity at a new
+    ///         namespace, which is an ordinary operation — would become a grain migration and orphan
+    ///         every ReBAC tuple naming the old key; and the same triple may legitimately be bound by
+    ///         at most one identity, which is a <i>uniqueness</i> question and therefore an index's
+    ///         job rather than a key's.
+    ///     </para>
+    ///     <para>
+    ///         The GUID is the identity because docs/plan/11 § Managed identity step 6 makes it the
+    ///         ReBAC subject id — <c>managedIdentity:{id}</c> — and re-keying would orphan every grant
+    ///         made to it, exactly as it would for <see cref="Group" />.
+    ///     </para>
+    ///     <para>
+    ///         <b>Cardinality</b> is one activation per managed identity, which is the high-cardinality
+    ///         answer docs/plan/04 § Grain taxonomy asks new grains for. The prefix is <c>mi</c> and
+    ///         not <c>managedidentity</c> only for the reason every other prefix here is short; it
+    ///         collides with nothing, since shapes are fixed by their first segment and their segment
+    ///         count.
+    ///     </para>
+    /// </remarks>
+    public static string ManagedIdentity(Guid managedIdentityId) => ManagedIdentityPrefix + N(managedIdentityId);
 
     /// <summary>
     ///     <c>cluster/{clusterId:N}</c> — <c>IClusterConnectionGrain</c>, docs/plan/06 § Grain keys.
@@ -1054,7 +1106,7 @@ public static class GrainKeys {
             return Invalid(
                 "A grain key within a tenant is required. It is one of 'sub/{id}', "
                 + "'sub/{id}/rg/{name}', 'res/{id}', 'user/{id}', 'op/{id}', 'cluster/{id}', "
-                + "'tenant/{id}', 'group/{id}', 'app/{id}', 'sp/{id}', 'session/{id}', "
+                + "'tenant/{id}', 'group/{id}', 'app/{id}', 'sp/{id}', 'session/{id}', 'mi/{id}', "
                 + "'platform/{singleton}', 'idx/path/{digest}', "
                 + "'idx/email/{digest}', 'rel/store/{tenantId}', 'rel/obj/{type}/{id}', "
                 + "'rel/sub/{type}/{id}' or 'rel/check/{type}/{id}' — see docs/plan/06 § Grain keys, "
@@ -1148,14 +1200,15 @@ public static class GrainKeys {
             "app" => GrainKeyKind.Application,
             "sp" => GrainKeyKind.ServicePrincipal,
             "session" => GrainKeyKind.Session,
+            "mi" => GrainKeyKind.ManagedIdentity,
             _ => GrainKeyKind.None
         };
 
         if (kind == GrainKeyKind.None) {
             return Invalid(
                 $"'{key}' is not a grain key: '{segments[0]}' is not one of 'sub', 'res', 'user', "
-                + "'op', 'cluster', 'tenant', 'group', 'app', 'sp', 'session' or 'platform'. The "
-                + "prefix is matched case-sensitively — see docs/plan/06 § Grain keys and "
+                + "'op', 'cluster', 'tenant', 'group', 'app', 'sp', 'session', 'mi' or 'platform'. "
+                + "The prefix is matched case-sensitively — see docs/plan/06 § Grain keys and "
                 + "docs/plan/11 § The object model."
             );
         }

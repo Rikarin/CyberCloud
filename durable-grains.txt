@@ -147,6 +147,25 @@ CyberCloud.Identity.Grains.ApplicationGrain
 # and integration authenticating as it, and there is no user to notice and re-enrol.
 CyberCloud.Identity.Grains.ServicePrincipalGrain
 #
+# ManagedIdentityGrain holds a workload's (cluster, namespace, serviceAccount) binding and the
+# cluster's OIDC issuer and public key set — docs/plan/11 § Managed identity, steps 2 and 3.
+#
+# ⚠ Read this line carefully, because the obvious argument goes the other way. Nothing on this grain
+# is secret: the key set is the public half of a signing pair, served unauthenticated by the
+# tenant's own API server, and the binding names a namespace rather than holding a credential. So
+# "is it sensitive" answers no — and that is not the question docs/plan/05 § Choosing a tier asks.
+# The question is "can this be rebuilt", and it cannot: the binding is a decision a tenant
+# administrator made, recorded nowhere else. There is no cluster to re-read it from, because the
+# cluster does not know which platform identity its service account was mapped to. Losing it does
+# not degrade authentication, it REVERSES it — every workload in the tenant stops being able to
+# exchange, and the only recovery is a human re-entering bindings they may not have written down.
+#
+# The issuer record beside it is genuinely rebuildable — RefreshIssuerAsync re-reads it — but it is
+# rebuildable only FROM the binding, so splitting the two across tiers would buy nothing and add a
+# state machine where a crash between two writes leaves an identity trusting a cluster it is no
+# longer bound to.
+CyberCloud.Identity.Grains.ManagedIdentityGrain
+#
 # ⚠ SessionGrain is deliberately ABSENT. docs/plan/05 § Hot lists sessions among what the hot tier
 # holds: losing one costs a sign-in, which is a warm-up rather than a loss. It is also the
 # highest-write-rate object in the identity module — every refresh rotation is a write — so putting

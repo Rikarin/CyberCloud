@@ -29,7 +29,18 @@ namespace CyberCloud.Identity.Host.Tokens;
 ///         <see cref="AccessTokenClaims.Permitted" /> and has no path that adds anything else, so a
 ///         future edit that wants a role claim has to add a line here <i>and</i> widen that set — two
 ///         visible edits in two files rather than one plausible-looking line. <c>NoRolesInTokenTests</c>
-///         asserts both directions.
+///         asserts both directions, and <see cref="Build" /> checks its own output against that set
+///         before returning, so the two cannot drift within one file either.
+///     </para>
+///     <para>
+///         <b>Two of the fourteen claims exist for the gateway and nothing else</b>, and both were
+///         missing while the two halves were built in parallel:
+///         <see cref="AccessTokenClaims.SubjectType" />, without which a ReBAC <c>SubjectRef</c>
+///         cannot be constructed and every <c>Check</c> is made against a guessed type; and
+///         <see cref="AccessTokenClaims.ImpersonatedBy" />, without which docs/plan/06 § Platform
+///         administration's impersonation cannot exist at all, because the operator behind a request
+///         has nowhere trustworthy to be recorded. ⚠ The second is minted <i>here</i> and read from
+///         no request surface anywhere — that is the whole of its security value.
 ///     </para>
 /// </remarks>
 public static class AccessTokenPrincipalFactory {
@@ -39,14 +50,47 @@ public static class AccessTokenPrincipalFactory {
     /// <param name="session">The session the token belongs to.</param>
     /// <param name="audience">The API that will accept the token.</param>
     /// <param name="scopes">The granted scopes.</param>
+    /// <param name="subjectType">
+    ///     What kind of subject <c>sub</c> names — one of <see cref="SubjectTypes" />.
+    /// </param>
+    /// <param name="impersonatedBy">
+    ///     The platform operator behind an impersonated request, or <see cref="Guid.Empty" /> — which
+    ///     is what every ordinary token passes, and which emits no claim at all.
+    /// </param>
     /// <returns>A principal carrying only <see cref="AccessTokenClaims.Permitted" /> claim types.</returns>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b><paramref name="subjectType" /> has no default, deliberately.</b> Defaulting it to
+    ///         <see cref="SubjectTypes.User" /> would make the one call site that mints a service
+    ///         principal's or a managed identity's token compile while emitting <c>user</c>, and the
+    ///         resulting token names a subject the ReBAC store has never heard of — every check denies,
+    ///         which reads as a permissions bug. A required parameter makes each caller say which of
+    ///         the three it is.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b><paramref name="impersonatedBy" /> is a parameter of this factory and is never
+    ///         read from a request.</b> docs/plan/06 § Platform administration's controls — a second
+    ///         operator's approval, a 60-minute box, the audit record, and the tenant's notification —
+    ///         are all properties of the <i>grant</i>, and the only way a token can carry the grant it
+    ///         was issued under is for the value to be minted here. See
+    ///         <see cref="AccessTokenClaims.ImpersonatedBy" />.
+    ///     </para>
+    /// </remarks>
+    /// <exception cref="ArgumentException"><paramref name="subjectType" /> is not a subject type.</exception>
+    /// <exception cref="InvalidOperationException">The built principal carries a claim outside the closed set.</exception>
     public static ClaimsPrincipal Build(
         SessionDescriptor session,
         string audience,
-        IReadOnlyList<string> scopes
+        IReadOnlyList<string> scopes,
+        string subjectType,
+        Guid impersonatedBy = default
     ) {
         ArgumentNullException.ThrowIfNull(session);
         ArgumentNullException.ThrowIfNull(scopes);
+
+        if (SubjectTypes.Ensure(subjectType).TryGetError(out var invalid)) {
+            throw new ArgumentException(invalid.Message, nameof(subjectType));
+        }
 
         // ⚠ The RoleClaimType is set to a claim type this principal never carries, deliberately.
         // ClaimsIdentity defaults it to the Microsoft role URI, and ClaimsPrincipal.IsInRole reads
@@ -62,6 +106,14 @@ public static class AccessTokenPrincipalFactory {
         );
 
         identity.AddClaim(new(AccessTokenClaims.Subject, N(session.UserId)));
+
+        // ⚠ The subject's TYPE, as its own claim rather than as a prefix on `sub`. The gateway builds
+        // a ReBAC SubjectRef out of the pair, and docs/plan/07 § The model makes user:abc and
+        // servicePrincipal:abc different subjects — so a token that carried only the id would make
+        // every Check a guess. See AccessTokenClaims.SubjectType for why a `type:id` convention on
+        // `sub` is the wrong answer even though it needs one fewer claim.
+        identity.AddClaim(new(AccessTokenClaims.SubjectType, subjectType));
+
         identity.AddClaim(new(AccessTokenClaims.TenantId, N(session.TenantId)));
         identity.AddClaim(new(AccessTokenClaims.SessionId, N(session.SessionId)));
         identity.AddClaim(new(AccessTokenClaims.Audience, audience));
@@ -86,7 +138,25 @@ public static class AccessTokenPrincipalFactory {
             identity.AddClaim(new(AccessTokenClaims.AuthenticationMethods, AmrValue(method)));
         }
 
-        return new(identity);
+        // ⚠ Emitted only when there IS an impersonation, and only from this argument. An empty claim
+        // on every ordinary token would be a value consumers learn to ignore, and the audit pipeline
+        // would have to distinguish "absent" from "empty" to answer "was this impersonated" — which
+        // is the question docs/plan/06 § Platform administration exists to make answerable.
+        if (impersonatedBy != Guid.Empty) {
+            identity.AddClaim(new(AccessTokenClaims.ImpersonatedBy, N(impersonatedBy)));
+        }
+
+        var principal = new ClaimsPrincipal(identity);
+
+        // ⚠ The closed set, checked against what was actually built rather than against what this
+        // method intends to build. The two differ the moment somebody adds an AddClaim above without
+        // reading the remarks, and this is the line that turns that into a failure here instead of a
+        // token in the wild carrying a claim the gateway will not recognise.
+        if (AccessTokenClaims.EnsurePermitted(principal.Claims.Select(x => x.Type)).TryGetError(out var error)) {
+            throw new InvalidOperationException(error.Message);
+        }
+
+        return principal;
     }
 
     /// <summary>

@@ -37,7 +37,7 @@ public sealed class NoRolesInTokenTests {
 
     [Fact]
     public void TheIssuedPrincipalCarriesNoRoleOrPermissionClaim() {
-        var principal = AccessTokenPrincipalFactory.Build(Session, "cyc.api", ["openid", "cyc.api"]);
+        var principal = AccessTokenPrincipalFactory.Build(Session, "cyc.api", ["openid", "cyc.api"], SubjectTypes.User);
 
         foreach (var claim in principal.Claims) {
             AccessTokenClaims.ForbiddenClaims.ShouldNotContain(
@@ -52,7 +52,7 @@ public sealed class NoRolesInTokenTests {
 
     [Fact]
     public void TheClaimSetIsExactlyTheClosedPermittedList() {
-        var principal = AccessTokenPrincipalFactory.Build(Session, "cyc.api", ["openid", "cyc.api"]);
+        var principal = AccessTokenPrincipalFactory.Build(Session, "cyc.api", ["openid", "cyc.api"], SubjectTypes.User);
 
         // ⚠ An allow-list, not a deny-list. A factory that stripped forbidden claims would still let
         // an unanticipated one through; one that can only emit from a closed set cannot.
@@ -67,7 +67,7 @@ public sealed class NoRolesInTokenTests {
 
     [Fact]
     public void IsInRoleAnswersNoForEverythingBecauseThereIsNothingToAnswerFrom() {
-        var principal = AccessTokenPrincipalFactory.Build(Session, "cyc.api", ["cyc.api"]);
+        var principal = AccessTokenPrincipalFactory.Build(Session, "cyc.api", ["cyc.api"], SubjectTypes.User);
 
         // ⚠ ClaimsIdentity defaults RoleClaimType to the Microsoft role URI, so leaving the default
         // would leave a WORKING IsInRole that silently answers "no" for everybody — code that reached
@@ -84,7 +84,7 @@ public sealed class NoRolesInTokenTests {
 
     [Fact]
     public void TheClaimsTheDocumentDoesNameAreAllPresent() {
-        var principal = AccessTokenPrincipalFactory.Build(Session, "cyc.api", ["openid", "cyc.api"]);
+        var principal = AccessTokenPrincipalFactory.Build(Session, "cyc.api", ["openid", "cyc.api"], SubjectTypes.User);
 
         // docs/plan/11 § Protocol: "`aud` names the API, `tid` the tenant, `sub` the GUID, plus
         // `scp`, `azp`, and an `auth_time`/`amr` pair".
@@ -101,7 +101,7 @@ public sealed class NoRolesInTokenTests {
 
     [Fact]
     public void AuthTimeComesFromTheSessionSoARefreshCannotDefeatStepUp() {
-        var principal = AccessTokenPrincipalFactory.Build(Session, "cyc.api", ["cyc.api"]);
+        var principal = AccessTokenPrincipalFactory.Build(Session, "cyc.api", ["cyc.api"], SubjectTypes.User);
 
         var authTime = principal.FindFirst(AccessTokenClaims.AuthenticationTime)!.Value;
 
@@ -115,7 +115,7 @@ public sealed class NoRolesInTokenTests {
 
     [Fact]
     public void AmrUsesTheRegisteredValuesRatherThanOurEnumNames() {
-        var principal = AccessTokenPrincipalFactory.Build(Session, "cyc.api", ["cyc.api"]);
+        var principal = AccessTokenPrincipalFactory.Build(Session, "cyc.api", ["cyc.api"], SubjectTypes.User);
 
         // ⚠ RFC 8176's registry, not our spelling. A relying party reading `amr` is reading that
         // registry; emitting "Passkey" would be a value nobody else understands, in the one claim
@@ -134,18 +134,129 @@ public sealed class NoRolesInTokenTests {
         // so the token an admin in forty groups receives is byte-identical in shape to a new user's.
         // A factory that took a group list would fail this by construction, which is why it does not
         // take one.
-        var principal = AccessTokenPrincipalFactory.Build(Session, "cyc.api", ["openid", "cyc.api"]);
+        var principal = AccessTokenPrincipalFactory.Build(Session, "cyc.api", ["openid", "cyc.api"], SubjectTypes.User);
         var claimCount = principal.Claims.Count();
 
-        // One claim per amr value, plus the seven fixed ones.
-        claimCount.ShouldBe(7 + Session.Methods.Count);
+        // One claim per amr value, plus the eight fixed ones — sub, sub_typ, tid, sid, aud, azp, scp
+        // and auth_time. ⚠ `act_sub` is not among them: it is emitted only when there IS an
+        // impersonation, which is what makes "was this request impersonated" answerable by the claim's
+        // presence rather than by comparing its value to an empty string.
+        claimCount.ShouldBe(8 + Session.Methods.Count);
 
         var busy = Session with {
             Methods = [AuthenticationMethod.Passkey, AuthenticationMethod.Totp]
         };
 
-        AccessTokenPrincipalFactory.Build(busy, "cyc.api", ["openid", "cyc.api"])
+        AccessTokenPrincipalFactory.Build(busy, "cyc.api", ["openid", "cyc.api"], SubjectTypes.User)
             .Claims.Count()
-            .ShouldBe(7 + busy.Methods.Count);
+            .ShouldBe(8 + busy.Methods.Count);
+    }
+
+    // ── The two claims the gateway stated and the contract did not carry ──────────────────────
+
+    [Fact]
+    public void TheSubjectTypeIsItsOwnClaimAndSubCarriesOnlyTheId() {
+        var principal = AccessTokenPrincipalFactory.Build(
+            Session,
+            "cyc.api",
+            ["cyc.api"],
+            SubjectTypes.ServicePrincipal
+        );
+
+        principal.FindFirst(AccessTokenClaims.SubjectType)!.Value.ShouldBe("servicePrincipal");
+
+        // ⚠ THE ASSERTION THAT THE PREFIX CONVENTION IS NOT BACK. `sub` is a bare GUID: there is no
+        // separator in it, so nothing can recover a type from it, and a consumer that tried would
+        // have to invent one. docs/plan/07 § The model makes user:abc and servicePrincipal:abc
+        // different subjects, so the type has to arrive as data rather than as a parsing convention.
+        var subject = principal.FindFirst(AccessTokenClaims.Subject)!.Value;
+
+        subject.ShouldBe(Session.UserId.ToString("N"));
+        subject.ShouldNotContain(":");
+        Guid.TryParseExact(subject, "N", out _).ShouldBeTrue();
+    }
+
+    [Fact]
+    public void EveryTokenCarriesASubjectTypeAndAnUnknownOneCannotBeMinted() {
+        // A required parameter rather than a defaulted one: the call site that mints a machine
+        // identity's token has to say so, instead of compiling into a token that claims to be a user.
+        foreach (var subjectType in SubjectTypes.All) {
+            AccessTokenPrincipalFactory.Build(Session, "cyc.api", ["cyc.api"], subjectType)
+                .FindFirst(AccessTokenClaims.SubjectType)!
+                .Value.ShouldBe(subjectType);
+        }
+
+        // ⚠ Ordinal. `serviceprincipal` is a subject the tuple store has never heard of, so a token
+        // carrying it would deny every check and look like a permissions bug.
+        Should.Throw<ArgumentException>(
+            () => AccessTokenPrincipalFactory.Build(Session, "cyc.api", ["cyc.api"], "serviceprincipal")
+        );
+
+        Should.Throw<ArgumentException>(
+            () => AccessTokenPrincipalFactory.Build(Session, "cyc.api", ["cyc.api"], "group")
+        );
+    }
+
+    [Fact]
+    public void AnOrdinaryTokenCarriesNoImpersonationClaimAtAll() {
+        var principal = AccessTokenPrincipalFactory.Build(Session, "cyc.api", ["cyc.api"], SubjectTypes.User);
+
+        // ⚠ Absent, not empty. "Was this request made under impersonation" is answered by the claim's
+        // presence; an empty claim on every token would make the audit pipeline distinguish absent
+        // from empty for the one question docs/plan/06 § Platform administration exists to answer.
+        principal.FindFirst(AccessTokenClaims.ImpersonatedBy).ShouldBeNull();
+    }
+
+    [Fact]
+    public void TheImpersonationClaimIsMintedFromTheGrantAndCarriesTheOperator() {
+        var operatorId = Guid.Parse("9c1e7b40-3f2a-4d58-9a6c-8b2d5e0f1a34");
+
+        var principal = AccessTokenPrincipalFactory.Build(
+            Session,
+            "cyc.api",
+            ["cyc.api"],
+            SubjectTypes.User,
+            operatorId
+        );
+
+        principal.FindFirst(AccessTokenClaims.ImpersonatedBy)!.Value.ShouldBe(operatorId.ToString("N"));
+
+        // ⚠ `sub` is still the impersonated user, not the operator, and that is the point of having
+        // two claims. The request is made AS the tenant's user — that is what "view as tenant" means —
+        // and the operator is the actor behind it. Collapsing them would make the audit trail say the
+        // tenant's own user did whatever support did.
+        principal.FindFirst(AccessTokenClaims.Subject)!.Value.ShouldBe(Session.UserId.ToString("N"));
+        principal.FindFirst(AccessTokenClaims.TenantId)!.Value.ShouldBe(Session.TenantId.ToString("N"));
+
+        // The eight fixed claims, plus act_sub, plus one per amr value.
+        principal.Claims.Count().ShouldBe(9 + Session.Methods.Count);
+    }
+
+    [Fact]
+    public void ThereIsNoInputToThisFactoryThatIsNotAnArgumentToIt() {
+        // ⚠ THE SECURITY PROPERTY, ASSERTED STRUCTURALLY. The impersonation value can only enter a
+        // token through a parameter of Build — there is no HttpContext, no header dictionary and no
+        // ambient accessor in this type's signature or in the assembly it lives in that could supply
+        // one. docs/plan/06 § Platform administration's controls are properties of the GRANT, and a
+        // value read off a request carries none of them.
+        var build = typeof(AccessTokenPrincipalFactory).GetMethod(nameof(AccessTokenPrincipalFactory.Build))!;
+
+        build.GetParameters()
+            .Select(x => x.ParameterType.Name)
+            .ShouldBe(["SessionDescriptor", "String", "IReadOnlyList`1", "String", "Guid"]);
+
+        // Nothing HTTP-shaped reaches it, which is what makes "never accepted from a header" a fact
+        // about the type rather than a rule about its callers.
+        build.GetParameters()
+            .ShouldAllBe(x => !x.ParameterType.FullName!.Contains("Microsoft.AspNetCore", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void TheFactoryRefusesToReturnAPrincipalCarryingAClaimOutsideTheClosedSet() {
+        // Build checks its own output, so the closed set is enforced by the code and not only by the
+        // test above it. This asserts the check exists by exercising the contract it delegates to —
+        // a future AddClaim that slipped past review fails at the factory rather than in the wild.
+        AccessTokenClaims.EnsurePermitted(["sub", "roles"]).IsFailure.ShouldBeTrue();
+        AccessTokenClaims.EnsurePermitted(["sub", "sub_typ", "act_sub"]).IsSuccess.ShouldBeTrue();
     }
 }

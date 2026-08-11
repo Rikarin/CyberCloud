@@ -130,8 +130,25 @@ sealed class GatewayHarness {
     /// <summary>Issues a token. The only way a caller gets a tenant.</summary>
     /// <param name="tenantId">The <c>tid</c> claim.</param>
     /// <param name="subjectId">The <c>sub</c> claim.</param>
-    public string Token(Guid tenantId, string subjectId = "user-1") =>
-        tokens.Issue(new(tenantId, "user", subjectId, "", "", Clock.UtcNow.AddMinutes(10)));
+    /// <param name="subjectType">
+    ///     The <c>sub_typ</c> claim — <c>user</c>, <c>servicePrincipal</c> or <c>managedIdentity</c>.
+    ///     ⚠ Its own claim rather than a prefix on <paramref name="subjectId" />, because
+    ///     docs/plan/07 § The model makes <c>user:abc</c> and <c>servicePrincipal:abc</c> two
+    ///     different subjects.
+    /// </param>
+    /// <param name="impersonatedBy">
+    ///     The <c>act_sub</c> claim — the operator behind an impersonated request, or empty.
+    ///     ⚠ It is a parameter of <b>issuing</b> a token and there is no other way to set it, which
+    ///     is the shape docs/plan/06 § Platform administration needs and the reason no request header
+    ///     can supply one.
+    /// </param>
+    public string Token(
+        Guid tenantId,
+        string subjectId = "user-1",
+        string subjectType = "user",
+        string impersonatedBy = ""
+    ) =>
+        tokens.Issue(new(tenantId, subjectType, subjectId, "", impersonatedBy, Clock.UtcNow.AddMinutes(10)));
 
     /// <summary>The happy-path resource path for a tenant.</summary>
     /// <param name="tenantId">Which tenant's path to spell.</param>
