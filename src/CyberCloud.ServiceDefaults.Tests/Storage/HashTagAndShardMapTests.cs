@@ -1,7 +1,7 @@
-using System.Globalization;
 using CyberCloud.ServiceDefaults.Storage;
 using Npgsql;
 using Shouldly;
+using System.Globalization;
 
 namespace CyberCloud.ServiceDefaults.Tests.Storage;
 
@@ -13,20 +13,9 @@ namespace CyberCloud.ServiceDefaults.Tests.Storage;
 ///     No containers. Everything here is a pure function, and a pure function that needs Docker to be
 ///     checked is a pure function nobody checks.
 /// </remarks>
-public sealed class HashTagAndShardMapTests
-{
-    static CyberCloudStorageOptions TwoShards()
-    {
-        var options = new CyberCloudStorageOptions();
-        options.Hot.ConnectionString = "localhost:6379";
-        options.Durable.Shards["durable-00"] = "Host=a;Database=cc;Username=u;Password=p";
-        options.Durable.Shards["durable-01"] = "Host=b;Database=cc;Username=u;Password=p";
-        return options;
-    }
-
+public sealed class HashTagAndShardMapTests {
     [Fact]
-    public void TheSlotFunctionMatchesRedisReferenceVectors()
-    {
+    public void TheSlotFunctionMatchesRedisReferenceVectors() {
         // The three values every CRC16 implementation is checked against, plus the two the Redis
         // Cluster specification itself uses. If this fails, nothing else in this file means
         // anything, so it comes first.
@@ -36,8 +25,7 @@ public sealed class HashTagAndShardMapTests
     }
 
     [Fact]
-    public void TheKeyLayoutIsExactlyTheOneInThePlan()
-    {
+    public void TheKeyLayoutIsExactlyTheOneInThePlan() {
         var map = new StaticShardMapCache(TwoShards());
         var tenant = Guid.Parse("11111111-2222-3333-4444-555555555555");
 
@@ -49,8 +37,7 @@ public sealed class HashTagAndShardMapTests
     }
 
     [Fact]
-    public void EveryKeyOfOneTenantLandsOnOneSlotAndDifferentTenantsDoNot()
-    {
+    public void EveryKeyOfOneTenantLandsOnOneSlotAndDifferentTenantsDoNot() {
         var map = new StaticShardMapCache(TwoShards());
         var a = map.HotHashTagFor(StorageFixture.Tenant(1).ToString("D", CultureInfo.InvariantCulture));
         var b = map.HotHashTagFor(StorageFixture.Tenant(2).ToString("D", CultureInfo.InvariantCulture));
@@ -72,8 +59,7 @@ public sealed class HashTagAndShardMapTests
     }
 
     [Fact]
-    public void TenantsSpreadOverTheSlotSpaceRatherThanClustering()
-    {
+    public void TenantsSpreadOverTheSlotSpaceRatherThanClustering() {
         var map = new StaticShardMapCache(TwoShards());
 
         var slots = Enumerable.Range(0, 500)
@@ -89,8 +75,7 @@ public sealed class HashTagAndShardMapTests
     }
 
     [Fact]
-    public void BracingTheWholeKeyLosesColocationWhichIsWhyItIsWrong()
-    {
+    public void BracingTheWholeKeyLosesColocationWhichIsWhyItIsWrong() {
         // ⚠ Both of these "work" against a single-node Redis and are wrong on a cluster. This test
         // is what makes the difference visible without one.
         var tag = "cc:t:" + Guid.Empty.ToString("N", CultureInfo.InvariantCulture);
@@ -104,8 +89,7 @@ public sealed class HashTagAndShardMapTests
     }
 
     [Fact]
-    public void EmptyBracesFallBackToHashingTheWholeKey()
-    {
+    public void EmptyBracesFallBackToHashingTheWholeKey() {
         // Redis' rule, restated so that a future "optimisation" that produces {} cannot pass.
         RedisHashSlot.HashTagOf("{}:a").ShouldBe("{}:a");
         RedisHashSlot.HashTagOf("{t}:a").ShouldBe("t");
@@ -114,8 +98,7 @@ public sealed class HashTagAndShardMapTests
     }
 
     [Fact]
-    public void TwoSpellingsOfOneTenantGuidGiveOneSlot()
-    {
+    public void TwoSpellingsOfOneTenantGuidGiveOneSlot() {
         var map = new StaticShardMapCache(TwoShards());
         var id = Guid.NewGuid();
 
@@ -127,8 +110,7 @@ public sealed class HashTagAndShardMapTests
     }
 
     [Fact]
-    public void AHashTagOverrideMovesATenantWithoutChangingTheKeyFormat()
-    {
+    public void AHashTagOverrideMovesATenantWithoutChangingTheKeyFormat() {
         var options = TwoShards();
         var whale = StorageFixture.Tenant(7);
         options.Hot.HashTagOverrides[whale.ToString("D", CultureInfo.InvariantCulture)] = "cc:big:whale";
@@ -141,16 +123,14 @@ public sealed class HashTagAndShardMapTests
     }
 
     [Fact]
-    public void ATagThatAlreadyCarriesBracesIsRejectedRatherThanNested()
-    {
+    public void ATagThatAlreadyCarriesBracesIsRejectedRatherThanNested() {
         // Redis takes the FIRST '{' to the FIRST following '}', so "{{a}b}" tags on "{a" — a value
         // nobody wrote. Cheaper to refuse it.
         Should.Throw<ArgumentException>(() => new TenantHotKeys("t", "{already}"));
     }
 
     [Fact]
-    public void TheNullTenantSentinelRoutesInsteadOfThrowing()
-    {
+    public void TheNullTenantSentinelRoutesInsteadOfThrowing() {
         // ⚠ This is the docs/plan/05 § Storage provider wiring defect, as a test. Its body starts
         // with Guid.Parse(tenantId); Orleans.Multitenant passes "Null" for every platform grain.
         Should.Throw<FormatException>(() => Guid.Parse("Null"));
@@ -164,8 +144,7 @@ public sealed class HashTagAndShardMapTests
     }
 
     [Fact]
-    public void PlacementIsStableAcrossProcessesAndPinsWin()
-    {
+    public void PlacementIsStableAcrossProcessesAndPinsWin() {
         var options = TwoShards();
         var tenant = StorageFixture.Tenant(3).ToString("D", CultureInfo.InvariantCulture);
 
@@ -183,8 +162,7 @@ public sealed class HashTagAndShardMapTests
     }
 
     [Fact]
-    public void APinToAnUnknownShardIsFatalAtWiringTimeRatherThanSilent()
-    {
+    public void APinToAnUnknownShardIsFatalAtWiringTimeRatherThanSilent() {
         var options = TwoShards();
         options.Durable.Pins[Guid.NewGuid().ToString("D", CultureInfo.InvariantCulture)] = "durable-99";
 
@@ -193,8 +171,7 @@ public sealed class HashTagAndShardMapTests
     }
 
     [Fact]
-    public void MaxPoolSizeIsAppliedAndOverridesWhateverTheOperatorWrote()
-    {
+    public void MaxPoolSizeIsAppliedAndOverridesWhateverTheOperatorWrote() {
         var options = TwoShards();
         options.Durable.Shards["durable-00"] = "Host=a;Database=cc;Username=u;Password=p;Maximum Pool Size=200";
         options.Durable.MaxPoolSize = 5;
@@ -210,8 +187,7 @@ public sealed class HashTagAndShardMapTests
     }
 
     [Fact]
-    public void EveryTenantOnAShardGetsAByteIdenticalConnectionStringOrThePoolMathIsPerTenant()
-    {
+    public void EveryTenantOnAShardGetsAByteIdenticalConnectionStringOrThePoolMathIsPerTenant() {
         // ⚠ The subtlest requirement in docs/plan/05 § Storage provider wiring, and one the document
         // does not state: Npgsql pools by connection string, and Orleans.Multitenant builds one
         // storage provider per TENANT. If the string differs per tenant — an application_name
@@ -230,15 +206,13 @@ public sealed class HashTagAndShardMapTests
 
         byShard.Count.ShouldBe(2, "200 tenants should reach both shards, or this proves nothing.");
 
-        foreach (var shard in byShard)
-        {
+        foreach (var shard in byShard) {
             shard.Select(x => x.Connection).Distinct(StringComparer.Ordinal).Count().ShouldBe(1);
         }
     }
 
     [Fact]
-    public void TransactionModePgBouncerTurnsOffTheTwoThingsThatBreakUnderIt()
-    {
+    public void TransactionModePgBouncerTurnsOffTheTwoThingsThatBreakUnderIt() {
         var options = TwoShards();
         options.Durable.PgBouncerTransactionMode = true;
 
@@ -255,8 +229,7 @@ public sealed class HashTagAndShardMapTests
     }
 
     [Fact]
-    public void NpgsqlDoesNotAutoPrepareByDefaultWhichIsWhatMakesPgBouncerViable()
-    {
+    public void NpgsqlDoesNotAutoPrepareByDefaultWhichIsWhatMakesPgBouncerViable() {
         // Recorded as a test because the compatibility argument for transaction-mode pooling rests
         // on it, and it is a property of a dependency rather than of our code — so it should break
         // the build if a future Npgsql changes the default.
@@ -264,18 +237,24 @@ public sealed class HashTagAndShardMapTests
     }
 
     [Fact]
-    public void AShardThatIsNotInTheTableFailsLoudly()
-    {
+    public void AShardThatIsNotInTheTableFailsLoudly() {
         Should.Throw<KeyNotFoundException>(() => new ConfiguredShardConnections(TwoShards()).Durable("durable-42"))
             .Message.ShouldContain("durable-00");
     }
 
     [Fact]
-    public void ASiloWithNoDurableShardsIsRefusedRatherThanStartedEmpty()
-    {
+    public void ASiloWithNoDurableShardsIsRefusedRatherThanStartedEmpty() {
         var options = new CyberCloudStorageOptions();
         options.Hot.ConnectionString = "localhost:6379";
 
         Should.Throw<InvalidOperationException>(() => new StaticShardMapCache(options));
+    }
+
+    static CyberCloudStorageOptions TwoShards() {
+        var options = new CyberCloudStorageOptions();
+        options.Hot.ConnectionString = "localhost:6379";
+        options.Durable.Shards["durable-00"] = "Host=a;Database=cc;Username=u;Password=p";
+        options.Durable.Shards["durable-01"] = "Host=b;Database=cc;Username=u;Password=p";
+        return options;
     }
 }

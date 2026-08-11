@@ -48,8 +48,7 @@ namespace CyberCloud.Authorization.Contracts;
 /// <param name="objectType">The schema object type the permission is defined on.</param>
 /// <param name="permission">The permission name.</param>
 [AttributeUsage(AttributeTargets.Method | AttributeTargets.Class, AllowMultiple = true, Inherited = false)]
-public sealed class RequiresPermissionAttribute(string objectType, string permission) : Attribute
-{
+public sealed class RequiresPermissionAttribute(string objectType, string permission) : Attribute {
     /// <summary>The schema object type the permission is defined on.</summary>
     public string ObjectType { get; } = objectType;
 

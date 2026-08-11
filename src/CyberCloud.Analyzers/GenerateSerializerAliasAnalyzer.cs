@@ -1,6 +1,6 @@
-using System.Collections.Immutable;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Diagnostics;
+using System.Collections.Immutable;
 
 namespace CyberCloud.Analyzers;
 
@@ -32,17 +32,14 @@ namespace CyberCloud.Analyzers;
 ///     </para>
 /// </remarks>
 [DiagnosticAnalyzer(LanguageNames.CSharp)]
-public sealed class GenerateSerializerAliasAnalyzer : DiagnosticAnalyzer
-{
+public sealed class GenerateSerializerAliasAnalyzer : DiagnosticAnalyzer {
     /// <inheritdoc />
     public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics { get; } =
         ImmutableArray.Create(Rules.GenerateSerializerWithoutAlias);
 
     /// <inheritdoc />
-    public override void Initialize(AnalysisContext context)
-    {
-        if (context is null)
-        {
+    public override void Initialize(AnalysisContext context) {
+        if (context is null) {
             return;
         }
 
@@ -51,45 +48,43 @@ public sealed class GenerateSerializerAliasAnalyzer : DiagnosticAnalyzer
         context.RegisterCompilationStartAction(OnCompilationStart);
     }
 
-    static void OnCompilationStart(CompilationStartAnalysisContext context)
-    {
+    static void OnCompilationStart(CompilationStartAnalysisContext context) {
         var generateSerializer = context.Compilation.GetTypeByMetadataName(WellKnown.GenerateSerializerAttribute);
         var alias = context.Compilation.GetTypeByMetadataName(WellKnown.AliasAttribute);
 
-        if (generateSerializer is null || alias is null)
-        {
+        if (generateSerializer is null || alias is null) {
             return;
         }
 
         context.RegisterSymbolAction(
             symbolContext => AnalyzeType(symbolContext, generateSerializer, alias),
-            SymbolKind.NamedType);
+            SymbolKind.NamedType
+        );
     }
 
     static void AnalyzeType(
         SymbolAnalysisContext context,
         INamedTypeSymbol generateSerializer,
-        INamedTypeSymbol alias)
-    {
+        INamedTypeSymbol alias
+    ) {
         var type = (INamedTypeSymbol)context.Symbol;
 
-        if (!HasAttribute(type, generateSerializer) || HasAttribute(type, alias))
-        {
+        if (!HasAttribute(type, generateSerializer) || HasAttribute(type, alias)) {
             return;
         }
 
-        context.ReportDiagnostic(Diagnostic.Create(
-            Rules.GenerateSerializerWithoutAlias,
-            type.Locations.Length > 0 ? type.Locations[0] : Location.None,
-            type.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)));
+        context.ReportDiagnostic(
+            Diagnostic.Create(
+                Rules.GenerateSerializerWithoutAlias,
+                type.Locations.Length > 0 ? type.Locations[0] : Location.None,
+                type.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)
+            )
+        );
     }
 
-    static bool HasAttribute(ISymbol symbol, INamedTypeSymbol attribute)
-    {
-        foreach (var applied in symbol.GetAttributes())
-        {
-            if (SymbolEqualityComparer.Default.Equals(applied.AttributeClass, attribute))
-            {
+    static bool HasAttribute(ISymbol symbol, INamedTypeSymbol attribute) {
+        foreach (var applied in symbol.GetAttributes()) {
+            if (SymbolEqualityComparer.Default.Equals(applied.AttributeClass, attribute)) {
                 return true;
             }
         }

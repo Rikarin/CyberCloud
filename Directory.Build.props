@@ -1,163 +1,161 @@
 <Project>
-
-  <!--
-    Root build properties for every .NET project in Cyber Cloud.
-
-    ⚠ This file applies to EVERY descendant directory. `references/` (docs/plan/03) is read-only,
-    never built and never restored, so it carries its own opt-out `Directory.Build.props` /
-    `.targets` / `.Packages.props` that terminate the upward search. Do not remove them.
-  -->
-
-  <PropertyGroup Label="Repository layout">
-    <RepositoryRoot>$(MSBuildThisFileDirectory)</RepositoryRoot>
-    <ArtifactsPath>$(RepositoryRoot)artifacts</ArtifactsPath>
-  </PropertyGroup>
-
-  <PropertyGroup Label="Target framework and language">
-    <!-- docs/plan/02 § Platform baseline: single TFM everywhere, no multi-targeting, no netstandard. -->
-    <TargetFramework>net10.0</TargetFramework>
-    <LangVersion>latest</LangVersion>
-    <Nullable>enable</Nullable>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <InvariantGlobalization>true</InvariantGlobalization>
-  </PropertyGroup>
-
-  <PropertyGroup Label="Warnings and analysis">
-    <!-- docs/plan/00 § Non-negotiables: "Warnings are errors". -->
-    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
-    <MSBuildTreatWarningsAsErrors>true</MSBuildTreatWarningsAsErrors>
-    <WarningsNotAsErrors></WarningsNotAsErrors>
-
-    <EnableNETAnalyzers>true</EnableNETAnalyzers>
-    <AnalysisLevel>latest-recommended</AnalysisLevel>
-    <AnalysisMode>Recommended</AnalysisMode>
-    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
-    <CodeAnalysisTreatWarningsAsErrors>true</CodeAnalysisTreatWarningsAsErrors>
-
-    <!-- Nullable diagnostics are errors, not warnings, so a null-forgiving edit cannot ride in. -->
-    <WarningLevel>9999</WarningLevel>
-    <NoWarn>$(NoWarn);CS1591</NoWarn>
     <!--
-      CS1591 = "missing XML comment for publicly visible type or member".
-      `GenerateDocumentationFile` (below) turns it on for every public member. We want the .xml
-      doc file — it is what gives the generated .NET SDK IntelliSense (docs/plan/02 ADR-012) — but
-      docs/plan/00 § Coding standards does NOT require a doc comment on every public member, and
-      with TreatWarningsAsErrors that combination makes an ordinary new class fail to compile.
-      Verified: without this NoWarn, a `public sealed class` with no `///` fails the build with
-      `error CS1591`. Documentation coverage is a review concern here, not a build gate.
+      Root build properties for every .NET project in Cyber Cloud.
+  
+      ⚠ This file applies to EVERY descendant directory. `references/` (docs/plan/03) is read-only,
+      never built and never restored, so it carries its own opt-out `Directory.Build.props` /
+      `.targets` / `.Packages.props` that terminate the upward search. Do not remove them.
     -->
-  </PropertyGroup>
 
-  <PropertyGroup Label="Determinism and reproducibility">
-    <Deterministic>true</Deterministic>
-    <DeterministicSourcePaths Condition="'$(ContinuousIntegrationBuild)' == 'true'">true</DeterministicSourcePaths>
-    <ContinuousIntegrationBuild Condition="'$(ContinuousIntegrationBuild)' == '' AND '$(CI)' != ''">true</ContinuousIntegrationBuild>
-    <PathMap Condition="'$(ContinuousIntegrationBuild)' == 'true'">$(RepositoryRoot)=/_/</PathMap>
-    <EmbedUntrackedSources>true</EmbedUntrackedSources>
-    <DebugType>portable</DebugType>
-    <IncludeSymbols>true</IncludeSymbols>
-    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
-    <ProduceReferenceAssembly>true</ProduceReferenceAssembly>
-  </PropertyGroup>
+    <PropertyGroup Label="Repository layout">
+        <RepositoryRoot>$(MSBuildThisFileDirectory)</RepositoryRoot>
+        <ArtifactsPath>$(RepositoryRoot)artifacts</ArtifactsPath>
+    </PropertyGroup>
 
-  <PropertyGroup Label="Packing">
-    <!-- Nothing is packable unless it opts in. `cli/` and any published SDK set IsPackable=true. -->
-    <IsPackable>false</IsPackable>
-    <IsPublishable>false</IsPublishable>
-    <Authors>Rikarin</Authors>
-    <Company>Rikarin</Company>
-    <Product>Cyber Cloud</Product>
-    <RepositoryType>git</RepositoryType>
-    <PublishRepositoryUrl>true</PublishRepositoryUrl>
-  </PropertyGroup>
+    <PropertyGroup Label="Target framework and language">
+        <!-- docs/plan/02 § Platform baseline: single TFM everywhere, no multi-targeting, no netstandard. -->
+        <TargetFramework>net10.0</TargetFramework>
+        <LangVersion>latest</LangVersion>
+        <Nullable>enable</Nullable>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <InvariantGlobalization>true</InvariantGlobalization>
+    </PropertyGroup>
 
-  <PropertyGroup Label="Assembly and namespace naming">
-    <!-- docs/plan/03 § src: folder name == assembly name == root namespace. -->
-    <RootNamespace>$(MSBuildProjectName)</RootNamespace>
-    <AssemblyName>$(MSBuildProjectName)</AssemblyName>
-    <NeutralLanguage>en-US</NeutralLanguage>
-    <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
-  </PropertyGroup>
+    <PropertyGroup Label="Warnings and analysis">
+        <!-- docs/plan/00 § Non-negotiables: "Warnings are errors". -->
+        <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+        <MSBuildTreatWarningsAsErrors>true</MSBuildTreatWarningsAsErrors>
+        <WarningsNotAsErrors></WarningsNotAsErrors>
 
-  <PropertyGroup Label="Restore">
-    <RestorePackagesWithLockFile>false</RestorePackagesWithLockFile>
-    <!-- CPM is on in Directory.Packages.props; NU1008 makes a Version= on a PackageReference fatal. -->
-    <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
-    <NuGetAuditMode>direct</NuGetAuditMode>
-    <NuGetAuditLevel>moderate</NuGetAuditLevel>
-    <!--
-      NU1901-NU1904 are package-vulnerability advisories. They are warnings that TreatWarningsAsErrors
-      would turn into build breaks on a day a CVE is published against a transitive dependency —
-      i.e. a red build caused by someone else's release. CI runs `Build.Licence`/audit separately.
-    -->
-    <WarningsNotAsErrors>$(WarningsNotAsErrors);NU1901;NU1902;NU1903;NU1904</WarningsNotAsErrors>
-  </PropertyGroup>
+        <EnableNETAnalyzers>true</EnableNETAnalyzers>
+        <AnalysisLevel>latest-recommended</AnalysisLevel>
+        <AnalysisMode>Recommended</AnalysisMode>
+        <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+        <CodeAnalysisTreatWarningsAsErrors>true</CodeAnalysisTreatWarningsAsErrors>
 
-  <PropertyGroup Label="Project role detection">
-    <!--
-      Consumed by Directory.Build.targets, which is imported after the project body.
+        <!-- Nullable diagnostics are errors, not warnings, so a null-forgiving edit cannot ride in. -->
+        <WarningLevel>9999</WarningLevel>
+        <NoWarn>$(NoWarn);CS1591</NoWarn>
+        <!--
+          CS1591 = "missing XML comment for publicly visible type or member".
+          `GenerateDocumentationFile` (below) turns it on for every public member. We want the .xml
+          doc file — it is what gives the generated .NET SDK IntelliSense (docs/plan/02 ADR-012) — but
+          docs/plan/00 § Coding standards does NOT require a doc comment on every public member, and
+          with TreatWarningsAsErrors that combination makes an ordinary new class fail to compile.
+          Verified: without this NoWarn, a `public sealed class` with no `///` fails the build with
+          `error CS1591`. Documentation coverage is a review concern here, not a build gate.
+        -->
+    </PropertyGroup>
 
-      IsTestProject answers ONE question: does this build as an xunit.v3 / Microsoft.Testing.Platform
-      host? It is true for the deployment-driven suites too. It does NOT say which Nuke target runs
-      the project, or how often — build/Build.Test.cs § SuiteOwning answers that, with one arm per
-      rule below, because docs/plan/23 § Test layers runs E2E and Chaos nightly and Load weekly,
-      none of them per-PR. Adding a rule here means adding an arm there; a project under test/ that
-      neither file claims fails the Test target by design.
-    -->
-    <IsTestProject Condition="$(MSBuildProjectName.EndsWith('.Tests'))">true</IsTestProject>
-    <IsTestProject Condition="$(MSBuildProjectName.EndsWith('.Conformance'))">true</IsTestProject>
-    <IsTestProject Condition="'$(MSBuildProjectName)' == 'CyberCloud.E2E'">true</IsTestProject>
-    <IsTestProject Condition="'$(MSBuildProjectName)' == 'CyberCloud.Chaos'">true</IsTestProject>
-    <IsTestProject Condition="'$(MSBuildProjectName)' == 'CyberCloud.Load'">true</IsTestProject>
-    <IsTestProject Condition="'$(MSBuildProjectName)' == 'CyberCloud.Isolation'">true</IsTestProject>
-    <IsContractsProject Condition="$(MSBuildProjectName.EndsWith('.Contracts'))">true</IsContractsProject>
-    <IsBuildProject Condition="'$(MSBuildProjectName)' == '_build'">true</IsBuildProject>
-  </PropertyGroup>
+    <PropertyGroup Label="Determinism and reproducibility">
+        <Deterministic>true</Deterministic>
+        <DeterministicSourcePaths Condition="'$(ContinuousIntegrationBuild)' == 'true'">true</DeterministicSourcePaths>
+        <ContinuousIntegrationBuild Condition="'$(ContinuousIntegrationBuild)' == '' AND '$(CI)' != ''">true</ContinuousIntegrationBuild>
+        <PathMap Condition="'$(ContinuousIntegrationBuild)' == 'true'">$(RepositoryRoot)=/_/</PathMap>
+        <EmbedUntrackedSources>true</EmbedUntrackedSources>
+        <DebugType>portable</DebugType>
+        <IncludeSymbols>true</IncludeSymbols>
+        <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+        <ProduceReferenceAssembly>true</ProduceReferenceAssembly>
+    </PropertyGroup>
 
-  <PropertyGroup Label="Test runner" Condition="'$(IsTestProject)' == 'true'">
-    <!--
-      ⚠ THESE MUST BE IN Directory.Build.props, NOT Directory.Build.targets.
+    <PropertyGroup Label="Packing">
+        <!-- Nothing is packable unless it opts in. `cli/` and any published SDK set IsPackable=true. -->
+        <IsPackable>false</IsPackable>
+        <IsPublishable>false</IsPublishable>
+        <Authors>Rikarin</Authors>
+        <Company>Rikarin</Company>
+        <Product>Cyber Cloud</Product>
+        <RepositoryType>git</RepositoryType>
+        <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    </PropertyGroup>
 
-      xunit.v3 is a Microsoft.Testing.Platform host and ships no VSTest adapter. `dotnet test`
-      selects VSTest unless told otherwise, and against an MTP-only assembly that ends as:
+    <PropertyGroup Label="Assembly and namespace naming">
+        <!-- docs/plan/03 § src: folder name == assembly name == root namespace. -->
+        <RootNamespace>$(MSBuildProjectName)</RootNamespace>
+        <AssemblyName>$(MSBuildProjectName)</AssemblyName>
+        <NeutralLanguage>en-US</NeutralLanguage>
+        <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
+    </PropertyGroup>
 
-        Testhost process for source(s) '…/CyberCloud.Sabotage.Tests.dll' exited with error: Error:
-          An assembly specified in the application dependencies manifest (testhost.deps.json) was
-          not found:
-            package: 'testhost', version: '18.6.0-release-26329-109'
-            path: 'testhost.dll'
-        Test Run Aborted.
+    <PropertyGroup Label="Restore">
+        <RestorePackagesWithLockFile>false</RestorePackagesWithLockFile>
+        <!-- CPM is on in Directory.Packages.props; NU1008 makes a Version= on a PackageReference fatal. -->
+        <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
+        <NuGetAuditMode>direct</NuGetAuditMode>
+        <NuGetAuditLevel>moderate</NuGetAuditLevel>
+        <!--
+          NU1901-NU1904 are package-vulnerability advisories. They are warnings that TreatWarningsAsErrors
+          would turn into build breaks on a day a CVE is published against a transitive dependency —
+          i.e. a red build caused by someone else's release. CI runs `Build.Licence`/audit separately.
+        -->
+        <WarningsNotAsErrors>$(WarningsNotAsErrors);NU1901;NU1902;NU1903;NU1904</WarningsNotAsErrors>
+    </PropertyGroup>
 
-      ⚠ Placement is the whole trick, and it is not obvious. `dotnet msbuild -getProperty:` reports
-      TestingPlatformDotnetTestSupport=true whether these live here or in Directory.Build.targets —
-      the final evaluated value is identical. But .targets is imported after the package targets
-      that branch on it, so from there it is inert: the property is true and the runner is still
-      VSTest. Verified on SDK 10.0.302 by moving these two lines and nothing else:
+    <PropertyGroup Label="Project role detection">
+        <!--
+          Consumed by Directory.Build.targets, which is imported after the project body.
+    
+          IsTestProject answers ONE question: does this build as an xunit.v3 / Microsoft.Testing.Platform
+          host? It is true for the deployment-driven suites too. It does NOT say which Nuke target runs
+          the project, or how often — build/Build.Test.cs § SuiteOwning answers that, with one arm per
+          rule below, because docs/plan/23 § Test layers runs E2E and Chaos nightly and Load weekly,
+          none of them per-PR. Adding a rule here means adding an arm there; a project under test/ that
+          neither file claims fails the Test target by design.
+        -->
+        <IsTestProject Condition="$(MSBuildProjectName.EndsWith('.Tests'))">true</IsTestProject>
+        <IsTestProject Condition="$(MSBuildProjectName.EndsWith('.Conformance'))">true</IsTestProject>
+        <IsTestProject Condition="'$(MSBuildProjectName)' == 'CyberCloud.E2E'">true</IsTestProject>
+        <IsTestProject Condition="'$(MSBuildProjectName)' == 'CyberCloud.Chaos'">true</IsTestProject>
+        <IsTestProject Condition="'$(MSBuildProjectName)' == 'CyberCloud.Load'">true</IsTestProject>
+        <IsTestProject Condition="'$(MSBuildProjectName)' == 'CyberCloud.Isolation'">true</IsTestProject>
+        <IsContractsProject Condition="$(MSBuildProjectName.EndsWith('.Contracts'))">true</IsContractsProject>
+        <IsBuildProject Condition="'$(MSBuildProjectName)' == '_build'">true</IsBuildProject>
+    </PropertyGroup>
 
-        in Directory.Build.targets → `dotnet test` aborts with the testhost error above
-        in the project body        → `Failed! - Failed: 1, Passed: 0, Total: 1`
-        in this file               → `Failed! - Failed: 1, Passed: 0, Total: 1`
+    <PropertyGroup Label="Test runner" Condition="'$(IsTestProject)' == 'true'">
+        <!--
+          ⚠ THESE MUST BE IN Directory.Build.props, NOT Directory.Build.targets.
+    
+          xunit.v3 is a Microsoft.Testing.Platform host and ships no VSTest adapter. `dotnet test`
+          selects VSTest unless told otherwise, and against an MTP-only assembly that ends as:
+    
+            Testhost process for source(s) '…/CyberCloud.Sabotage.Tests.dll' exited with error: Error:
+              An assembly specified in the application dependencies manifest (testhost.deps.json) was
+              not found:
+                package: 'testhost', version: '18.6.0-release-26329-109'
+                path: 'testhost.dll'
+            Test Run Aborted.
+    
+          ⚠ Placement is the whole trick, and it is not obvious. `dotnet msbuild -getProperty:` reports
+          TestingPlatformDotnetTestSupport=true whether these live here or in Directory.Build.targets —
+          the final evaluated value is identical. But .targets is imported after the package targets
+          that branch on it, so from there it is inert: the property is true and the runner is still
+          VSTest. Verified on SDK 10.0.302 by moving these two lines and nothing else:
+    
+            in Directory.Build.targets → `dotnet test` aborts with the testhost error above
+            in the project body        → `Failed! - Failed: 1, Passed: 0, Total: 1`
+            in this file               → `Failed! - Failed: 1, Passed: 0, Total: 1`
+    
+          Corollary: test projects must NOT reference Microsoft.NET.Test.Sdk. It is the VSTest bridge
+          and pulls the runner back. The pin stays in Directory.Packages.props for anything that
+          genuinely needs VSTest.
+    
+          Note that `build/Build.Test.cs` does not rely on any of this — it runs the test executables
+          directly and never invokes `dotnet test`. These properties exist so that a developer or an
+          IDE running `dotnet test` by hand gets the same answer as CI.
+        -->
+        <TestingPlatformDotnetTestSupport>true</TestingPlatformDotnetTestSupport>
+        <UseMicrosoftTestingPlatformRunner>true</UseMicrosoftTestingPlatformRunner>
+    </PropertyGroup>
 
-      Corollary: test projects must NOT reference Microsoft.NET.Test.Sdk. It is the VSTest bridge
-      and pulls the runner back. The pin stays in Directory.Packages.props for anything that
-      genuinely needs VSTest.
-
-      Note that `build/Build.Test.cs` does not rely on any of this — it runs the test executables
-      directly and never invokes `dotnet test`. These properties exist so that a developer or an
-      IDE running `dotnet test` by hand gets the same answer as CI.
-    -->
-    <TestingPlatformDotnetTestSupport>true</TestingPlatformDotnetTestSupport>
-    <UseMicrosoftTestingPlatformRunner>true</UseMicrosoftTestingPlatformRunner>
-  </PropertyGroup>
-
-  <PropertyGroup Label="Documentation">
-    <!--
-      Doc XML where it is consumed: library assemblies under src/ and cli/. Not for tests, not for
-      the Nuke build project — nobody reads their IntelliSense and the file is build output noise.
-    -->
-    <GenerateDocumentationFile>true</GenerateDocumentationFile>
-    <GenerateDocumentationFile Condition="'$(IsTestProject)' == 'true'">false</GenerateDocumentationFile>
-    <GenerateDocumentationFile Condition="'$(IsBuildProject)' == 'true'">false</GenerateDocumentationFile>
-  </PropertyGroup>
-
+    <PropertyGroup Label="Documentation">
+        <!--
+          Doc XML where it is consumed: library assemblies under src/ and cli/. Not for tests, not for
+          the Nuke build project — nobody reads their IntelliSense and the file is build output noise.
+        -->
+        <GenerateDocumentationFile>true</GenerateDocumentationFile>
+        <GenerateDocumentationFile Condition="'$(IsTestProject)' == 'true'">false</GenerateDocumentationFile>
+        <GenerateDocumentationFile Condition="'$(IsBuildProject)' == 'true'">false</GenerateDocumentationFile>
+    </PropertyGroup>
 </Project>

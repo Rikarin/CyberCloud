@@ -26,8 +26,7 @@ namespace CyberCloud.Authorization.Contracts;
 ///     </para>
 /// </remarks>
 [Alias("CyberCloud.Authorization.IObjectRelationsGrain")]
-public interface IObjectRelationsGrain : IGrainWithStringKey
-{
+public interface IObjectRelationsGrain : IGrainWithStringKey {
     /// <summary>Records <c>this#relation@subject</c>. Idempotent.</summary>
     /// <param name="relation">The relation.</param>
     /// <param name="subject">The subject.</param>
@@ -96,8 +95,7 @@ public interface IObjectRelationsGrain : IGrainWithStringKey
 ///     </para>
 /// </remarks>
 [Alias("CyberCloud.Authorization.ISubjectRelationsGrain")]
-public interface ISubjectRelationsGrain : IGrainWithStringKey
-{
+public interface ISubjectRelationsGrain : IGrainWithStringKey {
     /// <summary>Records that this subject appears in a tuple. Idempotent.</summary>
     /// <param name="entry">The entry.</param>
     /// <returns>Whether the entry was new.</returns>
@@ -130,8 +128,12 @@ public interface ISubjectRelationsGrain : IGrainWithStringKey
 ///         (§ Consistency) and the ordering of the two-grain write (§ Storage). docs/plan/04 § Grain
 ///         taxonomy's cardinality question applies and the answer is the same as for quota: this
 ///         grain serialises <i>tuple writes</i>, which § Caching across requests itself calls rare
-///         ("tuple writes are rare (role assignments), checks are constant"). <b>No check ever goes
-///         through it</b> except to read the version, which is a read.
+///         ("tuple writes are rare (role assignments), checks are constant").
+///         <b>
+///             No check ever goes
+///             through it
+///         </b>
+///         except to read the version, which is a read.
 ///     </para>
 ///     <para>
 ///         ⚠ <b>The write is not transactional and the journal is what makes the sweeper possible.</b>
@@ -143,8 +145,7 @@ public interface ISubjectRelationsGrain : IGrainWithStringKey
 ///     </para>
 /// </remarks>
 [Alias("CyberCloud.Authorization.ITupleStoreGrain")]
-public interface ITupleStoreGrain : IGrainWithStringKey
-{
+public interface ITupleStoreGrain : IGrainWithStringKey {
     /// <summary>
     ///     Writes a tuple to both grains, in order, and bumps the tenant's relation version.
     /// </summary>

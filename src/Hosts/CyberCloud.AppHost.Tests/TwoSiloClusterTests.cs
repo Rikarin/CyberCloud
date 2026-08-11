@@ -1,7 +1,6 @@
-using System.Globalization;
 using CyberCloud.Silo.Host.Hello;
 using Orleans.Multitenant;
-using Orleans.Runtime;
+using System.Globalization;
 
 namespace CyberCloud.AppHost.Tests;
 
@@ -21,17 +20,13 @@ namespace CyberCloud.AppHost.Tests;
 ///     </para>
 /// </remarks>
 [Collection(LocalTopologySuite.Name)]
-public sealed class TwoSiloClusterTests(LocalTopology topology)
-{
+public sealed class TwoSiloClusterTests(LocalTopology topology) {
     static readonly Guid Tenant = new("0d1f0dfe-4c7e-4f2c-9b5b-2f9b4d0a0003");
 
-    static string Id(Guid tenant) => tenant.ToString("D", CultureInfo.InvariantCulture);
-
     [Fact]
-    public async Task BothSilosAreInOneMembershipTable()
-    {
+    public async Task BothSilosAreInOneMembershipTable() {
         var management = topology.Client.GetGrain<IManagementGrain>(0);
-        var hosts = await management.GetHosts(onlyActive: true);
+        var hosts = await management.GetHosts(true);
 
         // ⚠ This is the assertion that distinguishes one cluster from two. A membership table is
         // per-cluster: if the two silos had not agreed on a primary, each would answer this with
@@ -41,21 +36,20 @@ public sealed class TwoSiloClusterTests(LocalTopology topology)
             "the cluster's membership table has "
             + $"{string.Join(", ", hosts.Select(x => $"{x.Key} = {x.Value}"))}. Two silos that each "
             + "hold their own development membership table are two clusters, not one — see "
-            + "CyberCloudClusterOptions.LocalhostPrimarySiloPort.");
+            + "CyberCloudClusterOptions.LocalhostPrimarySiloPort."
+        );
 
         hosts.Values.ShouldAllBe(status => status == SiloStatus.Active);
     }
 
     [Fact]
-    public async Task ActivationsAreSpreadOverBothSilos()
-    {
+    public async Task ActivationsAreSpreadOverBothSilos() {
         var tenant = topology.Client.ForTenant(Id(Tenant));
         var seen = new HashSet<string>(StringComparer.Ordinal);
 
         // Orleans' default placement is random, so this is a sampling loop rather than an assertion
         // about any one key. 40 activations over 2 silos miss one silo with probability 2^-39.
-        for (var i = 0; i < 40 && seen.Count < 2; i++)
-        {
+        for (var i = 0; i < 40 && seen.Count < 2; i++) {
             var key = string.Create(CultureInfo.InvariantCulture, $"hello/spread-{i}");
             seen.Add(await tenant.GetGrain<IHelloGrain>(key).SiloAddressAsync());
         }
@@ -63,18 +57,17 @@ public sealed class TwoSiloClusterTests(LocalTopology topology)
         seen.Count.ShouldBe(
             2,
             $"40 activations all landed on {string.Join(" and ", seen)}. Either there is one silo, "
-            + "or the two are not in one cluster and the client is only reaching one of them.");
+            + "or the two are not in one cluster and the client is only reaching one of them."
+        );
     }
 
     [Fact]
-    public async Task AGrainReachesAGrainOnTheOtherSilo()
-    {
+    public async Task AGrainReachesAGrainOnTheOtherSilo() {
         var tenant = topology.Client.ForTenant(Id(Tenant));
 
         var byAddress = new Dictionary<string, string>(StringComparer.Ordinal);
 
-        for (var i = 0; i < 40 && byAddress.Count < 2; i++)
-        {
+        for (var i = 0; i < 40 && byAddress.Count < 2; i++) {
             var key = string.Create(CultureInfo.InvariantCulture, $"hello/cross-{i}");
             var address = await tenant.GetGrain<IHelloGrain>(key).SiloAddressAsync();
             byAddress.TryAdd(address, key);
@@ -100,8 +93,7 @@ public sealed class TwoSiloClusterTests(LocalTopology topology)
     }
 
     [Fact]
-    public async Task AGrainKeepsItsStateWhenItIsReachedThroughTheOtherSilosGateway()
-    {
+    public async Task AGrainKeepsItsStateWhenItIsReachedThroughTheOtherSilosGateway() {
         // The client holds both gateways and picks one per grain reference. Writing through one
         // reference and reading through a freshly resolved one is the client-side half of "one
         // cluster": if the two silos were separate clusters, the second reference would routinely
@@ -117,4 +109,6 @@ public sealed class TwoSiloClusterTests(LocalTopology topology)
         readBack.DurableGreeting.ShouldBe("across the gateway");
         readBack.HotGreeting.ShouldBe("across the gateway");
     }
+
+    static string Id(Guid tenant) => tenant.ToString("D", CultureInfo.InvariantCulture);
 }

@@ -16,12 +16,11 @@ namespace CyberCloud.Authorization.Grains;
 ///     one.
 /// </remarks>
 public sealed class SubjectRelationsGrain(
-    [PersistentState("subjects", StorageTiers.Durable)] IPersistentState<SubjectRelationsState> state)
-    : Grain, ISubjectRelationsGrain
-{
+    [PersistentState("subjects", StorageTiers.Durable)] IPersistentState<SubjectRelationsState> state
+)
+    : Grain, ISubjectRelationsGrain {
     /// <inheritdoc />
-    public override Task OnActivateAsync(CancellationToken cancellationToken)
-    {
+    public override Task OnActivateAsync(CancellationToken cancellationToken) {
         // The key is decoded and discarded: this grain's identity IS the subject, and every entry
         // it holds is about some other object. Decoding is still done, because a key of the wrong
         // shape must fail on activation rather than quietly index the wrong subject.
@@ -31,16 +30,13 @@ public sealed class SubjectRelationsGrain(
     }
 
     /// <inheritdoc />
-    public async Task<Result<bool>> AddAsync(SubjectIndexEntry entry)
-    {
+    public async Task<Result<bool>> AddAsync(SubjectIndexEntry entry) {
         var validated = Validate(entry);
-        if (validated.TryGetError(out var error))
-        {
+        if (validated.TryGetError(out var error)) {
             return Result<bool>.Failure(error);
         }
 
-        if (state.State.Entries.Contains(entry))
-        {
+        if (state.State.Entries.Contains(entry)) {
             return Result<bool>.Success(false);
         }
 
@@ -50,16 +46,13 @@ public sealed class SubjectRelationsGrain(
     }
 
     /// <inheritdoc />
-    public async Task<Result<bool>> RemoveAsync(SubjectIndexEntry entry)
-    {
+    public async Task<Result<bool>> RemoveAsync(SubjectIndexEntry entry) {
         var validated = Validate(entry);
-        if (validated.TryGetError(out var error))
-        {
+        if (validated.TryGetError(out var error)) {
             return Result<bool>.Failure(error);
         }
 
-        if (!state.State.Entries.Remove(entry))
-        {
+        if (!state.State.Entries.Remove(entry)) {
             return Result<bool>.Success(false);
         }
 
@@ -69,34 +62,37 @@ public sealed class SubjectRelationsGrain(
 
     /// <inheritdoc />
     public Task<Result<IReadOnlyList<SubjectIndexEntry>>> ListAsync() =>
-        Task.FromResult(Result<IReadOnlyList<SubjectIndexEntry>>.Success(
-            [.. state.State.Entries
-                .OrderBy(x => x.Object.ToString(), StringComparer.Ordinal)
-                .ThenBy(x => x.Relation, StringComparer.Ordinal)
-                .ThenBy(x => x.SubjectRelation, StringComparer.Ordinal)]));
+        Task.FromResult(
+            Result<IReadOnlyList<SubjectIndexEntry>>.Success(
+                [
+                    .. state.State.Entries
+                        .OrderBy(x => x.Object.ToString(), StringComparer.Ordinal)
+                        .ThenBy(x => x.Relation, StringComparer.Ordinal)
+                        .ThenBy(x => x.SubjectRelation, StringComparer.Ordinal)
+                ]
+            )
+        );
 
     /// <inheritdoc />
-    public Task DeactivateAsync()
-    {
-        this.DeactivateOnIdle();
+    public Task DeactivateAsync() {
+        DeactivateOnIdle();
         return Task.CompletedTask;
     }
 
-    static Result Validate(SubjectIndexEntry entry)
-    {
-        if (entry is null || !entry.Object.IsValid)
-        {
+    static Result Validate(SubjectIndexEntry entry) {
+        if (entry is null || !entry.Object.IsValid) {
             return Result.Failure(
                 ErrorCode.InvalidRequestBody,
-                $"'{entry?.Object}' is not a well-formed object reference.");
+                $"'{entry?.Object}' is not a well-formed object reference."
+            );
         }
 
         if (entry.SubjectRelation.Length > 0
-            && !RelationNaming.IsName(entry.SubjectRelation))
-        {
+            && !RelationNaming.IsName(entry.SubjectRelation)) {
             return Result.Failure(
                 ErrorCode.InvalidRequestBody,
-                $"'{entry.SubjectRelation}' is not a userset relation name.");
+                $"'{entry.SubjectRelation}' is not a userset relation name."
+            );
         }
 
         return RelationNaming.ValidateName(entry.Relation, "relation");

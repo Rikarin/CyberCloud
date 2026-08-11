@@ -25,14 +25,13 @@ namespace CyberCloud.Silo.Host.Hello;
 public sealed class HelloGrain(
     [PersistentState("hello-hot", StorageTiers.Hot)] IPersistentState<HelloState> hot,
     [PersistentState("hello-durable", StorageTiers.Durable)] IPersistentState<HelloState> durable,
-    ILocalSiloDetails silo)
-    : Grain, IHelloGrain
-{
+    ILocalSiloDetails silo
+)
+    : Grain, IHelloGrain {
     string tenantId = string.Empty;
 
     /// <inheritdoc />
-    public override Task OnActivateAsync(CancellationToken cancellationToken)
-    {
+    public override Task OnActivateAsync(CancellationToken cancellationToken) {
         // ⚠ The refusal, not a default. A null tenant here means the caller used a bare
         // IGrainFactory.GetGrain, so the storage layer would place this grain on the null-tenant
         // shard and under the null-tenant Redis hash tag — i.e. in the platform's own state, under a
@@ -40,18 +39,18 @@ public sealed class HelloGrain(
         tenantId = this.GetTenantId()
             ?? throw new InvalidOperationException(
                 "IHelloGrain is tenant-scoped and was activated with no tenant qualification. Reach "
-                + "it with IGrainFactory.ForTenant(tenantId).GetGrain<IHelloGrain>(key).");
+                + "it with IGrainFactory.ForTenant(tenantId).GetGrain<IHelloGrain>(key)."
+            );
 
         return Task.CompletedTask;
     }
 
     /// <inheritdoc />
-    public async Task<HelloRoundTrip> SayHelloAsync(string greeting)
-    {
+    public async Task<HelloRoundTrip> SayHelloAsync(string greeting) {
         ArgumentNullException.ThrowIfNull(greeting);
 
-        hot.State = new HelloState { Greeting = greeting, Writes = hot.State.Writes + 1 };
-        durable.State = new HelloState { Greeting = greeting, Writes = durable.State.Writes + 1 };
+        hot.State = new() { Greeting = greeting, Writes = hot.State.Writes + 1 };
+        durable.State = new() { Greeting = greeting, Writes = durable.State.Writes + 1 };
 
         // Sequential rather than Task.WhenAll: a grain is single-threaded and two concurrent
         // WriteStateAsync calls on the same activation are two reentrant calls into the runtime.
@@ -62,8 +61,7 @@ public sealed class HelloGrain(
     }
 
     /// <inheritdoc />
-    public async Task<HelloRoundTrip> ReadBackAsync()
-    {
+    public async Task<HelloRoundTrip> ReadBackAsync() {
         await hot.ReadStateAsync();
         await durable.ReadStateAsync();
 
@@ -74,8 +72,7 @@ public sealed class HelloGrain(
     public Task<string> SiloAddressAsync() => Task.FromResult(silo.SiloAddress.ToString());
 
     /// <inheritdoc />
-    public Task<string> SiloAddressOfAsync(string otherKey)
-    {
+    public Task<string> SiloAddressOfAsync(string otherKey) {
         // ForTenant with THIS grain's own tenant. Reaching a sibling with a bare GetGrain would
         // address the null-tenant copy of it, and AddCyberCloudTenantSeparation would not object,
         // because the target's tenant would be "no tenant" rather than another tenant's.
@@ -85,31 +82,31 @@ public sealed class HelloGrain(
     }
 
     /// <inheritdoc />
-    public Task DeactivateAsync()
-    {
+    public Task DeactivateAsync() {
         DeactivateOnIdle();
         return Task.CompletedTask;
     }
 
-    HelloRoundTrip Snapshot() => new()
-    {
-        HotGreeting = hot.State.Greeting,
-        DurableGreeting = durable.State.Greeting,
-        HotWrites = hot.State.Writes,
-        DurableWrites = durable.State.Writes,
-        TenantId = tenantId,
-        SiloAddress = silo.SiloAddress.ToString(),
-    };
+    HelloRoundTrip Snapshot() =>
+        new() {
+            HotGreeting = hot.State.Greeting,
+            DurableGreeting = durable.State.Greeting,
+            HotWrites = hot.State.Writes,
+            DurableWrites = durable.State.Writes,
+            TenantId = tenantId,
+            SiloAddress = silo.SiloAddress.ToString()
+        };
 }
 
 /// <summary>The stored half of <see cref="HelloGrain" />, one instance per tier.</summary>
 [GenerateSerializer]
 [Alias("CyberCloud.Silo.Host.Hello.HelloState")]
-public sealed record HelloState
-{
+public sealed record HelloState {
     /// <summary>The last greeting written.</summary>
-    [Id(0)] public string Greeting { get; init; } = string.Empty;
+    [Id(0)]
+    public string Greeting { get; init; } = string.Empty;
 
     /// <summary>How many times this tier has been written.</summary>
-    [Id(1)] public int Writes { get; init; }
+    [Id(1)]
+    public int Writes { get; init; }
 }

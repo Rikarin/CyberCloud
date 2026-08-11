@@ -1,5 +1,6 @@
 using CyberCloud.Core.Resources;
 using Shouldly;
+using System.Globalization;
 
 namespace CyberCloud.Core.Tests;
 
@@ -67,8 +68,7 @@ namespace CyberCloud.Core.Tests;
 ///         package was established by execution, as described above.
 ///     </para>
 /// </remarks>
-public class OrleansMultitenantEncodingTests
-{
+public class OrleansMultitenantEncodingTests {
     [Theory]
     // tenant, keyWithinTenant, physical key — every row taken from the real-package run.
     [InlineData("t1", "sub/abc", "t1|sub/abc")]
@@ -89,8 +89,7 @@ public class OrleansMultitenantEncodingTests
     [InlineData(null, "a|b", "a||b")]
     [InlineData(null, "|lead", "||lead")]
     [InlineData(null, "~lead", "~lead")]
-    public void TheModelMatchesTheShippedPackage(string? tenant, string inner, string expected)
-    {
+    public void TheModelMatchesTheShippedPackage(string? tenant, string inner, string expected) {
         OrleansMultitenantKeyModel.Qualify(tenant, inner).ShouldBe(expected);
 
         OrleansMultitenantKeyModel.ExtractTenant(expected).ShouldBe(tenant);
@@ -98,70 +97,66 @@ public class OrleansMultitenantEncodingTests
     }
 
     [Fact]
-    public void TheEncodingIsLosslessForArbitraryInnerKeys()
-    {
+    public void TheEncodingIsLosslessForArbitraryInnerKeys() {
         string?[] tenants = [null, "t", "t1", "t|x", "||", "~", "2b4a1c662e704a9d9d0a1f7ec1f1a4b3"];
-        string[] inners =
-        [
+        string[] inners = [
             "", "a", "|", "~", "||", "~~", "|~", "~|", "a|b", "a||b", "a|", "|a", "~a", "a~",
             "sub/abc", "res/0a1b2c3d", "t2|owned", "|t2|owned", "~|t2|owned", "\0", "\n", "/",
             "0/prod/CyberCloud.DBforPostgreSQL/servers/1"
         ];
 
-        foreach (var tenant in tenants)
-        {
-            foreach (var inner in inners)
-            {
+        foreach (var tenant in tenants) {
+            foreach (var inner in inners) {
                 var physical = OrleansMultitenantKeyModel.Qualify(tenant, inner);
 
-                OrleansMultitenantKeyModel.ExtractTenant(physical).ShouldBe(
-                    tenant,
-                    $"tenant '{Corpus.Printable(tenant ?? "<null>")}' + inner "
-                    + $"'{Corpus.Printable(inner)}' -> '{Corpus.Printable(physical)}'");
+                OrleansMultitenantKeyModel.ExtractTenant(physical)
+                    .ShouldBe(
+                        tenant,
+                        $"tenant '{Corpus.Printable(tenant ?? "<null>")}' + inner "
+                        + $"'{Corpus.Printable(inner)}' -> '{Corpus.Printable(physical)}'"
+                    );
 
-                OrleansMultitenantKeyModel.ExtractKey(physical).ShouldBe(
-                    inner,
-                    $"tenant '{Corpus.Printable(tenant ?? "<null>")}' + inner "
-                    + $"'{Corpus.Printable(inner)}' -> '{Corpus.Printable(physical)}'");
+                OrleansMultitenantKeyModel.ExtractKey(physical)
+                    .ShouldBe(
+                        inner,
+                        $"tenant '{Corpus.Printable(tenant ?? "<null>")}' + inner "
+                        + $"'{Corpus.Printable(inner)}' -> '{Corpus.Printable(physical)}'"
+                    );
             }
         }
     }
 
     [Fact]
-    public void NoInnerKeyCanForgeADifferentTenant()
-    {
+    public void NoInnerKeyCanForgeADifferentTenant() {
         // The property that makes ADR-002's design safe despite the inner key not being escaped.
         // It holds because the tenant id escapes its OWN pipes and terminates at the first
         // undoubled one, so the boundary is fixed before the inner key is ever appended.
-        string[] attacks =
-        [
+        string[] attacks = [
             "t2|owned", "|t2|owned", "~|t2|owned", "||t2|owned", "a||b|c", "|", "||", "~|", "~~|",
             "\0t2|owned", "t2||owned"
         ];
 
-        foreach (var attack in attacks)
-        {
+        foreach (var attack in attacks) {
             var physical = OrleansMultitenantKeyModel.Qualify("t1", attack);
 
-            OrleansMultitenantKeyModel.ExtractTenant(physical).ShouldBe(
-                "t1",
-                $"inner key '{Corpus.Printable(attack)}' produced "
-                + $"'{Corpus.Printable(physical)}'");
+            OrleansMultitenantKeyModel.ExtractTenant(physical)
+                .ShouldBe(
+                    "t1",
+                    $"inner key '{Corpus.Printable(attack)}' produced "
+                    + $"'{Corpus.Printable(physical)}'"
+                );
         }
     }
 
     [Fact]
-    public void GrainKeysNeverTouchAnyOfTheInterestingBranches()
-    {
+    public void GrainKeysNeverTouchAnyOfTheInterestingBranches() {
         // This is the whole point of the exercise. Every key CyberCloud.Core produces is plain
         // enough that the encoding is a single concatenation — so a physical key in Redis, in a
         // log line or in a trace reads exactly as the key that was constructed.
-        foreach (var id in Corpus.ResourceIds(2_000, seed: 7))
-        {
-            var tenant = id.TenantId.ToString("N", System.Globalization.CultureInfo.InvariantCulture);
+        foreach (var id in Corpus.ResourceIds(2_000, 7)) {
+            var tenant = id.TenantId.ToString("N", CultureInfo.InvariantCulture);
 
-            foreach (var inner in Corpus.EveryGrainKeyShapeFor(id))
-            {
+            foreach (var inner in Corpus.EveryGrainKeyShapeFor(id)) {
                 OrleansMultitenantKeyModel.Qualify(tenant, inner).ShouldBe(tenant + "|" + inner);
                 OrleansMultitenantKeyModel.ExtractKey(tenant + "|" + inner).ShouldBe(inner);
                 OrleansMultitenantKeyModel.ExtractTenant(tenant + "|" + inner).ShouldBe(tenant);
@@ -170,19 +165,17 @@ public class OrleansMultitenantEncodingTests
     }
 
     [Fact]
-    public void ANullTenantKeyCanNeverBeMistakenForATenantedOne()
-    {
+    public void ANullTenantKeyCanNeverBeMistakenForATenantedOne() {
         // docs/plan/06:116-122 keeps IClusterConnectionGrain in the null tenant. If a null-tenant
         // physical key could parse as tenanted, that grain's key space would overlap a tenant's.
         // It cannot: the null-tenant branch doubles every '|', so no undoubled one survives.
         string[] inners = ["cluster/0a1b2c3d", "a|b", "|lead", "t1|sub/abc", "||", "|"];
 
-        foreach (var inner in inners)
-        {
+        foreach (var inner in inners) {
             var physical = OrleansMultitenantKeyModel.Qualify(null, inner);
 
-            OrleansMultitenantKeyModel.ExtractTenant(physical).ShouldBeNull(
-                $"'{Corpus.Printable(inner)}' -> '{Corpus.Printable(physical)}'");
+            OrleansMultitenantKeyModel.ExtractTenant(physical)
+                .ShouldBeNull($"'{Corpus.Printable(inner)}' -> '{Corpus.Printable(physical)}'");
         }
     }
 }
@@ -191,13 +184,10 @@ public class OrleansMultitenantEncodingTests
 ///     The model. Transcribed from <c>Orleans.Multitenant.Internal.TenantIdExtensions</c> — see the
 ///     provenance note on <see cref="OrleansMultitenantEncodingTests" />.
 /// </summary>
-static class OrleansMultitenantKeyModel
-{
+static class OrleansMultitenantKeyModel {
     /// <summary><c>AsTenantId</c> + <c>GetTenantQualifiedKey</c>.</summary>
-    public static string Qualify(string? tenant, string keyWithinTenant)
-    {
-        if (tenant is null)
-        {
+    public static string Qualify(string? tenant, string keyWithinTenant) {
+        if (tenant is null) {
             // Null tenant: no prefix, no '~' rule, the whole key is escaped.
             return keyWithinTenant.Replace("|", "||", StringComparison.Ordinal);
         }
@@ -205,8 +195,7 @@ static class OrleansMultitenantKeyModel
         var escapedTenant = tenant.Replace("|", "||", StringComparison.Ordinal) + "|";
 
         var text = keyWithinTenant;
-        if (text.Length > 0 && (text[0] == '|' || text[0] == '~'))
-        {
+        if (text.Length > 0 && (text[0] == '|' || text[0] == '~')) {
             text = "~" + text;
         }
 
@@ -214,8 +203,7 @@ static class OrleansMultitenantKeyModel
     }
 
     /// <summary><c>TryGetTenantId</c> + <c>TenantIdString</c>.</summary>
-    public static string? ExtractTenant(string physicalKey)
-    {
+    public static string? ExtractTenant(string physicalKey) {
         var end = TenantEnd(physicalKey);
         return end < 0
             ? null
@@ -223,19 +211,16 @@ static class OrleansMultitenantKeyModel
     }
 
     /// <summary><c>GetKey</c>.</summary>
-    public static string ExtractKey(string physicalKey)
-    {
+    public static string ExtractKey(string physicalKey) {
         var end = TenantEnd(physicalKey);
-        if (end < 0)
-        {
+        if (end < 0) {
             return physicalKey.Replace("||", "|", StringComparison.Ordinal);
         }
 
         var start = end;
         if (start + 2 <= physicalKey.Length
             && physicalKey[start] == '~'
-            && (physicalKey[start + 1] == '|' || physicalKey[start + 1] == '~'))
-        {
+            && (physicalKey[start + 1] == '|' || physicalKey[start + 1] == '~')) {
             start++;
         }
 
@@ -246,18 +231,14 @@ static class OrleansMultitenantKeyModel
     ///     The index one past the tenant terminator — the first <c>'|'</c> that is not part of a
     ///     <c>"||"</c> pair — or <c>-1</c> when there is no tenant.
     /// </summary>
-    static int TenantEnd(string physicalKey)
-    {
-        for (var i = 0; i < physicalKey.Length; i++)
-        {
-            if (physicalKey[i] != '|')
-            {
+    static int TenantEnd(string physicalKey) {
+        for (var i = 0; i < physicalKey.Length; i++) {
+            if (physicalKey[i] != '|') {
                 continue;
             }
 
             i++;
-            if (i == physicalKey.Length || physicalKey[i] != '|')
-            {
+            if (i == physicalKey.Length || physicalKey[i] != '|') {
                 return i;
             }
         }

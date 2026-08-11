@@ -1,5 +1,5 @@
-using System.Reflection;
 using Npgsql;
+using System.Reflection;
 
 namespace CyberCloud.Tenancy.Tests.Infrastructure;
 
@@ -18,39 +18,36 @@ namespace CyberCloud.Tenancy.Tests.Infrastructure;
 ///         helper would drag that project's containers and fixtures in with it.
 ///     </para>
 /// </remarks>
-static class OrleansAdoNetSchema
-{
-    static readonly string[] Scripts =
-    [
+static class OrleansAdoNetSchema {
+    static readonly string[] Scripts = [
         "CyberCloud.Tenancy.Tests.Infrastructure.PostgreSQL-Main.sql",
-        "CyberCloud.Tenancy.Tests.Infrastructure.PostgreSQL-Persistence.sql",
+        "CyberCloud.Tenancy.Tests.Infrastructure.PostgreSQL-Persistence.sql"
     ];
 
     /// <summary>Applies both scripts to the database the connection string points at.</summary>
     /// <param name="connectionString">An Npgsql connection string for one shard.</param>
     /// <param name="cancellationToken">The test's cancellation token.</param>
-    public static async Task CreateAsync(string connectionString, CancellationToken cancellationToken)
-    {
+    public static async Task CreateAsync(string connectionString, CancellationToken cancellationToken) {
         // Pooling off: a pooled connection opened here would stay as an idle backend under the same
         // application_name for the rest of the run and pollute any per-shard connection count.
         await using var connection = new NpgsqlConnection(
-            new NpgsqlConnectionStringBuilder(connectionString) { Pooling = false }.ConnectionString);
+            new NpgsqlConnectionStringBuilder(connectionString) { Pooling = false }.ConnectionString
+        );
 
         await connection.OpenAsync(cancellationToken);
 
-        foreach (var name in Scripts)
-        {
+        foreach (var name in Scripts) {
             await using var command = new NpgsqlCommand(Read(name), connection);
             await command.ExecuteNonQueryAsync(cancellationToken);
         }
     }
 
-    static string Read(string resourceName)
-    {
+    static string Read(string resourceName) {
         using var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream(resourceName)
             ?? throw new InvalidOperationException(
                 $"Embedded resource '{resourceName}' is missing. Available: "
-                + string.Join(", ", Assembly.GetExecutingAssembly().GetManifestResourceNames()));
+                + string.Join(", ", Assembly.GetExecutingAssembly().GetManifestResourceNames())
+            );
 
         using var reader = new StreamReader(stream);
         return reader.ReadToEnd();

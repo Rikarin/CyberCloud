@@ -5,7 +5,6 @@ using CyberCloud.Tenancy.Separation;
 using CyberCloud.Tenancy.Shards;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using Microsoft.Extensions.Hosting;
 using Orleans.Multitenant;
 
 namespace CyberCloud.Tenancy;
@@ -14,8 +13,7 @@ namespace CyberCloud.Tenancy;
 ///     The silo wiring for tenancy — the call docs/plan/04 § Silo composition marks "not optional",
 ///     plus the services the tenancy grains need.
 /// </summary>
-public static class TenancySiloBuilderExtensions
-{
+public static class TenancySiloBuilderExtensions {
     /// <summary>
     ///     Wires <c>AddMultitenantCommunicationSeparation</c> with
     ///     <see cref="PlatformCrossTenantAuthorizer" />.
@@ -30,8 +28,12 @@ public static class TenancySiloBuilderExtensions
     ///         tenant ids in the message."
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>Read the second sentence of that promise precisely, because it is exactly true
-    ///         and no more.</b> "A bug in one provider" is code running <i>inside a grain</i>, and
+    ///         ⚠
+    ///         <b>
+    ///             Read the second sentence of that promise precisely, because it is exactly true
+    ///             and no more.
+    ///         </b>
+    ///         "A bug in one provider" is code running <i>inside a grain</i>, and
     ///         that is the case this closes: <c>Orleans.Multitenant</c>'s
     ///         <c>TenantSeparatingCallFilter</c> is an <c>IIncomingGrainCallFilter</c> that reads
     ///         <c>context.SourceId</c>, and when the source is absent, a client or a system target it
@@ -45,29 +47,33 @@ public static class TenancySiloBuilderExtensions
     ///         incoming-call filter's position there is nothing to attribute a client call to. The
     ///         boundary that closes it is the gateway, which is where a request's tenant is
     ///         established from its token and where <c>ForTenant</c> is chosen — docs/plan/10. Until
-    ///         that exists, <b>anything holding an <c>IGrainFactory</c> outside a grain is inside the
-    ///         trust boundary.</b> <c>CrossTenantReachabilityTests</c> § route 7 asserts both halves
+    ///         that exists,
+    ///         <b>
+    ///             anything holding an <c>IGrainFactory</c> outside a grain is inside the
+    ///             trust boundary.
+    ///         </b>
+    ///         <c>CrossTenantReachabilityTests</c> § route 7 asserts both halves
     ///         so neither can be assumed.
     ///     </para>
     /// </remarks>
-    public static ISiloBuilder AddCyberCloudTenantSeparation(this ISiloBuilder silo)
-    {
+    public static ISiloBuilder AddCyberCloudTenantSeparation(this ISiloBuilder silo) {
         ArgumentNullException.ThrowIfNull(silo);
 
-        silo.ConfigureServices(services =>
-        {
-            // Defaults that DENY. See IPlatformOperatorAuthority — a stand-in that allowed would be
-            // a hole with a comment on it. A host that wants the platform edge registers a real one
-            // before this call.
-            services.TryAddSingleton<IPlatformOperatorAuthority, DenyPlatformOperatorAuthority>();
-            services.TryAddSingleton<ICrossTenantDelegationStore, NoCrossTenantDelegations>();
-            services.TryAddSingleton<PlatformCrossTenantAuthorizer>();
-            services.TryAddSingleton<CyberCloudGrainCallTenantSeparator>();
-        });
+        silo.ConfigureServices(services => {
+                // Defaults that DENY. See IPlatformOperatorAuthority — a stand-in that allowed would be
+                // a hole with a comment on it. A host that wants the platform edge registers a real one
+                // before this call.
+                services.TryAddSingleton<IPlatformOperatorAuthority, DenyPlatformOperatorAuthority>();
+                services.TryAddSingleton<ICrossTenantDelegationStore, NoCrossTenantDelegations>();
+                services.TryAddSingleton<PlatformCrossTenantAuthorizer>();
+                services.TryAddSingleton<CyberCloudGrainCallTenantSeparator>();
+            }
+        );
 
         return silo.AddMultitenantCommunicationSeparation(
             sp => sp.GetRequiredService<PlatformCrossTenantAuthorizer>(),
-            sp => sp.GetRequiredService<CyberCloudGrainCallTenantSeparator>());
+            sp => sp.GetRequiredService<CyberCloudGrainCallTenantSeparator>()
+        );
     }
 
     /// <summary>
@@ -93,8 +99,8 @@ public static class TenancySiloBuilderExtensions
     /// </remarks>
     public static ISiloBuilder AddCyberCloudTenancy(
         this ISiloBuilder silo,
-        CyberCloudStorageOptions options)
-    {
+        CyberCloudStorageOptions options
+    ) {
         ArgumentNullException.ThrowIfNull(silo);
         ArgumentNullException.ThrowIfNull(options);
 
@@ -102,18 +108,18 @@ public static class TenancySiloBuilderExtensions
 
         silo.AddCyberCloudGrainStorage(options, shardMap);
 
-        silo.ConfigureServices(services =>
-        {
-            services.TryAddSingleton<IClock, SystemClock>();
-            services.AddOptions<TenancyRefreshOptions>();
+        silo.ConfigureServices(services => {
+                services.TryAddSingleton<IClock, SystemClock>();
+                services.AddOptions<TenancyRefreshOptions>();
 
-            services.AddSingleton(shardMap);
-            services.AddSingleton<ShardMapRefresher>();
-            services.AddSingleton<TenantDirectoryCache>();
+                services.AddSingleton(shardMap);
+                services.AddSingleton<ShardMapRefresher>();
+                services.AddSingleton<TenantDirectoryCache>();
 
-            services.AddHostedService<ShardMapRefreshService>();
-            services.AddHostedService<TenantDirectoryRefreshService>();
-        });
+                services.AddHostedService<ShardMapRefreshService>();
+                services.AddHostedService<TenantDirectoryRefreshService>();
+            }
+        );
 
         return silo.AddCyberCloudTenantSeparation();
     }

@@ -6,8 +6,12 @@ namespace CyberCloud.Tenancy;
 ///     The tenant grain's durable record.
 /// </summary>
 /// <remarks>
-///     ⚠ <b>Every collection member below is <c>{ get; set; }</c> and that is load-bearing, not
-///     style.</b> The durable tier serialises state with <c>System.Text.Json</c>
+///     ⚠
+///     <b>
+///         Every collection member below is <c>{ get; set; }</c> and that is load-bearing, not
+///         style.
+///     </b>
+///     The durable tier serialises state with <c>System.Text.Json</c>
 ///     (<c>SystemTextJsonGrainStorageSerializer</c> — docs/plan/05 § Serialization chose JSON so that
 ///     year-two questions are answerable with <c>psql</c>). <c>System.Text.Json</c> <b>writes</b> a
 ///     get-only collection property and then, on read, <b>does not populate it</b>: the payload in
@@ -24,17 +28,16 @@ namespace CyberCloud.Tenancy;
 ///     </para>
 ///     <para>
 ///         Every type in this file is grain state, so every one of them obeys docs/plan/05
-///     § Serialization and schema evolution: a stable <c>[Alias]</c>, explicit <c>[Id(n)]</c> on every
-///     member, numbers never reused and never reordered. <c>TenancyStateContractTests</c> is the
-///     gate, and it is the same gate <c>WireContractTests</c> applies to
-///     <c>CyberCloud.Core.Contracts</c> — state in PostgreSQL outlives a deploy exactly as a wire
-///     payload outlives one silo.
+///         § Serialization and schema evolution: a stable <c>[Alias]</c>, explicit <c>[Id(n)]</c> on every
+///         member, numbers never reused and never reordered. <c>TenancyStateContractTests</c> is the
+///         gate, and it is the same gate <c>WireContractTests</c> applies to
+///         <c>CyberCloud.Core.Contracts</c> — state in PostgreSQL outlives a deploy exactly as a wire
+///         payload outlives one silo.
 ///     </para>
 /// </remarks>
 [GenerateSerializer]
 [Alias("CyberCloud.Tenancy.State.Tenant")]
-public sealed class TenantState
-{
+public sealed class TenantState {
     /// <summary>The tenant's record, or <see langword="null" /> before creation.</summary>
     [Id(0)]
     public TenantDescriptor? Descriptor { get; set; }
@@ -51,8 +54,7 @@ public sealed class TenantState
 /// <summary>The subscription grain's durable record.</summary>
 [GenerateSerializer]
 [Alias("CyberCloud.Tenancy.State.Subscription")]
-public sealed class SubscriptionState
-{
+public sealed class SubscriptionState {
     /// <summary>The subscription's record, or <see langword="null" /> before creation.</summary>
     [Id(0)]
     public SubscriptionDescriptor? Descriptor { get; set; }
@@ -65,8 +67,7 @@ public sealed class SubscriptionState
 /// <summary>The resource group grain's durable record.</summary>
 [GenerateSerializer]
 [Alias("CyberCloud.Tenancy.State.ResourceGroup")]
-public sealed class ResourceGroupState
-{
+public sealed class ResourceGroupState {
     /// <summary>The group's record, or <see langword="null" /> before creation.</summary>
     [Id(0)]
     public ResourceGroupDescriptor? Descriptor { get; set; }
@@ -89,8 +90,7 @@ public sealed class ResourceGroupState
 /// </summary>
 [GenerateSerializer]
 [Alias("CyberCloud.Tenancy.State.Index")]
-public sealed class IndexState
-{
+public sealed class IndexState {
     /// <summary>The entry. <c>Free</c> until something claims it.</summary>
     [Id(0)]
     public IndexEntry Entry { get; set; } = new();
@@ -99,8 +99,7 @@ public sealed class IndexState
 /// <summary>The tenant directory grain's durable record — the one global thing.</summary>
 [GenerateSerializer]
 [Alias("CyberCloud.Tenancy.State.TenantDirectory")]
-public sealed class TenantDirectoryState
-{
+public sealed class TenantDirectoryState {
     /// <summary>Every tenant's entry, by tenant id.</summary>
     [Id(0)]
     public Dictionary<Guid, TenantDirectoryEntry> Entries { get; set; } = [];
@@ -124,8 +123,7 @@ public sealed class TenantDirectoryState
 /// <summary>The shard map grain's durable record.</summary>
 [GenerateSerializer]
 [Alias("CyberCloud.Tenancy.State.ShardMap")]
-public sealed class ShardMapState
-{
+public sealed class ShardMapState {
     /// <summary>
     ///     Every tenant's assignment. ⚠ <b>Append-only in effect</b>: an entry here is never
     ///     rewritten, which is what makes docs/plan/05 § The shard map's "permanent" true rather
@@ -146,8 +144,7 @@ public sealed class ShardMapState
 /// <summary>The quota grain's durable record.</summary>
 [GenerateSerializer]
 [Alias("CyberCloud.Tenancy.State.Quota")]
-public sealed class QuotaState
-{
+public sealed class QuotaState {
     /// <summary>Committed usage per meter — resources that exist.</summary>
     [Id(0)]
     public Dictionary<QuotaMeter, decimal> Committed { get; set; } = [];

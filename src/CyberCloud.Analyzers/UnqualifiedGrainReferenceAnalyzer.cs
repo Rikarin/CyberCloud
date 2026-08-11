@@ -1,7 +1,7 @@
-using System.Collections.Immutable;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Diagnostics;
 using Microsoft.CodeAnalysis.Operations;
+using System.Collections.Immutable;
 
 namespace CyberCloud.Analyzers;
 
@@ -11,10 +11,13 @@ namespace CyberCloud.Analyzers;
 /// <remarks>
 ///     <para>
 ///         <b>This is the security rule, and it closes the hole the plan says is open.</b>
-///         docs/plan/00 § Non-negotiables, in the corrected tenant-separation section: <i>"That
-///         second row is currently <b>unenforced</b> — it is a discipline, not a gate. Making it one
-///         is a named task: an analyzer or architecture test forbidding raw
-///         <c>IGrainFactory.GetGrain</c> outside grain code."</i>
+///         docs/plan/00 § Non-negotiables, in the corrected tenant-separation section:
+///         <i>
+///             "That
+///             second row is currently <b>unenforced</b> — it is a discipline, not a gate. Making it one
+///             is a named task: an analyzer or architecture test forbidding raw
+///             <c>IGrainFactory.GetGrain</c> outside grain code."
+///         </i>
 ///     </para>
 ///     <para>
 ///         <b>Why the library cannot do it.</b> <c>Orleans.Multitenant</c>'s
@@ -43,8 +46,12 @@ namespace CyberCloud.Analyzers;
 ///     <list type="number">
 ///         <item>
 ///             <b>A grain that is not string-keyed.</b> docs/plan/00 § Coding standards:
-///             <c>IGrainWithStringKey</c> is <i>"the only key kind <c>Orleans.Multitenant</c> can
-///             carry a tenant in"</i>, so a <c>Guid</c>- or integer-keyed grain cannot be
+///             <c>IGrainWithStringKey</c> is
+///             <i>
+///                 "the only key kind <c>Orleans.Multitenant</c> can
+///                 carry a tenant in"
+///             </i>
+///             , so a <c>Guid</c>- or integer-keyed grain cannot be
 ///             tenant-scoped and reaching it without a tenant cannot cross one.
 ///             <c>ClusterHealthCheck</c> and <c>SiloReadinessHealthCheck</c> call
 ///             <c>GetGrain&lt;IManagementGrain&gt;(0)</c> — Orleans' own integer-keyed system grain
@@ -60,8 +67,12 @@ namespace CyberCloud.Analyzers;
 ///         <item>
 ///             <b>Null-tenant platform grains.</b> <c>ITenantDirectoryGrain</c> and
 ///             <c>IShardMapGrain</c> have no tenant to qualify with, and their own documentation says
-///             to reach them <i>"with a plain <c>IGrainFactory.GetGrain</c> — <b>not</b>
-///             <c>ForTenant</c>"</i>. Recognised by the key: a call to one of
+///             to reach them
+///             <i>
+///                 "with a plain <c>IGrainFactory.GetGrain</c> — <b>not</b>
+///                 <c>ForTenant</c>"
+///             </i>
+///             . Recognised by the key: a call to one of
 ///             <c>GrainKeys</c>'s null-tenant builders. <c>TenantDirectoryCache.Grain</c> and
 ///             <c>ShardMapRefresher.Grain</c> are the two sites, and without this exemption the rule
 ///             would fire on correct code the day it was switched on.
@@ -69,17 +80,14 @@ namespace CyberCloud.Analyzers;
 ///     </list>
 /// </remarks>
 [DiagnosticAnalyzer(LanguageNames.CSharp)]
-public sealed class UnqualifiedGrainReferenceAnalyzer : DiagnosticAnalyzer
-{
+public sealed class UnqualifiedGrainReferenceAnalyzer : DiagnosticAnalyzer {
     /// <inheritdoc />
     public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics { get; } =
         ImmutableArray.Create(Rules.UnqualifiedGrainReference);
 
     /// <inheritdoc />
-    public override void Initialize(AnalysisContext context)
-    {
-        if (context is null)
-        {
+    public override void Initialize(AnalysisContext context) {
+        if (context is null) {
             return;
         }
 
@@ -88,69 +96,61 @@ public sealed class UnqualifiedGrainReferenceAnalyzer : DiagnosticAnalyzer
         context.RegisterCompilationStartAction(OnCompilationStart);
     }
 
-    static void OnCompilationStart(CompilationStartAnalysisContext context)
-    {
+    static void OnCompilationStart(CompilationStartAnalysisContext context) {
         var stringKeyed = context.Compilation.GetTypeByMetadataName(WellKnown.GrainWithStringKey);
 
-        if (context.Compilation.GetTypeByMetadataName(WellKnown.GrainFactory) is null || stringKeyed is null)
-        {
+        if (context.Compilation.GetTypeByMetadataName(WellKnown.GrainFactory) is null || stringKeyed is null) {
             return;
         }
 
         context.RegisterOperationAction(
             operationContext => AnalyzeInvocation(operationContext, stringKeyed),
-            OperationKind.Invocation);
+            OperationKind.Invocation
+        );
     }
 
-    static void AnalyzeInvocation(OperationAnalysisContext context, INamedTypeSymbol stringKeyed)
-    {
+    static void AnalyzeInvocation(OperationAnalysisContext context, INamedTypeSymbol stringKeyed) {
         var operation = (IInvocationOperation)context.Operation;
 
-        if (!GrainFactories.IsUnqualifiedGetGrain(operation.TargetMethod))
-        {
+        if (!GrainFactories.IsUnqualifiedGetGrain(operation.TargetMethod)) {
             return;
         }
 
-        if (!GrainFactories.TargetsAStringKeyedGrain(operation.TargetMethod, stringKeyed))
-        {
+        if (!GrainFactories.TargetsAStringKeyedGrain(operation.TargetMethod, stringKeyed)) {
             return;
         }
 
-        if (GrainFactories.IsGrain(ContainingType(context.ContainingSymbol)))
-        {
+        if (GrainFactories.IsGrain(ContainingType(context.ContainingSymbol))) {
             return;
         }
 
-        if (ReachesANullTenantGrain(operation))
-        {
+        if (ReachesANullTenantGrain(operation)) {
             return;
         }
 
-        context.ReportDiagnostic(Diagnostic.Create(
-            Rules.UnqualifiedGrainReference,
-            operation.Syntax.GetLocation(),
-            context.ContainingSymbol.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)));
+        context.ReportDiagnostic(
+            Diagnostic.Create(
+                Rules.UnqualifiedGrainReference,
+                operation.Syntax.GetLocation(),
+                context.ContainingSymbol.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)
+            )
+        );
     }
 
-    static INamedTypeSymbol? ContainingType(ISymbol symbol) =>
-        symbol as INamedTypeSymbol ?? symbol.ContainingType;
+    static INamedTypeSymbol? ContainingType(ISymbol symbol) => symbol as INamedTypeSymbol ?? symbol.ContainingType;
 
     /// <summary>
     ///     True when the key handed to <c>GetGrain</c> came from one of <c>GrainKeys</c>'s
     ///     null-tenant builders.
     /// </summary>
-    static bool ReachesANullTenantGrain(IInvocationOperation operation)
-    {
-        foreach (var argument in operation.Arguments)
-        {
+    static bool ReachesANullTenantGrain(IInvocationOperation operation) {
+        foreach (var argument in operation.Arguments) {
             var value = argument.Value;
-            while (value is IConversionOperation conversion && conversion.Operand is not null)
-            {
+            while (value is IConversionOperation conversion && conversion.Operand is not null) {
                 value = conversion.Operand;
             }
 
-            if (value is IInvocationOperation key && GrainFactories.IsNullTenantKeyBuilder(key.TargetMethod))
-            {
+            if (value is IInvocationOperation key && GrainFactories.IsNullTenantKeyBuilder(key.TargetMethod)) {
                 return true;
             }
         }

@@ -1,105 +1,105 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!--
-    docs/plan/03:82 — "CyberCloud.ServiceDefaults/  # AddServiceDefaults, health checks, Orleans host
-    builders", and docs/plan/03:85: "the direct descendant of Survival's OrleansApplication …
-    copied in shape, not in code, because the membership and storage wiring differ".
-
-    ⚠ THIS IS THE FIRST ASSEMBLY IN THE TREE ALLOWED ORLEANS HOSTING. Everything below it —
-    CyberCloud.Core (zero packages) and CyberCloud.Core.Contracts (Microsoft.Orleans.Sdk only) —
-    stays hostable-from-anywhere on purpose, which is what lets the gateway, the CLI and the SDK
-    reference the contracts without acquiring a silo. Adding a package here is cheap; adding one
-    there is an assembly-graph change (docs/plan/03:231-241).
-
-    ⚠ WHAT SURVIVAL HAS THAT THIS DOES NOT, all deliberate:
-      * Microsoft.Extensions.ServiceDiscovery / .Http.Resilience — Aspire's, and Aspire is local
-        development only here (ADR-014). Neither is in docs/plan/02's dependency register.
-      * Newtonsoft.Json — Survival's health endpoint writes its JSON with it. System.Text.Json is
-        already in the shared framework and docs/plan/02 lists no Newtonsoft.
-      * Serilog.Sinks.Async, OpenTelemetry.Instrumentation.Process — not in the register either.
-      * Its Orleans pins. Survival mixes Microsoft.Orleans.Runtime 10.0.0 with
-        Microsoft.Orleans.Client/.Server 9.2.1; every Orleans reference here resolves through
-        $(OrleansVersion) = 10.2.2 in Directory.Packages.props.
-  -->
-
-  <ItemGroup>
-    <FrameworkReference Include="Microsoft.AspNetCore.App" />
-  </ItemGroup>
-
-  <ItemGroup Label="Orleans — ADR-004">
-    <PackageReference Include="Microsoft.Orleans.Server" />
-    <PackageReference Include="Microsoft.Orleans.Client" />
-    <!-- UseKubeMembership / UseKubeGatewayListProvider — the contrib membership provider. -->
-    <PackageReference Include="Orleans.Clustering.Kubernetes" />
-    <!-- UseKubernetesHosting — pod identity becomes silo identity (docs/plan/04:76). -->
-    <PackageReference Include="Microsoft.Orleans.Hosting.Kubernetes" />
-  </ItemGroup>
-
-  <ItemGroup Label="Grain storage — ADR-003, docs/plan/05 § The two tiers">
-    <!-- Hot: RedisGrainStorage + RedisStorageOptions. -->
-    <PackageReference Include="Microsoft.Orleans.Persistence.Redis" />
-    <!-- Durable: AdoNetGrainStorage + AdoNetGrainStorageOptions. Absent from docs/plan/02's register. -->
-    <PackageReference Include="Microsoft.Orleans.Persistence.AdoNet" />
     <!--
-      Per-tenant storage provider instances, keyed by the tenant id in the grain key — ADR-002.
-      This is what makes the two references above sharded rather than shared.
+      docs/plan/03:82 — "CyberCloud.ServiceDefaults/  # AddServiceDefaults, health checks, Orleans host
+      builders", and docs/plan/03:85: "the direct descendant of Survival's OrleansApplication …
+      copied in shape, not in code, because the membership and storage wiring differ".
+  
+      ⚠ THIS IS THE FIRST ASSEMBLY IN THE TREE ALLOWED ORLEANS HOSTING. Everything below it —
+      CyberCloud.Core (zero packages) and CyberCloud.Core.Contracts (Microsoft.Orleans.Sdk only) —
+      stays hostable-from-anywhere on purpose, which is what lets the gateway, the CLI and the SDK
+      reference the contracts without acquiring a silo. Adding a package here is cheap; adding one
+      there is an assembly-graph change (docs/plan/03:231-241).
+  
+      ⚠ WHAT SURVIVAL HAS THAT THIS DOES NOT, all deliberate:
+        * Microsoft.Extensions.ServiceDiscovery / .Http.Resilience — Aspire's, and Aspire is local
+          development only here (ADR-014). Neither is in docs/plan/02's dependency register.
+        * Newtonsoft.Json — Survival's health endpoint writes its JSON with it. System.Text.Json is
+          already in the shared framework and docs/plan/02 lists no Newtonsoft.
+        * Serilog.Sinks.Async, OpenTelemetry.Instrumentation.Process — not in the register either.
+        * Its Orleans pins. Survival mixes Microsoft.Orleans.Runtime 10.0.0 with
+          Microsoft.Orleans.Client/.Server 9.2.1; every Orleans reference here resolves through
+          $(OrleansVersion) = 10.2.2 in Directory.Packages.props.
     -->
-    <PackageReference Include="Orleans.Multitenant" />
-    <!--
-      ⚠ Two direct reasons and one indirect one.
 
-      Direct: ConfiguredShardConnections composes the durable connection string through
-      NpgsqlConnectionStringBuilder rather than by concatenation, so that a MaxPoolSize already
-      present in the operator's string is overridden rather than duplicated and ignored
-      (docs/plan/05 § Storage provider wiring); and it sets the two transaction-mode-PgBouncer
-      settings by name.
+    <ItemGroup>
+        <FrameworkReference Include="Microsoft.AspNetCore.App"/>
+    </ItemGroup>
 
-      Indirect, and the one that would bite: Microsoft.Orleans.Persistence.AdoNet resolves its
-      driver with Assembly.Load("Npgsql"). Without this reference the assembly is not in the host's
-      output and the failure is at first grain write.
-    -->
-    <PackageReference Include="Npgsql" />
-    <!-- Cluster-aware key/slot handling and ConfigurationOptions parsing — ADR-003, docs/plan/05 § Hot. -->
-    <PackageReference Include="StackExchange.Redis" />
-  </ItemGroup>
+    <ItemGroup Label="Orleans — ADR-004">
+        <PackageReference Include="Microsoft.Orleans.Server"/>
+        <PackageReference Include="Microsoft.Orleans.Client"/>
+        <!-- UseKubeMembership / UseKubeGatewayListProvider — the contrib membership provider. -->
+        <PackageReference Include="Orleans.Clustering.Kubernetes"/>
+        <!-- UseKubernetesHosting — pod identity becomes silo identity (docs/plan/04:76). -->
+        <PackageReference Include="Microsoft.Orleans.Hosting.Kubernetes"/>
+    </ItemGroup>
 
-  <ItemGroup Label="ABP — ADR-006, module system only">
-    <PackageReference Include="Volo.Abp.Autofac" />
-  </ItemGroup>
+    <ItemGroup Label="Grain storage — ADR-003, docs/plan/05 § The two tiers">
+        <!-- Hot: RedisGrainStorage + RedisStorageOptions. -->
+        <PackageReference Include="Microsoft.Orleans.Persistence.Redis"/>
+        <!-- Durable: AdoNetGrainStorage + AdoNetGrainStorageOptions. Absent from docs/plan/02's register. -->
+        <PackageReference Include="Microsoft.Orleans.Persistence.AdoNet"/>
+        <!--
+          Per-tenant storage provider instances, keyed by the tenant id in the grain key — ADR-002.
+          This is what makes the two references above sharded rather than shared.
+        -->
+        <PackageReference Include="Orleans.Multitenant"/>
+        <!--
+          ⚠ Two direct reasons and one indirect one.
+    
+          Direct: ConfiguredShardConnections composes the durable connection string through
+          NpgsqlConnectionStringBuilder rather than by concatenation, so that a MaxPoolSize already
+          present in the operator's string is overridden rather than duplicated and ignored
+          (docs/plan/05 § Storage provider wiring); and it sets the two transaction-mode-PgBouncer
+          settings by name.
+    
+          Indirect, and the one that would bite: Microsoft.Orleans.Persistence.AdoNet resolves its
+          driver with Assembly.Load("Npgsql"). Without this reference the assembly is not in the host's
+          output and the failure is at first grain write.
+        -->
+        <PackageReference Include="Npgsql"/>
+        <!-- Cluster-aware key/slot handling and ConfigurationOptions parsing — ADR-003, docs/plan/05 § Hot. -->
+        <PackageReference Include="StackExchange.Redis"/>
+    </ItemGroup>
 
-  <ItemGroup Label="Observability">
-    <PackageReference Include="Serilog.AspNetCore" />
-    <PackageReference Include="Serilog.Sinks.OpenTelemetry" />
-    <PackageReference Include="OpenTelemetry.Extensions.Hosting" />
-    <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" />
-    <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" />
-    <PackageReference Include="OpenTelemetry.Instrumentation.Http" />
-    <PackageReference Include="OpenTelemetry.Instrumentation.Runtime" />
-  </ItemGroup>
+    <ItemGroup Label="ABP — ADR-006, module system only">
+        <PackageReference Include="Volo.Abp.Autofac"/>
+    </ItemGroup>
 
-  <ItemGroup Label="Orleans' own PostgreSQL DDL — see Storage/OrleansAdoNetSchema.cs">
-    <!--
-      ⚠ COPIES of dotnet/orleans at tag v10.2.2:
-          src/AdoNet/Shared/PostgreSQL-Main.sql
-          src/AdoNet/Orleans.Persistence.AdoNet/PostgreSQL-Persistence.sql
-      Microsoft.Orleans.Persistence.AdoNet ships no SQL and no embedded resources. They are here,
-      rather than only in the two test projects that already carried a copy each, because the
-      durable tier is unusable without them and a Helm pre-install Job needs the same bytes a local
-      `dotnet run` uses.
-    -->
-    <EmbeddedResource Include="Storage/PostgreSQL-Main.sql" />
-    <EmbeddedResource Include="Storage/PostgreSQL-Persistence.sql" />
-  </ItemGroup>
+    <ItemGroup Label="Observability">
+        <PackageReference Include="Serilog.AspNetCore"/>
+        <PackageReference Include="Serilog.Sinks.OpenTelemetry"/>
+        <PackageReference Include="OpenTelemetry.Extensions.Hosting"/>
+        <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol"/>
+        <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore"/>
+        <PackageReference Include="OpenTelemetry.Instrumentation.Http"/>
+        <PackageReference Include="OpenTelemetry.Instrumentation.Runtime"/>
+    </ItemGroup>
 
-  <ItemGroup>
-    <ProjectReference Include="../CyberCloud.Core/CyberCloud.Core.csproj" />
-    <ProjectReference Include="../CyberCloud.Core.Contracts/CyberCloud.Core.Contracts.csproj" />
-  </ItemGroup>
+    <ItemGroup Label="Orleans' own PostgreSQL DDL — see Storage/OrleansAdoNetSchema.cs">
+        <!--
+          ⚠ COPIES of dotnet/orleans at tag v10.2.2:
+              src/AdoNet/Shared/PostgreSQL-Main.sql
+              src/AdoNet/Orleans.Persistence.AdoNet/PostgreSQL-Persistence.sql
+          Microsoft.Orleans.Persistence.AdoNet ships no SQL and no embedded resources. They are here,
+          rather than only in the two test projects that already carried a copy each, because the
+          durable tier is unusable without them and a Helm pre-install Job needs the same bytes a local
+          `dotnet run` uses.
+        -->
+        <EmbeddedResource Include="Storage/PostgreSQL-Main.sql"/>
+        <EmbeddedResource Include="Storage/PostgreSQL-Persistence.sql"/>
+    </ItemGroup>
 
-  <ItemGroup Label="CyberCloud.Analyzers — see CyberCloud.Core.csproj for why this is not a reference">
-    <ProjectReference Include="../CyberCloud.Analyzers/CyberCloud.Analyzers.csproj"
-                      OutputItemType="Analyzer"
-                      ReferenceOutputAssembly="false" />
-  </ItemGroup>
+    <ItemGroup>
+        <ProjectReference Include="../CyberCloud.Core/CyberCloud.Core.csproj"/>
+        <ProjectReference Include="../CyberCloud.Core.Contracts/CyberCloud.Core.Contracts.csproj"/>
+    </ItemGroup>
+
+    <ItemGroup Label="CyberCloud.Analyzers — see CyberCloud.Core.csproj for why this is not a reference">
+        <ProjectReference Include="../CyberCloud.Analyzers/CyberCloud.Analyzers.csproj"
+                          OutputItemType="Analyzer"
+                          ReferenceOutputAssembly="false"/>
+    </ItemGroup>
 
 </Project>

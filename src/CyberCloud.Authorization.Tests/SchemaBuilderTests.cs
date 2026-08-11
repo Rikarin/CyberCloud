@@ -8,11 +8,18 @@ namespace CyberCloud.Authorization.Tests;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         docs/plan/07 § Caching across requests: <i>"Negative relations break monotonic caching
-///         and this is the subtlest thing in the document. A permission of the form <c>A &amp; !B</c>
-///         is not monotone: adding a tuple can remove access … The rule, <b>enforced by the schema
-///         builder</b>: negation may only appear at the top level of a permission, over a relation
-///         that is computed from direct tuples on the same object."</i>
+///         docs/plan/07 § Caching across requests:
+///         <i>
+///             "Negative relations break monotonic caching
+///             and this is the subtlest thing in the document. A permission of the form <c>A &amp; !B</c>
+///             is not monotone: adding a tuple can remove access … The rule,
+///             <b>
+///                 enforced by the schema
+///                 builder
+///             </b>
+///             : negation may only appear at the top level of a permission, over a relation
+///             that is computed from direct tuples on the same object."
+///         </i>
 ///     </para>
 ///     <para>
 ///         Every illegal shape below <b>fails to build</b>. That is the whole point of this file: if
@@ -21,13 +28,11 @@ namespace CyberCloud.Authorization.Tests;
 ///         would be written against a schema its author believed was legal.
 ///     </para>
 /// </remarks>
-public sealed class SchemaBuilderTests
-{
+public sealed class SchemaBuilderTests {
     // ── The document's own example ─────────────────────────────────────────────────────────────
 
     [Fact]
-    public void TheExampleInTheDocumentCompilesAndBuilds()
-    {
+    public void TheExampleInTheDocumentCompilesAndBuilds() {
         // docs/plan/07 § The model, verbatim apart from the type it hangs off.
         var schema = Schema.DefineType("resourceGroup")
             .Relation("parent")
@@ -47,8 +52,7 @@ public sealed class SchemaBuilderTests
     }
 
     [Fact]
-    public void TheBuiltInSchemaBuilds()
-    {
+    public void TheBuiltInSchemaBuilds() {
         // If CyberCloudSchema ever violates a rule, this fails at type-initialisation time, which
         // is the earliest a compiled schema can fail.
         CyberCloudSchema.Instance.Version.ShouldBe(CyberCloudSchema.SchemaVersion);
@@ -60,8 +64,7 @@ public sealed class SchemaBuilderTests
     // ── ⚠ The negation rules. Each of these MUST fail to build. ────────────────────────────────
 
     [Fact]
-    public void NegatingATuplesetIsIllegal()
-    {
+    public void NegatingATuplesetIsIllegal() {
         // The exact case docs/plan/07 names: "`!Rel("suspended")`, never `!From(…)`".
         var problems = Schema.DefineType("doc")
             .Relation("parent")
@@ -79,12 +82,12 @@ public sealed class SchemaBuilderTests
                 .Relation("owner", This)
                 .Relation("blocked", This | From("parent", "blocked"))
                 .Permission("act", Rel("owner") & !From("parent", "blocked"))
-                .Build());
+                .Build()
+        );
     }
 
     [Fact]
-    public void NegatingARelationThatIsNotDirectIsIllegal()
-    {
+    public void NegatingARelationThatIsNotDirectIsIllegal() {
         // `blocked` is computed from the parent, so "the same object changed" no longer covers its
         // invalidation — which is the reason the restriction exists.
         var problems = Schema.DefineType("doc")
@@ -95,12 +98,12 @@ public sealed class SchemaBuilderTests
             .Validate();
 
         problems.ShouldContain(x =>
-            x.Contains("computed from direct tuples on the", StringComparison.Ordinal));
+            x.Contains("computed from direct tuples on the", StringComparison.Ordinal)
+        );
     }
 
     [Fact]
-    public void NegationInsideARelationIsIllegal()
-    {
+    public void NegationInsideARelationIsIllegal() {
         // A relation is reachable from another object through From(…), so a `!` in one is a `!`
         // that is not at any top level.
         var problems = Schema.DefineType("doc")
@@ -111,12 +114,12 @@ public sealed class SchemaBuilderTests
             .Validate();
 
         problems.ShouldContain(x =>
-            x.Contains("is a relation and its rewrite contains `!`", StringComparison.Ordinal));
+            x.Contains("is a relation and its rewrite contains `!`", StringComparison.Ordinal)
+        );
     }
 
     [Fact]
-    public void ANegationNestedBelowTheRootIsIllegal()
-    {
+    public void ANegationNestedBelowTheRootIsIllegal() {
         var problems = Schema.DefineType("doc")
             .Relation("owner", This)
             .Relation("editor", This)
@@ -126,12 +129,12 @@ public sealed class SchemaBuilderTests
 
         problems.ShouldContain(x =>
             x.Contains("not a top-level intersection", StringComparison.Ordinal)
-            || x.Contains("nests a `!`", StringComparison.Ordinal));
+            || x.Contains("nests a `!`", StringComparison.Ordinal)
+        );
     }
 
     [Fact]
-    public void ANegationWithNoPositiveTermIsIllegal()
-    {
+    public void ANegationWithNoPositiveTermIsIllegal() {
         // `!Rel("suspended")` alone grants to every subject in the universe that is not suspended.
         var problems = Schema.DefineType("doc")
             .Relation("suspended")
@@ -140,12 +143,12 @@ public sealed class SchemaBuilderTests
 
         problems.ShouldContain(x =>
             x.Contains("nothing but negations", StringComparison.Ordinal)
-            || x.Contains("not a top-level intersection", StringComparison.Ordinal));
+            || x.Contains("not a top-level intersection", StringComparison.Ordinal)
+        );
     }
 
     [Fact]
-    public void DoubleNegationIsIllegal()
-    {
+    public void DoubleNegationIsIllegal() {
         var problems = Schema.DefineType("doc")
             .Relation("owner", This)
             .Relation("suspended")
@@ -156,20 +159,19 @@ public sealed class SchemaBuilderTests
     }
 
     [Fact]
-    public void NegatingThisIsIllegal()
-    {
+    public void NegatingThisIsIllegal() {
         var problems = Schema.DefineType("doc")
             .Relation("owner", This)
             .Permission("act", Rel("owner") & !This)
             .Validate();
 
         problems.ShouldContain(x =>
-            x.Contains("may only be applied to `Rel(name)`", StringComparison.Ordinal));
+            x.Contains("may only be applied to `Rel(name)`", StringComparison.Ordinal)
+        );
     }
 
     [Fact]
-    public void NegatingAUnionIsIllegal()
-    {
+    public void NegatingAUnionIsIllegal() {
         var problems = Schema.DefineType("doc")
             .Relation("owner", This)
             .Relation("suspended")
@@ -178,12 +180,12 @@ public sealed class SchemaBuilderTests
             .Validate();
 
         problems.ShouldContain(x =>
-            x.Contains("may only be applied to `Rel(name)`", StringComparison.Ordinal));
+            x.Contains("may only be applied to `Rel(name)`", StringComparison.Ordinal)
+        );
     }
 
     [Fact]
-    public void ReferencingAPermissionThatCarriesANegationIsIllegal()
-    {
+    public void ReferencingAPermissionThatCarriesANegationIsIllegal() {
         // Rel(p) would move p's `!` below a top level.
         var problems = Schema.DefineType("doc")
             .Relation("owner", This)
@@ -193,12 +195,12 @@ public sealed class SchemaBuilderTests
             .Validate();
 
         problems.ShouldContain(x =>
-            x.Contains("permission containing `!`", StringComparison.Ordinal));
+            x.Contains("permission containing `!`", StringComparison.Ordinal)
+        );
     }
 
     [Fact]
-    public void InheritingAPermissionThatCarriesANegationIsIllegal()
-    {
+    public void InheritingAPermissionThatCarriesANegationIsIllegal() {
         // From(_, p) is the same mistake at a distance: it evaluates p from ANOTHER object.
         var problems = Schema.DefineType("doc")
             .Relation("parent")
@@ -212,12 +214,12 @@ public sealed class SchemaBuilderTests
             .Validate();
 
         problems.ShouldContain(x =>
-            x.Contains("permission containing `!`", StringComparison.Ordinal));
+            x.Contains("permission containing `!`", StringComparison.Ordinal)
+        );
     }
 
     [Fact]
-    public void TheLegalShapeIsExactlyTheOneTheDocumentWrites()
-    {
+    public void TheLegalShapeIsExactlyTheOneTheDocumentWrites() {
         var schema = Schema.DefineType("doc")
             .Relation("owner", This)
             .Relation("suspended")
@@ -230,8 +232,7 @@ public sealed class SchemaBuilderTests
     // ── The rest of the rules ──────────────────────────────────────────────────────────────────
 
     [Fact]
-    public void AnUnresolvableRelationReferenceIsIllegal()
-    {
+    public void AnUnresolvableRelationReferenceIsIllegal() {
         // This is the typo docs/plan/07 § The model credits an analyzer with catching.
         var problems = Schema.DefineType("doc")
             .Relation("owner", This)
@@ -242,8 +243,7 @@ public sealed class SchemaBuilderTests
     }
 
     [Fact]
-    public void AComputedTuplesetIsIllegal()
-    {
+    public void AComputedTuplesetIsIllegal() {
         var problems = Schema.DefineType("doc")
             .Relation("parent")
             .Relation("grandparent", From("parent", "parent"))
@@ -254,8 +254,7 @@ public sealed class SchemaBuilderTests
     }
 
     [Fact]
-    public void ATuplesetPointingAtAPermissionIsIllegal()
-    {
+    public void ATuplesetPointingAtAPermissionIsIllegal() {
         var problems = Schema.DefineType("doc")
             .Relation("owner", This)
             .Permission("act", Rel("owner"))
@@ -266,8 +265,7 @@ public sealed class SchemaBuilderTests
     }
 
     [Fact]
-    public void AComputedNameNoTypeDeclaresIsIllegal()
-    {
+    public void AComputedNameNoTypeDeclaresIsIllegal() {
         var problems = Schema.DefineType("doc")
             .Relation("parent")
             .Relation("owner", This | From("parent", "ownr"))
@@ -277,8 +275,7 @@ public sealed class SchemaBuilderTests
     }
 
     [Fact]
-    public void ThisInsideAPermissionIsIllegal()
-    {
+    public void ThisInsideAPermissionIsIllegal() {
         // A permission has no tuples of its own; This there is a silent allow-nothing.
         var problems = Schema.DefineType("doc")
             .Relation("owner", This)
@@ -289,8 +286,7 @@ public sealed class SchemaBuilderTests
     }
 
     [Fact]
-    public void DeclaringOneNameTwiceIsIllegal()
-    {
+    public void DeclaringOneNameTwiceIsIllegal() {
         var problems = Schema.DefineType("doc")
             .Relation("owner", This)
             .Permission("owner", Rel("owner"))
@@ -310,8 +306,7 @@ public sealed class SchemaBuilderTests
     [InlineData("own-er", "contains a hyphen")]
     [InlineData("own_er", "contains an underscore")]
     [InlineData("", "is empty")]
-    public void AnIllegalRelationNameIsIllegal(string name, string why)
-    {
+    public void AnIllegalRelationNameIsIllegal(string name, string why) {
         var problems = Schema.DefineType("doc")
             .Relation(name, This)
             .Validate();
@@ -321,12 +316,14 @@ public sealed class SchemaBuilderTests
 
     [Fact]
     public void AnEmptySchemaIsIllegal() =>
-        Schema.Create().Validate().ShouldContain(x =>
-            x.Contains("no object types", StringComparison.Ordinal));
+        Schema.Create()
+            .Validate()
+            .ShouldContain(x =>
+                x.Contains("no object types", StringComparison.Ordinal)
+            );
 
     [Fact]
-    public void ACycleIsLegalBecauseTheMemoBreaksItNotTheBuilder()
-    {
+    public void ACycleIsLegalBecauseTheMemoBreaksItNotTheBuilder() {
         // docs/plan/07 § Check: "Cycles are broken by the memo, not by cycle detection." Rejecting
         // them here would be a second and less complete mechanism — a cycle can be formed by TUPLES
         // at runtime, which no schema check can see.
@@ -340,14 +337,14 @@ public sealed class SchemaBuilderTests
     }
 
     [Fact]
-    public void BuildThrowsAndListsEveryProblemAtOnce()
-    {
+    public void BuildThrowsAndListsEveryProblemAtOnce() {
         var thrown = Should.Throw<SchemaDefinitionException>(() =>
             Schema.DefineType("doc")
                 .Relation("owner", This)
                 .Relation("suspended")
                 .Permission("act", Rel("ownr") & !Rel("nope"))
-                .Build());
+                .Build()
+        );
 
         thrown.Problems.Length.ShouldBeGreaterThanOrEqualTo(2);
         thrown.Message.ShouldContain("docs/plan/07");

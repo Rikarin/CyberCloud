@@ -11,9 +11,12 @@ namespace CyberCloud.Kubernetes.Contracts;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ADR-013: <i>"These labels are how billing attributes a pod, how the reconciler finds
-///         orphans, how deletion is complete, and how a support engineer answers 'whose is this'.
-///         Getting them on 99 % of objects is worth nothing; the 1 % is what you page about."</i>
+///         ADR-013:
+///         <i>
+///             "These labels are how billing attributes a pod, how the reconciler finds
+///             orphans, how deletion is complete, and how a support engineer answers 'whose is this'.
+///             Getting them on 99 % of objects is worth nothing; the 1 % is what you page about."
+///         </i>
 ///         Which is why they are injected by <see cref="KubeCommand" /> rather than asked for, and
 ///         why <see cref="IsMandatory" /> exists — a caller may add labels and may not replace one of
 ///         these.
@@ -27,8 +30,7 @@ namespace CyberCloud.Kubernetes.Contracts;
 ///         "because it is exactly the kind of detail that becomes a two-day bug six months in".
 ///     </para>
 /// </remarks>
-public static class KubeLabels
-{
+public static class KubeLabels {
     /// <summary>The DNS-subdomain prefix every Cyber Cloud label and annotation carries.</summary>
     /// <remarks>
     ///     ⚠ Lower-case, and that is a rule rather than a style. A label key's prefix is a DNS-1123
@@ -99,8 +101,7 @@ public static class KubeLabels
     ///     have to edit is a list a reviewer sees. <c>KubeLabelTests</c> asserts the count is seven
     ///     and that every one is a legal Kubernetes label key.
     /// </remarks>
-    public static ImmutableArray<string> Mandatory { get; } =
-    [
+    public static ImmutableArray<string> Mandatory { get; } = [
         TenantId,
         SubscriptionId,
         ResourceGroup,
@@ -115,8 +116,7 @@ public static class KubeLabels
         [ResourcePathAnnotation, ReconcileHashAnnotation];
 
     /// <summary>Whether <paramref name="key" /> is one of the seven a caller may not set or replace.</summary>
-    public static bool IsMandatory(string? key) =>
-        key is not null && Mandatory.Contains(key, StringComparer.Ordinal);
+    public static bool IsMandatory(string? key) => key is not null && Mandatory.Contains(key, StringComparer.Ordinal);
 
     /// <summary>Whether <paramref name="key" /> is one of the two annotations a caller may not replace.</summary>
     public static bool IsMandatoryAnnotation(string? key) =>
@@ -142,8 +142,12 @@ public static class KubeLabels
     ///         type two spellings and therefore two label selectors.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The result is not guaranteed to fit in 63 characters and this function does not
-    ///         truncate.</b> <see cref="ResourceTypeName" /> permits a namespace of two or more
+    ///         ⚠
+    ///         <b>
+    ///             The result is not guaranteed to fit in 63 characters and this function does not
+    ///             truncate.
+    ///         </b>
+    ///         <see cref="ResourceTypeName" /> permits a namespace of two or more
     ///         segments and a type path of up to three, each up to 63 characters, so a legal type can
     ///         be several hundred characters long. Truncating would map two distinct types onto one
     ///         label value, which silently breaks orphan detection and billing attribution — the two
@@ -163,8 +167,7 @@ public static class KubeLabels
     ///     <see cref="ReconcileHashAnnotation" /> value.
     /// </summary>
     /// <param name="body">The desired body, as it will be sent.</param>
-    public static string ReconcileHash(string body)
-    {
+    public static string ReconcileHash(string body) {
         ArgumentNullException.ThrowIfNull(body);
 
         Span<byte> hash = stackalloc byte[SHA256.HashSizeInBytes];
@@ -178,15 +181,13 @@ public static class KubeLabels
     ///     canonicaliser that folds two distinct code points onto one produces two resources with one
     ///     label value.
     /// </summary>
-    static string AsciiLower(string value)
-    {
-        Span<char> buffer = value.Length <= 256 ? stackalloc char[value.Length] : new char[value.Length];
-        for (var i = 0; i < value.Length; i++)
-        {
+    static string AsciiLower(string value) {
+        var buffer = value.Length <= 256 ? stackalloc char[value.Length] : new char[value.Length];
+        for (var i = 0; i < value.Length; i++) {
             var c = value[i];
             buffer[i] = c is >= 'A' and <= 'Z' ? (char)(c + 32) : c;
         }
 
-        return new string(buffer);
+        return new(buffer);
     }
 }

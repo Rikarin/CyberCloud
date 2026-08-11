@@ -33,8 +33,7 @@ namespace CyberCloud.Tenancy;
 ///         A claim by a different id is <c>ResourceAlreadyExists</c> — the gateway's <c>409</c>.
 ///     </para>
 /// </remarks>
-static class IndexClaimMachine
-{
+static class IndexClaimMachine {
     /// <summary>
     ///     The claim lease. docs/plan/06 § Two-phase create, step 1: "The claim is durable and
     ///     carries a 5-minute lease."
@@ -50,7 +49,7 @@ static class IndexClaimMachine
     /// <summary>The entry as it reads now, with an expired lease already collapsed to <c>Free</c>.</summary>
     public static IndexEntry Effective(IndexEntry entry, DateTimeOffset now) =>
         entry is { State: IndexEntryState.Claimed } && entry.LeaseExpiresAt <= now
-            ? new IndexEntry { State = IndexEntryState.Free, ModifiedAt = entry.ModifiedAt }
+            ? new() { State = IndexEntryState.Free, ModifiedAt = entry.ModifiedAt }
             : entry;
 
     /// <summary>Attempts the claim. Returns the new entry, or the conflict.</summary>
@@ -59,35 +58,35 @@ static class IndexClaimMachine
         Guid id,
         string indexedValue,
         DateTimeOffset now,
-        string what)
-    {
+        string what
+    ) {
         var entry = Effective(current, now);
 
-        if (entry.State != IndexEntryState.Free && entry.BoundTo != id)
-        {
+        if (entry.State != IndexEntryState.Free && entry.BoundTo != id) {
             return Result<IndexEntry>.Failure(
                 ErrorCode.ResourceAlreadyExists,
                 $"{what} is already {(entry.State == IndexEntryState.Confirmed ? "taken" : "claimed")} "
                 + $"by {entry.BoundTo:D}. docs/plan/06 § Two-phase create: a taken name is a "
-                + "409 Conflict.");
+                + "409 Conflict."
+            );
         }
 
-        if (entry.State == IndexEntryState.Confirmed)
-        {
+        if (entry.State == IndexEntryState.Confirmed) {
             // Same id, already confirmed: the retried PUT. A no-op, and NOT a re-lease — putting a
             // confirmed binding back under a lease would let it expire out from under a live
             // resource.
             return Result<IndexEntry>.Success(entry);
         }
 
-        return Result<IndexEntry>.Success(new IndexEntry
-        {
-            State = IndexEntryState.Claimed,
-            BoundTo = id,
-            IndexedValue = indexedValue,
-            LeaseExpiresAt = now + LeaseDuration,
-            ModifiedAt = now,
-        });
+        return Result<IndexEntry>.Success(
+            new() {
+                State = IndexEntryState.Claimed,
+                BoundTo = id,
+                IndexedValue = indexedValue,
+                LeaseExpiresAt = now + LeaseDuration,
+                ModifiedAt = now
+            }
+        );
     }
 
     /// <summary>Converts a lease into a permanent binding.</summary>
@@ -95,29 +94,29 @@ static class IndexClaimMachine
         IndexEntry current,
         Guid id,
         DateTimeOffset now,
-        string what)
-    {
+        string what
+    ) {
         var entry = Effective(current, now);
 
-        return entry switch
-        {
+        return entry switch {
             { State: IndexEntryState.Free } => Result<IndexEntry>.Failure(
                 ErrorCode.Conflict,
                 $"{what} has no live claim to confirm — the lease expired, so the name is free "
-                + "again and the create must start from step 1. docs/plan/06 § Two-phase create."),
+                + "again and the create must start from step 1. docs/plan/06 § Two-phase create."
+            ),
 
             _ when entry.BoundTo != id => Result<IndexEntry>.Failure(
                 ErrorCode.Conflict,
-                $"{what} is claimed by {entry.BoundTo:D}, not by {id:D}."),
+                $"{what} is claimed by {entry.BoundTo:D}, not by {id:D}."
+            ),
 
             { State: IndexEntryState.Confirmed } => Result<IndexEntry>.Success(entry),
 
-            _ => Result<IndexEntry>.Success(entry with
-            {
-                State = IndexEntryState.Confirmed,
-                LeaseExpiresAt = DateTimeOffset.MaxValue,
-                ModifiedAt = now,
-            }),
+            _ => Result<IndexEntry>.Success(
+                entry with {
+                    State = IndexEntryState.Confirmed, LeaseExpiresAt = DateTimeOffset.MaxValue, ModifiedAt = now
+                }
+            )
         };
     }
 
@@ -126,12 +125,11 @@ static class IndexClaimMachine
         IndexEntry current,
         Guid id,
         DateTimeOffset now,
-        string what)
-    {
+        string what
+    ) {
         var entry = Effective(current, now);
 
-        if (entry.State == IndexEntryState.Free)
-        {
+        if (entry.State == IndexEntryState.Free) {
             // Releasing a free name is a no-op rather than an error: delete is re-driven from a
             // reminder (docs/plan/06 § Two-phase create) and the second drive must not fail.
             return Result<IndexEntry>.Success(entry);
@@ -141,11 +139,8 @@ static class IndexClaimMachine
             ? Result<IndexEntry>.Failure(
                 ErrorCode.Conflict,
                 $"{what} is bound to {entry.BoundTo:D}, not to {id:D}. Releasing it would hand "
-                + "somebody else's name away.")
-            : Result<IndexEntry>.Success(new IndexEntry
-            {
-                State = IndexEntryState.Free,
-                ModifiedAt = now,
-            });
+                + "somebody else's name away."
+            )
+            : Result<IndexEntry>.Success(new() { State = IndexEntryState.Free, ModifiedAt = now });
     }
 }

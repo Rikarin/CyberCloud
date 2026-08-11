@@ -5,8 +5,11 @@ namespace CyberCloud.Authorization.Contracts;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>docs/plan/07 § Consistency and § Caching across requests contradict each other, and
-///         this enum is where the contradiction had to be resolved.</b>
+///         ⚠
+///         <b>
+///             docs/plan/07 § Consistency and § Caching across requests contradict each other, and
+///             this enum is where the contradiction had to be resolved.
+///         </b>
 ///     </para>
 ///     <para>
 ///         § Caching across requests says the cache is <i>keyed</i> by
@@ -27,8 +30,7 @@ namespace CyberCloud.Authorization.Contracts;
 ///     </para>
 /// </remarks>
 [Alias("CyberCloud.Authorization.ConsistencyMode")]
-public enum ConsistencyMode
-{
+public enum ConsistencyMode {
     /// <summary>
     ///     Any cached result, however stale. List views and portal navigation — docs/plan/07
     ///     § Consistency, row 1. <b>The default, and the one that can serve a revoked grant.</b>
@@ -68,8 +70,7 @@ public enum ConsistencyMode
 ///     </para>
 /// </remarks>
 [Alias("CyberCloud.Authorization.CheckOutcome")]
-public enum CheckOutcome
-{
+public enum CheckOutcome {
     /// <summary>Never assigned. Not an outcome — see <c>Result</c>'s <c>default(T)</c> argument.</summary>
     Unknown = 0,
 

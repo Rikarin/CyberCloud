@@ -3,8 +3,7 @@ using System.Globalization;
 namespace CyberCloud.Kubernetes.Connections;
 
 /// <summary>Which kind of caller made the current grain call.</summary>
-public enum CallerKind
-{
+public enum CallerKind {
     /// <summary>
     ///     Nothing established the caller. ⚠ Treated as <b>refused</b>, never as trusted — see
     ///     <see cref="CallerTenant" />.
@@ -21,7 +20,7 @@ public enum CallerKind
     ///     Not a grain: a cluster client, the gateway, a test. Orleans' own separation filter returns
     ///     early for these, so they carry no tenant at all.
     /// </summary>
-    Client = 3,
+    Client = 3
 }
 
 /// <summary>
@@ -54,15 +53,14 @@ public enum CallerKind
 ///         <c>ClusterConnectionTenancyTests</c> asserts exactly that.
 ///     </para>
 /// </remarks>
-public readonly record struct CallerTenant
-{
-    static readonly AsyncLocal<CallerTenant> Ambient = new();
+public readonly record struct CallerTenant {
+    /// <summary>
+    ///     <c>Orleans.Multitenant</c>'s literal for "no tenant" —
+    ///     <c>MultitenantStorageOptions.TenantIdForNullTenant</c>'s default.
+    /// </summary>
+    public const string NullTenantSentinel = "Null";
 
-    CallerTenant(CallerKind kind, Guid tenantId)
-    {
-        Kind = kind;
-        TenantId = tenantId;
-    }
+    static readonly AsyncLocal<CallerTenant> Ambient = new();
 
     /// <summary>What kind of caller.</summary>
     public CallerKind Kind { get; }
@@ -78,6 +76,14 @@ public readonly record struct CallerTenant
 
     /// <summary>A caller that is a grain with no tenant qualification.</summary>
     public static CallerTenant NullTenant { get; } = new(CallerKind.NullTenant, Guid.Empty);
+
+    /// <summary>The caller of the grain call currently executing.</summary>
+    public static CallerTenant Current => Ambient.Value;
+
+    CallerTenant(CallerKind kind, Guid tenantId) {
+        Kind = kind;
+        TenantId = tenantId;
+    }
 
     /// <summary>A caller that is a grain in <paramref name="tenantId" />.</summary>
     /// <param name="tenantId">The calling grain's tenant.</param>
@@ -95,29 +101,17 @@ public readonly record struct CallerTenant
     ///     wiring documents and <c>NullTenantGrainTests</c> pins. A non-GUID, non-<c>"Null"</c> value
     ///     is not guessed at: it becomes <see cref="Unknown" /> and is refused.
     /// </remarks>
-    public static CallerTenant FromTenantId(string? tenantId)
-    {
-        if (tenantId is null)
-        {
+    public static CallerTenant FromTenantId(string? tenantId) {
+        if (tenantId is null) {
             return NullTenant;
         }
 
-        if (string.Equals(tenantId, NullTenantSentinel, StringComparison.Ordinal))
-        {
+        if (string.Equals(tenantId, NullTenantSentinel, StringComparison.Ordinal)) {
             return NullTenant;
         }
 
         return Guid.TryParseExact(tenantId, "D", out var parsed) ? Of(parsed) : Unknown;
     }
-
-    /// <summary>
-    ///     <c>Orleans.Multitenant</c>'s literal for "no tenant" —
-    ///     <c>MultitenantStorageOptions.TenantIdForNullTenant</c>'s default.
-    /// </summary>
-    public const string NullTenantSentinel = "Null";
-
-    /// <summary>The caller of the grain call currently executing.</summary>
-    public static CallerTenant Current => Ambient.Value;
 
     /// <summary>
     ///     Sets the ambient caller for the duration of the current execution context. Called by
@@ -128,29 +122,25 @@ public readonly record struct CallerTenant
     public static IDisposable Enter(CallerTenant caller) => new Scope(caller);
 
     /// <inheritdoc />
-    public override string ToString() => Kind switch
-    {
-        CallerKind.Tenant => "tenant " + TenantId.ToString("D", CultureInfo.InvariantCulture),
-        CallerKind.NullTenant => "a null-tenant platform grain",
-        CallerKind.Client => "a client (not a grain)",
-        _ => "an unidentified caller",
-    };
+    public override string ToString() =>
+        Kind switch {
+            CallerKind.Tenant => "tenant " + TenantId.ToString("D", CultureInfo.InvariantCulture),
+            CallerKind.NullTenant => "a null-tenant platform grain",
+            CallerKind.Client => "a client (not a grain)",
+            _ => "an unidentified caller"
+        };
 
-    sealed class Scope : IDisposable
-    {
+    sealed class Scope : IDisposable {
         readonly CallerTenant previous;
         bool disposed;
 
-        internal Scope(CallerTenant caller)
-        {
+        internal Scope(CallerTenant caller) {
             previous = Ambient.Value;
             Ambient.Value = caller;
         }
 
-        public void Dispose()
-        {
-            if (disposed)
-            {
+        public void Dispose() {
+            if (disposed) {
                 return;
             }
 

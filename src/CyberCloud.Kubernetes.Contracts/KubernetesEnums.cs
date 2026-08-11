@@ -5,8 +5,7 @@ namespace CyberCloud.Kubernetes.Contracts;
 /// </summary>
 [GenerateSerializer]
 [Alias("CyberCloud.Kubernetes.ClusterConnectionKind")]
-public enum ClusterConnectionKind
-{
+public enum ClusterConnectionKind {
     /// <summary><c>default</c>. Not a connection kind.</summary>
     Unknown = 0,
 
@@ -55,8 +54,7 @@ public enum ClusterConnectionKind
 /// </remarks>
 [GenerateSerializer]
 [Alias("CyberCloud.Kubernetes.ClusterHealthState")]
-public enum ClusterHealthState
-{
+public enum ClusterHealthState {
     /// <summary>No ping has been attempted yet. Not an error, and not healthy either.</summary>
     Unknown = 0,
 
@@ -65,8 +63,12 @@ public enum ClusterHealthState
 
     /// <summary>
     ///     The cluster has not answered a ping for longer than the staleness window (90 seconds,
-    ///     docs/plan/09 § Cluster connections). Reconciles against it are <b>suspended, not
-    ///     failed</b>, and the portal says "cannot reach your cluster".
+    ///     docs/plan/09 § Cluster connections). Reconciles against it are
+    ///     <b>
+    ///         suspended, not
+    ///         failed
+    ///     </b>
+    ///     , and the portal says "cannot reach your cluster".
     /// </summary>
     Degraded = 2
 }
@@ -74,8 +76,7 @@ public enum ClusterHealthState
 /// <summary>What one server-side apply did.</summary>
 [GenerateSerializer]
 [Alias("CyberCloud.Kubernetes.ApplyResult")]
-public enum ApplyResult
-{
+public enum ApplyResult {
     /// <summary><c>default</c>. Not an outcome.</summary>
     Unknown = 0,
 
@@ -102,8 +103,12 @@ public enum ApplyResult
     Conflict = 4,
 
     /// <summary>
-    ///     ⚠ <b>The cluster is <see cref="ClusterHealthState.Degraded" /> and the write was not
-    ///     attempted.</b> This is a <i>success</i> carrying "not now", not a failure: docs/plan/09
+    ///     ⚠
+    ///     <b>
+    ///         The cluster is <see cref="ClusterHealthState.Degraded" /> and the write was not
+    ///         attempted.
+    ///     </b>
+    ///     This is a <i>success</i> carrying "not now", not a failure: docs/plan/09
     ///     § Cluster connections requires an unreachable cluster to suspend reconciles rather than
     ///     fail them, so that a tenant's network outage does not produce a failed operation and a
     ///     "provisioning failed" in the portal.
@@ -114,8 +119,7 @@ public enum ApplyResult
 /// <summary>How a delete cascades — docs/plan/09 § The command builder, <c>WithOwner</c>.</summary>
 [GenerateSerializer]
 [Alias("CyberCloud.Kubernetes.CascadePolicy")]
-public enum CascadePolicy
-{
+public enum CascadePolicy {
     /// <summary>
     ///     <c>Background</c> — the default. The object goes immediately and the garbage collector
     ///     deletes dependents afterwards.

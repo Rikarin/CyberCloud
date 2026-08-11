@@ -1,67 +1,67 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!--
-    docs/plan/02 ADR-018: tests are siblings. OutputType=Exe and the Microsoft.Testing.Platform
-    switches come from the repository-root Directory.Build.props / .targets — do not repeat them
-    here, and do NOT add Microsoft.NET.Test.Sdk.
-
-    FrameworkReference Microsoft.AspNetCore.App because SiloHostTests starts a real WebApplication
-    and talks to it over HTTP. That is the point of the file: a health check can only be shown not to
-    lie by asking it the way Kubernetes asks it.
-  -->
-
-  <ItemGroup>
-    <FrameworkReference Include="Microsoft.AspNetCore.App" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <PackageReference Include="xunit.v3" />
-    <PackageReference Include="Shouldly" />
     <!--
-      ABP, for one reason only: CreateSilo calls builder.Host.UseAutofac() per docs/plan/04:44, and
-      ABP's service-provider factory demands an IModuleContainer at Build() time. SiloHostTests
-      therefore has to register a real (empty) AbpModule, which is also what makes the test a proof
-      of the documented startup sequence rather than of a convenient subset of it.
+      docs/plan/02 ADR-018: tests are siblings. OutputType=Exe and the Microsoft.Testing.Platform
+      switches come from the repository-root Directory.Build.props / .targets — do not repeat them
+      here, and do NOT add Microsoft.NET.Test.Sdk.
+  
+      FrameworkReference Microsoft.AspNetCore.App because SiloHostTests starts a real WebApplication
+      and talks to it over HTTP. That is the point of the file: a health check can only be shown not to
+      lie by asking it the way Kubernetes asks it.
     -->
-    <PackageReference Include="Volo.Abp.Autofac" />
-  </ItemGroup>
 
-  <ItemGroup Label="Storage integration — ADR-018, docs/plan/23 § Test layers (the Grain row)">
-    <!--
-      ADR-018: "Grain behaviour is tested against a real in-process TestCluster
-      (Microsoft.Orleans.TestingHost) with real storage providers backed by Testcontainers, not
-      against mocked IGrainFactory." Every test under Storage/ is that sentence, with one
-      substitution: the silo is a real WebApplication host rather than a TestCluster, for the same
-      reason SiloHostTests uses one — these tests assert on the SILO's service provider (the tenant
-      storage providers, the configurator invocation counts, the keyed IGrainStorage registrations),
-      and TestCluster's public surface hands out the client's container, not the silo's. Nothing is
-      mocked either way, which is what ADR-018 is actually about.
-    -->
-    <PackageReference Include="Testcontainers.Redis" />
-    <PackageReference Include="Testcontainers.PostgreSql" />
-    <!-- Reading the row back out with plain SQL, and computing slots against a real cluster. -->
-    <PackageReference Include="Npgsql" />
-    <PackageReference Include="StackExchange.Redis" />
-  </ItemGroup>
+    <ItemGroup>
+        <FrameworkReference Include="Microsoft.AspNetCore.App"/>
+    </ItemGroup>
 
-  <ItemGroup Label="Orleans' own PostgreSQL DDL">
-    <!--
-      ⚠ These two files are COPIES of dotnet/orleans at tag v10.2.2:
-          src/AdoNet/Shared/PostgreSQL-Main.sql
-          src/AdoNet/Orleans.Persistence.AdoNet/PostgreSQL-Persistence.sql
-      Microsoft.Orleans.Persistence.AdoNet ships no SQL and no embedded resources, and nothing in
-      this repository creates the schema on a real shard — see OrleansAdoNetSchema.cs.
-    -->
-    <EmbeddedResource Include="Storage/PostgreSQL-Main.sql" />
-    <EmbeddedResource Include="Storage/PostgreSQL-Persistence.sql" />
-  </ItemGroup>
+    <ItemGroup>
+        <PackageReference Include="xunit.v3"/>
+        <PackageReference Include="Shouldly"/>
+        <!--
+          ABP, for one reason only: CreateSilo calls builder.Host.UseAutofac() per docs/plan/04:44, and
+          ABP's service-provider factory demands an IModuleContainer at Build() time. SiloHostTests
+          therefore has to register a real (empty) AbpModule, which is also what makes the test a proof
+          of the documented startup sequence rather than of a convenient subset of it.
+        -->
+        <PackageReference Include="Volo.Abp.Autofac"/>
+    </ItemGroup>
 
-  <ItemGroup Label="Global usings">
-    <Using Include="Xunit" />
-  </ItemGroup>
+    <ItemGroup Label="Storage integration — ADR-018, docs/plan/23 § Test layers (the Grain row)">
+        <!--
+          ADR-018: "Grain behaviour is tested against a real in-process TestCluster
+          (Microsoft.Orleans.TestingHost) with real storage providers backed by Testcontainers, not
+          against mocked IGrainFactory." Every test under Storage/ is that sentence, with one
+          substitution: the silo is a real WebApplication host rather than a TestCluster, for the same
+          reason SiloHostTests uses one — these tests assert on the SILO's service provider (the tenant
+          storage providers, the configurator invocation counts, the keyed IGrainStorage registrations),
+          and TestCluster's public surface hands out the client's container, not the silo's. Nothing is
+          mocked either way, which is what ADR-018 is actually about.
+        -->
+        <PackageReference Include="Testcontainers.Redis"/>
+        <PackageReference Include="Testcontainers.PostgreSql"/>
+        <!-- Reading the row back out with plain SQL, and computing slots against a real cluster. -->
+        <PackageReference Include="Npgsql"/>
+        <PackageReference Include="StackExchange.Redis"/>
+    </ItemGroup>
 
-  <ItemGroup>
-    <ProjectReference Include="../CyberCloud.ServiceDefaults/CyberCloud.ServiceDefaults.csproj" />
-  </ItemGroup>
+    <ItemGroup Label="Orleans' own PostgreSQL DDL">
+        <!--
+          ⚠ These two files are COPIES of dotnet/orleans at tag v10.2.2:
+              src/AdoNet/Shared/PostgreSQL-Main.sql
+              src/AdoNet/Orleans.Persistence.AdoNet/PostgreSQL-Persistence.sql
+          Microsoft.Orleans.Persistence.AdoNet ships no SQL and no embedded resources, and nothing in
+          this repository creates the schema on a real shard — see OrleansAdoNetSchema.cs.
+        -->
+        <EmbeddedResource Include="Storage/PostgreSQL-Main.sql"/>
+        <EmbeddedResource Include="Storage/PostgreSQL-Persistence.sql"/>
+    </ItemGroup>
+
+    <ItemGroup Label="Global usings">
+        <Using Include="Xunit"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../CyberCloud.ServiceDefaults/CyberCloud.ServiceDefaults.csproj"/>
+    </ItemGroup>
 
 </Project>

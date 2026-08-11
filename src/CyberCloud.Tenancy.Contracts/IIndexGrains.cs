@@ -35,8 +35,7 @@ namespace CyberCloud.Tenancy.Contracts;
 ///     </para>
 /// </remarks>
 [Alias("CyberCloud.Tenancy.IResourceIndexGrain")]
-public interface IResourceIndexGrain : IGrainWithStringKey
-{
+public interface IResourceIndexGrain : IGrainWithStringKey {
     /// <summary>
     ///     Step 1 of docs/plan/06 § Two-phase create: claims the name under a lease, or
     ///     <c>ResourceAlreadyExists</c> (the gateway's <c>409 Conflict</c>).
@@ -45,8 +44,11 @@ public interface IResourceIndexGrain : IGrainWithStringKey
     /// <param name="resourceId">The GUID to bind the address to.</param>
     /// <remarks>
     ///     <para>
-    ///         <b>Idempotent for the same <paramref name="resourceId" />, and that is what makes the
-    ///         retried <c>PUT</c> a no-op.</b> docs/plan/06 § Two-phase create: a silo that dies
+    ///         <b>
+    ///             Idempotent for the same <paramref name="resourceId" />, and that is what makes the
+    ///             retried <c>PUT</c> a no-op.
+    ///         </b>
+    ///         docs/plan/06 § Two-phase create: a silo that dies
     ///         between step 3 and the <c>202</c> leaves a confirmed binding, and "the caller retries
     ///         the <c>PUT</c> — which is idempotent because <c>PUT</c> with the same body on an
     ///         existing resource is a no-op, which is exactly why the API is <c>PUT</c> and not
@@ -112,8 +114,7 @@ public interface IResourceIndexGrain : IGrainWithStringKey
 ///     </para>
 /// </remarks>
 [Alias("CyberCloud.Tenancy.IEmailIndexGrain")]
-public interface IEmailIndexGrain : IGrainWithStringKey
-{
+public interface IEmailIndexGrain : IGrainWithStringKey {
     /// <summary>Claims the address under a lease, or <c>Conflict</c>.</summary>
     /// <param name="email">The address. Normalised with <c>GrainKeys.NormalizeEmail</c> before use.</param>
     /// <param name="userId">The user to bind it to.</param>

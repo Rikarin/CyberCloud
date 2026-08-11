@@ -1,7 +1,6 @@
-using System.Reflection;
 using CyberCloud.Kubernetes.Apply;
-using CyberCloud.Kubernetes.Connections;
 using Shouldly;
+using System.Reflection;
 
 namespace CyberCloud.Kubernetes.Tests;
 
@@ -24,21 +23,12 @@ namespace CyberCloud.Kubernetes.Tests;
 ///         part of the tree is asserted here, where it runs on every PR.
 ///     </para>
 /// </remarks>
-public sealed class AssemblyGraphTests
-{
+public sealed class AssemblyGraphTests {
     static readonly Assembly Contracts = typeof(KubeLabels).Assembly;
     static readonly Assembly Kubernetes = typeof(KubeApiClient).Assembly;
 
-    static IEnumerable<string> ReferencesOf(Assembly assembly) =>
-        assembly.GetReferencedAssemblies().Select(x => x.Name ?? string.Empty);
-
-    static bool IsKubernetesClient(string name) =>
-        name.StartsWith("k8s", StringComparison.OrdinalIgnoreCase)
-        || name.Contains("KubernetesClient", StringComparison.OrdinalIgnoreCase);
-
     [Fact]
-    public void TheContractsAssemblyDoesNotBindToTheKubernetesClient()
-    {
+    public void TheContractsAssemblyDoesNotBindToTheKubernetesClient() {
         // ⚠ THE RULE THAT MATTERS MOST HERE. Every provider reconciler references this assembly to
         // build a KubeCommand. One k8s.Models type in its public surface breaks rule 3 for the whole
         // provider tree, transitively and invisibly.
@@ -46,36 +36,35 @@ public sealed class AssemblyGraphTests
             .Where(IsKubernetesClient)
             .ShouldBeEmpty(
                 "CyberCloud.Kubernetes.Contracts is what providers reference; it must be "
-                + "JSON-and-GUIDs. docs/plan/03 § Assembly graph rules, rule 3.");
+                + "JSON-and-GUIDs. docs/plan/03 § Assembly graph rules, rule 3."
+            );
     }
 
     [Fact]
-    public void NoPublicMemberOfTheContractsAssemblyMentionsAKubernetesType()
-    {
+    public void NoPublicMemberOfTheContractsAssemblyMentionsAKubernetesType() {
         // The reference check above catches a binding; this catches the shape. A signature naming a
         // k8s type would fail to compile without the reference, so in practice these agree — but the
         // assertion states the intent, and it is the one a reviewer reads.
         var offenders = new List<string>();
 
-        foreach (var type in Contracts.GetExportedTypes())
-        {
-            foreach (var member in type.GetMembers(BindingFlags.Public | BindingFlags.Instance
-                | BindingFlags.Static | BindingFlags.DeclaredOnly))
-            {
-                var types = member switch
-                {
+        foreach (var type in Contracts.GetExportedTypes()) {
+            foreach (var member in type.GetMembers(
+                         BindingFlags.Public
+                         | BindingFlags.Instance
+                         | BindingFlags.Static
+                         | BindingFlags.DeclaredOnly
+                     )) {
+                var types = member switch {
                     MethodInfo m => m.GetParameters().Select(p => p.ParameterType).Append(m.ReturnType),
                     PropertyInfo p => [p.PropertyType],
                     FieldInfo f => new[] { f.FieldType },
                     ConstructorInfo c => c.GetParameters().Select(p => p.ParameterType),
-                    _ => [],
+                    _ => []
                 };
 
-                foreach (var referenced in types)
-                {
+                foreach (var referenced in types) {
                     var ns = referenced.Namespace ?? string.Empty;
-                    if (ns.StartsWith("k8s", StringComparison.OrdinalIgnoreCase))
-                    {
+                    if (ns.StartsWith("k8s", StringComparison.OrdinalIgnoreCase)) {
                         offenders.Add($"{type.Name}.{member.Name} -> {referenced.FullName}");
                     }
                 }
@@ -87,58 +76,77 @@ public sealed class AssemblyGraphTests
             + "`Object<T>(T obj) where T : IKubernetesObject<V1ObjectMeta>` and § Cluster "
             + "connections' `GetAsync<T>(ObjectRef) where T : IKubernetesObject` both violate this "
             + "rule as written; the repairs are documented on IKubeCommandBuilder.Object and "
-            + "KubeObject.");
+            + "KubeObject."
+        );
     }
 
     [Fact]
-    public void TheImplementationAssemblyIsAllowedToBindToTheKubernetesClient()
-    {
+    public void TheImplementationAssemblyIsAllowedToBindToTheKubernetesClient() {
         // The positive half: this is the boundary, and the point of the rule is that nothing above
         // it may do the same. A rule with no assembly on the allowed side is a ban, not a boundary.
         ReferencesOf(Kubernetes).ShouldContain("KubernetesClient");
     }
 
     [Fact]
-    public void OnlyTheApplyLayerNamesKubernetesTypes()
-    {
+    public void OnlyTheApplyLayerNamesKubernetesTypes() {
         // ⚠ Inside CyberCloud.Kubernetes the client is confined to one namespace, behind
         // IKubeApiClient. That is what lets the grain, the informers and the health tracker be
         // tested without an API server — and what would make swapping the client library a change
         // to one file rather than to the assembly.
         var offenders = Kubernetes.GetTypes()
             .Where(x => x.Namespace is not null
-                && !x.Namespace.StartsWith("CyberCloud.Kubernetes.Apply", StringComparison.Ordinal))
+                && !x.Namespace.StartsWith("CyberCloud.Kubernetes.Apply", StringComparison.Ordinal)
+            )
             .SelectMany(type => type
-                .GetMembers(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance
-                    | BindingFlags.Static | BindingFlags.DeclaredOnly)
+                .GetMembers(
+                    BindingFlags.Public
+                    | BindingFlags.NonPublic
+                    | BindingFlags.Instance
+                    | BindingFlags.Static
+                    | BindingFlags.DeclaredOnly
+                )
                 .OfType<MethodInfo>()
-                .Where(m => (m.ReturnType.Namespace ?? string.Empty).StartsWith("k8s", StringComparison.OrdinalIgnoreCase)
-                    || m.GetParameters().Any(p =>
-                        (p.ParameterType.Namespace ?? string.Empty).StartsWith("k8s", StringComparison.OrdinalIgnoreCase)))
-                .Select(m => $"{type.FullName}.{m.Name}"))
+                .Where(m => (m.ReturnType.Namespace ?? string.Empty).StartsWith(
+                        "k8s",
+                        StringComparison.OrdinalIgnoreCase
+                    )
+                    || m.GetParameters()
+                        .Any(p =>
+                            (p.ParameterType.Namespace ?? string.Empty).StartsWith(
+                                "k8s",
+                                StringComparison.OrdinalIgnoreCase
+                            )
+                        )
+                )
+                .Select(m => $"{type.FullName}.{m.Name}")
+            )
             .Where(x => !x.Contains('<'))
             .ToList();
 
-        offenders.ShouldBeEmpty(
-            "k8s types outside CyberCloud.Kubernetes.Apply: " + string.Join(", ", offenders));
+        offenders.ShouldBeEmpty("k8s types outside CyberCloud.Kubernetes.Apply: " + string.Join(", ", offenders));
     }
 
     [Fact]
-    public void TheGrainSurfaceIsExpressedInJsonAndGuidsOnly()
-    {
+    public void TheGrainSurfaceIsExpressedInJsonAndGuidsOnly() {
         // The contract docs/plan/09 § Cluster connections sketches with IKubernetesObject, restated
         // in the vocabulary rule 3 permits.
-        foreach (var method in typeof(IClusterConnectionGrain).GetMethods())
-        {
+        foreach (var method in typeof(IClusterConnectionGrain).GetMethods()) {
             method.IsGenericMethod.ShouldBeFalse(
                 $"{method.Name} is generic; a generic grain method here would be the route by which "
-                + "a k8s constraint reappeared.");
+                + "a k8s constraint reappeared."
+            );
 
-            foreach (var parameter in method.GetParameters())
-            {
+            foreach (var parameter in method.GetParameters()) {
                 (parameter.ParameterType.Namespace ?? string.Empty)
-                    .ShouldNotStartWith("k8s", Case.Insensitive);
+                    .ShouldNotStartWith("k8s");
             }
         }
     }
+
+    static IEnumerable<string> ReferencesOf(Assembly assembly) =>
+        assembly.GetReferencedAssemblies().Select(x => x.Name ?? string.Empty);
+
+    static bool IsKubernetesClient(string name) =>
+        name.StartsWith("k8s", StringComparison.OrdinalIgnoreCase)
+        || name.Contains("KubernetesClient", StringComparison.OrdinalIgnoreCase);
 }

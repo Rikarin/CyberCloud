@@ -1,8 +1,8 @@
-using System.Collections.Immutable;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Testing;
 using Microsoft.CodeAnalysis.Diagnostics;
 using Microsoft.CodeAnalysis.Testing;
+using System.Collections.Immutable;
 
 namespace CyberCloud.Analyzers.Tests;
 
@@ -23,8 +23,11 @@ namespace CyberCloud.Analyzers.Tests;
 ///         test here that would fail if the exemption were removed.
 ///     </para>
 ///     <para>
-///         <b>References come from this process, and that is a deliberate departure from the
-///         harness's default.</b> <c>Microsoft.CodeAnalysis.Testing</c> normally wants a
+///         <b>
+///             References come from this process, and that is a deliberate departure from the
+///             harness's default.
+///         </b>
+///         <c>Microsoft.CodeAnalysis.Testing</c> normally wants a
 ///         <see cref="ReferenceAssemblies" /> preset — <c>ReferenceAssemblies.Net.Net100</c> — and
 ///         resolves it by <b>restoring <c>Microsoft.NETCore.App.Ref</c> from NuGet at test time</b>.
 ///         That works, and it puts a network round trip inside a gate that docs/plan/23 § CI shape
@@ -40,8 +43,7 @@ namespace CyberCloud.Analyzers.Tests;
 ///         at the versions <c>Directory.Packages.props</c> pins.
 ///     </para>
 /// </remarks>
-static class AnalyzerHarness
-{
+static class AnalyzerHarness {
     /// <summary>
     ///     An empty preset. Everything is supplied through <see cref="Platform" /> instead; see the
     ///     remarks on this class for why.
@@ -66,17 +68,14 @@ static class AnalyzerHarness
     public static Task ReportsAsync<TAnalyzer>(
         string source,
         string? assemblyName = null,
-        bool skipSuppressionCheck = false)
-        where TAnalyzer : DiagnosticAnalyzer, new()
-    {
-        var test = new CSharpAnalyzerTest<TAnalyzer, DefaultVerifier>
-        {
-            TestCode = source,
-            ReferenceAssemblies = NoPresetPackages,
+        bool skipSuppressionCheck = false
+    )
+        where TAnalyzer : DiagnosticAnalyzer, new() {
+        var test = new CSharpAnalyzerTest<TAnalyzer, DefaultVerifier> {
+            TestCode = source, ReferenceAssemblies = NoPresetPackages
         };
 
-        if (skipSuppressionCheck)
-        {
+        if (skipSuppressionCheck) {
             // ⚠ Only CC1007 needs this, and the reason is a genuine circularity rather than a
             // convenience. After checking the expected diagnostics, the harness re-runs the analyzer
             // over the same source with `#pragma warning disable <ID>` injected, to prove the rule
@@ -89,10 +88,10 @@ static class AnalyzerHarness
 
         test.TestState.AdditionalReferences.AddRange(Platform);
 
-        if (assemblyName is not null)
-        {
+        if (assemblyName is not null) {
             test.SolutionTransforms.Add((solution, projectId) =>
-                solution.WithProjectAssemblyName(projectId, assemblyName));
+                solution.WithProjectAssemblyName(projectId, assemblyName)
+            );
         }
 
         return test.RunAsync(CancellationToken.None);
@@ -107,8 +106,8 @@ static class AnalyzerHarness
     /// <param name="source">C# with no markup.</param>
     /// <param name="assemblyName">The compilation's assembly name, when it matters.</param>
     public static Task IsSilentAsync<TAnalyzer>(string source, string? assemblyName = null)
-        where TAnalyzer : DiagnosticAnalyzer, new()
-        => ReportsAsync<TAnalyzer>(source, assemblyName);
+        where TAnalyzer : DiagnosticAnalyzer, new() =>
+        ReportsAsync<TAnalyzer>(source, assemblyName);
 
     /// <summary>
     ///     <see cref="ReportsAsync{TAnalyzer}" /> with the harness's suppression re-run turned off —
@@ -117,8 +116,8 @@ static class AnalyzerHarness
     /// <typeparam name="TAnalyzer">The analyzer under test.</typeparam>
     /// <param name="source">C# with <c>{|CC1234:span|}</c> markup around each expected report.</param>
     public static Task ReportsWithoutSuppressionCheckAsync<TAnalyzer>(string source)
-        where TAnalyzer : DiagnosticAnalyzer, new()
-        => ReportsAsync<TAnalyzer>(source, assemblyName: null, skipSuppressionCheck: true);
+        where TAnalyzer : DiagnosticAnalyzer, new() =>
+        ReportsAsync<TAnalyzer>(source, null, true);
 
     /// <summary>
     ///     The test host's <c>TRUSTED_PLATFORM_ASSEMBLIES</c>, as metadata references.
@@ -129,23 +128,20 @@ static class AnalyzerHarness
     ///     cannot contain an assembly that is not loadable, both of which a hand-rolled directory
     ///     sweep can.
     /// </remarks>
-    static ImmutableArray<MetadataReference> LoadPlatformAssemblies()
-    {
-        if (AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES") is not string trusted)
-        {
+    static ImmutableArray<MetadataReference> LoadPlatformAssemblies() {
+        if (AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES") is not string trusted) {
             throw new InvalidOperationException(
                 "TRUSTED_PLATFORM_ASSEMBLIES is unset, so there is nothing for an analysed snippet "
                 + "to compile against. This runs on the default (non-single-file) host; if that "
                 + "changed, supply references another way rather than falling back to a NuGet "
-                + "restore at test time.");
+                + "restore at test time."
+            );
         }
 
         var references = ImmutableArray.CreateBuilder<MetadataReference>();
 
-        foreach (var path in trusted.Split(Path.PathSeparator))
-        {
-            if (path.Length > 0 && path.EndsWith(".dll", StringComparison.OrdinalIgnoreCase))
-            {
+        foreach (var path in trusted.Split(Path.PathSeparator)) {
+            if (path.Length > 0 && path.EndsWith(".dll", StringComparison.OrdinalIgnoreCase)) {
                 references.Add(MetadataReference.CreateFromFile(path));
             }
         }

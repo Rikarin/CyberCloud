@@ -1,4 +1,6 @@
+using CyberCloud.Core.Resources;
 using CyberCloud.Tenancy.Contracts;
+using Orleans.Multitenant;
 
 namespace CyberCloud.Tenancy.Tests.Infrastructure;
 
@@ -16,8 +18,7 @@ namespace CyberCloud.Tenancy.Tests.Infrastructure;
 ///     the "bug in one provider" that docs/plan/04 § Silo composition says the separation catches.
 /// </remarks>
 [Alias("CyberCloud.Tenancy.Tests.IReacherGrain")]
-public interface IReacherGrain : IGrainWithStringKey
-{
+public interface IReacherGrain : IGrainWithStringKey {
     /// <summary>Calls <c>ITenantGrain.GetAsync</c> on a grain named by its <b>raw physical key</b>.</summary>
     /// <param name="physicalKey">The whole key, tenant prefix and all.</param>
     Task<string> ReachTenantByRawKeyAsync(string physicalKey);
@@ -53,32 +54,27 @@ public interface IReacherGrain : IGrainWithStringKey
 }
 
 /// <inheritdoc />
-public sealed class ReacherGrain : Grain, IReacherGrain
-{
+public sealed class ReacherGrain : Grain, IReacherGrain {
     /// <inheritdoc />
-    public async Task<string> ReachTenantByRawKeyAsync(string physicalKey)
-    {
+    public async Task<string> ReachTenantByRawKeyAsync(string physicalKey) {
         var reached = await GrainFactory.GetGrain<ITenantGrain>(physicalKey).GetAsync();
         return reached.IsSuccess ? reached.GetValueOrThrow().Slug : $"<{reached.Error!.Code}>";
     }
 
     /// <inheritdoc />
-    public async Task<string> ReachSubscriptionByRawKeyAsync(string physicalKey)
-    {
+    public async Task<string> ReachSubscriptionByRawKeyAsync(string physicalKey) {
         var reached = await GrainFactory.GetGrain<ISubscriptionGrain>(physicalKey).GetAsync();
         return reached.IsSuccess ? reached.GetValueOrThrow().DisplayName : $"<{reached.Error!.Code}>";
     }
 
     /// <inheritdoc />
-    public async Task<string> ReachIndexByRawKeyAsync(string physicalKey)
-    {
+    public async Task<string> ReachIndexByRawKeyAsync(string physicalKey) {
         var reached = await GrainFactory.GetGrain<IResourceIndexGrain>(physicalKey).GetAsync();
         return reached.IsSuccess ? reached.GetValueOrThrow().IndexedValue : $"<{reached.Error!.Code}>";
     }
 
     /// <inheritdoc />
-    public async Task<string> ReachQuotaByRawKeyAsync(string physicalKey)
-    {
+    public async Task<string> ReachQuotaByRawKeyAsync(string physicalKey) {
         var reached = await GrainFactory.GetGrain<IQuotaGrain>(physicalKey)
             .GetUsageAsync(QuotaMeter.Vcpu);
 
@@ -88,40 +84,35 @@ public sealed class ReacherGrain : Grain, IReacherGrain
     }
 
     /// <inheritdoc />
-    public async Task<int> ReachResourceGroupByRawKeyAsync(string physicalKey)
-    {
+    public async Task<int> ReachResourceGroupByRawKeyAsync(string physicalKey) {
         var reached = await GrainFactory.GetGrain<IResourceGroupGrain>(physicalKey).ListAsync();
         return reached.IsSuccess ? reached.GetValueOrThrow().Count : -1;
     }
 
     /// <inheritdoc />
-    public async Task<string> ReachEmailIndexByRawKeyAsync(string physicalKey)
-    {
+    public async Task<string> ReachEmailIndexByRawKeyAsync(string physicalKey) {
         var reached = await GrainFactory.GetGrain<IEmailIndexGrain>(physicalKey).GetAsync();
         return reached.IsSuccess ? reached.GetValueOrThrow().IndexedValue : $"<{reached.Error!.Code}>";
     }
 
     /// <inheritdoc />
-    public async Task<int> ReachTenantDirectoryAsync()
-    {
+    public async Task<int> ReachTenantDirectoryAsync() {
         var count = await GrainFactory
-            .GetGrain<ITenantDirectoryGrain>(Core.Resources.GrainKeys.TenantDirectory())
+            .GetGrain<ITenantDirectoryGrain>(GrainKeys.TenantDirectory())
             .CountAsync();
 
         return count.IsSuccess ? count.GetValueOrThrow() : -1;
     }
 
     /// <inheritdoc />
-    public async Task<long> ReachShardMapAsync()
-    {
+    public async Task<long> ReachShardMapAsync() {
         var snapshot = await GrainFactory
-            .GetGrain<IShardMapGrain>(Core.Resources.GrainKeys.ShardMap())
+            .GetGrain<IShardMapGrain>(GrainKeys.ShardMap())
             .GetSnapshotAsync(0);
 
         return snapshot.IsSuccess ? snapshot.GetValueOrThrow().Version : -1;
     }
 
     /// <inheritdoc />
-    public Task<string?> MyTenantAsync() =>
-        Task.FromResult(Orleans.Multitenant.AddressableExtensions.GetTenantId(this));
+    public Task<string?> MyTenantAsync() => Task.FromResult(AddressableExtensions.GetTenantId(this));
 }

@@ -6,8 +6,12 @@ namespace CyberCloud.Authorization;
 ///     <c>IObjectRelationsGrain</c>'s durable record — every tuple whose object is this one.
 /// </summary>
 /// <remarks>
-///     ⚠ <b>Every collection member in this file is <c>{ get; set; }</c> and that is load-bearing,
-///     not style.</b> The durable tier serialises state with <c>System.Text.Json</c>
+///     ⚠
+///     <b>
+///         Every collection member in this file is <c>{ get; set; }</c> and that is load-bearing,
+///         not style.
+///     </b>
+///     The durable tier serialises state with <c>System.Text.Json</c>
 ///     (docs/plan/05 § Serialization). <c>System.Text.Json</c> <i>writes</i> a get-only collection
 ///     property and then, on read, <b>does not populate it</b> — the payload in PostgreSQL is
 ///     correct and the grain comes back empty, silently. <c>CyberCloud.Tenancy</c> already lost a
@@ -24,8 +28,7 @@ namespace CyberCloud.Authorization;
 /// </remarks>
 [GenerateSerializer]
 [Alias("CyberCloud.Authorization.State.ObjectRelations")]
-public sealed class ObjectRelationsState
-{
+public sealed class ObjectRelationsState {
     /// <summary>Relation → the subjects that hold it directly.</summary>
     [Id(0)]
     public Dictionary<string, List<SubjectRef>> ByRelation { get; set; } = [];
@@ -34,8 +37,7 @@ public sealed class ObjectRelationsState
 /// <summary><c>ISubjectRelationsGrain</c>'s durable record — the reverse index.</summary>
 [GenerateSerializer]
 [Alias("CyberCloud.Authorization.State.SubjectRelations")]
-public sealed class SubjectRelationsState
-{
+public sealed class SubjectRelationsState {
     /// <summary>Every tuple this subject appears in.</summary>
     [Id(0)]
     public List<SubjectIndexEntry> Entries { get; set; } = [];
@@ -47,8 +49,7 @@ public sealed class SubjectRelationsState
 /// </summary>
 [GenerateSerializer]
 [Alias("CyberCloud.Authorization.State.PendingWrite")]
-public sealed class PendingWrite
-{
+public sealed class PendingWrite {
     /// <summary>The tuple.</summary>
     [Id(0)]
     public RelationTuple Tuple { get; set; } = new();
@@ -65,8 +66,7 @@ public sealed class PendingWrite
 /// <summary><c>ITupleStoreGrain</c>'s durable record.</summary>
 [GenerateSerializer]
 [Alias("CyberCloud.Authorization.State.TupleStore")]
-public sealed class TupleStoreState
-{
+public sealed class TupleStoreState {
     /// <summary>
     ///     The tenant's relation version — the monotonic number a <c>ConsistencyToken</c> carries.
     /// </summary>
@@ -91,8 +91,7 @@ public sealed class TupleStoreState
 /// <summary>One cached check answer.</summary>
 [GenerateSerializer]
 [Alias("CyberCloud.Authorization.State.CheckCacheEntry")]
-public sealed class CheckCacheEntry
-{
+public sealed class CheckCacheEntry {
     /// <summary>The decision.</summary>
     [Id(0)]
     public bool Allowed { get; set; }
@@ -113,8 +112,7 @@ public sealed class CheckCacheEntry
 /// <summary><c>ICheckGrain</c>'s hot-tier record — the check cache for one object.</summary>
 [GenerateSerializer]
 [Alias("CyberCloud.Authorization.State.CheckCache")]
-public sealed class CheckCacheState
-{
+public sealed class CheckCacheState {
     /// <summary>
     ///     <c>permission|subject</c> → the answer. The tenant and the object are the grain's
     ///     identity, so the two remaining components of docs/plan/07 § Caching across requests'

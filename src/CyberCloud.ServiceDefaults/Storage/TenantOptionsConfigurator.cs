@@ -31,8 +31,11 @@ namespace CyberCloud.ServiceDefaults.Storage;
 ///         <b>Where the service provider actually is.</b> There is one, and it reaches the provider
 ///         through a different parameter: <c>getProviderParameters</c>, of type
 ///         <c>GrainStorageProviderParametersFactory&lt;TOptions&gt;</c>, is
-///         <c>(IServiceProvider services, string providerName, string tenantProviderName, TOptions
-///         options) =&gt; object[]</c>. It runs <i>after</i> this callback, so it cannot feed it. The
+///         <c>
+///             (IServiceProvider services, string providerName, string tenantProviderName, TOptions
+///             options) =&gt; object[]
+///         </c>
+///         . It runs <i>after</i> this callback, so it cannot feed it. The
 ///         dependencies this callback needs are therefore captured — see
 ///         <see cref="HotTierConfigurator" /> and <see cref="DurableTierConfigurator" />, which hold
 ///         <see cref="IShardMapCache" /> and <see cref="IShardConnections" /> as fields and are

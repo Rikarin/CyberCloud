@@ -4,6 +4,7 @@ using CyberCloud.Tenancy.Contracts;
 using CyberCloud.Tenancy.Tests.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
+using Orleans.Configuration;
 using Orleans.Multitenant;
 using Shouldly;
 
@@ -29,39 +30,33 @@ namespace CyberCloud.Tenancy.Tests;
 ///     </para>
 /// </remarks>
 [Collection(TenancySuite.Name)]
-public sealed class NullTenantGrainTests(TenancyCluster cluster)
-{
+public sealed class NullTenantGrainTests(TenancyCluster cluster) {
     [Fact]
-    public void TheTrapIsRealAndTheSentinelIsTheDefault()
-    {
+    public void TheTrapIsRealAndTheSentinelIsTheDefault() {
         // Asserted against the library rather than against a comment, so that a change in
         // Orleans.Multitenant's default is a failing test rather than a silent behaviour change.
         new MultitenantStorageOptions().TenantIdForNullTenant.ShouldBe("Null");
 
-        Should.Throw<FormatException>(
-            () => Guid.Parse(new MultitenantStorageOptions().TenantIdForNullTenant, null));
+        Should.Throw<FormatException>(() => Guid.Parse(new MultitenantStorageOptions().TenantIdForNullTenant, null));
     }
 
     [Fact]
-    public void TheShardMapRoutesTheSentinelToTheConfiguredPlatformShard()
-    {
+    public void TheShardMapRoutesTheSentinelToTheConfiguredPlatformShard() {
         // The repair: IShardMapCache takes a string, and DurableTierOptions.NullTenantShard names
         // the shard. No parse, no throw.
         cluster.ShardMap.DurableShardFor("Null").ShouldBe(TenancyCluster.PlatformShard);
 
         // …and it is the shard the storage layer will actually use, through the production
         // configurator rather than a re-implementation of it.
-        var options = new Orleans.Configuration.AdoNetGrainStorageOptions();
+        var options = new AdoNetGrainStorageOptions();
         cluster.Services.GetRequiredService<DurableTierConfigurator>()
             .ConfigureForTenant(options, "Null");
 
-        options.ConnectionString.ShouldBe(
-            cluster.Connections.Durable(TenancyCluster.PlatformShard));
+        options.ConnectionString.ShouldBe(cluster.Connections.Durable(TenancyCluster.PlatformShard));
     }
 
     [Fact]
-    public async Task ANullTenantDurableGrainRoundTripsThroughTheStorageTier()
-    {
+    public async Task ANullTenantDurableGrainRoundTripsThroughTheStorageTier() {
         // ⚠ THE TEST THE TRAP WOULD FAIL. Two writes and two reads through the shard map grain and
         // the tenant directory grain, each of them null-tenant and durable, with a deactivation in
         // between so the read really comes from PostgreSQL.
@@ -70,15 +65,17 @@ public sealed class NullTenantGrainTests(TenancyCluster cluster)
         var assigned = (await cluster.ShardMapGrain().AssignAsync(tenant, "eu-central"))
             .GetValueOrThrow();
 
-        (await cluster.DirectoryGrain().RegisterAsync(new TenantDirectoryEntry
-        {
-            TenantId = tenant,
-            Slug = "null-tenant-probe",
-            HomeRegion = "eu-central",
-            HotShard = assigned.HotHashTag,
-            DurableShard = assigned.DurableShard,
-            Status = TenantStatus.Active,
-        })).IsSuccess.ShouldBeTrue();
+        (await cluster.DirectoryGrain()
+            .RegisterAsync(
+                new() {
+                    TenantId = tenant,
+                    Slug = "null-tenant-probe",
+                    HomeRegion = "eu-central",
+                    HotShard = assigned.HotHashTag,
+                    DurableShard = assigned.DurableShard,
+                    Status = TenantStatus.Active
+                }
+            )).IsSuccess.ShouldBeTrue();
 
         await cluster.ShardMapGrain().DeactivateAsync();
         await cluster.DirectoryGrain().DeactivateAsync();
@@ -86,39 +83,43 @@ public sealed class NullTenantGrainTests(TenancyCluster cluster)
 
         (await cluster.ShardMapGrain().GetAssignmentAsync(tenant)).GetValueOrThrow()
             .ShouldBe(assigned);
-        (await cluster.DirectoryGrain().LookupAsync(tenant)).GetValueOrThrow().Slug
+        (await cluster.DirectoryGrain().LookupAsync(tenant)).GetValueOrThrow()
+            .Slug
             .ShouldBe("null-tenant-probe");
     }
 
     [Fact]
-    public async Task TheRowsForANullTenantGrainAreInThePlatformShardAndNowhereElse()
-    {
+    public async Task TheRowsForANullTenantGrainAreInThePlatformShardAndNowhereElse() {
         var token = TestContext.Current.CancellationToken;
         var tenant = TenancyCluster.Tenant(31_002);
 
         (await cluster.ShardMapGrain().AssignAsync(tenant, "eu-central")).IsSuccess.ShouldBeTrue();
-        (await cluster.DirectoryGrain().RegisterAsync(new TenantDirectoryEntry
-        {
-            TenantId = tenant, Slug = "null-tenant-rows", HomeRegion = "eu-central",
-            Status = TenantStatus.Active,
-        })).IsSuccess.ShouldBeTrue();
+        (await cluster.DirectoryGrain()
+            .RegisterAsync(
+                new() {
+                    TenantId = tenant,
+                    Slug = "null-tenant-rows",
+                    HomeRegion = "eu-central",
+                    Status = TenantStatus.Active
+                }
+            )).IsSuccess.ShouldBeTrue();
 
         (await CountKeys(TenancyCluster.PlatformShard, GrainKeys.ShardMap(), token))
             .ShouldBe(1L, "the shard map's row is in the platform shard.");
         (await CountKeys(TenancyCluster.PlatformShard, GrainKeys.TenantDirectory(), token))
             .ShouldBe(1L, "the directory's row is in the platform shard.");
 
-        foreach (var shard in TenancyCluster.TenantShards)
-        {
+        foreach (var shard in TenancyCluster.TenantShards) {
             (await CountKeys(shard, GrainKeys.ShardMap(), token)).ShouldBe(
-                0L, $"no platform grain may be stored in tenant shard '{shard}'.");
+                0L,
+                $"no platform grain may be stored in tenant shard '{shard}'."
+            );
             (await CountKeys(shard, GrainKeys.TenantDirectory(), token)).ShouldBe(0L);
         }
     }
 
     [Fact]
-    public async Task ANullTenantGrainsPhysicalKeyCarriesNoTenantPrefix()
-    {
+    public async Task ANullTenantGrainsPhysicalKeyCarriesNoTenantPrefix() {
         // The other half of "null tenant": the key is the key, with no qualification in front of it.
         // A tenanted spelling would be a second activation of a thing there is exactly one of.
         var map = cluster.ShardMapGrain();
@@ -132,8 +133,7 @@ public sealed class NullTenantGrainTests(TenancyCluster cluster)
     }
 
     [Fact]
-    public async Task TenantQualifyingAPlatformGrainIsRefusedRatherThanSilentlyForked()
-    {
+    public async Task TenantQualifyingAPlatformGrainIsRefusedRatherThanSilentlyForked() {
         // The mistake that would give the platform one shard map per tenant. It has to fail loudly:
         // a second shard map is a second answer to "which database is this tenant in".
         var forked = cluster.For(TenancyCluster.Tenant(31_003))
@@ -145,8 +145,7 @@ public sealed class NullTenantGrainTests(TenancyCluster cluster)
     }
 
     [Fact]
-    public async Task APlatformGrainReachedByASecondKeyStringIsRefused()
-    {
+    public async Task APlatformGrainReachedByASecondKeyStringIsRefused() {
         // There is exactly one of each of these, and "exactly one" is enforced by the key. A second
         // accepted key string would be a second activation.
         var wrongKey = cluster.Grains.GetGrain<IShardMapGrain>("platform/tenant-directory");
@@ -157,22 +156,21 @@ public sealed class NullTenantGrainTests(TenancyCluster cluster)
     }
 
     [Fact]
-    public void TheNullTenantShardIsNotInTheTenantPlacementRotation()
-    {
+    public void TheNullTenantShardIsNotInTheTenantPlacementRotation() {
         // ⚠ Not tidiness. Between process start and the first refresh, the cache places unassigned
         // tenants over its configured list; the shard map grain places over ITS list. If the
         // platform shard were in one and not the other, a tenant touched in that window would land
         // on one shard and be recorded on another.
         cluster.ShardMap.Shards.ShouldNotContain(TenancyCluster.PlatformShard);
-        cluster.ShardMap.Shards.ShouldBe(TenancyCluster.TenantShards, ignoreOrder: true);
+        cluster.ShardMap.Shards.ShouldBe(TenancyCluster.TenantShards, true);
     }
 
-    async Task<long> CountKeys(string shard, string keyWithinTenant, CancellationToken token)
-    {
+    async Task<long> CountKeys(string shard, string keyWithinTenant, CancellationToken token) {
         await using var connection = await cluster.OpenShardAsync(shard, token);
         await using var command = new NpgsqlCommand(
             "SELECT count(*) FROM orleansstorage WHERE grainidextensionstring = @key",
-            connection);
+            connection
+        );
 
         command.Parameters.AddWithValue("key", keyWithinTenant);
 

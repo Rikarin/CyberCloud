@@ -20,8 +20,7 @@ namespace CyberCloud.ServiceDefaults;
 ///         and keep its state, which is what makes a blue/green cluster swap possible at all.
 ///     </para>
 /// </remarks>
-public sealed class CyberCloudClusterOptions
-{
+public sealed class CyberCloudClusterOptions {
     /// <summary>The configuration section these bind from.</summary>
     public const string SectionName = "CyberCloud:Cluster";
 
@@ -55,8 +54,12 @@ public sealed class CyberCloudClusterOptions
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>These two exist because Orleans' defaults are not free ports on a developer's
-    ///         machine.</b> docs/plan/04:60 writes <c>b.UseLocalhostClustering()</c> with no
+    ///         ⚠
+    ///         <b>
+    ///             These two exist because Orleans' defaults are not free ports on a developer's
+    ///             machine.
+    ///         </b>
+    ///         docs/plan/04:60 writes <c>b.UseLocalhostClustering()</c> with no
     ///         arguments, which binds <b>11111</b> and <b>30000</b>. 30000 in particular is a
     ///         popular port — it was already taken by an unrelated process on the machine this was
     ///         written on, and the failure is <c>AddressInUseException</c> out of a socket bind deep
@@ -74,8 +77,10 @@ public sealed class CyberCloudClusterOptions
     /// </remarks>
     public int LocalhostSiloPort { get; set; } = 11111;
 
-    /// <summary>The client-facing gateway port used in development only. See
-    ///     <see cref="LocalhostSiloPort" />.</summary>
+    /// <summary>
+    ///     The client-facing gateway port used in development only. See
+    ///     <see cref="LocalhostSiloPort" />.
+    /// </summary>
     public int LocalhostGatewayPort { get; set; } = 30000;
 
     /// <summary>

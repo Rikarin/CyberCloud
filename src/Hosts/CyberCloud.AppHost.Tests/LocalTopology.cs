@@ -1,11 +1,12 @@
-using System.Diagnostics;
 using Aspire.Hosting;
 using Aspire.Hosting.Testing;
-using CyberCloud.AppHost;
 using CyberCloud.ServiceDefaults;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Orleans.Configuration;
+using Projects;
+using System.Collections.Concurrent;
+using System.Diagnostics;
 
 namespace CyberCloud.AppHost.Tests;
 
@@ -24,16 +25,19 @@ namespace CyberCloud.AppHost.Tests;
 ///         that test means anything.
 ///     </para>
 ///     <para>
-///         ⚠ <b>It uses fixed ports and therefore cannot run beside a manual <c>dotnet run</c> of
-///         the same AppHost.</b> 11111/11112, 30011/30012 and 6443 are chosen in
+///         ⚠
+///         <b>
+///             It uses fixed ports and therefore cannot run beside a manual <c>dotnet run</c> of
+///             the same AppHost.
+///         </b>
+///         11111/11112, 30011/30012 and 6443 are chosen in
 ///         <see cref="CyberCloudResources" /> and are the same in both. That is a deliberate
 ///         consequence of Orleans' ports not being Aspire endpoints: Aspire allocates free ports for
 ///         things it knows about, and it does not know about these. The failure is an
 ///         <c>AddressInUseException</c> from a silo, which names the port.
 ///     </para>
 /// </remarks>
-public sealed class LocalTopology : IAsyncLifetime
-{
+public sealed class LocalTopology : IAsyncLifetime {
     /// <summary>
     ///     How long the whole bring-up is allowed to take before the suite gives up.
     /// </summary>
@@ -45,7 +49,7 @@ public sealed class LocalTopology : IAsyncLifetime
     /// </remarks>
     static readonly TimeSpan BringUpBudget = TimeSpan.FromMinutes(10);
 
-    readonly System.Collections.Concurrent.ConcurrentDictionary<string, string> resourceStates =
+    readonly ConcurrentDictionary<string, string> resourceStates =
         new(StringComparer.Ordinal);
 
     IHost clientHost = null!;
@@ -60,13 +64,12 @@ public sealed class LocalTopology : IAsyncLifetime
     public IClusterClient Client => clientHost.Services.GetRequiredService<IClusterClient>();
 
     /// <inheritdoc />
-    public async ValueTask InitializeAsync()
-    {
+    public async ValueTask InitializeAsync() {
         using var budget = new CancellationTokenSource(BringUpBudget);
         var token = budget.Token;
 
         var builder = await DistributedApplicationTestingBuilder
-            .CreateAsync<Projects.CyberCloud_AppHost>([], token);
+            .CreateAsync<CyberCloud_AppHost>([], token);
 
         Application = await builder.BuildAsync(token);
 
@@ -84,20 +87,16 @@ public sealed class LocalTopology : IAsyncLifetime
         // IManagementGrain a question — so a healthy silo is a silo whose grain runtime routes
         // messages, not merely a process that has not exited. Waiting on Running would race every
         // test below against Orleans' start-up.
-        try
-        {
-            await Application.ResourceNotifications.WaitForResourceHealthyAsync(
-                CyberCloudResources.SiloOne, token);
+        try {
+            await Application.ResourceNotifications.WaitForResourceHealthyAsync(CyberCloudResources.SiloOne, token);
 
-            await Application.ResourceNotifications.WaitForResourceHealthyAsync(
-                CyberCloudResources.SiloTwo, token);
-        }
-        catch (OperationCanceledException timedOut)
-        {
+            await Application.ResourceNotifications.WaitForResourceHealthyAsync(CyberCloudResources.SiloTwo, token);
+        } catch (OperationCanceledException timedOut) {
             throw new InvalidOperationException(
                 $"The local topology did not come up within {BringUpBudget}. Last known resource "
                 + $"states:{Environment.NewLine}{States()}",
-                timedOut);
+                timedOut
+            );
         }
 
         ColdStart = clock.Elapsed;
@@ -107,56 +106,34 @@ public sealed class LocalTopology : IAsyncLifetime
         // would only ever be visible on a failing run.
         Console.WriteLine(
             $"[CyberCloud.AppHost] cold start: {ColdStart.TotalSeconds:F1} s "
-            + "(StartAsync until both silos report healthy)");
+            + "(StartAsync until both silos report healthy)"
+        );
 
         clientHost = BuildClient();
         await clientHost.StartAsync(token);
     }
 
     /// <inheritdoc />
-    public async ValueTask DisposeAsync()
-    {
-        if (clientHost is not null)
-        {
+    public async ValueTask DisposeAsync() {
+        if (clientHost is not null) {
             await clientHost.StopAsync();
             clientHost.Dispose();
         }
 
-        if (Application is not null)
-        {
+        if (Application is not null) {
             await Application.StopAsync();
             await Application.DisposeAsync();
         }
     }
 
     /// <summary>The last observed state of every resource, one per line.</summary>
-    public string States() => string.Join(
-        Environment.NewLine,
-        resourceStates
-            .OrderBy(x => x.Key, StringComparer.Ordinal)
-            .Select(x => $"  {x.Key}: {x.Value}"));
-
-    async Task RecordResourceStatesAsync(CancellationToken cancellationToken)
-    {
-        try
-        {
-            await foreach (var change in Application.ResourceNotifications
-                .WatchAsync(cancellationToken)
-                .ConfigureAwait(false))
-            {
-                var snapshot = change.Snapshot;
-                var health = snapshot.HealthStatus?.ToString() ?? "no health check";
-
-                resourceStates[change.Resource.Name] =
-                    $"{snapshot.State?.Text ?? "?"} ({health})"
-                    + (snapshot.ExitCode is { } code ? $", exit code {code}" : string.Empty);
-            }
-        }
-        catch (OperationCanceledException)
-        {
-            // The bring-up budget elapsed or the fixture is being disposed.
-        }
-    }
+    public string States() =>
+        string.Join(
+            Environment.NewLine,
+            resourceStates
+                .OrderBy(x => x.Key, StringComparer.Ordinal)
+                .Select(x => $"  {x.Key}: {x.Value}")
+        );
 
     /// <summary>The Npgsql connection string for one durable shard, as the silos received it.</summary>
     /// <param name="shard">The shard id.</param>
@@ -164,6 +141,23 @@ public sealed class LocalTopology : IAsyncLifetime
     public async Task<string> ShardConnectionStringAsync(string shard, CancellationToken cancellationToken) =>
         await Application.GetConnectionStringAsync(shard, cancellationToken)
         ?? throw new InvalidOperationException($"The AppHost has no resource named '{shard}'.");
+
+    async Task RecordResourceStatesAsync(CancellationToken cancellationToken) {
+        try {
+            await foreach (var change in Application.ResourceNotifications
+                               .WatchAsync(cancellationToken)
+                               .ConfigureAwait(false)) {
+                var snapshot = change.Snapshot;
+                var health = snapshot.HealthStatus?.ToString() ?? "no health check";
+
+                resourceStates[change.Resource.Name] =
+                    $"{snapshot.State?.Text ?? "?"} ({health})"
+                    + (snapshot.ExitCode is { } code ? $", exit code {code}" : string.Empty);
+            }
+        } catch (OperationCanceledException) {
+            // The bring-up budget elapsed or the fixture is being disposed.
+        }
+    }
 
     /// <summary>
     ///     An Orleans client pointed at <b>both</b> gateways.
@@ -183,24 +177,24 @@ public sealed class LocalTopology : IAsyncLifetime
     ///         talk to and times out.
     ///     </para>
     /// </remarks>
-    static IHost BuildClient()
-    {
+    static IHost BuildClient() {
         var defaults = new CyberCloudClusterOptions();
 
         return new HostBuilder()
-            .UseOrleansClient(client =>
-            {
-                client.Configure<ClusterOptions>(options =>
-                {
-                    options.ClusterId = defaults.ClusterId;
-                    options.ServiceId = defaults.ServiceId;
-                });
+            .UseOrleansClient(client => {
+                    client.Configure<ClusterOptions>(options => {
+                            options.ClusterId = defaults.ClusterId;
+                            options.ServiceId = defaults.ServiceId;
+                        }
+                    );
 
-                client.UseLocalhostClustering(
-                    [CyberCloudResources.SiloOneGatewayPort, CyberCloudResources.SiloTwoGatewayPort],
-                    defaults.ServiceId,
-                    defaults.ClusterId);
-            })
+                    client.UseLocalhostClustering(
+                        [CyberCloudResources.SiloOneGatewayPort, CyberCloudResources.SiloTwoGatewayPort],
+                        defaults.ServiceId,
+                        defaults.ClusterId
+                    );
+                }
+            )
             .Build();
     }
 }
@@ -211,8 +205,7 @@ public sealed class LocalTopology : IAsyncLifetime
 ///     colliding ports.
 /// </remarks>
 [CollectionDefinition(Name)]
-public sealed class LocalTopologySuite : ICollectionFixture<LocalTopology>
-{
+public sealed class LocalTopologySuite : ICollectionFixture<LocalTopology> {
     /// <summary>The collection name.</summary>
     public const string Name = "apphost-local-topology";
 }

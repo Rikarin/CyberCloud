@@ -27,8 +27,12 @@ namespace CyberCloud.Tenancy.Tests;
 ///         </item>
 ///     </list>
 ///     <para>
-///         ⚠ <b>Interruption here means the activation is destroyed, not that a boolean was
-///         flipped.</b> Every test below calls <c>DeactivateAsync</c> on the real grain mid-flow, so
+///         ⚠
+///         <b>
+///             Interruption here means the activation is destroyed, not that a boolean was
+///             flipped.
+///         </b>
+///         Every test below calls <c>DeactivateAsync</c> on the real grain mid-flow, so
 ///         the in-memory state is gone and everything the grain knows afterwards comes back out of
 ///         PostgreSQL. A test that set a "pretend we died" flag would be asserting against its own
 ///         mock of the failure — which is precisely what ADR-018 forbids.
@@ -41,13 +45,14 @@ namespace CyberCloud.Tenancy.Tests;
 ///     </para>
 /// </remarks>
 [Collection(TenancySuite.Name)]
-public sealed class TwoPhaseCreateTests(TenancyCluster cluster)
-{
-    static Guid Tenant(int n) => TenancyCluster.Tenant(3000 + n);
+public sealed class TwoPhaseCreateTests(TenancyCluster cluster) {
+    /// <summary>Documented for the reader of <see cref="WaitForDeactivation" />.</summary>
+    internal const string StateSurvivedDeactivation =
+        "every post-deactivation assertion in this file reads a value that can only have come from "
+        + "durable storage, because the value was written before the activation was dropped.";
 
     [Fact]
-    public async Task TheHappyPathClaimsThenCreatesThenConfirms()
-    {
+    public async Task TheHappyPathClaimsThenCreatesThenConfirms() {
         var tenant = Tenant(1);
         var address = await GroupAndAddress(tenant, "happy-path", "web-01");
         var index = cluster.ResourceIndexGrain(address);
@@ -66,7 +71,8 @@ public sealed class TwoPhaseCreateTests(TenancyCluster cluster)
         (await group.BeginCreateAsync(address)).IsSuccess.ShouldBeTrue();
 
         // 3. Confirm.
-        (await index.ConfirmAsync(address.Id)).GetValueOrThrow().State
+        (await index.ConfirmAsync(address.Id)).GetValueOrThrow()
+            .State
             .ShouldBe(IndexEntryState.Confirmed);
 
         (await index.ResolveAsync()).GetValueOrThrow().ShouldBe(address.Id);
@@ -80,8 +86,7 @@ public sealed class TwoPhaseCreateTests(TenancyCluster cluster)
     }
 
     [Fact]
-    public async Task ASecondCreateOfTheSameNameByADifferentResourceIsAConflict()
-    {
+    public async Task ASecondCreateOfTheSameNameByADifferentResourceIsAConflict() {
         var tenant = Tenant(2);
         var address = await GroupAndAddress(tenant, "conflict", "web-01");
 
@@ -98,8 +103,7 @@ public sealed class TwoPhaseCreateTests(TenancyCluster cluster)
     // ── Interruption 1: die between claim and confirm ──────────────────────────────────────────
 
     [Fact]
-    public async Task DyingBetweenClaimAndConfirmLeavesTheClaimDurableAndTheNameStillTaken()
-    {
+    public async Task DyingBetweenClaimAndConfirmLeavesTheClaimDurableAndTheNameStillTaken() {
         // The first half of the guarantee, and the reason the claim is durable rather than in
         // memory: a claim that vanished with the activation would let two creates both win.
         var tenant = Tenant(3);
@@ -113,9 +117,11 @@ public sealed class TwoPhaseCreateTests(TenancyCluster cluster)
         await WaitForDeactivation();
 
         var afterDeath = await cluster.ResourceIndexGrain(address).GetAsync();
-        afterDeath.GetValueOrThrow().State.ShouldBe(
-            IndexEntryState.Claimed,
-            "the claim is durable — docs/plan/06 § Two-phase create, step 1.");
+        afterDeath.GetValueOrThrow()
+            .State.ShouldBe(
+                IndexEntryState.Claimed,
+                "the claim is durable — docs/plan/06 § Two-phase create, step 1."
+            );
         afterDeath.GetValueOrThrow().BoundTo.ShouldBe(address.Id);
 
         var rival = address with { Id = Guid.NewGuid() };
@@ -124,8 +130,7 @@ public sealed class TwoPhaseCreateTests(TenancyCluster cluster)
     }
 
     [Fact]
-    public async Task DyingBetweenClaimAndConfirmFreesTheNameWhenTheLeaseExpires()
-    {
+    public async Task DyingBetweenClaimAndConfirmFreesTheNameWhenTheLeaseExpires() {
         // ⚠ THE INTERRUPTION THE DOCUMENT NAMES: "If the silo dies between 1 and 3, the claim
         // expires and the name is free again."
         var tenant = Tenant(4);
@@ -143,10 +148,12 @@ public sealed class TwoPhaseCreateTests(TenancyCluster cluster)
         cluster.Clock.Advance(TimeSpan.FromMinutes(5) + TimeSpan.FromSeconds(1));
 
         var freed = cluster.ResourceIndexGrain(address);
-        (await freed.GetAsync()).GetValueOrThrow().State.ShouldBe(
-            IndexEntryState.Free,
-            "the lease expired, so the name is free — evaluated on read, because a timer that has "
-            + "to fire for correctness is a timer whose silo can also die.");
+        (await freed.GetAsync()).GetValueOrThrow()
+            .State.ShouldBe(
+                IndexEntryState.Free,
+                "the lease expired, so the name is free — evaluated on read, because a timer that has "
+                + "to fire for correctness is a timer whose silo can also die."
+            );
 
         // And somebody else can now have it.
         var rival = address with { Id = Guid.NewGuid() };
@@ -157,8 +164,7 @@ public sealed class TwoPhaseCreateTests(TenancyCluster cluster)
     }
 
     [Fact]
-    public async Task ConfirmingAnExpiredClaimFailsRatherThanResurrectingIt()
-    {
+    public async Task ConfirmingAnExpiredClaimFailsRatherThanResurrectingIt() {
         // The nastiest ordering: the original create wakes up after its lease expired and somebody
         // else took the name. Confirming must not silently steal it back.
         var tenant = Tenant(5);
@@ -185,8 +191,7 @@ public sealed class TwoPhaseCreateTests(TenancyCluster cluster)
     }
 
     [Fact]
-    public async Task TheOrphanedResourceGrainIsVisibleToTheReaper()
-    {
+    public async Task TheOrphanedResourceGrainIsVisibleToTheReaper() {
         // "the orphaned resource grain (durable state, no confirmed index) is swept by a
         // per-subscription reaper reminder". The reaper itself is the resource manager's; what
         // tenancy owes it is the list — and the list has to survive the group grain dying too.
@@ -226,8 +231,7 @@ public sealed class TwoPhaseCreateTests(TenancyCluster cluster)
     // ── Interruption 2: die between confirm and the 202 ────────────────────────────────────────
 
     [Fact]
-    public async Task DyingBetweenConfirmAndTheResponseMakesTheRetriedPutANoOp()
-    {
+    public async Task DyingBetweenConfirmAndTheResponseMakesTheRetriedPutANoOp() {
         // ⚠ THE SECOND INTERRUPTION THE DOCUMENT NAMES: "If it dies between 3 and 4, the resource
         // exists and the caller retries the PUT — which is idempotent because PUT with the same body
         // on an existing resource is a no-op, which is exactly why the API is PUT and not POST."
@@ -252,10 +256,12 @@ public sealed class TwoPhaseCreateTests(TenancyCluster cluster)
         // The caller retries the whole PUT: claim, create, confirm, complete. Every step again.
         var retryClaim = await cluster.ResourceIndexGrain(address).TryClaimAsync(address, address.Id);
         retryClaim.IsSuccess.ShouldBeTrue("the same GUID re-claiming its own confirmed binding.");
-        retryClaim.GetValueOrThrow().State.ShouldBe(
-            IndexEntryState.Confirmed,
-            "⚠ and it is STILL Confirmed — a retry must not put a live binding back under a lease, "
-            + "or the lease could expire out from under a resource that exists.");
+        retryClaim.GetValueOrThrow()
+            .State.ShouldBe(
+                IndexEntryState.Confirmed,
+                "⚠ and it is STILL Confirmed — a retry must not put a live binding back under a lease, "
+                + "or the lease could expire out from under a resource that exists."
+            );
 
         (await Group(address).BeginCreateAsync(address)).IsSuccess.ShouldBeTrue();
         (await cluster.ResourceIndexGrain(address).ConfirmAsync(address.Id)).IsSuccess.ShouldBeTrue();
@@ -263,15 +269,16 @@ public sealed class TwoPhaseCreateTests(TenancyCluster cluster)
         var after = (await Group(address).ListAsync()).GetValueOrThrow();
 
         after.Count.ShouldBe(before.Count, "the retry created nothing new.");
-        after.Single(x => x.ResourceId == address.Id).State.ShouldBe(
-            ProvisioningState.Succeeded,
-            "⚠ and it did not reset a live resource to Creating, which would make the reaper treat "
-            + "it as an orphan.");
+        after.Single(x => x.ResourceId == address.Id)
+            .State.ShouldBe(
+                ProvisioningState.Succeeded,
+                "⚠ and it did not reset a live resource to Creating, which would make the reaper treat "
+                + "it as an orphan."
+            );
     }
 
     [Fact]
-    public async Task ARetriedPutWithADifferentResourceIdIsStillAConflict()
-    {
+    public async Task ARetriedPutWithADifferentResourceIdIsStillAConflict() {
         // The other half of idempotence: "same body" is what is idempotent. A different GUID for the
         // same path is a second resource claiming a taken name.
         var tenant = Tenant(8);
@@ -289,8 +296,7 @@ public sealed class TwoPhaseCreateTests(TenancyCluster cluster)
     }
 
     [Fact]
-    public async Task AConfirmedBindingDoesNotExpireHoweverLongTheSiloIsAway()
-    {
+    public async Task AConfirmedBindingDoesNotExpireHoweverLongTheSiloIsAway() {
         var tenant = Tenant(9);
         var address = await GroupAndAddress(tenant, "no-expiry", "web-01");
         var index = cluster.ResourceIndexGrain(address);
@@ -308,8 +314,7 @@ public sealed class TwoPhaseCreateTests(TenancyCluster cluster)
     }
 
     [Fact]
-    public async Task AClaimBuiltFromPathRatherThanCanonicalPathIsRefusedRatherThanMisfiled()
-    {
+    public async Task AClaimBuiltFromPathRatherThanCanonicalPathIsRefusedRatherThanMisfiled() {
         // docs/plan/06 § Identifiers: the index key must hash CanonicalPath. If a caller hashes Path
         // instead, the two spellings of one resource become two grains and the two-phase create is
         // defeated. GrainKeys.PathIndex makes the mistake unrepresentable at the key; this asserts
@@ -317,10 +322,7 @@ public sealed class TwoPhaseCreateTests(TenancyCluster cluster)
         var tenant = Tenant(10);
         var address = await GroupAndAddress(tenant, "canonical", "web-01");
 
-        var mixedCase = address with
-        {
-            Type = new ResourceTypeName("CYBERCLOUD.DBFORPOSTGRESQL", "SERVERS"),
-        };
+        var mixedCase = address with { Type = new("CYBERCLOUD.DBFORPOSTGRESQL", "SERVERS") };
 
         // Same canonical path, so the SAME index grain — which is the property being relied on.
         GrainKeys.PathIndex(mixedCase).ShouldBe(GrainKeys.PathIndex(address));
@@ -342,15 +344,16 @@ public sealed class TwoPhaseCreateTests(TenancyCluster cluster)
         misfiled.Error!.Code.ShouldBe(ErrorCode.InvalidGrainKey);
     }
 
+    static Guid Tenant(int n) => TenancyCluster.Tenant(3000 + n);
+
     IResourceGroupGrain Group(ResourceId address) =>
         cluster.ResourceGroupGrain(address.TenantId, address.SubscriptionId, address.ResourceGroup);
 
-    async Task<ResourceId> GroupAndAddress(Guid tenant, string groupName, string resourceName)
-    {
+    async Task<ResourceId> GroupAndAddress(Guid tenant, string groupName, string resourceName) {
         var subscription = Guid.NewGuid();
 
-        (await cluster.TenantGrain(tenant).CreateAsync(
-            "t" + tenant.ToString("N")[..8], "T", "eu-central")).IsSuccess.ShouldBeTrue();
+        (await cluster.TenantGrain(tenant).CreateAsync("t" + tenant.ToString("N")[..8], "T", "eu-central")).IsSuccess
+            .ShouldBeTrue();
 
         (await cluster.SubscriptionGrain(tenant, subscription).CreateAsync("prod")).IsSuccess
             .ShouldBeTrue();
@@ -358,13 +361,14 @@ public sealed class TwoPhaseCreateTests(TenancyCluster cluster)
         (await cluster.SubscriptionGrain(tenant, subscription)
             .CreateResourceGroupAsync(groupName, "eu-central")).IsSuccess.ShouldBeTrue();
 
-        return new ResourceId(
+        return new(
             tenant,
             subscription,
             groupName,
-            new ResourceTypeName("CyberCloud.DBforPostgreSQL", "servers"),
+            new("CyberCloud.DBforPostgreSQL", "servers"),
             resourceName,
-            Guid.NewGuid());
+            Guid.NewGuid()
+        );
     }
 
     /// <summary>
@@ -378,10 +382,6 @@ public sealed class TwoPhaseCreateTests(TenancyCluster cluster)
     ///     pause is too short (the grain simply has not died yet), so this is a sharpener, not a
     ///     correctness crutch: <see cref="StateSurvivedDeactivation" /> is the check that it worked.
     /// </remarks>
-    static Task WaitForDeactivation() => Task.Delay(TimeSpan.FromMilliseconds(250), TestContext.Current.CancellationToken);
-
-    /// <summary>Documented for the reader of <see cref="WaitForDeactivation" />.</summary>
-    internal const string StateSurvivedDeactivation =
-        "every post-deactivation assertion in this file reads a value that can only have come from "
-        + "durable storage, because the value was written before the activation was dropped.";
+    static Task WaitForDeactivation() =>
+        Task.Delay(TimeSpan.FromMilliseconds(250), TestContext.Current.CancellationToken);
 }

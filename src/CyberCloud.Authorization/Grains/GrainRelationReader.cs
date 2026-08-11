@@ -1,9 +1,9 @@
-using System.Globalization;
 using CyberCloud.Authorization.Contracts;
 using CyberCloud.Authorization.Evaluation;
 using CyberCloud.Core;
 using CyberCloud.Core.Resources;
 using Orleans.Multitenant;
+using System.Globalization;
 
 namespace CyberCloud.Authorization.Grains;
 
@@ -25,16 +25,16 @@ namespace CyberCloud.Authorization.Grains;
 ///     </para>
 /// </remarks>
 sealed class GrainRelationReader(IGrainFactory grains, Guid tenantId, bool forceDurable)
-    : IRelationReader
-{
+    : IRelationReader {
     readonly string tenant = tenantId.ToString("D", CultureInfo.InvariantCulture);
 
     /// <inheritdoc />
     public async ValueTask<Result<ObjectRelationsSnapshot>> ReadAsync(
-        ObjectRef @object, CancellationToken cancellationToken)
-    {
-        var grain = grains.ForTenant(tenant).GetGrain<IObjectRelationsGrain>(
-            GrainKeys.ObjectRelations(@object.Type, @object.Id));
+        ObjectRef @object,
+        CancellationToken cancellationToken
+    ) {
+        var grain = grains.ForTenant(tenant)
+            .GetGrain<IObjectRelationsGrain>(GrainKeys.ObjectRelations(@object.Type, @object.Id));
 
         return forceDurable
             ? await grain.ReadDurableAsync()

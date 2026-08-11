@@ -6,9 +6,12 @@ using Shouldly;
 namespace CyberCloud.Tenancy.Tests;
 
 /// <summary>
-///     docs/plan/23's chaos-invariant 5, with real infrastructure: <b>"If the global cluster is
-///     unreachable, no <i>new</i> tenants can be created and no directory changes propagate — but
-///     every existing tenant keeps working from cache, in every region, indefinitely."</b>
+///     docs/plan/23's chaos-invariant 5, with real infrastructure:
+///     <b>
+///         "If the global cluster is
+///         unreachable, no <i>new</i> tenants can be created and no directory changes propagate — but
+///         every existing tenant keeps working from cache, in every region, indefinitely."
+///     </b>
 ///     (docs/plan/05 § The tenant directory.)
 /// </summary>
 /// <remarks>
@@ -34,8 +37,7 @@ namespace CyberCloud.Tenancy.Tests;
 ///     </para>
 /// </remarks>
 [Collection(DestructiveTenancySuite.Name)]
-public sealed class TenantDirectoryBlackholeTests(TenancyCluster cluster)
-{
+public sealed class TenantDirectoryBlackholeTests(TenancyCluster cluster) {
     static Guid Existing => TenancyCluster.Tenant(21_001);
 
     static Guid AlsoExisting => TenancyCluster.Tenant(21_002);
@@ -43,8 +45,7 @@ public sealed class TenantDirectoryBlackholeTests(TenancyCluster cluster)
     static Guid BrandNew => TenancyCluster.Tenant(21_003);
 
     [Fact]
-    public async Task SeedThenBlackholeThenAssertAsync()
-    {
+    public async Task SeedThenBlackholeThenAssertAsync() {
         var token = TestContext.Current.CancellationToken;
 
         // ── Before ────────────────────────────────────────────────────────────────────────────
@@ -86,9 +87,11 @@ public sealed class TenantDirectoryBlackholeTests(TenancyCluster cluster)
         cluster.Directory.TryLookup(Existing, out var cached).ShouldBeTrue();
         cached!.Slug.ShouldBe("blackhole-a");
 
-        (await cluster.Directory.LookupAsync(Existing)).GetValueOrThrow().Slug
+        (await cluster.Directory.LookupAsync(Existing)).GetValueOrThrow()
+            .Slug
             .ShouldBe("blackhole-a");
-        (await cluster.Directory.LookupAsync(AlsoExisting)).GetValueOrThrow().Slug
+        (await cluster.Directory.LookupAsync(AlsoExisting)).GetValueOrThrow()
+            .Slug
             .ShouldBe("blackhole-b");
 
         // 2. The shard map still routes every tenant it knows about.
@@ -97,7 +100,8 @@ public sealed class TenantDirectoryBlackholeTests(TenancyCluster cluster)
         // 3. ⚠ THE POINT: existing tenants keep WORKING, not merely keep resolving. Real grain
         //    calls, real reads and real writes against the real tenant shards, with the global
         //    directory's database stopped.
-        (await cluster.TenantGrain(Existing).GetAsync()).GetValueOrThrow().Slug
+        (await cluster.TenantGrain(Existing).GetAsync()).GetValueOrThrow()
+            .Slug
             .ShouldBe("blackhole-a");
 
         (await cluster.TenantGrain(Existing).AddSubscriptionAsync(Guid.NewGuid())).IsSuccess
@@ -110,8 +114,13 @@ public sealed class TenantDirectoryBlackholeTests(TenancyCluster cluster)
             .CreateResourceGroupAsync("prod-rg", "eu-central")).IsSuccess.ShouldBeTrue();
 
         var address = new ResourceId(
-            AlsoExisting, subscription, "prod-rg",
-            new ResourceTypeName("CyberCloud.DBforPostgreSQL", "servers"), "db-1", Guid.NewGuid());
+            AlsoExisting,
+            subscription,
+            "prod-rg",
+            new("CyberCloud.DBforPostgreSQL", "servers"),
+            "db-1",
+            Guid.NewGuid()
+        );
 
         (await cluster.ResourceIndexGrain(address).TryClaimAsync(address, address.Id)).IsSuccess
             .ShouldBeTrue("the whole two-phase create runs with the global cluster down.");
@@ -125,7 +134,8 @@ public sealed class TenantDirectoryBlackholeTests(TenancyCluster cluster)
         var unknown = await cluster.Directory.LookupAsync(BrandNew);
         unknown.IsFailure.ShouldBeTrue(
             "a tenant that is not in the local snapshot cannot be resolved while the global "
-            + "directory is unreachable — docs/plan/05 § The tenant directory says exactly this.");
+            + "directory is unreachable — docs/plan/05 § The tenant directory says exactly this."
+        );
         unknown.Error!.Code.ShouldBe(ErrorCode.TenantNotFound);
         unknown.Error.Message.ShouldContain("unreachable");
 
@@ -147,25 +157,27 @@ public sealed class TenantDirectoryBlackholeTests(TenancyCluster cluster)
 
         // 7. …and after all that, the existing tenants are still fine. Asserted last so that the
         //    failures above are known not to have broken them.
-        (await cluster.TenantGrain(Existing).GetAsync()).GetValueOrThrow().Slug
+        (await cluster.TenantGrain(Existing).GetAsync()).GetValueOrThrow()
+            .Slug
             .ShouldBe("blackhole-a");
         (await cluster.Directory.LookupAsync(AlsoExisting)).IsSuccess.ShouldBeTrue();
     }
 
-    async Task RegisterAsync(Guid tenant, string slug)
-    {
+    async Task RegisterAsync(Guid tenant, string slug) {
         var assignment = (await cluster.ShardMapGrain().AssignAsync(tenant, "eu-central"))
             .GetValueOrThrow();
 
-        var registered = await cluster.DirectoryGrain().RegisterAsync(new TenantDirectoryEntry
-        {
-            TenantId = tenant,
-            Slug = slug,
-            HomeRegion = "eu-central",
-            HotShard = assignment.HotHashTag,
-            DurableShard = assignment.DurableShard,
-            Status = TenantStatus.Active,
-        });
+        var registered = await cluster.DirectoryGrain()
+            .RegisterAsync(
+                new() {
+                    TenantId = tenant,
+                    Slug = slug,
+                    HomeRegion = "eu-central",
+                    HotShard = assignment.HotHashTag,
+                    DurableShard = assignment.DurableShard,
+                    Status = TenantStatus.Active
+                }
+            );
 
         registered.IsSuccess.ShouldBeTrue(registered.Error?.Message);
     }

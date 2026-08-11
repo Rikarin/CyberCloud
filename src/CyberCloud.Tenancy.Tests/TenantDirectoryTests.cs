@@ -9,56 +9,51 @@ namespace CyberCloud.Tenancy.Tests;
 ///     makes about itself.
 /// </summary>
 [Collection(TenancySuite.Name)]
-public sealed class TenantDirectoryTests(TenancyCluster cluster)
-{
-    static Guid Tenant(int n) => TenancyCluster.Tenant(11_000 + n);
-
+public sealed class TenantDirectoryTests(TenancyCluster cluster) {
     [Fact]
-    public async Task ATenantIsRegisteredWithItsRegionAndBothShards()
-    {
+    public async Task ATenantIsRegisteredWithItsRegionAndBothShards() {
         // "Per tenant: id, slug, home region, hot-shard id, durable-shard id, status, directory
         // version. About 200 bytes."
         var tenant = Tenant(1);
         var assignment = (await cluster.ShardMapGrain().AssignAsync(tenant, "eu-central"))
             .GetValueOrThrow();
 
-        var entry = (await cluster.DirectoryGrain().RegisterAsync(new TenantDirectoryEntry
-        {
-            TenantId = tenant,
-            Slug = "dir-1",
-            HomeRegion = "eu-central",
-            HotShard = assignment.HotHashTag,
-            DurableShard = assignment.DurableShard,
-            Status = TenantStatus.Provisioning,
-        })).GetValueOrThrow();
+        var entry = (await cluster.DirectoryGrain()
+            .RegisterAsync(
+                new() {
+                    TenantId = tenant,
+                    Slug = "dir-1",
+                    HomeRegion = "eu-central",
+                    HotShard = assignment.HotHashTag,
+                    DurableShard = assignment.DurableShard,
+                    Status = TenantStatus.Provisioning
+                }
+            )).GetValueOrThrow();
 
         entry.DirectoryVersion.ShouldBeGreaterThan(0);
         entry.DurableShard.ShouldBe(assignment.DurableShard);
 
         (await cluster.DirectoryGrain().LookupAsync(tenant)).GetValueOrThrow().Slug.ShouldBe("dir-1");
-        (await cluster.DirectoryGrain().LookupBySlugAsync("dir-1")).GetValueOrThrow().TenantId
+        (await cluster.DirectoryGrain().LookupBySlugAsync("dir-1")).GetValueOrThrow()
+            .TenantId
             .ShouldBe(tenant);
     }
 
     [Fact]
-    public async Task SlugsAreGloballyUnique()
-    {
+    public async Task SlugsAreGloballyUnique() {
         // docs/plan/04 § The clusters, plural puts "global uniqueness (email, tenant slug, DNS zone
         // apex)" in the global cluster. The directory grain's single activation IS that mutex.
         await Register(Tenant(2), "dir-unique");
 
-        var stolen = await cluster.DirectoryGrain().RegisterAsync(new TenantDirectoryEntry
-        {
-            TenantId = Tenant(3), Slug = "dir-unique", HomeRegion = "us-east",
-        });
+        var stolen = await cluster.DirectoryGrain()
+            .RegisterAsync(new() { TenantId = Tenant(3), Slug = "dir-unique", HomeRegion = "us-east" });
 
         stolen.IsFailure.ShouldBeTrue();
         stolen.Error!.Code.ShouldBe(ErrorCode.Conflict);
     }
 
     [Fact]
-    public async Task APurgedTenantsSlugIsTombstonedForever()
-    {
+    public async Task APurgedTenantsSlugIsTombstonedForever() {
         // docs/plan/06 § Tenant lifecycle: "directory entry tombstoned forever (never reuse an id)".
         var tenant = Tenant(4);
         await Register(tenant, "dir-purged");
@@ -66,22 +61,20 @@ public sealed class TenantDirectoryTests(TenancyCluster cluster)
         (await cluster.DirectoryGrain().SetStatusAsync(tenant, TenantStatus.Purged)).IsSuccess
             .ShouldBeTrue();
 
-        var reused = await cluster.DirectoryGrain().RegisterAsync(new TenantDirectoryEntry
-        {
-            TenantId = Tenant(5), Slug = "dir-purged", HomeRegion = "eu-central",
-        });
+        var reused = await cluster.DirectoryGrain()
+            .RegisterAsync(new() { TenantId = Tenant(5), Slug = "dir-purged", HomeRegion = "eu-central" });
 
         reused.IsFailure.ShouldBeTrue();
         reused.Error!.Message.ShouldContain("purged");
 
         // The entry itself stays, so the id can never be reissued either.
-        (await cluster.DirectoryGrain().LookupAsync(tenant)).GetValueOrThrow().Status
+        (await cluster.DirectoryGrain().LookupAsync(tenant)).GetValueOrThrow()
+            .Status
             .ShouldBe(TenantStatus.Purged);
     }
 
     [Fact]
-    public async Task ReadsNeverLeaveTheProcessOnceTheTenantIsResident()
-    {
+    public async Task ReadsNeverLeaveTheProcessOnceTheTenantIsResident() {
         // Claim 1: "Reads never leave the process." TryLookup is not even async — it cannot do I/O.
         var tenant = Tenant(6);
         await Register(tenant, "dir-resident");
@@ -96,8 +89,7 @@ public sealed class TenantDirectoryTests(TenancyCluster cluster)
     }
 
     [Fact]
-    public async Task ACacheMissFallsBackToAGrainCallAndIsCounted()
-    {
+    public async Task ACacheMissFallsBackToAGrainCallAndIsCounted() {
         // Claim 2: "A cache miss (a tenant created 200 ms ago in another region) falls back to a
         // grain call — measured, alerted on, and expected to be a handful per second worldwide."
         var tenant = Tenant(7);
@@ -118,8 +110,7 @@ public sealed class TenantDirectoryTests(TenancyCluster cluster)
     }
 
     [Fact]
-    public async Task ADeltaCarriesOnlyWhatChangedAfterTheCallersCursor()
-    {
+    public async Task ADeltaCarriesOnlyWhatChangedAfterTheCallersCursor() {
         var directory = cluster.DirectoryGrain();
 
         // One write first, so the cursor below is genuinely non-zero: GetDeltaAsync(0) means "I
@@ -136,13 +127,12 @@ public sealed class TenantDirectoryTests(TenancyCluster cluster)
         var delta = (await directory.GetDeltaAsync(before)).GetValueOrThrow();
 
         delta.IsFullSnapshot.ShouldBeFalse();
-        delta.Entries.Select(x => x.Slug).ShouldBe(["dir-delta-a", "dir-delta-b"], ignoreOrder: true);
+        delta.Entries.Select(x => x.Slug).ShouldBe(["dir-delta-a", "dir-delta-b"], true);
         delta.Version.ShouldBeGreaterThan(before);
     }
 
     [Fact]
-    public async Task AFirstReadGetsTheWholeDirectory()
-    {
+    public async Task AFirstReadGetsTheWholeDirectory() {
         await Register(Tenant(10), "dir-full");
 
         var full = (await cluster.DirectoryGrain().GetDeltaAsync(0)).GetValueOrThrow();
@@ -153,21 +143,20 @@ public sealed class TenantDirectoryTests(TenancyCluster cluster)
     }
 
     [Fact]
-    public async Task TheDirectorySurvivesItsOwnGrainDyingBecauseItIsDurable()
-    {
+    public async Task TheDirectorySurvivesItsOwnGrainDyingBecauseItIsDurable() {
         var tenant = Tenant(11);
         await Register(tenant, "dir-durable");
 
         await cluster.DirectoryGrain().DeactivateAsync();
         await Task.Delay(TimeSpan.FromMilliseconds(250), TestContext.Current.CancellationToken);
 
-        (await cluster.DirectoryGrain().LookupAsync(tenant)).GetValueOrThrow().Slug
+        (await cluster.DirectoryGrain().LookupAsync(tenant)).GetValueOrThrow()
+            .Slug
             .ShouldBe("dir-durable");
     }
 
     [Fact]
-    public async Task AStatusChangeAdvancesTheVersionSoCachesSeeIt()
-    {
+    public async Task AStatusChangeAdvancesTheVersionSoCachesSeeIt() {
         var tenant = Tenant(12);
         var registered = await Register(tenant, "dir-status");
 
@@ -184,8 +173,7 @@ public sealed class TenantDirectoryTests(TenancyCluster cluster)
     }
 
     [Fact]
-    public async Task AnUnknownTenantIsNotFoundRatherThanEmpty()
-    {
+    public async Task AnUnknownTenantIsNotFoundRatherThanEmpty() {
         var missing = await cluster.DirectoryGrain().LookupAsync(Tenant(999));
 
         missing.IsFailure.ShouldBeTrue();
@@ -194,20 +182,23 @@ public sealed class TenantDirectoryTests(TenancyCluster cluster)
         await Task.CompletedTask;
     }
 
-    async Task<TenantDirectoryEntry> Register(Guid tenant, string slug)
-    {
+    static Guid Tenant(int n) => TenancyCluster.Tenant(11_000 + n);
+
+    async Task<TenantDirectoryEntry> Register(Guid tenant, string slug) {
         var assignment = (await cluster.ShardMapGrain().AssignAsync(tenant, "eu-central"))
             .GetValueOrThrow();
 
-        var registered = await cluster.DirectoryGrain().RegisterAsync(new TenantDirectoryEntry
-        {
-            TenantId = tenant,
-            Slug = slug,
-            HomeRegion = "eu-central",
-            HotShard = assignment.HotHashTag,
-            DurableShard = assignment.DurableShard,
-            Status = TenantStatus.Active,
-        });
+        var registered = await cluster.DirectoryGrain()
+            .RegisterAsync(
+                new() {
+                    TenantId = tenant,
+                    Slug = slug,
+                    HomeRegion = "eu-central",
+                    HotShard = assignment.HotHashTag,
+                    DurableShard = assignment.DurableShard,
+                    Status = TenantStatus.Active
+                }
+            );
 
         registered.IsSuccess.ShouldBeTrue(registered.Error?.Message);
         return registered.GetValueOrThrow();

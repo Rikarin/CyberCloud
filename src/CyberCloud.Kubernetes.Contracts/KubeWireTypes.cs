@@ -27,8 +27,7 @@ namespace CyberCloud.Kubernetes.Contracts;
 /// </remarks>
 [GenerateSerializer]
 [Alias("CyberCloud.Kubernetes.GroupVersionKind")]
-public sealed record GroupVersionKind
-{
+public sealed record GroupVersionKind {
     /// <summary>The API group, or the empty string for the core group.</summary>
     [Id(0)]
     public string Group { get; init; } = string.Empty;
@@ -52,8 +51,7 @@ public sealed record GroupVersionKind
     public string ApiVersion => IsCoreGroup ? Version : Group + "/" + Version;
 
     /// <summary>Whether every component needed to address this kind is present.</summary>
-    public bool IsComplete =>
-        Version.Length > 0 && Kind.Length > 0 && Plural.Length > 0;
+    public bool IsComplete => Version.Length > 0 && Kind.Length > 0 && Plural.Length > 0;
 
     /// <inheritdoc />
     public override string ToString() => ApiVersion + " " + Kind + " (" + Plural + ")";
@@ -62,8 +60,7 @@ public sealed record GroupVersionKind
 /// <summary>The address of one object in one cluster.</summary>
 [GenerateSerializer]
 [Alias("CyberCloud.Kubernetes.ObjectRef")]
-public sealed record ObjectRef
-{
+public sealed record ObjectRef {
     /// <summary>Which kind.</summary>
     [Id(0)]
     public GroupVersionKind Kind { get; init; } = new();
@@ -80,8 +77,7 @@ public sealed record ObjectRef
     public bool IsClusterScoped => Namespace.Length == 0;
 
     /// <inheritdoc />
-    public override string ToString() =>
-        IsClusterScoped ? $"{Kind.Kind}/{Name}" : $"{Kind.Kind}/{Namespace}/{Name}";
+    public override string ToString() => IsClusterScoped ? $"{Kind.Kind}/{Name}" : $"{Kind.Kind}/{Namespace}/{Name}";
 }
 
 /// <summary>
@@ -89,8 +85,12 @@ public sealed record ObjectRef
 /// </summary>
 /// <remarks>
 ///     ⚠ <b>JSON and not a <c>k8s.Models</c> type, and that is rule 3.</b> docs/plan/09
-///     § Cluster connections sketches <c>Task&lt;Result&lt;T&gt;&gt; GetAsync&lt;T&gt;(ObjectRef)
-///     where T : IKubernetesObject</c>. That constraint cannot be honoured: it puts
+///     § Cluster connections sketches
+///     <c>
+///         Task&lt;Result&lt;T&gt;&gt; GetAsync&lt;T&gt;(ObjectRef)
+///         where T : IKubernetesObject
+///     </c>
+///     . That constraint cannot be honoured: it puts
 ///     <c>k8s.Models.IKubernetesObject</c> in this assembly's public surface and therefore in the
 ///     compile-time closure of every caller — which is exactly what docs/plan/03 § Assembly graph
 ///     rules rule 3 forbids ("no assembly above <c>CyberCloud.Kubernetes</c> references
@@ -100,8 +100,7 @@ public sealed record ObjectRef
 /// </remarks>
 [GenerateSerializer]
 [Alias("CyberCloud.Kubernetes.KubeObject")]
-public sealed record KubeObject
-{
+public sealed record KubeObject {
     /// <summary>What the object is.</summary>
     [Id(0)]
     public ObjectRef Ref { get; init; } = new();
@@ -122,8 +121,7 @@ public sealed record KubeObject
 /// </summary>
 [GenerateSerializer]
 [Alias("CyberCloud.Kubernetes.FieldConflict")]
-public sealed record FieldConflict
-{
+public sealed record FieldConflict {
     /// <summary>The field path the API server named, for example <c>.spec.replicas</c>.</summary>
     [Id(0)]
     public string Field { get; init; } = string.Empty;
@@ -146,8 +144,7 @@ public sealed record FieldConflict
 /// </remarks>
 [GenerateSerializer]
 [Alias("CyberCloud.Kubernetes.DriftEvent")]
-public sealed record DriftEvent
-{
+public sealed record DriftEvent {
     /// <summary>The resource whose desired state lost the field.</summary>
     [Id(0)]
     public Guid ResourceId { get; init; }
@@ -181,8 +178,7 @@ public sealed record DriftEvent
 /// <summary>The result of one apply.</summary>
 [GenerateSerializer]
 [Alias("CyberCloud.Kubernetes.ApplyOutcome")]
-public sealed record ApplyOutcome
-{
+public sealed record ApplyOutcome {
     /// <summary>What happened.</summary>
     [Id(0)]
     public ApplyResult Result { get; init; } = ApplyResult.Unknown;
@@ -217,8 +213,7 @@ public sealed record ApplyOutcome
 /// <summary>Connection health — docs/plan/09 § Cluster connections.</summary>
 [GenerateSerializer]
 [Alias("CyberCloud.Kubernetes.ClusterHealth")]
-public sealed record ClusterHealth
-{
+public sealed record ClusterHealth {
     /// <summary>The cluster.</summary>
     [Id(0)]
     public Guid ClusterId { get; init; }
@@ -256,8 +251,7 @@ public sealed record ClusterHealth
 /// </summary>
 [GenerateSerializer]
 [Alias("CyberCloud.Kubernetes.InformerLease")]
-public sealed record InformerLease
-{
+public sealed record InformerLease {
     /// <summary>The cluster the informer runs against.</summary>
     [Id(0)]
     public Guid ClusterId { get; init; }
@@ -308,8 +302,7 @@ public sealed record InformerLease
 /// </remarks>
 [GenerateSerializer]
 [Alias("CyberCloud.Kubernetes.ClusterConnectionDescriptor")]
-public sealed record ClusterConnectionDescriptor
-{
+public sealed record ClusterConnectionDescriptor {
     /// <summary>The cluster resource's GUID. Also the grain key — <c>cluster/{clusterId:N}</c>.</summary>
     [Id(0)]
     public Guid ClusterId { get; init; }
@@ -357,5 +350,6 @@ public sealed record ClusterConnectionDescriptor
     public override string ToString() =>
         string.Create(
             CultureInfo.InvariantCulture,
-            $"cluster {ClusterId:D} ({Kind}) owned by tenant {OwningTenantId:D}");
+            $"cluster {ClusterId:D} ({Kind}) owned by tenant {OwningTenantId:D}"
+        );
 }

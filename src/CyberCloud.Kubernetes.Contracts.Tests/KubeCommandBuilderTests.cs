@@ -1,46 +1,20 @@
-using System.Text.Json;
 using CyberCloud.Core.Resources;
 using Shouldly;
+using System.Text.Json;
 
 namespace CyberCloud.Kubernetes.Contracts.Tests;
 
 /// <summary>
 ///     The rest of the ADR-013 builder: what it emits, what it refuses, and the seams it declares.
 /// </summary>
-public sealed class KubeCommandBuilderTests
-{
-    static readonly GroupVersionKind Deployments = new()
-    {
-        Group = "apps", Version = "v1", Kind = "Deployment", Plural = "deployments",
-    };
-
-    static ResourceId Resource() => new(
-        Guid.Parse("9f2c1b7e-3d4a-4f21-9c6b-0a1e2d3c4b5a"),
-        Guid.Parse("77de4a10-1b2c-4d3e-8f90-a1b2c3d4e5f6"),
-        "prod",
-        new ResourceTypeName("CyberCloud.DBforPostgreSQL", "servers"),
-        "main",
-        Guid.Parse("3a8f0c22-5e6d-4a7b-8c9d-0e1f2a3b4c5d"));
-
-    static IKubeCommandBuilder Builder(IChartRenderer? charts = null)
-    {
-        var id = Resource();
-        return KubeCommand.For(new NullConnection(), charts)
-            .WithTenantId(id.TenantId)
-            .WithResourceId(id);
-    }
-
-    static IKubeCommandBuilder Complete(IChartRenderer? charts = null) =>
-        Builder(charts)
-            .WithKind(Deployments)
-            .InNamespace("tenant-space")
-            .ObjectJson("""{"metadata":{"name":"main"},"spec":{"replicas":2}}""");
+public sealed class KubeCommandBuilderTests {
+    static readonly GroupVersionKind Deployments =
+        new() { Group = "apps", Version = "v1", Kind = "Deployment", Plural = "deployments" };
 
     // ── What it emits ──────────────────────────────────────────────────────────────────────────
 
     [Fact]
-    public void TheBodyCarriesTheApiVersionAndKindFromTheGvkAndNotFromTheCaller()
-    {
+    public void TheBodyCarriesTheApiVersionAndKindFromTheGvkAndNotFromTheCaller() {
         // An apply patch whose apiVersion disagrees with the URL is rejected, and the URL is built
         // from the GVK — so the GVK wins rather than whatever the rendered body happened to say.
         var command = Builder()
@@ -54,8 +28,7 @@ public sealed class KubeCommandBuilderTests
     }
 
     [Fact]
-    public void TheNamespaceAndNameLandInMetadata()
-    {
+    public void TheNamespaceAndNameLandInMetadata() {
         var command = Complete().Build();
 
         using var document = JsonDocument.Parse(command.Body);
@@ -68,8 +41,7 @@ public sealed class KubeCommandBuilderTests
     }
 
     [Fact]
-    public void TheCallersOwnFieldsAreLeftAlone()
-    {
+    public void TheCallersOwnFieldsAreLeftAlone() {
         var command = Complete().Build();
 
         using var document = JsonDocument.Parse(command.Body);
@@ -77,11 +49,12 @@ public sealed class KubeCommandBuilderTests
     }
 
     [Fact]
-    public void TheSubscriptionIsInferredFromTheResourceAndCanBeOverridden()
-    {
+    public void TheSubscriptionIsInferredFromTheResourceAndCanBeOverridden() {
         // docs/plan/09 § The command builder: "inferred from ResourceId; override for platform
         // objects".
-        Complete().Build().SubscriptionId
+        Complete()
+            .Build()
+            .SubscriptionId
             .ShouldBe(Guid.Parse("77de4a10-1b2c-4d3e-8f90-a1b2c3d4e5f6"));
 
         var platform = Guid.Parse("00000000-0000-0000-0000-0000000000aa");
@@ -92,8 +65,7 @@ public sealed class KubeCommandBuilderTests
     }
 
     [Fact]
-    public void ForceIsAlwaysFalseAndThereIsNoBuilderMethodToChangeIt()
-    {
+    public void ForceIsAlwaysFalseAndThereIsNoBuilderMethodToChangeIt() {
         // ⚠ force: true is the switch that turns ADR-013's conflict back into the silent revert it
         // exists to replace. It is unreachable from the builder on purpose.
         Complete().Build().Force.ShouldBeFalse();
@@ -105,15 +77,16 @@ public sealed class KubeCommandBuilderTests
     // ── The reconcile hash ─────────────────────────────────────────────────────────────────────
 
     [Fact]
-    public void TheReconcileHashIsStableAcrossPropertyOrdering()
-    {
+    public void TheReconcileHashIsStableAcrossPropertyOrdering() {
         // ⚠ A no-op detector that reports a change because a field moved is worse than none: it
         // turns every reconcile into an apply. The hash is over a canonicalised rendering.
-        var a = Builder().WithKind(Deployments)
+        var a = Builder()
+            .WithKind(Deployments)
             .ObjectJson("""{"metadata":{"name":"main"},"spec":{"replicas":2,"paused":false}}""")
             .Build();
 
-        var b = Builder().WithKind(Deployments)
+        var b = Builder()
+            .WithKind(Deployments)
             .ObjectJson("""{"spec":{"paused":false,"replicas":2},"metadata":{"name":"main"}}""")
             .Build();
 
@@ -121,10 +94,10 @@ public sealed class KubeCommandBuilderTests
     }
 
     [Fact]
-    public void TheReconcileHashChangesWhenTheDesiredStateDoes()
-    {
+    public void TheReconcileHashChangesWhenTheDesiredStateDoes() {
         var a = Complete().Build();
-        var b = Builder().WithKind(Deployments)
+        var b = Builder()
+            .WithKind(Deployments)
             .ObjectJson("""{"metadata":{"name":"main"},"spec":{"replicas":3}}""")
             .Build();
 
@@ -132,8 +105,7 @@ public sealed class KubeCommandBuilderTests
     }
 
     [Fact]
-    public void TheHashIsOverTheDesiredBodyAndNotOverTheInjectedResult()
-    {
+    public void TheHashIsOverTheDesiredBodyAndNotOverTheInjectedResult() {
         // ⚠ Hashing after injection would fold the hash annotation's own presence into the hash and
         // make every second apply look different.
         var command = Complete().Build();
@@ -149,8 +121,7 @@ public sealed class KubeCommandBuilderTests
     // ── Owner references ───────────────────────────────────────────────────────────────────────
 
     [Fact]
-    public void WithOwnerEmitsAnOwnerReferenceThatCascades()
-    {
+    public void WithOwnerEmitsAnOwnerReferenceThatCascades() {
         var parent = Resource() with { Name = "parent", Id = Guid.Parse("11111111-2222-3333-4444-555555555555") };
 
         var command = Complete()
@@ -172,8 +143,7 @@ public sealed class KubeCommandBuilderTests
     // ── Refusals ───────────────────────────────────────────────────────────────────────────────
 
     [Fact]
-    public void AMissingKindIsRefusedWithAMessageNamingThePluralProblem()
-    {
+    public void AMissingKindIsRefusedWithAMessageNamingThePluralProblem() {
         var built = Builder().ObjectJson("""{"metadata":{"name":"main"}}""").TryBuild();
 
         built.IsFailure.ShouldBeTrue();
@@ -182,10 +152,9 @@ public sealed class KubeCommandBuilderTests
     }
 
     [Fact]
-    public void AKindWithoutAPluralIsRefused()
-    {
+    public void AKindWithoutAPluralIsRefused() {
         var built = Builder()
-            .WithKind(new GroupVersionKind { Group = "apps", Version = "v1", Kind = "Deployment" })
+            .WithKind(new() { Group = "apps", Version = "v1", Kind = "Deployment" })
             .ObjectJson("""{"metadata":{"name":"main"}}""")
             .TryBuild();
 
@@ -194,8 +163,7 @@ public sealed class KubeCommandBuilderTests
     }
 
     [Fact]
-    public void AMissingObjectIsRefused()
-    {
+    public void AMissingObjectIsRefused() {
         var built = Builder().WithKind(Deployments).TryBuild();
 
         built.IsFailure.ShouldBeTrue();
@@ -203,8 +171,7 @@ public sealed class KubeCommandBuilderTests
     }
 
     [Fact]
-    public void MalformedJsonIsRefusedWithTheParserSMessage()
-    {
+    public void MalformedJsonIsRefusedWithTheParserSMessage() {
         var built = Builder().WithKind(Deployments).ObjectJson("{ not json").TryBuild();
 
         built.IsFailure.ShouldBeTrue();
@@ -212,8 +179,7 @@ public sealed class KubeCommandBuilderTests
     }
 
     [Fact]
-    public void BuildThrowsWhereTryBuildReturns()
-    {
+    public void BuildThrowsWhereTryBuildReturns() {
         // docs/plan/00 § Coding standards: a domain outcome is a Result; a bug is an exception. Both
         // spellings exist so a reconciler can choose which this is for it.
         var builder = Builder().WithKind(Deployments);
@@ -223,8 +189,7 @@ public sealed class KubeCommandBuilderTests
     }
 
     [Fact]
-    public void AnObjectWithNoNameFallsBackToTheResourceName()
-    {
+    public void AnObjectWithNoNameFallsBackToTheResourceName() {
         // ResourceNaming is the DNS-1123 label rule, which is exactly what a Kubernetes object name
         // must satisfy — so the fallback is always legal.
         var command = Builder().WithKind(Deployments).ObjectJson("""{"spec":{}}""").Build();
@@ -235,8 +200,7 @@ public sealed class KubeCommandBuilderTests
     // ── The chart seam ─────────────────────────────────────────────────────────────────────────
 
     [Fact]
-    public void ChartWithoutARendererFailsWithAMessageNamingTheChartsAssembly()
-    {
+    public void ChartWithoutARendererFailsWithAMessageNamingTheChartsAssembly() {
         // ⚠ THE SEAM, NOT A STUB. docs/plan/03 § src puts Helm rendering in
         // CyberCloud.Kubernetes.Charts. Silently applying nothing would be the bad outcome; so would
         // an exception with no explanation.
@@ -253,8 +217,7 @@ public sealed class KubeCommandBuilderTests
     }
 
     [Fact]
-    public void ARegisteredRendererIsUsedAndItsOutputIsLabelledLikeAnyOtherObject()
-    {
+    public void ARegisteredRendererIsUsedAndItsOutputIsLabelledLikeAnyOtherObject() {
         // The seam works when filled — asserted so the shape is fixed before the renderer exists.
         var renderer = new StubRenderer("""{"metadata":{"name":"main"},"spec":{"replicas":7}}""");
 
@@ -273,11 +236,11 @@ public sealed class KubeCommandBuilderTests
     }
 
     [Fact]
-    public void AMultiObjectChartIsRefusedWithAnExplanationRatherThanSilentlyApplyingTheFirst()
-    {
+    public void AMultiObjectChartIsRefusedWithAnExplanationRatherThanSilentlyApplyingTheFirst() {
         var renderer = new StubRenderer(
             """{"metadata":{"name":"a"}}""",
-            """{"metadata":{"name":"b"}}""");
+            """{"metadata":{"name":"b"}}"""
+        );
 
         var built = Builder(renderer)
             .WithKind(Deployments)
@@ -292,23 +255,46 @@ public sealed class KubeCommandBuilderTests
     // ── The deferred connection kind ───────────────────────────────────────────────────────────
 
     [Fact]
-    public void TheConnectionKindEnumIsTheDocumentsClosedSetIncludingTheDeferredOne()
-    {
+    public void TheConnectionKindEnumIsTheDocumentsClosedSetIncludingTheDeferredOne() {
         // docs/plan/09 § Cluster connections' table has four rows. AgentInitiated is declared even
         // though it is not built, so the enum is the document's set rather than the subset that
         // happens to work — and so persisted state naming it round-trips when it lands.
-        Enum.GetValues<ClusterConnectionKind>().ShouldBe(
-        [
-            ClusterConnectionKind.Unknown,
-            ClusterConnectionKind.Kubeconfig,
-            ClusterConnectionKind.ServiceAccountToken,
-            ClusterConnectionKind.AgentInitiated,
-            ClusterConnectionKind.InHouse,
-        ]);
+        Enum.GetValues<ClusterConnectionKind>()
+            .ShouldBe(
+                [
+                    ClusterConnectionKind.Unknown,
+                    ClusterConnectionKind.Kubeconfig,
+                    ClusterConnectionKind.ServiceAccountToken,
+                    ClusterConnectionKind.AgentInitiated,
+                    ClusterConnectionKind.InHouse
+                ]
+            );
     }
 
-    sealed class StubRenderer(params string[] documents) : IChartRenderer
-    {
+    static ResourceId Resource() =>
+        new(
+            Guid.Parse("9f2c1b7e-3d4a-4f21-9c6b-0a1e2d3c4b5a"),
+            Guid.Parse("77de4a10-1b2c-4d3e-8f90-a1b2c3d4e5f6"),
+            "prod",
+            new("CyberCloud.DBforPostgreSQL", "servers"),
+            "main",
+            Guid.Parse("3a8f0c22-5e6d-4a7b-8c9d-0e1f2a3b4c5d")
+        );
+
+    static IKubeCommandBuilder Builder(IChartRenderer? charts = null) {
+        var id = Resource();
+        return KubeCommand.For(new NullConnection(), charts)
+            .WithTenantId(id.TenantId)
+            .WithResourceId(id);
+    }
+
+    static IKubeCommandBuilder Complete(IChartRenderer? charts = null) =>
+        Builder(charts)
+            .WithKind(Deployments)
+            .InNamespace("tenant-space")
+            .ObjectJson("""{"metadata":{"name":"main"},"spec":{"replicas":2}}""");
+
+    sealed class StubRenderer(params string[] documents) : IChartRenderer {
         public string? Chart { get; private set; }
 
         public string? ReleaseNamespace { get; private set; }
@@ -319,8 +305,8 @@ public sealed class KubeCommandBuilderTests
             string chart,
             JsonElement values,
             string releaseNamespace,
-            string releaseName)
-        {
+            string releaseName
+        ) {
             Chart = chart;
             ReleaseNamespace = releaseNamespace;
             ReleaseName = releaseName;

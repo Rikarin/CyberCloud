@@ -1,41 +1,41 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!--
-    docs/plan/03 § Hosts: "CyberCloud.Silo.Host/  # the Orleans silo — loads every provider module".
-
-    It loads no provider modules yet, because there are none. What it does have is the whole of
-    docs/plan/04 § Silo composition that exists today — CreateSilo, the two storage tiers, the
-    tenancy grains and the cross-tenant separation — plus the one-shot `apply-durable-schema` mode
-    (see Program.cs), which is the thing that makes a fresh PostgreSQL shard usable at all.
-  -->
-
-  <PropertyGroup>
-    <OutputType>Exe</OutputType>
     <!--
-      The Aspire AppHost references this project and the generated `Projects.CyberCloud_Silo_Host`
-      metadata is how it launches it. Nothing else about this project is Aspire-aware: it reads
-      plain configuration, so `dotnet run` on it directly with a `CyberCloud__Storage__…`
-      environment works identically. ADR-014 — Aspire is the local orchestrator, not a dependency.
+      docs/plan/03 § Hosts: "CyberCloud.Silo.Host/  # the Orleans silo — loads every provider module".
+  
+      It loads no provider modules yet, because there are none. What it does have is the whole of
+      docs/plan/04 § Silo composition that exists today — CreateSilo, the two storage tiers, the
+      tenancy grains and the cross-tenant separation — plus the one-shot `apply-durable-schema` mode
+      (see Program.cs), which is the thing that makes a fresh PostgreSQL shard usable at all.
     -->
-    <IsPublishable>true</IsPublishable>
-    <!--
-      CA1515 — "an application's API isn't typically referenced from outside the assembly". It is
-      here, twice over, and both are deliberate: the Aspire AppHost takes a `Projects.*` handle to
-      this project, and CyberCloud.AppHost.Tests calls IHelloGrain through a real Orleans client, so
-      the grain interface and its wire types have to be public. Directory.Build.targets' automatic
-      InternalsVisibleTo covers only `CyberCloud.Silo.Host.Tests`, which is not the suite that
-      exercises this host — the exit criterion belongs to the AppHost, not to the silo.
-    -->
-    <NoWarn>$(NoWarn);CA1515</NoWarn>
-  </PropertyGroup>
 
-  <ItemGroup>
-    <ProjectReference Include="../../CyberCloud.ServiceDefaults/CyberCloud.ServiceDefaults.csproj" />
-    <ProjectReference Include="../../CyberCloud.Tenancy/CyberCloud.Tenancy.csproj" />
-  </ItemGroup>
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <!--
+          The Aspire AppHost references this project and the generated `Projects.CyberCloud_Silo_Host`
+          metadata is how it launches it. Nothing else about this project is Aspire-aware: it reads
+          plain configuration, so `dotnet run` on it directly with a `CyberCloud__Storage__…`
+          environment works identically. ADR-014 — Aspire is the local orchestrator, not a dependency.
+        -->
+        <IsPublishable>true</IsPublishable>
+        <!--
+          CA1515 — "an application's API isn't typically referenced from outside the assembly". It is
+          here, twice over, and both are deliberate: the Aspire AppHost takes a `Projects.*` handle to
+          this project, and CyberCloud.AppHost.Tests calls IHelloGrain through a real Orleans client, so
+          the grain interface and its wire types have to be public. Directory.Build.targets' automatic
+          InternalsVisibleTo covers only `CyberCloud.Silo.Host.Tests`, which is not the suite that
+          exercises this host — the exit criterion belongs to the AppHost, not to the silo.
+        -->
+        <NoWarn>$(NoWarn);CA1515</NoWarn>
+    </PropertyGroup>
 
-  <ItemGroup>
-    <PackageReference Include="Volo.Abp.Autofac" />
-  </ItemGroup>
+    <ItemGroup>
+        <ProjectReference Include="../../CyberCloud.ServiceDefaults/CyberCloud.ServiceDefaults.csproj"/>
+        <ProjectReference Include="../../CyberCloud.Tenancy/CyberCloud.Tenancy.csproj"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Volo.Abp.Autofac"/>
+    </ItemGroup>
 
 </Project>

@@ -8,8 +8,11 @@ namespace CyberCloud.ServiceDefaults.Storage;
 /// <remarks>
 ///     <para>
 ///         ⚠ <b>This exists because Orleans' own one is <c>internal</c>.</b>
-///         <c>AddMultitenantGrainStorage&lt;TGrainStorage, TGrainStorageOptions,
-///         TGrainStorageOptionsValidator&gt;</c> has a third type parameter constrained to
+///         <c>
+///             AddMultitenantGrainStorage&lt;TGrainStorage, TGrainStorageOptions,
+///             TGrainStorageOptionsValidator&gt;
+///         </c>
+///         has a third type parameter constrained to
 ///         <c>class, IConfigurationValidator</c>, and the natural argument for the Redis tier —
 ///         <c>Orleans.Persistence.RedisStorageOptionsValidator</c> — is not public in
 ///         Microsoft.Orleans.Persistence.Redis 10.2.2 (verified by reflection over the shipped
@@ -33,20 +36,17 @@ namespace CyberCloud.ServiceDefaults.Storage;
 /// <param name="options">The tenant's options, after <c>configureTenantOptions</c> has run.</param>
 /// <param name="name">The provider name including the tenant id.</param>
 public sealed class HotTierStorageOptionsValidator(RedisStorageOptions options, string name)
-    : IConfigurationValidator
-{
+    : IConfigurationValidator {
     /// <inheritdoc />
-    public void ValidateConfiguration()
-    {
-        if (options is null || options.ConfigurationOptions is null)
-        {
+    public void ValidateConfiguration() {
+        if (options is null || options.ConfigurationOptions is null) {
             throw new OrleansConfigurationException(
                 $"Hot-tier grain storage '{name}' has no RedisStorageOptions.ConfigurationOptions. "
-                + $"Set {CyberCloudStorageOptions.SectionName}:Hot:ConnectionString.");
+                + $"Set {CyberCloudStorageOptions.SectionName}:Hot:ConnectionString."
+            );
         }
 
-        if (options.GetStorageKey is null)
-        {
+        if (options.GetStorageKey is null) {
             // Without this the provider falls back to Orleans' default key,
             // {ServiceId}/state/{grainId}/{grainType} — no braces, therefore no hash tag, therefore
             // a tenant's keys scattered across every shard of the cluster. It would work perfectly
@@ -56,7 +56,8 @@ public sealed class HotTierStorageOptionsValidator(RedisStorageOptions options, 
             throw new OrleansConfigurationException(
                 $"Hot-tier grain storage '{name}' has no RedisStorageOptions.GetStorageKey, so it "
                 + "would use Orleans' default un-tagged key layout instead of "
-                + "{cc:t:<tenantId>}:<grainType>:<keyWithinTenant> (docs/plan/05 § Hot).");
+                + "{cc:t:<tenantId>}:<grainType>:<keyWithinTenant> (docs/plan/05 § Hot)."
+            );
         }
     }
 }

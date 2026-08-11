@@ -6,16 +6,19 @@ namespace CyberCloud.Analyzers;
 /// <remarks>
 ///     <para>
 ///         ⚠ Every one of these is looked up with
-///         <c>Compilation.GetTypeByMetadataName</c> and every analyzer <b>returns without
-///         registering</b> when the lookup fails. That is deliberate: <c>CyberCloud.Core</c>
+///         <c>Compilation.GetTypeByMetadataName</c> and every analyzer
+///         <b>
+///             returns without
+///             registering
+///         </b>
+///         when the lookup fails. That is deliberate: <c>CyberCloud.Core</c>
 ///         references no Orleans at all (docs/plan/03 § Assembly graph rules, rule 1), so an
 ///         Orleans-shaped rule must be inert there rather than guessing from a syntactic name
 ///         match. It also means this analyzer assembly needs no reference to Orleans, which it
 ///         could not have anyway — it targets netstandard2.0 and Orleans 10 targets net10.0.
 ///     </para>
 /// </remarks>
-static class WellKnown
-{
+static class WellKnown {
     /// <summary><c>Orleans.GenerateSerializerAttribute</c>.</summary>
     public const string GenerateSerializerAttribute = "Orleans.GenerateSerializerAttribute";
 
@@ -41,9 +44,13 @@ static class WellKnown
     ///     <c>Orleans.IGrainWithStringKey</c> — the only key kind that can carry a tenant.
     /// </summary>
     /// <remarks>
-    ///     docs/plan/00 § Coding standards: <i>"Grain interfaces are <c>IGrainWithStringKey</c> for
-    ///     anything tenant-scoped, because that is the only key kind <c>Orleans.Multitenant</c> can
-    ///     carry a tenant in (verified against its source)."</i> CC1006 leans on the contrapositive:
+    ///     docs/plan/00 § Coding standards:
+    ///     <i>
+    ///         "Grain interfaces are <c>IGrainWithStringKey</c> for
+    ///         anything tenant-scoped, because that is the only key kind <c>Orleans.Multitenant</c> can
+    ///         carry a tenant in (verified against its source)."
+    ///     </i>
+    ///     CC1006 leans on the contrapositive:
     ///     a grain whose key is not a string cannot be tenant-scoped, so reaching it without a
     ///     tenant cannot be a cross-tenant read.
     /// </remarks>

@@ -1,36 +1,36 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!--
-    docs/plan/02 ADR-018: tests are siblings. OutputType=Exe, the Microsoft.Testing.Platform
-    switches, IsPackable=false and the NoWarn set all come from the repository-root
-    Directory.Build.props / Directory.Build.targets § Test project conventions — do not repeat them
-    here, and in particular do NOT add Microsoft.NET.Test.Sdk (it drags the runner back to VSTest;
-    see the comment in Directory.Build.props § Test runner).
-
-    ⚠ No Orleans.Multitenant reference, deliberately. The tenant-qualified key encoding these tests
-    assert against was verified by decompiling and executing the shipped 4.0.0 assembly out of tree
-    (see OrleansMultitenantEncodingTests) — but CyberCloud.Core must not acquire an Orleans
-    dependency through the back door of its own test project, because that is how assembly-graph
-    rule 1 (docs/plan/03:226) gets eroded one "just for the test" at a time.
-  -->
-
-  <ItemGroup>
-    <PackageReference Include="xunit.v3" />
-    <PackageReference Include="Shouldly" />
-  </ItemGroup>
-
-  <ItemGroup Label="Global usings">
     <!--
-      xunit.v3 does not ship an implicit using for its own namespace, so without this every test
-      file starts with `using Xunit;`. ImplicitUsings is on repository-wide (Directory.Build.props),
-      so adding the one namespace every file in this project needs is consistent with that choice
-      rather than an exception to it.
+      docs/plan/02 ADR-018: tests are siblings. OutputType=Exe, the Microsoft.Testing.Platform
+      switches, IsPackable=false and the NoWarn set all come from the repository-root
+      Directory.Build.props / Directory.Build.targets § Test project conventions — do not repeat them
+      here, and in particular do NOT add Microsoft.NET.Test.Sdk (it drags the runner back to VSTest;
+      see the comment in Directory.Build.props § Test runner).
+  
+      ⚠ No Orleans.Multitenant reference, deliberately. The tenant-qualified key encoding these tests
+      assert against was verified by decompiling and executing the shipped 4.0.0 assembly out of tree
+      (see OrleansMultitenantEncodingTests) — but CyberCloud.Core must not acquire an Orleans
+      dependency through the back door of its own test project, because that is how assembly-graph
+      rule 1 (docs/plan/03:226) gets eroded one "just for the test" at a time.
     -->
-    <Using Include="Xunit" />
-  </ItemGroup>
 
-  <ItemGroup>
-    <ProjectReference Include="../CyberCloud.Core/CyberCloud.Core.csproj" />
-  </ItemGroup>
+    <ItemGroup>
+        <PackageReference Include="xunit.v3"/>
+        <PackageReference Include="Shouldly"/>
+    </ItemGroup>
+
+    <ItemGroup Label="Global usings">
+        <!--
+          xunit.v3 does not ship an implicit using for its own namespace, so without this every test
+          file starts with `using Xunit;`. ImplicitUsings is on repository-wide (Directory.Build.props),
+          so adding the one namespace every file in this project needs is consistent with that choice
+          rather than an exception to it.
+        -->
+        <Using Include="Xunit"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../CyberCloud.Core/CyberCloud.Core.csproj"/>
+    </ItemGroup>
 
 </Project>

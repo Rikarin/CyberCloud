@@ -24,8 +24,7 @@ namespace CyberCloud.Tenancy.Contracts;
 ///     </para>
 /// </remarks>
 [Alias("CyberCloud.Tenancy.ITenantGrain")]
-public interface ITenantGrain : IGrainWithStringKey
-{
+public interface ITenantGrain : IGrainWithStringKey {
     /// <summary>Creates the tenant in <see cref="TenantStatus.Provisioning" />. Idempotent.</summary>
     /// <param name="slug">The globally unique DNS-1123 slug.</param>
     /// <param name="displayName">The human-facing name.</param>

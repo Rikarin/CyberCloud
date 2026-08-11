@@ -5,21 +5,20 @@ namespace CyberCloud.Analyzers.Tests;
 ///     grain reference is taken through <c>ForTenant</c>, because
 ///     <c>Orleans.Multitenant</c>'s call filter never sees a caller that is not a grain.
 /// </summary>
-public sealed class UnqualifiedGrainReferenceAnalyzerTests
-{
+public sealed class UnqualifiedGrainReferenceAnalyzerTests {
     const string Grains = """
-        using Orleans;
-        using Orleans.Multitenant;
-        using CyberCloud.Core.Resources;
+                          using Orleans;
+                          using Orleans.Multitenant;
+                          using CyberCloud.Core.Resources;
 
-        public interface ITenantGrain : IGrainWithStringKey
-        {
-        }
+                          public interface ITenantGrain : IGrainWithStringKey
+                          {
+                          }
 
-        public interface ICounterGrain : IGrainWithIntegerKey
-        {
-        }
-        """;
+                          public interface ICounterGrain : IGrainWithIntegerKey
+                          {
+                          }
+                          """;
 
     // ── positive ─────────────────────────────────────────────────────────────────────────────────
 
@@ -34,12 +33,13 @@ public sealed class UnqualifiedGrainReferenceAnalyzerTests
             Grains
             + """
 
-            public sealed class TenantEndpoint
-            {
-                public ITenantGrain Get(IGrainFactory grains, System.Guid tenantId) =>
-                    {|CC1006:grains.GetGrain<ITenantGrain>(GrainKeys.Tenant(tenantId))|};
-            }
-            """);
+              public sealed class TenantEndpoint
+              {
+                  public ITenantGrain Get(IGrainFactory grains, System.Guid tenantId) =>
+                      {|CC1006:grains.GetGrain<ITenantGrain>(GrainKeys.Tenant(tenantId))|};
+              }
+              """
+        );
 
     /// <summary>
     ///     ⚠ Using <c>GrainKeys</c> is <i>not</i> enough on its own — CC1004 and CC1006 answer
@@ -52,15 +52,16 @@ public sealed class UnqualifiedGrainReferenceAnalyzerTests
             Grains
             + """
 
-            public sealed class Reconciler
-            {
-                readonly IGrainFactory grains;
+              public sealed class Reconciler
+              {
+                  readonly IGrainFactory grains;
 
-                public Reconciler(IGrainFactory grains) => this.grains = grains;
+                  public Reconciler(IGrainFactory grains) => this.grains = grains;
 
-                public ITenantGrain Next(string key) => {|CC1006:grains.GetGrain<ITenantGrain>(key)|};
-            }
-            """);
+                  public ITenantGrain Next(string key) => {|CC1006:grains.GetGrain<ITenantGrain>(key)|};
+              }
+              """
+        );
 
     // ── negative ─────────────────────────────────────────────────────────────────────────────────
 
@@ -75,11 +76,12 @@ public sealed class UnqualifiedGrainReferenceAnalyzerTests
             Grains
             + """
 
-            public sealed class SubscriptionGrain : Grain
-            {
-                public ITenantGrain Owner(string key) => GrainFactory.GetGrain<ITenantGrain>(key);
-            }
-            """);
+              public sealed class SubscriptionGrain : Grain
+              {
+                  public ITenantGrain Owner(string key) => GrainFactory.GetGrain<ITenantGrain>(key);
+              }
+              """
+        );
 
     /// <summary>
     ///     Exemption 2, and the whole point of the rule: <c>ForTenant</c> returns a different type,
@@ -91,13 +93,14 @@ public sealed class UnqualifiedGrainReferenceAnalyzerTests
             Grains
             + """
 
-            public sealed class TenantEndpoint
-            {
-                public ITenantGrain Get(IGrainFactory grains, System.Guid tenantId) =>
-                    grains.ForTenant(tenantId.ToString("D")).GetGrain<ITenantGrain>(
-                        GrainKeys.Tenant(tenantId));
-            }
-            """);
+              public sealed class TenantEndpoint
+              {
+                  public ITenantGrain Get(IGrainFactory grains, System.Guid tenantId) =>
+                      grains.ForTenant(tenantId.ToString("D")).GetGrain<ITenantGrain>(
+                          GrainKeys.Tenant(tenantId));
+              }
+              """
+        );
 
     /// <summary>
     ///     ⚠ Exemption 3, and the one that was found by running the rule over this repository:
@@ -113,11 +116,12 @@ public sealed class UnqualifiedGrainReferenceAnalyzerTests
             Grains
             + """
 
-            public sealed class ClusterProbe
-            {
-                public ICounterGrain Get(IGrainFactory grains) => grains.GetGrain<ICounterGrain>(0);
-            }
-            """);
+              public sealed class ClusterProbe
+              {
+                  public ICounterGrain Get(IGrainFactory grains) => grains.GetGrain<ICounterGrain>(0);
+              }
+              """
+        );
 
     /// <summary>
     ///     Exemption 4. A platform singleton is null-tenant, and <c>ITenantDirectoryGrain</c>'s own
@@ -131,18 +135,19 @@ public sealed class UnqualifiedGrainReferenceAnalyzerTests
             Grains
             + """
 
-            public sealed class ShardMapRefresher
-            {
-                public ITenantGrain Map(IGrainFactory grains) =>
-                    grains.GetGrain<ITenantGrain>(GrainKeys.ShardMap());
+              public sealed class ShardMapRefresher
+              {
+                  public ITenantGrain Map(IGrainFactory grains) =>
+                      grains.GetGrain<ITenantGrain>(GrainKeys.ShardMap());
 
-                public ITenantGrain Directory(IGrainFactory grains) =>
-                    grains.GetGrain<ITenantGrain>(GrainKeys.TenantDirectory());
+                  public ITenantGrain Directory(IGrainFactory grains) =>
+                      grains.GetGrain<ITenantGrain>(GrainKeys.TenantDirectory());
 
-                public ITenantGrain Cluster(IGrainFactory grains, System.Guid clusterId) =>
-                    grains.GetGrain<ITenantGrain>(GrainKeys.ClusterConnection(clusterId));
-            }
-            """);
+                  public ITenantGrain Cluster(IGrainFactory grains, System.Guid clusterId) =>
+                      grains.GetGrain<ITenantGrain>(GrainKeys.ClusterConnection(clusterId));
+              }
+              """
+        );
 
     /// <summary>
     ///     ⚠ And a <i>tenanted</i> <c>GrainKeys</c> builder is not exempt. The exemption is the set
@@ -155,10 +160,11 @@ public sealed class UnqualifiedGrainReferenceAnalyzerTests
             Grains
             + """
 
-            public sealed class Reader
-            {
-                public ITenantGrain Get(IGrainFactory grains, System.Guid resourceId) =>
-                    {|CC1006:grains.GetGrain<ITenantGrain>(GrainKeys.Resource(resourceId))|};
-            }
-            """);
+              public sealed class Reader
+              {
+                  public ITenantGrain Get(IGrainFactory grains, System.Guid resourceId) =>
+                      {|CC1006:grains.GetGrain<ITenantGrain>(GrainKeys.Resource(resourceId))|};
+              }
+              """
+        );
 }

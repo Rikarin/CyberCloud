@@ -1,67 +1,67 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!--
-    docs/plan/03 § Assembly graph rules, rule 1:
-
-        "CyberCloud.Core references no Orleans hosting, no KubernetesClient, no ABP application
-         layer. It is contracts, identifiers, error codes and pure functions."
-
-    ⚠ THIS PROJECT HAS NO <PackageReference>, AND THAT IS THE POINT. Everything it needs is in the
-    net10.0 shared framework: System.Collections.Immutable and System.Collections.Frozen ship in
-    Microsoft.NETCore.App, so the frozen error-code registry costs no dependency.
-
-    Rule 3 ("no assembly above CyberCloud.Kubernetes references k8s.Models") is satisfied for free
-    by the same emptiness. Before adding a package here, read docs/plan/03:222-232 — an addition
-    that pulls in Orleans, KubernetesClient or Volo.Abp.* is a build-gate failure by design, not an
-    inconvenience.
-
-    Everything else — TargetFramework, nullable, analyzers, TreatWarningsAsErrors, doc XML,
-    InternalsVisibleTo for the sibling .Tests project — comes from the repository-root
-    Directory.Build.props / Directory.Build.targets.
-  -->
-
-  <PropertyGroup Label="Analyzer suppressions — two, both argued">
     <!--
-      CA1716 "Rename type Error so that it no longer conflicts with the reserved language keyword
-      'Error'". The keyword is Visual Basic's `Error` statement. `Error` is the name docs/plan/08
-      § Errors gives this shape ("error": { "code", "message", "target", "details" }), it is the
-      name in the JSON on the wire, in the OpenAPI document and in the generated SDK, and renaming
-      the C# type to ErrorInfo/ProblemDetail would make the type and its own serialised form
-      disagree for the benefit of a language nothing in this repository is written in.
-
-      CA1000 "Do not declare static members on generic types" — Result<T>.Success / .Failure /
-      .FromValue / .FromError. The rule exists because `Foo<T>.Bar()` forces a caller to name T;
-      for a result factory that is exactly what the caller wants, and every alternative is worse:
-      non-generic Result.Success<T>(v) collides with the Result.Success property, and dropping the
-      factories in favour of the implicit conversions alone removes the only spelling that works
-      when T is itself generic. The BCL takes the same exception (ImmutableArray<T>.Empty,
-      Task<T>.FromResult, Nullable<T> helpers).
-
-      ⚠ These are the ONLY two suppressions in this assembly and neither is a #pragma
-      (docs/plan/00:121). Adding a third needs the same standard of argument.
+      docs/plan/03 § Assembly graph rules, rule 1:
+  
+          "CyberCloud.Core references no Orleans hosting, no KubernetesClient, no ABP application
+           layer. It is contracts, identifiers, error codes and pure functions."
+  
+      ⚠ THIS PROJECT HAS NO <PackageReference>, AND THAT IS THE POINT. Everything it needs is in the
+      net10.0 shared framework: System.Collections.Immutable and System.Collections.Frozen ship in
+      Microsoft.NETCore.App, so the frozen error-code registry costs no dependency.
+  
+      Rule 3 ("no assembly above CyberCloud.Kubernetes references k8s.Models") is satisfied for free
+      by the same emptiness. Before adding a package here, read docs/plan/03:222-232 — an addition
+      that pulls in Orleans, KubernetesClient or Volo.Abp.* is a build-gate failure by design, not an
+      inconvenience.
+  
+      Everything else — TargetFramework, nullable, analyzers, TreatWarningsAsErrors, doc XML,
+      InternalsVisibleTo for the sibling .Tests project — comes from the repository-root
+      Directory.Build.props / Directory.Build.targets.
     -->
-    <NoWarn>$(NoWarn);CA1716;CA1000</NoWarn>
-  </PropertyGroup>
 
-  <ItemGroup Label="CyberCloud.Analyzers — docs/plan/00 § Coding standards, § Non-negotiables">
-    <!--
-      ⚠ THIS IS NOT A REFERENCE AND DOES NOT VIOLATE THE "NO PACKAGES HERE" RULE ABOVE.
-      `OutputItemType="Analyzer"` puts CyberCloud.Analyzers.dll on the compiler's analyzer list;
-      `ReferenceOutputAssembly="false"` keeps it off the compile line and out of the output
-      directory. Nothing from it reaches this assembly's metadata, which is what
-      `AssemblyGraphTests.CoreReferencesNothingButTheSharedFramework` asserts —
-      `GetReferencedAssemblies()` does not see an analyzer, and that test still passes with this
-      line in place.
+    <PropertyGroup Label="Analyzer suppressions — two, both argued">
+        <!--
+          CA1716 "Rename type Error so that it no longer conflicts with the reserved language keyword
+          'Error'". The keyword is Visual Basic's `Error` statement. `Error` is the name docs/plan/08
+          § Errors gives this shape ("error": { "code", "message", "target", "details" }), it is the
+          name in the JSON on the wire, in the OpenAPI document and in the generated SDK, and renaming
+          the C# type to ErrorInfo/ProblemDetail would make the type and its own serialised form
+          disagree for the benefit of a language nothing in this repository is written in.
+    
+          CA1000 "Do not declare static members on generic types" — Result<T>.Success / .Failure /
+          .FromValue / .FromError. The rule exists because `Foo<T>.Bar()` forces a caller to name T;
+          for a result factory that is exactly what the caller wants, and every alternative is worse:
+          non-generic Result.Success<T>(v) collides with the Result.Success property, and dropping the
+          factories in favour of the implicit conversions alone removes the only spelling that works
+          when T is itself generic. The BCL takes the same exception (ImmutableArray<T>.Empty,
+          Task<T>.FromResult, Nullable<T> helpers).
+    
+          ⚠ These are the ONLY two suppressions in this assembly and neither is a #pragma
+          (docs/plan/00:121). Adding a third needs the same standard of argument.
+        -->
+        <NoWarn>$(NoWarn);CA1716;CA1000</NoWarn>
+    </PropertyGroup>
 
-      ⚠ Most of the rules are inert here on purpose: CyberCloud.Core has no Orleans reference, so
-      the [Alias], [Id], GetGrain and grain-key rules all fail their
-      `GetTypeByMetadataName("Orleans.…")` lookup and register nothing. CC1001, CC1002 and CC1007
-      are language-level and do apply. Referencing the analyzer anyway is what makes "every project
-      is policed" a property of the tree rather than of whoever remembered.
-    -->
-    <ProjectReference Include="../CyberCloud.Analyzers/CyberCloud.Analyzers.csproj"
-                      OutputItemType="Analyzer"
-                      ReferenceOutputAssembly="false" />
-  </ItemGroup>
+    <ItemGroup Label="CyberCloud.Analyzers — docs/plan/00 § Coding standards, § Non-negotiables">
+        <!--
+          ⚠ THIS IS NOT A REFERENCE AND DOES NOT VIOLATE THE "NO PACKAGES HERE" RULE ABOVE.
+          `OutputItemType="Analyzer"` puts CyberCloud.Analyzers.dll on the compiler's analyzer list;
+          `ReferenceOutputAssembly="false"` keeps it off the compile line and out of the output
+          directory. Nothing from it reaches this assembly's metadata, which is what
+          `AssemblyGraphTests.CoreReferencesNothingButTheSharedFramework` asserts —
+          `GetReferencedAssemblies()` does not see an analyzer, and that test still passes with this
+          line in place.
+    
+          ⚠ Most of the rules are inert here on purpose: CyberCloud.Core has no Orleans reference, so
+          the [Alias], [Id], GetGrain and grain-key rules all fail their
+          `GetTypeByMetadataName("Orleans.…")` lookup and register nothing. CC1001, CC1002 and CC1007
+          are language-level and do apply. Referencing the analyzer anyway is what makes "every project
+          is policed" a property of the tree rather than of whoever remembered.
+        -->
+        <ProjectReference Include="../CyberCloud.Analyzers/CyberCloud.Analyzers.csproj"
+                          OutputItemType="Analyzer"
+                          ReferenceOutputAssembly="false"/>
+    </ItemGroup>
 
 </Project>

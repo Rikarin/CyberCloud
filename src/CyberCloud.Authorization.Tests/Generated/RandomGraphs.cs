@@ -1,5 +1,5 @@
-using System.Globalization;
 using CyberCloud.Authorization.Contracts;
+using System.Globalization;
 using static CyberCloud.Authorization.Rewrite;
 
 namespace CyberCloud.Authorization.Tests.Generated;
@@ -13,29 +13,45 @@ public sealed record GeneratedGraph(
     int Seed,
     AuthorizationSchema Schema,
     IReadOnlyList<RelationTuple> Tuples,
-    IReadOnlyList<(ObjectRef Object, string Name, SubjectRef Subject)> Queries)
-{
+    IReadOnlyList<(ObjectRef Object, string Name, SubjectRef Subject)> Queries
+) {
     /// <summary>The graph as text, for a failure message that can be pasted into the corpus.</summary>
     public string Describe() =>
-        "seed " + Seed.ToString(CultureInfo.InvariantCulture) + Environment.NewLine
-        + "schema:" + Environment.NewLine
+        "seed "
+        + Seed.ToString(CultureInfo.InvariantCulture)
+        + Environment.NewLine
+        + "schema:"
+        + Environment.NewLine
         + string.Join(
             Environment.NewLine,
             Schema.TypeNames.SelectMany(type =>
                 Schema.Type(type)!.Members.Select(m =>
-                    $"  {type}#{m.Name} {(m.IsPermission ? "(permission)" : "(relation)")} = {m.Expression}")))
-        + Environment.NewLine + "tuples:" + Environment.NewLine
+                    $"  {type}#{m.Name} {(m.IsPermission ? "(permission)" : "(relation)")} = {m.Expression}"
+                )
+            )
+        )
+        + Environment.NewLine
+        + "tuples:"
+        + Environment.NewLine
         + string.Join(Environment.NewLine, Tuples.Select(x => "  " + x));
 }
 
 /// <summary>
-///     A deterministic generator of ReBAC graphs — <b>including cycles, deep nesting and
-///     negation</b>, which is what docs/plan/07 § Testing asks the property test to cover.
+///     A deterministic generator of ReBAC graphs —
+///     <b>
+///         including cycles, deep nesting and
+///         negation
+///     </b>
+///     , which is what docs/plan/07 § Testing asks the property test to cover.
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>Hand-rolled rather than FsCheck/CsCheck, for the reason
-///         <c>CyberCloud.Core.Tests.Corpus</c> already records:</b> central package management
+///         ⚠
+///         <b>
+///             Hand-rolled rather than FsCheck/CsCheck, for the reason
+///             <c>CyberCloud.Core.Tests.Corpus</c> already records:
+///         </b>
+///         central package management
 ///         forbids an unpinned version and its own header says a package outside docs/plan/02's
 ///         register needs an ADR. Writing an ADR to get shrinking is not the right trade; a seeded
 ///         generator gives the same coverage, is reproducible from the seed printed in the failure
@@ -58,8 +74,7 @@ public sealed record GeneratedGraph(
 ///         check on that claim.
 ///     </para>
 /// </remarks>
-public static class RandomGraphs
-{
+public static class RandomGraphs {
     /// <summary>The object types generated schemas define.</summary>
     public static IReadOnlyList<string> Types { get; } = ["ta", "tb", "tc"];
 
@@ -74,8 +89,7 @@ public static class RandomGraphs
 
     /// <summary>Generates one graph.</summary>
     /// <param name="seed">The seed. The same seed always produces the same graph.</param>
-    public static GeneratedGraph Generate(int seed)
-    {
+    public static GeneratedGraph Generate(int seed) {
         var random = new Random(seed);
         var schema = BuildSchema(random);
         var objects = Objects(random);
@@ -83,14 +97,13 @@ public static class RandomGraphs
         var tuples = BuildTuples(random, objects, subjects);
 
         List<(ObjectRef, string, SubjectRef)> queries = [];
-        for (var i = 0; i < 4; i++)
-        {
+        for (var i = 0; i < 4; i++) {
             var target = objects[random.Next(objects.Count)];
             var names = Names(random);
             queries.Add((target, names, subjects[random.Next(subjects.Count)]));
         }
 
-        return new GeneratedGraph(seed, schema, tuples, queries);
+        return new(seed, schema, tuples, queries);
     }
 
     static string Names(Random random) =>
@@ -98,80 +111,69 @@ public static class RandomGraphs
             ? ComputedRelations[random.Next(ComputedRelations.Count)]
             : PermissionNames[random.Next(PermissionNames.Count)];
 
-    static AuthorizationSchema BuildSchema(Random random)
-    {
+    static AuthorizationSchema BuildSchema(Random random) {
         var builder = Schema.Create(1);
 
-        foreach (var type in Types)
-        {
+        foreach (var type in Types) {
             var scope = builder.DefineType(type);
 
-            foreach (var direct in DirectRelations)
-            {
+            foreach (var direct in DirectRelations) {
                 scope.Relation(direct);
             }
 
             // Computed relations. `This` is legal here and nowhere else; the tupleset is always a
             // direct relation, which is SchemaBuilder rule 4.
-            foreach (var computed in ComputedRelations)
-            {
-                scope.Relation(computed, RelationRewrite(random, depth: 0));
+            foreach (var computed in ComputedRelations) {
+                scope.Relation(computed, RelationRewrite(random, 0));
             }
 
             // Permissions. Never `This`; sometimes a top-level negation over a direct relation on
             // the same object, which is the only shape docs/plan/07 allows.
-            foreach (var permission in PermissionNames)
-            {
+            foreach (var permission in PermissionNames) {
                 var positive = PermissionRewrite(random);
 
                 scope.Permission(
                     permission,
                     random.Next(3) == 0
                         ? positive & !Rel(DirectRelations[random.Next(DirectRelations.Count)])
-                        : positive);
+                        : positive
+                );
             }
         }
 
         return builder.Build();
     }
 
-    static RelationExpression RelationRewrite(Random random, int depth)
-    {
-        if (depth >= 2)
-        {
+    static RelationExpression RelationRewrite(Random random, int depth) {
+        if (depth >= 2) {
             return This;
         }
 
-        return random.Next(6) switch
-        {
+        return random.Next(6) switch {
             0 => This,
             1 => Rel(Pick(random, ComputedRelations)),
             2 => From(Pick(random, DirectRelations), Pick(random, ComputedRelations)),
             3 => This | From(Pick(random, DirectRelations), Pick(random, ComputedRelations)),
             4 => RelationRewrite(random, depth + 1) | RelationRewrite(random, depth + 1),
-            _ => RelationRewrite(random, depth + 1) & RelationRewrite(random, depth + 1),
+            _ => RelationRewrite(random, depth + 1) & RelationRewrite(random, depth + 1)
         };
     }
 
     static RelationExpression PermissionRewrite(Random random) =>
-        random.Next(4) switch
-        {
+        random.Next(4) switch {
             0 => Rel(Pick(random, ComputedRelations)),
             1 => Rel(Pick(random, ComputedRelations)) | Rel(Pick(random, DirectRelations)),
             2 => Rel(Pick(random, ComputedRelations)) & Rel(Pick(random, ComputedRelations)),
             _ => Rel(Pick(random, ComputedRelations))
-                | (Rel(Pick(random, ComputedRelations)) & Rel(Pick(random, ComputedRelations))),
+                | (Rel(Pick(random, ComputedRelations)) & Rel(Pick(random, ComputedRelations)))
         };
 
-    static List<ObjectRef> Objects(Random random)
-    {
+    static List<ObjectRef> Objects(Random random) {
         var count = 3 + random.Next(4);
         List<ObjectRef> objects = [];
 
-        for (var i = 0; i < count; i++)
-        {
-            objects.Add(ObjectRef.Of(
-                Types[i % Types.Count], "o" + i.ToString(CultureInfo.InvariantCulture)));
+        for (var i = 0; i < count; i++) {
+            objects.Add(ObjectRef.Of(Types[i % Types.Count], "o" + i.ToString(CultureInfo.InvariantCulture)));
         }
 
         return objects;
@@ -186,13 +188,14 @@ public static class RandomGraphs
     static List<SubjectRef> Subjects() => [SubjectRef.Of("ta", "u0"), SubjectRef.Of("tb", "u1")];
 
     static List<RelationTuple> BuildTuples(
-        Random random, List<ObjectRef> objects, List<SubjectRef> subjects)
-    {
+        Random random,
+        List<ObjectRef> objects,
+        List<SubjectRef> subjects
+    ) {
         var count = 6 + random.Next(14);
         List<RelationTuple> tuples = [];
 
-        for (var i = 0; i < count; i++)
-        {
+        for (var i = 0; i < count; i++) {
             var target = objects[random.Next(objects.Count)];
 
             // Tuples are written against relations, never permissions — SchemaBuilder's rule and
@@ -203,12 +206,9 @@ public static class RandomGraphs
 
             SubjectRef subject;
             var roll = random.Next(10);
-            if (roll < 6)
-            {
+            if (roll < 6) {
                 subject = subjects[random.Next(subjects.Count)];
-            }
-            else if (roll < 9)
-            {
+            } else if (roll < 9) {
                 // A userset subject — the source of group nesting and of most cycles.
                 var userset = objects[random.Next(objects.Count)];
                 subject = SubjectRef.Userset(
@@ -216,10 +216,9 @@ public static class RandomGraphs
                     userset.Id,
                     random.Next(2) == 0
                         ? Pick(random, ComputedRelations)
-                        : Pick(random, DirectRelations));
-            }
-            else
-            {
+                        : Pick(random, DirectRelations)
+                );
+            } else {
                 // A concrete object as a subject — what a tupleset edge points at.
                 var pointed = objects[random.Next(objects.Count)];
                 subject = SubjectRef.Of(pointed.Type, pointed.Id);

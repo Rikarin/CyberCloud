@@ -1,6 +1,6 @@
-using System.Globalization;
 using Microsoft.Extensions.Logging;
 using Orleans.Multitenant;
+using System.Globalization;
 
 namespace CyberCloud.Tenancy.Separation;
 
@@ -21,8 +21,7 @@ namespace CyberCloud.Tenancy.Separation;
 ///         built).
 ///     </para>
 /// </remarks>
-public interface IPlatformOperatorAuthority
-{
+public interface IPlatformOperatorAuthority {
     /// <summary>
     ///     Whether the ambient caller may act as a platform operator against
     ///     <paramref name="targetTenantId" />.
@@ -38,8 +37,7 @@ public interface IPlatformOperatorAuthority
 }
 
 /// <summary>The default: nothing is a platform operator. See <see cref="IPlatformOperatorAuthority" />.</summary>
-public sealed class DenyPlatformOperatorAuthority : IPlatformOperatorAuthority
-{
+public sealed class DenyPlatformOperatorAuthority : IPlatformOperatorAuthority {
     /// <inheritdoc />
     public string? OperatorFor(string targetTenantId) => null;
 }
@@ -53,8 +51,7 @@ public sealed class DenyPlatformOperatorAuthority : IPlatformOperatorAuthority
 ///     The interface exists because the authorizer's shape has to have somewhere to ask, and adding
 ///     the question later would mean changing the authorizer rather than registering a service.
 /// </remarks>
-public interface ICrossTenantDelegationStore
-{
+public interface ICrossTenantDelegationStore {
     /// <summary>Whether an unexpired delegation lets <paramref name="source" /> reach <paramref name="target" />.</summary>
     /// <param name="source">The tenant making the call.</param>
     /// <param name="target">The tenant being called.</param>
@@ -62,8 +59,7 @@ public interface ICrossTenantDelegationStore
 }
 
 /// <summary>The default: no delegations exist. See <see cref="ICrossTenantDelegationStore" />.</summary>
-public sealed class NoCrossTenantDelegations : ICrossTenantDelegationStore
-{
+public sealed class NoCrossTenantDelegations : ICrossTenantDelegationStore {
     /// <inheritdoc />
     public bool IsDelegated(string source, string target) => false;
 }
@@ -100,8 +96,12 @@ public sealed class NoCrossTenantDelegations : ICrossTenantDelegationStore
 ///         <c>PlatformCrossTenantAuthorizer</c> explicitly allows the platform → connection edge and
 ///         logs it. This is the single place tenancy is enforced by code rather than by key." Every
 ///         null-tenant grain is in that category — the tenant directory and the shard map are read by
-///         tenant-scoped code as a matter of course — so the rule here is <b>any tenant → the null
-///         tenant is allowed and logged</b>, and it is the one rule in this file that trades a key
+///         tenant-scoped code as a matter of course — so the rule here is
+///         <b>
+///             any tenant → the null
+///             tenant is allowed and logged
+///         </b>
+///         , and it is the one rule in this file that trades a key
 ///         guarantee for a code guarantee. It is stated rather than hidden because the cost is real:
 ///         a null-tenant grain that forgets to check its own state is reachable from any tenant.
 ///     </para>
@@ -123,9 +123,9 @@ public sealed class NoCrossTenantDelegations : ICrossTenantDelegationStore
 public sealed class PlatformCrossTenantAuthorizer(
     IPlatformOperatorAuthority operators,
     ICrossTenantDelegationStore delegations,
-    ILogger<PlatformCrossTenantAuthorizer> logger)
-    : ICrossTenantAuthorizer
-{
+    ILogger<PlatformCrossTenantAuthorizer> logger
+)
+    : ICrossTenantAuthorizer {
     /// <summary>
     ///     The platform tenant — docs/plan/06 § Platform administration, "<c>Guid.Empty</c>".
     /// </summary>
@@ -163,37 +163,34 @@ public sealed class PlatformCrossTenantAuthorizer(
     ///     <paramref name="targetTenantId" /> — it only asks when the two differ — and passes
     ///     <see langword="null" /> for a null-tenant grain on either side.
     /// </remarks>
-    public bool IsAccessAuthorized(string? sourceTenantId, string? targetTenantId)
-    {
+    public bool IsAccessAuthorized(string? sourceTenantId, string? targetTenantId) {
         // Edge: anything → a null-tenant platform grain. Allowed, logged, and the grain is
         // responsible for its own tenancy check. See the ⚠ on the type.
-        if (targetTenantId is null)
-        {
+        if (targetTenantId is null) {
             AllowedNullTenantEdges++;
             logger.LogDebug(
                 "Cross-tenant edge allowed: tenant {Source} → a null-tenant platform grain. The "
                 + "grain enforces tenancy in code (docs/plan/06 § Grain keys).",
-                sourceTenantId);
+                sourceTenantId
+            );
             return true;
         }
 
         // Edge: a null-tenant grain → a tenant. Denied — no document describes it.
-        if (sourceTenantId is null)
-        {
+        if (sourceTenantId is null) {
             return Deny(sourceTenantId, targetTenantId);
         }
 
         // Edge: the platform tenant → any tenant.
-        if (string.Equals(sourceTenantId, PlatformTenantId, StringComparison.OrdinalIgnoreCase))
-        {
-            if (operators.OperatorFor(targetTenantId) is { } operatorId)
-            {
+        if (string.Equals(sourceTenantId, PlatformTenantId, StringComparison.OrdinalIgnoreCase)) {
+            if (operators.OperatorFor(targetTenantId) is { } operatorId) {
                 AllowedPlatformEdges++;
                 logger.LogWarning(
                     "Platform operator {Operator} reached into tenant {Target}. docs/plan/06 "
                     + "§ Platform administration requires this edge to be logged, always.",
                     operatorId,
-                    targetTenantId);
+                    targetTenantId
+                );
                 return true;
             }
 
@@ -201,21 +198,20 @@ public sealed class PlatformCrossTenantAuthorizer(
         }
 
         // Edge: tenant A → tenant B under a delegation.
-        if (delegations.IsDelegated(sourceTenantId, targetTenantId))
-        {
+        if (delegations.IsDelegated(sourceTenantId, targetTenantId)) {
             AllowedDelegatedEdges++;
             logger.LogWarning(
                 "Delegated cross-tenant access: tenant {Source} → tenant {Target}.",
                 sourceTenantId,
-                targetTenantId);
+                targetTenantId
+            );
             return true;
         }
 
         return Deny(sourceTenantId, targetTenantId);
     }
 
-    bool Deny(string? sourceTenantId, string? targetTenantId)
-    {
+    bool Deny(string? sourceTenantId, string? targetTenantId) {
         Denied++;
 
         // The security event of docs/plan/06 § Platform administration, row 3. The
@@ -226,7 +222,8 @@ public sealed class PlatformCrossTenantAuthorizer(
             "DENIED cross-tenant access: tenant {Source} → tenant {Target}. No platform operator "
             + "relation and no delegation. docs/plan/06 § Platform administration.",
             sourceTenantId ?? "NULL",
-            targetTenantId ?? "NULL");
+            targetTenantId ?? "NULL"
+        );
 
         return false;
     }

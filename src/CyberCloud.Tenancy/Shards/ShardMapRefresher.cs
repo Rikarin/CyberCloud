@@ -32,8 +32,8 @@ namespace CyberCloud.Tenancy.Shards;
 public sealed class ShardMapRefresher(
     GrainBackedShardMapCache cache,
     IGrainFactory grains,
-    ILogger<ShardMapRefresher> logger)
-{
+    ILogger<ShardMapRefresher> logger
+) {
     /// <summary>How many refreshes have failed since the process started.</summary>
     public long Failures { get; private set; }
 
@@ -46,26 +46,20 @@ public sealed class ShardMapRefresher(
     /// <summary>Polls once. Never throws.</summary>
     /// <param name="cancellationToken">The host's shutdown token.</param>
     /// <returns><see langword="true" /> if a snapshot was applied.</returns>
-    public async Task<bool> RefreshAsync(CancellationToken cancellationToken = default)
-    {
-        try
-        {
+    public async Task<bool> RefreshAsync(CancellationToken cancellationToken = default) {
+        try {
             cancellationToken.ThrowIfCancellationRequested();
 
             var snapshot = await Grain.GetSnapshotAsync(cache.Version);
-            if (snapshot.TryGetError(out var error))
-            {
+            if (snapshot.TryGetError(out var error)) {
                 Failures++;
-                logger.LogWarning(
-                    "Shard map refresh returned {Code}: {Message}", error.Code.Value, error.Message);
+                logger.LogWarning("Shard map refresh returned {Code}: {Message}", error.Code.Value, error.Message);
                 return false;
             }
 
             Successes++;
             return cache.Apply(snapshot.GetValueOrThrow());
-        }
-        catch (Exception exception) when (exception is not OperationCanceledException)
-        {
+        } catch (Exception exception) when (exception is not OperationCanceledException) {
             Failures++;
 
             // Deliberately swallowed — see the ⚠ on the type. The count is the signal; docs/plan/05
@@ -75,7 +69,8 @@ public sealed class ShardMapRefresher(
                 "Shard map refresh failed. The cached map (version {Version}, {Count} recorded "
                 + "assignments) stays in use, so every tenant already in it keeps resolving.",
                 cache.Version,
-                cache.RecordedAssignments);
+                cache.RecordedAssignments
+            );
 
             return false;
         }
@@ -85,14 +80,12 @@ public sealed class ShardMapRefresher(
 /// <summary>Runs <see cref="ShardMapRefresher" /> on a timer for the life of the silo.</summary>
 public sealed class ShardMapRefreshService(
     ShardMapRefresher refresher,
-    IOptions<TenancyRefreshOptions> options)
-    : BackgroundService
-{
+    IOptions<TenancyRefreshOptions> options
+)
+    : BackgroundService {
     /// <inheritdoc />
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
-    {
-        if (!options.Value.RunBackgroundRefresh)
-        {
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken) {
+        if (!options.Value.RunBackgroundRefresh) {
             return;
         }
 
@@ -100,15 +93,11 @@ public sealed class ShardMapRefreshService(
 
         await refresher.RefreshAsync(stoppingToken);
 
-        try
-        {
-            while (await timer.WaitForNextTickAsync(stoppingToken))
-            {
+        try {
+            while (await timer.WaitForNextTickAsync(stoppingToken)) {
                 await refresher.RefreshAsync(stoppingToken);
             }
-        }
-        catch (OperationCanceledException)
-        {
+        } catch (OperationCanceledException) {
             // Shutdown.
         }
     }

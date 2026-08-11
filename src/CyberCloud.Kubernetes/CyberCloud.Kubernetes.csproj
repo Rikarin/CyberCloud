@@ -1,48 +1,48 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!--
-    docs/plan/03 § src — "connections, command builder, informers, SSA (09)".
+    <!--
+      docs/plan/03 § src — "connections, command builder, informers, SSA (09)".
+  
+      ⚠ THIS IS THE BOUNDARY ASSEMBLY OF docs/plan/03 § Assembly graph rules, RULE 3: "No assembly
+      above CyberCloud.Kubernetes references k8s.Models." This is the assembly that may, and it is the
+      only one in the platform that does. Everything it exposes upwards is expressed in
+      CyberCloud.Kubernetes.Contracts' JSON-and-GUID vocabulary, so that a provider reconciler — which
+      is above this — never names a Kubernetes type.
+  
+      ⚠ KubernetesClient 19.0.2, and the one thing that actually changed from Survival's 18.0.13.
+      docs/plan/02 § Data, transport, Kubernetes asserts "19 changed the generic client surface — a
+      small migration, done once, here" without naming it. Verified by diffing the public surface of
+      both assemblies (18.0.13 vs 19.0.2, net10.0): the ONLY change to the generic-object surface is
+  
+        -  Task<T> GenericClient.ListAsync<T>(CancellationToken cancel = default)
+        +  Task<T> GenericClient.ListAsync<T>(string labelSelector = null, string fieldSelector = null,
+        +      int? limit = null, string continueToken = null, CancellationToken cancel = default)
+  
+      (and the same for ListNamespacedAsync). ICustomObjectsOperations — the interface server-side
+      apply actually goes through — is byte-identical between the two versions. The migration cost is
+      therefore exactly: a call written as `ListAsync<T>(ct)` no longer compiles and becomes
+      `ListAsync<T>(cancel: ct)`. Everything else in the 18→19 diff is generated-model churn tracking
+      Kubernetes 1.34 → 1.35 (alpha→beta graduations of StorageVersionMigration and
+      PodCertificateRequest, removal of storage.k8s.io/v1alpha1 VolumeAttributesClass).
+  
+      The change is a gain rather than a cost for this assembly: in 18.0.13 GenericClient could not
+      list by label selector at all, and docs/plan/09 § Observing filters every informer by
+      `cybercloud.io/managed-by=cybercloud`.
+    -->
 
-    ⚠ THIS IS THE BOUNDARY ASSEMBLY OF docs/plan/03 § Assembly graph rules, RULE 3: "No assembly
-    above CyberCloud.Kubernetes references k8s.Models." This is the assembly that may, and it is the
-    only one in the platform that does. Everything it exposes upwards is expressed in
-    CyberCloud.Kubernetes.Contracts' JSON-and-GUID vocabulary, so that a provider reconciler — which
-    is above this — never names a Kubernetes type.
+    <ItemGroup>
+        <!-- The boundary. Nothing above this assembly may reference it — rule 3. -->
+        <PackageReference Include="KubernetesClient"/>
+        <!-- Grain implementations, reminders, IIncomingGrainCallFilter. -->
+        <PackageReference Include="Microsoft.Orleans.Server"/>
+        <!-- GrainId.GetTenantId(), for the caller-tenant check the null-tenant key cannot make. -->
+        <PackageReference Include="Orleans.Multitenant"/>
+    </ItemGroup>
 
-    ⚠ KubernetesClient 19.0.2, and the one thing that actually changed from Survival's 18.0.13.
-    docs/plan/02 § Data, transport, Kubernetes asserts "19 changed the generic client surface — a
-    small migration, done once, here" without naming it. Verified by diffing the public surface of
-    both assemblies (18.0.13 vs 19.0.2, net10.0): the ONLY change to the generic-object surface is
-
-      -  Task<T> GenericClient.ListAsync<T>(CancellationToken cancel = default)
-      +  Task<T> GenericClient.ListAsync<T>(string labelSelector = null, string fieldSelector = null,
-      +      int? limit = null, string continueToken = null, CancellationToken cancel = default)
-
-    (and the same for ListNamespacedAsync). ICustomObjectsOperations — the interface server-side
-    apply actually goes through — is byte-identical between the two versions. The migration cost is
-    therefore exactly: a call written as `ListAsync<T>(ct)` no longer compiles and becomes
-    `ListAsync<T>(cancel: ct)`. Everything else in the 18→19 diff is generated-model churn tracking
-    Kubernetes 1.34 → 1.35 (alpha→beta graduations of StorageVersionMigration and
-    PodCertificateRequest, removal of storage.k8s.io/v1alpha1 VolumeAttributesClass).
-
-    The change is a gain rather than a cost for this assembly: in 18.0.13 GenericClient could not
-    list by label selector at all, and docs/plan/09 § Observing filters every informer by
-    `cybercloud.io/managed-by=cybercloud`.
-  -->
-
-  <ItemGroup>
-    <!-- The boundary. Nothing above this assembly may reference it — rule 3. -->
-    <PackageReference Include="KubernetesClient" />
-    <!-- Grain implementations, reminders, IIncomingGrainCallFilter. -->
-    <PackageReference Include="Microsoft.Orleans.Server" />
-    <!-- GrainId.GetTenantId(), for the caller-tenant check the null-tenant key cannot make. -->
-    <PackageReference Include="Orleans.Multitenant" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <ProjectReference Include="../CyberCloud.Core/CyberCloud.Core.csproj" />
-    <ProjectReference Include="../CyberCloud.Core.Contracts/CyberCloud.Core.Contracts.csproj" />
-    <ProjectReference Include="../CyberCloud.Kubernetes.Contracts/CyberCloud.Kubernetes.Contracts.csproj" />
-  </ItemGroup>
+    <ItemGroup>
+        <ProjectReference Include="../CyberCloud.Core/CyberCloud.Core.csproj"/>
+        <ProjectReference Include="../CyberCloud.Core.Contracts/CyberCloud.Core.Contracts.csproj"/>
+        <ProjectReference Include="../CyberCloud.Kubernetes.Contracts/CyberCloud.Kubernetes.Contracts.csproj"/>
+    </ItemGroup>
 
 </Project>

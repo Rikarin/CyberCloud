@@ -4,8 +4,7 @@ namespace CyberCloud.Analyzers.Tests;
 ///     CC1001 — <c>docs/plan/00 § Coding standards</c>, the half of the <c>.Result</c> / <c>.Wait()</c>
 ///     ban that <c>CA1849</c> does not cover.
 /// </summary>
-public sealed class BlockingWaitAnalyzerTests
-{
+public sealed class BlockingWaitAnalyzerTests {
     // ── positive ─────────────────────────────────────────────────────────────────────────────────
 
     [Fact]
@@ -18,7 +17,8 @@ public sealed class BlockingWaitAnalyzerTests
             {
                 public string Read(Task<string> pending) => {|CC1001:pending.Result|};
             }
-            """);
+            """
+        );
 
     [Fact]
     public Task WaitFromASynchronousMethodIsReported() =>
@@ -33,7 +33,8 @@ public sealed class BlockingWaitAnalyzerTests
                     {|CC1001:pending.Wait()|};
                 }
             }
-            """);
+            """
+        );
 
     [Fact]
     public Task GetAwaiterGetResultFromASynchronousMethodIsReported() =>
@@ -45,7 +46,8 @@ public sealed class BlockingWaitAnalyzerTests
             {
                 public string Read(Task<string> pending) => {|CC1001:pending.GetAwaiter().GetResult()|};
             }
-            """);
+            """
+        );
 
     /// <summary>The evasion that would otherwise make the rule decorative.</summary>
     [Fact]
@@ -59,7 +61,8 @@ public sealed class BlockingWaitAnalyzerTests
                 public string Read(Task<string> pending) =>
                     {|CC1001:pending.ConfigureAwait(false).GetAwaiter().GetResult()|};
             }
-            """);
+            """
+        );
 
     [Fact]
     public Task AConstructorCountsAsASynchronousMethod() =>
@@ -78,7 +81,8 @@ public sealed class BlockingWaitAnalyzerTests
 
                 public string Value => value;
             }
-            """);
+            """
+        );
 
     // ── negative — every one of these is correct code ────────────────────────────────────────────
 
@@ -100,7 +104,8 @@ public sealed class BlockingWaitAnalyzerTests
                     return pending.Result;
                 }
             }
-            """);
+            """
+        );
 
     [Fact]
     public Task AwaitingIsObviouslyFine() =>
@@ -112,7 +117,8 @@ public sealed class BlockingWaitAnalyzerTests
             {
                 public async Task<string> ReadAsync(Task<string> pending) => await pending;
             }
-            """);
+            """
+        );
 
     /// <summary>
     ///     ⚠ <c>CyberCloud.Core.Result&lt;T&gt;</c> exists. A rule that matched the member name
@@ -131,7 +137,8 @@ public sealed class BlockingWaitAnalyzerTests
             {
                 public string Read(Parsed parsed) => parsed.Result;
             }
-            """);
+            """
+        );
 
     /// <summary>A blocking primitive is not a blocked task, and banning it is not this rule's job.</summary>
     [Fact]
@@ -144,7 +151,8 @@ public sealed class BlockingWaitAnalyzerTests
             {
                 public void Enter(SemaphoreSlim gate) => gate.Wait();
             }
-            """);
+            """
+        );
 
     /// <summary>
     ///     Exemption 1. <c>CyberCloud.ServiceDefaults.Storage.HotTierConfigurator</c>'s constructor
@@ -167,7 +175,8 @@ public sealed class BlockingWaitAnalyzerTests
                         TaskContinuationOptions.ExecuteSynchronously,
                         TaskScheduler.Default);
             }
-            """);
+            """
+        );
 
     /// <summary>
     ///     Exemption 2. <c>HotTierConfigurator.Dispose</c> is exactly this: a task whose completion
@@ -194,7 +203,8 @@ public sealed class BlockingWaitAnalyzerTests
                     }
                 }
             }
-            """);
+            """
+        );
 
     /// <summary>
     ///     ⚠ The exemption is scoped to the guarded expression, not to the method. A <i>different</i>
@@ -218,7 +228,8 @@ public sealed class BlockingWaitAnalyzerTests
                     return "";
                 }
             }
-            """);
+            """
+        );
 
     /// <summary>
     ///     A synchronous lambda inside an <c>async</c> method is still a synchronous context — the
@@ -240,5 +251,6 @@ public sealed class BlockingWaitAnalyzerTests
                     read();
                 }
             }
-            """);
+            """
+        );
 }

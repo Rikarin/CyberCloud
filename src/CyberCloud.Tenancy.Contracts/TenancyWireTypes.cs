@@ -6,8 +6,7 @@ namespace CyberCloud.Tenancy.Contracts;
 /// </summary>
 [GenerateSerializer]
 [Alias("CyberCloud.Tenancy.TenantDescriptor")]
-public sealed record TenantDescriptor
-{
+public sealed record TenantDescriptor {
     /// <summary>The tenant id. The brief's GUID — docs/plan/06 § Identifiers.</summary>
     [Id(0)]
     public Guid Id { get; init; }
@@ -51,8 +50,7 @@ public sealed record TenantDescriptor
 /// </summary>
 [GenerateSerializer]
 [Alias("CyberCloud.Tenancy.TenantDirectoryEntry")]
-public sealed record TenantDirectoryEntry
-{
+public sealed record TenantDirectoryEntry {
     /// <summary>The tenant id.</summary>
     [Id(0)]
     public Guid TenantId { get; init; }
@@ -91,8 +89,7 @@ public sealed record TenantDirectoryEntry
 /// </summary>
 [GenerateSerializer]
 [Alias("CyberCloud.Tenancy.TenantDirectoryDelta")]
-public sealed record TenantDirectoryDelta
-{
+public sealed record TenantDirectoryDelta {
     /// <summary>The version the directory is at now.</summary>
     [Id(0)]
     public long Version { get; init; }
@@ -119,8 +116,7 @@ public sealed record TenantDirectoryDelta
 /// </remarks>
 [GenerateSerializer]
 [Alias("CyberCloud.Tenancy.ShardAssignment")]
-public sealed record ShardAssignment
-{
+public sealed record ShardAssignment {
     /// <summary>The tenant.</summary>
     [Id(0)]
     public Guid TenantId { get; init; }
@@ -152,8 +148,7 @@ public sealed record ShardAssignment
 /// </summary>
 [GenerateSerializer]
 [Alias("CyberCloud.Tenancy.ShardMapSnapshot")]
-public sealed record ShardMapSnapshot
-{
+public sealed record ShardMapSnapshot {
     /// <summary>The map version this snapshot was taken at.</summary>
     [Id(0)]
     public long Version { get; init; }
@@ -180,8 +175,7 @@ public sealed record ShardMapSnapshot
 /// </summary>
 [GenerateSerializer]
 [Alias("CyberCloud.Tenancy.SubscriptionDescriptor")]
-public sealed record SubscriptionDescriptor
-{
+public sealed record SubscriptionDescriptor {
     /// <summary>The subscription id.</summary>
     [Id(0)]
     public Guid Id { get; init; }
@@ -216,8 +210,7 @@ public sealed record SubscriptionDescriptor
 /// </summary>
 [GenerateSerializer]
 [Alias("CyberCloud.Tenancy.ResourceGroupDescriptor")]
-public sealed record ResourceGroupDescriptor
-{
+public sealed record ResourceGroupDescriptor {
     /// <summary>The name, unique within the subscription.</summary>
     [Id(0)]
     public string Name { get; init; } = string.Empty;
@@ -258,8 +251,7 @@ public sealed record ResourceGroupDescriptor
 /// </remarks>
 [GenerateSerializer]
 [Alias("CyberCloud.Tenancy.ResourceGroupMember")]
-public sealed record ResourceGroupMember
-{
+public sealed record ResourceGroupMember {
     /// <summary>The resource's GUID — its identity, stable across renames.</summary>
     [Id(0)]
     public Guid ResourceId { get; init; }
@@ -289,8 +281,7 @@ public sealed record ResourceGroupMember
 /// </summary>
 [GenerateSerializer]
 [Alias("CyberCloud.Tenancy.IndexEntry")]
-public sealed record IndexEntry
-{
+public sealed record IndexEntry {
     /// <summary>Free, claimed under a lease, or a permanent binding.</summary>
     [Id(0)]
     public IndexEntryState State { get; init; } = IndexEntryState.Free;
@@ -330,8 +321,7 @@ public sealed record IndexEntry
 /// </remarks>
 [GenerateSerializer]
 [Alias("CyberCloud.Tenancy.QuotaLease")]
-public sealed record QuotaLease
-{
+public sealed record QuotaLease {
     /// <summary>The lease's own id — what <c>ReleaseAsync</c> and <c>CommitAsync</c> take.</summary>
     [Id(0)]
     public Guid LeaseId { get; init; }
@@ -367,8 +357,7 @@ public sealed record QuotaLease
 /// <summary>One meter's committed, reserved and limit figures.</summary>
 [GenerateSerializer]
 [Alias("CyberCloud.Tenancy.QuotaUsage")]
-public sealed record QuotaUsage
-{
+public sealed record QuotaUsage {
     /// <summary>The meter.</summary>
     [Id(0)]
     public QuotaMeter Meter { get; init; } = QuotaMeter.Unknown;

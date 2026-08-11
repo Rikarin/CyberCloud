@@ -1,4 +1,3 @@
-
 namespace CyberCloud.Core.Contracts.Serialization;
 
 /// <summary>
@@ -23,8 +22,19 @@ namespace CyberCloud.Core.Contracts.Serialization;
 ///         exception and still throw — see <c>ResourceTypeNameSurrogate</c>.
 ///     </para>
 /// </remarks>
-static class WireErrors
-{
+static class WireErrors {
+    /// <summary>
+    ///     An <see cref="Error" /> arrived with a blank message.
+    /// </summary>
+    /// <remarks>
+    ///     Core's <see cref="Error" /> constructor rejects a blank message
+    ///     (<c>ArgumentException</c>), so the value has to be supplied here or the payload cannot be
+    ///     materialised at all.
+    /// </remarks>
+    internal const string MissingMessage =
+        "An error arrived over the wire with no message. The peer that produced it is out of "
+        + "contract: docs/plan/08:187 requires a message that names the actual values.";
+
     /// <summary>
     ///     A <see cref="Result" /> arrived saying "failure" and carrying no error.
     /// </summary>
@@ -40,7 +50,8 @@ static class WireErrors
         ErrorCode.InternalError,
         "A failed Result arrived over the wire with no error attached. This is the wire counterpart "
         + "of default(Result): it is reported as a failure, never as a success, because a "
-        + "deserialiser that cannot read an outcome must not invent a successful one.");
+        + "deserialiser that cannot read an outcome must not invent a successful one."
+    );
 
     /// <summary>
     ///     A <see cref="Result{T}" /> arrived saying "success" and carrying no value.
@@ -54,19 +65,8 @@ static class WireErrors
         ErrorCode.InternalError,
         "A successful Result<T> arrived over the wire with no value. Result<T> is constrained "
         + "T : notnull, so 'succeeded, and the answer is null' is not a state it can hold; the "
-        + "outcome is reported as a failure.");
-
-    /// <summary>
-    ///     An <see cref="Error" /> arrived with a blank message.
-    /// </summary>
-    /// <remarks>
-    ///     Core's <see cref="Error" /> constructor rejects a blank message
-    ///     (<c>ArgumentException</c>), so the value has to be supplied here or the payload cannot be
-    ///     materialised at all.
-    /// </remarks>
-    internal const string MissingMessage =
-        "An error arrived over the wire with no message. The peer that produced it is out of "
-        + "contract: docs/plan/08:187 requires a message that names the actual values.";
+        + "outcome is reported as a failure."
+    );
 
     /// <summary>
     ///     Resolves a wire code string to a registered <see cref="ErrorCode" />.

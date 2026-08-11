@@ -51,8 +51,7 @@ namespace CyberCloud.Core.Resources;
 ///         <c>GrainKeysTests</c>.
 ///     </para>
 /// </remarks>
-public static class RelationNaming
-{
+public static class RelationNaming {
     /// <summary>The longest legal type, relation or permission name.</summary>
     public const int MaxNameLength = 64;
 
@@ -66,22 +65,17 @@ public static class RelationNaming
     ///     Whether <paramref name="name" /> is a legal object type, relation or permission name.
     /// </summary>
     /// <param name="name">The candidate.</param>
-    public static bool IsName(string? name)
-    {
-        if (string.IsNullOrEmpty(name) || name.Length > MaxNameLength)
-        {
+    public static bool IsName(string? name) {
+        if (string.IsNullOrEmpty(name) || name.Length > MaxNameLength) {
             return false;
         }
 
-        if (name[0] is not (>= 'a' and <= 'z'))
-        {
+        if (name[0] is not (>= 'a' and <= 'z')) {
             return false;
         }
 
-        foreach (var c in name)
-        {
-            if (c is not (>= 'a' and <= 'z' or >= 'A' and <= 'Z' or >= '0' and <= '9'))
-            {
+        foreach (var c in name) {
+            if (c is not (>= 'a' and <= 'z' or >= 'A' and <= 'Z' or >= '0' and <= '9')) {
                 return false;
             }
         }
@@ -108,7 +102,8 @@ public static class RelationNaming
                 + "and containing only ASCII letters and digits. ':', '#', '@', '/' and '|' are "
                 + "excluded because they are the separators of the tuple grammar and of the grain "
                 + "key: a name carrying one makes 'object#relation@subject' parse two ways. "
-                + "docs/plan/07 § The model.");
+                + "docs/plan/07 § The model."
+            );
 
     /// <summary>Validates an object id, with a message that states the rule.</summary>
     /// <param name="id">The candidate.</param>
@@ -121,7 +116,8 @@ public static class RelationNaming
                 + $"{ResourceNaming.MaxLength} characters of lower-case letters, digits and "
                 + "hyphens, starting and ending alphanumeric. The 32-digit lower-case 'N' form of a "
                 + "GUID satisfies it, which is the normal case (docs/plan/07 § The model), and so "
-                + "does a named singleton such as 'root'.");
+                + "does a named singleton such as 'root'."
+            );
 
     static string Show(string? value) => value is null ? "<null>" : value;
 }

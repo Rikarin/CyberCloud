@@ -1,5 +1,3 @@
-using System.Diagnostics.CodeAnalysis;
-using System.Reflection;
 using CyberCloud.ServiceDefaults.HealthChecks;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.HttpOverrides;
@@ -12,6 +10,8 @@ using OpenTelemetry;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
+using System.Diagnostics.CodeAnalysis;
+using System.Reflection;
 
 namespace CyberCloud.ServiceDefaults;
 
@@ -19,8 +19,7 @@ namespace CyberCloud.ServiceDefaults;
 ///     The cross-cutting host wiring every Cyber Cloud process shares — descended in shape from
 ///     Survival's <c>Survival.ServiceDefaults.Extensions</c> (docs/plan/03:85).
 /// </summary>
-public static class ServiceDefaultsExtensions
-{
+public static class ServiceDefaultsExtensions {
     /// <summary>The activity/meter source names Cyber Cloud emits under.</summary>
     /// <remarks>
     ///     A prefix rather than a list, so a new assembly's <c>ActivitySource</c> is collected
@@ -29,27 +28,28 @@ public static class ServiceDefaultsExtensions
     /// </remarks>
     public const string TelemetrySourcePrefix = "CyberCloud";
 
+    const string HealthCheckPolicy = "HealthChecks";
+
     /// <summary>
     ///     OpenTelemetry, the default health checks and forwarded headers. Called by every host.
     /// </summary>
-    public static IHostApplicationBuilder AddServiceDefaults(this IHostApplicationBuilder builder)
-    {
+    public static IHostApplicationBuilder AddServiceDefaults(this IHostApplicationBuilder builder) {
         ArgumentNullException.ThrowIfNull(builder);
 
         builder.ConfigureOpenTelemetry();
         builder.AddDefaultHealthChecks();
 
-        builder.Services.Configure<ForwardedHeadersOptions>(options =>
-        {
-            options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+        builder.Services.Configure<ForwardedHeadersOptions>(options => {
+                options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
 
-            // ⚠ Cleared on purpose. The default only trusts loopback, which in a cluster means the
-            // headers the ingress sets are dropped and every request appears to come from the node.
-            // The proxy in front of these pods is the platform's own ingress; anything reaching a
-            // pod directly is not a request path we serve.
-            options.KnownIPNetworks.Clear();
-            options.KnownProxies.Clear();
-        });
+                // ⚠ Cleared on purpose. The default only trusts loopback, which in a cluster means the
+                // headers the ingress sets are dropped and every request appears to come from the node.
+                // The proxy in front of these pods is the platform's own ingress; anything reaching a
+                // pod directly is not a request path we serve.
+                options.KnownIPNetworks.Clear();
+                options.KnownProxies.Clear();
+            }
+        );
 
         return builder;
     }
@@ -65,40 +65,41 @@ public static class ServiceDefaultsExtensions
     ///     <c>Microsoft.Orleans.Application</c> here without it produces a trace that stops at the
     ///     gateway (docs/plan/04:78), which looks like working tracing until somebody needs it.
     /// </remarks>
-    public static IHostApplicationBuilder ConfigureOpenTelemetry(this IHostApplicationBuilder builder)
-    {
+    public static IHostApplicationBuilder ConfigureOpenTelemetry(this IHostApplicationBuilder builder) {
         ArgumentNullException.ThrowIfNull(builder);
 
-        builder.Logging.AddOpenTelemetry(logging =>
-        {
-            logging.IncludeFormattedMessage = true;
-            logging.IncludeScopes = true;
-        });
+        builder.Logging.AddOpenTelemetry(logging => {
+                logging.IncludeFormattedMessage = true;
+                logging.IncludeScopes = true;
+            }
+        );
 
         builder.Services.AddOpenTelemetry()
             .ConfigureResource(resource => resource.AddAttributes(
-                new Dictionary<string, object>(StringComparer.Ordinal)
-                {
-                    ["service.instance.id"] = Environment.GetEnvironmentVariable("POD_NAME")
-                        ?? Guid.NewGuid().ToString("N"),
-                    ["service.version"] =
-                        Assembly.GetEntryAssembly()?.GetName().Version?.ToString(3) ?? "0.0.0",
-                }))
+                    new Dictionary<string, object>(StringComparer.Ordinal) {
+                        ["service.instance.id"] = Environment.GetEnvironmentVariable("POD_NAME")
+                            ?? Guid.NewGuid().ToString("N"),
+                        ["service.version"] =
+                            Assembly.GetEntryAssembly()?.GetName().Version?.ToString(3) ?? "0.0.0"
+                    }
+                )
+            )
             .WithMetrics(metrics => metrics
                 .AddAspNetCoreInstrumentation()
                 .AddHttpClientInstrumentation()
                 .AddRuntimeInstrumentation()
                 .AddMeter("Microsoft.Orleans")
-                .AddMeter($"{TelemetrySourcePrefix}.*"))
+                .AddMeter($"{TelemetrySourcePrefix}.*")
+            )
             .WithTracing(tracing => tracing
                 .AddSource("Microsoft.Orleans.Runtime")
                 .AddSource("Microsoft.Orleans.Application")
                 .AddSource($"{TelemetrySourcePrefix}.*")
                 .AddAspNetCoreInstrumentation()
-                .AddHttpClientInstrumentation());
+                .AddHttpClientInstrumentation()
+            );
 
-        if (!string.IsNullOrWhiteSpace(builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOINT"]))
-        {
+        if (!string.IsNullOrWhiteSpace(builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOINT"])) {
             builder.Services.AddOpenTelemetry().UseOtlpExporter();
         }
 
@@ -113,15 +114,16 @@ public static class ServiceDefaultsExtensions
     ///     tagged <see cref="HealthCheckTags.Live" /> and nothing else ever should be — see the
     ///     remarks on <see cref="HealthCheckTags" />.
     /// </remarks>
-    public static IHostApplicationBuilder AddDefaultHealthChecks(this IHostApplicationBuilder builder)
-    {
+    public static IHostApplicationBuilder AddDefaultHealthChecks(this IHostApplicationBuilder builder) {
         ArgumentNullException.ThrowIfNull(builder);
 
         builder.Services.AddRequestTimeouts(timeouts =>
-            timeouts.AddPolicy(HealthCheckPolicy, TimeSpan.FromSeconds(5)));
+            timeouts.AddPolicy(HealthCheckPolicy, TimeSpan.FromSeconds(5))
+        );
 
         builder.Services.AddOutputCache(caching =>
-            caching.AddPolicy(HealthCheckPolicy, policy => policy.Expire(TimeSpan.FromSeconds(10))));
+            caching.AddPolicy(HealthCheckPolicy, policy => policy.Expire(TimeSpan.FromSeconds(10)))
+        );
 
         builder.Services
             .AddHealthChecks()
@@ -158,8 +160,7 @@ public static class ServiceDefaultsExtensions
     ///         why a storage dependency must not gate readiness.
     ///     </para>
     /// </remarks>
-    public static IHostApplicationBuilder AddOrleansHealthChecks(this IHostApplicationBuilder builder)
-    {
+    public static IHostApplicationBuilder AddOrleansHealthChecks(this IHostApplicationBuilder builder) {
         ArgumentNullException.ThrowIfNull(builder);
 
         // Singleton because SiloParticipantsHealthCheck carries the "since when" window across
@@ -187,8 +188,8 @@ public static class ServiceDefaultsExtensions
     ///     forbids. A gateway's readiness is its HTTP listener, which the <c>self</c> check covers.
     /// </remarks>
     public static IHostApplicationBuilder AddOrleansClientHealthChecks(
-        this IHostApplicationBuilder builder)
-    {
+        this IHostApplicationBuilder builder
+    ) {
         ArgumentNullException.ThrowIfNull(builder);
 
         builder.Services.AddHealthChecks().AddCheck<ClusterHealthCheck>("cluster");
@@ -210,9 +211,9 @@ public static class ServiceDefaultsExtensions
         "Design",
         "CA1062:Validate arguments of public methods",
         Justification = "app is dereferenced immediately; a null there is a null-reference at the "
-            + "call site, which is the same diagnostic one line earlier.")]
-    public static IEndpointRouteBuilder MapDefaultEndpoints(this IEndpointRouteBuilder app)
-    {
+            + "call site, which is the same diagnostic one line earlier."
+    )]
+    public static IEndpointRouteBuilder MapDefaultEndpoints(this IEndpointRouteBuilder app) {
         ArgumentNullException.ThrowIfNull(app);
 
         var group = app.MapGroup(string.Empty);
@@ -220,18 +221,19 @@ public static class ServiceDefaultsExtensions
 
         group.MapHealthChecks(
             "/alive",
-            new() { Predicate = static r => r.Tags.Contains(HealthCheckTags.Live) });
+            new() { Predicate = static r => r.Tags.Contains(HealthCheckTags.Live) }
+        );
 
         group.MapHealthChecks(
             "/health",
-            new() { Predicate = static r => r.Tags.Contains(HealthCheckTags.Ready) });
+            new() { Predicate = static r => r.Tags.Contains(HealthCheckTags.Ready) }
+        );
 
         group.MapHealthChecks(
             "/api/health",
-            new() { Predicate = static _ => true, ResponseWriter = HealthReportBody.WriteAsync });
+            new() { Predicate = static _ => true, ResponseWriter = HealthReportBody.WriteAsync }
+        );
 
         return app;
     }
-
-    const string HealthCheckPolicy = "HealthChecks";
 }

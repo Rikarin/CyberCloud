@@ -7,11 +7,19 @@ namespace CyberCloud.Authorization.Tests.Generated;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         docs/plan/07 § Testing asks for <i>"<c>Check</c> agrees with a slow, obviously-correct
-///         reference evaluator on … random graphs including cycles, deep nesting, and negation"</i>.
+///         docs/plan/07 § Testing asks for
+///         <i>
+///             "<c>Check</c> agrees with a slow, obviously-correct
+///             reference evaluator on … random graphs including cycles, deep nesting, and negation"
+///         </i>
+///         .
 ///         This is that evaluator, and "obviously correct" is the design goal rather than a
-///         compliment: it has <b>no memo</b>, <b>no short-circuit</b>, <b>no depth cap</b>, <b>no
-///         cycle handling of any kind</b>, and no shared code with
+///         compliment: it has <b>no memo</b>, <b>no short-circuit</b>, <b>no depth cap</b>,
+///         <b>
+///             no
+///             cycle handling of any kind
+///         </b>
+///         , and no shared code with
 ///         <c>CyberCloud.Authorization.Evaluation</c>. If the two agree, they agree for reasons that
 ///         are not a common bug.
 ///     </para>
@@ -23,8 +31,11 @@ namespace CyberCloud.Authorization.Tests.Generated;
 ///         comparing the two is the point.
 ///     </para>
 ///     <para>
-///         <b>How it handles negation: stratification, which the schema builder has already
-///         guaranteed.</b> Nothing a relation or a negation-free permission references may carry a
+///         <b>
+///             How it handles negation: stratification, which the schema builder has already
+///             guaranteed.
+///         </b>
+///         Nothing a relation or a negation-free permission references may carry a
 ///         <c>!</c> (<c>SchemaBuilder</c>, rule 11), so the rule set splits cleanly in two: stratum
 ///         0 is everything without a negation and is monotone, so it is iterated to a fixed point;
 ///         stratum 1 is the permissions that carry one and is evaluated exactly once on top. That is
@@ -32,8 +43,7 @@ namespace CyberCloud.Authorization.Tests.Generated;
 ///         payoff of the restriction docs/plan/07 § Caching across requests imposes.
 ///     </para>
 /// </remarks>
-public static class ReferenceEvaluator
-{
+public static class ReferenceEvaluator {
     /// <summary>Whether <paramref name="subject" /> has <paramref name="name" /> on <paramref name="target" />.</summary>
     /// <param name="schema">The schema.</param>
     /// <param name="tuples">Every tuple in the world.</param>
@@ -45,8 +55,8 @@ public static class ReferenceEvaluator
         IReadOnlyList<RelationTuple> tuples,
         ObjectRef target,
         string name,
-        SubjectRef subject)
-    {
+        SubjectRef subject
+    ) {
         ArgumentNullException.ThrowIfNull(schema);
         ArgumentNullException.ThrowIfNull(tuples);
         ArgumentNullException.ThrowIfNull(target);
@@ -56,8 +66,7 @@ public static class ReferenceEvaluator
         var facts = Fixpoint(schema, tuples, universe, subject);
 
         var member = schema.Member(target.Type, name);
-        if (member is null)
-        {
+        if (member is null) {
             return false;
         }
 
@@ -68,16 +77,15 @@ public static class ReferenceEvaluator
 
     /// <summary>Every object any tuple or the query mentions.</summary>
     static List<ObjectRef> Universe(
-        IReadOnlyList<RelationTuple> tuples, ObjectRef target, SubjectRef subject)
-    {
-        Dictionary<string, ObjectRef> found = new(StringComparer.Ordinal)
-        {
-            [target.ToString()] = target,
-            [subject.Object.ToString()] = subject.Object,
+        IReadOnlyList<RelationTuple> tuples,
+        ObjectRef target,
+        SubjectRef subject
+    ) {
+        Dictionary<string, ObjectRef> found = new(StringComparer.Ordinal) {
+            [target.ToString()] = target, [subject.Object.ToString()] = subject.Object
         };
 
-        foreach (var tuple in tuples)
-        {
+        foreach (var tuple in tuples) {
             found[tuple.Object.ToString()] = tuple.Object;
             found[tuple.Subject.Object.ToString()] = tuple.Subject.Object;
         }
@@ -93,40 +101,33 @@ public static class ReferenceEvaluator
         AuthorizationSchema schema,
         IReadOnlyList<RelationTuple> tuples,
         List<ObjectRef> universe,
-        SubjectRef subject)
-    {
+        SubjectRef subject
+    ) {
         HashSet<(string Object, string Name)> facts = [];
 
         bool changed;
-        do
-        {
+        do {
             changed = false;
 
-            foreach (var target in universe)
-            {
+            foreach (var target in universe) {
                 var type = schema.Type(target.Type);
-                if (type is null)
-                {
+                if (type is null) {
                     continue;
                 }
 
-                foreach (var member in type.Members)
-                {
+                foreach (var member in type.Members) {
                     if (member.ContainsNegation
-                        || facts.Contains((target.ToString(), member.Name)))
-                    {
+                        || facts.Contains((target.ToString(), member.Name))) {
                         continue;
                     }
 
-                    if (Eval(schema, tuples, target, member.Name, member.Expression, subject, facts))
-                    {
+                    if (Eval(schema, tuples, target, member.Name, member.Expression, subject, facts)) {
                         facts.Add((target.ToString(), member.Name));
                         changed = true;
                     }
                 }
             }
-        }
-        while (changed);
+        } while (changed);
 
         return facts;
     }
@@ -138,9 +139,9 @@ public static class ReferenceEvaluator
         string relation,
         RelationExpression expression,
         SubjectRef subject,
-        HashSet<(string Object, string Name)> facts) =>
-        expression switch
-        {
+        HashSet<(string Object, string Name)> facts
+    ) =>
+        expression switch {
             ThisExpression => Direct(tuples, target, relation, subject, facts),
 
             RelationRefExpression reference =>
@@ -150,15 +151,16 @@ public static class ReferenceEvaluator
                 .Any(x => facts.Contains((x.Object.ToString(), tupleset.Computed))),
 
             UnionExpression union => union.Operands.Any(x =>
-                Eval(schema, tuples, target, relation, x, subject, facts)),
+                Eval(schema, tuples, target, relation, x, subject, facts)
+            ),
 
             IntersectionExpression intersection => intersection.Operands.All(x =>
-                Eval(schema, tuples, target, relation, x, subject, facts)),
+                Eval(schema, tuples, target, relation, x, subject, facts)
+            ),
 
-            ExclusionExpression exclusion => !Eval(
-                schema, tuples, target, relation, exclusion.Operand, subject, facts),
+            ExclusionExpression exclusion => !Eval(schema, tuples, target, relation, exclusion.Operand, subject, facts),
 
-            _ => false,
+            _ => false
         };
 
     static bool Direct(
@@ -166,18 +168,15 @@ public static class ReferenceEvaluator
         ObjectRef target,
         string relation,
         SubjectRef subject,
-        HashSet<(string Object, string Name)> facts)
-    {
-        foreach (var candidate in Subjects(tuples, target, relation))
-        {
-            if (candidate == subject)
-            {
+        HashSet<(string Object, string Name)> facts
+    ) {
+        foreach (var candidate in Subjects(tuples, target, relation)) {
+            if (candidate == subject) {
                 return true;
             }
 
             if (candidate.IsUserset
-                && facts.Contains((candidate.Object.ToString(), candidate.Relation)))
-            {
+                && facts.Contains((candidate.Object.ToString(), candidate.Relation))) {
                 return true;
             }
         }
@@ -186,9 +185,13 @@ public static class ReferenceEvaluator
     }
 
     static IEnumerable<SubjectRef> Subjects(
-        IReadOnlyList<RelationTuple> tuples, ObjectRef target, string relation) =>
+        IReadOnlyList<RelationTuple> tuples,
+        ObjectRef target,
+        string relation
+    ) =>
         tuples
             .Where(x => x.Object == target
-                && string.Equals(x.Relation, relation, StringComparison.Ordinal))
+                && string.Equals(x.Relation, relation, StringComparison.Ordinal)
+            )
             .Select(x => x.Subject);
 }

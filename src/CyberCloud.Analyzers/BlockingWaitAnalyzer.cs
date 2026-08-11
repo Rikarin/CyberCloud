@@ -1,9 +1,9 @@
-using System.Collections.Immutable;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Diagnostics;
 using Microsoft.CodeAnalysis.Operations;
+using System.Collections.Immutable;
 
 namespace CyberCloud.Analyzers;
 
@@ -23,8 +23,11 @@ namespace CyberCloud.Analyzers;
 ///         context, so it never double-reports with CA1849.
 ///     </para>
 ///     <para>
-///         <b>Two exemptions, both for shapes that provably do not block, both found in this
-///         repository.</b> An analyzer that fires on correct code gets suppressed wholesale and then
+///         <b>
+///             Two exemptions, both for shapes that provably do not block, both found in this
+///             repository.
+///         </b>
+///         An analyzer that fires on correct code gets suppressed wholesale and then
 ///         protects nothing, so each is narrow and each has a negative test:
 ///     </para>
 ///     <list type="number">
@@ -45,17 +48,14 @@ namespace CyberCloud.Analyzers;
 ///     </list>
 /// </remarks>
 [DiagnosticAnalyzer(LanguageNames.CSharp)]
-public sealed class BlockingWaitAnalyzer : DiagnosticAnalyzer
-{
+public sealed class BlockingWaitAnalyzer : DiagnosticAnalyzer {
     /// <inheritdoc />
     public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics { get; } =
         ImmutableArray.Create(Rules.BlockingWaitInSynchronousMethod);
 
     /// <inheritdoc />
-    public override void Initialize(AnalysisContext context)
-    {
-        if (context is null)
-        {
+    public override void Initialize(AnalysisContext context) {
+        if (context is null) {
             return;
         }
 
@@ -64,49 +64,46 @@ public sealed class BlockingWaitAnalyzer : DiagnosticAnalyzer
         context.RegisterCompilationStartAction(OnCompilationStart);
     }
 
-    static void OnCompilationStart(CompilationStartAnalysisContext context)
-    {
+    static void OnCompilationStart(CompilationStartAnalysisContext context) {
         var compilation = context.Compilation;
 
-        var taskTypes = new[]
-            {
-                compilation.GetTypeByMetadataName(WellKnown.Task),
-                compilation.GetTypeByMetadataName(WellKnown.TaskOfT),
+        var taskTypes = new[] {
+                compilation.GetTypeByMetadataName(WellKnown.Task), compilation.GetTypeByMetadataName(WellKnown.TaskOfT),
                 compilation.GetTypeByMetadataName(WellKnown.ValueTask),
-                compilation.GetTypeByMetadataName(WellKnown.ValueTaskOfT),
+                compilation.GetTypeByMetadataName(WellKnown.ValueTaskOfT)
             }
             .Where(x => x is not null)
             .Select(x => x!)
             .ToImmutableArray();
 
-        if (taskTypes.IsEmpty)
-        {
+        if (taskTypes.IsEmpty) {
             return;
         }
 
         context.RegisterOperationAction(
             operationContext => AnalyzeResultProperty(operationContext, taskTypes),
-            OperationKind.PropertyReference);
+            OperationKind.PropertyReference
+        );
 
         context.RegisterOperationAction(
             operationContext => AnalyzeInvocation(operationContext, taskTypes),
-            OperationKind.Invocation);
+            OperationKind.Invocation
+        );
     }
 
     // ── the three blocking shapes ────────────────────────────────────────────────────────────────
 
     static void AnalyzeResultProperty(
         OperationAnalysisContext context,
-        ImmutableArray<INamedTypeSymbol> taskTypes)
-    {
+        ImmutableArray<INamedTypeSymbol> taskTypes
+    ) {
         var operation = (IPropertyReferenceOperation)context.Operation;
 
         // ⚠ The containing-type check is the whole of the negative case. `CyberCloud.Core.Result<T>`
         // exists in this repository, and anything with a property called `Result` — a parse result,
         // an HTTP response wrapper, a test double — must not be reported.
         if (!string.Equals(operation.Property.Name, "Result", StringComparison.Ordinal)
-            || !IsTaskType(operation.Property.ContainingType, taskTypes))
-        {
+            || !IsTaskType(operation.Property.ContainingType, taskTypes)) {
             return;
         }
 
@@ -115,8 +112,8 @@ public sealed class BlockingWaitAnalyzer : DiagnosticAnalyzer
 
     static void AnalyzeInvocation(
         OperationAnalysisContext context,
-        ImmutableArray<INamedTypeSymbol> taskTypes)
-    {
+        ImmutableArray<INamedTypeSymbol> taskTypes
+    ) {
         var operation = (IInvocationOperation)context.Operation;
         var method = operation.TargetMethod;
 
@@ -124,8 +121,7 @@ public sealed class BlockingWaitAnalyzer : DiagnosticAnalyzer
         // or Monitor.Wait — those are blocking primitives, not task-blocking, and the containing-type
         // check is what keeps them out.
         if (string.Equals(method.Name, "Wait", StringComparison.Ordinal)
-            && IsTaskType(method.ContainingType, taskTypes))
-        {
+            && IsTaskType(method.ContainingType, taskTypes)) {
             Report(context, operation, operation.Instance, "Task.Wait()");
             return;
         }
@@ -134,8 +130,7 @@ public sealed class BlockingWaitAnalyzer : DiagnosticAnalyzer
         // `.ConfigureAwait(false).GetAwaiter().GetResult()`. Matching on the awaiter type rather
         // than on the receiver chain is what makes the ConfigureAwait form impossible to miss.
         if (string.Equals(method.Name, "GetResult", StringComparison.Ordinal)
-            && IsAwaiterType(method.ContainingType))
-        {
+            && IsAwaiterType(method.ContainingType)) {
             Report(context, operation, AwaitedExpression(operation.Instance), "GetAwaiter().GetResult()");
         }
     }
@@ -146,26 +141,27 @@ public sealed class BlockingWaitAnalyzer : DiagnosticAnalyzer
         OperationAnalysisContext context,
         IOperation operation,
         IOperation? receiver,
-        string what)
-    {
+        string what
+    ) {
         var enclosing = EnclosingFunction(operation, context.ContainingSymbol);
-        if (enclosing.IsAsync)
-        {
+        if (enclosing.IsAsync) {
             // CA1849's territory, and it is already an error in .editorconfig. Reporting here too
             // would put two ids on one line and teach people to suppress both.
             return;
         }
 
-        if (IsContinueWithAntecedent(receiver) || IsGuardedByCompletionCheck(operation, receiver))
-        {
+        if (IsContinueWithAntecedent(receiver) || IsGuardedByCompletionCheck(operation, receiver)) {
             return;
         }
 
-        context.ReportDiagnostic(Diagnostic.Create(
-            Rules.BlockingWaitInSynchronousMethod,
-            operation.Syntax.GetLocation(),
-            what,
-            enclosing.Name));
+        context.ReportDiagnostic(
+            Diagnostic.Create(
+                Rules.BlockingWaitInSynchronousMethod,
+                operation.Syntax.GetLocation(),
+                what,
+                enclosing.Name
+            )
+        );
     }
 
     // ── context ──────────────────────────────────────────────────────────────────────────────────
@@ -173,12 +169,9 @@ public sealed class BlockingWaitAnalyzer : DiagnosticAnalyzer
     /// <summary>
     ///     The nearest enclosing function — lambda, local function, or the containing member.
     /// </summary>
-    static (bool IsAsync, string Name) EnclosingFunction(IOperation operation, ISymbol containingSymbol)
-    {
-        for (var parent = operation.Parent; parent is not null; parent = parent.Parent)
-        {
-            switch (parent)
-            {
+    static (bool IsAsync, string Name) EnclosingFunction(IOperation operation, ISymbol containingSymbol) {
+        for (var parent = operation.Parent; parent is not null; parent = parent.Parent) {
+            switch (parent) {
                 case IAnonymousFunctionOperation anonymous:
                     return (anonymous.Symbol.IsAsync, containingSymbol.Name);
 
@@ -194,36 +187,28 @@ public sealed class BlockingWaitAnalyzer : DiagnosticAnalyzer
     ///     Exemption 1 — the receiver is the parameter of a <c>ContinueWith</c> continuation, so the
     ///     task it names is complete before the delegate runs.
     /// </summary>
-    static bool IsContinueWithAntecedent(IOperation? receiver)
-    {
-        if (receiver is not IParameterReferenceOperation parameter)
-        {
+    static bool IsContinueWithAntecedent(IOperation? receiver) {
+        if (receiver is not IParameterReferenceOperation parameter) {
             return false;
         }
 
         // The parameter belongs to the lambda; the lambda is an argument to ContinueWith.
-        for (var parent = receiver.Parent; parent is not null; parent = parent.Parent)
-        {
-            if (parent is not IAnonymousFunctionOperation anonymous)
-            {
+        for (var parent = receiver.Parent; parent is not null; parent = parent.Parent) {
+            if (parent is not IAnonymousFunctionOperation anonymous) {
                 continue;
             }
 
             var owned = false;
-            foreach (var candidate in anonymous.Symbol.Parameters)
-            {
+            foreach (var candidate in anonymous.Symbol.Parameters) {
                 owned |= SymbolEqualityComparer.Default.Equals(candidate, parameter.Parameter);
             }
 
-            if (!owned)
-            {
+            if (!owned) {
                 return false;
             }
 
-            for (var outer = anonymous.Parent; outer is not null; outer = outer.Parent)
-            {
-                if (outer is IInvocationOperation invocation)
-                {
+            for (var outer = anonymous.Parent; outer is not null; outer = outer.Parent) {
+                if (outer is IInvocationOperation invocation) {
                     return string.Equals(invocation.TargetMethod.Name, "ContinueWith", StringComparison.Ordinal);
                 }
             }
@@ -238,25 +223,20 @@ public sealed class BlockingWaitAnalyzer : DiagnosticAnalyzer
     ///     Exemption 2 — an enclosing <c>if</c> already established that this very expression's task
     ///     has completed, so reading it cannot block.
     /// </summary>
-    static bool IsGuardedByCompletionCheck(IOperation operation, IOperation? receiver)
-    {
-        if (receiver?.Syntax is not ExpressionSyntax guarded)
-        {
+    static bool IsGuardedByCompletionCheck(IOperation operation, IOperation? receiver) {
+        if (receiver?.Syntax is not ExpressionSyntax guarded) {
             return false;
         }
 
-        for (var node = operation.Syntax.Parent; node is not null; node = node.Parent)
-        {
-            if (node is not IfStatementSyntax conditional)
-            {
+        for (var node = operation.Syntax.Parent; node is not null; node = node.Parent) {
+            if (node is not IfStatementSyntax conditional) {
                 continue;
             }
 
-            foreach (var access in conditional.Condition.DescendantNodesAndSelf().OfType<MemberAccessExpressionSyntax>())
-            {
+            foreach (var access in conditional.Condition.DescendantNodesAndSelf()
+                         .OfType<MemberAccessExpressionSyntax>()) {
                 if (IsCompletionProbe(access.Name.Identifier.ValueText)
-                    && SyntaxFactory.AreEquivalent(access.Expression, guarded))
-                {
+                    && SyntaxFactory.AreEquivalent(access.Expression, guarded)) {
                     return true;
                 }
             }
@@ -271,18 +251,14 @@ public sealed class BlockingWaitAnalyzer : DiagnosticAnalyzer
 
     // ── type predicates ──────────────────────────────────────────────────────────────────────────
 
-    static bool IsTaskType(INamedTypeSymbol? type, ImmutableArray<INamedTypeSymbol> taskTypes)
-    {
-        if (type is null)
-        {
+    static bool IsTaskType(INamedTypeSymbol? type, ImmutableArray<INamedTypeSymbol> taskTypes) {
+        if (type is null) {
             return false;
         }
 
         var definition = type.OriginalDefinition;
-        foreach (var candidate in taskTypes)
-        {
-            if (SymbolEqualityComparer.Default.Equals(definition, candidate))
-            {
+        foreach (var candidate in taskTypes) {
+            if (SymbolEqualityComparer.Default.Equals(definition, candidate)) {
                 return true;
             }
         }
@@ -302,18 +278,17 @@ public sealed class BlockingWaitAnalyzer : DiagnosticAnalyzer
         && string.Equals(
             type.ContainingNamespace?.ToDisplayString(),
             "System.Runtime.CompilerServices",
-            StringComparison.Ordinal);
+            StringComparison.Ordinal
+        );
 
     /// <summary>
     ///     Unwraps <c>x.GetAwaiter()</c> and <c>x.ConfigureAwait(false)</c> back to <c>x</c>, so the
     ///     two exemptions can be tested against the task the caller actually named.
     /// </summary>
-    static IOperation? AwaitedExpression(IOperation? receiver)
-    {
+    static IOperation? AwaitedExpression(IOperation? receiver) {
         while (receiver is IInvocationOperation invocation
                && (string.Equals(invocation.TargetMethod.Name, "GetAwaiter", StringComparison.Ordinal)
-                   || string.Equals(invocation.TargetMethod.Name, "ConfigureAwait", StringComparison.Ordinal)))
-        {
+                   || string.Equals(invocation.TargetMethod.Name, "ConfigureAwait", StringComparison.Ordinal))) {
             receiver = invocation.Instance;
         }
 

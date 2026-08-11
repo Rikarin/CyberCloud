@@ -11,15 +11,18 @@ namespace CyberCloud.Tenancy.Contracts;
 ///         tenant-qualified (docs/plan/06 § Grain keys). Build it with <c>GrainKeys.Subscription</c>.
 ///     </para>
 ///     <para>
-///         ⚠ <b>One tenant, many subscriptions, and that is why this is a grain and not a field on
-///         the tenant.</b> docs/plan/06 § The hierarchy: "production, staging, per-team — is the
+///         ⚠
+///         <b>
+///             One tenant, many subscriptions, and that is why this is a grain and not a field on
+///             the tenant.
+///         </b>
+///         docs/plan/06 § The hierarchy: "production, staging, per-team — is the
 ///         shape every real customer wants within a month, and retrofitting it later means
 ///         renumbering every resource id".
 ///     </para>
 /// </remarks>
 [Alias("CyberCloud.Tenancy.ISubscriptionGrain")]
-public interface ISubscriptionGrain : IGrainWithStringKey
-{
+public interface ISubscriptionGrain : IGrainWithStringKey {
     /// <summary>Creates the subscription. Idempotent on the same display name.</summary>
     /// <param name="displayName">The display name.</param>
     Task<Result<SubscriptionDescriptor>> CreateAsync(string displayName);

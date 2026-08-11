@@ -35,8 +35,7 @@ namespace CyberCloud.Tenancy.Contracts;
 ///     </para>
 /// </remarks>
 [Alias("CyberCloud.Tenancy.ITenantDirectoryGrain")]
-public interface ITenantDirectoryGrain : IGrainWithStringKey
-{
+public interface ITenantDirectoryGrain : IGrainWithStringKey {
     /// <summary>
     ///     Writes or updates a tenant's directory entry, claiming its slug. One of the four things
     ///     that write here — docs/plan/05 § The tenant directory puts the rate at 0.12/s.
@@ -92,14 +91,17 @@ public interface ITenantDirectoryGrain : IGrainWithStringKey
 ///         map is explicit that this is "a decision rather than an omission" — rebalancing means
 ///         moving live durable state, which is "a quarter of work for a problem that does not exist
 ///         until a shard is genuinely full — at which point the answer is to stop assigning new
-///         tenants to it, which costs nothing. <b>Capacity is added at the front, not redistributed
-///         at the back.</b>" So <see cref="AssignAsync" /> on a tenant that already has an assignment
+///         tenants to it, which costs nothing.
+///         <b>
+///             Capacity is added at the front, not redistributed
+///             at the back.
+///         </b>
+///         " So <see cref="AssignAsync" /> on a tenant that already has an assignment
 ///         returns the original, unchanged, even after the shard list grows.
 ///     </para>
 /// </remarks>
 [Alias("CyberCloud.Tenancy.IShardMapGrain")]
-public interface IShardMapGrain : IGrainWithStringKey
-{
+public interface IShardMapGrain : IGrainWithStringKey {
     /// <summary>
     ///     The shard list this map places into. Idempotent; adding a shard never moves a tenant.
     /// </summary>

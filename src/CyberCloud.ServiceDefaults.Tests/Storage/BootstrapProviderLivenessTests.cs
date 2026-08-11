@@ -1,5 +1,3 @@
-using System.Net;
-using System.Net.Sockets;
 using CyberCloud.Core.Contracts;
 using CyberCloud.ServiceDefaults.Storage;
 using Microsoft.AspNetCore.Builder;
@@ -7,8 +5,9 @@ using Microsoft.Extensions.DependencyInjection;
 using Orleans.Multitenant;
 using Orleans.Storage;
 using Shouldly;
+using System.Net;
+using System.Net.Sockets;
 using Testcontainers.Redis;
-using Volo.Abp;
 
 namespace CyberCloud.ServiceDefaults.Tests.Storage;
 
@@ -39,14 +38,17 @@ namespace CyberCloud.ServiceDefaults.Tests.Storage;
 ///         readiness probe, joins the cluster, and takes traffic — and every grain activation that
 ///         lands on that shard fails. The blast radius is the tenants on one shard rather than the
 ///         whole silo, which is arguably the better failure, but it is not the one the wiring
-///         implies and it means <b>nothing checks a shard's reachability before a silo is declared
-///         ready</b>. docs/plan/05 says nothing about this either way. If the desired behaviour is
+///         implies and it means
+///         <b>
+///             nothing checks a shard's reachability before a silo is declared
+///             ready
+///         </b>
+///         . docs/plan/05 says nothing about this either way. If the desired behaviour is
 ///         "do not join the cluster with an unreachable shard", it needs a health check per shard —
 ///         it will not come from the storage wiring.
 ///     </para>
 /// </remarks>
-public sealed class BootstrapProviderLivenessTests : IAsyncLifetime
-{
+public sealed class BootstrapProviderLivenessTests : IAsyncLifetime {
     readonly RedisContainer redis = new RedisBuilder("redis:8-alpine").Build();
 
     WebApplication? silo;
@@ -55,16 +57,11 @@ public sealed class BootstrapProviderLivenessTests : IAsyncLifetime
     public async ValueTask InitializeAsync() => await redis.StartAsync(TestContext.Current.CancellationToken);
 
     /// <inheritdoc />
-    public async ValueTask DisposeAsync()
-    {
-        if (silo is not null)
-        {
-            try
-            {
+    public async ValueTask DisposeAsync() {
+        if (silo is not null) {
+            try {
                 await silo.StopAsync();
-            }
-            catch (InvalidOperationException)
-            {
+            } catch (InvalidOperationException) {
                 // Never started.
             }
 
@@ -75,21 +72,22 @@ public sealed class BootstrapProviderLivenessTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task ASiloStartsHealthyEvenThoughItsDurableShardIsUnreachable()
-    {
+    public async Task ASiloStartsHealthyEvenThoughItsDurableShardIsUnreachable() {
         // A port nothing is listening on, with a two-second connect timeout so the failure is fast
         // whichever way it goes.
         var deadShard =
             $"Host=127.0.0.1;Port={FreePort()};Database=cc;Username=cc;Password=cc;Timeout=2;Command Timeout=2";
 
-        var builder = OrleansApplication.CreateSilo([
-            "--environment", "Development",
-            "--urls", "http://127.0.0.1:0",
-            $"--{CyberCloudClusterOptions.SectionName}:LocalhostSiloPort={FreePort()}",
-            $"--{CyberCloudClusterOptions.SectionName}:LocalhostGatewayPort={FreePort()}",
-            $"--{CyberCloudStorageOptions.SectionName}:Hot:ConnectionString={redis.GetConnectionString()}",
-            $"--{CyberCloudStorageOptions.SectionName}:Durable:Shards:durable-00={deadShard}",
-        ]);
+        var builder = OrleansApplication.CreateSilo(
+            [
+                "--environment", "Development",
+                "--urls", "http://127.0.0.1:0",
+                $"--{CyberCloudClusterOptions.SectionName}:LocalhostSiloPort={FreePort()}",
+                $"--{CyberCloudClusterOptions.SectionName}:LocalhostGatewayPort={FreePort()}",
+                $"--{CyberCloudStorageOptions.SectionName}:Hot:ConnectionString={redis.GetConnectionString()}",
+                $"--{CyberCloudStorageOptions.SectionName}:Durable:Shards:durable-00={deadShard}"
+            ]
+        );
 
         await builder.Services.AddApplicationAsync<StorageSiloModule>();
 
@@ -117,8 +115,7 @@ public sealed class BootstrapProviderLivenessTests : IAsyncLifetime
         await Should.ThrowAsync<Exception>(() => durable.WriteAsync("never arrives"));
     }
 
-    static int FreePort()
-    {
+    static int FreePort() {
         using var socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
         socket.Bind(new IPEndPoint(IPAddress.Loopback, 0));
         return ((IPEndPoint)socket.LocalEndPoint!).Port;

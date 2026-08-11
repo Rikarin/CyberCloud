@@ -1,6 +1,6 @@
-using System.Globalization;
 using CyberCloud.Core;
 using CyberCloud.Core.Resources;
+using System.Globalization;
 
 namespace CyberCloud.Authorization.Contracts;
 
@@ -24,8 +24,7 @@ namespace CyberCloud.Authorization.Contracts;
 /// </remarks>
 [GenerateSerializer]
 [Alias("CyberCloud.Authorization.ObjectRef")]
-public sealed record ObjectRef
-{
+public sealed record ObjectRef {
     /// <summary>The object type — <c>resourceGroup</c>, <c>user</c>, <c>group</c>.</summary>
     [Id(0)]
     public string Type { get; init; } = string.Empty;
@@ -40,26 +39,23 @@ public sealed record ObjectRef
     /// <summary>Builds a reference, or explains why the parts are not one.</summary>
     /// <param name="type">The object type.</param>
     /// <param name="id">The object id.</param>
-    public static Result<ObjectRef> Create(string? type, string? id)
-    {
+    public static Result<ObjectRef> Create(string? type, string? id) {
         var validType = RelationNaming.ValidateName(type, "object type");
-        if (validType.TryGetError(out var typeError))
-        {
+        if (validType.TryGetError(out var typeError)) {
             return Result<ObjectRef>.Failure(typeError);
         }
 
         var validId = RelationNaming.ValidateId(id);
         return validId.TryGetError(out var idError)
             ? Result<ObjectRef>.Failure(idError)
-            : Result<ObjectRef>.Success(new ObjectRef { Type = type!, Id = id! });
+            : Result<ObjectRef>.Success(new() { Type = type!, Id = id! });
     }
 
     /// <summary>Builds a reference from parts that are known to be legal.</summary>
     /// <param name="type">The object type.</param>
     /// <param name="id">The object id.</param>
     /// <exception cref="ArgumentException">Either part is not legal.</exception>
-    public static ObjectRef Of(string type, string id)
-    {
+    public static ObjectRef Of(string type, string id) {
         var created = Create(type, id);
         return created.TryGetError(out var error)
             ? throw new ArgumentException(error.Message, nameof(type))
@@ -69,17 +65,16 @@ public sealed record ObjectRef
     /// <summary>Builds a reference to an object identified by a GUID.</summary>
     /// <param name="type">The object type.</param>
     /// <param name="id">The object id.</param>
-    public static ObjectRef Of(string type, Guid id) =>
-        Of(type, id.ToString("N", CultureInfo.InvariantCulture));
+    public static ObjectRef Of(string type, Guid id) => Of(type, id.ToString("N", CultureInfo.InvariantCulture));
 
     /// <summary>Parses <c>type:id</c>.</summary>
     /// <param name="value">The text.</param>
-    public static Result<ObjectRef> Parse(string? value)
-    {
-        if (string.IsNullOrEmpty(value))
-        {
+    public static Result<ObjectRef> Parse(string? value) {
+        if (string.IsNullOrEmpty(value)) {
             return Result<ObjectRef>.Failure(
-                ErrorCode.InvalidRequestBody, "An object reference is 'type:id' and this is empty.");
+                ErrorCode.InvalidRequestBody,
+                "An object reference is 'type:id' and this is empty."
+            );
         }
 
         var colon = value.IndexOf(':', StringComparison.Ordinal);
@@ -87,7 +82,8 @@ public sealed record ObjectRef
             ? Result<ObjectRef>.Failure(
                 ErrorCode.InvalidRequestBody,
                 $"'{value}' is not an object reference: it has no ':'. The form is 'type:id' — "
-                + "docs/plan/07 § The model.")
+                + "docs/plan/07 § The model."
+            )
             : Create(value[..colon], value[(colon + 1)..]);
     }
 
@@ -101,8 +97,7 @@ public sealed record ObjectRef
 /// </summary>
 [GenerateSerializer]
 [Alias("CyberCloud.Authorization.SubjectRef")]
-public sealed record SubjectRef
-{
+public sealed record SubjectRef {
     /// <summary>The subject's object type.</summary>
     [Id(0)]
     public string Type { get; init; } = string.Empty;
@@ -134,24 +129,20 @@ public sealed record SubjectRef
     /// <param name="type">The object type.</param>
     /// <param name="id">The object id.</param>
     /// <param name="relation">The userset relation, or <see langword="null" /> for a concrete object.</param>
-    public static Result<SubjectRef> Create(string? type, string? id, string? relation = null)
-    {
+    public static Result<SubjectRef> Create(string? type, string? id, string? relation = null) {
         var validObject = ObjectRef.Create(type, id);
-        if (validObject.TryGetError(out var objectError))
-        {
+        if (validObject.TryGetError(out var objectError)) {
             return Result<SubjectRef>.Failure(objectError);
         }
 
-        if (string.IsNullOrEmpty(relation))
-        {
-            return Result<SubjectRef>.Success(new SubjectRef { Type = type!, Id = id! });
+        if (string.IsNullOrEmpty(relation)) {
+            return Result<SubjectRef>.Success(new() { Type = type!, Id = id! });
         }
 
         var validRelation = RelationNaming.ValidateName(relation, "userset relation");
         return validRelation.TryGetError(out var relationError)
             ? Result<SubjectRef>.Failure(relationError)
-            : Result<SubjectRef>.Success(
-                new SubjectRef { Type = type!, Id = id!, Relation = relation });
+            : Result<SubjectRef>.Success(new() { Type = type!, Id = id!, Relation = relation });
     }
 
     /// <summary>A concrete subject.</summary>
@@ -171,18 +162,16 @@ public sealed record SubjectRef
     /// <param name="id">The object id.</param>
     /// <param name="relation">The userset relation.</param>
     /// <exception cref="ArgumentException">The parts are not legal.</exception>
-    public static SubjectRef Userset(string type, string id, string relation) =>
-        Build(type, id, relation);
+    public static SubjectRef Userset(string type, string id, string relation) => Build(type, id, relation);
 
     /// <summary>Parses <c>type:id</c> or <c>type:id#relation</c>.</summary>
     /// <param name="value">The text.</param>
-    public static Result<SubjectRef> Parse(string? value)
-    {
-        if (string.IsNullOrEmpty(value))
-        {
+    public static Result<SubjectRef> Parse(string? value) {
+        if (string.IsNullOrEmpty(value)) {
             return Result<SubjectRef>.Failure(
                 ErrorCode.InvalidRequestBody,
-                "A subject is 'type:id' or 'type:id#relation' and this is empty.");
+                "A subject is 'type:id' or 'type:id#relation' and this is empty."
+            );
         }
 
         var hash = value.IndexOf('#', StringComparison.Ordinal);
@@ -194,16 +183,15 @@ public sealed record SubjectRef
             ? Result<SubjectRef>.Failure(
                 ErrorCode.InvalidRequestBody,
                 $"'{value}' is not a subject: it has no ':'. The form is 'type:id' or "
-                + "'type:id#relation' — docs/plan/07 § The model.")
+                + "'type:id#relation' — docs/plan/07 § The model."
+            )
             : Create(objectPart[..colon], objectPart[(colon + 1)..], relation);
     }
 
     /// <summary>Renders <c>type:id</c> or <c>type:id#relation</c>.</summary>
-    public override string ToString() =>
-        IsUserset ? Type + ":" + Id + "#" + Relation : Type + ":" + Id;
+    public override string ToString() => IsUserset ? Type + ":" + Id + "#" + Relation : Type + ":" + Id;
 
-    static SubjectRef Build(string type, string id, string? relation)
-    {
+    static SubjectRef Build(string type, string id, string? relation) {
         var created = Create(type, id, relation);
         return created.TryGetError(out var error)
             ? throw new ArgumentException(error.Message, nameof(type))
@@ -216,8 +204,7 @@ public sealed record SubjectRef
 /// </summary>
 [GenerateSerializer]
 [Alias("CyberCloud.Authorization.RelationTuple")]
-public sealed record RelationTuple
-{
+public sealed record RelationTuple {
     /// <summary>The object the relation is on.</summary>
     [Id(0)]
     public ObjectRef Object { get; init; } = new();
@@ -237,28 +224,28 @@ public sealed record RelationTuple
     /// <param name="object">The object.</param>
     /// <param name="relation">The relation.</param>
     /// <param name="subject">The subject.</param>
-    public static Result<RelationTuple> Create(ObjectRef @object, string? relation, SubjectRef subject)
-    {
+    public static Result<RelationTuple> Create(ObjectRef @object, string? relation, SubjectRef subject) {
         ArgumentNullException.ThrowIfNull(@object);
         ArgumentNullException.ThrowIfNull(subject);
 
-        if (!@object.IsValid)
-        {
+        if (!@object.IsValid) {
             return Result<RelationTuple>.Failure(
-                ErrorCode.InvalidRequestBody, $"'{@object}' is not a well-formed object reference.");
+                ErrorCode.InvalidRequestBody,
+                $"'{@object}' is not a well-formed object reference."
+            );
         }
 
-        if (!subject.IsValid)
-        {
+        if (!subject.IsValid) {
             return Result<RelationTuple>.Failure(
-                ErrorCode.InvalidRequestBody, $"'{subject}' is not a well-formed subject.");
+                ErrorCode.InvalidRequestBody,
+                $"'{subject}' is not a well-formed subject."
+            );
         }
 
         var validRelation = RelationNaming.ValidateName(relation, "relation");
         return validRelation.TryGetError(out var error)
             ? Result<RelationTuple>.Failure(error)
-            : Result<RelationTuple>.Success(
-                new RelationTuple { Object = @object, Relation = relation!, Subject = subject });
+            : Result<RelationTuple>.Success(new() { Object = @object, Relation = relation!, Subject = subject });
     }
 
     /// <summary>
@@ -267,40 +254,42 @@ public sealed record RelationTuple
     /// </summary>
     /// <param name="value">The text, for example <c>resourceGroup:prod#owner@user:alice</c>.</param>
     /// <remarks>
-    ///     ⚠ <b>The grammar is unambiguous only because <see cref="RelationNaming" /> excludes
-    ///     <c>#</c> and <c>@</c> from every component.</b> The subject half may itself contain a
+    ///     ⚠
+    ///     <b>
+    ///         The grammar is unambiguous only because <see cref="RelationNaming" /> excludes
+    ///         <c>#</c> and <c>@</c> from every component.
+    ///     </b>
+    ///     The subject half may itself contain a
     ///     <c>#</c> (a userset), so the split is on the <b>first</b> <c>#</c> and the <b>first</b>
     ///     <c>@</c> after it — and the object half can contain neither.
     /// </remarks>
-    public static Result<RelationTuple> Parse(string? value)
-    {
-        if (string.IsNullOrEmpty(value))
-        {
+    public static Result<RelationTuple> Parse(string? value) {
+        if (string.IsNullOrEmpty(value)) {
             return Result<RelationTuple>.Failure(
                 ErrorCode.InvalidRequestBody,
-                "A tuple is 'object#relation@subject' and this is empty.");
+                "A tuple is 'object#relation@subject' and this is empty."
+            );
         }
 
         var hash = value.IndexOf('#', StringComparison.Ordinal);
-        if (hash < 0)
-        {
+        if (hash < 0) {
             return Result<RelationTuple>.Failure(
                 ErrorCode.InvalidRequestBody,
-                $"'{value}' is not a tuple: it has no '#'. The form is 'object#relation@subject'.");
+                $"'{value}' is not a tuple: it has no '#'. The form is 'object#relation@subject'."
+            );
         }
 
         var at = value.IndexOf('@', hash + 1);
-        if (at < 0)
-        {
+        if (at < 0) {
             return Result<RelationTuple>.Failure(
                 ErrorCode.InvalidRequestBody,
                 $"'{value}' is not a tuple: it has no '@' after the '#'. The form is "
-                + "'object#relation@subject'.");
+                + "'object#relation@subject'."
+            );
         }
 
         var parsedObject = ObjectRef.Parse(value[..hash]);
-        if (parsedObject.TryGetError(out var objectError))
-        {
+        if (parsedObject.TryGetError(out var objectError)) {
             return Result<RelationTuple>.Failure(objectError);
         }
 
@@ -310,7 +299,8 @@ public sealed record RelationTuple
             : Create(
                 parsedObject.GetValueOrThrow(),
                 value[(hash + 1)..at],
-                parsedSubject.GetValueOrThrow());
+                parsedSubject.GetValueOrThrow()
+            );
     }
 
     /// <summary>Renders <c>object#relation@subject</c>.</summary>
@@ -323,8 +313,7 @@ public sealed record RelationTuple
 /// </summary>
 [GenerateSerializer]
 [Alias("CyberCloud.Authorization.ConsistencyToken")]
-public sealed record ConsistencyToken
-{
+public sealed record ConsistencyToken {
     /// <summary>The tenant this token is about.</summary>
     [Id(0)]
     public Guid TenantId { get; init; }
@@ -334,8 +323,7 @@ public sealed record ConsistencyToken
     public long Version { get; init; }
 
     /// <summary>Renders the token as the opaque string an API would hand out.</summary>
-    public override string ToString() =>
-        string.Create(CultureInfo.InvariantCulture, $"{TenantId:N}.{Version}");
+    public override string ToString() => string.Create(CultureInfo.InvariantCulture, $"{TenantId:N}.{Version}");
 }
 
 /// <summary>
@@ -344,8 +332,7 @@ public sealed record ConsistencyToken
 /// </summary>
 [GenerateSerializer]
 [Alias("CyberCloud.Authorization.Consistency")]
-public sealed record Consistency
-{
+public sealed record Consistency {
     /// <summary>The mode.</summary>
     [Id(0)]
     public ConsistencyMode Mode { get; init; } = ConsistencyMode.MinimizeLatency;
@@ -363,10 +350,9 @@ public sealed record Consistency
 
     /// <summary>Row 2 — no cache entry older than <paramref name="token" />.</summary>
     /// <param name="token">The token a write returned.</param>
-    public static Consistency AtLeastAsFresh(ConsistencyToken token)
-    {
+    public static Consistency AtLeastAsFresh(ConsistencyToken token) {
         ArgumentNullException.ThrowIfNull(token);
-        return new Consistency { Mode = ConsistencyMode.AtLeastAsFresh, Token = token };
+        return new() { Mode = ConsistencyMode.AtLeastAsFresh, Token = token };
     }
 }
 
@@ -376,8 +362,7 @@ public sealed record Consistency
 /// </summary>
 [GenerateSerializer]
 [Alias("CyberCloud.Authorization.CheckResult")]
-public sealed record CheckResult
-{
+public sealed record CheckResult {
     /// <summary>The decision. <b>Fail-closed</b>: false whenever the outcome is not allowed.</summary>
     [Id(0)]
     public bool Allowed { get; init; }
@@ -410,8 +395,7 @@ public sealed record CheckResult
     public string CapDetail { get; init; } = string.Empty;
 
     /// <summary>Whether a cap truncated the walk — a deny that may be wrong.</summary>
-    public bool WasTruncated =>
-        Outcome is CheckOutcome.DepthCapExceeded or CheckOutcome.BreadthCapExceeded;
+    public bool WasTruncated => Outcome is CheckOutcome.DepthCapExceeded or CheckOutcome.BreadthCapExceeded;
 }
 
 /// <summary>
@@ -420,16 +404,19 @@ public sealed record CheckResult
 /// </summary>
 /// <remarks>
 ///     ⚠ <b><see cref="Inherited" /> is the whole argument for <c>From(…)</c>.</b> An assignment
-///     with <see cref="Inherited" /> = <see langword="true" /> has <b>no tuple on
-///     <see cref="Scope" /></b>: it is a tuple on <see cref="InheritedFrom" /> that this scope picks
+///     with <see cref="Inherited" /> = <see langword="true" /> has
+///     <b>
+///         no tuple on
+///         <see cref="Scope" />
+///     </b>
+///     : it is a tuple on <see cref="InheritedFrom" /> that this scope picks
 ///     up through the <c>From("parent", …)</c> rewrite. docs/plan/07's third table row —
 ///     "Inheritance sub → rg → resource | The <c>From("parent", …)</c> rewrites; no tuples written"
 ///     — is exactly this field.
 /// </remarks>
 [GenerateSerializer]
 [Alias("CyberCloud.Authorization.RoleAssignment")]
-public sealed record RoleAssignment
-{
+public sealed record RoleAssignment {
     /// <summary>The scope the assignment is being viewed at.</summary>
     [Id(0)]
     public ObjectRef Scope { get; init; } = new();
@@ -454,8 +441,7 @@ public sealed record RoleAssignment
 /// <summary>Every tuple whose object is one object, as <c>IObjectRelationsGrain</c> returns it.</summary>
 [GenerateSerializer]
 [Alias("CyberCloud.Authorization.ObjectRelationsSnapshot")]
-public sealed record ObjectRelationsSnapshot
-{
+public sealed record ObjectRelationsSnapshot {
     /// <summary>The object.</summary>
     [Id(0)]
     public ObjectRef Object { get; init; } = new();
@@ -481,8 +467,7 @@ public sealed record ObjectRelationsSnapshot
 /// </summary>
 [GenerateSerializer]
 [Alias("CyberCloud.Authorization.SubjectIndexEntry")]
-public sealed record SubjectIndexEntry
-{
+public sealed record SubjectIndexEntry {
     /// <summary>The object the tuple is on.</summary>
     [Id(0)]
     public ObjectRef Object { get; init; } = new();
@@ -504,8 +489,7 @@ public sealed record SubjectIndexEntry
 /// </summary>
 [GenerateSerializer]
 [Alias("CyberCloud.Authorization.SweepReport")]
-public sealed record SweepReport
-{
+public sealed record SweepReport {
     /// <summary>How many journal entries were outstanding when the sweep started.</summary>
     [Id(0)]
     public int Pending { get; init; }

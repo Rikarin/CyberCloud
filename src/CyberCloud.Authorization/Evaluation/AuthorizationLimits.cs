@@ -34,8 +34,7 @@ namespace CyberCloud.Authorization.Evaluation;
 ///         subject sitting in position 3 into a denial.
 ///     </para>
 /// </remarks>
-public sealed record AuthorizationLimits
-{
+public sealed record AuthorizationLimits {
     /// <summary>docs/plan/07 § Check: "Depth cap 12".</summary>
     public int MaxDepth { get; init; } = 12;
 

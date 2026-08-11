@@ -1,4 +1,3 @@
-using CyberCloud.Core;
 using CyberCloud.Core.Resources;
 using Shouldly;
 
@@ -9,8 +8,7 @@ namespace CyberCloud.Core.Contracts.Tests;
 ///     serializer.
 /// </summary>
 public sealed class IdentifierSerializationTests(OrleansSerializerFixture orleans)
-    : IClassFixture<OrleansSerializerFixture>
-{
+    : IClassFixture<OrleansSerializerFixture> {
     static readonly Guid TenantId = Guid.Parse("2b4a1c66-2e70-4a9d-9d0a-1f7ec1f1a4b3");
     static readonly Guid SubscriptionId = Guid.Parse("6f0f1f0e-1234-4c8b-9a3d-aabbccddeeff");
     static readonly Guid ResourceGuid = Guid.Parse("11112222-3333-4444-5555-666677778888");
@@ -18,8 +16,7 @@ public sealed class IdentifierSerializationTests(OrleansSerializerFixture orlean
     // ── ResourceTypeName ───────────────────────────────────────────────────────────────────────
 
     [Fact]
-    public void AResourceTypeNameRoundTrips()
-    {
+    public void AResourceTypeNameRoundTrips() {
         var original = new ResourceTypeName("CyberCloud.DBforPostgreSQL", "servers");
         var round = orleans.RoundTrip(original);
 
@@ -29,8 +26,7 @@ public sealed class IdentifierSerializationTests(OrleansSerializerFixture orlean
     }
 
     [Fact]
-    public void ANestedResourceTypeNameRoundTrips()
-    {
+    public void ANestedResourceTypeNameRoundTrips() {
         var original = new ResourceTypeName("CyberCloud.DBforPostgreSQL", "servers/databases");
 
         orleans.RoundTrip(original).ShouldBe(original);
@@ -38,8 +34,7 @@ public sealed class IdentifierSerializationTests(OrleansSerializerFixture orlean
     }
 
     [Fact]
-    public void ResourceTypeNamePreservesCasingRatherThanCanonicalising()
-    {
+    public void ResourceTypeNamePreservesCasingRatherThanCanonicalising() {
         // Equality on this type is case-insensitive, so ShouldBe would pass even if the wire folded
         // the case. The portal and the CLI display Namespace/Type verbatim, so assert the strings.
         var round = orleans.RoundTrip(new ResourceTypeName("CyberCloud.Compute", "virtualMachines"));
@@ -49,26 +44,25 @@ public sealed class IdentifierSerializationTests(OrleansSerializerFixture orlean
     }
 
     [Fact]
-    public void DefaultResourceTypeNameRoundTripsWithoutThrowing()
-    {
+    public void DefaultResourceTypeNameRoundTripsWithoutThrowing() {
         var round = orleans.RoundTrip(default(ResourceTypeName));
 
         round.IsEmpty.ShouldBeTrue();
-        round.ShouldBe(default(ResourceTypeName));
+        round.ShouldBe(default);
     }
 
     // ── ResourceId ─────────────────────────────────────────────────────────────────────────────
 
     [Fact]
-    public void AResolvedResourceIdRoundTrips()
-    {
+    public void AResolvedResourceIdRoundTrips() {
         var original = new ResourceId(
             TenantId,
             SubscriptionId,
             "prod",
-            new ResourceTypeName("CyberCloud.DBforPostgreSQL", "servers"),
+            new("CyberCloud.DBforPostgreSQL", "servers"),
             "orders-db",
-            ResourceGuid);
+            ResourceGuid
+        );
 
         var round = orleans.RoundTrip(original);
 
@@ -78,15 +72,15 @@ public sealed class IdentifierSerializationTests(OrleansSerializerFixture orlean
     }
 
     [Fact]
-    public void AnUnresolvedResourceIdKeepsItsEmptyGuid()
-    {
+    public void AnUnresolvedResourceIdKeepsItsEmptyGuid() {
         // docs/plan/06:44 — an id parsed from a path carries Guid.Empty until the index resolves it.
         // Guid.Empty here is a value, not an absence, and must not be confused with default(ResourceId).
         ResourceId.TryParsePath(
                 "/tenants/2b4a1c66-2e70-4a9d-9d0a-1f7ec1f1a4b3"
                 + "/subscriptions/6f0f1f0e-1234-4c8b-9a3d-aabbccddeeff"
                 + "/resourceGroups/prod/providers/CyberCloud.DBforPostgreSQL/servers/orders-db",
-                out var parsed)
+                out var parsed
+            )
             .ShouldBeTrue();
 
         var round = orleans.RoundTrip(parsed);
@@ -97,33 +91,31 @@ public sealed class IdentifierSerializationTests(OrleansSerializerFixture orlean
     }
 
     [Fact]
-    public void ANestedTypeResourceIdRoundTrips()
-    {
+    public void ANestedTypeResourceIdRoundTrips() {
         var original = new ResourceId(
             TenantId,
             SubscriptionId,
             "prod",
-            new ResourceTypeName("CyberCloud.DBforPostgreSQL", "servers/databases"),
+            new("CyberCloud.DBforPostgreSQL", "servers/databases"),
             "orders",
-            ResourceGuid);
+            ResourceGuid
+        );
 
         orleans.RoundTrip(original).Path.ShouldBe(original.Path);
     }
 
     [Fact]
-    public void DefaultResourceIdRoundTripsWithoutThrowing()
-    {
+    public void DefaultResourceIdRoundTripsWithoutThrowing() {
         // ResourceId's constructor rejects the null name that default() implies, so the surrogate
         // has to recognise the empty payload. Without this, every failed Result<ResourceId> would
         // throw on deserialization instead of arriving as a failure.
-        orleans.RoundTrip(default(ResourceId)).ShouldBe(default(ResourceId));
+        orleans.RoundTrip(default(ResourceId)).ShouldBe(default);
     }
 
     // ── Grain keys, which are derived on arrival and never sent ────────────────────────────────
 
     [Fact]
-    public void AGrainKeyIsDerivedFromTheArrivedIdentifierAndNotCarriedAsAValue()
-    {
+    public void AGrainKeyIsDerivedFromTheArrivedIdentifierAndNotCarriedAsAValue() {
         // ⚠ There is no grain-key surrogate, deliberately: ResourceKey and ResourceKeySurrogate were
         // deleted rather than ported when ADR-002 settled IResourceGrain on res/{resourceId:N}
         // (docs/plan/02:153-163). A grain key travelling on the wire as a value is exactly the
@@ -134,9 +126,10 @@ public sealed class IdentifierSerializationTests(OrleansSerializerFixture orlean
             TenantId,
             SubscriptionId,
             "prod",
-            new ResourceTypeName("CyberCloud.DBforPostgreSQL", "servers"),
+            new("CyberCloud.DBforPostgreSQL", "servers"),
             "orders-db",
-            ResourceGuid);
+            ResourceGuid
+        );
 
         var round = orleans.RoundTrip(id);
 
@@ -148,23 +141,23 @@ public sealed class IdentifierSerializationTests(OrleansSerializerFixture orlean
     // ── Errors carrying identifiers ────────────────────────────────────────────────────────────
 
     [Fact]
-    public void AResultHoldingAResourceIdRoundTrips()
-    {
+    public void AResultHoldingAResourceIdRoundTrips() {
         var original = Result<ResourceId>.Success(
-            new ResourceId(
+            new(
                 TenantId,
                 SubscriptionId,
                 "prod",
-                new ResourceTypeName("CyberCloud.Compute", "virtualMachines"),
+                new("CyberCloud.Compute", "virtualMachines"),
                 "web-01",
-                ResourceGuid));
+                ResourceGuid
+            )
+        );
 
         orleans.RoundTrip(original).ShouldBe(original);
     }
 
     [Fact]
-    public void AParseFailureRoundTripsAsAFailure()
-    {
+    public void AParseFailureRoundTripsAsAFailure() {
         // The real shape ResourceId.ParsePath returns: a failed Result<ResourceId> whose value slot
         // holds default(ResourceId) and whose error names the offending value.
         var original = ResourceId.ParsePath("/nope");

@@ -20,16 +20,19 @@ namespace CyberCloud.Analyzers;
 ///     Orleans.Multitenant.TenantGrainFactory : (no interfaces)
 ///     </code>
 ///     <para>
-///         So "did this call go through <c>ForTenant</c>?" is a question about the <i>type of the
-///         receiver</i>, not about the shape of the expression. CC1006 does not have to chase
+///         So "did this call go through <c>ForTenant</c>?" is a question about the
+///         <i>
+///             type of the
+///             receiver
+///         </i>
+///         , not about the shape of the expression. CC1006 does not have to chase
 ///         <c>ForTenant(…)</c> through locals, fields, parameters or helper methods: a
 ///         <c>TenantGrainFactory</c> can only have come from one place. That is what makes the rule
 ///         cheap and, more importantly, unfoolable in the direction that matters — you cannot
 ///         accidentally land on the tenant-qualified overload.
 ///     </para>
 /// </remarks>
-static class GrainFactories
-{
+static class GrainFactories {
     /// <summary>
     ///     True for a <c>GetGrain</c> declared by <c>Orleans.IGrainFactory</c> or by Orleans's own
     ///     extension class over it — i.e. the <b>un</b>qualified factory.
@@ -62,25 +65,19 @@ static class GrainFactories
     ///     incoming call to the <i>calling grain's</i> tenant, and none of those has one. They are
     ///     exactly the callers CC1006 exists to catch.
     /// </remarks>
-    public static bool IsGrain(INamedTypeSymbol? type)
-    {
-        if (type is null)
-        {
+    public static bool IsGrain(INamedTypeSymbol? type) {
+        if (type is null) {
             return false;
         }
 
-        foreach (var contract in type.AllInterfaces)
-        {
-            if (IsOrleansType(contract, "IGrainBase"))
-            {
+        foreach (var contract in type.AllInterfaces) {
+            if (IsOrleansType(contract, "IGrainBase")) {
                 return true;
             }
         }
 
-        for (var current = type.BaseType; current is not null; current = current.BaseType)
-        {
-            if (IsOrleansType(current, "Grain"))
-            {
+        for (var current = type.BaseType; current is not null; current = current.BaseType) {
+            if (IsOrleansType(current, "Grain")) {
                 return true;
             }
         }
@@ -97,8 +94,11 @@ static class GrainFactories
     ///         docs/plan/06 § Grain keys and <c>GrainKeyKind</c>'s own documentation: a platform
     ///         singleton (<c>platform/{name}</c>) and a cluster connection (<c>cluster/{id:N}</c>)
     ///         are null-tenant by construction. <c>ITenantDirectoryGrain</c>'s remarks are explicit —
-    ///         <i>"reach it with a plain <c>IGrainFactory.GetGrain</c> — <b>not</b>
-    ///         <c>ForTenant</c>"</i> — because there is no tenant to qualify with.
+    ///         <i>
+    ///             "reach it with a plain <c>IGrainFactory.GetGrain</c> — <b>not</b>
+    ///             <c>ForTenant</c>"
+    ///         </i>
+    ///         — because there is no tenant to qualify with.
     ///     </para>
     ///     <para>
     ///         This set is what keeps CC1006 off the two correct call sites that exist today,
@@ -108,15 +108,12 @@ static class GrainFactories
     ///         wholesale.
     ///     </para>
     /// </remarks>
-    public static bool IsNullTenantKeyBuilder(IMethodSymbol method)
-    {
-        if (!string.Equals(method.ContainingType?.ToDisplayString(), WellKnown.GrainKeys, StringComparison.Ordinal))
-        {
+    public static bool IsNullTenantKeyBuilder(IMethodSymbol method) {
+        if (!string.Equals(method.ContainingType?.ToDisplayString(), WellKnown.GrainKeys, StringComparison.Ordinal)) {
             return false;
         }
 
-        switch (method.Name)
-        {
+        switch (method.Name) {
             case "PlatformSingleton":
             case "ShardMap":
             case "TenantDirectory":
@@ -134,9 +131,13 @@ static class GrainFactories
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         docs/plan/00 § Coding standards: <i>"Grain interfaces are <c>IGrainWithStringKey</c>
-    ///         for anything tenant-scoped, because that is the only key kind
-    ///         <c>Orleans.Multitenant</c> can carry a tenant in."</i> Contrapositive: a
+    ///         docs/plan/00 § Coding standards:
+    ///         <i>
+    ///             "Grain interfaces are <c>IGrainWithStringKey</c>
+    ///             for anything tenant-scoped, because that is the only key kind
+    ///             <c>Orleans.Multitenant</c> can carry a tenant in."
+    ///         </i>
+    ///         Contrapositive: a
     ///         <c>Guid</c>-keyed or integer-keyed grain has nowhere to put a tenant id, so reaching
     ///         it without one is not a cross-tenant read and CC1006 must be silent.
     ///     </para>
@@ -157,18 +158,14 @@ static class GrainFactories
     ///         answers instead: a <c>Guid</c> or <c>long</c> in the signature means a non-string key.
     ///     </para>
     /// </remarks>
-    public static bool TargetsAStringKeyedGrain(IMethodSymbol method, INamedTypeSymbol stringKeyed)
-    {
-        if (method.TypeArguments.Length == 1)
-        {
+    public static bool TargetsAStringKeyedGrain(IMethodSymbol method, INamedTypeSymbol stringKeyed) {
+        if (method.TypeArguments.Length == 1) {
             return ImplementsOrIs(method.TypeArguments[0], stringKeyed);
         }
 
-        foreach (var parameter in method.Parameters)
-        {
+        foreach (var parameter in method.Parameters) {
             if (parameter.Type.SpecialType == SpecialType.System_Int64
-                || string.Equals(parameter.Type.Name, "Guid", StringComparison.Ordinal))
-            {
+                || string.Equals(parameter.Type.Name, "Guid", StringComparison.Ordinal)) {
                 return false;
             }
         }
@@ -176,17 +173,13 @@ static class GrainFactories
         return true;
     }
 
-    static bool ImplementsOrIs(ITypeSymbol type, INamedTypeSymbol contract)
-    {
-        if (SymbolEqualityComparer.Default.Equals(type, contract))
-        {
+    static bool ImplementsOrIs(ITypeSymbol type, INamedTypeSymbol contract) {
+        if (SymbolEqualityComparer.Default.Equals(type, contract)) {
             return true;
         }
 
-        foreach (var implemented in type.AllInterfaces)
-        {
-            if (SymbolEqualityComparer.Default.Equals(implemented, contract))
-            {
+        foreach (var implemented in type.AllInterfaces) {
+            if (SymbolEqualityComparer.Default.Equals(implemented, contract)) {
                 return true;
             }
         }
@@ -202,20 +195,17 @@ static class GrainFactories
         && string.Equals(
             type.ContainingNamespace?.ToDisplayString(),
             "Orleans.Multitenant",
-            StringComparison.Ordinal);
+            StringComparison.Ordinal
+        );
 
-    static bool IsOrleansType(INamedTypeSymbol? type, params string[] names)
-    {
+    static bool IsOrleansType(INamedTypeSymbol? type, params string[] names) {
         if (type is null
-            || !string.Equals(type.ContainingNamespace?.ToDisplayString(), "Orleans", StringComparison.Ordinal))
-        {
+            || !string.Equals(type.ContainingNamespace?.ToDisplayString(), "Orleans", StringComparison.Ordinal)) {
             return false;
         }
 
-        foreach (var name in names)
-        {
-            if (string.Equals(type.Name, name, StringComparison.Ordinal))
-            {
+        foreach (var name in names) {
+            if (string.Equals(type.Name, name, StringComparison.Ordinal)) {
                 return true;
             }
         }

@@ -28,9 +28,9 @@ namespace CyberCloud.Tenancy;
 ///     </para>
 /// </remarks>
 public sealed class TenantDirectoryGrain(
-    [PersistentState("directory", StorageTiers.Durable)] IPersistentState<TenantDirectoryState> state)
-    : Grain, ITenantDirectoryGrain
-{
+    [PersistentState("directory", StorageTiers.Durable)] IPersistentState<TenantDirectoryState> state
+)
+    : Grain, ITenantDirectoryGrain {
     /// <summary>
     ///     How far back a caller's cursor may be before it is handed the whole directory instead of
     ///     a delta.
@@ -38,49 +38,46 @@ public sealed class TenantDirectoryGrain(
     const long DeltaWindow = 10_000;
 
     /// <inheritdoc />
-    public override Task OnActivateAsync(CancellationToken cancellationToken)
-    {
+    public override Task OnActivateAsync(CancellationToken cancellationToken) {
         TenancyGrainKeys.EnsurePlatformSingleton(this, GrainKeys.TenantDirectorySingleton);
         return Task.CompletedTask;
     }
 
     /// <inheritdoc />
-    public async Task<Result<TenantDirectoryEntry>> RegisterAsync(TenantDirectoryEntry entry)
-    {
+    public async Task<Result<TenantDirectoryEntry>> RegisterAsync(TenantDirectoryEntry entry) {
         ArgumentNullException.ThrowIfNull(entry);
 
-        if (entry.TenantId == Guid.Empty)
-        {
+        if (entry.TenantId == Guid.Empty) {
             return Result<TenantDirectoryEntry>.Failure(
-                ErrorCode.InvalidRequestBody, "A directory entry needs a tenant id.");
+                ErrorCode.InvalidRequestBody,
+                "A directory entry needs a tenant id."
+            );
         }
 
         var slug = ResourceNaming.Validate(entry.Slug, "tenant slug");
-        if (slug.TryGetError(out var invalid))
-        {
+        if (slug.TryGetError(out var invalid)) {
             return Result<TenantDirectoryEntry>.Failure(invalid);
         }
 
-        if (state.State.TombstonedSlugs.Contains(entry.Slug, StringComparer.Ordinal))
-        {
+        if (state.State.TombstonedSlugs.Contains(entry.Slug, StringComparer.Ordinal)) {
             return Result<TenantDirectoryEntry>.Failure(
                 ErrorCode.Conflict,
                 $"Slug '{entry.Slug}' belonged to a purged tenant. docs/plan/06 § Tenant lifecycle "
                 + "tombstones a purged tenant's directory entry forever and never reuses an id; "
-                + "reusing the slug would make an old audit trail point at a new customer.");
+                + "reusing the slug would make an old audit trail point at a new customer."
+            );
         }
 
-        if (state.State.BySlug.TryGetValue(entry.Slug, out var owner) && owner != entry.TenantId)
-        {
+        if (state.State.BySlug.TryGetValue(entry.Slug, out var owner) && owner != entry.TenantId) {
             return Result<TenantDirectoryEntry>.Failure(
                 ErrorCode.Conflict,
                 $"Slug '{entry.Slug}' is already held by tenant {owner:D}. Tenant slugs are globally "
-                + "unique — docs/plan/04 § The clusters, plural.");
+                + "unique — docs/plan/04 § The clusters, plural."
+            );
         }
 
         if (state.State.Entries.TryGetValue(entry.TenantId, out var previous)
-            && !string.Equals(previous.Slug, entry.Slug, StringComparison.Ordinal))
-        {
+            && !string.Equals(previous.Slug, entry.Slug, StringComparison.Ordinal)) {
             state.State.BySlug.Remove(previous.Slug);
         }
 
@@ -94,10 +91,14 @@ public sealed class TenantDirectoryGrain(
 
     /// <inheritdoc />
     public Task<Result<TenantDirectoryEntry>> LookupAsync(Guid tenantId) =>
-        Task.FromResult(state.State.Entries.TryGetValue(tenantId, out var entry)
-            ? Result<TenantDirectoryEntry>.Success(entry)
-            : Result<TenantDirectoryEntry>.Failure(
-                ErrorCode.TenantNotFound, $"Tenant {tenantId:D} is not in the directory."));
+        Task.FromResult(
+            state.State.Entries.TryGetValue(tenantId, out var entry)
+                ? Result<TenantDirectoryEntry>.Success(entry)
+                : Result<TenantDirectoryEntry>.Failure(
+                    ErrorCode.TenantNotFound,
+                    $"Tenant {tenantId:D} is not in the directory."
+                )
+        );
 
     /// <inheritdoc />
     public Task<Result<TenantDirectoryEntry>> LookupBySlugAsync(string slug) =>
@@ -105,34 +106,32 @@ public sealed class TenantDirectoryGrain(
             state.State.BySlug.TryGetValue(slug ?? string.Empty, out var tenantId)
             && state.State.Entries.TryGetValue(tenantId, out var entry)
                 ? Result<TenantDirectoryEntry>.Success(entry)
-                : Result<TenantDirectoryEntry>.Failure(
-                    ErrorCode.TenantNotFound, $"No tenant has the slug '{slug}'."));
+                : Result<TenantDirectoryEntry>.Failure(ErrorCode.TenantNotFound, $"No tenant has the slug '{slug}'.")
+        );
 
     /// <inheritdoc />
-    public async Task<Result<TenantDirectoryEntry>> SetStatusAsync(Guid tenantId, TenantStatus status)
-    {
-        if (!state.State.Entries.TryGetValue(tenantId, out var entry))
-        {
+    public async Task<Result<TenantDirectoryEntry>> SetStatusAsync(Guid tenantId, TenantStatus status) {
+        if (!state.State.Entries.TryGetValue(tenantId, out var entry)) {
             return Result<TenantDirectoryEntry>.Failure(
-                ErrorCode.TenantNotFound, $"Tenant {tenantId:D} is not in the directory.");
+                ErrorCode.TenantNotFound,
+                $"Tenant {tenantId:D} is not in the directory."
+            );
         }
 
-        if (entry.Status == TenantStatus.Purged)
-        {
+        if (entry.Status == TenantStatus.Purged) {
             return Result<TenantDirectoryEntry>.Failure(
                 ErrorCode.Conflict,
                 $"Tenant {tenantId:D} is Purged, which docs/plan/06 § Tenant lifecycle makes "
-                + "terminal — the entry is tombstoned forever.");
+                + "terminal — the entry is tombstoned forever."
+            );
         }
 
         var written = entry with { Status = status, DirectoryVersion = ++state.State.Version };
         state.State.Entries[tenantId] = written;
 
-        if (status == TenantStatus.Purged)
-        {
+        if (status == TenantStatus.Purged) {
             // The slug is burned, not freed. The entry stays so that the id can never be reissued.
-            if (!state.State.TombstonedSlugs.Contains(entry.Slug, StringComparer.Ordinal))
-            {
+            if (!state.State.TombstonedSlugs.Contains(entry.Slug, StringComparer.Ordinal)) {
                 state.State.TombstonedSlugs.Add(entry.Slug);
             }
 
@@ -144,8 +143,7 @@ public sealed class TenantDirectoryGrain(
     }
 
     /// <inheritdoc />
-    public Task<Result<TenantDirectoryDelta>> GetDeltaAsync(long knownVersion)
-    {
+    public Task<Result<TenantDirectoryDelta>> GetDeltaAsync(long knownVersion) {
         var full = knownVersion <= 0 || state.State.Version - knownVersion > DeltaWindow;
 
         var entries = full
@@ -155,22 +153,19 @@ public sealed class TenantDirectoryGrain(
                 .OrderBy(x => x.DirectoryVersion)
                 .ToList();
 
-        return Task.FromResult(Result<TenantDirectoryDelta>.Success(new TenantDirectoryDelta
-        {
-            Version = state.State.Version,
-            Entries = entries,
-            IsFullSnapshot = full,
-        }));
+        return Task.FromResult(
+            Result<TenantDirectoryDelta>.Success(
+                new() { Version = state.State.Version, Entries = entries, IsFullSnapshot = full }
+            )
+        );
     }
 
     /// <inheritdoc />
-    public Task<Result<int>> CountAsync() =>
-        Task.FromResult(Result<int>.Success(state.State.Entries.Count));
+    public Task<Result<int>> CountAsync() => Task.FromResult(Result<int>.Success(state.State.Entries.Count));
 
     /// <inheritdoc />
-    public Task DeactivateAsync()
-    {
-        this.DeactivateOnIdle();
+    public Task DeactivateAsync() {
+        DeactivateOnIdle();
         return Task.CompletedTask;
     }
 }

@@ -8,4 +8,5 @@
 // A using-alias beats a namespace import, so this pins the name assembly-wide to ours. The
 // alternative — qualifying every mention as CyberCloud.Core.ErrorCode — would be noise on roughly
 // every failure path in every grain, and would leave the trap armed for the next file.
+
 global using ErrorCode = CyberCloud.Core.ErrorCode;

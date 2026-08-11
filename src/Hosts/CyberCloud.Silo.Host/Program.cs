@@ -28,18 +28,19 @@ using Volo.Abp;
 // the silos cannot disagree about which shards exist.
 const string applySchemaFlag = "--apply-durable-schema";
 
-if (args.Contains(applySchemaFlag, StringComparer.Ordinal))
-{
+if (args.Contains(applySchemaFlag, StringComparer.Ordinal)) {
     // ⚠ Filtered out before the configuration builder sees it. Microsoft.Extensions.Configuration's
     // command-line provider expects `--key=value` or `--key value`; a bare trailing switch is
     // "Unrecognized argument format", thrown out of AddCommandLine before a line of our code runs.
     return await ApplyDurableSchemaAsync(
-        [.. args.Where(x => !string.Equals(x, applySchemaFlag, StringComparison.Ordinal))]);
+        [.. args.Where(x => !string.Equals(x, applySchemaFlag, StringComparison.Ordinal))]
+    );
 }
 
 var builder = OrleansApplication.CreateSilo(
     args,
-    configureStorage: (silo, storage) => silo.AddCyberCloudTenancy(storage));
+    configureStorage: (silo, storage) => silo.AddCyberCloudTenancy(storage)
+);
 
 await builder.Services.AddApplicationAsync<SiloHostModule>();
 
@@ -60,34 +61,33 @@ app.MapDefaultEndpoints();
 await app.RunAsync();
 return 0;
 
-static async Task<int> ApplyDurableSchemaAsync(string[] args)
-{
+static async Task<int> ApplyDurableSchemaAsync(string[] args) {
     var configuration = Host.CreateApplicationBuilder(args).Configuration;
 
     var storage = new CyberCloudStorageOptions();
     configuration.GetSection(CyberCloudStorageOptions.SectionName).Bind(storage);
 
-    if (storage.Durable.Shards.Count == 0)
-    {
+    if (storage.Durable.Shards.Count == 0) {
         // A silent success here is the worst outcome available: the job goes green, the silos start,
         // and the first grain write fails with a message about `orleansquery` that names nothing
         // about configuration.
         await Console.Error.WriteLineAsync(
             $"--apply-durable-schema: {CyberCloudStorageOptions.SectionName}:Durable:Shards is "
             + "empty, so there is nothing to create the schema on. A silo started against this "
-            + "configuration has no durable tier at all.");
+            + "configuration has no durable tier at all."
+        );
 
         return 1;
     }
 
     var applied = await OrleansAdoNetSchema.ApplyAsync(storage.Durable, CancellationToken.None);
 
-    foreach (var (shard, created) in applied)
-    {
+    foreach (var (shard, created) in applied) {
         Console.WriteLine(
             created
                 ? $"--apply-durable-schema: created the Orleans grain-storage schema on '{shard}'."
-                : $"--apply-durable-schema: '{shard}' already had it; nothing to do.");
+                : $"--apply-durable-schema: '{shard}' already had it; nothing to do."
+        );
     }
 
     return 0;

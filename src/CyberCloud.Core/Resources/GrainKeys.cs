@@ -10,8 +10,7 @@ namespace CyberCloud.Core.Resources;
 ///     § Grain taxonomy does name (<see cref="Tenant" />, <see cref="PlatformSingleton" />), and
 ///     nothing else may be a grain key.
 /// </summary>
-public enum GrainKeyKind
-{
+public enum GrainKeyKind {
     /// <summary><c>default(GrainKey)</c>. Not a key.</summary>
     None = 0,
 
@@ -49,8 +48,12 @@ public enum GrainKeyKind
     Tenant,
 
     /// <summary>
-    ///     A platform singleton — <c>platform/{name}</c>, one activation worldwide. ⚠ <b>Null
-    ///     tenant</b>. <see cref="GrainKey.Name" /> carries the singleton's name; the set is closed
+    ///     A platform singleton — <c>platform/{name}</c>, one activation worldwide. ⚠
+    ///     <b>
+    ///         Null
+    ///         tenant
+    ///     </b>
+    ///     . <see cref="GrainKey.Name" /> carries the singleton's name; the set is closed
     ///     and is <see cref="GrainKeys.PlatformSingletons" />.
     /// </summary>
     PlatformSingleton,
@@ -88,13 +91,46 @@ public enum GrainKeyKind
 ///         <see cref="string.Empty" /> respectively:
 ///     </para>
 ///     <list type="table">
-///         <item><term><see cref="GrainKeyKind.Subscription" /></term><description><see cref="Id" /> = the subscription.</description></item>
-///         <item><term><see cref="GrainKeyKind.ResourceGroup" /></term><description><see cref="Id" /> = the <i>subscription</i>, <see cref="Name" /> = the group.</description></item>
-///         <item><term><see cref="GrainKeyKind.Resource" /></term><description><see cref="Id" /> = the resource.</description></item>
-///         <item><term><see cref="GrainKeyKind.User" /></term><description><see cref="Id" /> = the user.</description></item>
-///         <item><term><see cref="GrainKeyKind.Operation" /></term><description><see cref="Id" /> = the operation.</description></item>
-///         <item><term><see cref="GrainKeyKind.ClusterConnection" /></term><description><see cref="Id" /> = the cluster.</description></item>
-///         <item><term><see cref="GrainKeyKind.PathIndex" /> / <see cref="GrainKeyKind.EmailIndex" /></term><description><see cref="Digest" /> only.</description></item>
+///         <item>
+///             <term>
+///                 <see cref="GrainKeyKind.Subscription" />
+///             </term>
+///             <description><see cref="Id" /> = the subscription.</description>
+///         </item>
+///         <item>
+///             <term>
+///                 <see cref="GrainKeyKind.ResourceGroup" />
+///             </term>
+///             <description><see cref="Id" /> = the <i>subscription</i>, <see cref="Name" /> = the group.</description>
+///         </item>
+///         <item>
+///             <term>
+///                 <see cref="GrainKeyKind.Resource" />
+///             </term>
+///             <description><see cref="Id" /> = the resource.</description>
+///         </item>
+///         <item>
+///             <term>
+///                 <see cref="GrainKeyKind.User" />
+///             </term>
+///             <description><see cref="Id" /> = the user.</description>
+///         </item>
+///         <item>
+///             <term>
+///                 <see cref="GrainKeyKind.Operation" />
+///             </term>
+///             <description><see cref="Id" /> = the operation.</description>
+///         </item>
+///         <item>
+///             <term>
+///                 <see cref="GrainKeyKind.ClusterConnection" />
+///             </term>
+///             <description><see cref="Id" /> = the cluster.</description>
+///         </item>
+///         <item>
+///             <term><see cref="GrainKeyKind.PathIndex" /> / <see cref="GrainKeyKind.EmailIndex" /></term>
+///             <description><see cref="Digest" /> only.</description>
+///         </item>
 ///     </list>
 ///     <para>
 ///         ⚠ <b>An index key decodes to its digest and no further, and that is the point of a hash.</b>
@@ -104,32 +140,11 @@ public enum GrainKeyKind
 ///         caller routing a key to a grain type actually needs.
 ///     </para>
 /// </remarks>
-public readonly record struct GrainKey
-{
+public readonly record struct GrainKey {
     readonly string? name;
     readonly string? digest;
     readonly string? objectType;
     readonly string? objectId;
-
-    internal GrainKey(GrainKeyKind kind, Guid id, string? name, string? digest)
-    {
-        Kind = kind;
-        Id = id;
-        this.name = name;
-        this.digest = digest;
-        objectType = null;
-        objectId = null;
-    }
-
-    internal GrainKey(GrainKeyKind kind, string objectType, string objectId)
-    {
-        Kind = kind;
-        Id = Guid.Empty;
-        name = null;
-        digest = null;
-        this.objectType = objectType;
-        this.objectId = objectId;
-    }
 
     /// <summary>Which grain this key addresses.</summary>
     public GrainKeyKind Kind { get; }
@@ -152,29 +167,47 @@ public readonly record struct GrainKey
     /// <summary>The ReBAC object id, for the same three shapes.</summary>
     public string ObjectId => objectId ?? string.Empty;
 
+    internal GrainKey(GrainKeyKind kind, Guid id, string? name, string? digest) {
+        Kind = kind;
+        Id = id;
+        this.name = name;
+        this.digest = digest;
+        objectType = null;
+        objectId = null;
+    }
+
+    internal GrainKey(GrainKeyKind kind, string objectType, string objectId) {
+        Kind = kind;
+        Id = Guid.Empty;
+        name = null;
+        digest = null;
+        this.objectType = objectType;
+        this.objectId = objectId;
+    }
+
     /// <summary>
     ///     Re-emits the key. <c>GrainKeys.Parse(k).GetValueOrThrow().ToString() == k</c> for every
     ///     <c>k</c> the parser accepts — enforced by the parser itself, see
     ///     <see cref="GrainKeys.Parse" />.
     /// </summary>
-    public override string ToString() => Kind switch
-    {
-        GrainKeyKind.Subscription => GrainKeys.Subscription(Id),
-        GrainKeyKind.ResourceGroup => GrainKeys.ResourceGroup(Id, Name),
-        GrainKeyKind.Resource => GrainKeys.Resource(Id),
-        GrainKeyKind.PathIndex => GrainKeys.PathIndexPrefix + Digest,
-        GrainKeyKind.User => GrainKeys.User(Id),
-        GrainKeyKind.EmailIndex => GrainKeys.EmailIndexPrefix + Digest,
-        GrainKeyKind.Operation => GrainKeys.Operation(Id),
-        GrainKeyKind.ClusterConnection => GrainKeys.ClusterConnection(Id),
-        GrainKeyKind.Tenant => GrainKeys.Tenant(Id),
-        GrainKeyKind.PlatformSingleton => GrainKeys.PlatformSingletonPrefix + Name,
-        GrainKeyKind.ObjectRelations => GrainKeys.ObjectRelations(ObjectType, ObjectId),
-        GrainKeyKind.SubjectRelations => GrainKeys.SubjectRelations(ObjectType, ObjectId),
-        GrainKeyKind.CheckCache => GrainKeys.CheckCache(ObjectType, ObjectId),
-        GrainKeyKind.TupleStore => GrainKeys.TupleStore(Id),
-        _ => string.Empty
-    };
+    public override string ToString() =>
+        Kind switch {
+            GrainKeyKind.Subscription => GrainKeys.Subscription(Id),
+            GrainKeyKind.ResourceGroup => GrainKeys.ResourceGroup(Id, Name),
+            GrainKeyKind.Resource => GrainKeys.Resource(Id),
+            GrainKeyKind.PathIndex => GrainKeys.PathIndexPrefix + Digest,
+            GrainKeyKind.User => GrainKeys.User(Id),
+            GrainKeyKind.EmailIndex => GrainKeys.EmailIndexPrefix + Digest,
+            GrainKeyKind.Operation => GrainKeys.Operation(Id),
+            GrainKeyKind.ClusterConnection => GrainKeys.ClusterConnection(Id),
+            GrainKeyKind.Tenant => GrainKeys.Tenant(Id),
+            GrainKeyKind.PlatformSingleton => GrainKeys.PlatformSingletonPrefix + Name,
+            GrainKeyKind.ObjectRelations => GrainKeys.ObjectRelations(ObjectType, ObjectId),
+            GrainKeyKind.SubjectRelations => GrainKeys.SubjectRelations(ObjectType, ObjectId),
+            GrainKeyKind.CheckCache => GrainKeys.CheckCache(ObjectType, ObjectId),
+            GrainKeyKind.TupleStore => GrainKeys.TupleStore(Id),
+            _ => string.Empty
+        };
 }
 
 /// <summary>
@@ -199,20 +232,104 @@ public readonly record struct GrainKey
 ///         (in a log, in a repair tool, in a dead-letter handler) needs the other half.
 ///     </para>
 ///     <list type="table">
-///         <item><term><see cref="Subscription" /></term><description><c>sub/{subscriptionId:N}</c></description></item>
-///         <item><term><see cref="ResourceGroup" /></term><description><c>sub/{subscriptionId:N}/rg/{name}</c></description></item>
-///         <item><term><see cref="Resource" /></term><description><c>res/{resourceId:N}</c></description></item>
-///         <item><term><see cref="PathIndex" /></term><description><c>idx/path/{sha256(canonicalPath)[..16]}</c></description></item>
-///         <item><term><see cref="User" /></term><description><c>user/{userId:N}</c></description></item>
-///         <item><term><see cref="EmailIndex" /></term><description><c>idx/email/{sha256(tenantId + normalizedEmail)[..16]}</c></description></item>
-///         <item><term><see cref="Operation" /></term><description><c>op/{operationId:N}</c></description></item>
-///         <item><term><see cref="ClusterConnection" /></term><description><c>cluster/{clusterId:N}</c> — <b>null tenant</b></description></item>
-///         <item><term><see cref="Tenant" /></term><description><c>tenant/{tenantId:N}</c> — not in docs/plan/06's table</description></item>
-///         <item><term><see cref="PlatformSingleton" /></term><description><c>platform/{name}</c> — <b>null tenant</b>, not in docs/plan/06's table</description></item>
-///         <item><term><see cref="ObjectRelations" /></term><description><c>rel/obj/{type}/{id}</c> — docs/plan/07 § Storage</description></item>
-///         <item><term><see cref="SubjectRelations" /></term><description><c>rel/sub/{type}/{id}</c> — docs/plan/07 § Storage</description></item>
-///         <item><term><see cref="CheckCache" /></term><description><c>rel/check/{type}/{id}</c> — not in docs/plan/07's table</description></item>
-///         <item><term><see cref="TupleStore" /></term><description><c>rel/store/{tenantId:N}</c> — not in docs/plan/07's table</description></item>
+///         <item>
+///             <term>
+///                 <see cref="Subscription" />
+///             </term>
+///             <description>
+///                 <c>sub/{subscriptionId:N}</c>
+///             </description>
+///         </item>
+///         <item>
+///             <term>
+///                 <see cref="ResourceGroup" />
+///             </term>
+///             <description>
+///                 <c>sub/{subscriptionId:N}/rg/{name}</c>
+///             </description>
+///         </item>
+///         <item>
+///             <term>
+///                 <see cref="Resource" />
+///             </term>
+///             <description>
+///                 <c>res/{resourceId:N}</c>
+///             </description>
+///         </item>
+///         <item>
+///             <term>
+///                 <see cref="PathIndex" />
+///             </term>
+///             <description>
+///                 <c>idx/path/{sha256(canonicalPath)[..16]}</c>
+///             </description>
+///         </item>
+///         <item>
+///             <term>
+///                 <see cref="User" />
+///             </term>
+///             <description>
+///                 <c>user/{userId:N}</c>
+///             </description>
+///         </item>
+///         <item>
+///             <term>
+///                 <see cref="EmailIndex" />
+///             </term>
+///             <description>
+///                 <c>idx/email/{sha256(tenantId + normalizedEmail)[..16]}</c>
+///             </description>
+///         </item>
+///         <item>
+///             <term>
+///                 <see cref="Operation" />
+///             </term>
+///             <description>
+///                 <c>op/{operationId:N}</c>
+///             </description>
+///         </item>
+///         <item>
+///             <term>
+///                 <see cref="ClusterConnection" />
+///             </term>
+///             <description><c>cluster/{clusterId:N}</c> — <b>null tenant</b></description>
+///         </item>
+///         <item>
+///             <term>
+///                 <see cref="Tenant" />
+///             </term>
+///             <description><c>tenant/{tenantId:N}</c> — not in docs/plan/06's table</description>
+///         </item>
+///         <item>
+///             <term>
+///                 <see cref="PlatformSingleton" />
+///             </term>
+///             <description><c>platform/{name}</c> — <b>null tenant</b>, not in docs/plan/06's table</description>
+///         </item>
+///         <item>
+///             <term>
+///                 <see cref="ObjectRelations" />
+///             </term>
+///             <description><c>rel/obj/{type}/{id}</c> — docs/plan/07 § Storage</description>
+///         </item>
+///         <item>
+///             <term>
+///                 <see cref="SubjectRelations" />
+///             </term>
+///             <description><c>rel/sub/{type}/{id}</c> — docs/plan/07 § Storage</description>
+///         </item>
+///         <item>
+///             <term>
+///                 <see cref="CheckCache" />
+///             </term>
+///             <description><c>rel/check/{type}/{id}</c> — not in docs/plan/07's table</description>
+///         </item>
+///         <item>
+///             <term>
+///                 <see cref="TupleStore" />
+///             </term>
+///             <description><c>rel/store/{tenantId:N}</c> — not in docs/plan/07's table</description>
+///         </item>
 ///     </list>
 ///     <para>
 ///         The four <c>rel/</c> shapes are docs/plan/07 § Storage's, plus the two that document
@@ -272,8 +389,7 @@ public readonly record struct GrainKey
 ///         re-parsed as a different shape. See <c>GrainKeysTests</c> § key-shape collision.
 ///     </para>
 /// </remarks>
-public static class GrainKeys
-{
+public static class GrainKeys {
     /// <summary><c>sub/</c> — a subscription, and the head of a resource group key.</summary>
     public const string SubscriptionPrefix = "sub/";
 
@@ -357,11 +473,14 @@ public static class GrainKeys
 
     const int DigestBytes = DigestLength / 2;
 
+    /// <summary>The closed set of platform-singleton names.</summary>
+    public static IReadOnlyList<string> PlatformSingletons { get; } =
+        [ShardMapSingleton, TenantDirectorySingleton];
+
     // ── Formatting ─────────────────────────────────────────────────────────────────────────────
 
     /// <summary><c>sub/{subscriptionId:N}</c> — <c>ISubscriptionGrain</c>, docs/plan/06:103.</summary>
-    public static string Subscription(Guid subscriptionId) =>
-        SubscriptionPrefix + N(subscriptionId);
+    public static string Subscription(Guid subscriptionId) => SubscriptionPrefix + N(subscriptionId);
 
     /// <summary>
     ///     <c>sub/{subscriptionId:N}/rg/{name}</c> — <c>IResourceGroupGrain</c>, docs/plan/06:104.
@@ -373,8 +492,7 @@ public static class GrainKeys
     ///     trusted: see the remarks on <see cref="GrainKeys" /> § collision.
     /// </remarks>
     /// <exception cref="ArgumentException"><paramref name="name" /> breaks <see cref="ResourceNaming" />.</exception>
-    public static string ResourceGroup(Guid subscriptionId, string name)
-    {
+    public static string ResourceGroup(Guid subscriptionId, string name) {
         var validated = ResourceNaming.EnsureValid(name, nameof(name), "resource group name");
         return SubscriptionPrefix + N(subscriptionId) + "/" + ResourceGroupSegment + "/" + validated;
     }
@@ -429,15 +547,14 @@ public static class GrainKeys
     ///     </para>
     /// </remarks>
     /// <exception cref="ArgumentException"><paramref name="name" /> is not in <see cref="PlatformSingletons" />.</exception>
-    public static string PlatformSingleton(string name)
-    {
-        if (!PlatformSingletons.Contains(name, StringComparer.Ordinal))
-        {
+    public static string PlatformSingleton(string name) {
+        if (!PlatformSingletons.Contains(name, StringComparer.Ordinal)) {
             throw new ArgumentException(
                 $"'{name}' is not a platform singleton. The set is closed and is "
                 + $"[{string.Join(", ", PlatformSingletons)}] — docs/plan/04 § Grain taxonomy, the "
                 + "Platform row. A key that varies per tenant is not a platform singleton.",
-                nameof(name));
+                nameof(name)
+            );
         }
 
         return PlatformSingletonPrefix + name;
@@ -451,10 +568,6 @@ public static class GrainKeys
     ///     directory.
     /// </summary>
     public static string TenantDirectory() => PlatformSingletonPrefix + TenantDirectorySingleton;
-
-    /// <summary>The closed set of platform-singleton names.</summary>
-    public static IReadOnlyList<string> PlatformSingletons { get; } =
-        [ShardMapSingleton, TenantDirectorySingleton];
 
     // ── The ReBAC shapes — docs/plan/07 § Storage ──────────────────────────────────────────────
 
@@ -477,8 +590,7 @@ public static class GrainKeys
     ///     </para>
     /// </remarks>
     /// <exception cref="ArgumentException">Either component breaks <see cref="RelationNaming" />.</exception>
-    public static string ObjectRelations(string type, string id) =>
-        ObjectRelationsPrefix + EnsureObject(type, id);
+    public static string ObjectRelations(string type, string id) => ObjectRelationsPrefix + EnsureObject(type, id);
 
     /// <summary>
     ///     <c>rel/sub/{type}/{id}</c> — <c>ISubjectRelationsGrain</c>, the reverse index: every
@@ -493,8 +605,7 @@ public static class GrainKeys
     ///     whoever is asking about <c>group:eng</c>.
     /// </remarks>
     /// <exception cref="ArgumentException">Either component breaks <see cref="RelationNaming" />.</exception>
-    public static string SubjectRelations(string type, string id) =>
-        SubjectRelationsPrefix + EnsureObject(type, id);
+    public static string SubjectRelations(string type, string id) => SubjectRelationsPrefix + EnsureObject(type, id);
 
     /// <summary>
     ///     <c>rel/check/{type}/{id}</c> — <c>ICheckGrain</c>, the hot-tier check cache for one
@@ -519,8 +630,7 @@ public static class GrainKeys
     ///     </para>
     /// </remarks>
     /// <exception cref="ArgumentException">Either component breaks <see cref="RelationNaming" />.</exception>
-    public static string CheckCache(string type, string id) =>
-        CheckCachePrefix + EnsureObject(type, id);
+    public static string CheckCache(string type, string id) => CheckCachePrefix + EnsureObject(type, id);
 
     /// <summary>
     ///     <c>rel/store/{tenantId:N}</c> — <c>ITupleStoreGrain</c>, the tenant's tuple writer and
@@ -572,8 +682,7 @@ public static class GrainKeys
     ///         <c>GrainKeysTests.TheClusterKeyIsANullTenantKeyAndCannotBeMistakenForATenantedOne</c>.
     ///     </para>
     /// </remarks>
-    public static string ClusterConnection(Guid clusterId) =>
-        ClusterConnectionPrefix + N(clusterId);
+    public static string ClusterConnection(Guid clusterId) => ClusterConnectionPrefix + N(clusterId);
 
     /// <summary>
     ///     <c>idx/path/{sha256(canonicalPath)[..16]}</c> — <c>IResourceIndexGrain</c>,
@@ -598,8 +707,7 @@ public static class GrainKeys
     ///         <see cref="Guid.Empty" /> therefore produces the same index key as the resolved one.
     ///     </para>
     /// </remarks>
-    public static string PathIndex(ResourceId id) =>
-        PathIndexPrefix + Digest(PathIndexPrefix, id.CanonicalPath);
+    public static string PathIndex(ResourceId id) => PathIndexPrefix + Digest(PathIndexPrefix, id.CanonicalPath);
 
     /// <summary>
     ///     <c>idx/email/{sha256(tenantId + normalizedEmail)[..16]}</c> — <c>IEmailIndexGrain</c>,
@@ -607,27 +715,35 @@ public static class GrainKeys
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         <b>The tenant id is in the digest as well as in the tenant qualification, and that is
-    ///         not redundant.</b> docs/plan/11:99-101 — <i>"email uniqueness is per tenant; global
-    ///         email uniqueness would be a global index — the thing we do not have and do not
-    ///         want"</i>. Keying on the tenant twice costs nothing and means the digest stays correct
+    ///         <b>
+    ///             The tenant id is in the digest as well as in the tenant qualification, and that is
+    ///             not redundant.
+    ///         </b>
+    ///         docs/plan/11:99-101 —
+    ///         <i>
+    ///             "email uniqueness is per tenant; global
+    ///             email uniqueness would be a global index — the thing we do not have and do not
+    ///             want"
+    ///         </i>
+    ///         . Keying on the tenant twice costs nothing and means the digest stays correct
     ///         if this grain is ever read outside its tenant qualification (a repair tool, an audit
     ///         export), which is exactly when a silently tenant-free key would be dangerous.
     ///     </para>
     ///     <para>
-    ///         <b>The normalization rule is <see cref="NormalizeEmail" />, and it is part of the
-    ///         contract.</b> Storing a differently-normalized address on the user than the one that
+    ///         <b>
+    ///             The normalization rule is <see cref="NormalizeEmail" />, and it is part of the
+    ///             contract.
+    ///         </b>
+    ///         Storing a differently-normalized address on the user than the one that
     ///         went into this digest is how an account becomes unfindable by its own email.
     ///     </para>
     /// </remarks>
     /// <exception cref="ArgumentException">
     ///     <paramref name="email" /> is not an address <see cref="NormalizeEmail" /> accepts.
     /// </exception>
-    public static string EmailIndex(Guid tenantId, string email)
-    {
+    public static string EmailIndex(Guid tenantId, string email) {
         var normalized = NormalizeEmail(email);
-        if (normalized.TryGetError(out var error))
-        {
+        if (normalized.TryGetError(out var error)) {
             throw new ArgumentException(error.Message, nameof(email));
         }
 
@@ -652,8 +768,12 @@ public static class GrainKeys
     ///     </para>
     ///     <para>
     ///         ⚠ <b>Why ASCII-only case folding, and not <see cref="string.ToLowerInvariant" />.</b>
-    ///         The property this function must have is that <b>two different addresses never produce
-    ///         one key</b> — a collision here is one account silently claiming another's identity at
+    ///         The property this function must have is that
+    ///         <b>
+    ///             two different addresses never produce
+    ///             one key
+    ///         </b>
+    ///         — a collision here is one account silently claiming another's identity at
     ///         sign-up, and the two-phase claim cannot distinguish it from a genuine duplicate.
     ///         <see cref="string.ToLowerInvariant" /> does not have that property: U+212A KELVIN SIGN
     ///         folds onto <c>'k'</c>, so <c>aK@example.com</c> and <c>ak@example.com</c> would
@@ -687,80 +807,73 @@ public static class GrainKeys
     ///         job (docs/plan/11 § Sign-up), not a regular expression's.
     ///     </para>
     /// </remarks>
-    public static Result<string> NormalizeEmail(string? email)
-    {
-        if (email is null)
-        {
+    public static Result<string> NormalizeEmail(string? email) {
+        if (email is null) {
             return InvalidEmail("null", "an email address is required");
         }
 
         var trimmed = email.AsSpan().Trim();
-        if (trimmed.IsEmpty)
-        {
+        if (trimmed.IsEmpty) {
             return InvalidEmail(email, "it is empty once surrounding white space is removed");
         }
 
-        if (trimmed.Length > MaxEmailLength)
-        {
+        if (trimmed.Length > MaxEmailLength) {
             return InvalidEmail(
                 email,
-                "it is " + Int(trimmed.Length) + " characters long and RFC 5321 caps an address at "
-                + Int(MaxEmailLength));
+                "it is "
+                + Int(trimmed.Length)
+                + " characters long and RFC 5321 caps an address at "
+                + Int(MaxEmailLength)
+            );
         }
 
         var at = -1;
-        for (var i = 0; i < trimmed.Length; i++)
-        {
+        for (var i = 0; i < trimmed.Length; i++) {
             var c = trimmed[i];
 
-            if (char.IsWhiteSpace(c) || char.IsControl(c))
-            {
+            if (char.IsWhiteSpace(c) || char.IsControl(c)) {
                 return InvalidEmail(
                     email,
                     "it contains white space or a control character (U+"
-                    + ((int)c).ToString("X4", CultureInfo.InvariantCulture) + ") at position "
-                    + Int(i));
+                    + ((int)c).ToString("X4", CultureInfo.InvariantCulture)
+                    + ") at position "
+                    + Int(i)
+                );
             }
 
-            if (c != '@')
-            {
+            if (c != '@') {
                 continue;
             }
 
-            if (at >= 0)
-            {
+            if (at >= 0) {
                 return InvalidEmail(email, "it contains more than one '@'");
             }
 
             at = i;
         }
 
-        if (at < 0)
-        {
+        if (at < 0) {
             return InvalidEmail(email, "it contains no '@'");
         }
 
-        if (at == 0)
-        {
+        if (at == 0) {
             return InvalidEmail(email, "it has an empty local part — nothing before the '@'");
         }
 
-        if (at == trimmed.Length - 1)
-        {
+        if (at == trimmed.Length - 1) {
             return InvalidEmail(email, "it has an empty domain — nothing after the '@'");
         }
 
-        Span<char> buffer = trimmed.Length <= 256
+        var buffer = trimmed.Length <= 256
             ? stackalloc char[trimmed.Length]
             : new char[trimmed.Length];
 
-        for (var i = 0; i < trimmed.Length; i++)
-        {
+        for (var i = 0; i < trimmed.Length; i++) {
             var c = trimmed[i];
             buffer[i] = c is >= 'A' and <= 'Z' ? (char)(c + 32) : c;
         }
 
-        return Result<string>.Success(new string(buffer));
+        return Result<string>.Success(new(buffer));
     }
 
     // ── Parsing ────────────────────────────────────────────────────────────────────────────────
@@ -769,12 +882,10 @@ public static class GrainKeys
     ///     Parses a grain key within a tenant. Returns <see langword="false" /> for anything that is
     ///     not exactly one, and never throws.
     /// </summary>
-    public static bool TryParse(string? keyWithinTenant, out GrainKey key)
-    {
+    public static bool TryParse(string? keyWithinTenant, out GrainKey key) {
         key = default;
         var parsed = Parse(keyWithinTenant);
-        if (parsed.IsFailure)
-        {
+        if (parsed.IsFailure) {
             return false;
         }
 
@@ -785,8 +896,11 @@ public static class GrainKeys
     /// <summary><see cref="TryParse" /> with an explanation.</summary>
     /// <remarks>
     ///     <para>
-    ///         <b>The parser accepts exactly the strings the formatters produce — no second
-    ///         spelling.</b> Every shape is recognised by a case-sensitive first segment and an exact
+    ///         <b>
+    ///             The parser accepts exactly the strings the formatters produce — no second
+    ///             spelling.
+    ///         </b>
+    ///         Every shape is recognised by a case-sensitive first segment and an exact
     ///         segment count, every GUID must be the 32-digit lower-case <c>N</c> form, every digest
     ///         must be <see cref="DigestLength" /> lower-case hexadecimal characters, and a resource
     ///         group name is re-validated against <see cref="ResourceNaming" />. As a final guard the
@@ -803,43 +917,41 @@ public static class GrainKeys
     ///         a different shape. See <c>GrainKeysTests</c> § key-shape collision.
     ///     </para>
     /// </remarks>
-    public static Result<GrainKey> Parse(string? keyWithinTenant)
-    {
-        if (string.IsNullOrEmpty(keyWithinTenant))
-        {
+    public static Result<GrainKey> Parse(string? keyWithinTenant) {
+        if (string.IsNullOrEmpty(keyWithinTenant)) {
             return Invalid(
                 "A grain key within a tenant is required. It is one of 'sub/{id}', "
                 + "'sub/{id}/rg/{name}', 'res/{id}', 'user/{id}', 'op/{id}', 'cluster/{id}', "
                 + "'tenant/{id}', 'platform/{singleton}', 'idx/path/{digest}', "
                 + "'idx/email/{digest}', 'rel/store/{tenantId}', 'rel/obj/{type}/{id}', "
                 + "'rel/sub/{type}/{id}' or 'rel/check/{type}/{id}' — see docs/plan/06 § Grain keys "
-                + "and docs/plan/07 § Storage.");
+                + "and docs/plan/07 § Storage."
+            );
         }
 
         var segments = keyWithinTenant.Split('/');
-        foreach (var segment in segments)
-        {
-            if (segment.Length == 0)
-            {
+        foreach (var segment in segments) {
+            if (segment.Length == 0) {
                 return Invalid(
                     $"'{keyWithinTenant}' is not a grain key: it contains an empty segment (a "
-                    + "doubled, leading or trailing '/').");
+                    + "doubled, leading or trailing '/')."
+                );
             }
         }
 
-        var parsed = segments.Length switch
-        {
+        var parsed = segments.Length switch {
             2 => ParseTwoSegments(keyWithinTenant, segments),
             3 => ParseThreeSegments(keyWithinTenant, segments),
             4 => ParseFourSegments(keyWithinTenant, segments),
             _ => Invalid(
                 $"'{keyWithinTenant}' is not a grain key: it has "
-                + Int(segments.Length) + " '/'-separated segments and every grain key shape has 2, "
-                + "3 or 4.")
+                + Int(segments.Length)
+                + " '/'-separated segments and every grain key shape has 2, "
+                + "3 or 4."
+            )
         };
 
-        if (parsed.TryGetError(out var error))
-        {
+        if (parsed.TryGetError(out var error)) {
             return Result<GrainKey>.Failure(error);
         }
 
@@ -851,7 +963,8 @@ public static class GrainKeys
             : Invalid(
                 $"'{keyWithinTenant}' is not a grain key: it decodes to '{key}', which is a "
                 + "different string. One grain has exactly one key, so a second spelling is "
-                + "rejected rather than silently accepted as a second activation.");
+                + "rejected rather than silently accepted as a second activation."
+            );
     }
 
     /// <summary>
@@ -867,15 +980,12 @@ public static class GrainKeys
     ///     trivially, so one that does not is a bug worth catching — which is why the predicate is
     ///     public. It is the assertion any future key-formatting code should be held to.
     /// </remarks>
-    public static bool IsTenantQualificationSafe(string? keyWithinTenant)
-    {
-        if (string.IsNullOrEmpty(keyWithinTenant))
-        {
+    public static bool IsTenantQualificationSafe(string? keyWithinTenant) {
+        if (string.IsNullOrEmpty(keyWithinTenant)) {
             return false;
         }
 
-        if (keyWithinTenant[0] is '|' or '~')
-        {
+        if (keyWithinTenant[0] is '|' or '~') {
             return false;
         }
 
@@ -884,20 +994,17 @@ public static class GrainKeys
 
     // ── Internals ──────────────────────────────────────────────────────────────────────────────
 
-    static Result<GrainKey> ParseTwoSegments(string key, string[] segments)
-    {
-        if (string.Equals(segments[0], "platform", StringComparison.Ordinal))
-        {
+    static Result<GrainKey> ParseTwoSegments(string key, string[] segments) {
+        if (string.Equals(segments[0], "platform", StringComparison.Ordinal)) {
             return PlatformSingletons.Contains(segments[1], StringComparer.Ordinal)
-                ? Result<GrainKey>.Success(
-                    new GrainKey(GrainKeyKind.PlatformSingleton, Guid.Empty, segments[1], null))
+                ? Result<GrainKey>.Success(new(GrainKeyKind.PlatformSingleton, Guid.Empty, segments[1], null))
                 : Invalid(
                     $"'{key}' is not a grain key: '{segments[1]}' is not a platform singleton. The "
-                    + $"set is closed and is [{string.Join(", ", PlatformSingletons)}].");
+                    + $"set is closed and is [{string.Join(", ", PlatformSingletons)}]."
+                );
         }
 
-        var kind = segments[0] switch
-        {
+        var kind = segments[0] switch {
             "sub" => GrainKeyKind.Subscription,
             "res" => GrainKeyKind.Resource,
             "user" => GrainKeyKind.User,
@@ -907,128 +1014,124 @@ public static class GrainKeys
             _ => GrainKeyKind.None
         };
 
-        if (kind == GrainKeyKind.None)
-        {
+        if (kind == GrainKeyKind.None) {
             return Invalid(
                 $"'{key}' is not a grain key: '{segments[0]}' is not one of 'sub', 'res', 'user', "
                 + "'op', 'cluster', 'tenant' or 'platform'. The prefix is matched case-sensitively — "
-                + "see docs/plan/06 § Grain keys.");
+                + "see docs/plan/06 § Grain keys."
+            );
         }
 
         return GuidFormat.TryParseN(segments[1], out var id)
-            ? Result<GrainKey>.Success(new GrainKey(kind, id, null, null))
+            ? Result<GrainKey>.Success(new(kind, id, null, null))
             : Invalid(
                 $"'{segments[1]}' is not an id: a grain key spells GUIDs in the 32-digit "
-                + "lower-case 'N' form, with no hyphens and no braces.");
+                + "lower-case 'N' form, with no hyphens and no braces."
+            );
     }
 
-    static Result<GrainKey> ParseThreeSegments(string key, string[] segments)
-    {
-        if (string.Equals(segments[0], RelationSegment, StringComparison.Ordinal))
-        {
-            if (!string.Equals(segments[1], "store", StringComparison.Ordinal))
-            {
+    static Result<GrainKey> ParseThreeSegments(string key, string[] segments) {
+        if (string.Equals(segments[0], RelationSegment, StringComparison.Ordinal)) {
+            if (!string.Equals(segments[1], "store", StringComparison.Ordinal)) {
                 return Invalid(
                     $"'{key}' is not a grain key: the only three-segment 'rel' shape is "
                     + "'rel/store/{tenantId}' — docs/plan/07 § Consistency. 'rel/obj', 'rel/sub' "
-                    + "and 'rel/check' take four segments.");
+                    + "and 'rel/check' take four segments."
+                );
             }
 
             return GuidFormat.TryParseN(segments[2], out var tenantId)
-                ? Result<GrainKey>.Success(new GrainKey(GrainKeyKind.TupleStore, tenantId, null, null))
+                ? Result<GrainKey>.Success(new(GrainKeyKind.TupleStore, tenantId, null, null))
                 : Invalid(
                     $"'{segments[2]}' is not a tenant id: a grain key spells GUIDs in the 32-digit "
-                    + "lower-case 'N' form, with no hyphens and no braces.");
+                    + "lower-case 'N' form, with no hyphens and no braces."
+                );
         }
 
-        if (!string.Equals(segments[0], "idx", StringComparison.Ordinal))
-        {
+        if (!string.Equals(segments[0], "idx", StringComparison.Ordinal)) {
             return Invalid(
                 $"'{key}' is not a grain key: a three-segment key is an index or a tuple store and "
-                + "must start with 'idx' or 'rel'.");
+                + "must start with 'idx' or 'rel'."
+            );
         }
 
-        var kind = segments[1] switch
-        {
+        var kind = segments[1] switch {
             "path" => GrainKeyKind.PathIndex,
             "email" => GrainKeyKind.EmailIndex,
             _ => GrainKeyKind.None
         };
 
-        if (kind == GrainKeyKind.None)
-        {
+        if (kind == GrainKeyKind.None) {
             return Invalid(
                 $"'{key}' is not a grain key: '{segments[1]}' is not an index. The two indexes are "
-                + "'idx/path' (docs/plan/06:106) and 'idx/email' (docs/plan/06:108).");
+                + "'idx/path' (docs/plan/06:106) and 'idx/email' (docs/plan/06:108)."
+            );
         }
 
         return IsDigest(segments[2])
-            ? Result<GrainKey>.Success(new GrainKey(kind, Guid.Empty, null, segments[2]))
+            ? Result<GrainKey>.Success(new(kind, Guid.Empty, null, segments[2]))
             : Invalid(
-                $"'{segments[2]}' is not an index digest: it must be exactly " + Int(DigestLength)
-                + " lower-case hexadecimal characters, the first " + Int(DigestLength)
-                + " of a SHA-256.");
+                $"'{segments[2]}' is not an index digest: it must be exactly "
+                + Int(DigestLength)
+                + " lower-case hexadecimal characters, the first "
+                + Int(DigestLength)
+                + " of a SHA-256."
+            );
     }
 
-    static Result<GrainKey> ParseFourSegments(string key, string[] segments)
-    {
-        if (string.Equals(segments[0], RelationSegment, StringComparison.Ordinal))
-        {
+    static Result<GrainKey> ParseFourSegments(string key, string[] segments) {
+        if (string.Equals(segments[0], RelationSegment, StringComparison.Ordinal)) {
             return ParseRelation(key, segments);
         }
 
         if (!string.Equals(segments[0], "sub", StringComparison.Ordinal)
-            || !string.Equals(segments[2], ResourceGroupSegment, StringComparison.Ordinal))
-        {
+            || !string.Equals(segments[2], ResourceGroupSegment, StringComparison.Ordinal)) {
             return Invalid(
                 $"'{key}' is not a grain key: the four-segment shapes are "
                 + "'sub/{subscriptionId}/rg/{name}' (docs/plan/06:104) and 'rel/{obj|sub|check}/"
-                + "{type}/{id}' (docs/plan/07 § Storage).");
+                + "{type}/{id}' (docs/plan/07 § Storage)."
+            );
         }
 
-        if (!GuidFormat.TryParseN(segments[1], out var subscriptionId))
-        {
+        if (!GuidFormat.TryParseN(segments[1], out var subscriptionId)) {
             return Invalid(
                 $"'{segments[1]}' is not a subscription id: a grain key spells GUIDs in the "
-                + "32-digit lower-case 'N' form, with no hyphens and no braces.");
+                + "32-digit lower-case 'N' form, with no hyphens and no braces."
+            );
         }
 
         var name = ResourceNaming.Validate(segments[3], "resource group name");
         return name.TryGetError(out var error)
-            ? Result<GrainKey>.Failure(new Error(ErrorCode.InvalidGrainKey, error.Message))
-            : Result<GrainKey>.Success(
-                new GrainKey(GrainKeyKind.ResourceGroup, subscriptionId, segments[3], null));
+            ? Result<GrainKey>.Failure(new(ErrorCode.InvalidGrainKey, error.Message))
+            : Result<GrainKey>.Success(new(GrainKeyKind.ResourceGroup, subscriptionId, segments[3], null));
     }
 
-    static Result<GrainKey> ParseRelation(string key, string[] segments)
-    {
-        var kind = segments[1] switch
-        {
+    static Result<GrainKey> ParseRelation(string key, string[] segments) {
+        var kind = segments[1] switch {
             "obj" => GrainKeyKind.ObjectRelations,
             "sub" => GrainKeyKind.SubjectRelations,
             "check" => GrainKeyKind.CheckCache,
             _ => GrainKeyKind.None
         };
 
-        if (kind == GrainKeyKind.None)
-        {
+        if (kind == GrainKeyKind.None) {
             return Invalid(
                 $"'{key}' is not a grain key: '{segments[1]}' is not an authorization shape. The "
                 + "four-segment 'rel' shapes are 'rel/obj' (the tuples whose object this is), "
                 + "'rel/sub' (the reverse index) and 'rel/check' (the check cache) — docs/plan/07 "
-                + "§ Storage.");
+                + "§ Storage."
+            );
         }
 
         var type = RelationNaming.ValidateName(segments[2], "object type");
-        if (type.TryGetError(out var typeError))
-        {
-            return Result<GrainKey>.Failure(new Error(ErrorCode.InvalidGrainKey, typeError.Message));
+        if (type.TryGetError(out var typeError)) {
+            return Result<GrainKey>.Failure(new(ErrorCode.InvalidGrainKey, typeError.Message));
         }
 
         var id = RelationNaming.ValidateId(segments[3]);
         return id.TryGetError(out var idError)
-            ? Result<GrainKey>.Failure(new Error(ErrorCode.InvalidGrainKey, idError.Message))
-            : Result<GrainKey>.Success(new GrainKey(kind, segments[2], segments[3]));
+            ? Result<GrainKey>.Failure(new(ErrorCode.InvalidGrainKey, idError.Message))
+            : Result<GrainKey>.Success(new(kind, segments[2], segments[3]));
     }
 
     /// <summary>
@@ -1036,34 +1139,27 @@ public static class GrainKeys
     ///     <c>{type}/{id}</c>.
     /// </summary>
     /// <exception cref="ArgumentException">Either component is not legal.</exception>
-    static string EnsureObject(string type, string id)
-    {
+    static string EnsureObject(string type, string id) {
         var validType = RelationNaming.ValidateName(type, "object type");
-        if (validType.TryGetError(out var typeError))
-        {
+        if (validType.TryGetError(out var typeError)) {
             throw new ArgumentException(typeError.Message, nameof(type));
         }
 
         var validId = RelationNaming.ValidateId(id);
-        if (validId.TryGetError(out var idError))
-        {
+        if (validId.TryGetError(out var idError)) {
             throw new ArgumentException(idError.Message, nameof(id));
         }
 
         return type + "/" + id;
     }
 
-    static bool IsDigest(string value)
-    {
-        if (value.Length != DigestLength)
-        {
+    static bool IsDigest(string value) {
+        if (value.Length != DigestLength) {
             return false;
         }
 
-        foreach (var c in value)
-        {
-            if (c is not (>= '0' and <= '9' or >= 'a' and <= 'f'))
-            {
+        foreach (var c in value) {
+            if (c is not (>= '0' and <= '9' or >= 'a' and <= 'f')) {
                 return false;
             }
         }
@@ -1083,8 +1179,7 @@ public static class GrainKeys
     ///     <see cref="ResourceTypeName" /> reject control characters in a path, and
     ///     <see cref="NormalizeEmail" /> rejects them in an address.
     /// </remarks>
-    static string Digest(string purpose, string value)
-    {
+    static string Digest(string purpose, string value) {
         var input = purpose + "\n" + value;
         var bytes = Encoding.UTF8.GetBytes(input);
 
@@ -1098,14 +1193,15 @@ public static class GrainKeys
 
     static string Int(int value) => value.ToString(CultureInfo.InvariantCulture);
 
-    static Result<GrainKey> Invalid(string message) =>
-        Result<GrainKey>.Failure(ErrorCode.InvalidGrainKey, message);
+    static Result<GrainKey> Invalid(string message) => Result<GrainKey>.Failure(ErrorCode.InvalidGrainKey, message);
 
     static Result<string> InvalidEmail(string shown, string problem) =>
         Result<string>.Failure(
             ErrorCode.InvalidGrainKey,
             $"'{shown}' is not an email address: {problem}. An address is 1-"
-            + Int(MaxEmailLength) + " characters with exactly one '@', a non-empty local part and a "
+            + Int(MaxEmailLength)
+            + " characters with exactly one '@', a non-empty local part and a "
             + "non-empty domain, and no white space or control characters. See docs/plan/11 "
-            + "§ Sign-up and tenant creation.");
+            + "§ Sign-up and tenant creation."
+        );
 }

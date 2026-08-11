@@ -1,10 +1,10 @@
-using System.Collections.Immutable;
 using CyberCloud.Core;
 using CyberCloud.Core.Resources;
 using CyberCloud.Tenancy.Contracts;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using System.Collections.Immutable;
 
 namespace CyberCloud.Tenancy.Directory;
 
@@ -22,13 +22,19 @@ namespace CyberCloud.Tenancy.Directory;
 ///             against an immutable snapshot and cannot do I/O at all — it is not even async.
 ///         </item>
 ///         <item>
-///             <b>"A cache miss … falls back to a grain call — measured, alerted on, and expected to
-///             be a handful per second worldwide."</b> <see cref="LookupAsync" /> is the fallback and
+///             <b>
+///                 "A cache miss … falls back to a grain call — measured, alerted on, and expected to
+///                 be a handful per second worldwide."
+///             </b>
+///             <see cref="LookupAsync" /> is the fallback and
 ///             <see cref="Misses" /> is the measurement.
 ///         </item>
 ///         <item>
-///             <b>"If the global cluster is unreachable … every existing tenant keeps working from
-///             cache, in every region, indefinitely."</b> — chaos-invariant 5 in docs/plan/23. Every
+///             <b>
+///                 "If the global cluster is unreachable … every existing tenant keeps working from
+///                 cache, in every region, indefinitely."
+///             </b>
+///             — chaos-invariant 5 in docs/plan/23. Every
 ///             failure path here returns cached data if it has any, and the word <i>indefinitely</i>
 ///             is load-bearing: there is <b>no</b> staleness deadline, no TTL and no circuit that
 ///             starts failing reads after N minutes. A cached entry serves until something replaces
@@ -39,10 +45,13 @@ namespace CyberCloud.Tenancy.Directory;
 /// </remarks>
 public sealed class TenantDirectoryCache(
     IGrainFactory grains,
-    ILogger<TenantDirectoryCache> logger)
-{
-    volatile Snapshot current = new(0, ImmutableDictionary<Guid, TenantDirectoryEntry>.Empty,
-        ImmutableDictionary<string, Guid>.Empty);
+    ILogger<TenantDirectoryCache> logger
+) {
+    volatile Snapshot current = new(
+        0,
+        ImmutableDictionary<Guid, TenantDirectoryEntry>.Empty,
+        ImmutableDictionary<string, Guid>.Empty
+    );
 
     /// <summary>The directory version this snapshot was built from.</summary>
     public long Version => current.Version;
@@ -64,8 +73,7 @@ public sealed class TenantDirectoryCache(
     public long FallbackFailures { get; private set; }
 
     /// <summary>The directory grain — one activation worldwide, null tenant.</summary>
-    public ITenantDirectoryGrain Grain =>
-        grains.GetGrain<ITenantDirectoryGrain>(GrainKeys.TenantDirectory());
+    public ITenantDirectoryGrain Grain => grains.GetGrain<ITenantDirectoryGrain>(GrainKeys.TenantDirectory());
 
     /// <summary>
     ///     The in-process read. <b>Cannot do I/O</b> and cannot fail.
@@ -84,28 +92,22 @@ public sealed class TenantDirectoryCache(
     ///     returned and the failure is only counted. That is the whole of chaos-invariant 5: an
     ///     existing tenant is unaffected by the global cluster being gone.
     /// </remarks>
-    public async Task<Result<TenantDirectoryEntry>> LookupAsync(Guid tenantId)
-    {
-        if (current.ById.TryGetValue(tenantId, out var cached))
-        {
+    public async Task<Result<TenantDirectoryEntry>> LookupAsync(Guid tenantId) {
+        if (current.ById.TryGetValue(tenantId, out var cached)) {
             Hits++;
             return Result<TenantDirectoryEntry>.Success(cached);
         }
 
         Misses++;
 
-        try
-        {
+        try {
             var looked = await Grain.LookupAsync(tenantId);
-            if (looked.TryGetValue(out var entry))
-            {
+            if (looked.TryGetValue(out var entry)) {
                 Absorb(entry);
             }
 
             return looked;
-        }
-        catch (Exception exception) when (exception is not OperationCanceledException)
-        {
+        } catch (Exception exception) when (exception is not OperationCanceledException) {
             FallbackFailures++;
 
             logger.LogWarning(
@@ -115,22 +117,23 @@ public sealed class TenantDirectoryCache(
                 + "tenants).",
                 tenantId,
                 current.Version,
-                current.ById.Count);
+                current.ById.Count
+            );
 
             return Result<TenantDirectoryEntry>.Failure(
                 ErrorCode.TenantNotFound,
                 $"Tenant {tenantId:D} is not in this process's directory snapshot and the global "
                 + "directory cluster is unreachable. docs/plan/05 § The tenant directory: with the "
                 + "global cluster down, no NEW tenant can be resolved anywhere — every existing one "
-                + "keeps working from cache. This tenant is either new or does not exist.");
+                + "keeps working from cache. This tenant is either new or does not exist."
+            );
         }
     }
 
     /// <summary>Looks a tenant up by slug, in memory only.</summary>
     /// <param name="slug">The slug.</param>
     /// <param name="entry">The entry, when resident.</param>
-    public bool TryLookupBySlug(string slug, out TenantDirectoryEntry? entry)
-    {
+    public bool TryLookupBySlug(string slug, out TenantDirectoryEntry? entry) {
         entry = null;
         return current.BySlug.TryGetValue(slug ?? string.Empty, out var id)
             && current.ById.TryGetValue(id, out entry);
@@ -139,13 +142,11 @@ public sealed class TenantDirectoryCache(
     /// <summary>Applies a delta from <see cref="ITenantDirectoryGrain.GetDeltaAsync" />.</summary>
     /// <param name="delta">The delta.</param>
     /// <returns><see langword="true" /> if anything changed.</returns>
-    public bool Apply(TenantDirectoryDelta delta)
-    {
+    public bool Apply(TenantDirectoryDelta delta) {
         ArgumentNullException.ThrowIfNull(delta);
 
         var previous = current;
-        if (delta.Version < previous.Version)
-        {
+        if (delta.Version < previous.Version) {
             return false;
         }
 
@@ -157,36 +158,30 @@ public sealed class TenantDirectoryCache(
             ? ImmutableDictionary.CreateBuilder<string, Guid>(StringComparer.Ordinal)
             : previous.BySlug.ToBuilder();
 
-        foreach (var entry in delta.Entries)
-        {
+        foreach (var entry in delta.Entries) {
             byId[entry.TenantId] = entry;
             bySlug[entry.Slug] = entry.TenantId;
         }
 
         // Replaced wholesale, so a reader never sees half a delta.
-        current = new Snapshot(delta.Version, byId.ToImmutable(), bySlug.ToImmutable());
+        current = new(delta.Version, byId.ToImmutable(), bySlug.ToImmutable());
         return delta.Version != previous.Version || byId.Count != previous.ById.Count;
     }
 
     /// <summary>Refreshes from the grain. Never throws.</summary>
     /// <param name="cancellationToken">The host's shutdown token.</param>
-    public async Task<bool> RefreshAsync(CancellationToken cancellationToken = default)
-    {
-        try
-        {
+    public async Task<bool> RefreshAsync(CancellationToken cancellationToken = default) {
+        try {
             cancellationToken.ThrowIfCancellationRequested();
 
             var delta = await Grain.GetDeltaAsync(current.Version);
-            if (delta.TryGetValue(out var value))
-            {
+            if (delta.TryGetValue(out var value)) {
                 return Apply(value);
             }
 
             FallbackFailures++;
             return false;
-        }
-        catch (Exception exception) when (exception is not OperationCanceledException)
-        {
+        } catch (Exception exception) when (exception is not OperationCanceledException) {
             FallbackFailures++;
 
             logger.LogWarning(
@@ -194,38 +189,38 @@ public sealed class TenantDirectoryCache(
                 "Tenant directory refresh failed. The cached snapshot (version {Version}, {Count} "
                 + "tenants) stays in use indefinitely — docs/plan/05 § The tenant directory.",
                 current.Version,
-                current.ById.Count);
+                current.ById.Count
+            );
 
             return false;
         }
     }
 
-    void Absorb(TenantDirectoryEntry entry)
-    {
+    void Absorb(TenantDirectoryEntry entry) {
         var previous = current;
-        current = new Snapshot(
+        current = new(
             Math.Max(previous.Version, entry.DirectoryVersion),
             previous.ById.SetItem(entry.TenantId, entry),
-            previous.BySlug.SetItem(entry.Slug, entry.TenantId));
+            previous.BySlug.SetItem(entry.Slug, entry.TenantId)
+        );
     }
 
     sealed record Snapshot(
         long Version,
         ImmutableDictionary<Guid, TenantDirectoryEntry> ById,
-        ImmutableDictionary<string, Guid> BySlug);
+        ImmutableDictionary<string, Guid> BySlug
+    );
 }
 
 /// <summary>Runs <see cref="TenantDirectoryCache" />'s refresh on a timer.</summary>
 public sealed class TenantDirectoryRefreshService(
     TenantDirectoryCache cache,
-    IOptions<TenancyRefreshOptions> options)
-    : BackgroundService
-{
+    IOptions<TenancyRefreshOptions> options
+)
+    : BackgroundService {
     /// <inheritdoc />
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
-    {
-        if (!options.Value.RunBackgroundRefresh)
-        {
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken) {
+        if (!options.Value.RunBackgroundRefresh) {
             return;
         }
 
@@ -233,15 +228,11 @@ public sealed class TenantDirectoryRefreshService(
 
         await cache.RefreshAsync(stoppingToken);
 
-        try
-        {
-            while (await timer.WaitForNextTickAsync(stoppingToken))
-            {
+        try {
+            while (await timer.WaitForNextTickAsync(stoppingToken)) {
                 await cache.RefreshAsync(stoppingToken);
             }
-        }
-        catch (OperationCanceledException)
-        {
+        } catch (OperationCanceledException) {
             // Shutdown.
         }
     }

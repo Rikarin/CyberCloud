@@ -4,8 +4,7 @@ namespace CyberCloud.Analyzers.Tests;
 ///     CC1007 — <c>docs/plan/00 § Non-negotiables</c>: "no <c>#pragma warning disable</c> without a
 ///     linked issue".
 /// </summary>
-public sealed class PragmaWithoutIssueAnalyzerTests
-{
+public sealed class PragmaWithoutIssueAnalyzerTests {
     // ── positive ─────────────────────────────────────────────────────────────────────────────────
 
     [Fact]
@@ -17,7 +16,8 @@ public sealed class PragmaWithoutIssueAnalyzerTests
             class Thing
             {
             }
-            """);
+            """
+        );
 
     /// <summary>A justification with no link is a note to nobody.</summary>
     [Fact]
@@ -29,7 +29,8 @@ public sealed class PragmaWithoutIssueAnalyzerTests
             class Thing
             {
             }
-            """);
+            """
+        );
 
     /// <summary>The blanket form — no codes at all — is the worst one and is still reported.</summary>
     [Fact]
@@ -41,7 +42,8 @@ public sealed class PragmaWithoutIssueAnalyzerTests
             class Thing
             {
             }
-            """);
+            """
+        );
 
     // ── negative ─────────────────────────────────────────────────────────────────────────────────
 
@@ -54,7 +56,8 @@ public sealed class PragmaWithoutIssueAnalyzerTests
             class Thing
             {
             }
-            """);
+            """
+        );
 
     [Fact]
     public Task AHashNumberIsALink() =>
@@ -65,7 +68,8 @@ public sealed class PragmaWithoutIssueAnalyzerTests
             class Thing
             {
             }
-            """);
+            """
+        );
 
     [Fact]
     public Task ATrackerKeyIsALink() =>
@@ -76,7 +80,8 @@ public sealed class PragmaWithoutIssueAnalyzerTests
             class Thing
             {
             }
-            """);
+            """
+        );
 
     /// <summary>A justification too long for one line gets the line above.</summary>
     [Fact]
@@ -89,7 +94,8 @@ public sealed class PragmaWithoutIssueAnalyzerTests
             class Thing
             {
             }
-            """);
+            """
+        );
 
     /// <summary>⚠ <c>restore</c> is the good half and must never be reported.</summary>
     [Fact]
@@ -101,7 +107,8 @@ public sealed class PragmaWithoutIssueAnalyzerTests
             class Thing
             {
             }
-            """);
+            """
+        );
 
     /// <summary>
     ///     ⚠ A file with a link somewhere in it does not license a pragma. The comment has to be
@@ -121,7 +128,8 @@ public sealed class PragmaWithoutIssueAnalyzerTests
             }
 
             {|CC1007:#pragma warning disable CA1822|}
-            """);
+            """
+        );
 
     /// <summary>A file with no suppression at all is the common case and must be silent.</summary>
     [Fact]
@@ -131,5 +139,6 @@ public sealed class PragmaWithoutIssueAnalyzerTests
             class Thing
             {
             }
-            """);
+            """
+        );
 }

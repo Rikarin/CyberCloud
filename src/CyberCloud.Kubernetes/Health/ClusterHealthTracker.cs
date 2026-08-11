@@ -9,11 +9,14 @@ namespace CyberCloud.Kubernetes.Health;
 /// <remarks>
 ///     <para>
 ///         <b>The rule this type encodes, and the reason it is a type at all.</b> docs/plan/09
-///         § Cluster connections: <i>"A cluster that has not answered a ping in 90 seconds is
-///         Degraded; its resources' reconciles are suspended (not failed) and the portal says
-///         'cannot reach your cluster' instead of 'provisioning failed'. The distinction between
-///         our failure and unreachable is what stops a tenant's network outage from looking like a
-///         platform bug."</i>
+///         § Cluster connections:
+///         <i>
+///             "A cluster that has not answered a ping in 90 seconds is
+///             Degraded; its resources' reconciles are suspended (not failed) and the portal says
+///             'cannot reach your cluster' instead of 'provisioning failed'. The distinction between
+///             our failure and unreachable is what stops a tenant's network outage from looking like a
+///             platform bug."
+///         </i>
 ///     </para>
 ///     <para>
 ///         ⚠ <b>Degraded is decided by elapsed time, not by a failure count.</b> Those differ in the
@@ -29,36 +32,12 @@ namespace CyberCloud.Kubernetes.Health;
 ///         is a test nobody runs. Same argument as <c>TestClock</c> in the tenancy suite.
 ///     </para>
 /// </remarks>
-public sealed class ClusterHealthTracker(Guid clusterId, IClock clock, TimeSpan? stalenessWindow = null)
-{
+public sealed class ClusterHealthTracker(Guid clusterId, IClock clock, TimeSpan? stalenessWindow = null) {
     /// <summary>
     ///     90 seconds — docs/plan/09 § Cluster connections, stated as a number and therefore
     ///     transcribed as one.
     /// </summary>
     public static readonly TimeSpan StalenessWindow = TimeSpan.FromSeconds(90);
-
-    /// <summary>The window this instance is using.</summary>
-    public TimeSpan Window { get; } = stalenessWindow ?? StalenessWindow;
-
-    /// <summary>
-    ///     Restores the last known success from durable state, so that a rehomed activation does not
-    ///     start its window over.
-    /// </summary>
-    /// <param name="at">When a ping last succeeded.</param>
-    /// <remarks>
-    ///     ⚠ Without this, an activation that moved silos would report
-    ///     <see cref="ClusterHealthState.Unknown" /> and — worse — could not report
-    ///     <see cref="ClusterHealthState.Degraded" />, because the transition is measured from the
-    ///     last success and it would have none. A cluster that went unreachable an hour ago would
-    ///     read as "no information" rather than "cannot reach your cluster" for a full window after
-    ///     every rebalance.
-    /// </remarks>
-    public void SeedLastSuccess(DateTimeOffset at)
-    {
-        lastSuccessAt = at;
-        lastAttemptAt = at;
-        everSucceeded = true;
-    }
 
     /// <summary>
     ///     How often the connection grain's reminder pings. A third of the window, so that two
@@ -73,24 +52,8 @@ public sealed class ClusterHealthTracker(Guid clusterId, IClock clock, TimeSpan?
     int consecutiveFailures;
     string message = string.Empty;
 
-    /// <summary>Records a successful ping.</summary>
-    public void RecordSuccess()
-    {
-        lastAttemptAt = clock.UtcNow;
-        lastSuccessAt = lastAttemptAt;
-        everSucceeded = true;
-        consecutiveFailures = 0;
-        message = string.Empty;
-    }
-
-    /// <summary>Records a ping that did not answer.</summary>
-    /// <param name="reason">What went wrong, for <see cref="ClusterHealth.Message" />.</param>
-    public void RecordFailure(string reason)
-    {
-        lastAttemptAt = clock.UtcNow;
-        consecutiveFailures++;
-        message = reason;
-    }
+    /// <summary>The window this instance is using.</summary>
+    public TimeSpan Window { get; } = stalenessWindow ?? StalenessWindow;
 
     /// <summary>Health as of now.</summary>
     /// <remarks>
@@ -100,28 +63,61 @@ public sealed class ClusterHealthTracker(Guid clusterId, IClock clock, TimeSpan?
     ///     <see cref="ClusterHealthState.Healthy" /> forever on a silo whose reminder stopped firing
     ///     — which is precisely the case this property exists to catch.
     /// </remarks>
-    public ClusterHealth Current
-    {
-        get
-        {
+    public ClusterHealth Current {
+        get {
             var now = clock.UtcNow;
 
             var state = !everSucceeded
-                ? (consecutiveFailures > 0 ? ClusterHealthState.Degraded : ClusterHealthState.Unknown)
+                ? consecutiveFailures > 0 ? ClusterHealthState.Degraded : ClusterHealthState.Unknown
                 : now - lastSuccessAt >= Window
                     ? ClusterHealthState.Degraded
                     : ClusterHealthState.Healthy;
 
-            return new ClusterHealth
-            {
+            return new() {
                 ClusterId = clusterId,
                 State = state,
                 LastSuccessAt = lastSuccessAt,
                 LastAttemptAt = lastAttemptAt,
                 ConsecutiveFailures = consecutiveFailures,
-                Message = state == ClusterHealthState.Degraded ? DegradedMessage(now) : string.Empty,
+                Message = state == ClusterHealthState.Degraded ? DegradedMessage(now) : string.Empty
             };
         }
+    }
+
+    /// <summary>
+    ///     Restores the last known success from durable state, so that a rehomed activation does not
+    ///     start its window over.
+    /// </summary>
+    /// <param name="at">When a ping last succeeded.</param>
+    /// <remarks>
+    ///     ⚠ Without this, an activation that moved silos would report
+    ///     <see cref="ClusterHealthState.Unknown" /> and — worse — could not report
+    ///     <see cref="ClusterHealthState.Degraded" />, because the transition is measured from the
+    ///     last success and it would have none. A cluster that went unreachable an hour ago would
+    ///     read as "no information" rather than "cannot reach your cluster" for a full window after
+    ///     every rebalance.
+    /// </remarks>
+    public void SeedLastSuccess(DateTimeOffset at) {
+        lastSuccessAt = at;
+        lastAttemptAt = at;
+        everSucceeded = true;
+    }
+
+    /// <summary>Records a successful ping.</summary>
+    public void RecordSuccess() {
+        lastAttemptAt = clock.UtcNow;
+        lastSuccessAt = lastAttemptAt;
+        everSucceeded = true;
+        consecutiveFailures = 0;
+        message = string.Empty;
+    }
+
+    /// <summary>Records a ping that did not answer.</summary>
+    /// <param name="reason">What went wrong, for <see cref="ClusterHealth.Message" />.</param>
+    public void RecordFailure(string reason) {
+        lastAttemptAt = clock.UtcNow;
+        consecutiveFailures++;
+        message = reason;
     }
 
     /// <summary>
@@ -129,8 +125,7 @@ public sealed class ClusterHealthTracker(Guid clusterId, IClock clock, TimeSpan?
     ///     not "provisioning failed", and the wording is part of the requirement rather than
     ///     decoration — it is what tells a tenant the problem is on their side of the connection.
     /// </summary>
-    string DegradedMessage(DateTimeOffset now)
-    {
+    string DegradedMessage(DateTimeOffset now) {
         var forHowLong = everSucceeded
             ? $"for {(now - lastSuccessAt).TotalSeconds:F0} seconds"
             : "since the platform first tried";

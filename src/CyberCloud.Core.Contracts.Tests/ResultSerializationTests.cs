@@ -1,7 +1,6 @@
-using System.Collections.Immutable;
-using CyberCloud.Core;
 using CyberCloud.Core.Resources;
 using Shouldly;
+using System.Collections.Immutable;
 
 namespace CyberCloud.Core.Contracts.Tests;
 
@@ -14,16 +13,14 @@ namespace CyberCloud.Core.Contracts.Tests;
 ///     assembly and the one a happy-path round-trip test would never find.
 /// </remarks>
 public sealed class ResultSerializationTests(OrleansSerializerFixture orleans)
-    : IClassFixture<OrleansSerializerFixture>
-{
+    : IClassFixture<OrleansSerializerFixture> {
     static readonly ResourceTypeName PostgresServers =
         new("CyberCloud.DBforPostgreSQL", "servers");
 
     // ── The default-value trap ─────────────────────────────────────────────────────────────────
 
     [Fact]
-    public void DefaultResultSurvivesAsAFailure()
-    {
+    public void DefaultResultSurvivesAsAFailure() {
         // default(Result) is deliberately a failure in Core. The wire must not launder it.
         var round = orleans.RoundTrip(default(Result));
 
@@ -34,8 +31,7 @@ public sealed class ResultSerializationTests(OrleansSerializerFixture orleans)
     }
 
     [Fact]
-    public void DefaultResultKeepsItsErrorTextSoTheCauseIsNotLost()
-    {
+    public void DefaultResultKeepsItsErrorTextSoTheCauseIsNotLost() {
         // Core substitutes its Uninitialized error in the property getter, so what goes on the wire
         // is that error's text — not a placeholder invented by the surrogate. Asserting the text
         // survives is what distinguishes "still a failure" from "still a failure, and still says
@@ -44,8 +40,7 @@ public sealed class ResultSerializationTests(OrleansSerializerFixture orleans)
     }
 
     [Fact]
-    public void DefaultResultIsNotStructurallyEqualToItsRoundTripAndThatIsExpected()
-    {
+    public void DefaultResultIsNotStructurallyEqualToItsRoundTripAndThatIsExpected() {
         // ⚠ The one place the round trip is not an identity, recorded so nobody "fixes" it.
         //
         // Result is a record struct, so its synthesised equality compares the BACKING FIELD behind
@@ -67,8 +62,7 @@ public sealed class ResultSerializationTests(OrleansSerializerFixture orleans)
     }
 
     [Fact]
-    public void DefaultGenericResultOverAValueTypeSurvivesAsAFailure()
-    {
+    public void DefaultGenericResultOverAValueTypeSurvivesAsAFailure() {
         // The nastiest shape: T is a value type, so a null-based "did it work" check would read the
         // zero as an answer. Result<int> failure must stay a failure and must not hand back 0.
         var round = orleans.RoundTrip(default(Result<int>));
@@ -79,8 +73,7 @@ public sealed class ResultSerializationTests(OrleansSerializerFixture orleans)
     }
 
     [Fact]
-    public void DefaultGenericResultOverAValidatingStructSurvivesAsAFailure()
-    {
+    public void DefaultGenericResultOverAValidatingStructSurvivesAsAFailure() {
         // Result<ResourceId> writes default(ResourceId) into the value slot of a failure, and
         // ResourceId's constructor throws on the null name that implies. If ResourceIdSurrogate did
         // not special-case default, this test would throw rather than fail — which is why it is
@@ -94,13 +87,13 @@ public sealed class ResultSerializationTests(OrleansSerializerFixture orleans)
     // ── Failures ───────────────────────────────────────────────────────────────────────────────
 
     [Fact]
-    public void AFailedResultRoundTripsWithItsWholeError()
-    {
+    public void AFailedResultRoundTripsWithItsWholeError() {
         var original = Result.Failure(
             ErrorCode.QuotaExceeded,
             "Subscription quota for 'vcpu' in region 'eu-central' would be exceeded "
             + "(requested 8, available 2).",
-            "/properties/sku");
+            "/properties/sku"
+        );
 
         var round = orleans.RoundTrip(original);
 
@@ -111,11 +104,11 @@ public sealed class ResultSerializationTests(OrleansSerializerFixture orleans)
     }
 
     [Fact]
-    public void AFailedGenericResultRoundTripsWithItsWholeError()
-    {
+    public void AFailedGenericResultRoundTripsWithItsWholeError() {
         var original = Result<ResourceId>.Failure(
             ErrorCode.ResourceNotFound,
-            "No resource with that path exists in this subscription.");
+            "No resource with that path exists in this subscription."
+        );
 
         var round = orleans.RoundTrip(original);
 
@@ -125,32 +118,34 @@ public sealed class ResultSerializationTests(OrleansSerializerFixture orleans)
     }
 
     [Fact]
-    public void AFailedGenericResultIsEqualToItself()
-    {
+    public void AFailedGenericResultIsEqualToItself() {
         // Both sides hold default(T) in the value slot, so record-struct equality is exact here.
         var original = Result<ResourceId>.Failure(
             ErrorCode.ResourceNotFound,
-            "No resource with that path exists in this subscription.");
+            "No resource with that path exists in this subscription."
+        );
 
         orleans.RoundTrip(original).ShouldBe(original);
     }
 
     [Fact]
-    public void NestedErrorDetailsRoundTrip()
-    {
+    public void NestedErrorDetailsRoundTrip() {
         var original = Result.Failure(
-            new Error(
+            new(
                 ErrorCode.InvalidRequestBody,
                 "The request body failed the type's JSON Schema.",
                 "",
                 [
-                    new Error(ErrorCode.InvalidRequestBody, "'sku' is required.", "/properties/sku"),
-                    new Error(
+                    new(ErrorCode.InvalidRequestBody, "'sku' is required.", "/properties/sku"),
+                    new(
                         ErrorCode.InvalidRequestBody,
                         "'version' must be one of 15, 16, 17.",
                         "/properties/version",
-                        [new Error(ErrorCode.InvalidRequestBody, "got '9.6'.", "/properties/version")]),
-                ]));
+                        [new(ErrorCode.InvalidRequestBody, "got '9.6'.", "/properties/version")]
+                    )
+                ]
+            )
+        );
 
         var round = orleans.RoundTrip(original);
 
@@ -162,8 +157,7 @@ public sealed class ResultSerializationTests(OrleansSerializerFixture orleans)
     // ── Successes ──────────────────────────────────────────────────────────────────────────────
 
     [Fact]
-    public void SuccessRoundTripsAndIsStillSuccess()
-    {
+    public void SuccessRoundTripsAndIsStillSuccess() {
         var round = orleans.RoundTrip(Result.Success);
 
         round.IsSuccess.ShouldBeTrue();
@@ -172,16 +166,17 @@ public sealed class ResultSerializationTests(OrleansSerializerFixture orleans)
     }
 
     [Fact]
-    public void AGenericResultHoldingAResourceIdRoundTrips()
-    {
+    public void AGenericResultHoldingAResourceIdRoundTrips() {
         var original = Result<ResourceId>.Success(
-            new ResourceId(
+            new(
                 Guid.Parse("2b4a1c66-2e70-4a9d-9d0a-1f7ec1f1a4b3"),
                 Guid.Parse("6f0f1f0e-1234-4c8b-9a3d-aabbccddeeff"),
                 "prod",
                 PostgresServers,
                 "orders-db",
-                Guid.Parse("11112222-3333-4444-5555-666677778888")));
+                Guid.Parse("11112222-3333-4444-5555-666677778888")
+            )
+        );
 
         var round = orleans.RoundTrip(original);
 
@@ -191,16 +186,14 @@ public sealed class ResultSerializationTests(OrleansSerializerFixture orleans)
     }
 
     [Fact]
-    public void AGenericResultOverAPrimitiveRoundTrips()
-    {
+    public void AGenericResultOverAPrimitiveRoundTrips() {
         // The open generic converter has to instantiate for a T this assembly never names.
         orleans.RoundTrip(Result<int>.Success(42)).ShouldBe(Result<int>.Success(42));
         orleans.RoundTrip(Result<string>.Success("ok")).ShouldBe(Result<string>.Success("ok"));
     }
 
     [Fact]
-    public void AGenericResultOverACollectionRoundTrips()
-    {
+    public void AGenericResultOverACollectionRoundTrips() {
         // A T that is itself generic — the case that would fail if the converter were closed over a
         // fixed set of types rather than open.
         var original = Result<ImmutableArray<string>>.Success(["eu-central", "us-east"]);
@@ -211,8 +204,7 @@ public sealed class ResultSerializationTests(OrleansSerializerFixture orleans)
     }
 
     [Fact]
-    public void ANestedResultRoundTrips()
-    {
+    public void ANestedResultRoundTrips() {
         // Result<Result<T>> is not a shape anybody should write, but it is the shape that proves the
         // open generic converter recurses through itself rather than through a special case.
         var inner = Result<int>.Failure(ErrorCode.Conflict, "lost a race");

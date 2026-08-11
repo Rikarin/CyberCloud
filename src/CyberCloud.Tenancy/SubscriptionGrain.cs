@@ -12,36 +12,32 @@ namespace CyberCloud.Tenancy;
 /// </summary>
 public sealed class SubscriptionGrain(
     [PersistentState("subscription", StorageTiers.Durable)] IPersistentState<SubscriptionState> state,
-    IClock clock)
-    : Grain, ISubscriptionGrain
-{
+    IClock clock
+)
+    : Grain, ISubscriptionGrain {
     Guid subscriptionId;
     Guid tenantId;
 
     /// <inheritdoc />
-    public override Task OnActivateAsync(CancellationToken cancellationToken)
-    {
+    public override Task OnActivateAsync(CancellationToken cancellationToken) {
         tenantId = TenancyGrainKeys.TenantOf(this);
         subscriptionId = TenancyGrainKeys.Decode(this, GrainKeyKind.Subscription).Id;
         return Task.CompletedTask;
     }
 
     /// <inheritdoc />
-    public async Task<Result<SubscriptionDescriptor>> CreateAsync(string displayName)
-    {
-        if (state.State.Descriptor is { } existing)
-        {
+    public async Task<Result<SubscriptionDescriptor>> CreateAsync(string displayName) {
+        if (state.State.Descriptor is { } existing) {
             return Result<SubscriptionDescriptor>.Success(Snapshot(existing));
         }
 
-        state.State.Descriptor = new SubscriptionDescriptor
-        {
+        state.State.Descriptor = new() {
             Id = subscriptionId,
             TenantId = tenantId,
             DisplayName = displayName,
             State = ProvisioningState.Succeeded,
             CreatedAt = clock.UtcNow,
-            Version = 1,
+            Version = 1
         };
 
         await state.WriteStateAsync();
@@ -50,47 +46,51 @@ public sealed class SubscriptionGrain(
 
     /// <inheritdoc />
     public Task<Result<SubscriptionDescriptor>> GetAsync() =>
-        Task.FromResult(state.State.Descriptor is { } descriptor
-            ? Result<SubscriptionDescriptor>.Success(Snapshot(descriptor))
-            : Result<SubscriptionDescriptor>.Failure(TenancyGrainKeys.NotCreated(
-                ErrorCode.SubscriptionNotFound, "Subscription", subscriptionId.ToString("D"))));
+        Task.FromResult(
+            state.State.Descriptor is { } descriptor
+                ? Result<SubscriptionDescriptor>.Success(Snapshot(descriptor))
+                : Result<SubscriptionDescriptor>.Failure(
+                    TenancyGrainKeys.NotCreated(
+                        ErrorCode.SubscriptionNotFound,
+                        "Subscription",
+                        subscriptionId.ToString("D")
+                    )
+                )
+        );
 
     /// <inheritdoc />
-    public async Task<Result<ResourceGroupDescriptor>> CreateResourceGroupAsync(string name, string region)
-    {
-        if (state.State.Descriptor is null)
-        {
-            return Result<ResourceGroupDescriptor>.Failure(TenancyGrainKeys.NotCreated(
-                ErrorCode.SubscriptionNotFound, "Subscription", subscriptionId.ToString("D")));
+    public async Task<Result<ResourceGroupDescriptor>> CreateResourceGroupAsync(string name, string region) {
+        if (state.State.Descriptor is null) {
+            return Result<ResourceGroupDescriptor>.Failure(
+                TenancyGrainKeys.NotCreated(
+                    ErrorCode.SubscriptionNotFound,
+                    "Subscription",
+                    subscriptionId.ToString("D")
+                )
+            );
         }
 
         var validated = ResourceNaming.Validate(name, "resource group name");
-        if (validated.TryGetError(out var invalid))
-        {
+        if (validated.TryGetError(out var invalid)) {
             return Result<ResourceGroupDescriptor>.Failure(invalid);
         }
 
         // ⚠ The group grain is created FIRST and the listing entry is added after it succeeds. The
         // other order would list a group that does not exist, and a caller that then GETs it gets a
         // 404 for something the list just told them about.
-        var group = GrainFactory.ForTenant(tenantId.ToString("D")).GetGrain<IResourceGroupGrain>(
-            GrainKeys.ResourceGroup(subscriptionId, name));
+        var group = GrainFactory.ForTenant(tenantId.ToString("D"))
+            .GetGrain<IResourceGroupGrain>(GrainKeys.ResourceGroup(subscriptionId, name));
 
         var created = await group.CreateAsync(tenantId, region);
-        if (created.TryGetError(out var failure))
-        {
+        if (created.TryGetError(out var failure)) {
             return Result<ResourceGroupDescriptor>.Failure(failure);
         }
 
-        if (!state.State.ResourceGroups.Contains(name, StringComparer.Ordinal))
-        {
+        if (!state.State.ResourceGroups.Contains(name, StringComparer.Ordinal)) {
             state.State.ResourceGroups.Add(name);
             state.State.ResourceGroups.Sort(StringComparer.Ordinal);
 
-            state.State.Descriptor = state.State.Descriptor with
-            {
-                Version = state.State.Descriptor.Version + 1,
-            };
+            state.State.Descriptor = state.State.Descriptor with { Version = state.State.Descriptor.Version + 1 };
             await state.WriteStateAsync();
         }
 
@@ -102,10 +102,8 @@ public sealed class SubscriptionGrain(
         Task.FromResult(Result<IReadOnlyList<string>>.Success([.. state.State.ResourceGroups]));
 
     /// <inheritdoc />
-    public async Task<Result> RemoveResourceGroupAsync(string name)
-    {
-        if (!state.State.ResourceGroups.Remove(name))
-        {
+    public async Task<Result> RemoveResourceGroupAsync(string name) {
+        if (!state.State.ResourceGroups.Remove(name)) {
             return Result.Success;
         }
 
@@ -114,9 +112,8 @@ public sealed class SubscriptionGrain(
     }
 
     /// <inheritdoc />
-    public Task DeactivateAsync()
-    {
-        this.DeactivateOnIdle();
+    public Task DeactivateAsync() {
+        DeactivateOnIdle();
         return Task.CompletedTask;
     }
 

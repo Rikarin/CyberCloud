@@ -1,7 +1,8 @@
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using System.Net.Mime;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using Microsoft.AspNetCore.Http;
 
 namespace CyberCloud.ServiceDefaults.HealthChecks;
 
@@ -11,8 +12,10 @@ namespace CyberCloud.ServiceDefaults.HealthChecks;
 ///     framework and docs/plan/02's register lists no Newtonsoft, so the shape is copied and the
 ///     library is not.
 /// </remarks>
-sealed record HealthReportBody
-{
+sealed record HealthReportBody {
+    static readonly JsonSerializerOptions Options =
+        new(JsonSerializerDefaults.Web) { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull };
+
     /// <summary>The aggregate status: <c>Healthy</c>, <c>Degraded</c> or <c>Unhealthy</c>.</summary>
     [JsonPropertyName("status")]
     public required string Status { get; init; }
@@ -36,37 +39,32 @@ sealed record HealthReportBody
     /// </remarks>
     internal static Task WriteAsync(
         HttpContext context,
-        Microsoft.Extensions.Diagnostics.HealthChecks.HealthReport report)
-    {
+        HealthReport report
+    ) {
         context.Response.ContentType = MediaTypeNames.Application.Json;
 
-        var body = new HealthReportBody
-        {
+        var body = new HealthReportBody {
             Status = report.Status.ToString(),
             Duration = report.TotalDuration,
-            Checks = [.. report.Entries.Select(entry => new HealthEntry
-            {
-                Name = entry.Key,
-                Status = entry.Value.Status.ToString(),
-                Description = entry.Value.Description,
-                Duration = entry.Value.Duration,
-                Error = entry.Value.Exception?.Message,
-                Tags = [.. entry.Value.Tags],
-            })],
+            Checks = [
+                .. report.Entries.Select(entry => new HealthEntry {
+                        Name = entry.Key,
+                        Status = entry.Value.Status.ToString(),
+                        Description = entry.Value.Description,
+                        Duration = entry.Value.Duration,
+                        Error = entry.Value.Exception?.Message,
+                        Tags = [.. entry.Value.Tags]
+                    }
+                )
+            ]
         };
 
         return context.Response.WriteAsJsonAsync(body, Options);
     }
-
-    static readonly JsonSerializerOptions Options = new(JsonSerializerDefaults.Web)
-    {
-        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-    };
 }
 
 /// <summary>One check's result inside a <see cref="HealthReportBody" />.</summary>
-sealed record HealthEntry
-{
+sealed record HealthEntry {
     /// <summary>The registered name, for example <c>silo-ready</c>.</summary>
     [JsonPropertyName("name")]
     public required string Name { get; init; }

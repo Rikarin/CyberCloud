@@ -4,14 +4,17 @@ namespace CyberCloud.Core.Contracts;
 ///     The names of the Orleans stream providers. docs/plan/04 § Streams and ADR-005.
 /// </summary>
 /// <remarks>
-///     docs/plan/04:129 — <i>"One stream provider, <c>Events</c>, over NATS JetStream,
-///     multitenant-wrapped so a stream id carries the tenant."</i> There is deliberately only one:
+///     docs/plan/04:129 —
+///     <i>
+///         "One stream provider, <c>Events</c>, over NATS JetStream,
+///         multitenant-wrapped so a stream id carries the tenant."
+///     </i>
+///     There is deliberately only one:
 ///     the namespaces in docs/plan/04:132-138 (<c>resource-changed</c>, <c>operation-progress</c>,
 ///     <c>cluster-observed</c>, <c>metering</c>, <c>platform</c>) are stream <i>namespaces</i>
 ///     within this provider, not providers of their own.
 /// </remarks>
-public static class StreamProviders
-{
+public static class StreamProviders {
     /// <summary>
     ///     The one provider. Named in <c>[ImplicitStreamSubscription]</c> on every consuming grain
     ///     and in <c>GetStreamProvider(StreamProviders.Events)</c> on every producer.
@@ -28,8 +31,7 @@ public static class StreamProviders
 ///     consumer of every namespace below must be idempotent, and anything requiring global order
 ///     does not use a stream at all.
 /// </remarks>
-public static class StreamNamespaces
-{
+public static class StreamNamespaces {
     /// <summary>
     ///     <c>cc.{tenant}.res.{provider}.{type}.{id}</c> — produced by <c>IResourceGrain</c> on
     ///     every state transition; consumed by the portal fan-out, the resource-graph projection,

@@ -19,8 +19,7 @@ namespace CyberCloud.AppHost;
 ///         why 30000 in particular is a bad bet on a developer's machine.
 ///     </para>
 /// </remarks>
-public static class CyberCloudResources
-{
+public static class CyberCloudResources {
     /// <summary>The Redis container that backs the hot tier — docs/plan/05 § Hot.</summary>
     public const string Redis = "hot";
 

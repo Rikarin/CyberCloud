@@ -9,9 +9,12 @@ namespace CyberCloud.Core;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         docs/plan/08 § Errors: <i>"<c>code</c> is a stable, documented, greppable identifier. It
-///         is part of the API contract; changing one is a breaking change. There is a checked-in
-///         registry and a build gate on additions."</i>
+///         docs/plan/08 § Errors:
+///         <i>
+///             "<c>code</c> is a stable, documented, greppable identifier. It
+///             is part of the API contract; changing one is a breaking change. There is a checked-in
+///             registry and a build gate on additions."
+///         </i>
 ///     </para>
 ///     <para>
 ///         This type <b>is</b> that registry, and it is closed by construction: the constructor is
@@ -34,8 +37,7 @@ namespace CyberCloud.Core;
 ///         <see cref="Value" /> ordinally, which are the same relation.
 ///     </para>
 /// </remarks>
-public sealed class ErrorCode : IEquatable<ErrorCode>
-{
+public sealed class ErrorCode : IEquatable<ErrorCode> {
     // ── The registry. Every code below cites the document that requires it. ────────────────────
     // Ordering is alphabetical so that a diff on this block is readable.
 
@@ -120,8 +122,12 @@ public sealed class ErrorCode : IEquatable<ErrorCode>
     /// </summary>
     /// <remarks>
     ///     ⚠ <b>A distinguishable failure — never a denial, never an allow.</b> docs/plan/07 § The
-    ///     model: <i>"A typo'd permission name in a text DSL is a silent allow-nothing or, worse in
-    ///     the wrong evaluator, a silent allow-everything."</i> Returning a denial would be the
+    ///     model:
+    ///     <i>
+    ///         "A typo'd permission name in a text DSL is a silent allow-nothing or, worse in
+    ///         the wrong evaluator, a silent allow-everything."
+    ///     </i>
+    ///     Returning a denial would be the
     ///     first and returning <c>Success(allowed: true)</c> the second, so the engine returns this
     ///     instead: an outcome that can be alerted on rather than served. The enforcement seam
     ///     (docs/plan/07 § The enforcement seam) still renders it to the caller as <c>404</c>; the
@@ -146,6 +152,9 @@ public sealed class ErrorCode : IEquatable<ErrorCode>
     /// </summary>
     public static readonly ErrorCode QuotaExceeded = new("QuotaExceeded");
 
+    static readonly FrozenDictionary<string, ErrorCode> ByValue =
+        All.ToFrozenDictionary(x => x.Value, StringComparer.Ordinal);
+
     // ── The closed set, and the lookup built from it. ──────────────────────────────────────────
 
     /// <summary>Every code in the registry, in declaration order.</summary>
@@ -155,8 +164,7 @@ public sealed class ErrorCode : IEquatable<ErrorCode>
     ///     reviewer sees. <c>ErrorCodeRegistryTests.EveryDeclaredCodeIsInAll</c> is the safety net
     ///     for the "forgot to add it here" mistake.
     /// </remarks>
-    public static ImmutableArray<ErrorCode> All { get; } =
-    [
+    public static ImmutableArray<ErrorCode> All { get; } = [
         AuthorizationFailed,
         Conflict,
         InternalError,
@@ -183,23 +191,20 @@ public sealed class ErrorCode : IEquatable<ErrorCode>
         QuotaExceeded
     ];
 
-    static readonly FrozenDictionary<string, ErrorCode> ByValue =
-        All.ToFrozenDictionary(x => x.Value, StringComparer.Ordinal);
-
-    ErrorCode(string value) => Value = value;
-
     /// <summary>The wire form — the exact string that appears in <c>error.code</c>.</summary>
     public string Value { get; }
+
+    ErrorCode(string value) {
+        Value = value;
+    }
 
     /// <summary>
     ///     Resolves a wire string back to a registered code. Returns <see langword="false" /> for
     ///     anything not in the registry, including <see langword="null" /> — an unregistered code
     ///     arriving over the wire is data from an older or newer peer, not a code.
     /// </summary>
-    public static bool TryFromValue(string? value, [NotNullWhen(true)] out ErrorCode? code)
-    {
-        if (value is null)
-        {
+    public static bool TryFromValue(string? value, [NotNullWhen(true)] out ErrorCode? code) {
+        if (value is null) {
             code = null;
             return false;
         }

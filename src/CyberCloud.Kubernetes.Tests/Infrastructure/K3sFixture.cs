@@ -1,7 +1,8 @@
-using System.Text;
 using CyberCloud.Kubernetes.Apply;
 using k8s;
 using k8s.Models;
+using System.Text;
+using System.Text.Json;
 using Testcontainers.K3s;
 
 namespace CyberCloud.Kubernetes.Tests.Infrastructure;
@@ -17,8 +18,7 @@ namespace CyberCloud.Kubernetes.Tests.Infrastructure;
 ///     <c>kube-apiserver</c>'s field-management machinery — nothing we wrote. A fake would assert our
 ///     belief about what the API server does, which is precisely the belief worth checking.
 /// </remarks>
-public sealed class K3sFixture : IAsyncLifetime
-{
+public sealed class K3sFixture : IAsyncLifetime {
     /// <summary>
     ///     The k3s image, pinned.
     /// </summary>
@@ -33,6 +33,12 @@ public sealed class K3sFixture : IAsyncLifetime
     /// </remarks>
     public const string Image = "rancher/k3s:v1.35.7-k3s1";
 
+    /// <summary>The namespace every test in this fixture writes into.</summary>
+    public const string Namespace = "cc-fabric";
+
+    /// <summary>The cluster id the fabric addresses this container by.</summary>
+    public static readonly Guid ClusterId = Guid.Parse("3a8f0c22-5e6d-4a7b-8c9d-0e1f2a3b4c5d");
+
     readonly K3sContainer container = new K3sBuilder(Image).Build();
 
     /// <summary>The raw client, for the parts of a test that are deliberately not us.</summary>
@@ -41,18 +47,11 @@ public sealed class K3sFixture : IAsyncLifetime
     /// <summary>The fabric's client — the thing under test.</summary>
     public IKubeApiClient Api { get; private set; } = null!;
 
-    /// <summary>The namespace every test in this fixture writes into.</summary>
-    public const string Namespace = "cc-fabric";
-
-    /// <summary>The cluster id the fabric addresses this container by.</summary>
-    public static readonly Guid ClusterId = Guid.Parse("3a8f0c22-5e6d-4a7b-8c9d-0e1f2a3b4c5d");
-
     /// <summary>The kubeconfig, for tests that build their own client.</summary>
     public string Kubeconfig { get; private set; } = string.Empty;
 
     /// <inheritdoc />
-    public async ValueTask InitializeAsync()
-    {
+    public async ValueTask InitializeAsync() {
         var token = TestContext.Current.CancellationToken;
 
         await container.StartAsync(token);
@@ -63,16 +62,16 @@ public sealed class K3sFixture : IAsyncLifetime
         var config = await KubernetesClientConfiguration.BuildConfigFromConfigFileAsync(yaml);
 
         Raw = new k8s.Kubernetes(config);
-        Api = new KubeApiClient(Raw, ClusterId, new TestClock(), ownsClient: false);
+        Api = new KubeApiClient(Raw, ClusterId, new TestClock(), false);
 
         await Raw.CoreV1.CreateNamespaceAsync(
-            new V1Namespace { Metadata = new V1ObjectMeta { Name = Namespace } },
-            cancellationToken: token);
+            new() { Metadata = new() { Name = Namespace } },
+            cancellationToken: token
+        );
     }
 
     /// <inheritdoc />
-    public async ValueTask DisposeAsync()
-    {
+    public async ValueTask DisposeAsync() {
         Raw?.Dispose();
         await container.DisposeAsync();
     }
@@ -99,11 +98,13 @@ public sealed class K3sFixture : IAsyncLifetime
         string name,
         string json,
         string group = "apps",
-        string version = "v1")
-    {
+        string version = "v1"
+    ) {
         using var response = await Raw.CustomObjects.PatchNamespacedCustomObjectWithHttpMessagesAsync(
-            new V1Patch(System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(json),
-                V1Patch.PatchType.ApplyPatch),
+            new V1Patch(
+                JsonSerializer.Deserialize<JsonElement>(json),
+                V1Patch.PatchType.ApplyPatch
+            ),
             group,
             version,
             Namespace,
@@ -111,7 +112,8 @@ public sealed class K3sFixture : IAsyncLifetime
             name,
             fieldManager: manager,
             force: true,
-            cancellationToken: TestContext.Current.CancellationToken);
+            cancellationToken: TestContext.Current.CancellationToken
+        );
     }
 
     /// <summary>Reads a field's current value straight from the cluster, bypassing our code.</summary>
@@ -136,20 +138,23 @@ public sealed class K3sFixture : IAsyncLifetime
         string name,
         string group,
         string version,
-        params string[] path)
-    {
+        params string[] path
+    ) {
         ArgumentNullException.ThrowIfNull(path);
 
         using var response = await Raw.CustomObjects.GetNamespacedCustomObjectWithHttpMessagesAsync(
-            group, version, Namespace, plural, name,
-            cancellationToken: TestContext.Current.CancellationToken);
+            group,
+            version,
+            Namespace,
+            plural,
+            name,
+            cancellationToken: TestContext.Current.CancellationToken
+        );
 
-        var element = (System.Text.Json.JsonElement)response.Body!;
+        var element = (JsonElement)response.Body!;
 
-        foreach (var segment in path)
-        {
-            if (!element.TryGetProperty(segment, out element))
-            {
+        foreach (var segment in path) {
+            if (!element.TryGetProperty(segment, out element)) {
                 return null;
             }
         }
@@ -170,8 +175,7 @@ public sealed class K3sFixture : IAsyncLifetime
 
 /// <summary>Binds <see cref="K3sFixture" /> to the classes that share it.</summary>
 [CollectionDefinition(Name)]
-public sealed class K3sSuite : ICollectionFixture<K3sFixture>
-{
+public sealed class K3sSuite : ICollectionFixture<K3sFixture> {
     /// <summary>The collection name.</summary>
     public const string Name = "k3s";
 }

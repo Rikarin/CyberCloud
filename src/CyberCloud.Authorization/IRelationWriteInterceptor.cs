@@ -7,12 +7,20 @@ namespace CyberCloud.Authorization;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>This exists so that docs/plan/07 § Storage's central safety claim can be
-///         <i>tested</i>, not merely believed.</b> That claim is: "A subject index missing an entry
+///         ⚠
+///         <b>
+///             This exists so that docs/plan/07 § Storage's central safety claim can be
+///             <i>tested</i>, not merely believed.
+///         </b>
+///         That claim is: "A subject index missing an entry
 ///         costs a <c>ListObjects</c> a miss, not a <c>Check</c> an incorrect answer, because
-///         <c>Check</c> walks forward from the object. <b>That asymmetry is deliberate: the
-///         direction that can be stale is the one where staleness is a performance bug, not a
-///         security bug.</b>"
+///         <c>Check</c> walks forward from the object.
+///         <b>
+///             That asymmetry is deliberate: the
+///             direction that can be stale is the one where staleness is a performance bug, not a
+///             security bug.
+///         </b>
+///         "
 ///     </para>
 ///     <para>
 ///         The only honest way to check it is to have the write actually die between the object
@@ -27,8 +35,7 @@ namespace CyberCloud.Authorization;
 ///         extension point, and it must never grow the ability to change the tuple.
 ///     </para>
 /// </remarks>
-public interface IRelationWriteInterceptor
-{
+public interface IRelationWriteInterceptor {
     /// <summary>
     ///     Called after the object-relations half of a write has been persisted and before the
     ///     subject-index half is attempted.
@@ -39,12 +46,10 @@ public interface IRelationWriteInterceptor
 }
 
 /// <summary>The production interceptor: nothing happens between the two halves.</summary>
-public sealed class NoRelationWriteInterceptor : IRelationWriteInterceptor
-{
+public sealed class NoRelationWriteInterceptor : IRelationWriteInterceptor {
     /// <summary>The single instance.</summary>
     public static NoRelationWriteInterceptor Instance { get; } = new();
 
     /// <inheritdoc />
-    public ValueTask AfterObjectWriteAsync(RelationTuple tuple, bool isDelete) =>
-        ValueTask.CompletedTask;
+    public ValueTask AfterObjectWriteAsync(RelationTuple tuple, bool isDelete) => ValueTask.CompletedTask;
 }

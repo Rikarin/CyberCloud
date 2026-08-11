@@ -14,33 +14,38 @@ namespace CyberCloud.Kubernetes.Connections;
 ///         a reconciler unit test would need an Orleans cluster to build a command.
 ///     </para>
 ///     <para>
-///         ⚠ <b>The grain key is built by <see cref="GrainKeys.ClusterConnection" /> and the grain is
-///         resolved from the UNQUALIFIED factory.</b> A cluster connection is null-tenant
+///         ⚠
+///         <b>
+///             The grain key is built by <see cref="GrainKeys.ClusterConnection" /> and the grain is
+///             resolved from the UNQUALIFIED factory.
+///         </b>
+///         A cluster connection is null-tenant
 ///         (docs/plan/06 § Grain keys), so calling <c>ForTenant(...)</c> here would silently create a
 ///         second activation per tenant of a grain there is supposed to be exactly one of — which is
 ///         precisely the failure <c>NullTenantGrainTests.TenantQualifyingAPlatformGrainIsRefused</c>
 ///         exists to make loud for the other two platform grains.
 ///     </para>
 /// </remarks>
-public sealed class ClusterConnectionHandle(IGrainFactory grains, Guid clusterId) : IKubeClusterConnection
-{
+public sealed class ClusterConnectionHandle(IGrainFactory grains, Guid clusterId) : IKubeClusterConnection {
     /// <inheritdoc />
     public Guid ClusterId => clusterId;
+
+    /// <summary>The grain this handle forwards to.</summary>
+    public IClusterConnectionGrain Grain =>
+        grains.GetGrain<IClusterConnectionGrain>(GrainKeys.ClusterConnection(clusterId));
 
     /// <inheritdoc />
     public Task<Result<ApplyOutcome>> ApplyAsync(
         KubeCommand command,
-        CancellationToken cancellationToken = default) =>
+        CancellationToken cancellationToken = default
+    ) =>
         Grain.ApplyAsync(command);
 
     /// <inheritdoc />
     public Task<Result> DeleteAsync(
         KubeCommand command,
         CascadePolicy policy = CascadePolicy.Background,
-        CancellationToken cancellationToken = default) =>
+        CancellationToken cancellationToken = default
+    ) =>
         Grain.DeleteAsync(command, policy);
-
-    /// <summary>The grain this handle forwards to.</summary>
-    public IClusterConnectionGrain Grain =>
-        grains.GetGrain<IClusterConnectionGrain>(GrainKeys.ClusterConnection(clusterId));
 }

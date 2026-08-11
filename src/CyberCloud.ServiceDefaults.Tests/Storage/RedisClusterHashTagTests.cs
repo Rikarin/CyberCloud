@@ -1,11 +1,11 @@
-using System.Globalization;
-using System.Net;
-using System.Net.Sockets;
 using CyberCloud.ServiceDefaults.Storage;
 using DotNet.Testcontainers.Builders;
 using DotNet.Testcontainers.Containers;
 using Shouldly;
 using StackExchange.Redis;
+using System.Globalization;
+using System.Net;
+using System.Net.Sockets;
 
 namespace CyberCloud.ServiceDefaults.Tests.Storage;
 
@@ -37,8 +37,7 @@ namespace CyberCloud.ServiceDefaults.Tests.Storage;
 ///         containerised cluster reachable at all.
 ///     </para>
 /// </remarks>
-public sealed class RedisClusterHashTagTests : IAsyncLifetime
-{
+public sealed class RedisClusterHashTagTests : IAsyncLifetime {
     readonly int port = FreePort();
     readonly int busPort = FreePort();
 
@@ -46,8 +45,7 @@ public sealed class RedisClusterHashTagTests : IAsyncLifetime
     ConnectionMultiplexer multiplexer = null!;
 
     /// <inheritdoc />
-    public async ValueTask InitializeAsync()
-    {
+    public async ValueTask InitializeAsync() {
         var token = TestContext.Current.CancellationToken;
 
         container = new ContainerBuilder("redis:8-alpine")
@@ -55,12 +53,19 @@ public sealed class RedisClusterHashTagTests : IAsyncLifetime
             .WithPortBinding(busPort, 16379)
             .WithCommand(
                 "redis-server",
-                "--cluster-enabled", "yes",
-                "--cluster-announce-ip", "127.0.0.1",
-                "--cluster-announce-port", port.ToString(CultureInfo.InvariantCulture),
-                "--cluster-announce-bus-port", busPort.ToString(CultureInfo.InvariantCulture),
-                "--maxmemory-policy", "noeviction",
-                "--appendonly", "no")
+                "--cluster-enabled",
+                "yes",
+                "--cluster-announce-ip",
+                "127.0.0.1",
+                "--cluster-announce-port",
+                port.ToString(CultureInfo.InvariantCulture),
+                "--cluster-announce-bus-port",
+                busPort.ToString(CultureInfo.InvariantCulture),
+                "--maxmemory-policy",
+                "noeviction",
+                "--appendonly",
+                "no"
+            )
             .WithWaitStrategy(Wait.ForUnixContainer().UntilCommandIsCompleted("redis-cli", "ping"))
             .Build();
 
@@ -68,11 +73,9 @@ public sealed class RedisClusterHashTagTests : IAsyncLifetime
 
         await container.ExecAsync(["redis-cli", "cluster", "addslotsrange", "0", "16383"], token);
 
-        for (var attempt = 0; attempt < 60; attempt++)
-        {
+        for (var attempt = 0; attempt < 60; attempt++) {
             var info = await container.ExecAsync(["redis-cli", "cluster", "info"], token);
-            if (info.Stdout.Contains("cluster_state:ok", StringComparison.Ordinal))
-            {
+            if (info.Stdout.Contains("cluster_state:ok", StringComparison.Ordinal)) {
                 break;
             }
 
@@ -91,19 +94,16 @@ public sealed class RedisClusterHashTagTests : IAsyncLifetime
     }
 
     /// <inheritdoc />
-    public async ValueTask DisposeAsync()
-    {
+    public async ValueTask DisposeAsync() {
         multiplexer?.Dispose();
 
-        if (container is not null)
-        {
+        if (container is not null) {
             await container.DisposeAsync();
         }
     }
 
     [Fact]
-    public void TheServerIsActuallyInClusterModeOrNothingBelowMeansAnything()
-    {
+    public void TheServerIsActuallyInClusterModeOrNothingBelowMeansAnything() {
         var server = multiplexer.GetServer(multiplexer.GetEndPoints()[0]);
         server.ServerType.ShouldBe(ServerType.Cluster);
 
@@ -113,19 +113,22 @@ public sealed class RedisClusterHashTagTests : IAsyncLifetime
     }
 
     [Fact]
-    public void OurSlotFunctionAgreesWithTheServerOnEveryKeyShapeWeUse()
-    {
+    public void OurSlotFunctionAgreesWithTheServerOnEveryKeyShapeWeUse() {
         var server = multiplexer.GetServer(multiplexer.GetEndPoints()[0]);
 
         var keys = new List<string> { "foo", "somekey", "{}:empty-tag", "no-braces-at-all" };
-        keys.AddRange(Enumerable.Range(0, 40).Select(i =>
-            TenantHotKeys.Format(
-                "cc:t:" + StorageFixture.Tenant(i).ToString("N", CultureInfo.InvariantCulture),
-                "CyberCloud.Tests.Hot",
-                "res/" + i)));
+        keys.AddRange(
+            Enumerable.Range(0, 40)
+                .Select(i =>
+                    TenantHotKeys.Format(
+                        "cc:t:" + StorageFixture.Tenant(i).ToString("N", CultureInfo.InvariantCulture),
+                        "CyberCloud.Tests.Hot",
+                        "res/" + i
+                    )
+                )
+        );
 
-        foreach (var key in keys)
-        {
+        foreach (var key in keys) {
             var fromServer = (int)(long)(RedisResult)server.Execute("CLUSTER", "KEYSLOT", key);
 
             RedisHashSlot.Of(key).ShouldBe(fromServer, $"slot mismatch for '{key}'");
@@ -134,8 +137,7 @@ public sealed class RedisClusterHashTagTests : IAsyncLifetime
     }
 
     [Fact]
-    public void OneTenantIsOneSlotAndTwoTenantsAreNot()
-    {
+    public void OneTenantIsOneSlotAndTwoTenantsAreNot() {
         var tagA = "cc:t:" + StorageFixture.Tenant(1).ToString("N", CultureInfo.InvariantCulture);
         var tagB = "cc:t:" + StorageFixture.Tenant(2).ToString("N", CultureInfo.InvariantCulture);
 
@@ -150,8 +152,7 @@ public sealed class RedisClusterHashTagTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task AMultiKeyReadWithinOneTenantIsOneRoundTripAndAcrossTenantsIsCrossSlot()
-    {
+    public async Task AMultiKeyReadWithinOneTenantIsOneRoundTripAndAcrossTenantsIsCrossSlot() {
         // docs/plan/05 § Hot: "a multi-key read is one round trip". That is the payoff of the tag,
         // and the failure without it is not slowness — it is an error.
         var token = TestContext.Current.CancellationToken;
@@ -175,8 +176,7 @@ public sealed class RedisClusterHashTagTests : IAsyncLifetime
         //
         // (a) The client refuses to route it — StackExchange.Redis computes the slots itself and
         //     will not send a command that spans two.
-        var refusedByClient = Should.Throw<RedisCommandException>(
-            () => database.StringGet([a1, b1]));
+        var refusedByClient = Should.Throw<RedisCommandException>(() => database.StringGet([a1, b1]));
         refusedByClient.Message.ShouldContain("slot");
 
         // (b) And if it did send it, the SERVER rejects it. Issued with redis-cli inside the
@@ -187,8 +187,7 @@ public sealed class RedisClusterHashTagTests : IAsyncLifetime
     }
 
     [Fact]
-    public void EvictionIsOffOnTheHotTierBecauseAnEvictionWouldBeALostWrite()
-    {
+    public void EvictionIsOffOnTheHotTierBecauseAnEvictionWouldBeALostWrite() {
         // docs/plan/05 § Hot: "maxmemory-policy noeviction (a hot-tier eviction is a correctness bug,
         // not a capacity event — it must page, not silently drop state)".
         var server = multiplexer.GetServer(multiplexer.GetEndPoints()[0]);
@@ -197,8 +196,7 @@ public sealed class RedisClusterHashTagTests : IAsyncLifetime
         policy.ShouldBe("noeviction");
     }
 
-    static int FreePort()
-    {
+    static int FreePort() {
         using var socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
         socket.Bind(new IPEndPoint(IPAddress.Loopback, 0));
         return ((IPEndPoint)socket.LocalEndPoint!).Port;

@@ -13,12 +13,19 @@ namespace CyberCloud.Kubernetes.Contracts;
 ///         in-house cluster is while it is being created) would otherwise have two.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Every method here is reachable from every tenant, and that is not a bug — it is the
-///         cost of the null-tenant key.</b> <c>PlatformCrossTenantAuthorizer</c> allows any tenant →
+///         ⚠
+///         <b>
+///             Every method here is reachable from every tenant, and that is not a bug — it is the
+///             cost of the null-tenant key.
+///         </b>
+///         <c>PlatformCrossTenantAuthorizer</c> allows any tenant →
 ///         null-tenant edge and logs it, precisely because the target grain is expected to enforce
-///         tenancy itself. docs/plan/06 § Grain keys: <i>"The grain therefore carries the owning
-///         tenant as state and checks it on every call … This is the single place tenancy is enforced
-///         by code rather than by key, and it is called out here so nobody has to discover it."</i>
+///         tenancy itself. docs/plan/06 § Grain keys:
+///         <i>
+///             "The grain therefore carries the owning
+///             tenant as state and checks it on every call … This is the single place tenancy is enforced
+///             by code rather than by key, and it is called out here so nobody has to discover it."
+///         </i>
 ///         The implementation's <c>EnsureCallerMayReach</c> is that check, it runs first in every
 ///         method, and <c>ClusterConnectionTenancyTests</c> asserts there is no method without it.
 ///     </para>
@@ -31,16 +38,19 @@ namespace CyberCloud.Kubernetes.Contracts;
 ///     </para>
 ///     <para>
 ///         ⚠ <b>Differences from the sketch at docs/plan/09 § Cluster connections</b>, both forced by
-///         docs/plan/03 § Assembly graph rules rule 3: <c>GetAsync&lt;T&gt;(ObjectRef) where T :
-///         IKubernetesObject</c> returns <see cref="KubeObject" /> (JSON) instead, and the generic
+///         docs/plan/03 § Assembly graph rules rule 3:
+///         <c>
+///             GetAsync&lt;T&gt;(ObjectRef) where T :
+///             IKubernetesObject
+///         </c>
+///         returns <see cref="KubeObject" /> (JSON) instead, and the generic
 ///         constraint is gone. A grain interface is referenced by the gateway and by every provider,
 ///         so a <c>k8s.Models</c> constraint here would put Kubernetes types in the compile-time
 ///         closure of the whole platform.
 ///     </para>
 /// </remarks>
 [Alias("K8s.ClusterConnection")]
-public interface IClusterConnectionGrain : IGrainWithStringKey
-{
+public interface IClusterConnectionGrain : IGrainWithStringKey {
     /// <summary>
     ///     Registers or updates what this connection points at, and who owns it.
     /// </summary>

@@ -34,8 +34,7 @@ namespace CyberCloud.Core.Contracts.Serialization;
 /// </remarks>
 [GenerateSerializer]
 [Alias("CyberCloud.Core.Error")]
-public struct ErrorSurrogate
-{
+public struct ErrorSurrogate {
     /// <summary>The wire form of <see cref="Error.Code" /> — <see cref="ErrorCode.Value" />.</summary>
     [Id(0)]
     public string? Code { get; set; }
@@ -59,11 +58,9 @@ public struct ErrorSurrogate
 
 /// <summary>The <see cref="Error" /> ↔ <see cref="ErrorSurrogate" /> converter.</summary>
 [RegisterConverter]
-public sealed class ErrorSurrogateConverter : IConverter<Error, ErrorSurrogate>
-{
+public sealed class ErrorSurrogateConverter : IConverter<Error, ErrorSurrogate> {
     /// <inheritdoc />
-    public Error ConvertFromSurrogate(in ErrorSurrogate surrogate)
-    {
+    public Error ConvertFromSurrogate(in ErrorSurrogate surrogate) {
         var message = string.IsNullOrWhiteSpace(surrogate.Message)
             ? WireErrors.MissingMessage
             : surrogate.Message;
@@ -73,22 +70,22 @@ public sealed class ErrorSurrogateConverter : IConverter<Error, ErrorSurrogate>
         // ⚠ Target is re-validated by Error's constructor (RFC 6901), and a malformed one throws.
         // That is deliberate: Target is a JSON Pointer the portal feeds straight into a form, and
         // accepting an arbitrary string here would push the malformed value one layer further out.
-        return new Error(
+        return new(
             code,
             resolved,
             surrogate.Target,
             surrogate.Details is { Length: > 0 } details
                 ? ImmutableArray.Create(details)
-                : ImmutableArray<Error>.Empty);
+                : ImmutableArray<Error>.Empty
+        );
     }
 
     /// <inheritdoc />
     public ErrorSurrogate ConvertToSurrogate(in Error value) =>
-        new()
-        {
+        new() {
             Code = value.Code.Value,
             Message = value.Message,
             Target = value.Target,
-            Details = value.Details.IsDefaultOrEmpty ? null : [.. value.Details],
+            Details = value.Details.IsDefaultOrEmpty ? null : [.. value.Details]
         };
 }

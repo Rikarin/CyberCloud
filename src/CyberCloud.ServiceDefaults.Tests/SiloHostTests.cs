@@ -1,16 +1,14 @@
-using System.Net;
-using System.Net.Sockets;
-using System.Text.Json;
 using CyberCloud.Core.Contracts;
 using CyberCloud.ServiceDefaults.Storage;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.Extensions.DependencyInjection;
-using Orleans.Runtime;
 using Orleans.Storage;
 using Shouldly;
-using Volo.Abp;
+using System.Net;
+using System.Net.Sockets;
+using System.Text.Json;
 using Volo.Abp.Modularity;
 
 namespace CyberCloud.ServiceDefaults.Tests;
@@ -48,8 +46,7 @@ sealed class SiloTestModule : AbpModule;
 ///         tests, one pass, five "Address already in use". A fixture is created once per class.
 ///     </para>
 /// </remarks>
-public sealed class SiloHostFixture : IAsyncLifetime
-{
+public sealed class SiloHostFixture : IAsyncLifetime {
     WebApplication app = null!;
 
     /// <summary>The running silo's service provider.</summary>
@@ -59,8 +56,7 @@ public sealed class SiloHostFixture : IAsyncLifetime
     public HttpClient Http { get; private set; } = null!;
 
     /// <inheritdoc />
-    public async ValueTask InitializeAsync()
-    {
+    public async ValueTask InitializeAsync() {
         // --environment Development is what selects UseLocalhostClustering over UseKubeMembership
         // (ADR-004). Port 0 lets the OS pick the HTTP one.
         //
@@ -69,12 +65,14 @@ public sealed class SiloHostFixture : IAsyncLifetime
         // LocalhostSiloPort/LocalhostGatewayPort at all. On the machine this was written on, 30000
         // was already held by an unrelated process, and the failure was an AddressInUseException
         // from a socket bind inside Orleans that named neither port nor process.
-        var builder = OrleansApplication.CreateSilo([
-            "--environment", "Development",
-            "--urls", "http://127.0.0.1:0",
-            $"--{CyberCloudClusterOptions.SectionName}:LocalhostSiloPort={FreePort()}",
-            $"--{CyberCloudClusterOptions.SectionName}:LocalhostGatewayPort={FreePort()}",
-        ]);
+        var builder = OrleansApplication.CreateSilo(
+            [
+                "--environment", "Development",
+                "--urls", "http://127.0.0.1:0",
+                $"--{CyberCloudClusterOptions.SectionName}:LocalhostSiloPort={FreePort()}",
+                $"--{CyberCloudClusterOptions.SectionName}:LocalhostGatewayPort={FreePort()}"
+            ]
+        );
 
         // ⚠ Not optional, and not obvious from docs/plan/04:41-68. CreateSilo calls
         // builder.Host.UseAutofac(), and ABP's service-provider factory resolves IModuleContainer
@@ -95,28 +93,23 @@ public sealed class SiloHostFixture : IAsyncLifetime
             .Addresses
             .First();
 
-        Http = new HttpClient { BaseAddress = new Uri(address) };
+        Http = new() { BaseAddress = new(address) };
     }
 
     /// <inheritdoc />
-    public async ValueTask DisposeAsync()
-    {
+    public async ValueTask DisposeAsync() {
         Http?.Dispose();
 
-        if (app is null)
-        {
+        if (app is null) {
             return;
         }
 
         // ⚠ StopAsync on a silo that never reached Running throws its own exception, which xUnit
         // reports as a fixture-cleanup failure and which then hides the startup failure that is the
         // real diagnosis. Dispose is enough for a host that never started.
-        try
-        {
+        try {
             await app.StopAsync();
-        }
-        catch (InvalidOperationException)
-        {
+        } catch (InvalidOperationException) {
             // The host never started; nothing to stop.
         }
 
@@ -129,8 +122,7 @@ public sealed class SiloHostFixture : IAsyncLifetime
     ///     Orleans binds it — but the window is microseconds and the alternative is a fixed port
     ///     that is provably not free on at least one developer machine.
     /// </remarks>
-    static int FreePort()
-    {
+    static int FreePort() {
         using var socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
         socket.Bind(new IPEndPoint(IPAddress.Loopback, 0));
         return ((IPEndPoint)socket.LocalEndPoint!).Port;
@@ -138,13 +130,11 @@ public sealed class SiloHostFixture : IAsyncLifetime
 }
 
 /// <summary>The assertions against the running silo.</summary>
-public sealed class SiloHostTests(SiloHostFixture silo) : IClassFixture<SiloHostFixture>
-{
+public sealed class SiloHostTests(SiloHostFixture silo) : IClassFixture<SiloHostFixture> {
     HttpClient Http => silo.Http;
 
     [Fact]
-    public async Task TheSiloStartsAndReachesActive()
-    {
+    public async Task TheSiloStartsAndReachesActive() {
         var local = silo.Services.GetRequiredService<ILocalSiloDetails>();
         var hosts = await silo.Services.GetRequiredService<IGrainFactory>()
             .GetGrain<IManagementGrain>(0)
@@ -154,15 +144,13 @@ public sealed class SiloHostTests(SiloHostFixture silo) : IClassFixture<SiloHost
     }
 
     [Fact]
-    public async Task LivenessPasses()
-    {
+    public async Task LivenessPasses() {
         var response = await Http.GetAsync(new Uri("/alive", UriKind.Relative), TestContext.Current.CancellationToken);
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
     }
 
     [Fact]
-    public async Task ReadinessPassesOnlyBecauseTheSiloIsActuallyServing()
-    {
+    public async Task ReadinessPassesOnlyBecauseTheSiloIsActuallyServing() {
         // The claim under test: 200 here means the silo answered an IManagementGrain call and found
         // itself Active in the result. Both are asserted directly above; this asserts the endpoint
         // agrees.
@@ -171,9 +159,11 @@ public sealed class SiloHostTests(SiloHostFixture silo) : IClassFixture<SiloHost
     }
 
     [Fact]
-    public async Task TheDetailEndpointReportsEveryCheckAndNoStackTraces()
-    {
-        var response = await Http.GetAsync(new Uri("/api/health", UriKind.Relative), TestContext.Current.CancellationToken);
+    public async Task TheDetailEndpointReportsEveryCheckAndNoStackTraces() {
+        var response = await Http.GetAsync(
+            new Uri("/api/health", UriKind.Relative),
+            TestContext.Current.CancellationToken
+        );
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
 
         var body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
@@ -199,8 +189,7 @@ public sealed class SiloHostTests(SiloHostFixture silo) : IClassFixture<SiloHost
     }
 
     [Fact]
-    public void ActivityPropagationIsWiredOrTracingStopsAtTheGateway()
-    {
+    public void ActivityPropagationIsWiredOrTracingStopsAtTheGateway() {
         // docs/plan/04:78. There is no public "is it on?" flag, so this asserts the observable
         // consequence: AddActivityPropagation registers its filters as IIncomingGrainCallFilter and
         // IOutgoingGrainCallFilter in the silo's container. Without the call, both are empty.
@@ -209,8 +198,7 @@ public sealed class SiloHostTests(SiloHostFixture silo) : IClassFixture<SiloHost
     }
 
     [Fact]
-    public void TheSiloHasNoGrainStorageUnlessTheStorageSectionIsConfigured()
-    {
+    public void TheSiloHasNoGrainStorageUnlessTheStorageSectionIsConfigured() {
         // ⚠ REPLACES TheSiloHasNoGrainStorageBecauseThatWiringIsADeliberateSeam, and is strictly
         // stronger than it was.
         //
@@ -227,12 +215,13 @@ public sealed class SiloHostTests(SiloHostFixture silo) : IClassFixture<SiloHost
         // persisted grains. All four spellings are asked here.
         silo.Services.GetServices<IGrainStorage>().ShouldBeEmpty();
 
-        foreach (var name in new[] { "Default", StorageTiers.Hot, StorageTiers.Durable })
-        {
-            silo.Services.GetKeyedServices<IGrainStorage>(name).ShouldBeEmpty(
-                $"a grain storage provider is registered under '{name}' on a silo that was given no "
-                + "CyberCloud:Storage configuration. If that is deliberate, say which tier and how "
-                + "it is sharded — docs/plan/05 § The two tiers.");
+        foreach (var name in new[] { "Default", StorageTiers.Hot, StorageTiers.Durable }) {
+            silo.Services.GetKeyedServices<IGrainStorage>(name)
+                .ShouldBeEmpty(
+                    $"a grain storage provider is registered under '{name}' on a silo that was given no "
+                    + "CyberCloud:Storage configuration. If that is deliberate, say which tier and how "
+                    + "it is sharded — docs/plan/05 § The two tiers."
+                );
         }
 
         // The wiring types are not in the container either, so nothing can have been half-wired.

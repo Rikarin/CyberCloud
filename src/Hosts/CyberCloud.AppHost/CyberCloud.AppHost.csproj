@@ -1,58 +1,58 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!--
-    docs/plan/03 § Hosts: "CyberCloud.AppHost/  # Aspire — local development only (ADR-014)".
-
-    ⚠ ADR-014 IS A SCOPE RULE, NOT A PREFERENCE. "Production deployment is Helm charts and
-    Kubernetes manifests. Aspire's deployment story is not used." So this project produces no
-    manifests, has no publisher package, and is never referenced by anything that ships. The
-    `IsAspireHost` property below is what makes `dotnet run` work; `aspire publish` /
-    `aspire deploy` are not part of the build graph and no Nuke target invokes them.
-
-    ⚠ The SDK version is NOT under central package management. Aspire.AppHost.Sdk is an MSBuild
-    SDK, and MSBuild resolves those before the CPM props are read — a version has to be here or in
-    global.json's msbuild-sdks. It is kept equal to $(AspireVersion) by hand; docs/plan/02
-    § Dependency register pins the Aspire.Hosting.* family at 13.4.6 and this must not drift from
-    it. Survival drifted (SDK 9.1.0 against packages 13.1.0) and still builds, which is exactly why
-    the drift is easy to miss.
-  -->
-  <Sdk Name="Aspire.AppHost.Sdk" Version="13.4.6" />
-
-  <PropertyGroup>
-    <OutputType>Exe</OutputType>
-    <IsAspireHost>true</IsAspireHost>
-    <UserSecretsId>cybercloud-apphost-6f3a1c2e-8d05-4f21-9a77-1b0c5d2e4a93</UserSecretsId>
     <!--
-      The generated Projects.* metadata classes are `public partial class` with no XML docs; the
-      repository's CS1591 NoWarn already covers that. What it does not cover is IDE0005 on the
-      generated file, which cannot be edited.
+      docs/plan/03 § Hosts: "CyberCloud.AppHost/  # Aspire — local development only (ADR-014)".
+  
+      ⚠ ADR-014 IS A SCOPE RULE, NOT A PREFERENCE. "Production deployment is Helm charts and
+      Kubernetes manifests. Aspire's deployment story is not used." So this project produces no
+      manifests, has no publisher package, and is never referenced by anything that ships. The
+      `IsAspireHost` property below is what makes `dotnet run` work; `aspire publish` /
+      `aspire deploy` are not part of the build graph and no Nuke target invokes them.
+  
+      ⚠ The SDK version is NOT under central package management. Aspire.AppHost.Sdk is an MSBuild
+      SDK, and MSBuild resolves those before the CPM props are read — a version has to be here or in
+      global.json's msbuild-sdks. It is kept equal to $(AspireVersion) by hand; docs/plan/02
+      § Dependency register pins the Aspire.Hosting.* family at 13.4.6 and this must not drift from
+      it. Survival drifted (SDK 9.1.0 against packages 13.1.0) and still builds, which is exactly why
+      the drift is easy to miss.
     -->
-    <NoWarn>$(NoWarn);IDE0005</NoWarn>
-    <!--
-      CA1515 — CyberCloud.AppHost.Tests runs this AppHost and asserts against the same resource
-      names and ports Program.cs uses, so CyberCloudResources is genuinely referenced from outside.
-      Directory.Build.targets' automatic InternalsVisibleTo names `CyberCloud.AppHost.Tests`, but an
-      `internal` type is not visible to Aspire's own reflection over the entry-point assembly, so
-      relying on it here would work today and break the first time the testing builder is asked to
-      load this assembly out of process.
-    -->
-    <NoWarn>$(NoWarn);CA1515</NoWarn>
-  </PropertyGroup>
+    <Sdk Name="Aspire.AppHost.Sdk" Version="13.4.6"/>
 
-  <ItemGroup Label="Aspire — ADR-014, local development only">
-    <PackageReference Include="Aspire.Hosting.AppHost" />
-    <PackageReference Include="Aspire.Hosting.Redis" />
-    <PackageReference Include="Aspire.Hosting.PostgreSQL" />
-    <PackageReference Include="Aspire.Hosting.NATS" />
-  </ItemGroup>
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <IsAspireHost>true</IsAspireHost>
+        <UserSecretsId>cybercloud-apphost-6f3a1c2e-8d05-4f21-9a77-1b0c5d2e4a93</UserSecretsId>
+        <!--
+          The generated Projects.* metadata classes are `public partial class` with no XML docs; the
+          repository's CS1591 NoWarn already covers that. What it does not cover is IDE0005 on the
+          generated file, which cannot be edited.
+        -->
+        <NoWarn>$(NoWarn);IDE0005</NoWarn>
+        <!--
+          CA1515 — CyberCloud.AppHost.Tests runs this AppHost and asserts against the same resource
+          names and ports Program.cs uses, so CyberCloudResources is genuinely referenced from outside.
+          Directory.Build.targets' automatic InternalsVisibleTo names `CyberCloud.AppHost.Tests`, but an
+          `internal` type is not visible to Aspire's own reflection over the entry-point assembly, so
+          relying on it here would work today and break the first time the testing builder is asked to
+          load this assembly out of process.
+        -->
+        <NoWarn>$(NoWarn);CA1515</NoWarn>
+    </PropertyGroup>
 
-  <ItemGroup Label="The processes Aspire launches">
-    <!--
-      An AppHost's ProjectReference is not an ordinary reference: Aspire.AppHost.Sdk turns each one
-      into a `Projects.<Name>` metadata type, which is the handle AddProject<T>() takes. That is why
-      the silo is referenced here even though no code in this project uses a type from it.
-    -->
-    <ProjectReference Include="../CyberCloud.Silo.Host/CyberCloud.Silo.Host.csproj" />
-  </ItemGroup>
+    <ItemGroup Label="Aspire — ADR-014, local development only">
+        <PackageReference Include="Aspire.Hosting.AppHost"/>
+        <PackageReference Include="Aspire.Hosting.Redis"/>
+        <PackageReference Include="Aspire.Hosting.PostgreSQL"/>
+        <PackageReference Include="Aspire.Hosting.NATS"/>
+    </ItemGroup>
+
+    <ItemGroup Label="The processes Aspire launches">
+        <!--
+          An AppHost's ProjectReference is not an ordinary reference: Aspire.AppHost.Sdk turns each one
+          into a `Projects.<Name>` metadata type, which is the handle AddProject<T>() takes. That is why
+          the silo is referenced here even though no code in this project uses a type from it.
+        -->
+        <ProjectReference Include="../CyberCloud.Silo.Host/CyberCloud.Silo.Host.csproj"/>
+    </ItemGroup>
 
 </Project>

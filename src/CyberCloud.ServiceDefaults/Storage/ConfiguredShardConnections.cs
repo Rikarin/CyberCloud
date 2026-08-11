@@ -7,15 +7,13 @@ namespace CyberCloud.ServiceDefaults.Storage;
 ///     <see cref="IShardConnections" /> over <see cref="CyberCloudStorageOptions" />, with the
 ///     connection-pool arithmetic of docs/plan/05 § Storage provider wiring applied once per shard.
 /// </summary>
-public sealed class ConfiguredShardConnections : IShardConnections
-{
+public sealed class ConfiguredShardConnections : IShardConnections {
     readonly Dictionary<string, string> durable;
     readonly ConfigurationOptions hot;
 
     /// <summary>Builds the connection table.</summary>
     /// <param name="options">The bound <c>CyberCloud:Storage</c> section.</param>
-    public ConfiguredShardConnections(CyberCloudStorageOptions options)
-    {
+    public ConfiguredShardConnections(CyberCloudStorageOptions options) {
         ArgumentNullException.ThrowIfNull(options);
 
         // ⚠ Built ONCE, here, and handed out by reference. Every tenant on a shard therefore gets a
@@ -27,21 +25,22 @@ public sealed class ConfiguredShardConnections : IShardConnections
         durable = options.Durable.Shards.ToDictionary(
             x => x.Key,
             x => Canonicalise(x.Value, options.Durable),
-            StringComparer.Ordinal);
+            StringComparer.Ordinal
+        );
 
         hot = ConfigurationOptions.Parse(options.Hot.ConnectionString);
     }
 
     /// <inheritdoc />
-    public string Durable(string shard)
-    {
+    public string Durable(string shard) {
         ArgumentException.ThrowIfNullOrEmpty(shard);
 
         return durable.TryGetValue(shard, out var connectionString)
             ? connectionString
             : throw new KeyNotFoundException(
                 $"Durable shard '{shard}' is not in {CyberCloudStorageOptions.SectionName}:Durable:Shards. "
-                + $"Known shards: {string.Join(", ", durable.Keys.Order(StringComparer.Ordinal))}.");
+                + $"Known shards: {string.Join(", ", durable.Keys.Order(StringComparer.Ordinal))}."
+            );
     }
 
     /// <inheritdoc />
@@ -61,15 +60,10 @@ public sealed class ConfiguredShardConnections : IShardConnections
     ///         is how it happens.
     ///     </para>
     /// </remarks>
-    static string Canonicalise(string connectionString, DurableTierOptions options)
-    {
-        var builder = new NpgsqlConnectionStringBuilder(connectionString)
-        {
-            MaxPoolSize = options.MaxPoolSize,
-        };
+    static string Canonicalise(string connectionString, DurableTierOptions options) {
+        var builder = new NpgsqlConnectionStringBuilder(connectionString) { MaxPoolSize = options.MaxPoolSize };
 
-        if (options.PgBouncerTransactionMode)
-        {
+        if (options.PgBouncerTransactionMode) {
             // See DurableTierOptions.PgBouncerTransactionMode for the evidence behind both of these.
             builder.MaxAutoPrepare = 0;
             builder.NoResetOnClose = true;

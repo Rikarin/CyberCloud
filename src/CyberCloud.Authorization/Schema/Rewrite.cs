@@ -7,7 +7,7 @@ namespace CyberCloud.Authorization;
 /// <example>
 ///     <code>
 ///     using static CyberCloud.Authorization.Rewrite;
-///
+/// 
 ///     Schema.DefineType("resourceGroup")
 ///         .Relation("parent")
 ///         .Relation("owner",       This | From("parent", "owner"))
@@ -15,8 +15,7 @@ namespace CyberCloud.Authorization;
 ///         .Permission("assignRole", Rel("owner") &amp; !Rel("suspended"));
 ///     </code>
 /// </example>
-public static class Rewrite
-{
+public static class Rewrite {
     /// <summary>The direct tuples on this relation and this object.</summary>
     public static RelationExpression This { get; } = new ThisExpression();
 

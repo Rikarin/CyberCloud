@@ -16,8 +16,12 @@ namespace CyberCloud.Tenancy.Contracts;
 ///         without adding an identity.
 ///     </para>
 ///     <para>
-///         ⚠ <b>The tier is Durable, and docs/plan/04 § Grain taxonomy says "Hot + a durable
-///         checkpoint" for the Coordinator kind.</b> That is a real disagreement and it is resolved
+///         ⚠
+///         <b>
+///             The tier is Durable, and docs/plan/04 § Grain taxonomy says "Hot + a durable
+///             checkpoint" for the Coordinator kind.
+///         </b>
+///         That is a real disagreement and it is resolved
 ///         towards durable here, deliberately: a lost hot-tier record of committed quota is a
 ///         subscription that can exceed its limit until something recomputes it, and docs/plan/05
 ///         § Hot lists what the hot tier holds — "sessions, observed state, caches, counters" — with
@@ -35,8 +39,7 @@ namespace CyberCloud.Tenancy.Contracts;
 ///     </para>
 /// </remarks>
 [Alias("CyberCloud.Tenancy.IQuotaGrain")]
-public interface IQuotaGrain : IGrainWithStringKey
-{
+public interface IQuotaGrain : IGrainWithStringKey {
     /// <summary>
     ///     Reserves quota under a lease — docs/plan/06 § Quota's signature, and its
     ///     "<b>Reservation, not a counter increment</b>".

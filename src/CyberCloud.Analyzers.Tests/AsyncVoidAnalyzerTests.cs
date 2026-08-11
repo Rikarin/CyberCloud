@@ -1,8 +1,7 @@
 namespace CyberCloud.Analyzers.Tests;
 
 /// <summary>CC1002 — <c>docs/plan/00 § Coding standards</c>, "No <c>async void</c>".</summary>
-public sealed class AsyncVoidAnalyzerTests
-{
+public sealed class AsyncVoidAnalyzerTests {
     // ── positive ─────────────────────────────────────────────────────────────────────────────────
 
     [Fact]
@@ -18,7 +17,8 @@ public sealed class AsyncVoidAnalyzerTests
                     await Task.Yield();
                 }
             }
-            """);
+            """
+        );
 
     [Fact]
     public Task AnAsyncVoidLocalFunctionIsReported() =>
@@ -38,7 +38,8 @@ public sealed class AsyncVoidAnalyzerTests
                     Inner();
                 }
             }
-            """);
+            """
+        );
 
     /// <summary>
     ///     The form that gets written by accident: nothing in the source says "void", the delegate
@@ -59,7 +60,8 @@ public sealed class AsyncVoidAnalyzerTests
                     fire();
                 }
             }
-            """);
+            """
+        );
 
     // ── negative ─────────────────────────────────────────────────────────────────────────────────
 
@@ -73,7 +75,8 @@ public sealed class AsyncVoidAnalyzerTests
             {
                 public async Task StartAsync() => await Task.Yield();
             }
-            """);
+            """
+        );
 
     /// <summary>
     ///     ⚠ The near-miss that matters. <c>Task.Run(async () =&gt; …)</c> is correct and everywhere;
@@ -90,7 +93,8 @@ public sealed class AsyncVoidAnalyzerTests
             {
                 public Task StartAsync() => Task.Run(async () => await Task.Yield());
             }
-            """);
+            """
+        );
 
     [Fact]
     public Task AnAsyncLambdaBoundToFuncOfValueTaskIsCorrect() =>
@@ -109,7 +113,8 @@ public sealed class AsyncVoidAnalyzerTests
                     _ = body;
                 }
             }
-            """);
+            """
+        );
 
     /// <summary>A plain <c>void</c> method is not this rule's business.</summary>
     [Fact]
@@ -122,5 +127,6 @@ public sealed class AsyncVoidAnalyzerTests
                 {
                 }
             }
-            """);
+            """
+        );
 }

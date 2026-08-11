@@ -4,8 +4,7 @@ namespace CyberCloud.ServiceDefaults.Tests.Storage;
 
 /// <summary>A grain whose state lives in the hot tier.</summary>
 [Alias("CyberCloud.Tests.Hot")]
-public interface IHotStateGrain : IGrainWithStringKey
-{
+public interface IHotStateGrain : IGrainWithStringKey {
     /// <summary>Reads the stored note, or the empty string if nothing is stored.</summary>
     Task<string> ReadAsync();
 
@@ -19,8 +18,7 @@ public interface IHotStateGrain : IGrainWithStringKey
 
 /// <summary>A grain whose state lives in the durable tier.</summary>
 [Alias("CyberCloud.Tests.Durable")]
-public interface IDurableStateGrain : IGrainWithStringKey
-{
+public interface IDurableStateGrain : IGrainWithStringKey {
     /// <summary>Reads the stored note, or the empty string if nothing is stored.</summary>
     Task<string> ReadAsync();
 
@@ -38,8 +36,7 @@ public interface IDurableStateGrain : IGrainWithStringKey
 /// </summary>
 [GenerateSerializer]
 [Alias("CyberCloud.Tests.NoteState")]
-public sealed class NoteState
-{
+public sealed class NoteState {
     /// <summary>The note.</summary>
     [Id(0)]
     public string Note { get; set; } = string.Empty;
@@ -54,15 +51,14 @@ public sealed class NoteState
 ///     spelling of docs/plan/05 § Choosing a tier.
 /// </summary>
 public sealed class HotStateGrain(
-    [PersistentState("note", StorageTiers.Hot)] IPersistentState<NoteState> state)
-    : Grain, IHotStateGrain
-{
+    [PersistentState("note", StorageTiers.Hot)] IPersistentState<NoteState> state
+)
+    : Grain, IHotStateGrain {
     /// <inheritdoc />
     public Task<string> ReadAsync() => Task.FromResult(state.State.Note);
 
     /// <inheritdoc />
-    public async Task WriteAsync(string note)
-    {
+    public async Task WriteAsync(string note) {
         state.State.Note = note;
         state.State.Revision++;
         await state.WriteStateAsync();
@@ -74,15 +70,14 @@ public sealed class HotStateGrain(
 
 /// <summary><see cref="IDurableStateGrain" />, bound to <see cref="StorageTiers.Durable" />.</summary>
 public sealed class DurableStateGrain(
-    [PersistentState("note", StorageTiers.Durable)] IPersistentState<NoteState> state)
-    : Grain, IDurableStateGrain
-{
+    [PersistentState("note", StorageTiers.Durable)] IPersistentState<NoteState> state
+)
+    : Grain, IDurableStateGrain {
     /// <inheritdoc />
     public Task<string> ReadAsync() => Task.FromResult(state.State.Note);
 
     /// <inheritdoc />
-    public async Task WriteAsync(string note)
-    {
+    public async Task WriteAsync(string note) {
         state.State.Note = note;
         state.State.Revision++;
         await state.WriteStateAsync();

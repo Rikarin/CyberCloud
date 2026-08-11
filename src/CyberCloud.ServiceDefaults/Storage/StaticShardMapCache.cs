@@ -31,8 +31,12 @@ namespace CyberCloud.ServiceDefaults.Storage;
 ///         <item>
 ///             <b>Adding a shard here re-places existing tenants.</b> <c>hash mod n</c> moves roughly
 ///             <c>1 - 1/n</c> of tenants when <c>n</c> changes, and docs/plan/05 § The shard map says
-///             flatly that a tenant's durable state is never moved. So <b>the configured shard list
-///             must not change</b> while this stub is the implementation. Capacity is added by the
+///             flatly that a tenant's durable state is never moved. So
+///             <b>
+///                 the configured shard list
+///                 must not change
+///             </b>
+///             while this stub is the implementation. Capacity is added by the
 ///             real thing, which records each assignment rather than recomputing it. This is the one
 ///             sharp edge of the stub and it is why it is a stub.
 ///         </item>
@@ -57,8 +61,7 @@ namespace CyberCloud.ServiceDefaults.Storage;
 ///         one <c>AddSingleton</c>.
 ///     </para>
 /// </remarks>
-public sealed class StaticShardMapCache : IShardMapCache
-{
+public sealed class StaticShardMapCache : IShardMapCache {
     /// <summary>
     ///     The fixed prefix of every hot-tier hash tag. docs/plan/05 § Hot fixes the layout as
     ///     <c>{cc:t:&lt;tenantId&gt;}:&lt;grainType&gt;:&lt;keyWithinTenant&gt;</c>.
@@ -70,6 +73,10 @@ public sealed class StaticShardMapCache : IShardMapCache
     readonly Dictionary<string, string> hotOverrides;
     readonly string? nullTenantShard;
 
+    /// <inheritdoc />
+    /// <remarks>Always 0 — see the class remarks, item 3.</remarks>
+    public long Version => 0;
+
     /// <summary>Builds the map from configuration.</summary>
     /// <param name="options">The bound <c>CyberCloud:Storage</c> section.</param>
     /// <exception cref="InvalidOperationException">
@@ -77,8 +84,7 @@ public sealed class StaticShardMapCache : IShardMapCache
     ///     are fatal at wiring time on purpose: a pin that silently falls back to the hash is a
     ///     tenant quietly reading an empty database.
     /// </exception>
-    public StaticShardMapCache(CyberCloudStorageOptions options)
-    {
+    public StaticShardMapCache(CyberCloudStorageOptions options) {
         ArgumentNullException.ThrowIfNull(options);
 
         durableShards = [.. options.Durable.Shards.Keys.OrderBy(x => x, StringComparer.Ordinal)];
@@ -86,48 +92,40 @@ public sealed class StaticShardMapCache : IShardMapCache
         hotOverrides = options.Hot.HashTagOverrides;
         nullTenantShard = options.Durable.NullTenantShard;
 
-        if (durableShards.Count == 0)
-        {
+        if (durableShards.Count == 0) {
             throw new InvalidOperationException(
                 $"{CyberCloudStorageOptions.SectionName}:Durable:Shards is empty. The durable tier is "
                 + "N independent PostgreSQL servers (docs/plan/05 § Durable) and a silo with none of "
-                + "them cannot store a tenant, a subscription or a resource.");
+                + "them cannot store a tenant, a subscription or a resource."
+            );
         }
 
-        foreach (var (tenantId, shard) in durablePins)
-        {
-            if (!options.Durable.Shards.ContainsKey(shard))
-            {
+        foreach (var (tenantId, shard) in durablePins) {
+            if (!options.Durable.Shards.ContainsKey(shard)) {
                 throw new InvalidOperationException(
                     $"Tenant {tenantId} is pinned to durable shard '{shard}', which is not in "
-                    + $"{CyberCloudStorageOptions.SectionName}:Durable:Shards.");
+                    + $"{CyberCloudStorageOptions.SectionName}:Durable:Shards."
+                );
             }
         }
 
-        if (nullTenantShard is not null && !options.Durable.Shards.ContainsKey(nullTenantShard))
-        {
+        if (nullTenantShard is not null && !options.Durable.Shards.ContainsKey(nullTenantShard)) {
             throw new InvalidOperationException(
                 $"{CyberCloudStorageOptions.SectionName}:Durable:NullTenantShard is '{nullTenantShard}', "
-                + "which is not in the shard table.");
+                + "which is not in the shard table."
+            );
         }
     }
 
     /// <inheritdoc />
-    /// <remarks>Always 0 — see the class remarks, item 3.</remarks>
-    public long Version => 0;
-
-    /// <inheritdoc />
-    public string DurableShardFor(string tenantId)
-    {
+    public string DurableShardFor(string tenantId) {
         ArgumentException.ThrowIfNullOrEmpty(tenantId);
 
-        if (durablePins.TryGetValue(tenantId, out var pinned))
-        {
+        if (durablePins.TryGetValue(tenantId, out var pinned)) {
             return pinned;
         }
 
-        if (nullTenantShard is not null && IsNullTenant(tenantId))
-        {
+        if (nullTenantShard is not null && IsNullTenant(tenantId)) {
             return nullTenantShard;
         }
 
@@ -135,33 +133,21 @@ public sealed class StaticShardMapCache : IShardMapCache
     }
 
     /// <inheritdoc />
-    public string HotHashTagFor(string tenantId)
-    {
+    public string HotHashTagFor(string tenantId) {
         ArgumentException.ThrowIfNullOrEmpty(tenantId);
 
-        if (hotOverrides.TryGetValue(tenantId, out var overridden))
-        {
+        if (hotOverrides.TryGetValue(tenantId, out var overridden)) {
             return overridden;
         }
 
         // A GUID has five textual spellings and they are the same tenant. Canonicalising to "N"
         // means `D`-formatted and `N`-formatted ids cannot end up in two different slots holding two
         // halves of one tenant's session state — which is a bug with no error message.
-        return HotTagPrefix + (Guid.TryParse(tenantId, out var id)
-            ? id.ToString("N", CultureInfo.InvariantCulture)
-            : tenantId);
+        return HotTagPrefix
+            + (Guid.TryParse(tenantId, out var id)
+                ? id.ToString("N", CultureInfo.InvariantCulture)
+                : tenantId);
     }
-
-    /// <summary>
-    ///     Whether this is <c>Orleans.Multitenant</c>'s null-tenant sentinel rather than a real
-    ///     tenant id.
-    /// </summary>
-    /// <remarks>
-    ///     The sentinel is <c>MultitenantStorageOptions.TenantIdForNullTenant</c>, default
-    ///     <c>"Null"</c>. It is compared as "not a GUID" rather than against the literal so that a
-    ///     silo which changed the sentinel still routes its platform grains to the platform shard.
-    /// </remarks>
-    static bool IsNullTenant(string tenantId) => !Guid.TryParse(tenantId, out _);
 
     /// <summary>
     ///     A hash that is stable across processes, machines and .NET releases.
@@ -180,10 +166,20 @@ public sealed class StaticShardMapCache : IShardMapCache
     ///         tenant in", and the day the two drifted a tenant's rows would split silently.
     ///     </para>
     /// </remarks>
-    public static uint StableHash(string value)
-    {
+    public static uint StableHash(string value) {
         Span<byte> digest = stackalloc byte[32];
         SHA256.HashData(Encoding.UTF8.GetBytes(value), digest);
         return BitConverter.ToUInt32(digest[..4]);
     }
+
+    /// <summary>
+    ///     Whether this is <c>Orleans.Multitenant</c>'s null-tenant sentinel rather than a real
+    ///     tenant id.
+    /// </summary>
+    /// <remarks>
+    ///     The sentinel is <c>MultitenantStorageOptions.TenantIdForNullTenant</c>, default
+    ///     <c>"Null"</c>. It is compared as "not a GUID" rather than against the literal so that a
+    ///     silo which changed the sentinel still routes its platform grains to the platform shard.
+    /// </remarks>
+    static bool IsNullTenant(string tenantId) => !Guid.TryParse(tenantId, out _);
 }

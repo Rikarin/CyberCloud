@@ -7,24 +7,20 @@ namespace CyberCloud.Core.Time;
 ///     <see cref="IClock" /> implementation; the parameterless form uses
 ///     <see cref="TimeProvider.System" />.
 /// </remarks>
-public sealed class SystemClock : IClock
-{
+public sealed class SystemClock : IClock {
     readonly TimeProvider provider;
-
-    /// <summary>Creates a clock over <see cref="TimeProvider.System" />.</summary>
-    public SystemClock()
-        : this(TimeProvider.System)
-    {
-    }
-
-    /// <summary>Creates a clock over <paramref name="timeProvider" />.</summary>
-    /// <exception cref="ArgumentNullException"><paramref name="timeProvider" /> is null.</exception>
-    public SystemClock(TimeProvider timeProvider)
-    {
-        ArgumentNullException.ThrowIfNull(timeProvider);
-        provider = timeProvider;
-    }
 
     /// <inheritdoc />
     public DateTimeOffset UtcNow => provider.GetUtcNow();
+
+    /// <summary>Creates a clock over <see cref="TimeProvider.System" />.</summary>
+    public SystemClock()
+        : this(TimeProvider.System) { }
+
+    /// <summary>Creates a clock over <paramref name="timeProvider" />.</summary>
+    /// <exception cref="ArgumentNullException"><paramref name="timeProvider" /> is null.</exception>
+    public SystemClock(TimeProvider timeProvider) {
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        provider = timeProvider;
+    }
 }

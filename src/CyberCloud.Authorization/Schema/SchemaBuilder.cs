@@ -1,13 +1,12 @@
-using System.Globalization;
 using CyberCloud.Core.Resources;
+using System.Globalization;
 
 namespace CyberCloud.Authorization;
 
 /// <summary>
 ///     The entry point docs/plan/07 § The model writes its example against.
 /// </summary>
-public static class Schema
-{
+public static class Schema {
     /// <summary>Starts a schema and defines its first type.</summary>
     /// <param name="type">The object type name.</param>
     public static SchemaTypeBuilder DefineType(string type) => new SchemaBuilder().DefineType(type);
@@ -74,8 +73,11 @@ public static class Schema
 ///             requests names the first of these explicitly.
 ///         </item>
 ///         <item>
-///             <b>⚠ <c>!Rel(name)</c>: <c>name</c> is computed from direct tuples on
-///             the same object.</b> The document's exact restriction. It is what keeps invalidation
+///             <b>
+///                 ⚠ <c>!Rel(name)</c>: <c>name</c> is computed from direct tuples on
+///                 the same object.
+///             </b>
+///             The document's exact restriction. It is what keeps invalidation
 ///             to "the same object changed".
 ///         </item>
 ///         <item>
@@ -92,22 +94,29 @@ public static class Schema
 ///     </list>
 ///     <para>
 ///         <b>Why all of this is a build failure rather than a comment.</b> docs/plan/07 § Caching
-///         across requests: <i>"Negative relations break monotonic caching and this is the subtlest
-///         thing in the document … The rule, enforced by the schema builder."</i> If it were merely
+///         across requests:
+///         <i>
+///             "Negative relations break monotonic caching and this is the subtlest
+///             thing in the document … The rule, enforced by the schema builder."
+///         </i>
+///         If it were merely
 ///         documented, adding a tuple could <i>remove</i> access from a cached path, and the cache
 ///         would be wrong in a way no later test would catch — because every test would be written
 ///         against a schema somebody believed was legal.
 ///     </para>
 ///     <para>
 ///         <b>What is deliberately NOT a rule: cycles.</b> <c>a → b → a</c> across types, or a
-///         <c>parent</c> chain that loops, builds fine. docs/plan/07 § Check: <i>"Cycles are broken
-///         by the memo, not by cycle detection."</i> Rejecting them here would be a second,
+///         <c>parent</c> chain that loops, builds fine. docs/plan/07 § Check:
+///         <i>
+///             "Cycles are broken
+///             by the memo, not by cycle detection."
+///         </i>
+///         Rejecting them here would be a second,
 ///         redundant, and less complete mechanism — a cycle can be formed by <b>tuples</b> at
 ///         runtime, which no schema check can see.
 ///     </para>
 /// </remarks>
-public sealed class SchemaBuilder
-{
+public sealed class SchemaBuilder {
     readonly Dictionary<string, List<SchemaMember>> byType = new(StringComparer.Ordinal);
     readonly List<string> typeOrder = [];
     readonly List<string> problems = [];
@@ -116,28 +125,23 @@ public sealed class SchemaBuilder
 
     /// <summary>Sets the schema version.</summary>
     /// <param name="schemaVersion">The version — a component of the check cache key.</param>
-    public SchemaBuilder WithVersion(int schemaVersion)
-    {
+    public SchemaBuilder WithVersion(int schemaVersion) {
         version = schemaVersion;
         return this;
     }
 
     /// <summary>Begins (or reopens) an object type.</summary>
     /// <param name="type">The object type name.</param>
-    public SchemaTypeBuilder DefineType(string type)
-    {
+    public SchemaTypeBuilder DefineType(string type) {
         var valid = RelationNaming.ValidateName(type, "object type");
-        if (valid.TryGetError(out var error))
-        {
+        if (valid.TryGetError(out var error)) {
             problems.Add(error.Message);
-        }
-        else if (!byType.ContainsKey(type))
-        {
+        } else if (!byType.ContainsKey(type)) {
             byType[type] = [];
             typeOrder.Add(type);
         }
 
-        return new SchemaTypeBuilder(this, type);
+        return new(this, type);
     }
 
     /// <summary>
@@ -147,62 +151,27 @@ public sealed class SchemaBuilder
 
     /// <summary>Builds the schema.</summary>
     /// <exception cref="SchemaDefinitionException">The schema breaks one or more rules.</exception>
-    public AuthorizationSchema Build()
-    {
+    public AuthorizationSchema Build() {
         var found = Validate();
-        if (found.Count > 0)
-        {
+        if (found.Count > 0) {
             throw new SchemaDefinitionException(
                 "The authorization schema is not valid and was not built. "
                 + found.Count.ToString(CultureInfo.InvariantCulture)
                 + " problem(s) — see docs/plan/07 § The model and § Caching across requests:",
-                found);
+                found
+            );
         }
 
-        return new AuthorizationSchema(
+        return new(
             version,
-            typeOrder.Select(type => new SchemaType(type, byType[type])));
-    }
-
-    internal void Add(string type, SchemaMember member)
-    {
-        if (!byType.TryGetValue(type, out var members))
-        {
-            problems.Add(
-                $"'{member.Name}' is declared on the object type '{type}', which failed validation "
-                + "and was never opened.");
-            return;
-        }
-
-        var valid = RelationNaming.ValidateName(
-            member.Name, member.IsPermission ? "permission name" : "relation name");
-
-        if (valid.TryGetError(out var error))
-        {
-            problems.Add(error.Message);
-            return;
-        }
-
-        var existing = members.Find(x => string.Equals(x.Name, member.Name, StringComparison.Ordinal));
-        if (existing is not null)
-        {
-            problems.Add(
-                $"'{type}' declares '{member.Name}' twice — once as a "
-                + $"{Kind(existing)} and once as a {Kind(member)}. A duplicate is not a merge: it "
-                + "is two authors believing different things about one word, and whichever one wins "
-                + "is arbitrary.");
-            return;
-        }
-
-        members.Add(member);
+            typeOrder.Select(type => new SchemaType(type, byType[type]))
+        );
     }
 
     static string Kind(SchemaMember member) => member.IsPermission ? "permission" : "relation";
 
-    IEnumerable<string> CheckRules()
-    {
-        if (byType.Count == 0)
-        {
+    IEnumerable<string> CheckRules() {
+        if (byType.Count == 0) {
             yield return "The schema defines no object types. An empty schema denies everything, "
                 + "which is safe and is almost certainly a wiring mistake rather than an intent.";
             yield break;
@@ -221,15 +190,12 @@ public sealed class SchemaBuilder
             .Select(x => x.Name)
             .ToHashSet(StringComparer.Ordinal);
 
-        foreach (var type in typeOrder)
-        {
+        foreach (var type in typeOrder) {
             var members = byType[type];
             var byName = members.ToDictionary(x => x.Name, StringComparer.Ordinal);
 
-            foreach (var member in members)
-            {
-                foreach (var problem in CheckMember(type, member, byName, namesAnywhere, negatingNames))
-                {
+            foreach (var member in members) {
+                foreach (var problem in CheckMember(type, member, byName, namesAnywhere, negatingNames)) {
                     yield return problem;
                 }
             }
@@ -241,14 +207,12 @@ public sealed class SchemaBuilder
         SchemaMember member,
         Dictionary<string, SchemaMember> byName,
         HashSet<string> namesAnywhere,
-        HashSet<string> negatingNames)
-    {
+        HashSet<string> negatingNames
+    ) {
         var where = $"{type}#{member.Name}";
 
-        foreach (var node in member.Expression.DescendantsAndSelf())
-        {
-            switch (node)
-            {
+        foreach (var node in member.Expression.DescendantsAndSelf()) {
+            switch (node) {
                 // Rule 2 — This only in a relation.
                 case ThisExpression when member.IsPermission:
                     yield return
@@ -261,16 +225,13 @@ public sealed class SchemaBuilder
 
                 // Rules 3 and 11 — Rel(x) resolves on this type, and does not carry a negation.
                 case RelationRefExpression reference:
-                    if (!byName.TryGetValue(reference.Relation, out var target))
-                    {
+                    if (!byName.TryGetValue(reference.Relation, out var target)) {
                         yield return
                             $"{where} references `Rel(\"{reference.Relation}\")` and '{type}' "
                             + $"declares no '{reference.Relation}'. It declares "
                             + $"[{Join(byName.Keys)}]. This is the typo docs/plan/07 § The model "
                             + "credits an analyzer with catching; it is caught here instead.";
-                    }
-                    else if (target.ContainsNegation)
-                    {
+                    } else if (target.ContainsNegation) {
                         yield return
                             $"{where} references `Rel(\"{reference.Relation}\")`, which is a "
                             + "permission containing `!`. Referencing it would move that `!` below "
@@ -283,8 +244,14 @@ public sealed class SchemaBuilder
 
                 // Rules 4, 5 and 11 — From(t, c).
                 case TuplesetExpression tupleset:
-                    foreach (var problem in CheckTupleset(where, type, tupleset, byName, namesAnywhere, negatingNames))
-                    {
+                    foreach (var problem in CheckTupleset(
+                                 where,
+                                 type,
+                                 tupleset,
+                                 byName,
+                                 namesAnywhere,
+                                 negatingNames
+                             )) {
                         yield return problem;
                     }
 
@@ -292,23 +259,17 @@ public sealed class SchemaBuilder
 
                 // Rules 6, 8 and 9 — where a negation may be and what it may be over.
                 case ExclusionExpression exclusion:
-                    foreach (var problem in CheckExclusion(where, member, exclusion, byName))
-                    {
+                    foreach (var problem in CheckExclusion(where, member, exclusion, byName)) {
                         yield return problem;
                     }
 
-                    break;
-
-                default:
                     break;
             }
         }
 
         // Rules 7 and 10 — the shape of a permission that carries a negation.
-        if (member.ContainsNegation)
-        {
-            foreach (var problem in CheckNegationIsTopLevel(where, member))
-            {
+        if (member.ContainsNegation) {
+            foreach (var problem in CheckNegationIsTopLevel(where, member)) {
                 yield return problem;
             }
         }
@@ -320,38 +281,30 @@ public sealed class SchemaBuilder
         TuplesetExpression tupleset,
         Dictionary<string, SchemaMember> byName,
         HashSet<string> namesAnywhere,
-        HashSet<string> negatingNames)
-    {
-        if (!byName.TryGetValue(tupleset.Tupleset, out var pointer))
-        {
+        HashSet<string> negatingNames
+    ) {
+        if (!byName.TryGetValue(tupleset.Tupleset, out var pointer)) {
             yield return
                 $"{where} uses `From(\"{tupleset.Tupleset}\", …)` and '{type}' declares no "
                 + $"'{tupleset.Tupleset}'. It declares [{Join(byName.Keys)}].";
-        }
-        else if (pointer.IsPermission)
-        {
+        } else if (pointer.IsPermission) {
             yield return
                 $"{where} uses `From(\"{tupleset.Tupleset}\", …)` and '{tupleset.Tupleset}' is a "
                 + "permission. A tupleset is read as tuples — \"the object I point to via x\" only "
                 + "means something if x is written, not computed.";
-        }
-        else if (!pointer.IsDirectOnly)
-        {
+        } else if (!pointer.IsDirectOnly) {
             yield return
                 $"{where} uses `From(\"{tupleset.Tupleset}\", …)` and '{tupleset.Tupleset}' is "
                 + $"computed ({pointer.Expression}) rather than written. A tupleset must be a "
                 + "direct relation, or the walk follows objects that no tuple points at.";
         }
 
-        if (!namesAnywhere.Contains(tupleset.Computed))
-        {
+        if (!namesAnywhere.Contains(tupleset.Computed)) {
             yield return
                 $"{where} uses `From(…, \"{tupleset.Computed}\")` and no object type in the schema "
                 + $"declares '{tupleset.Computed}'. The target type is only known at check time, so "
                 + "this is as far as static resolution goes — but a name no type declares is a typo.";
-        }
-        else if (negatingNames.Contains(tupleset.Computed))
-        {
+        } else if (negatingNames.Contains(tupleset.Computed)) {
             yield return
                 $"{where} uses `From(…, \"{tupleset.Computed}\")` and '{tupleset.Computed}' is a "
                 + "permission containing `!`. Evaluating it from another object puts that `!` below "
@@ -363,11 +316,10 @@ public sealed class SchemaBuilder
         string where,
         SchemaMember member,
         ExclusionExpression exclusion,
-        Dictionary<string, SchemaMember> byName)
-    {
+        Dictionary<string, SchemaMember> byName
+    ) {
         // Rule 6 — never inside a relation.
-        if (!member.IsPermission)
-        {
+        if (!member.IsPermission) {
             yield return
                 $"{where} is a relation and its rewrite contains `!`. Negation is legal only in a "
                 + "permission (docs/plan/07 § Caching across requests): a relation is reachable "
@@ -378,8 +330,7 @@ public sealed class SchemaBuilder
         }
 
         // Rule 8 — only over Rel(name).
-        if (exclusion.Operand is not RelationRefExpression negated)
-        {
+        if (exclusion.Operand is not RelationRefExpression negated) {
             yield return
                 $"{where} negates `{exclusion.Operand}`. `!` may only be applied to `Rel(name)` — "
                 + "docs/plan/07 § Caching across requests: \"`!Rel(\"suspended\")`, never "
@@ -390,14 +341,11 @@ public sealed class SchemaBuilder
         }
 
         // Rule 9 — over a relation computed from direct tuples on the same object.
-        if (!byName.TryGetValue(negated.Relation, out var target))
-        {
+        if (!byName.TryGetValue(negated.Relation, out var target)) {
             yield return
                 $"{where} negates `Rel(\"{negated.Relation}\")` and the type declares no "
                 + $"'{negated.Relation}'.";
-        }
-        else if (target.IsPermission || !target.IsDirectOnly)
-        {
+        } else if (target.IsPermission || !target.IsDirectOnly) {
             yield return
                 $"{where} negates `Rel(\"{negated.Relation}\")`, which is "
                 + (target.IsPermission ? "a permission" : $"computed ({target.Expression})")
@@ -408,10 +356,8 @@ public sealed class SchemaBuilder
         }
     }
 
-    static IEnumerable<string> CheckNegationIsTopLevel(string where, SchemaMember member)
-    {
-        if (member.Expression is not IntersectionExpression root)
-        {
+    static IEnumerable<string> CheckNegationIsTopLevel(string where, SchemaMember member) {
+        if (member.Expression is not IntersectionExpression root) {
             yield return
                 $"{where} contains `!` but its rewrite is not a top-level intersection (it is "
                 + $"{member.Expression.GetType().Name}). Negation may appear only as a direct "
@@ -422,25 +368,21 @@ public sealed class SchemaBuilder
         }
 
         var positives = 0;
-        foreach (var operand in root.Operands)
-        {
-            if (operand is ExclusionExpression)
-            {
+        foreach (var operand in root.Operands) {
+            if (operand is ExclusionExpression) {
                 continue;
             }
 
             positives++;
 
-            if (operand.DescendantsAndSelf().Any(x => x is ExclusionExpression))
-            {
+            if (operand.DescendantsAndSelf().Any(x => x is ExclusionExpression)) {
                 yield return
                     $"{where} nests a `!` inside `{operand}`. Negation may appear only as a direct "
                     + "operand of the permission's root `&`, never deeper.";
             }
         }
 
-        if (positives == 0)
-        {
+        if (positives == 0) {
             yield return
                 $"{where} is nothing but negations. A permission of the form `!Rel(\"suspended\")` "
                 + "grants to every subject that is not suspended — an allow-everything with a minus "
@@ -448,21 +390,48 @@ public sealed class SchemaBuilder
         }
     }
 
-    static string Join(IEnumerable<string> names) =>
-        string.Join(", ", names.Order(StringComparer.Ordinal));
+    static string Join(IEnumerable<string> names) => string.Join(", ", names.Order(StringComparer.Ordinal));
+
+    internal void Add(string type, SchemaMember member) {
+        if (!byType.TryGetValue(type, out var members)) {
+            problems.Add(
+                $"'{member.Name}' is declared on the object type '{type}', which failed validation "
+                + "and was never opened."
+            );
+            return;
+        }
+
+        var valid = RelationNaming.ValidateName(member.Name, member.IsPermission ? "permission name" : "relation name");
+
+        if (valid.TryGetError(out var error)) {
+            problems.Add(error.Message);
+            return;
+        }
+
+        var existing = members.Find(x => string.Equals(x.Name, member.Name, StringComparison.Ordinal));
+        if (existing is not null) {
+            problems.Add(
+                $"'{type}' declares '{member.Name}' twice — once as a "
+                + $"{Kind(existing)} and once as a {Kind(member)}. A duplicate is not a merge: it "
+                + "is two authors believing different things about one word, and whichever one wins "
+                + "is arbitrary."
+            );
+            return;
+        }
+
+        members.Add(member);
+    }
 }
 
 /// <summary>
 ///     The per-type half of the fluent surface, shaped so that the example in docs/plan/07 § The
 ///     model compiles as written.
 /// </summary>
-public sealed class SchemaTypeBuilder
-{
+public sealed class SchemaTypeBuilder {
     readonly SchemaBuilder builder;
     readonly string type;
 
-    internal SchemaTypeBuilder(SchemaBuilder builder, string type)
-    {
+    internal SchemaTypeBuilder(SchemaBuilder builder, string type) {
         this.builder = builder;
         this.type = type;
     }
@@ -474,9 +443,8 @@ public sealed class SchemaTypeBuilder
     /// <summary>A relation with a rewrite.</summary>
     /// <param name="name">The relation name.</param>
     /// <param name="expression">How it is computed.</param>
-    public SchemaTypeBuilder Relation(string name, RelationExpression expression)
-    {
-        builder.Add(type, new SchemaMember(name, expression, IsPermission: false, IsRole: false));
+    public SchemaTypeBuilder Relation(string name, RelationExpression expression) {
+        builder.Add(type, new(name, expression, false, false));
         return this;
     }
 
@@ -491,18 +459,16 @@ public sealed class SchemaTypeBuilder
     ///     "<c>GET /roleAssignments</c> lists tuples whose relation is a named role" a property of
     ///     the schema rather than a convention two files apart.
     /// </remarks>
-    public SchemaTypeBuilder Role(string name, RelationExpression expression)
-    {
-        builder.Add(type, new SchemaMember(name, expression, IsPermission: false, IsRole: true));
+    public SchemaTypeBuilder Role(string name, RelationExpression expression) {
+        builder.Add(type, new(name, expression, false, true));
         return this;
     }
 
     /// <summary>A permission.</summary>
     /// <param name="name">The permission name — what <c>[RequiresPermission]</c> names.</param>
     /// <param name="expression">How it is computed.</param>
-    public SchemaTypeBuilder Permission(string name, RelationExpression expression)
-    {
-        builder.Add(type, new SchemaMember(name, expression, IsPermission: true, IsRole: false));
+    public SchemaTypeBuilder Permission(string name, RelationExpression expression) {
+        builder.Add(type, new(name, expression, true, false));
         return this;
     }
 

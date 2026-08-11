@@ -1,5 +1,5 @@
-using System.Reflection;
 using Npgsql;
+using System.Reflection;
 
 namespace CyberCloud.ServiceDefaults.Tests.Storage;
 
@@ -17,8 +17,11 @@ namespace CyberCloud.ServiceDefaults.Tests.Storage;
 ///         <item>
 ///             <b>The provider does not create its own schema.</b> There is no auto-migrate.
 ///             <c>AdoNetGrainStorage.Init</c> runs
-///             <c>SELECT QueryKey, QueryText FROM OrleansQuery WHERE QueryKey = 'WriteToStorageKey'
-///             OR …</c> and expects four rows. Against an empty database that is a
+///             <c>
+///                 SELECT QueryKey, QueryText FROM OrleansQuery WHERE QueryKey = 'WriteToStorageKey'
+///                 OR …
+///             </c>
+///             and expects four rows. Against an empty database that is a
 ///             <c>relation "orleansquery" does not exist</c> at silo start.
 ///         </item>
 ///         <item>
@@ -50,20 +53,17 @@ namespace CyberCloud.ServiceDefaults.Tests.Storage;
 ///         it behind a test helper is the point of this comment.
 ///     </para>
 /// </remarks>
-static class OrleansAdoNetSchema
-{
+static class OrleansAdoNetSchema {
     /// <summary>The two scripts, in the order they must run.</summary>
-    static readonly string[] Scripts =
-    [
+    static readonly string[] Scripts = [
         "CyberCloud.ServiceDefaults.Tests.Storage.PostgreSQL-Main.sql",
-        "CyberCloud.ServiceDefaults.Tests.Storage.PostgreSQL-Persistence.sql",
+        "CyberCloud.ServiceDefaults.Tests.Storage.PostgreSQL-Persistence.sql"
     ];
 
     /// <summary>Applies both scripts to the database the connection string points at.</summary>
     /// <param name="connectionString">An Npgsql connection string for one shard.</param>
     /// <param name="cancellationToken">The test's cancellation token.</param>
-    public static async Task CreateAsync(string connectionString, CancellationToken cancellationToken)
-    {
+    public static async Task CreateAsync(string connectionString, CancellationToken cancellationToken) {
         // ⚠ Pooling off, deliberately. A pooled connection opened here stays as an idle Postgres
         // backend under the same application_name for the rest of the run, and
         // TheDurableConnectionCountPerShardStaysWithinMaxPoolSizeUnderLoad counts backends by
@@ -71,23 +71,23 @@ static class OrleansAdoNetSchema
         // one connection. A measurement that includes the measuring apparatus is worse than no
         // measurement, because it fails at 5 and looks like a real breach.
         await using var connection = new NpgsqlConnection(
-            new NpgsqlConnectionStringBuilder(connectionString) { Pooling = false }.ConnectionString);
+            new NpgsqlConnectionStringBuilder(connectionString) { Pooling = false }.ConnectionString
+        );
 
         await connection.OpenAsync(cancellationToken);
 
-        foreach (var name in Scripts)
-        {
+        foreach (var name in Scripts) {
             await using var command = new NpgsqlCommand(Read(name), connection);
             await command.ExecuteNonQueryAsync(cancellationToken);
         }
     }
 
-    static string Read(string resourceName)
-    {
+    static string Read(string resourceName) {
         using var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream(resourceName)
             ?? throw new InvalidOperationException(
                 $"Embedded resource '{resourceName}' is missing. Available: "
-                + string.Join(", ", Assembly.GetExecutingAssembly().GetManifestResourceNames()));
+                + string.Join(", ", Assembly.GetExecutingAssembly().GetManifestResourceNames())
+            );
 
         using var reader = new StreamReader(stream);
         return reader.ReadToEnd();

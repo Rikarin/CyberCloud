@@ -6,8 +6,12 @@ using Shouldly;
 namespace CyberCloud.Tenancy.Tests;
 
 /// <summary>
-///     docs/plan/06 § Two-phase create, the second half: <b>"Deletion is the same in reverse and it
-///     is the harder half"</b>.
+///     docs/plan/06 § Two-phase create, the second half:
+///     <b>
+///         "Deletion is the same in reverse and it
+///         is the harder half"
+///     </b>
+///     .
 /// </summary>
 /// <remarks>
 ///     <para>
@@ -23,13 +27,9 @@ namespace CyberCloud.Tenancy.Tests;
 ///     </para>
 /// </remarks>
 [Collection(TenancySuite.Name)]
-public sealed class DeleteOrderingTests(TenancyCluster cluster)
-{
-    static Guid Tenant(int n) => TenancyCluster.Tenant(4000 + n);
-
+public sealed class DeleteOrderingTests(TenancyCluster cluster) {
     [Fact]
-    public async Task TheIndexIsReleasedFirstSoTheNameIsImmediatelyReusable()
-    {
+    public async Task TheIndexIsReleasedFirstSoTheNameIsImmediatelyReusable() {
         var address = await Provision(Tenant(1), "delete-order", "web-01");
         var index = cluster.ResourceIndexGrain(address);
         var group = Group(address);
@@ -45,17 +45,18 @@ public sealed class DeleteOrderingTests(TenancyCluster cluster)
 
         reclaimed.IsSuccess.ShouldBeTrue(
             "docs/plan/06 § Two-phase create: 'release the index first (so the name is immediately "
-            + "reusable)'.");
+            + "reusable)'."
+        );
         reclaimed.GetValueOrThrow().BoundTo.ShouldBe(replacement.Id);
 
         // …and the old resource is still listed, in Deleting.
         (await group.ListAsync()).GetValueOrThrow()
-            .Single(x => x.ResourceId == address.Id).State.ShouldBe(ProvisioningState.Deleting);
+            .Single(x => x.ResourceId == address.Id)
+            .State.ShouldBe(ProvisioningState.Deleting);
     }
 
     [Fact]
-    public async Task AResourceWhoseTeardownFailsStaysDeletingAndStaysVisibleInListings()
-    {
+    public async Task AResourceWhoseTeardownFailsStaysDeletingAndStaysVisibleInListings() {
         // ⚠ THE BILLING-DISPUTE CLAUSE, as a test.
         var address = await Provision(Tenant(2), "teardown-fails", "web-01");
         var group = Group(address);
@@ -64,8 +65,7 @@ public sealed class DeleteOrderingTests(TenancyCluster cluster)
         (await group.BeginDeleteAsync(address.Id)).IsSuccess.ShouldBeTrue();
 
         // The data plane refuses. Three times.
-        for (var attempt = 1; attempt <= 3; attempt++)
-        {
+        for (var attempt = 1; attempt <= 3; attempt++) {
             (await group.FailDeleteAsync(address.Id, "the cluster refused: finalizer stuck"))
                 .IsSuccess.ShouldBeTrue();
         }
@@ -76,14 +76,14 @@ public sealed class DeleteOrderingTests(TenancyCluster cluster)
         member.State.ShouldBe(
             ProvisioningState.Deleting,
             "never Failed and never removed: 'never silently gone while its pods still run and its "
-            + "meter still ticks'.");
+            + "meter still ticks'."
+        );
         member.TeardownAttempts.ShouldBe(3);
         member.LastFailure.ShouldContain("finalizer stuck");
     }
 
     [Fact]
-    public async Task AFailedTeardownSurvivesTheGroupGrainDyingBecauseTheReminderHasToFindIt()
-    {
+    public async Task AFailedTeardownSurvivesTheGroupGrainDyingBecauseTheReminderHasToFindIt() {
         // A retry reminder re-drives the teardown after a silo restart. If the Deleting state were
         // in memory only, the restart would look like a completed delete.
         var address = await Provision(Tenant(3), "teardown-survives", "web-01");
@@ -105,8 +105,7 @@ public sealed class DeleteOrderingTests(TenancyCluster cluster)
     }
 
     [Fact]
-    public async Task OnlyASucceededTeardownRemovesTheMember()
-    {
+    public async Task OnlyASucceededTeardownRemovesTheMember() {
         var address = await Provision(Tenant(4), "teardown-succeeds", "web-01");
         var group = Group(address);
 
@@ -122,8 +121,7 @@ public sealed class DeleteOrderingTests(TenancyCluster cluster)
     }
 
     [Fact]
-    public async Task AMemberCannotBeRemovedWithoutADeleteHavingBegun()
-    {
+    public async Task AMemberCannotBeRemovedWithoutADeleteHavingBegun() {
         // The direction that would hide a live resource: CompleteDelete on something that is still
         // Succeeded. Refused, because a listing that drops a running resource is the failure this
         // whole ordering exists to prevent.
@@ -138,8 +136,7 @@ public sealed class DeleteOrderingTests(TenancyCluster cluster)
     }
 
     [Fact]
-    public async Task ATeardownFailureCannotBeRecordedAgainstAResourceThatIsNotBeingDeleted()
-    {
+    public async Task ATeardownFailureCannotBeRecordedAgainstAResourceThatIsNotBeingDeleted() {
         var address = await Provision(Tenant(6), "no-fabrication", "web-01");
         var group = Group(address);
 
@@ -150,8 +147,7 @@ public sealed class DeleteOrderingTests(TenancyCluster cluster)
     }
 
     [Fact]
-    public async Task ReleasingAnIndexBoundToSomebodyElseIsRefused()
-    {
+    public async Task ReleasingAnIndexBoundToSomebodyElseIsRefused() {
         // The delete path's own cross-resource guard: releasing by the wrong GUID would hand a live
         // resource's name away.
         var address = await Provision(Tenant(7), "wrong-owner", "web-01");
@@ -165,20 +161,19 @@ public sealed class DeleteOrderingTests(TenancyCluster cluster)
     }
 
     [Fact]
-    public async Task ReleasingTwiceIsANoOpBecauseTheDeleteIsReDrivenFromAReminder()
-    {
+    public async Task ReleasingTwiceIsANoOpBecauseTheDeleteIsReDrivenFromAReminder() {
         var address = await Provision(Tenant(8), "idempotent-release", "web-01");
         var index = cluster.ResourceIndexGrain(address);
 
         (await index.ReleaseAsync(address.Id)).IsSuccess.ShouldBeTrue();
         (await index.ReleaseAsync(address.Id)).IsSuccess.ShouldBeTrue(
             "delete is re-driven from a reminder (docs/plan/06 § Two-phase create), so every step "
-            + "must be safe to run twice.");
+            + "must be safe to run twice."
+        );
     }
 
     [Fact]
-    public async Task DeletingTheGroupIsNotDeletingItsMembersHere()
-    {
+    public async Task DeletingTheGroupIsNotDeletingItsMembersHere() {
         // A resource group IS a lifecycle unit — "delete it, delete its contents, in dependency
         // order, as one operation" (docs/plan/06 § The hierarchy). That orchestration is the
         // resource manager's (docs/plan/08) and is deliberately not built here. What this asserts is
@@ -191,24 +186,27 @@ public sealed class DeleteOrderingTests(TenancyCluster cluster)
             .RemoveResourceGroupAsync(address.ResourceGroup)).IsSuccess.ShouldBeTrue();
 
         (await cluster.SubscriptionGrain(address.TenantId, subscription).ListResourceGroupsAsync())
-            .GetValueOrThrow().ShouldNotContain(address.ResourceGroup);
+            .GetValueOrThrow()
+            .ShouldNotContain(address.ResourceGroup);
 
         (await Group(address).ListAsync()).GetValueOrThrow()
             .ShouldContain(
                 x => x.ResourceId == address.Id,
                 "the group's members are still there — the resource manager has to tear them down, "
-                + "and until it does the resource is not gone.");
+                + "and until it does the resource is not gone."
+            );
     }
+
+    static Guid Tenant(int n) => TenancyCluster.Tenant(4000 + n);
 
     IResourceGroupGrain Group(ResourceId address) =>
         cluster.ResourceGroupGrain(address.TenantId, address.SubscriptionId, address.ResourceGroup);
 
-    async Task<ResourceId> Provision(Guid tenant, string groupName, string resourceName)
-    {
+    async Task<ResourceId> Provision(Guid tenant, string groupName, string resourceName) {
         var subscription = Guid.NewGuid();
 
-        (await cluster.TenantGrain(tenant).CreateAsync(
-            "t" + tenant.ToString("N")[..8], "T", "eu-central")).IsSuccess.ShouldBeTrue();
+        (await cluster.TenantGrain(tenant).CreateAsync("t" + tenant.ToString("N")[..8], "T", "eu-central")).IsSuccess
+            .ShouldBeTrue();
         (await cluster.SubscriptionGrain(tenant, subscription).CreateAsync("prod")).IsSuccess
             .ShouldBeTrue();
         (await cluster.SubscriptionGrain(tenant, subscription)
@@ -218,9 +216,10 @@ public sealed class DeleteOrderingTests(TenancyCluster cluster)
             tenant,
             subscription,
             groupName,
-            new ResourceTypeName("CyberCloud.DBforPostgreSQL", "servers"),
+            new("CyberCloud.DBforPostgreSQL", "servers"),
             resourceName,
-            Guid.NewGuid());
+            Guid.NewGuid()
+        );
 
         var group = Group(address);
 

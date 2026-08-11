@@ -5,8 +5,12 @@ namespace CyberCloud.Tenancy.Contracts;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>The interesting member is <see cref="Suspended" />, and its meaning is deliberate:
-///         the data plane keeps running.</b> docs/plan/06 § Tenant lifecycle — "suspending a tenant
+///         ⚠
+///         <b>
+///             The interesting member is <see cref="Suspended" />, and its meaning is deliberate:
+///             the data plane keeps running.
+///         </b>
+///         docs/plan/06 § Tenant lifecycle — "suspending a tenant
 ///         should not take their production down without notice". Only control-plane writes are
 ///         rejected, with <c>403</c>. Anything that reads this enum and shuts a workload down on
 ///         <see cref="Suspended" /> has misread it; <see cref="Disabled" /> is the one that scales
@@ -20,8 +24,7 @@ namespace CyberCloud.Tenancy.Contracts;
 ///     </para>
 /// </remarks>
 [Alias("CyberCloud.Tenancy.TenantStatus")]
-public enum TenantStatus
-{
+public enum TenantStatus {
     /// <summary>Never assigned. Not a status — see the <c>default(T)</c> argument on <c>Result</c>.</summary>
     Unknown = 0,
 
@@ -58,8 +61,7 @@ public enum TenantStatus
 ///     is not small. Every provider uses this and none invents its own.
 /// </summary>
 [Alias("CyberCloud.Tenancy.ProvisioningState")]
-public enum ProvisioningState
-{
+public enum ProvisioningState {
     /// <summary>Never assigned.</summary>
     Unknown = 0,
 
@@ -96,8 +98,7 @@ public enum ProvisioningState
 ///     activations serialising every create in the platform.
 /// </remarks>
 [Alias("CyberCloud.Tenancy.QuotaMeter")]
-public enum QuotaMeter
-{
+public enum QuotaMeter {
     /// <summary>Never assigned.</summary>
     Unknown = 0,
 
@@ -130,8 +131,7 @@ public enum QuotaMeter
 ///     which is what frees the name.
 /// </remarks>
 [Alias("CyberCloud.Tenancy.IndexEntryState")]
-public enum IndexEntryState
-{
+public enum IndexEntryState {
     /// <summary>Nothing is claimed. The name is free.</summary>
     Free = 0,
 

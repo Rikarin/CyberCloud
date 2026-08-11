@@ -1,12 +1,11 @@
-using System.Globalization;
 using CyberCloud.Authorization.Contracts;
 using CyberCloud.Core;
+using System.Globalization;
 
 namespace CyberCloud.Authorization.Evaluation;
 
 /// <summary>What one evaluation concluded, before it becomes a <see cref="CheckResult" />.</summary>
-public sealed record CheckEvaluation
-{
+public sealed record CheckEvaluation {
     /// <summary>The decision. Always false unless <see cref="Outcome" /> is allowed.</summary>
     public bool Allowed { get; init; }
 
@@ -44,8 +43,12 @@ public sealed record CheckEvaluation
 ///         from being exponential.
 ///     </para>
 ///     <para>
-///         ⚠ <b>But an in-progress false must not be <i>memoized</i>, and that half is not in the
-///         document.</b> Consider <c>a = Rel(b) | This</c>, <c>b = Rel(a)</c>, with a direct tuple
+///         ⚠
+///         <b>
+///             But an in-progress false must not be <i>memoized</i>, and that half is not in the
+///             document.
+///         </b>
+///         Consider <c>a = Rel(b) | This</c>, <c>b = Rel(a)</c>, with a direct tuple
 ///         on <c>a</c>. Evaluating <c>a</c> descends into <c>b</c>, which loops back to <c>a</c> and
 ///         gets the in-progress false, so <c>b</c> concludes false; then <c>a</c>'s
 ///         <c>This</c> succeeds and <c>a</c> is true — at which point <c>b</c> is true as well, and
@@ -69,8 +72,7 @@ public sealed record CheckEvaluation
 ///         wrong answer under intersection is not a trade worth making.
 ///     </para>
 /// </remarks>
-public sealed class CheckEvaluator
-{
+public sealed class CheckEvaluator {
     readonly AuthorizationSchema schema;
     readonly IRelationReader reader;
     readonly AuthorizationLimits limits;
@@ -97,8 +99,8 @@ public sealed class CheckEvaluator
         AuthorizationSchema schema,
         IRelationReader reader,
         AuthorizationLimits? limits = null,
-        IMembershipIndex? membershipIndex = null)
-    {
+        IMembershipIndex? membershipIndex = null
+    ) {
         this.schema = schema;
         this.reader = reader;
         this.limits = limits ?? AuthorizationLimits.Default;
@@ -120,22 +122,23 @@ public sealed class CheckEvaluator
         ObjectRef @object,
         string permission,
         SubjectRef subject,
-        CancellationToken cancellationToken)
-    {
+        CancellationToken cancellationToken
+    ) {
         ArgumentNullException.ThrowIfNull(@object);
         ArgumentNullException.ThrowIfNull(subject);
 
-        if (schema.Type(@object.Type) is null)
-        {
+        if (schema.Type(@object.Type) is null) {
             return Result<CheckEvaluation>.Failure(
                 ErrorCode.SchemaInvalid,
                 $"'{@object.Type}' is not an object type in schema version "
-                + schema.Version.ToString(CultureInfo.InvariantCulture) + ". It defines ["
-                + string.Join(", ", schema.TypeNames) + "].");
+                + schema.Version.ToString(CultureInfo.InvariantCulture)
+                + ". It defines ["
+                + string.Join(", ", schema.TypeNames)
+                + "]."
+            );
         }
 
-        if (schema.Member(@object.Type, permission) is null)
-        {
+        if (schema.Member(@object.Type, permission) is null) {
             return Result<CheckEvaluation>.Failure(
                 ErrorCode.SchemaInvalid,
                 $"'{@object.Type}' defines no '{permission}'. Its permissions are ["
@@ -143,7 +146,8 @@ public sealed class CheckEvaluator
                 + "] and its relations are ["
                 + string.Join(", ", schema.Type(@object.Type)!.Relations)
                 + "]. docs/plan/07 § The model — a typo'd permission name must be neither a silent "
-                + "allow-nothing nor a silent allow-everything, so it is this failure instead.");
+                + "allow-nothing nor a silent allow-everything, so it is this failure instead."
+            );
         }
 
         AuthorizationMetrics.RecordCheck();
@@ -151,8 +155,7 @@ public sealed class CheckEvaluator
         var result = await EvaluateNameAsync(@object, permission, subject, 0, cancellationToken)
             .ConfigureAwait(false);
 
-        if (readFailure is not null)
-        {
+        if (readFailure is not null) {
             return Result<CheckEvaluation>.Failure(readFailure);
         }
 
@@ -160,23 +163,21 @@ public sealed class CheckEvaluator
             : result.Truncated ? cap
             : CheckOutcome.Denied;
 
-        if (outcome == CheckOutcome.DepthCapExceeded)
-        {
+        if (outcome == CheckOutcome.DepthCapExceeded) {
             AuthorizationMetrics.RecordDepthCap();
-        }
-        else if (outcome == CheckOutcome.BreadthCapExceeded)
-        {
+        } else if (outcome == CheckOutcome.BreadthCapExceeded) {
             AuthorizationMetrics.RecordBreadthCap();
         }
 
-        return Result<CheckEvaluation>.Success(new CheckEvaluation
-        {
-            Allowed = result.Value,
-            Outcome = outcome,
-            TriplesVisited = triplesVisited,
-            MaxDepthReached = maxDepthReached,
-            CapDetail = outcome is CheckOutcome.Allowed or CheckOutcome.Denied ? string.Empty : capDetail,
-        });
+        return Result<CheckEvaluation>.Success(
+            new() {
+                Allowed = result.Value,
+                Outcome = outcome,
+                TriplesVisited = triplesVisited,
+                MaxDepthReached = maxDepthReached,
+                CapDetail = outcome is CheckOutcome.Allowed or CheckOutcome.Denied ? string.Empty : capDetail
+            }
+        );
     }
 
     async ValueTask<NodeResult> EvaluateNameAsync(
@@ -184,44 +185,40 @@ public sealed class CheckEvaluator
         string name,
         SubjectRef subject,
         int depth,
-        CancellationToken cancellationToken)
-    {
-        if (readFailure is not null)
-        {
+        CancellationToken cancellationToken
+    ) {
+        if (readFailure is not null) {
             return NodeResult.False;
         }
 
         maxDepthReached = Math.Max(maxDepthReached, depth);
 
-        if (depth > limits.MaxDepth)
-        {
+        if (depth > limits.MaxDepth) {
             RecordCap(
                 CheckOutcome.DepthCapExceeded,
                 $"the walk reached depth {depth.ToString(CultureInfo.InvariantCulture)} at "
                 + $"{@object}#{name}, past the cap of "
-                + limits.MaxDepth.ToString(CultureInfo.InvariantCulture));
+                + limits.MaxDepth.ToString(CultureInfo.InvariantCulture)
+            );
 
             return NodeResult.Cut;
         }
 
         var triple = new Triple(@object.Type, @object.Id, name, subject.ToString());
 
-        if (memo.TryGetValue(triple, out var memoized))
-        {
-            return new NodeResult(memoized, Cyclic: false, Truncated: false);
+        if (memo.TryGetValue(triple, out var memoized)) {
+            return new(memoized, false, false);
         }
 
-        if (inProgress.Contains(triple))
-        {
+        if (inProgress.Contains(triple)) {
             // docs/plan/07 § Check: "a revisit is a cache hit that returns 'in progress → false for
             // this path', which is the correct semantics for a union". The Cyclic flag is what
             // stops that false from being written down — see the remarks on this class.
-            return new NodeResult(Value: false, Cyclic: true, Truncated: false);
+            return new(false, true, false);
         }
 
         var member = schema.Member(@object.Type, name);
-        if (member is null)
-        {
+        if (member is null) {
             // A tuple points at an object whose type does not define this name. That is data
             // referring to a vocabulary that has moved, not a caller error, so it is a deny for
             // this path rather than a failed request — and it is fail-closed.
@@ -232,22 +229,17 @@ public sealed class CheckEvaluator
         inProgress.Add(triple);
 
         NodeResult result;
-        try
-        {
-            result = await EvaluateExpressionAsync(
-                    @object, name, member.Expression, subject, depth, cancellationToken)
+        try {
+            result = await EvaluateExpressionAsync(@object, name, member.Expression, subject, depth, cancellationToken)
                 .ConfigureAwait(false);
-        }
-        finally
-        {
+        } finally {
             inProgress.Remove(triple);
         }
 
         // A true is a real derivation and can never be withdrawn, so it is always written down.
         // A false is only written down when nothing under it was cut short and nothing under it
         // leaned on an in-progress marker.
-        if (result.Value || (!result.Cyclic && !result.Truncated))
-        {
+        if (result.Value || (!result.Cyclic && !result.Truncated)) {
             memo[triple] = result.Value;
         }
 
@@ -260,82 +252,91 @@ public sealed class CheckEvaluator
         RelationExpression expression,
         SubjectRef subject,
         int depth,
-        CancellationToken cancellationToken)
-    {
-        switch (expression)
-        {
+        CancellationToken cancellationToken
+    ) {
+        switch (expression) {
             case ThisExpression:
                 return await EvaluateDirectAsync(@object, relation, subject, depth, cancellationToken)
                     .ConfigureAwait(false);
 
             case RelationRefExpression reference:
                 // Same object, so no hop and no depth increment — see AuthorizationLimits.
-                return await EvaluateNameAsync(
-                        @object, reference.Relation, subject, depth, cancellationToken)
+                return await EvaluateNameAsync(@object, reference.Relation, subject, depth, cancellationToken)
                     .ConfigureAwait(false);
 
             case TuplesetExpression tupleset:
                 return await EvaluateTuplesetAsync(@object, tupleset, subject, depth, cancellationToken)
                     .ConfigureAwait(false);
 
-            case UnionExpression union:
-                {
-                    var flags = NodeResult.False;
-                    foreach (var operand in union.Operands)
-                    {
-                        var operandResult = await EvaluateExpressionAsync(
-                                @object, relation, operand, subject, depth, cancellationToken)
-                            .ConfigureAwait(false);
-
-                        flags = flags.Merge(operandResult);
-                        if (operandResult.Value)
-                        {
-                            // docs/plan/07 § Check, step 5: "Short-circuit on the first true."
-                            return flags.WithValue(true);
-                        }
-                    }
-
-                    return flags.WithValue(false);
-                }
-
-            case IntersectionExpression intersection:
-                {
-                    var flags = NodeResult.False;
-                    foreach (var operand in intersection.Operands)
-                    {
-                        var operandResult = await EvaluateExpressionAsync(
-                                @object, relation, operand, subject, depth, cancellationToken)
-                            .ConfigureAwait(false);
-
-                        flags = flags.Merge(operandResult);
-                        if (!operandResult.Value)
-                        {
-                            return flags.WithValue(false);
-                        }
-                    }
-
-                    return flags.WithValue(true);
-                }
-
-            case ExclusionExpression exclusion:
-                {
+            case UnionExpression union: {
+                var flags = NodeResult.False;
+                foreach (var operand in union.Operands) {
                     var operandResult = await EvaluateExpressionAsync(
-                            @object, relation, exclusion.Operand, subject, depth, cancellationToken)
+                            @object,
+                            relation,
+                            operand,
+                            subject,
+                            depth,
+                            cancellationToken
+                        )
                         .ConfigureAwait(false);
 
-                    // ⚠ FAIL-CLOSED THROUGH A NEGATION, which is the one place a cap could
-                    // otherwise GRANT access. A truncated operand evaluates to false, and `!false`
-                    // is true — so a walk that ran out of budget inside `!Rel("suspended")` would
-                    // conclude "not suspended" and allow. The truncation is therefore propagated
-                    // instead of being negated with the value.
-                    //
-                    // This is reachable in practice even though the negated relation is
-                    // direct-only: a tuple on it may name a USERSET subject, and walking that
-                    // userset can hit either cap.
-                    return operandResult.Truncated
-                        ? operandResult.WithValue(false)
-                        : operandResult.WithValue(!operandResult.Value);
+                    flags = flags.Merge(operandResult);
+                    if (operandResult.Value) {
+                        // docs/plan/07 § Check, step 5: "Short-circuit on the first true."
+                        return flags.WithValue(true);
+                    }
                 }
+
+                return flags.WithValue(false);
+            }
+
+            case IntersectionExpression intersection: {
+                var flags = NodeResult.False;
+                foreach (var operand in intersection.Operands) {
+                    var operandResult = await EvaluateExpressionAsync(
+                            @object,
+                            relation,
+                            operand,
+                            subject,
+                            depth,
+                            cancellationToken
+                        )
+                        .ConfigureAwait(false);
+
+                    flags = flags.Merge(operandResult);
+                    if (!operandResult.Value) {
+                        return flags.WithValue(false);
+                    }
+                }
+
+                return flags.WithValue(true);
+            }
+
+            case ExclusionExpression exclusion: {
+                var operandResult = await EvaluateExpressionAsync(
+                        @object,
+                        relation,
+                        exclusion.Operand,
+                        subject,
+                        depth,
+                        cancellationToken
+                    )
+                    .ConfigureAwait(false);
+
+                // ⚠ FAIL-CLOSED THROUGH A NEGATION, which is the one place a cap could
+                // otherwise GRANT access. A truncated operand evaluates to false, and `!false`
+                // is true — so a walk that ran out of budget inside `!Rel("suspended")` would
+                // conclude "not suspended" and allow. The truncation is therefore propagated
+                // instead of being negated with the value.
+                //
+                // This is reachable in practice even though the negated relation is
+                // direct-only: a tuple on it may name a USERSET subject, and walking that
+                // userset can hit either cap.
+                return operandResult.Truncated
+                    ? operandResult.WithValue(false)
+                    : operandResult.WithValue(!operandResult.Value);
+            }
 
             default:
                 return NodeResult.False;
@@ -347,11 +348,10 @@ public sealed class CheckEvaluator
         string relation,
         SubjectRef subject,
         int depth,
-        CancellationToken cancellationToken)
-    {
+        CancellationToken cancellationToken
+    ) {
         var snapshot = await SnapshotAsync(@object, cancellationToken).ConfigureAwait(false);
-        if (snapshot is null)
-        {
+        if (snapshot is null) {
             return NodeResult.False;
         }
 
@@ -359,10 +359,8 @@ public sealed class CheckEvaluator
 
         // A concrete match is a set test over tuples already read. It costs no grain call and no
         // recursion, so it is not charged against the breadth cap — see AuthorizationLimits.
-        foreach (var candidate in subjects)
-        {
-            if (candidate == subject)
-            {
+        foreach (var candidate in subjects) {
+            if (candidate == subject) {
                 return NodeResult.True;
             }
         }
@@ -370,20 +368,18 @@ public sealed class CheckEvaluator
         var flags = NodeResult.False;
         var expansions = 0;
 
-        foreach (var candidate in subjects)
-        {
-            if (!candidate.IsUserset)
-            {
+        foreach (var candidate in subjects) {
+            if (!candidate.IsUserset) {
                 continue;
             }
 
-            if (expansions == limits.MaxBreadth)
-            {
+            if (expansions == limits.MaxBreadth) {
                 RecordCap(
                     CheckOutcome.BreadthCapExceeded,
                     $"{@object}#{relation} has more than "
                     + limits.MaxBreadth.ToString(CultureInfo.InvariantCulture)
-                    + " userset subjects to expand");
+                    + " userset subjects to expand"
+                );
 
                 return flags.Merge(NodeResult.Cut).WithValue(false);
             }
@@ -394,10 +390,8 @@ public sealed class CheckEvaluator
                 .TryTestMembershipAsync(candidate, subject, cancellationToken)
                 .ConfigureAwait(false);
 
-            if (indexed is not null)
-            {
-                if (indexed.Value)
-                {
+            if (indexed is not null) {
+                if (indexed.Value) {
                     return flags.WithValue(true);
                 }
 
@@ -405,12 +399,16 @@ public sealed class CheckEvaluator
             }
 
             var nested = await EvaluateNameAsync(
-                candidate.Object, candidate.Relation, subject, depth + 1, cancellationToken)
+                    candidate.Object,
+                    candidate.Relation,
+                    subject,
+                    depth + 1,
+                    cancellationToken
+                )
                 .ConfigureAwait(false);
 
             flags = flags.Merge(nested);
-            if (nested.Value)
-            {
+            if (nested.Value) {
                 return flags.WithValue(true);
             }
         }
@@ -423,25 +421,24 @@ public sealed class CheckEvaluator
         TuplesetExpression tupleset,
         SubjectRef subject,
         int depth,
-        CancellationToken cancellationToken)
-    {
+        CancellationToken cancellationToken
+    ) {
         var snapshot = await SnapshotAsync(@object, cancellationToken).ConfigureAwait(false);
-        if (snapshot is null)
-        {
+        if (snapshot is null) {
             return NodeResult.False;
         }
 
         var flags = NodeResult.False;
         var expansions = 0;
 
-        foreach (var target in snapshot.Subjects(tupleset.Tupleset))
-        {
-            if (expansions == limits.MaxBreadth)
-            {
+        foreach (var target in snapshot.Subjects(tupleset.Tupleset)) {
+            if (expansions == limits.MaxBreadth) {
                 RecordCap(
                     CheckOutcome.BreadthCapExceeded,
                     $"{@object}#{tupleset.Tupleset} points at more than "
-                    + limits.MaxBreadth.ToString(CultureInfo.InvariantCulture) + " objects");
+                    + limits.MaxBreadth.ToString(CultureInfo.InvariantCulture)
+                    + " objects"
+                );
 
                 return flags.Merge(NodeResult.Cut).WithValue(false);
             }
@@ -452,12 +449,16 @@ public sealed class CheckEvaluator
             // is the reading that keeps `From("parent", …)` meaningful when somebody writes
             // `subscription:S#parent@tenant:T#owner` by mistake.
             var nested = await EvaluateNameAsync(
-                target.Object, tupleset.Computed, subject, depth + 1, cancellationToken)
+                    target.Object,
+                    tupleset.Computed,
+                    subject,
+                    depth + 1,
+                    cancellationToken
+                )
                 .ConfigureAwait(false);
 
             flags = flags.Merge(nested);
-            if (nested.Value)
-            {
+            if (nested.Value) {
                 return flags.WithValue(true);
             }
         }
@@ -466,17 +467,16 @@ public sealed class CheckEvaluator
     }
 
     async ValueTask<ObjectRelationsSnapshot?> SnapshotAsync(
-        ObjectRef @object, CancellationToken cancellationToken)
-    {
+        ObjectRef @object,
+        CancellationToken cancellationToken
+    ) {
         var key = (@object.Type, @object.Id);
-        if (snapshots.TryGetValue(key, out var cached))
-        {
+        if (snapshots.TryGetValue(key, out var cached)) {
             return cached;
         }
 
         var read = await reader.ReadAsync(@object, cancellationToken).ConfigureAwait(false);
-        if (read.TryGetError(out var error))
-        {
+        if (read.TryGetError(out var error)) {
             readFailure = error;
             return null;
         }
@@ -486,12 +486,10 @@ public sealed class CheckEvaluator
         return snapshot;
     }
 
-    void RecordCap(CheckOutcome outcome, string detail)
-    {
+    void RecordCap(CheckOutcome outcome, string detail) {
         // The first cap hit is the one reported. A walk that hits both is reported as whichever it
         // met first, which is the one that actually shaped the answer.
-        if (cap != CheckOutcome.Denied)
-        {
+        if (cap != CheckOutcome.Denied) {
             return;
         }
 
@@ -501,16 +499,14 @@ public sealed class CheckEvaluator
 
     readonly record struct Triple(string Type, string Id, string Name, string Subject);
 
-    readonly record struct NodeResult(bool Value, bool Cyclic, bool Truncated)
-    {
+    readonly record struct NodeResult(bool Value, bool Cyclic, bool Truncated) {
         public static NodeResult False { get; } = new(false, false, false);
 
         public static NodeResult True { get; } = new(true, false, false);
 
         public static NodeResult Cut { get; } = new(false, false, true);
 
-        public NodeResult Merge(NodeResult other) =>
-            new(Value, Cyclic || other.Cyclic, Truncated || other.Truncated);
+        public NodeResult Merge(NodeResult other) => new(Value, Cyclic || other.Cyclic, Truncated || other.Truncated);
 
         public NodeResult WithValue(bool value) => new(value, Cyclic, Truncated);
     }

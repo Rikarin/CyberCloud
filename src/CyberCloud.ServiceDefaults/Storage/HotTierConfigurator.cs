@@ -1,6 +1,6 @@
-using System.Collections.Concurrent;
 using Orleans.Persistence;
 using StackExchange.Redis;
+using System.Collections.Concurrent;
 
 namespace CyberCloud.ServiceDefaults.Storage;
 
@@ -22,34 +22,13 @@ namespace CyberCloud.ServiceDefaults.Storage;
 ///         <c>IsShared: true</c> tells the provider not to dispose what it did not create.
 ///     </para>
 /// </remarks>
-public sealed class HotTierConfigurator : IDisposable
-{
+public sealed class HotTierConfigurator : IDisposable {
     readonly IShardMapCache shardMap;
     readonly IShardConnections connections;
     readonly Lazy<Task<IConnectionMultiplexer>> multiplexer;
     readonly ConcurrentDictionary<string, int> invocationsPerTenant = new(StringComparer.Ordinal);
 
     long invocations;
-
-    /// <summary>Creates the configurator.</summary>
-    /// <param name="shardMap">The in-process shard map — supplies the hash tag.</param>
-    /// <param name="connections">The connection table — supplies the cluster configuration.</param>
-    public HotTierConfigurator(IShardMapCache shardMap, IShardConnections connections)
-    {
-        ArgumentNullException.ThrowIfNull(shardMap);
-        ArgumentNullException.ThrowIfNull(connections);
-
-        this.shardMap = shardMap;
-        this.connections = connections;
-
-        multiplexer = new Lazy<Task<IConnectionMultiplexer>>(
-            () => ConnectionMultiplexer.ConnectAsync(connections.HotCluster()).ContinueWith(
-                t => (IConnectionMultiplexer)t.GetAwaiter().GetResult(),
-                CancellationToken.None,
-                TaskContinuationOptions.ExecuteSynchronously,
-                TaskScheduler.Default),
-            LazyThreadSafetyMode.ExecutionAndPublication);
-    }
 
     /// <summary>
     ///     How many times <see cref="ConfigureForTenant" /> has run since the silo started.
@@ -68,6 +47,28 @@ public sealed class HotTierConfigurator : IDisposable
     /// <summary>The hash tag each tenant was given, for diagnostics and tests.</summary>
     public ConcurrentDictionary<string, string> HashTagPerTenant { get; } = new(StringComparer.Ordinal);
 
+    /// <summary>Creates the configurator.</summary>
+    /// <param name="shardMap">The in-process shard map — supplies the hash tag.</param>
+    /// <param name="connections">The connection table — supplies the cluster configuration.</param>
+    public HotTierConfigurator(IShardMapCache shardMap, IShardConnections connections) {
+        ArgumentNullException.ThrowIfNull(shardMap);
+        ArgumentNullException.ThrowIfNull(connections);
+
+        this.shardMap = shardMap;
+        this.connections = connections;
+
+        multiplexer = new(
+            () => ConnectionMultiplexer.ConnectAsync(connections.HotCluster())
+                .ContinueWith(
+                    t => (IConnectionMultiplexer)t.GetAwaiter().GetResult(),
+                    CancellationToken.None,
+                    TaskContinuationOptions.ExecuteSynchronously,
+                    TaskScheduler.Default
+                ),
+            LazyThreadSafetyMode.ExecutionAndPublication
+        );
+    }
+
     /// <summary>
     ///     Fills in one tenant's <c>RedisStorageOptions</c>. This is the callback
     ///     <c>Orleans.Multitenant</c> invokes.
@@ -77,8 +78,7 @@ public sealed class HotTierConfigurator : IDisposable
     ///     The tenant id, extracted by <c>Orleans.Multitenant</c> from the grain key — or
     ///     <c>MultitenantStorageOptions.TenantIdForNullTenant</c> for a null-tenant grain.
     /// </param>
-    public void ConfigureForTenant(RedisStorageOptions options, string tenantId)
-    {
+    public void ConfigureForTenant(RedisStorageOptions options, string tenantId) {
         ArgumentNullException.ThrowIfNull(options);
 
         Interlocked.Increment(ref invocations);
@@ -108,8 +108,7 @@ public sealed class HotTierConfigurator : IDisposable
     ///     throws: nothing should ever store state through this instance, and a key it could
     ///     compute would be a key outside every tenant's hash tag.
     /// </remarks>
-    public void ConfigureBootstrap(RedisStorageOptions options)
-    {
+    public void ConfigureBootstrap(RedisStorageOptions options) {
         ArgumentNullException.ThrowIfNull(options);
 
         options.ConfigurationOptions = connections.HotCluster();
@@ -140,18 +139,16 @@ public sealed class HotTierConfigurator : IDisposable
         IServiceProvider services,
         string providerName,
         string tenantProviderName,
-        RedisStorageOptions options)
-    {
+        RedisStorageOptions options
+    ) {
         ArgumentNullException.ThrowIfNull(options);
 
         return [options, options.GrainStorageSerializer];
     }
 
     /// <inheritdoc />
-    public void Dispose()
-    {
-        if (multiplexer.IsValueCreated && multiplexer.Value.IsCompletedSuccessfully)
-        {
+    public void Dispose() {
+        if (multiplexer.IsValueCreated && multiplexer.Value.IsCompletedSuccessfully) {
             multiplexer.Value.Result.Dispose();
         }
     }
@@ -164,5 +161,6 @@ public sealed class HotTierConfigurator : IDisposable
             $"The tenant-unaware bootstrap hot-tier provider was asked for a storage key for "
             + $"{grainType}/{grainId}. It exists only to initialise shared dependencies at silo "
             + "start (Orleans.Multitenant's addStorageProvider) and must never store state — a key "
-            + "from here would sit outside every tenant's hash tag.");
+            + "from here would sit outside every tenant's hash tag."
+        );
 }

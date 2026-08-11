@@ -23,14 +23,27 @@ namespace CyberCloud.Core;
 ///         not here: docs/plan/03:226 keeps Core free of wire concerns.
 ///     </para>
 /// </remarks>
-public sealed record Error
-{
+public sealed record Error {
+    /// <summary>The stable, greppable identifier. Part of the API contract.</summary>
+    public ErrorCode Code { get; }
+
+    /// <summary>The human-readable message. Names actual values.</summary>
+    public string Message { get; }
+
+    /// <summary>An RFC 6901 JSON Pointer into the request body, or <see langword="null" />.</summary>
+    public string? Target { get; }
+
+    /// <summary>Nested errors. Never default; possibly empty.</summary>
+    public ImmutableArray<Error> Details { get; }
+
     /// <summary>Creates an error.</summary>
     /// <param name="code">A registered code. See <see cref="ErrorCode" />.</param>
     /// <param name="message">
     ///     A human-readable message that <b>names the actual values</b> — docs/plan/08:187:
-    ///     <i>"Quota exceeded" without the meter, the request and the remainder is a support ticket
-    ///     by construction.</i>
+    ///     <i>
+    ///         "Quota exceeded" without the meter, the request and the remainder is a support ticket
+    ///         by construction.
+    ///     </i>
     /// </param>
     /// <param name="target">
     ///     An optional RFC 6901 JSON Pointer into the request body, so the portal can highlight the
@@ -48,18 +61,18 @@ public sealed record Error
         ErrorCode code,
         string message,
         string? target = null,
-        ImmutableArray<Error> details = default)
-    {
+        ImmutableArray<Error> details = default
+    ) {
         ArgumentNullException.ThrowIfNull(code);
         ArgumentException.ThrowIfNullOrWhiteSpace(message);
 
-        if (target is not null && !IsJsonPointer(target))
-        {
+        if (target is not null && !IsJsonPointer(target)) {
             throw new ArgumentException(
                 $"'{target}' is not an RFC 6901 JSON Pointer. A target is either \"\" (the whole "
                 + "document) or a sequence of \"/\"-prefixed reference tokens, for example "
                 + "\"/properties/sku\". docs/plan/08:188.",
-                nameof(target));
+                nameof(target)
+            );
         }
 
         Code = code;
@@ -68,59 +81,12 @@ public sealed record Error
         Details = details.IsDefault ? [] : details;
     }
 
-    /// <summary>The stable, greppable identifier. Part of the API contract.</summary>
-    public ErrorCode Code { get; }
-
-    /// <summary>The human-readable message. Names actual values.</summary>
-    public string Message { get; }
-
-    /// <summary>An RFC 6901 JSON Pointer into the request body, or <see langword="null" />.</summary>
-    public string? Target { get; }
-
-    /// <summary>Nested errors. Never default; possibly empty.</summary>
-    public ImmutableArray<Error> Details { get; }
-
     /// <summary>Returns this error with <see cref="Target" /> replaced.</summary>
     public Error WithTarget(string? target) => new(Code, Message, target, Details);
 
     /// <summary>Returns this error with <paramref name="details" /> appended.</summary>
     public Error WithDetails(params ImmutableArray<Error> details) =>
         new(Code, Message, Target, Details.AddRange(details.IsDefault ? [] : details));
-
-    /// <summary>
-    ///     RFC 6901 § 3: a pointer is the empty string, or a sequence of parts each beginning with
-    ///     <c>'/'</c>. Escaping (<c>~0</c>, <c>~1</c>) is validated too, because a lone <c>'~'</c>
-    ///     is the one malformed pointer a hand-written target actually produces.
-    /// </summary>
-    static bool IsJsonPointer(string target)
-    {
-        if (target.Length == 0)
-        {
-            return true;
-        }
-
-        if (target[0] != '/')
-        {
-            return false;
-        }
-
-        for (var i = 0; i < target.Length; i++)
-        {
-            if (target[i] != '~')
-            {
-                continue;
-            }
-
-            if (i + 1 >= target.Length || (target[i + 1] != '0' && target[i + 1] != '1'))
-            {
-                return false;
-            }
-
-            i++;
-        }
-
-        return true;
-    }
 
     /// <inheritdoc />
     public bool Equals(Error? other) =>
@@ -131,14 +97,12 @@ public sealed record Error
         && Details.SequenceEqual(other.Details);
 
     /// <inheritdoc />
-    public override int GetHashCode()
-    {
+    public override int GetHashCode() {
         var hash = new HashCode();
         hash.Add(Code);
         hash.Add(Message, StringComparer.Ordinal);
         hash.Add(Target, StringComparer.Ordinal);
-        foreach (var detail in Details)
-        {
+        foreach (var detail in Details) {
             hash.Add(detail);
         }
 
@@ -148,4 +112,33 @@ public sealed record Error
     /// <inheritdoc />
     public override string ToString() =>
         Target is null ? $"{Code.Value}: {Message}" : $"{Code.Value} ({Target}): {Message}";
+
+    /// <summary>
+    ///     RFC 6901 § 3: a pointer is the empty string, or a sequence of parts each beginning with
+    ///     <c>'/'</c>. Escaping (<c>~0</c>, <c>~1</c>) is validated too, because a lone <c>'~'</c>
+    ///     is the one malformed pointer a hand-written target actually produces.
+    /// </summary>
+    static bool IsJsonPointer(string target) {
+        if (target.Length == 0) {
+            return true;
+        }
+
+        if (target[0] != '/') {
+            return false;
+        }
+
+        for (var i = 0; i < target.Length; i++) {
+            if (target[i] != '~') {
+                continue;
+            }
+
+            if (i + 1 >= target.Length || (target[i + 1] != '0' && target[i + 1] != '1')) {
+                return false;
+            }
+
+            i++;
+        }
+
+        return true;
+    }
 }

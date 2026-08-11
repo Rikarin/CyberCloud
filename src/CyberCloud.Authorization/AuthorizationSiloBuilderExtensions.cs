@@ -12,8 +12,7 @@ namespace CyberCloud.Authorization;
 ///     grain evaluates against, which is deliberately a decision the host makes: a test silo runs a
 ///     purpose-built schema and production runs <see cref="CyberCloudSchema" />.
 /// </remarks>
-public static class AuthorizationSiloBuilderExtensions
-{
+public static class AuthorizationSiloBuilderExtensions {
     /// <summary>
     ///     Registers the built-in schema (docs/plan/07 § Azure RBAC, expressed in it), the
     ///     document's caps, the M1 no-op membership index and the no-op write interceptor.
@@ -33,17 +32,18 @@ public static class AuthorizationSiloBuilderExtensions
     ///     <c>AddCyberCloudTenancy</c> uses for <c>IClock</c>.
     /// </remarks>
     public static ISiloBuilder AddCyberCloudAuthorization(
-        this ISiloBuilder silo, AuthorizationSchema schema)
-    {
+        this ISiloBuilder silo,
+        AuthorizationSchema schema
+    ) {
         ArgumentNullException.ThrowIfNull(silo);
         ArgumentNullException.ThrowIfNull(schema);
 
-        return silo.ConfigureServices(services =>
-        {
-            services.TryAddSingleton(schema);
-            services.TryAddSingleton(AuthorizationLimits.Default);
-            services.TryAddSingleton<IMembershipIndex>(NoMembershipIndex.Instance);
-            services.TryAddSingleton<IRelationWriteInterceptor>(NoRelationWriteInterceptor.Instance);
-        });
+        return silo.ConfigureServices(services => {
+                services.TryAddSingleton(schema);
+                services.TryAddSingleton(AuthorizationLimits.Default);
+                services.TryAddSingleton<IMembershipIndex>(NoMembershipIndex.Instance);
+                services.TryAddSingleton<IRelationWriteInterceptor>(NoRelationWriteInterceptor.Instance);
+            }
+        );
     }
 }
