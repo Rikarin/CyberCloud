@@ -148,7 +148,21 @@
       }
     }
   },
-  "x-cybercloud-providers": [],
-  "x-cybercloud-resource-types": [],
-  "x-cybercloud-api-versions": []
+  "x-cybercloud-providers": [
+    "CyberCloud.Sample"
+  ],
+  "x-cybercloud-resource-types": [
+    {
+      "type": "CyberCloud.Sample/widgets",
+      "apiVersions": [
+        "2026-08-01"
+      ]
+    }
+  ],
+  "x-cybercloud-api-versions": [
+    {
+      "apiVersion": "2026-08-01",
+      "document": "2026-08-01.json"
+    }
+  ]
 }

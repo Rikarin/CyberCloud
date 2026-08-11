@@ -33,6 +33,9 @@ partial class Build
     /// </summary>
     AbsolutePath OpenApiDirectory => RootDirectory / "openapi";
 
+    /// <summary>Where docs/plan/03 § Providers puts every provider. Matched at any depth below.</summary>
+    AbsolutePath ProvidersRoot => RootDirectory / "src" / "Providers";
+
     AbsolutePath GenerationReportFile => ArtifactsDirectory / "generation-report.json";
 
     /// <summary>The built assembly of a project, in the configuration this run is building.</summary>
@@ -51,12 +54,28 @@ partial class Build
     ///         there, and a provider anywhere else is a repository-layout problem rather than something
     ///         this predicate should quietly accommodate.
     ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Match anywhere under <c>src/Providers/</c>, not at a fixed depth.</b> An earlier
+    ///         version tested <c>Parent?.Parent?.Name == "Providers"</c>, which assumes
+    ///         <c>src/Providers/{Name}/{Name}.csproj</c>. docs/plan/03 § Providers gives a provider
+    ///         <i>five</i> projects under one folder, so the real path is
+    ///         <c>src/Providers/{Name}/{Name}/{Name}.csproj</c> — one level deeper. The predicate
+    ///         matched nothing, and because a registry with no providers is a legitimate state, the
+    ///         target reported "no provider is registered" and <b>passed</b> with the first provider
+    ///         sitting in the solution. A discovery rule that silently finds nothing is the failure
+    ///         mode this file's own vacuous-pass warning exists to make visible; depth was the wrong
+    ///         thing to key on.
+    ///     </para>
     /// </summary>
     IReadOnlyList<AbsolutePath> ProviderAssemblies =>
         Solution.AllProjects
             .Select(x => (AbsolutePath)x.Path)
-            .Where(project => string.Equals(project.Parent?.Parent?.Name, "Providers", StringComparison.Ordinal))
+            .Where(project => project.Parent is not null
+                && ProvidersRoot is not null
+                && project.ToString().StartsWith(ProvidersRoot + Path.DirectorySeparatorChar, StringComparison.Ordinal))
             .Where(project => SuiteOwning(project) is null)
+            .Where(project => !project.NameWithoutExtension.EndsWith(".Contracts", StringComparison.Ordinal)
+                && !project.NameWithoutExtension.EndsWith(".Application", StringComparison.Ordinal))
             .OrderBy(project => project.NameWithoutExtension, StringComparer.Ordinal)
             .Select(project => AssemblyOf(project.NameWithoutExtension))
             .ToList();
