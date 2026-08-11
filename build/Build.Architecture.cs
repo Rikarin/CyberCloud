@@ -212,13 +212,8 @@ partial class Build
                 + "assemblies' to round-trip through. `git tag` is empty. Implement with the first tag"),
             GateOutcome.Analyzer("Secrets", "CC1005, in full"),
             GateOutcome.Analyzer("No blocking", "CC1001 and CC1002, wider than the doc's 'grain assemblies'"),
-            GateOutcome.Blocked(
-                "Generated surfaces",
-                "the docs/plan/02 § ADR-012 generation pipeline does not exist — `Generate` is a stub, "
-                + "and there is nothing to regenerate byte-identically from"),
-            GateOutcome.Blocked(
-                "OpenAPI compatibility",
-                "no OpenAPI document is published or checked in, so there are no api-versions to diff"),
+            GeneratedSurfacesGate(),
+            OpenApiCompatibilityGate(),
             GateOutcome.Blocked(
                 "Labels",
                 "docs/plan/23 § The architecture gates says this one is asserted by the conformance "
@@ -684,6 +679,104 @@ partial class Build
     static bool IsGrainKeyInterface(string name)
         => name.StartsWith("IGrainWith", StringComparison.Ordinal)
             && name.EndsWith("Key", StringComparison.Ordinal);
+
+    // ── Gates: generated surfaces and OpenAPI compatibility — docs/plan/02 § ADR-012 ──────────
+
+    GenerationReport? generation;
+
+    /// <summary>
+    ///     The generator's report, produced once and read by both rows below.
+    ///     <para>
+    ///         ⚠ <c>--check</c>, so the gate never writes into the tree it is inspecting. That is the
+    ///         difference between this and <c>Generate</c>, which writes first and then reports —
+    ///         a gate that repaired the thing it was checking would be permanently green.
+    ///     </para>
+    /// </summary>
+    GenerationReport Generation => generation ??= RunGenerator(write: false);
+
+    /// <summary>
+    ///     docs/plan/23 § The architecture gates, row <b>Generated surfaces</b>: "OpenAPI/CLI/SDK/forms
+    ///     regenerate byte-identically from the registry."
+    ///     <para>
+    ///         ⚠ <b>One of the four, and the row says so rather than implying four.</b>
+    ///         docs/plan/21 § Generation makes the OpenAPI document the surface the CLI, the SDKs and
+    ///         the portal forms are generated <i>from</i>, so this is the one that has to exist first
+    ///         — but a row reading "Enforced" over one surface when the doc names four would be the
+    ///         kind of true-and-misleading tick <see cref="GateStatus.Vacuous" /> exists to avoid.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Counted in resource types rather than in documents.</b> An empty registry still
+    ///         produces <c>openapi/index.json</c>, so counting documents would report "1 inspected"
+    ///         and a confident tick over a platform with no API at all.
+    ///     </para>
+    /// </summary>
+    GateOutcome GeneratedSurfacesGate()
+    {
+        var violations = new List<string>();
+
+        foreach (var document in Generation.Documents)
+        {
+            foreach (var problem in document.StructuralProblems)
+            {
+                violations.Add(
+                    $"openapi/{document.File} is not a valid OpenAPI 3.1 document — {problem}. "
+                    + "docs/plan/02 § ADR-012 specifies 3.1");
+            }
+
+            if (document.Drifted)
+            {
+                violations.Add(
+                    $"openapi/{document.File} is not what the provider registry generates. Run "
+                    + "./build.sh Generate and commit the result — docs/plan/23 § The architecture "
+                    + "gates, row Generated surfaces");
+            }
+        }
+
+        foreach (var stale in Generation.Stale)
+        {
+            violations.Add(
+                $"openapi/{stale} is checked in and the registry no longer produces it. An api-version "
+                + "is kept forever and removing one needs a 12-month notice window — "
+                + "docs/plan/08 § The provider registry");
+        }
+
+        return GateOutcome.From(
+            "Generated surfaces",
+            Generation.ResourceTypes,
+            $"resource type(s) over {Generation.Documents.Count} OpenAPI document(s), regenerated and "
+            + "compared byte-for-byte; the CLI, SDK and portal-form surfaces are not generated yet",
+            violations);
+    }
+
+    /// <summary>
+    ///     docs/plan/23 § The architecture gates, row <b>OpenAPI compatibility</b>: "published
+    ///     api-versions diffed; a breaking change fails."
+    ///     <para>
+    ///         Counted in documents that had a published predecessor, because a version that is new in
+    ///         this commit has nothing to be incompatible with — so a run that only added versions is
+    ///         <see cref="GateStatus.Vacuous" /> rather than <see cref="GateStatus.Enforced" />, which
+    ///         is the honest answer to "did the compatibility rule hold".
+    ///     </para>
+    /// </summary>
+    GateOutcome OpenApiCompatibilityGate()
+    {
+        var diffable = Generation.Documents
+            .Where(x => x.Published && x.ApiVersion.Length > 0)
+            .ToList();
+
+        var violations = Generation.Documents
+            .SelectMany(document => document.BreakingChanges.Select(breaking =>
+                $"openapi/{document.File} breaks api-version {document.ApiVersion} — {breaking}. "
+                + "docs/plan/21 § OpenAPI: adding an optional field is fine, removing anything or "
+                + "narrowing a type is not"))
+            .ToList();
+
+        return GateOutcome.From(
+            "OpenAPI compatibility",
+            diffable.Count,
+            "published api-version document(s) diffed against their checked-in predecessor",
+            violations);
+    }
 
     // ── Gate: analyzer coverage — not in docs/plan/23, and that is the point ──────────────────
 

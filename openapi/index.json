@@ -1,0 +1,154 @@
+{
+  "openapi": "3.1.1",
+  "info": {
+    "title": "Cyber Cloud",
+    "version": "index",
+    "description": "The index of Cyber Cloud's published api-versions. One document per version is listed in x-cybercloud-api-versions; this file declares no paths of its own. Generated from the provider registry — docs/plan/02 § ADR-012."
+  },
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "description": "One error. docs/plan/08 § Errors.",
+        "properties": {
+          "code": {
+            "$ref": "#/components/schemas/ErrorCode"
+          },
+          "details": {
+            "type": "array",
+            "description": "Every other problem found. A form that has to be fixed one field per round trip is a form nobody finishes.",
+            "items": {
+              "$ref": "#/components/schemas/Error"
+            }
+          },
+          "message": {
+            "type": "string",
+            "description": "For a human, naming the actual numbers. 'Quota exceeded' without the meter, the request and the remainder is a support ticket by construction."
+          },
+          "target": {
+            "type": "string",
+            "description": "An RFC 6901 JSON Pointer into the request body, so the portal can highlight the field."
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "additionalProperties": false
+      },
+      "ErrorCode": {
+        "type": "string",
+        "description": "A stable, documented, greppable identifier. ⚠ It is part of the API contract and changing one is a breaking change — docs/plan/08 § Errors. The closed set is CyberCloud.Core.ErrorCode.All.",
+        "enum": [
+          "AuthorizationFailed",
+          "Conflict",
+          "InternalError",
+          "InvalidApiVersion",
+          "InvalidGrainKey",
+          "InvalidRequestBody",
+          "InvalidResourceId",
+          "InvalidResourceName",
+          "InvalidResourceType",
+          "OperationCanceled",
+          "OperationInProgress",
+          "OperationTimeout",
+          "PolicyViolation",
+          "PreconditionFailed",
+          "ProvisioningFailed",
+          "QuotaExceeded",
+          "ResourceAlreadyExists",
+          "ResourceGroupNotFound",
+          "ResourceNotFound",
+          "SchemaInvalid",
+          "ScopeLocked",
+          "SubscriptionNotFound",
+          "TenantNotFound",
+          "TenantSuspended"
+        ]
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "description": "One shape, everywhere, Azure's. docs/plan/08 § Errors.",
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/Error"
+          }
+        },
+        "required": [
+          "error"
+        ],
+        "additionalProperties": false
+      },
+      "OperationProgress": {
+        "type": "object",
+        "description": "One progress entry. The array is this platform's addition to Azure's pattern and is what makes a nine-minute cluster creation tolerable — docs/plan/10.",
+        "properties": {
+          "at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "message": {
+            "type": "string",
+            "description": "What happened, naming the actual numbers."
+          },
+          "percentComplete": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "step": {
+            "type": "string",
+            "description": "The phase a reconciler reported — applying, waiting-for-ready."
+          }
+        },
+        "required": [
+          "at",
+          "step"
+        ],
+        "additionalProperties": false
+      },
+      "OperationState": {
+        "type": "string",
+        "description": "Azure's status vocabulary. ⚠ Canceled is reached only after the delete path has run for everything already applied — cancellation completes rather than abandoning.",
+        "enum": [
+          "Canceled",
+          "Failed",
+          "NotStarted",
+          "Running",
+          "Succeeded"
+        ]
+      },
+      "OperationStatus": {
+        "type": "object",
+        "description": "An operation's current state. ⚠ The members are docs/plan/10 § Long-running operations, over HTTP's, which is a subset of the OperationStatus wire type — no HTTP projection of that record is declared anywhere in the tree.",
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/Error"
+          },
+          "percentComplete": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "progress": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OperationProgress"
+            }
+          },
+          "status": {
+            "$ref": "#/components/schemas/OperationState"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "x-cybercloud-providers": [],
+  "x-cybercloud-resource-types": [],
+  "x-cybercloud-api-versions": []
+}

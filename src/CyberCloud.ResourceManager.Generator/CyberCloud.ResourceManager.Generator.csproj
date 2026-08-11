@@ -1,0 +1,49 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      docs/plan/02 § ADR-012 — the host for the generation step. `./build.sh Generate` runs this.
+
+      ⚠ THIS PROJECT IS A SHELL. Every decision about what a generated surface contains lives in
+      CyberCloud.ResourceManager.Contracts/Generation, which is a library with no file system and no
+      command line and is therefore testable without either. What is here is argument parsing,
+      Assembly.LoadFrom, and turning a GenerationReport into an exit code — the three things that
+      cannot be unit-tested usefully and the three things nobody should have to read to understand the
+      OpenAPI document.
+
+      ⚠ WHY A SEPARATE PROCESS RATHER THAN CODE IN build/Build.Generate.cs. The Nuke build is a
+      net10.0 app that reads compiled assemblies with System.Reflection.Metadata precisely so it never
+      has to resolve Orleans into its own load context — the reasoning is on AssemblyFacts.Read in
+      build/ArchitectureFacts.cs. Generation cannot work that way: docs/plan/08 § The provider registry
+      requires the emitters to read THE SAME OBJECT the write path validates against, which means
+      running a provider's Describe, which means loading it for real. Doing that in a process that
+      already references CyberCloud.ResourceManager is the cheap way; doing it inside the build host
+      would drag Orleans, ABP and every provider's dependency closure in with it.
+
+      ⚠ IT REFERENCES THE IMPLEMENTATION ASSEMBLY, not only .Contracts, and only for
+      ProviderRegistry.Build and ProviderDiscovery. Those are the two things that turn a list of
+      IResourceProvider into an IProviderRegistry, and they live with the registry.
+    -->
+
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <!--
+          ⚠ GenerateDocumentationFile is deliberately NOT turned off here, however pointless doc XML
+          on an internal tool is. Directory.Build.props turns it on for everything under src/ that is
+          not a test, and IDE0005 (unnecessary using) only runs when it is on — turning it off gets
+          `error EnableGenerateDocumentationFile` out of the compiler, because the repository builds
+          with EnforceCodeStyleInBuild and warnings as errors. Verified by setting it to false: the
+          build fails with exactly that.
+        -->
+    </PropertyGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../CyberCloud.ResourceManager/CyberCloud.ResourceManager.csproj"/>
+    </ItemGroup>
+
+    <ItemGroup Label="CyberCloud.Analyzers — see CyberCloud.Core.csproj for why this is not a reference">
+        <ProjectReference Include="../CyberCloud.Analyzers/CyberCloud.Analyzers.csproj"
+                          OutputItemType="Analyzer"
+                          ReferenceOutputAssembly="false"/>
+    </ItemGroup>
+
+</Project>
