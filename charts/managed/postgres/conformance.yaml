@@ -1,0 +1,64 @@
+# Conformance manifest — docs/plan/12 § The pattern, once, piece 8.
+#
+# What the conformance suite asserts about CyberCloud.DBforPostgreSQL/servers. This file is data:
+# the suite that reads it lives in test/ and does not exist yet, so today `Build.Charts` checks only
+# that the file is present, non-empty, and names the same resource type as Chart.yaml. That is a
+# weaker check than it will be and the target says so in its own log rather than implying otherwise.
+
+resourceType: CyberCloud.DBforPostgreSQL/servers
+apiVersion: "2026-08-01"
+chart: postgres
+
+# Objects the reconciler must have applied once the resource reports Succeeded.
+renders:
+  - group: postgresql.cnpg.io
+    version: v1
+    kind: Cluster
+    count: 1
+  - group: postgresql.cnpg.io
+    version: v1
+    kind: Pooler
+    count: 1
+    when: pooling.enabled
+
+# ADR-013 — every rendered object carries all seven labels. Asserted against real rendered output,
+# which is what the Labels architecture gate in docs/plan/23 § The architecture gates requires.
+labels:
+  required:
+    - cybercloud.io/tenant-id
+    - cybercloud.io/subscription-id
+    - cybercloud.io/resource-group
+    - cybercloud.io/resource-id
+    - cybercloud.io/resource-type
+    - cybercloud.io/api-version
+    - cybercloud.io/managed-by
+  # ⚠ Not the resource type verbatim. A `/` is not a legal label value character, so the value is
+  # lower-cased with `/` replaced by `_` — KubeLabels.ResourceTypeValue.
+  values:
+    cybercloud.io/resource-type: cybercloud.dbforpostgresql_servers
+    cybercloud.io/managed-by: cybercloud
+
+# Behaviour a tenant is entitled to. Each is a statement the suite can fail on, not a feature list.
+assertions:
+  - id: connect-in-cluster
+    says: A client connects to the read-write Service with the credentials from listKeys and runs SELECT 1.
+  - id: pooler-is-the-default-endpoint
+    says: With pooling.enabled the advertised connection string points at the Pooler, not at the cluster Service, so turning pooling off later is a visible change rather than a silent one.
+  - id: failover-preserves-committed-writes
+    says: Deleting the primary pod promotes a replica and every transaction that returned success before the delete is still readable afterwards.
+  - id: pitr-window-is-the-retention-days
+    says: A restore to a timestamp retentionDays-minus-one days old succeeds; a restore older than retentionDays fails with a stated error rather than an empty database.
+  - id: extensions-are-the-allow-list
+    says: Every value the schema's extensions enum permits installs; anything else is refused by the API before it reaches a cluster.
+  - id: storage-grows-never-shrinks
+    says: Increasing storage.size resizes online; decreasing it is refused at the API.
+  - id: secrets-never-round-trip
+    says: A GET of the resource never returns bootstrap.password in any form. The only path out is the listKeys action.
+
+# Meters the type must emit — docs/plan/12 § The pattern, once, piece 3. Listed here so the
+# conformance suite and the provider's Describe can be diffed against one file rather than agreeing
+# by coincidence.
+meters:
+  - postgres.instance.hours
+  - postgres.storage.gib.hours
+  - postgres.backup.gib.hours

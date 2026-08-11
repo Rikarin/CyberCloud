@@ -1,0 +1,78 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      docs/plan/03 § Hosts and docs/plan/10 — the one public entry point. An ASP.NET Core app and an
+      Orleans CLIENT (OrleansApplication.CreateClient), never a silo, so a gateway deploy does not
+      move grains.
+
+      ⚠ THE REFERENCE SET IS PART OF THE SECURITY ARGUMENT, IN BOTH DIRECTIONS.
+
+      What is here, and why each one has to be:
+
+        CyberCloud.Analyzers            CC1006. docs/plan/00 § The tenant-separation row, corrected:
+                                        "the gateway does not exist yet, and when it does, adding the
+                                        analyzer reference to it is what makes this row true for the
+                                        caller it is actually about". Without this line the Analyzer
+                                        coverage gate in build/Build.Architecture.cs fails the build,
+                                        and that is deliberate.
+        CyberCloud.Tenancy              TenantDirectoryCache — the in-process snapshot stage 3 reads.
+        CyberCloud.ResourceManager      Stage 8 dispatches to it. docs/plan/08 calls it "a service
+                                        held by the gateway".
+
+      What is deliberately ABSENT:
+
+        CyberCloud.Authorization.Contracts — the gateway must not be able to NAME ICheckGrain.
+          docs/plan/07 § The enforcement seam puts authorization in exactly one place, inside the
+          resource manager. The reference is absent transitively too: CyberCloud.ResourceManager
+          references it, but a transitive reference produces no AssemblyRef row unless a type is
+          actually bound, and GatewayIsolationTests asserts the row is not there. That assertion is
+          the machine-checked form of "the gateway performs no authorization itself".
+
+        Any EF Core / Npgsql / DbContext package — docs/plan/10 § What the gateway must never do:
+          "a gateway with a DbContext is a second write path within a year". Also asserted.
+
+        Any SignalR backplane package — docs/plan/10 § SignalR: "No SignalR backplane product." The
+          fan-out is a connection grain plus Orleans streams, which is O(interested), not O(pods).
+    -->
+
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <IsPublishable>true</IsPublishable>
+        <!--
+          CA1515 — "an application's API isn't typically referenced from outside the assembly". Two
+          reasons it is wrong here: IConnectionGrain and its wire types are an Orleans grain contract,
+          which the runtime and a silo both bind by name, and the hub classes are instantiated by
+          SignalR. Directory.Build.targets grants InternalsVisibleTo to the sibling test project, so
+          everything that does NOT have one of those two reasons stays internal.
+        -->
+        <NoWarn>$(NoWarn);CA1515</NoWarn>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <!-- ASP.NET Core, SignalR server, the health-check abstractions. -->
+        <FrameworkReference Include="Microsoft.AspNetCore.App"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <!-- IGrainFactory.ForTenant. Every grain reference in this assembly goes through it. -->
+        <PackageReference Include="Orleans.Multitenant"/>
+        <!-- The connection grain of docs/plan/10 § SignalR. See ConnectionGrain on where it runs. -->
+        <PackageReference Include="Microsoft.Orleans.Server"/>
+        <!-- Stage 5's counters. docs/plan/10 § Request pipeline: "Redis-backed sliding window". -->
+        <PackageReference Include="StackExchange.Redis"/>
+        <PackageReference Include="Volo.Abp.Autofac"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../../CyberCloud.ServiceDefaults/CyberCloud.ServiceDefaults.csproj"/>
+        <ProjectReference Include="../../CyberCloud.Tenancy/CyberCloud.Tenancy.csproj"/>
+        <ProjectReference Include="../../CyberCloud.ResourceManager/CyberCloud.ResourceManager.csproj"/>
+    </ItemGroup>
+
+    <ItemGroup Label="CyberCloud.Analyzers — CC1006 is the reason this project exists in the gate">
+        <ProjectReference Include="../../CyberCloud.Analyzers/CyberCloud.Analyzers.csproj"
+                          OutputItemType="Analyzer"
+                          ReferenceOutputAssembly="false"/>
+    </ItemGroup>
+
+</Project>

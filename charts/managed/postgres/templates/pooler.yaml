@@ -1,0 +1,20 @@
+{{/*
+PgBouncer — docs/plan/12 § The catalogue, PostgreSQL: "connection pooling (PgBouncer) is on by
+default, because a managed Postgres without it fails at the first serverless workload and adding it
+later changes the connection string."
+*/}}
+{{- if .Values.pooling.enabled }}
+apiVersion: postgresql.cnpg.io/v1
+kind: Pooler
+metadata:
+  name: {{ include "postgres.name" . }}-pooler
+  labels:
+    {{- include "postgres.platformLabels" . | nindent 4 }}
+spec:
+  cluster:
+    name: {{ include "postgres.name" . }}
+  instances: {{ .Values.pooling.instances }}
+  type: rw
+  pgbouncer:
+    poolMode: {{ .Values.pooling.mode | quote }}
+{{- end }}

@@ -1,0 +1,146 @@
+# The durable-schema job — the step that makes a shard usable.
+#
+# ═══════════════════════════════════════════════════════════════════════════════════════════════
+#  ⚠ WITHOUT THIS, THE DURABLE TIER IS AN EMPTY DATABASE AND THE FIRST SILO FAILS AT START.
+#
+#  `Microsoft.Orleans.Persistence.AdoNet` ships zero SQL and does not migrate. `AdoNetGrainStorage
+#  .Init` runs `SELECT QueryKey, QueryText FROM OrleansQuery` and expects four rows; against a fresh
+#  database that is `relation "orleansquery" does not exist`. The full account, with the evidence, is
+#  on `CyberCloud.ServiceDefaults.Storage.OrleansAdoNetSchema`.
+#
+#  docs/plan/05 § The shard map says "a shard is added by starting a server and putting it in the
+#  map". This job is the step between those two clauses.
+# ═══════════════════════════════════════════════════════════════════════════════════════════════
+#
+# ── Why a Job and not something a silo does on start ────────────────────────────────────────────
+#
+# The DDL is two bare `CREATE TABLE` scripts. N silos racing them is N−1 failures and the winner is a
+# coin toss. So the schema is applied by a separate PROCESS, in the SAME IMAGE, selected by an
+# argument — `CyberCloud.Silo.Host --apply-durable-schema`, which `return`s before
+# `OrleansApplication.CreateSilo` is ever called. A silo process therefore contains no code path that
+# reaches the DDL; the argument is the only one.
+#
+# ── Why one Job for every shard, rather than one Job per shard ──────────────────────────────────
+#
+# docs/plan/05 § Durable starts at 16 shards, so this is a real question and the answer is one Job.
+#
+#   * One configuration. The job binds the same `CyberCloud:Storage:Durable:Shards` section a silo
+#     binds, from the same Secret. Sixteen Jobs means sixteen chances for the job's shard set and the
+#     silo's shard set to disagree, and a shard the silos know about but no job visited is exactly the
+#     failure this file exists to prevent.
+#   * Retry is resume. `OrleansAdoNetSchema.ApplyAsync(DurableTierOptions, …)` walks the shards
+#     sequentially in `StringComparer.Ordinal` order and probes each one before touching it. When
+#     shard 9 fails, shards 1–8 are already done, the process exits non-zero naming shard 9, and the
+#     Job's next attempt re-probes 1–8, finds them applied, skips them, and arrives back at 9. The
+#     order is deterministic, so "arrives back at 9" is a property rather than a hope.
+#   * Sixteen pod start-ups buy nothing. The whole run is a handful of `CREATE`s.
+#
+# ⚠ THE COST, STATED: it is fail-fast, not continue-on-error. A shard that is genuinely unreachable
+# blocks every shard after it in ordinal order, forever. That is the right trade — a green job with
+# seven unwritten shards is worse than a red one — but the operator's remedy is in
+# `deploy/README.md` § When a shard fails, not in a retry loop here.
+#
+# ── This Job and the chart's hook are the same body ─────────────────────────────────────────────
+#
+# `charts/platform` runs this exact pod spec as a `pre-install,pre-upgrade` hook. What it adds is four
+# annotations, and they are written out in `deploy/README.md` § What `charts/platform` must honour.
+# They are not set here because a hand-applied Job is not part of a Helm release and annotations
+# claiming otherwise would be a lie that `helm uninstall` eventually acts on.
+#
+# ── Applying this twice ─────────────────────────────────────────────────────────────────────────
+#
+# ⚠ `kubectl apply` OVER A COMPLETED JOB WITH A DIFFERENT IMAGE FAILS: `spec.template` is immutable,
+# and the error — `field is immutable` — arrives after the operator has already concluded the
+# bootstrap is idempotent. `bootstrap.sh` deletes the Job before applying it, and the chart gets the
+# same behaviour from `helm.sh/hook-delete-policy: before-hook-creation`. Neither of those makes the
+# *schema* safe to re-apply; that is `OrleansAdoNetSchema`'s `to_regclass` probe, one layer down.
+#
+# ⚠ `image:` IS A PLACEHOLDER AND THIS FILE IS NOT DIRECTLY APPLIABLE. Deliberate — there is no
+# defensible default, and a stale tag baked in here would be the thing an operator reinstalls the
+# platform with during an outage. `bootstrap.sh --image` substitutes it. Pass a digest, not a tag:
+# docs/plan/23 § Build ends the `Images` row with "push by digest rather than by tag", and a repaired
+# platform that came up on a different build than the one that was running is not a repair.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: cybercloud-durable-schema
+  labels:
+    app.kubernetes.io/part-of: cybercloud
+    app.kubernetes.io/component: durable-schema
+spec:
+  # ⚠ THE SINGLE-ACTOR GUARANTEE, SPELLED OUT RATHER THAN DEFAULTED. Both of these are already the
+  # default, and both are written because they are the reason this is safe: one completion, one pod at
+  # a time. Anyone editing this file to speed it up has to delete a line that says why not.
+  #
+  # What they do NOT guarantee: the Job controller's pod creation is at-least-once. Under a node
+  # partition it can start a replacement while the original is still running on the unreachable node.
+  # `deploy/README.md` § N silos racing works through what happens then; the short version is that the
+  # loser fails on `42P07 duplicate table`, and the retry finds the schema present and succeeds.
+  completions: 1
+  parallelism: 1
+  # Four attempts. Enough to ride out a Postgres failover or a partition-induced duplicate, few enough
+  # that a genuinely wrong connection string turns red in about a minute instead of six.
+  backoffLimit: 4
+  # A hung `CREATE TABLE` — a shard behind a firewall that blackholes rather than refuses — would
+  # otherwise wait on the TCP timeout, and the chart's `helm install` would wait with it.
+  activeDeadlineSeconds: 600
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/part-of: cybercloud
+        app.kubernetes.io/component: durable-schema
+    spec:
+      # ⚠ `Never`, NOT `OnFailure`. `OnFailure` restarts the container in place and the failed
+      # container's log is gone with it. `Never` gives each attempt a fresh pod that stays around, so
+      # `kubectl logs --previous`-style archaeology is not needed to find out which shard failed —
+      # which is the one thing the operator needs and the one thing the error message carries.
+      restartPolicy: Never
+      serviceAccountName: cybercloud-durable-schema
+      # The job talks to PostgreSQL and to nothing else. No token, no API access, nothing to steal.
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: apply-durable-schema
+          # ⚠ REPLACED BY bootstrap.sh. Must be the SAME image as the silo Deployment — same digest,
+          # not merely the same tag. The job and the silos share `OrleansAdoNetSchema` and the two
+          # embedded SQL scripts, and a job from an older image writing a schema a newer silo then
+          # reads is the migration this design does not have.
+          image: CYBERCLOUD_IMAGE_PLACEHOLDER
+          args: ["--apply-durable-schema"]
+          env:
+            # ⚠ `Development` selects `UseLocalhostClustering` over `UseKubeMembership` in
+            # `OrleansApplication.CreateSilo` (docs/plan/02 § ADR-004). It changes nothing on this code
+            # path — the one-shot mode never builds a silo — and it is pinned anyway, so that the job
+            # and the silos are configured by one habit rather than two.
+            - name: DOTNET_ENVIRONMENT
+              value: Production
+          envFrom:
+            # ⚠ THE SAME SECRET THE SILOS READ. Its keys are
+            # `CyberCloud__Storage__Durable__Shards__<shardId>`, which the .NET configuration
+            # environment-variable provider maps to `CyberCloud:Storage:Durable:Shards:<shardId>`.
+            # Sharing the Secret is what makes "the job and the silos cannot disagree about which
+            # shards exist" true rather than aspirational — see `deploy/README.md` § The shard set is
+            # one object.
+            - secretRef:
+                name: cybercloud-durable-shards
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              memory: 512Mi
+          volumeMounts:
+            # `readOnlyRootFilesystem: true` and .NET want somewhere to write. This is the whole of it.
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}

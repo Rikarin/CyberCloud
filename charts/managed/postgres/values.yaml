@@ -1,0 +1,109 @@
+# Managed PostgreSQL — the configuration surface, once.
+#
+# ⚠ values.schema.json next to this file is GENERATED from the annotations below by
+# `./build.sh Charts`, and is diffed in CI. Edit this file; never edit that one.
+#
+# The annotation format is charts/README.md § The annotation format. Every key carries a
+# `## @param`; a key without one fails the build with its line number, because a schema that
+# silently omits half the configuration surface is worse than no schema.
+
+## @param version {string} Major PostgreSQL version. Minor upgrades are applied automatically in the maintenance window.
+## @enum 16 | 17 | 18
+## @required
+version: "17"
+
+## @param replicas {integer} Number of instances, including the primary. One is a single point of failure and is offered for development only.
+## @range 1..5
+## @required
+replicas: 2
+
+## @param synchronousReplication {boolean} Whether commits wait for a replica. Costs write latency and removes the window in which a failover loses transactions.
+synchronousReplication: false
+
+## @param sizing {object} CPU and memory, either by preset or explicitly.
+sizing:
+  ## @param preset {string} A sizing preset from docs/plan/12. Databases use the s1 family, which is 1 vCPU to 4 GiB.
+  ## @enum s1.nano | s1.micro | s1.small | s1.medium | s1.large | s1.xlarge | s1.2xlarge | s1.4xlarge
+  preset: s1.small
+  ## @param cpu {string} Explicit vCPU quantity in Kubernetes form, for example 500m or 2. Empty means take it from the preset.
+  cpu: ""
+  ## @param memory {string} Explicit memory quantity in Kubernetes form, for example 4Gi. Empty means take it from the preset.
+  memory: ""
+
+## @param storage {object} The data volume.
+storage:
+  ## @param size {string} Data volume size in Kubernetes quantity form. Grows online; never shrinks.
+  ## @required
+  size: 20Gi
+  ## @param class {string} StorageClass name. Empty means the cluster default.
+  ## @widget storageclass
+  ## @immutable
+  class: ""
+  ## @param walSize {string} Size of the separate write-ahead-log volume. Empty means the WAL shares the data volume.
+  walSize: ""
+
+## @param pooling {object} PgBouncer in front of the cluster.
+pooling:
+  ## @param enabled {boolean} Whether to run a connection pooler. On by default — a managed Postgres without one fails at the first serverless workload, and adding it later changes the connection string.
+  enabled: true
+  ## @param mode {string} PgBouncer pooling mode. Transaction pooling is the useful one and breaks session-scoped features such as prepared statements and advisory locks.
+  ## @enum session | transaction | statement
+  mode: transaction
+  ## @param instances {integer} Number of pooler pods.
+  ## @range 1..8
+  instances: 2
+
+## @param extensions {array} Extensions to install, from the platform allow-list. An arbitrary-extension escape hatch is a code-execution surface and is not offered.
+## @enum pgvector | postgis | pg_stat_statements | timescaledb
+extensions: []
+
+## @param backup {object} Backup to the tenant's object store, using CloudNativePG's barman-cloud.
+backup:
+  ## @param enabled {boolean} Whether continuous backup and WAL archiving run.
+  enabled: true
+  ## @param retentionDays {integer} How long base backups and WAL are kept. The point-in-time-recovery window is this number of days.
+  ## @range 1..365
+  retentionDays: 14
+  ## @param destinationPath {string} Object-store URL for base backups and WAL, for example s3://tenant-bucket/postgres. Empty means the platform fills it in from the tenant's default bucket.
+  destinationPath: ""
+
+## @param bootstrap {object} What exists in the database the moment it comes up.
+bootstrap:
+  ## @param database {string} Name of the application database created on first start.
+  database: app
+  ## @param owner {string} Role that owns the application database.
+  owner: app
+  ## @param password {string} Password for the owning role. Provisioned into the tenant's Vault and read back by ISecretResolver at render time; it is never written into a values file or into grain state.
+  ## @secret
+  password: ""
+
+## @param monitoring {object} What the platform scrapes.
+monitoring:
+  ## @param enabled {boolean} Whether CloudNativePG emits a PodMonitor for the platform's metrics stack.
+  enabled: true
+
+## @param platform {object} Resource identity injected by the reconciler. Not a tenant-facing setting.
+## @internal Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.
+platform:
+  ## @param tenantId {string} Tenant GUID, rendered into the cybercloud.io/tenant-id label.
+  tenantId: ""
+  ## @param subscriptionId {string} Subscription GUID, rendered into the cybercloud.io/subscription-id label.
+  subscriptionId: ""
+  ## @param resourceGroup {string} Resource group name, rendered into the cybercloud.io/resource-group label.
+  resourceGroup: ""
+  ## @param resourceId {string} Resource GUID, rendered into the cybercloud.io/resource-id label.
+  resourceId: ""
+  ## @param resourceType {string} Fully qualified resource type, rendered into the cybercloud.io/resource-type label.
+  resourceType: CyberCloud.DBforPostgreSQL/servers
+  ## @param apiVersion {string} The api-version the resource was last written at, rendered into the cybercloud.io/api-version label.
+  apiVersion: "2026-08-01"
+  ## @param managedBy {string} Value of the cybercloud.io/managed-by label. Constant, and the selector every informer filters on.
+  managedBy: cybercloud
+
+## @param imageName {string} Override the operator's default PostgreSQL image. Empty means the operator chooses, which is what keeps minor upgrades automatic.
+## @internal A pinned image defeats automatic minor upgrades, so it is a platform escape hatch rather than a tenant setting.
+imageName: ""
+
+## @param nameOverride {string} Replace the generated object-name stem. Empty means derive it from the release name.
+## @internal Helm plumbing. Nothing about it belongs in a resource body.
+nameOverride: ""

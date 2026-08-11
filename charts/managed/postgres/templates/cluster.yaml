@@ -1,0 +1,97 @@
+{{/*
+CloudNativePG `Cluster` — docs/plan/12 § The catalogue, PostgreSQL.
+
+⚠ This renders a custom resource; it does not install the operator. The operator is
+charts/bundle/'s job, which is why this chart has no CRD directory and no operator Deployment.
+*/}}
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: {{ include "postgres.name" . }}
+  labels:
+    {{- include "postgres.platformLabels" . | nindent 4 }}
+spec:
+  instances: {{ .Values.replicas }}
+  imageName: {{ .Values.imageName | default (printf "ghcr.io/cloudnative-pg/postgresql:%s" .Values.version) | quote }}
+
+  {{- with include "postgres.resources" . }}
+  resources:
+    {{- . | trim | nindent 4 }}
+  {{- end }}
+
+  postgresql:
+    parameters:
+      {{- if .Values.extensions }}
+      shared_preload_libraries: {{ join "," .Values.extensions | quote }}
+      {{- end }}
+      max_connections: "200"
+
+  {{- if .Values.synchronousReplication }}
+  postgresql_synchronous:
+    method: any
+    number: 1
+  {{- end }}
+
+  bootstrap:
+    initdb:
+      database: {{ .Values.bootstrap.database | quote }}
+      owner: {{ .Values.bootstrap.owner | quote }}
+      {{- if .Values.bootstrap.password }}
+      {{/*
+        ⚠ The value reaching this template is resolved from the tenant's Vault by ISecretResolver
+        at render time — docs/plan/12 § The pattern, once, piece 5. It is never persisted in a
+        values file and never reaches grain state; values.yaml carries "" and the annotation
+        carries `@secret`, which is what makes the generated schema mark it writeOnly.
+      */}}
+      secret:
+        name: {{ include "postgres.name" . }}-app
+      {{- end }}
+      {{- if .Values.extensions }}
+      postInitApplicationSQL:
+        {{- range .Values.extensions }}
+        - CREATE EXTENSION IF NOT EXISTS {{ . }};
+        {{- end }}
+      {{- end }}
+
+  storage:
+    size: {{ .Values.storage.size | quote }}
+    {{- if .Values.storage.class }}
+    storageClass: {{ .Values.storage.class | quote }}
+    {{- end }}
+
+  {{- if .Values.storage.walSize }}
+  walStorage:
+    size: {{ .Values.storage.walSize | quote }}
+    {{- if .Values.storage.class }}
+    storageClass: {{ .Values.storage.class | quote }}
+    {{- end }}
+  {{- end }}
+
+  {{- if .Values.backup.enabled }}
+  backup:
+    retentionPolicy: {{ printf "%dd" (int .Values.backup.retentionDays) | quote }}
+    barmanObjectStore:
+      destinationPath: {{ .Values.backup.destinationPath | quote }}
+      wal:
+        compression: gzip
+  {{- end }}
+
+  monitoring:
+    enablePodMonitor: {{ .Values.monitoring.enabled }}
+{{- if .Values.bootstrap.password }}
+---
+{{/*
+The owning role's password, as a CloudNativePG basic-auth secret. Rendered only when the resolver
+supplied a value; an empty `bootstrap.password` means the operator generates one instead.
+*/}}
+apiVersion: v1
+kind: Secret
+type: kubernetes.io/basic-auth
+metadata:
+  name: {{ include "postgres.name" . }}-app
+  labels:
+    {{- include "postgres.platformLabels" . | nindent 4 }}
+stringData:
+  username: {{ .Values.bootstrap.owner | quote }}
+  password: {{ .Values.bootstrap.password | quote }}
+{{- end }}

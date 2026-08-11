@@ -1,0 +1,347 @@
+{
+  "$id": "https://schema.cybercloud.io/charts/postgres/values.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "The configuration surface of the postgres chart. GENERATED from values.yaml by `./build.sh Charts` and diffed in CI — docs/plan/03 § charts/. Edit values.yaml, never this file. Members carrying `x-cybercloud-api: false` are chart or platform plumbing and are not part of the resource body.",
+  "properties": {
+    "backup": {
+      "additionalProperties": false,
+      "description": "Backup to the tenant's object store, using CloudNativePG's barman-cloud.",
+      "properties": {
+        "destinationPath": {
+          "default": "",
+          "description": "Object-store URL for base backups and WAL, for example s3://tenant-bucket/postgres. Empty means the platform fills it in from the tenant's default bucket.",
+          "type": "string",
+          "x-cybercloud-order": 2,
+          "x-cybercloud-pointer": "/properties/backup/destinationPath"
+        },
+        "enabled": {
+          "default": true,
+          "description": "Whether continuous backup and WAL archiving run.",
+          "type": "boolean",
+          "x-cybercloud-order": 0,
+          "x-cybercloud-pointer": "/properties/backup/enabled"
+        },
+        "retentionDays": {
+          "default": 14,
+          "description": "How long base backups and WAL are kept. The point-in-time-recovery window is this number of days.",
+          "maximum": 365,
+          "minimum": 1,
+          "type": "integer",
+          "x-cybercloud-order": 1,
+          "x-cybercloud-pointer": "/properties/backup/retentionDays"
+        }
+      },
+      "type": "object",
+      "x-cybercloud-order": 7,
+      "x-cybercloud-pointer": "/properties/backup"
+    },
+    "bootstrap": {
+      "additionalProperties": false,
+      "description": "What exists in the database the moment it comes up.",
+      "properties": {
+        "database": {
+          "default": "app",
+          "description": "Name of the application database created on first start.",
+          "type": "string",
+          "x-cybercloud-order": 0,
+          "x-cybercloud-pointer": "/properties/bootstrap/database"
+        },
+        "owner": {
+          "default": "app",
+          "description": "Role that owns the application database.",
+          "type": "string",
+          "x-cybercloud-order": 1,
+          "x-cybercloud-pointer": "/properties/bootstrap/owner"
+        },
+        "password": {
+          "default": "",
+          "description": "Password for the owning role. Provisioned into the tenant's Vault and read back by ISecretResolver at render time; it is never written into a values file or into grain state.",
+          "format": "password",
+          "type": "string",
+          "writeOnly": true,
+          "x-cybercloud-order": 2,
+          "x-cybercloud-pointer": "/properties/bootstrap/password",
+          "x-cybercloud-secret": true
+        }
+      },
+      "type": "object",
+      "x-cybercloud-order": 8,
+      "x-cybercloud-pointer": "/properties/bootstrap"
+    },
+    "extensions": {
+      "default": [],
+      "description": "Extensions to install, from the platform allow-list. An arbitrary-extension escape hatch is a code-execution surface and is not offered.",
+      "items": {
+        "enum": [
+          "pgvector",
+          "postgis",
+          "pg_stat_statements",
+          "timescaledb"
+        ],
+        "type": "string"
+      },
+      "type": "array",
+      "x-cybercloud-order": 6,
+      "x-cybercloud-pointer": "/properties/extensions"
+    },
+    "imageName": {
+      "default": "",
+      "description": "Override the operator's default PostgreSQL image. Empty means the operator chooses, which is what keeps minor upgrades automatic.",
+      "type": "string",
+      "x-cybercloud-api": false,
+      "x-cybercloud-internal-reason": "A pinned image defeats automatic minor upgrades, so it is a platform escape hatch rather than a tenant setting.",
+      "x-cybercloud-order": 11,
+      "x-cybercloud-pointer": "/properties/imageName"
+    },
+    "monitoring": {
+      "additionalProperties": false,
+      "description": "What the platform scrapes.",
+      "properties": {
+        "enabled": {
+          "default": true,
+          "description": "Whether CloudNativePG emits a PodMonitor for the platform's metrics stack.",
+          "type": "boolean",
+          "x-cybercloud-order": 0,
+          "x-cybercloud-pointer": "/properties/monitoring/enabled"
+        }
+      },
+      "type": "object",
+      "x-cybercloud-order": 9,
+      "x-cybercloud-pointer": "/properties/monitoring"
+    },
+    "nameOverride": {
+      "default": "",
+      "description": "Replace the generated object-name stem. Empty means derive it from the release name.",
+      "type": "string",
+      "x-cybercloud-api": false,
+      "x-cybercloud-internal-reason": "Helm plumbing. Nothing about it belongs in a resource body.",
+      "x-cybercloud-order": 12,
+      "x-cybercloud-pointer": "/properties/nameOverride"
+    },
+    "platform": {
+      "additionalProperties": false,
+      "description": "Resource identity injected by the reconciler. Not a tenant-facing setting.",
+      "properties": {
+        "apiVersion": {
+          "default": "2026-08-01",
+          "description": "The api-version the resource was last written at, rendered into the cybercloud.io/api-version label.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 5,
+          "x-cybercloud-pointer": "/properties/platform/apiVersion"
+        },
+        "managedBy": {
+          "default": "cybercloud",
+          "description": "Value of the cybercloud.io/managed-by label. Constant, and the selector every informer filters on.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 6,
+          "x-cybercloud-pointer": "/properties/platform/managedBy"
+        },
+        "resourceGroup": {
+          "default": "",
+          "description": "Resource group name, rendered into the cybercloud.io/resource-group label.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 2,
+          "x-cybercloud-pointer": "/properties/platform/resourceGroup"
+        },
+        "resourceId": {
+          "default": "",
+          "description": "Resource GUID, rendered into the cybercloud.io/resource-id label.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 3,
+          "x-cybercloud-pointer": "/properties/platform/resourceId"
+        },
+        "resourceType": {
+          "default": "CyberCloud.DBforPostgreSQL/servers",
+          "description": "Fully qualified resource type, rendered into the cybercloud.io/resource-type label.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 4,
+          "x-cybercloud-pointer": "/properties/platform/resourceType"
+        },
+        "subscriptionId": {
+          "default": "",
+          "description": "Subscription GUID, rendered into the cybercloud.io/subscription-id label.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 1,
+          "x-cybercloud-pointer": "/properties/platform/subscriptionId"
+        },
+        "tenantId": {
+          "default": "",
+          "description": "Tenant GUID, rendered into the cybercloud.io/tenant-id label.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 0,
+          "x-cybercloud-pointer": "/properties/platform/tenantId"
+        }
+      },
+      "type": "object",
+      "x-cybercloud-api": false,
+      "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+      "x-cybercloud-order": 10,
+      "x-cybercloud-pointer": "/properties/platform"
+    },
+    "pooling": {
+      "additionalProperties": false,
+      "description": "PgBouncer in front of the cluster.",
+      "properties": {
+        "enabled": {
+          "default": true,
+          "description": "Whether to run a connection pooler. On by default — a managed Postgres without one fails at the first serverless workload, and adding it later changes the connection string.",
+          "type": "boolean",
+          "x-cybercloud-order": 0,
+          "x-cybercloud-pointer": "/properties/pooling/enabled"
+        },
+        "instances": {
+          "default": 2,
+          "description": "Number of pooler pods.",
+          "maximum": 8,
+          "minimum": 1,
+          "type": "integer",
+          "x-cybercloud-order": 2,
+          "x-cybercloud-pointer": "/properties/pooling/instances"
+        },
+        "mode": {
+          "default": "transaction",
+          "description": "PgBouncer pooling mode. Transaction pooling is the useful one and breaks session-scoped features such as prepared statements and advisory locks.",
+          "enum": [
+            "session",
+            "transaction",
+            "statement"
+          ],
+          "type": "string",
+          "x-cybercloud-order": 1,
+          "x-cybercloud-pointer": "/properties/pooling/mode"
+        }
+      },
+      "type": "object",
+      "x-cybercloud-order": 5,
+      "x-cybercloud-pointer": "/properties/pooling"
+    },
+    "replicas": {
+      "default": 2,
+      "description": "Number of instances, including the primary. One is a single point of failure and is offered for development only.",
+      "maximum": 5,
+      "minimum": 1,
+      "type": "integer",
+      "x-cybercloud-order": 1,
+      "x-cybercloud-pointer": "/properties/replicas"
+    },
+    "sizing": {
+      "additionalProperties": false,
+      "description": "CPU and memory, either by preset or explicitly.",
+      "properties": {
+        "cpu": {
+          "default": "",
+          "description": "Explicit vCPU quantity in Kubernetes form, for example 500m or 2. Empty means take it from the preset.",
+          "type": "string",
+          "x-cybercloud-order": 1,
+          "x-cybercloud-pointer": "/properties/sizing/cpu"
+        },
+        "memory": {
+          "default": "",
+          "description": "Explicit memory quantity in Kubernetes form, for example 4Gi. Empty means take it from the preset.",
+          "type": "string",
+          "x-cybercloud-order": 2,
+          "x-cybercloud-pointer": "/properties/sizing/memory"
+        },
+        "preset": {
+          "default": "s1.small",
+          "description": "A sizing preset from docs/plan/12. Databases use the s1 family, which is 1 vCPU to 4 GiB.",
+          "enum": [
+            "s1.nano",
+            "s1.micro",
+            "s1.small",
+            "s1.medium",
+            "s1.large",
+            "s1.xlarge",
+            "s1.2xlarge",
+            "s1.4xlarge"
+          ],
+          "type": "string",
+          "x-cybercloud-order": 0,
+          "x-cybercloud-pointer": "/properties/sizing/preset"
+        }
+      },
+      "type": "object",
+      "x-cybercloud-order": 3,
+      "x-cybercloud-pointer": "/properties/sizing"
+    },
+    "storage": {
+      "additionalProperties": false,
+      "description": "The data volume.",
+      "properties": {
+        "class": {
+          "default": "",
+          "description": "StorageClass name. Empty means the cluster default.",
+          "type": "string",
+          "x-cybercloud-immutable": true,
+          "x-cybercloud-order": 1,
+          "x-cybercloud-pointer": "/properties/storage/class",
+          "x-cybercloud-widget": "storageclass"
+        },
+        "size": {
+          "default": "20Gi",
+          "description": "Data volume size in Kubernetes quantity form. Grows online; never shrinks.",
+          "type": "string",
+          "x-cybercloud-order": 0,
+          "x-cybercloud-pointer": "/properties/storage/size"
+        },
+        "walSize": {
+          "default": "",
+          "description": "Size of the separate write-ahead-log volume. Empty means the WAL shares the data volume.",
+          "type": "string",
+          "x-cybercloud-order": 2,
+          "x-cybercloud-pointer": "/properties/storage/walSize"
+        }
+      },
+      "required": [
+        "size"
+      ],
+      "type": "object",
+      "x-cybercloud-order": 4,
+      "x-cybercloud-pointer": "/properties/storage"
+    },
+    "synchronousReplication": {
+      "default": false,
+      "description": "Whether commits wait for a replica. Costs write latency and removes the window in which a failover loses transactions.",
+      "type": "boolean",
+      "x-cybercloud-order": 2,
+      "x-cybercloud-pointer": "/properties/synchronousReplication"
+    },
+    "version": {
+      "default": "17",
+      "description": "Major PostgreSQL version. Minor upgrades are applied automatically in the maintenance window.",
+      "enum": [
+        "16",
+        "17",
+        "18"
+      ],
+      "type": "string",
+      "x-cybercloud-order": 0,
+      "x-cybercloud-pointer": "/properties/version"
+    }
+  },
+  "required": [
+    "replicas",
+    "version"
+  ],
+  "title": "postgres chart values",
+  "type": "object",
+  "x-cybercloud-api-version": "2026-08-01",
+  "x-cybercloud-chart": "postgres",
+  "x-cybercloud-chart-version": "0.1.0",
+  "x-cybercloud-resource-type": "CyberCloud.DBforPostgreSQL/servers"
+}

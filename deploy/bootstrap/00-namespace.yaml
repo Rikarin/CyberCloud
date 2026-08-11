@@ -1,0 +1,33 @@
+# The namespace the platform runs in.
+#
+# ⚠ BOOTSTRAP OWNS THIS OBJECT, NOT `charts/platform`. Two reasons, and both are recovery reasons
+# (docs/plan/09 § The platform's own cluster):
+#
+#   1. `helm uninstall` deletes what the release created. A namespace created by the chart takes the
+#      membership RBAC, the shard Secret and every Orleans membership custom resource with it, so an
+#      uninstall/reinstall — the exact motion an operator makes when repairing the platform — starts
+#      from a cluster with no schema credentials in it.
+#   2. The durable-schema hook Job runs `pre-install`, which is *before* the release's own manifests.
+#      A namespace templated by the chart does not exist yet at that point.
+#
+# So the chart is installed with `--namespace cybercloud` and without `--create-namespace`.
+#
+# Renaming this: change it here, and pass the same `-n` to every command in `deploy/README.md`. No
+# manifest in this directory carries a `namespace:` field, so the name lives in exactly one place.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: cybercloud
+  labels:
+    app.kubernetes.io/part-of: cybercloud
+    # ⚠ `self-managed` is docs/plan/09 § The platform's own cluster, point 1: "the platform's own
+    # resources are marked self-managed and are excluded from tenant-facing reconciliation". Nothing
+    # reads this label yet — the reconciler that must honour it is not written. It is set here anyway,
+    # because the alternative is to add it later to a live namespace that the platform has meanwhile
+    # started reconciling as if it were a tenant's.
+    cybercloud.io/self-managed: "true"
+    # Pod Security Admission. The silo needs no privilege at all: no host mounts, no capabilities, no
+    # host network. `restricted` is therefore free, and a namespace that starts unrestricted never
+    # becomes restricted later.
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: latest
