@@ -161,7 +161,7 @@ Six, all settled, kept here because each changed what gets built.
    it by name. [05](05-state-and-storage.md).
 2. **`Orleans.Multitenant` requires string grain keys, so "GUID as ID" needed reconciling.** GUIDs are
    the identifiers everywhere a user or an API sees one; the grain *key* is a composed string
-   containing them, built only by `ResourceKey`. Verified against the library's source. ADR-002.
+   containing them, built only by `GrainKeys`. Verified against the library's source. ADR-002.
 3. **SSH into the cloud terminal's container is the wrong transport.** The Kubernetes exec streaming
    API does everything SSH would, with no listener in the container, no key management and no network
    path. SSH stays relevant for reaching *VMs*, which is a separate, later feature.

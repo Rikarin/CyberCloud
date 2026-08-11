@@ -165,8 +165,8 @@ The intent, in full in `.editorconfig` and `Directory.Build.props`:
 
 - **Grain interfaces are `IGrainWithStringKey`** for anything tenant-scoped, because that is the only
   key kind `Orleans.Multitenant` can carry a tenant in (verified against its source). GUIDs remain the
-  *identifier*; the key is a composed string. `ResourceKey` is the one type allowed to format or parse
-  one — [06 § Keys](06-tenancy-and-resource-model.md).
+  *identifier*; the key is a composed string. `GrainKeys` is the one type allowed to format or parse
+  one — [06 § Grain keys](06-tenancy-and-resource-model.md).
 - **Every grain interface method returns `Task<Result<T>>` or `Task<Result>`**, never throws for a
   domain outcome. Exceptions are for bugs and infrastructure. The gateway maps `Result` to an Azure-shaped
   error body; a thrown exception maps to `500` and pages someone.

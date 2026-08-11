@@ -5,8 +5,8 @@ using Shouldly;
 namespace CyberCloud.Core.Contracts.Tests;
 
 /// <summary>
-///     <see cref="ResourceId" />, <see cref="ResourceKey" /> and <see cref="ResourceTypeName" />
-///     through Orleans' own serializer.
+///     <see cref="ResourceId" /> and <see cref="ResourceTypeName" /> through Orleans' own
+///     serializer.
 /// </summary>
 public sealed class IdentifierSerializationTests(OrleansSerializerFixture orleans)
     : IClassFixture<OrleansSerializerFixture>
@@ -119,34 +119,17 @@ public sealed class IdentifierSerializationTests(OrleansSerializerFixture orlean
         orleans.RoundTrip(default(ResourceId)).ShouldBe(default(ResourceId));
     }
 
-    // ── ResourceKey ────────────────────────────────────────────────────────────────────────────
+    // ── Grain keys, which are derived on arrival and never sent ────────────────────────────────
 
     [Fact]
-    public void AResourceKeyRoundTripsToTheSameGrainKey()
+    public void AGrainKeyIsDerivedFromTheArrivedIdentifierAndNotCarriedAsAValue()
     {
-        var original = new ResourceKey(
-            SubscriptionId,
-            "prod",
-            new ResourceTypeName("CyberCloud.DBforPostgreSQL", "servers"),
-            ResourceGuid);
-
-        var round = orleans.RoundTrip(original);
-
-        round.ShouldBe(original);
-
-        // The assertion that matters: the same grain, not merely an equal-looking record. A key
-        // that round-trips into a different string addresses a different activation.
-        round.ToKeyWithinTenant().ShouldBe(original.ToKeyWithinTenant());
-        ResourceKey.IsTenantQualificationSafe(round.ToKeyWithinTenant()).ShouldBeTrue();
-    }
-
-    [Fact]
-    public void DefaultResourceKeyRoundTripsWithoutThrowing() =>
-        orleans.RoundTrip(default(ResourceKey)).ShouldBe(default(ResourceKey));
-
-    [Fact]
-    public void AResourceKeyDerivedFromAResourceIdSurvivesTheWire()
-    {
+        // ⚠ There is no grain-key surrogate, deliberately: ResourceKey and ResourceKeySurrogate were
+        // deleted rather than ported when ADR-002 settled IResourceGrain on res/{resourceId:N}
+        // (docs/plan/02:153-163). A grain key travelling on the wire as a value is exactly the
+        // coupling that removes — a peer on an older build would be sending an address it composed
+        // itself. What crosses is the ResourceId; GrainKeys composes the key on the far side. This
+        // test is that contract: same key either side, composed twice, never transmitted.
         var id = new ResourceId(
             TenantId,
             SubscriptionId,
@@ -155,21 +138,25 @@ public sealed class IdentifierSerializationTests(OrleansSerializerFixture orlean
             "orders-db",
             ResourceGuid);
 
-        var expected = ResourceKey.From(id).ToKeyWithinTenant();
+        var round = orleans.RoundTrip(id);
 
-        ResourceKey.From(orleans.RoundTrip(id)).ToKeyWithinTenant().ShouldBe(expected);
+        GrainKeys.Resource(round.Id).ShouldBe(GrainKeys.Resource(id.Id));
+        GrainKeys.PathIndex(round).ShouldBe(GrainKeys.PathIndex(id));
+        GrainKeys.IsTenantQualificationSafe(GrainKeys.Resource(round.Id)).ShouldBeTrue();
     }
 
     // ── Errors carrying identifiers ────────────────────────────────────────────────────────────
 
     [Fact]
-    public void AResultHoldingAResourceKeyRoundTrips()
+    public void AResultHoldingAResourceIdRoundTrips()
     {
-        var original = Result<ResourceKey>.Success(
-            new ResourceKey(
+        var original = Result<ResourceId>.Success(
+            new ResourceId(
+                TenantId,
                 SubscriptionId,
                 "prod",
                 new ResourceTypeName("CyberCloud.Compute", "virtualMachines"),
+                "web-01",
                 ResourceGuid));
 
         orleans.RoundTrip(original).ShouldBe(original);

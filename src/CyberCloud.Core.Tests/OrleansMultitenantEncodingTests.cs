@@ -5,7 +5,7 @@ namespace CyberCloud.Core.Tests;
 
 /// <summary>
 ///     A faithful model of <c>Orleans.Multitenant</c> 4.0.0's tenant-qualified key encoding, plus
-///     the assertions <see cref="ResourceKey" /> depends on.
+///     the assertions <see cref="GrainKeys" /> depends on.
 /// </summary>
 /// <remarks>
 ///     <para>
@@ -55,14 +55,14 @@ namespace CyberCloud.Core.Tests;
 ///         <item>
 ///             <b>NOT IN THE ADR</b> — the null-tenant branch is a different encoding entirely: no
 ///             prefix, no <c>'~'</c> rule, and the <i>whole key</i> has its <c>'|'</c> doubled.
-///             docs/plan/06:87-93 makes <c>IClusterConnectionGrain</c> a null-tenant grain, so this
+///             docs/plan/06:116-122 makes <c>IClusterConnectionGrain</c> a null-tenant grain, so this
 ///             branch is live, not theoretical.
 ///         </item>
 ///     </list>
 ///     <para>
 ///         ⚠ This file is a <i>model</i>, not the package. <c>CyberCloud.Core</c> must not acquire
 ///         an Orleans dependency (docs/plan/03:226) and neither must its tests. The model is here so
-///         that the properties <see cref="ResourceKey" /> relies on are asserted in CI rather than
+///         that the properties <see cref="GrainKeys" /> relies on are asserted in CI rather than
 ///         asserted once in a scratch directory; the correspondence between the model and the
 ///         package was established by execution, as described above.
 ///     </para>
@@ -151,26 +151,28 @@ public class OrleansMultitenantEncodingTests
     }
 
     [Fact]
-    public void ResourceKeysNeverTouchAnyOfTheInterestingBranches()
+    public void GrainKeysNeverTouchAnyOfTheInterestingBranches()
     {
         // This is the whole point of the exercise. Every key CyberCloud.Core produces is plain
         // enough that the encoding is a single concatenation — so a physical key in Redis, in a
         // log line or in a trace reads exactly as the key that was constructed.
         foreach (var id in Corpus.ResourceIds(2_000, seed: 7))
         {
-            var inner = ResourceKey.From(id).ToKeyWithinTenant();
             var tenant = id.TenantId.ToString("N", System.Globalization.CultureInfo.InvariantCulture);
 
-            OrleansMultitenantKeyModel.Qualify(tenant, inner).ShouldBe(tenant + "|" + inner);
-            OrleansMultitenantKeyModel.ExtractKey(tenant + "|" + inner).ShouldBe(inner);
-            OrleansMultitenantKeyModel.ExtractTenant(tenant + "|" + inner).ShouldBe(tenant);
+            foreach (var inner in Corpus.EveryGrainKeyShapeFor(id))
+            {
+                OrleansMultitenantKeyModel.Qualify(tenant, inner).ShouldBe(tenant + "|" + inner);
+                OrleansMultitenantKeyModel.ExtractKey(tenant + "|" + inner).ShouldBe(inner);
+                OrleansMultitenantKeyModel.ExtractTenant(tenant + "|" + inner).ShouldBe(tenant);
+            }
         }
     }
 
     [Fact]
     public void ANullTenantKeyCanNeverBeMistakenForATenantedOne()
     {
-        // docs/plan/06:87-93 keeps IClusterConnectionGrain in the null tenant. If a null-tenant
+        // docs/plan/06:116-122 keeps IClusterConnectionGrain in the null tenant. If a null-tenant
         // physical key could parse as tenanted, that grain's key space would overlap a tenant's.
         // It cannot: the null-tenant branch doubles every '|', so no undoubled one survives.
         string[] inners = ["cluster/0a1b2c3d", "a|b", "|lead", "t1|sub/abc", "||", "|"];

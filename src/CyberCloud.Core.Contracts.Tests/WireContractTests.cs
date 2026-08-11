@@ -58,10 +58,12 @@ public sealed class WireContractTests
         ("ResourceIdSurrogate", 4, "Name"),
         ("ResourceIdSurrogate", 5, "Id"),
 
-        ("ResourceKeySurrogate", 0, "SubscriptionId"),
-        ("ResourceKeySurrogate", 1, "ResourceGroup"),
-        ("ResourceKeySurrogate", 2, "Type"),
-        ("ResourceKeySurrogate", 3, "ResourceId"),
+        // ⚠ ResourceKeySurrogate's four entries were REMOVED, not burned, and that is the one
+        // exception this list's own rule allows. The append-only rule protects numbers that a
+        // deployed peer might send; nothing has shipped, ResourceKey no longer exists (a grain key
+        // is now built by CyberCloud.Core.Resources.GrainKeys and never travels as a value), and its
+        // alias "CyberCloud.Core.ResourceKey" is retired with it. If any silo had ever run, this
+        // would instead be a burned group with a comment. See ADR-002, docs/plan/02:161-188.
     ];
 
     /// <summary>The aliases this assembly publishes. Changing one is a wire break.</summary>
@@ -79,7 +81,6 @@ public sealed class WireContractTests
         ("ResultSurrogate`1", "CyberCloud.Core.Result`1"),
         ("ResourceTypeNameSurrogate", "CyberCloud.Core.ResourceTypeName"),
         ("ResourceIdSurrogate", "CyberCloud.Core.ResourceId"),
-        ("ResourceKeySurrogate", "CyberCloud.Core.ResourceKey"),
     ];
 
     static IEnumerable<Type> GeneratedSerializerTypes =>

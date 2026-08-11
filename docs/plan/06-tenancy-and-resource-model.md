@@ -96,7 +96,7 @@ fabric. We are stricter on purpose, and the error message says so, because the m
 ## Grain keys
 
 From ADR-002: tenant-scoped grains are `IGrainWithStringKey`, keyed by `Orleans.Multitenant`'s
-tenant-qualified key. `ResourceKey` is the only type allowed to build the within-tenant part.
+tenant-qualified key. `GrainKeys` is the only type allowed to build the within-tenant part.
 
 | Grain | Key within tenant |
 |---|---|

@@ -3,7 +3,7 @@ using Shouldly;
 
 namespace CyberCloud.Core.Tests;
 
-/// <summary>The naming rule from docs/plan/06:58-65.</summary>
+/// <summary>The naming rule from docs/plan/06:87-90.</summary>
 public class ResourceNamingTests
 {
     // ── Boundary lengths: 0, 1, 63, 64 ─────────────────────────────────────────────────────────
@@ -116,7 +116,7 @@ public class ResourceNamingTests
     public void AHyphenInTheMiddleIsAccepted(string name) =>
         ResourceNaming.IsValid(name).ShouldBeTrue();
 
-    // ── The message is the mitigation (docs/plan/06:63-65) ─────────────────────────────────────
+    // ── The message is the mitigation (docs/plan/06:92-94) ─────────────────────────────────────
 
     [Fact]
     public void TheMessageStatesTheRuleTheLimitAndWhyWeDoNotMangle()

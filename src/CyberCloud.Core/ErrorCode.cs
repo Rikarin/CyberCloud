@@ -47,7 +47,7 @@ public sealed class ErrorCode : IEquatable<ErrorCode>
     /// </remarks>
     public static readonly ErrorCode AuthorizationFailed = new("AuthorizationFailed");
 
-    /// <summary>A concurrent change lost. docs/plan/06:100 (<c>409</c> on a taken name).</summary>
+    /// <summary>A concurrent change lost. docs/plan/06:129 (<c>409</c> on a taken name).</summary>
     public static readonly ErrorCode Conflict = new("Conflict");
 
     /// <summary>An unexpected fault. Carries no exception detail — docs/plan/08:190.</summary>
@@ -57,6 +57,11 @@ public sealed class ErrorCode : IEquatable<ErrorCode>
     public static readonly ErrorCode InvalidApiVersion = new("InvalidApiVersion");
 
     /// <summary>A grain key within a tenant is malformed. ADR-002, docs/plan/02:127-141.</summary>
+    /// <remarks>
+    ///     Also carried by <c>GrainKeys.NormalizeEmail</c>, whose failure means "no email index key
+    ///     can be minted for this string". A user-facing sign-up validator should say so in its own
+    ///     words rather than surfacing this code — it names the mechanism, not the field.
+    /// </remarks>
     public static readonly ErrorCode InvalidGrainKey = new("InvalidGrainKey");
 
     /// <summary>The request body failed the type's JSON Schema. docs/plan/08:22.</summary>
@@ -66,7 +71,7 @@ public sealed class ErrorCode : IEquatable<ErrorCode>
     public static readonly ErrorCode InvalidResourceId = new("InvalidResourceId");
 
     /// <summary>
-    ///     A resource group or resource name breaks the naming rules. docs/plan/06:58-65.
+    ///     A resource group or resource name breaks the naming rules. docs/plan/06:87-90.
     /// </summary>
     /// <remarks>
     ///     The message for this code is the mitigation the document asks for: it names the offending
@@ -89,13 +94,13 @@ public sealed class ErrorCode : IEquatable<ErrorCode>
     /// <summary>Policy evaluation denied the request. docs/plan/08:25.</summary>
     public static readonly ErrorCode PolicyViolation = new("PolicyViolation");
 
-    /// <summary>An <c>If-Match</c> etag did not match. docs/plan/06:173.</summary>
+    /// <summary>An <c>If-Match</c> etag did not match. docs/plan/06:202.</summary>
     public static readonly ErrorCode PreconditionFailed = new("PreconditionFailed");
 
     /// <summary>Reconciliation failed terminally. docs/plan/08:60 (<c>Failed</c>).</summary>
     public static readonly ErrorCode ProvisioningFailed = new("ProvisioningFailed");
 
-    /// <summary>The name is already claimed in this scope. docs/plan/06:100.</summary>
+    /// <summary>The name is already claimed in this scope. docs/plan/06:129.</summary>
     public static readonly ErrorCode ResourceAlreadyExists = new("ResourceAlreadyExists");
 
     /// <summary>The resource group does not exist. docs/plan/06:11.</summary>
@@ -106,7 +111,7 @@ public sealed class ErrorCode : IEquatable<ErrorCode>
     /// </summary>
     public static readonly ErrorCode ResourceNotFound = new("ResourceNotFound");
 
-    /// <summary>A lock forbids the write or the delete. docs/plan/06:172.</summary>
+    /// <summary>A lock forbids the write or the delete. docs/plan/06:201.</summary>
     public static readonly ErrorCode ScopeLocked = new("ScopeLocked");
 
     /// <summary>The subscription does not exist. docs/plan/06:10.</summary>
@@ -116,7 +121,7 @@ public sealed class ErrorCode : IEquatable<ErrorCode>
     public static readonly ErrorCode TenantNotFound = new("TenantNotFound");
 
     /// <summary>
-    ///     The tenant is <c>Suspended</c> and control-plane writes are rejected. docs/plan/06:126.
+    ///     The tenant is <c>Suspended</c> and control-plane writes are rejected. docs/plan/06:155.
     /// </summary>
     public static readonly ErrorCode TenantSuspended = new("TenantSuspended");
 

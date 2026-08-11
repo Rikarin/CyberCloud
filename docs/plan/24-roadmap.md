@@ -30,7 +30,7 @@ Nothing tenant-facing ships. This is the phase people try to shorten and must no
 
 | Item | EM | Doc |
 |---|---|---|
-| Core: ids, `Result<T>`, `ResourceId`/`ResourceKey`, error registry | 0.8 | [06](06-tenancy-and-resource-model.md) |
+| Core: ids, `Result<T>`, `ResourceId`/`GrainKeys`, error registry | 0.8 | [06](06-tenancy-and-resource-model.md) |
 | Tenancy: tenant/subscription/RG grains, the global directory, the shard map | 1.5 | [05](05-state-and-storage.md), [06](06-tenancy-and-resource-model.md) |
 | Storage tiers: multitenant Redis + sharded Postgres, PgBouncer, hash tags | 1.2 | [05](05-state-and-storage.md) |
 | ReBAC: schema builder, tuple grains, `Check`, cache, consistency tokens, role-assignment view | 2.1 | [07](07-rebac-authorization.md) |

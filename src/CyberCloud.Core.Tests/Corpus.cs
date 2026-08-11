@@ -52,7 +52,7 @@ static class Corpus
         ("е", "CYRILLIC SMALL LETTER IE — a look-alike for 'e'"),
         ("​", "ZERO WIDTH SPACE — invisible everywhere"),
         ("﻿", "ZERO WIDTH NO-BREAK SPACE — invisible everywhere"),
-        ("A", "upper case, which docs/plan/06:59 forbids"),
+        ("A", "upper case, which docs/plan/06:88 forbids"),
         ("_", "legal in a Kubernetes annotation, illegal in a DNS-1123 label")
     ];
 
@@ -166,6 +166,52 @@ static class Corpus
                 new ResourceTypeName(namespaces.Current, typePaths.Current),
                 name,
                 NextGuid(random));
+        }
+    }
+
+    /// <summary>
+    ///     Every one of the eight grain-key shapes at docs/plan/06:101-110, built from one
+    ///     <paramref name="id" /> plus GUIDs derived from it.
+    /// </summary>
+    /// <remarks>
+    ///     Returned as a set rather than one at a time because the properties worth asserting —
+    ///     round trip, tenant-qualification safety, and above all that no two shapes can produce the
+    ///     same string — are properties <i>across</i> the shapes, not within one.
+    /// </remarks>
+    public static IEnumerable<string> EveryGrainKeyShapeFor(ResourceId id)
+    {
+        yield return GrainKeys.Subscription(id.SubscriptionId);
+        yield return GrainKeys.ResourceGroup(id.SubscriptionId, id.ResourceGroup);
+        yield return GrainKeys.Resource(id.Id);
+        yield return GrainKeys.PathIndex(id);
+        yield return GrainKeys.User(id.Id);
+        yield return GrainKeys.EmailIndex(id.TenantId, id.Name + "@" + id.ResourceGroup + ".example");
+        yield return GrainKeys.Operation(id.Id);
+        yield return GrainKeys.ClusterConnection(id.Id);
+    }
+
+    /// <summary>
+    ///     Generates syntactically distinct email addresses — no two differ only by ASCII case, so
+    ///     no two may ever share an index key.
+    /// </summary>
+    public static IEnumerable<string> DistinctEmails(int count, int seed)
+    {
+        string[] domains =
+        [
+            "example.com", "example.org", "mail.example.com", "a.co", "sub.domain.example",
+            "EXAMPLE.COM", "Example.Com"
+        ];
+
+        var random = new Random(seed);
+        for (var i = 0; i < count; i++)
+        {
+            // The local part carries the loop counter, which is what makes the set distinct even
+            // when the random suffix repeats.
+            var local = "user" + i.ToString(CultureInfo.InvariantCulture)
+                + "." + (char)('a' + random.Next(26))
+                + random.Next(1000).ToString(CultureInfo.InvariantCulture);
+
+            yield return local + "@" + domains[random.Next(domains.Length)];
         }
     }
 

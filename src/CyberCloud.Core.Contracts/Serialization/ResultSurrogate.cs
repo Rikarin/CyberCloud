@@ -69,7 +69,7 @@ public sealed class ResultSurrogateConverter : IConverter<Result, ResultSurrogat
 ///         ⚠ <b><see cref="Value" /> is written even for a failure</b>, because a failed
 ///         <c>Result&lt;T&gt;</c> holds <c>default(T)</c> and Orleans serialises the field either
 ///         way. For a <c>T</c> that is itself a validating value type — <c>ResourceId</c>,
-///         <c>ResourceKey</c>, <c>ResourceTypeName</c> — that means <b>their</b> surrogates have to
+///         <c>ResourceTypeName</c> — that means <b>their</b> surrogates have to
 ///         round-trip <c>default(T)</c> without throwing, which is why each of them special-cases
 ///         it. A <c>Result&lt;ResourceId&gt;</c> failure is the exact payload that finds this, and
 ///         it is one of the round-trip tests.

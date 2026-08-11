@@ -124,8 +124,8 @@ public readonly record struct ResourceId(
     ///         <c>resourceGroups</c>, <c>providers</c> — are matched case-insensitively, because a
     ///         support engineer pasting <c>/ResourceGroups/</c> out of a document should not get a
     ///         parse error. The <i>values</i> are not folded: <c>/resourceGroups/PROD</c> fails,
-    ///         because <c>PROD</c> is not a legal name (docs/plan/06:59) and folding it to
-    ///         <c>prod</c> would be exactly the mangling docs/plan/06:63-65 forbids. Use
+    ///         because <c>PROD</c> is not a legal name (docs/plan/06:88) and folding it to
+    ///         <c>prod</c> would be exactly the mangling docs/plan/06:92-94 forbids. Use
     ///         <see cref="ParsePath" /> to get a message that says so. Round-tripping is unaffected:
     ///         <see cref="Path" /> always emits the canonical literals and the values are already
     ///         lower-case.

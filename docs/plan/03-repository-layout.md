@@ -66,7 +66,7 @@ are siblings (ADR-018) and are omitted below for readability — assume `X.Tests
 
 ```
 src/
-├── CyberCloud.Core/                     # ids, Result<T>, error codes, clock, ResourceKey, ResourceId
+├── CyberCloud.Core/                     # ids, Result<T>, error codes, clock, GrainKeys, ResourceId
 ├── CyberCloud.Core.Contracts/           # wire types shared by grains, gateway, SDK — [GenerateSerializer]
 ├── CyberCloud.Tenancy/                  # tenant/subscription/resource-group grains, the tenant directory
 ├── CyberCloud.Tenancy.Contracts/

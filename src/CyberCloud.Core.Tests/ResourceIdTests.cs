@@ -129,7 +129,7 @@ public class ResourceIdTests
     //     matched CASE-INSENSITIVELY — a support engineer pasting /ResourceGroups/ gets a parse,
     //     not an error;
     //   * the VALUES are not folded. /resourceGroups/PROD FAILS, because PROD is not a legal name
-    //     (docs/plan/06:59) and lower-casing it would be exactly the mangling docs/plan/06:63-65
+    //     (docs/plan/06:88) and lower-casing it would be exactly the mangling docs/plan/06:92-94
     //     forbids;
     //   * provider namespaces and type names ARE compared case-insensitively, because they are
     //     mixed-case by design (CyberCloud.DBforPostgreSQL) and Azure treats them that way.
@@ -273,10 +273,8 @@ public class ResourceIdTests
 
         ResourceId.TryParsePath(padded, out _).ShouldBeFalse();
 
-        ResourceKey.TryParse(
-            " 7f2d4e881a3b4c5d8e9f0a1b2c3d4e5f"
-            + "/prod/CyberCloud.DBforPostgreSQL/servers/0a1b2c3d4e5f40718293a4b5c6d7e8f9",
-            out _).ShouldBeFalse();
+        GrainKeys.TryParse(" res/0a1b2c3d4e5f40718293a4b5c6d7e8f9", out _).ShouldBeFalse();
+        GrainKeys.TryParse("res/ 0a1b2c3d4e5f40718293a4b5c6d7e8f9", out _).ShouldBeFalse();
     }
 
     [Fact]
@@ -291,18 +289,17 @@ public class ResourceIdTests
     [Fact]
     public void TheKeyUsesNAndThePathUsesDAndBothParse()
     {
-        // docs/plan/06:52 spells GUIDs `D` in a path; docs/plan/02:138 spells them `N` in a key.
-        var key = ResourceKey.From(Sample);
+        // docs/plan/06:52 spells GUIDs `D` in a path; docs/plan/06:101-110 spells them `N` in a key.
+        var key = GrainKeys.Resource(Sample.Id);
 
         Sample.Path.ShouldContain(Sample.TenantId.ToString("D", CultureInfo.InvariantCulture));
-        key.ToKeyWithinTenant()
-            .ShouldStartWith(Sample.SubscriptionId.ToString("N", CultureInfo.InvariantCulture));
+        key.ShouldEndWith(Sample.Id.ToString("N", CultureInfo.InvariantCulture));
 
         ResourceId.TryParsePath(Sample.Path, out var backFromPath).ShouldBeTrue();
-        ResourceKey.TryParse(key.ToKeyWithinTenant(), out var backFromKey).ShouldBeTrue();
+        GrainKeys.TryParse(key, out var backFromKey).ShouldBeTrue();
 
         backFromPath.SubscriptionId.ShouldBe(Sample.SubscriptionId);
-        backFromKey.SubscriptionId.ShouldBe(Sample.SubscriptionId);
+        backFromKey.Id.ShouldBe(Sample.Id);
     }
 
     // ── Empty and malformed input — none of these may throw ────────────────────────────────────
