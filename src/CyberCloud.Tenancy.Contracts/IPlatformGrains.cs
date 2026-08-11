@@ -44,16 +44,21 @@ public interface ITenantDirectoryGrain : IGrainWithStringKey {
     Task<Result<TenantDirectoryEntry>> RegisterAsync(TenantDirectoryEntry entry);
 
     /// <summary>Looks a tenant up by id, or <c>TenantNotFound</c>.</summary>
-    /// <param name="tenantId">The tenant.</param>
+    /// <param name="tenantId">The tenant's GUID, which never changes — unlike its slug.</param>
     Task<Result<TenantDirectoryEntry>> LookupAsync(Guid tenantId);
 
     /// <summary>Looks a tenant up by its globally unique slug, or <c>TenantNotFound</c>.</summary>
-    /// <param name="slug">The slug.</param>
+    /// <param name="slug">
+    ///     The slug as registered. Unique platform-wide, which is why this lookup lives on the one
+    ///     global grain rather than in a region.
+    /// </param>
     Task<Result<TenantDirectoryEntry>> LookupBySlugAsync(string slug);
 
     /// <summary>Changes a tenant's status. Purged is terminal.</summary>
-    /// <param name="tenantId">The tenant.</param>
-    /// <param name="status">The new status.</param>
+    /// <param name="tenantId">The tenant whose entry moves.</param>
+    /// <param name="status">
+    ///     The status to move to. <see cref="TenantStatus.Purged" /> cannot be moved away from.
+    /// </param>
     Task<Result<TenantDirectoryEntry>> SetStatusAsync(Guid tenantId, TenantStatus status);
 
     /// <summary>
@@ -117,7 +122,10 @@ public interface IShardMapGrain : IGrainWithStringKey {
     /// <summary>
     ///     Assigns a tenant to a shard, permanently — docs/plan/05 § The shard map.
     /// </summary>
-    /// <param name="tenantId">The tenant.</param>
+    /// <param name="tenantId">
+    ///     The tenant to place. Also the tie-breaker in the weighted pick, so the same tenant lands
+    ///     on the same shard given the same shard list.
+    /// </param>
     /// <param name="region">The region the tenant is homed to.</param>
     /// <returns>
     ///     The tenant's assignment. <b>The original one</b> if it already has one, regardless of what
@@ -126,7 +134,7 @@ public interface IShardMapGrain : IGrainWithStringKey {
     Task<Result<ShardAssignment>> AssignAsync(Guid tenantId, string region);
 
     /// <summary>The tenant's assignment, or <c>TenantNotFound</c> if it has never been assigned.</summary>
-    /// <param name="tenantId">The tenant.</param>
+    /// <param name="tenantId">The tenant to look up. Read-only — this never assigns.</param>
     Task<Result<ShardAssignment>> GetAssignmentAsync(Guid tenantId);
 
     /// <summary>
@@ -139,7 +147,10 @@ public interface IShardMapGrain : IGrainWithStringKey {
     /// <summary>
     ///     Takes a shard in or out of the placement rotation. Existing tenants are unaffected.
     /// </summary>
-    /// <param name="shard">The shard id.</param>
+    /// <param name="shard">
+    ///     A shard id from <see cref="ConfigureShardsAsync" />. One that is not in the map is a
+    ///     failure, not a silent no-op.
+    /// </param>
     /// <param name="accepting">Whether new tenants may be placed on it.</param>
     Task<Result<ShardMapSnapshot>> SetAcceptingNewTenantsAsync(string shard, bool accepting);
 

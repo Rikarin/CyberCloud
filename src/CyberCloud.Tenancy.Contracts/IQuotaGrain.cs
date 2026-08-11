@@ -44,9 +44,15 @@ public interface IQuotaGrain : IGrainWithStringKey {
     ///     Reserves quota under a lease — docs/plan/06 § Quota's signature, and its
     ///     "<b>Reservation, not a counter increment</b>".
     /// </summary>
-    /// <param name="meter">The meter family.</param>
+    /// <param name="meter">
+    ///     Which limit to draw against. <see cref="QuotaMeter.Unknown" /> is not a meter and is
+    ///     rejected — it is the zero value a default-constructed wire type carries.
+    /// </param>
     /// <param name="amount">How much. Must be positive.</param>
-    /// <param name="operationId">The operation that owns the lease.</param>
+    /// <param name="operationId">
+    ///     The operation whose lifetime bounds the lease. When that operation grain dies without
+    ///     committing, the lease expires and the quota comes back on its own.
+    /// </param>
     /// <returns>The lease, or <c>QuotaExceeded</c>.</returns>
     /// <remarks>
     ///     The lease expires on its own if it is neither committed nor released — which is what
@@ -58,28 +64,43 @@ public interface IQuotaGrain : IGrainWithStringKey {
     /// <summary>
     ///     Turns a lease into committed usage. The resource now exists.
     /// </summary>
-    /// <param name="leaseId">The lease.</param>
+    /// <param name="leaseId">
+    ///     <see cref="QuotaLease.LeaseId" /> from the <see cref="TryReserveAsync" /> that took it. A
+    ///     lease that has already expired fails rather than committing silently.
+    /// </param>
     Task<Result<QuotaUsage>> CommitAsync(Guid leaseId);
 
     /// <summary>
     ///     Releases a lease without committing — <b>the operation failed</b>. The quota is available
     ///     again immediately.
     /// </summary>
-    /// <param name="leaseId">The lease.</param>
+    /// <param name="leaseId">
+    ///     <see cref="QuotaLease.LeaseId" /> from the <see cref="TryReserveAsync" /> that took it.
+    ///     Releasing a lease that has already gone succeeds rather than failing, so a failure path
+    ///     re-driven from a reminder is safe to run twice. In that case there is no meter left to
+    ///     report on and the usage comes back naming <see cref="QuotaMeter.Unknown" /> — ask
+    ///     <see cref="GetUsageAsync" /> if you need figures.
+    /// </param>
     Task<Result<QuotaUsage>> ReleaseAsync(Guid leaseId);
 
     /// <summary>Gives committed quota back, when a resource is deleted.</summary>
-    /// <param name="meter">The meter.</param>
-    /// <param name="amount">How much to return.</param>
+    /// <param name="meter">
+    ///     Which limit to credit. Distinct from <see cref="ReleaseAsync" /> in audit meaning: this
+    ///     one unwinds usage that was committed, not a reservation that never landed.
+    /// </param>
+    /// <param name="amount">How much to return. Must be positive.</param>
     Task<Result<QuotaUsage>> ReturnAsync(QuotaMeter meter, decimal amount);
 
     /// <summary>Sets a meter's limit — the per-tenant override of docs/plan/06 § Quota.</summary>
-    /// <param name="meter">The meter.</param>
-    /// <param name="limit">The new ceiling. Must not be negative.</param>
+    /// <param name="meter">Which limit to move. The default ceilings are per meter, not global.</param>
+    /// <param name="limit">
+    ///     The new ceiling. Must not be negative, and may be set below what is already committed —
+    ///     that stops new reservations without unwinding resources that exist.
+    /// </param>
     Task<Result<QuotaUsage>> SetLimitAsync(QuotaMeter meter, decimal limit);
 
     /// <summary>One meter's figures, with expired leases already discounted.</summary>
-    /// <param name="meter">The meter.</param>
+    /// <param name="meter">Which limit to report. One meter per call — there is no "all" value.</param>
     Task<Result<QuotaUsage>> GetUsageAsync(QuotaMeter meter);
 
     /// <summary>Every lease that is currently live.</summary>
