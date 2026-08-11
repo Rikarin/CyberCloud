@@ -1,0 +1,47 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      ADR-012's generation step, driven through its own entry point.
+
+      ⚠ WHAT THIS PROJECT IS FOR, AND WHAT IT DELIBERATELY DOES NOT REPEAT. Every decision about what
+      a generated surface *contains* is CyberCloud.ResourceManager.Contracts/Generation's, and
+      CyberCloud.ResourceManager.Contracts.Tests/Generation already drives those emitters directly.
+      What has never had a test is the layer between them and the build: argument parsing, the
+      Assembly.LoadFrom that turns a provider-assembly path into a registry, the exit code, and the JSON
+      report that build/Build.Generate.cs § Parse reads key by key. Those four are the only things
+      that can make a run generate nothing, write into the wrong directory, or hand the build a
+      report it silently misreads — and all four sit outside the emitters' reach.
+
+      ⚠ NO Testcontainers AND NO NETWORK. Generation is a pure function of the provider registry
+      (docs/plan/08 § The provider registry: Describe consults no clock, config or database), so a
+      suite that needed either would be describing a different program.
+
+      ⚠ IT REFERENCES CyberCloud.Providers.Sample, and only for its built .dll on disk. The point of
+      the discovery tests is that a REAL provider assembly, loaded the way the build loads one,
+      reaches the emitted document with its name intact — which a hand-built registry cannot show.
+      That reference is invisible to docs/plan/03 § Assembly graph rules: build/Build.Architecture.cs
+      builds its assembly set from projects where SuiteOwning(project) is null, so no *.Tests project
+      is a candidate for any of the six rules.
+
+      ⚠ IT NEVER WRITES TO openapi/ OR generated/. Every run in this suite is handed a fresh
+      temporary directory — see TemporaryTree. A suite that regenerated the checked-in surfaces would
+      be a suite that makes the Generated surfaces gate pass by rewriting its own evidence.
+    -->
+
+    <ItemGroup>
+        <PackageReference Include="xunit.v3"/>
+        <PackageReference Include="Shouldly"/>
+    </ItemGroup>
+
+    <ItemGroup Label="Global usings">
+        <Using Include="Xunit"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <!-- The program under test. InternalsVisibleTo on that project is what makes Main reachable. -->
+        <ProjectReference Include="../CyberCloud.ResourceManager.Generator/CyberCloud.ResourceManager.Generator.csproj"/>
+        <!-- A real provider assembly to hand to the provider-assembly flag, not a stand-in for one. -->
+        <ProjectReference Include="../Providers/CyberCloud.Providers.Sample/CyberCloud.Providers.Sample/CyberCloud.Providers.Sample.csproj"/>
+    </ItemGroup>
+
+</Project>

@@ -40,6 +40,18 @@
         <ProjectReference Include="../CyberCloud.ResourceManager/CyberCloud.ResourceManager.csproj"/>
     </ItemGroup>
 
+    <ItemGroup>
+        <!--
+          ⚠ The suite calls Program.Main IN-PROCESS rather than starting this executable, and the
+          reason is the coverage floor rather than convenience. docs/plan/23 § Test layers puts a
+          ≥ 70 % floor on every shipping project; `dotnet-coverage` instruments the test host, and a
+          generator driven as a child process is a process the instrumenter never sees — the floor
+          would then report 0 % over a suite that exercises every line of it. Main is `internal` for
+          the same reason and for no other; the entry point does not have to be public.
+        -->
+        <InternalsVisibleTo Include="CyberCloud.ResourceManager.Generator.Tests"/>
+    </ItemGroup>
+
     <ItemGroup Label="CyberCloud.Analyzers — see CyberCloud.Core.csproj for why this is not a reference">
         <ProjectReference Include="../CyberCloud.Analyzers/CyberCloud.Analyzers.csproj"
                           OutputItemType="Analyzer"

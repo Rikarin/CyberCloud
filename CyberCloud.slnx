@@ -91,6 +91,14 @@
           Nuke build rather than code inside it.
         -->
         <Project Path="src/CyberCloud.ResourceManager.Generator/CyberCloud.ResourceManager.Generator.csproj"/>
+        <!--
+          ⚠ The generator's suite drives Program.Main IN-PROCESS. docs/plan/23 § Test layers puts the
+          ≥ 70 % coverage floor on every shipping project, and dotnet-coverage instruments the test
+          host only — a generator started as a child process is one the instrumenter never sees, so a
+          suite that exercised every line of it would still report 0 %. That is why the generator has
+          an InternalsVisibleTo and an `internal` Main.
+        -->
+        <Project Path="src/CyberCloud.ResourceManager.Generator.Tests/CyberCloud.ResourceManager.Generator.Tests.csproj"/>
 
         <!-- docs/plan/11. The hosts live under /src/Hosts/ — cookies there, bearer at the gateway. -->
         <Project Path="src/CyberCloud.Identity.Contracts/CyberCloud.Identity.Contracts.csproj"/>
@@ -125,6 +133,14 @@
         <Project Path="src/Providers/CyberCloud.Providers.Sample/CyberCloud.Providers.Sample.Contracts/CyberCloud.Providers.Sample.Contracts.csproj"/>
         <Project Path="src/Providers/CyberCloud.Providers.Sample/CyberCloud.Providers.Sample/CyberCloud.Providers.Sample.csproj"/>
         <Project Path="src/Providers/CyberCloud.Providers.Sample/CyberCloud.Providers.Sample.Application/CyberCloud.Providers.Sample.Application.csproj"/>
+        <!--
+          ⚠ A sixth project in a folder docs/plan/03 § Providers describes with five, and it is a
+          suite rather than a provider part. Rule 4 ("nothing references a *.Application assembly
+          except its own host") is not violated by it and does not need an exemption: rule 4 runs over
+          Build.Architecture.cs § ShippingAssemblies, which is every project where SuiteOwning is
+          null, and a *.Tests project is claimed by the per-PR suite.
+        -->
+        <Project Path="src/Providers/CyberCloud.Providers.Sample/CyberCloud.Providers.Sample.Application.Tests/CyberCloud.Providers.Sample.Application.Tests.csproj"/>
         <Project Path="src/Providers/CyberCloud.Providers.Sample/CyberCloud.Providers.Sample.Tests/CyberCloud.Providers.Sample.Tests.csproj"/>
         <Project Path="src/Providers/CyberCloud.Providers.Sample/CyberCloud.Providers.Sample.Conformance/CyberCloud.Providers.Sample.Conformance.csproj"/>
     </Folder>
