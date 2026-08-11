@@ -61,8 +61,10 @@ public sealed class MessageGrain(
                     ErrorCode.Conflict,
                     $"Idempotency key '{request.IdempotencyKey}' already named a {recorded.Channel} "
                     + $"message to {recorded.Destination}, and this send differs from it. One key "
-                    + "means one message — derive the key from the thing being notified about (the "
-                    + "user and the purpose and the window), never from the attempt."
+                    + "means one message — derive the key from the thing being notified about, "
+                    + "never from the attempt and never from a clock. ⚠ THIS FAILURE IS WHAT A "
+                    + "TIME-WINDOW KEY LOOKS LIKE: two genuinely different notifications inside one "
+                    + "window compute one key, and the second arrives here rather than being sent."
                 );
             }
 

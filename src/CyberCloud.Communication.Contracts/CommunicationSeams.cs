@@ -31,8 +31,22 @@ public interface IMessageSender {
     /// <param name="request">
     ///     What to send. ⚠ <see cref="SendRequest.IdempotencyKey" /> is required and is the caller's
     ///     to choose well: it must be a function of the thing being notified about, not of the
-    ///     attempt. <c>$"otp-{userId:N}-{purpose}-{window:O}"</c> collapses a retry;
-    ///     <c>Guid.NewGuid()</c> sends twice and is the mistake this parameter exists to prevent.
+    ///     attempt. <c>Guid.NewGuid()</c> sends twice and is the mistake this parameter exists to
+    ///     prevent.
+    ///     <para>
+    ///         ⚠ <b>A clock reading is not the answer either, and this parameter used to recommend
+    ///         one.</b> The suggestion here was <c>$"otp-{userId:N}-{purpose}-{window:O}"</c>, and it
+    ///         is wrong in both directions — <c>CyberCloud.Identity.Tests.OtpDeliveryTests</c> has
+    ///         the evidence. Too coarse a window and two genuinely distinct codes compute one key, so
+    ///         the second differs in content and comes back <see cref="ErrorCode.Conflict" />: not a
+    ///         silent duplicate, a broken "resend". Too fine — or unrounded, which the <c>O</c>
+    ///         round-trip format is, since it prints sub-second precision — and a retry landing on
+    ///         the far side of a boundary computes a new key and sends twice, which is
+    ///         <c>Guid.NewGuid()</c> by another route. Derive it from something that changes when,
+    ///         and only when, the notification is genuinely a different one:
+    ///         <c>CyberCloud.Identity.Seams.CommunicationOtpDelivery</c> uses a digest over the code
+    ///         itself, and its remarks say what that costs.
+    ///     </para>
     /// </param>
     /// <param name="cancellationToken">Cancels the call.</param>
     Task<Result<MessageSnapshot>> SendAsync(
