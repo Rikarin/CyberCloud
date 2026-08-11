@@ -1,3 +1,4 @@
+using CyberCloud.ServiceDefaults.Storage;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -91,35 +92,40 @@ public static class OrleansApplication
             // "Microsoft.Orleans.Application" is the other half and is useless without this one.
             silo.AddActivityPropagation();
 
-            // ── SEAM: docs/plan/04:50-56. Owned by the storage/sharding task. ──────────────────
+            // ── The two grain-storage tiers ── docs/plan/04 § Silo composition, docs/plan/05.
             //
-            // The document's block continues here with:
+            // Wired only when CyberCloud:Storage is configured, and that condition is the design
+            // rather than a convenience:
             //
-            //   .AddMultitenantGrainStorageAsDefault<RedisGrainStorage, RedisStorageOptions>(
-            //        StorageTiers.Hot,     (sp, o, tenantId) => o.ConfigureForTenant(sp, tenantId))
-            //   .AddMultitenantGrainStorage<AdoNetGrainStorage, AdoNetGrainStorageOptions>(
-            //        StorageTiers.Durable, (sp, o, tenantId) => o.ConfigureForTenant(sp, tenantId))
+            //  * calling it unconditionally would make a configured Redis and a configured Postgres
+            //    a precondition of `CreateSilo` returning a usable host, so every host test in this
+            //    repository would need two containers to assert anything about health checks;
+            //  * a silo with no configured storage is a silo that CANNOT PERSIST A GRAIN, and that
+            //    has to stay visible rather than degrade into an in-memory provider nobody chose.
+            //    `SiloHostTests.TheSiloHasNoGrainStorageUnlessTheStorageSectionIsConfigured` is the
+            //    assertion.
+            //
+            // What is STILL a seam here, and why:
+            //
             //   .AddMultitenantStreams(StreamProviders.Events, NatsStreamProvider.Configure)
             //   .AddMultitenantCommunicationSeparation(_ => new PlatformCrossTenantAuthorizer())
             //   .UseRedisReminderService(o => o.ConfigureSharded())
             //
-            // None of it is called from here, and the omission is deliberate rather than pending:
-            //
-            //  * every one of those lines needs a reachable Redis, Postgres or NATS at silo START,
-            //    so calling them here would make `CreateSilo` untestable and would make a
-            //    misconfigured connection string a crash loop instead of a failed grain call;
-            //  * ConfigureForTenant needs IShardMapCache and IShardConnections (docs/plan/05:147),
-            //    which do not exist yet — the signature they plug into is
-            //    Storage/TenantOptionsConfigurator.cs;
-            //  * PlatformCrossTenantAuthorizer is an ICrossTenantAuthorizer, and authorization is
-            //    CyberCloud.Authorization's (ADR-007). ServiceDefaults referencing it would invert
-            //    the assembly graph.
-            //
-            // ⚠ The consequence, stated plainly so nobody discovers it in staging: a silo built by
-            // this method and given no `configureCluster` HAS NO GRAIN STORAGE AND NO TENANT
-            // SEPARATION. docs/plan/04:73 calls AddMultitenantCommunicationSeparation "not
-            // optional" — without it a bug in one provider can read another tenant's grain and
-            // nothing complains. Wiring it is a condition of shipping, not of compiling.
+            // ⚠ AddMultitenantCommunicationSeparation is the one that matters and it is NOT here.
+            // docs/plan/04 § Silo composition calls it "not optional"; its argument is an
+            // ICrossTenantAuthorizer and authorization is CyberCloud.Authorization's (ADR-007), so
+            // referencing it from ServiceDefaults would invert the assembly graph. It plugs in
+            // through `configureCluster`, immediately after this call. Until it is wired, a grain
+            // still cannot be *stored* in the wrong tenant's shard — the key selects the store —
+            // but one grain can still *call* another tenant's grain.
+            var storage = builder.Configuration.GetSection(CyberCloudStorageOptions.SectionName);
+            if (storage.Exists())
+            {
+                var storageOptions = new CyberCloudStorageOptions();
+                storage.Bind(storageOptions);
+                silo.AddCyberCloudGrainStorage(storageOptions);
+            }
+
             configureCluster?.Invoke(silo);
 
             if (builder.Environment.IsDevelopment())

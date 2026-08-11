@@ -26,6 +26,36 @@
     <PackageReference Include="Volo.Abp.Autofac" />
   </ItemGroup>
 
+  <ItemGroup Label="Storage integration — ADR-018, docs/plan/23 § Test layers (the Grain row)">
+    <!--
+      ADR-018: "Grain behaviour is tested against a real in-process TestCluster
+      (Microsoft.Orleans.TestingHost) with real storage providers backed by Testcontainers, not
+      against mocked IGrainFactory." Every test under Storage/ is that sentence, with one
+      substitution: the silo is a real WebApplication host rather than a TestCluster, for the same
+      reason SiloHostTests uses one — these tests assert on the SILO's service provider (the tenant
+      storage providers, the configurator invocation counts, the keyed IGrainStorage registrations),
+      and TestCluster's public surface hands out the client's container, not the silo's. Nothing is
+      mocked either way, which is what ADR-018 is actually about.
+    -->
+    <PackageReference Include="Testcontainers.Redis" />
+    <PackageReference Include="Testcontainers.PostgreSql" />
+    <!-- Reading the row back out with plain SQL, and computing slots against a real cluster. -->
+    <PackageReference Include="Npgsql" />
+    <PackageReference Include="StackExchange.Redis" />
+  </ItemGroup>
+
+  <ItemGroup Label="Orleans' own PostgreSQL DDL">
+    <!--
+      ⚠ These two files are COPIES of dotnet/orleans at tag v10.2.2:
+          src/AdoNet/Shared/PostgreSQL-Main.sql
+          src/AdoNet/Orleans.Persistence.AdoNet/PostgreSQL-Persistence.sql
+      Microsoft.Orleans.Persistence.AdoNet ships no SQL and no embedded resources, and nothing in
+      this repository creates the schema on a real shard — see OrleansAdoNetSchema.cs.
+    -->
+    <EmbeddedResource Include="Storage/PostgreSQL-Main.sql" />
+    <EmbeddedResource Include="Storage/PostgreSQL-Persistence.sql" />
+  </ItemGroup>
+
   <ItemGroup Label="Global usings">
     <Using Include="Xunit" />
   </ItemGroup>
