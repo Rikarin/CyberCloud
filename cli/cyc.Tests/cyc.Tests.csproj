@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      docs/plan/02 ADR-018: tests are siblings. OutputType=Exe, the Microsoft.Testing.Platform
+      switches and the NoWarn set come from the repository-root Directory.Build.props /
+      Directory.Build.targets § Test project conventions.
+
+      ⚠ NOTHING HERE OPENS A SOCKET, READS A KEYCHAIN, WRITES TO ~/.cyc OR LAUNCHES A BROWSER. Every
+      test drives CycApplication through a CycHost whose console is two StringWriters, whose client
+      is built over CyberCloudClientOptions.Transport — the same HttpMessageHandler seam
+      CyberCloud.Sdk.Tests uses — and whose state directory is a temporary folder. That is the same
+      configuration a private deployment uses, so the tests exercise a supported path rather than a
+      back door.
+
+      ⚠ The project name matches cli/cyc/cyc.csproj + ".Tests", which is what
+      Directory.Build.targets § InternalsVisibleTo generates. The CLI's types are internal — an
+      executable has no callers — so without that the suite would see nothing.
+    -->
+
+    <ItemGroup>
+        <PackageReference Include="xunit.v3"/>
+        <PackageReference Include="Shouldly"/>
+    </ItemGroup>
+
+    <ItemGroup Label="Global usings">
+        <Using Include="Xunit"/>
+        <Using Include="Shouldly"/>
+        <Using Include="CyberCloud.Cli"/>
+        <Using Include="System.Net"/>
+        <Using Include="System.Net.Http"/>
+        <Using Include="System.Text"/>
+        <Using Include="System.Text.Json"/>
+        <Using Include="System.Globalization"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../cyc/cyc.csproj"/>
+    </ItemGroup>
+
+</Project>
