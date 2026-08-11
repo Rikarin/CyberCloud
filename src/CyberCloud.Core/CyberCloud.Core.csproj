@@ -1,0 +1,46 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    docs/plan/03 § Assembly graph rules, rule 1:
+
+        "CyberCloud.Core references no Orleans hosting, no KubernetesClient, no ABP application
+         layer. It is contracts, identifiers, error codes and pure functions."
+
+    ⚠ THIS PROJECT HAS NO <PackageReference>, AND THAT IS THE POINT. Everything it needs is in the
+    net10.0 shared framework: System.Collections.Immutable and System.Collections.Frozen ship in
+    Microsoft.NETCore.App, so the frozen error-code registry costs no dependency.
+
+    Rule 3 ("no assembly above CyberCloud.Kubernetes references k8s.Models") is satisfied for free
+    by the same emptiness. Before adding a package here, read docs/plan/03:222-232 — an addition
+    that pulls in Orleans, KubernetesClient or Volo.Abp.* is a build-gate failure by design, not an
+    inconvenience.
+
+    Everything else — TargetFramework, nullable, analyzers, TreatWarningsAsErrors, doc XML,
+    InternalsVisibleTo for the sibling .Tests project — comes from the repository-root
+    Directory.Build.props / Directory.Build.targets.
+  -->
+
+  <PropertyGroup Label="Analyzer suppressions — two, both argued">
+    <!--
+      CA1716 "Rename type Error so that it no longer conflicts with the reserved language keyword
+      'Error'". The keyword is Visual Basic's `Error` statement. `Error` is the name docs/plan/08
+      § Errors gives this shape ("error": { "code", "message", "target", "details" }), it is the
+      name in the JSON on the wire, in the OpenAPI document and in the generated SDK, and renaming
+      the C# type to ErrorInfo/ProblemDetail would make the type and its own serialised form
+      disagree for the benefit of a language nothing in this repository is written in.
+
+      CA1000 "Do not declare static members on generic types" — Result<T>.Success / .Failure /
+      .FromValue / .FromError. The rule exists because `Foo<T>.Bar()` forces a caller to name T;
+      for a result factory that is exactly what the caller wants, and every alternative is worse:
+      non-generic Result.Success<T>(v) collides with the Result.Success property, and dropping the
+      factories in favour of the implicit conversions alone removes the only spelling that works
+      when T is itself generic. The BCL takes the same exception (ImmutableArray<T>.Empty,
+      Task<T>.FromResult, Nullable<T> helpers).
+
+      ⚠ These are the ONLY two suppressions in this assembly and neither is a #pragma
+      (docs/plan/00:121). Adding a third needs the same standard of argument.
+    -->
+    <NoWarn>$(NoWarn);CA1716;CA1000</NoWarn>
+  </PropertyGroup>
+
+</Project>
