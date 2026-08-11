@@ -10,7 +10,7 @@
 | Solution | `CyberCloud.slnx` | Plus `.slnf` filters per area for fast IDE loads |
 | Packages | Central Package Management | `Directory.Packages.props`, no floating versions |
 | Frontend | Angular 22, Tailwind 4, zoneless, SSR | The library dictates the version, not the other way round — but ⚠ read it from **npm**, not from `~/Projects/Rikarin/xui`. xUI's CI bumps the published version without reflecting it back into the checkout. `@xui/* ^2.2.0`, peering `@angular/*: 22`. See ADR-017 |
-| Node | ⚠ **unresolved** — plan says 22 LTS; the dev host runs 26.5.0 | xUI is a pnpm workspace and the portal joins that convention (pnpm 11.18 present). The Node major is *not* pinned by any `@xui` peer range, so this is our choice, not xUI's — it needs a `.nvmrc`/`engines` decision and a matching CI image before portal work starts, or local and CI will silently differ |
+| Node | ✅ **24 (Active LTS)** — decided 2026-08-11 | ⚠ Was "22 LTS", which is now **maintenance-only**. Four inputs: Angular 22 permits `^22.22.3 \|\| ^24.15.0 \|\| >=26.0.0`, so it does not decide; Node 22 is Maintenance, 24 is Active LTS, 26 is Current (LTS 2026-10-20); **xUI itself pins `engines.node: 24.x`**, which is the strongest signal and makes this less open than it looked; the dev host runs 26.5.0 and must keep working. 26 was rejected — a platform's portal should not build on a non-LTS release. Pinned in `portal/.nvmrc`, `.node-version` and `engines`; the check **warns locally, fails in CI** (`pnpm node:gate --strict`), because a blocked local install stops work over a version that builds fine while a drifted CI image silently produces unreproducible artifacts. ⚠ The CI image must be Node 24 — that half lives outside this repo |
 
 ## Dependency register
 
@@ -554,11 +554,29 @@ the working tree is behind what consumers actually resolve. Read the registry, n
 | | Local checkout | Published on npm (2026-08-11) |
 |---|---|---|
 | Version | — (workspace) | `@xui/* ` **2.2.0** (`next`: 2.2.0-alpha.0) |
-| Angular | pinned `22.0.8` exactly | peer `@angular/*: 22` — a **major range** |
 | Tailwind | `^4.3.3` in devDependencies | **not a peer dependency at all** |
-| Other peers | — | `clsx >=2`, `luxon >=3`, `rxjs >=7`, `tailwind-merge >=3` |
+| Other peers | — | `clsx >=2`, `luxon >=3`, `rxjs >=7`, `tailwind-merge >=3`, ⚠ `@ng-icons/*: 34` |
 
-So the portal depends on `@xui/* ^2.2.0` from the registry and is free within Angular 22.x. The
+⚠ **CORRECTED AGAIN, 2026-08-11: the portal is NOT free within Angular 22.x.** An earlier version of
+this note read `@xui/core`'s peers, saw `@angular/*: 22`, and generalised. **The peer ranges are not
+uniform across the packages**, and the exceptions are in the M1 shell:
+
+| Package | Peer | |
+|---|---|---|
+| `@xui/panel-stack`, `popover`, `tooltip`, `breadcrumb` | `@angular/common: 22.0.8` | **exact** |
+| `@xui/echarts` | `@angular/cdk: 22.0.6` | **exact, and a different version** |
+| `@xui/core` and the rest | `@angular/*: 22` | the major range this note used to claim for all of them |
+
+`@angular/common@22.0.8` peers `@angular/core@22.0.8` exactly, so **one exact peer drags the whole
+framework to a point release**. With `@angular/*` at the 22.1.1 head and `strict-peer-dependencies`,
+`pnpm install` **fails**. The portal therefore pins `@angular/* = 22.0.8`, `@angular/cdk = 22.0.6`
+and `@ng-icons/* = 34.0.0` (the registry head is 35.0.1, and `@xui/*` peers `34`).
+
+The lesson generalises past this row: **reading one package's manifest is not reading the library's
+contract.** `@xui/*` is ~92 independently-published packages, and a claim about "the peers" has to be
+checked across the set the portal actually imports.
+
+So the portal depends on `@xui/* ^2.2.0` from the registry at a **pinned** Angular point release. The
 "90 components, one npm package each" claim is confirmed — the checkout carries 92 libraries under
 `libs/ui`, and every component this plan names by hand (`data-table`, `dock-manager`, `omnibar`,
 `node-graph`, `splitter`, `code-block`, `rich-text-editor`, `date-range-picker`, `echarts`,
