@@ -1,0 +1,56 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      docs/plan/03 § src — the metering domain: the per-subscription sampler, the rollup worker, the
+      append-only usage ledger, the emission seam's default implementation and the sink defaults.
+
+      docs/plan/22 § Effort, M1: "Usage events, samplers, dedup, ClickHouse rollups". Rating, price
+      lists, invoices, PSP integration, tax, budgets, forecasts and cost views are M2 and nothing
+      here reaches towards them — M1 ships meters that are correct from the first resource, because
+      usage that was never recorded cannot be recovered.
+
+      ⚠ NO ClickHouse CLIENT, DELIBERATELY. IUsageSink is the seam; this assembly ships an in-memory
+      implementation and an honest "there is no sink" default. See IUsageSink for exactly what a
+      real one owes.
+
+      ⚠ WHY THIS DOES NOT REFERENCE CyberCloud.ResourceManager. The sampler needs to know what
+      exists, and the obvious way to get it would be to call the resource manager. It does not:
+      IMeteredResourceSource is the seam, and the intended implementation reads the resource-graph
+      projection (docs/plan/08 § The resource-graph projection) rather than the write path.
+      Metering must not be able to make a create slower or a create able to make metering wrong, and
+      an assembly reference is the shortest path to both.
+    -->
+
+    <ItemGroup>
+        <!-- Grain implementations and [PersistentState]. -->
+        <PackageReference Include="Microsoft.Orleans.Server"/>
+        <!--
+          IRemindable, RegisterOrUpdateReminder, TickStatus. Both the sampler and the rollup are
+          reminder-driven — docs/plan/22 § Two kinds of meter's 5-minute sampler and docs/plan/04
+          § Reminders' fourth use, "Rollups — metering aggregation windows". ⚠ The reminder SERVICE
+          is the host's choice (Redis in production, in-memory in a test) and is not decided here.
+        -->
+        <PackageReference Include="Microsoft.Orleans.Reminders"/>
+        <!-- ForTenant, GetKeyWithinTenant, GetTenantId. -->
+        <PackageReference Include="Orleans.Multitenant"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../CyberCloud.Core/CyberCloud.Core.csproj"/>
+        <ProjectReference Include="../CyberCloud.Core.Contracts/CyberCloud.Core.Contracts.csproj"/>
+        <ProjectReference Include="../CyberCloud.Tenancy.Contracts/CyberCloud.Tenancy.Contracts.csproj"/>
+        <ProjectReference Include="../CyberCloud.Metering.Contracts/CyberCloud.Metering.Contracts.csproj"/>
+    </ItemGroup>
+
+    <ItemGroup Label="CyberCloud.Analyzers — see CyberCloud.Core.csproj for why this is not a reference">
+        <!--
+          CC1003 ([Alias] on grain state), CC1005 (the IdempotencyKey suppressions, each carrying its
+          argument) and CC1006 (GrainUsageEmitter holds an IGrainFactory outside a grain and must
+          qualify with ForTenant) are all live here.
+        -->
+        <ProjectReference Include="../CyberCloud.Analyzers/CyberCloud.Analyzers.csproj"
+                          OutputItemType="Analyzer"
+                          ReferenceOutputAssembly="false"/>
+    </ItemGroup>
+
+</Project>

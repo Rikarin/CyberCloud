@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      The pure half of metering's tests: the idempotency key's determinism and its sensitivity, the
+      window snap, the meter catalogue's totality over QuotaMeter, the state-based accrual
+      arithmetic, and the structural immutability of the ledger's interface and wire types.
+
+      ⚠ NO Testcontainers AND NO Aspire.Hosting HERE, AND NONE IS NEEDED. Nothing in this project
+      touches a grain, so ADR-018's "real storage" rule does not reach it — that rule is about grain
+      behaviour, and these are value types and one reflection sweep. The grain-backed half is
+      CyberCloud.Metering.Tests, which does have something to say about it.
+    -->
+
+    <ItemGroup>
+        <PackageReference Include="xunit.v3"/>
+        <PackageReference Include="Shouldly"/>
+    </ItemGroup>
+
+    <ItemGroup Label="Global usings">
+        <Using Include="Xunit"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../CyberCloud.Metering.Contracts/CyberCloud.Metering.Contracts.csproj"/>
+    </ItemGroup>
+
+</Project>

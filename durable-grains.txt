@@ -66,6 +66,42 @@ CyberCloud.ResourceManager.Grains.ResourceGrain
 # the Creating-forever state the chaos suite exists to forbid.
 CyberCloud.ResourceManager.Grains.OperationGrain
 
+# ── Metering — docs/plan/22 ────────────────────────────────────────────────────────────────────
+# The two halves of "a usage record, once emitted, is never lost and never double-counted"
+# (docs/plan/22, opening). Both are on this list because neither is rebuildable, and the reason is
+# the same sentence in docs/plan/22 § Effort that puts metering in M1 and invoicing in M2: "usage
+# that was never recorded cannot be recovered".
+#
+# UsageRollupGrain holds two things. The first is raw usage for hours that have not closed — the
+# sample window has passed, the resource may since have been deleted, and there is nowhere to read
+# it from again. The second is the set of idempotency keys already seen, and losing THAT is worse
+# than losing the records: a lost record is a figure that is too low and shows up as a dip in a
+# graph, while a forgotten key turns every redelivery inside the seven-day horizon into a double
+# charge that looks like growth. Delivery is at-least-once (docs/plan/04 § Streams), so redelivery
+# is the expected path after a silo restart and not an edge case.
+CyberCloud.Metering.Grains.UsageRollupGrain
+#
+# UsageLedgerGrain is the append-only record of account — docs/plan/22 § The pipeline: "The ledger
+# is durable-tier and append-only. Corrections are new entries with a reason and a link to the
+# original, never edits. An adjustable ledger cannot be audited and cannot be defended in a
+# dispute." Durable is the tier that sentence names. ⚠ It is also the one grain here whose loss
+# tolerance is legal rather than operational: this is what an invoice is derived from and what a
+# customer's dispute is argued against, and ADR-003's zero is the only defensible figure.
+#
+# ⚠ Read this entry as the M1 half of docs/plan/22 § Effort's "ledger grain" row, which that table
+# puts in M2. The M2 row is a ledger of CHARGES and needs prices, which M1 does not have. This is
+# the ledger of USAGE — quantities, not money — and it is M1 because the meters must be correct
+# from the first resource. When rating lands, charges are a second ledger derived from this one and
+# this one does not change.
+CyberCloud.Metering.Grains.UsageLedgerGrain
+#
+# ⚠ NOT UsageSamplerGrain, and the absence is reviewed rather than forgotten. Its state is a cursor
+# saying which window it last sampled. Losing it makes the sampler re-sample the current window,
+# which produces records carrying the SAME idempotency keys, which UsageRollupGrain collapses — so
+# the loss costs one redundant pass and nothing else. docs/plan/05 § Choosing a tier's test ("if the
+# honest answer is 'this can be rebuilt', the tier is Hot") answers cleanly, and it answers that way
+# only because the dedup above is durable.
+
 # ── Providers — docs/plan/03 § Providers ───────────────────────────────────────────────────────
 # NOTHING, and the absence is the reviewed decision rather than an omission.
 #

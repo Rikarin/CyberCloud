@@ -73,6 +73,10 @@
         <Project Path="src/CyberCloud.Kubernetes.Contracts.Tests/CyberCloud.Kubernetes.Contracts.Tests.csproj"/>
         <Project Path="src/CyberCloud.Kubernetes/CyberCloud.Kubernetes.csproj"/>
         <Project Path="src/CyberCloud.Kubernetes.Tests/CyberCloud.Kubernetes.Tests.csproj"/>
+        <Project Path="src/CyberCloud.Metering.Contracts/CyberCloud.Metering.Contracts.csproj"/>
+        <Project Path="src/CyberCloud.Metering.Contracts.Tests/CyberCloud.Metering.Contracts.Tests.csproj"/>
+        <Project Path="src/CyberCloud.Metering/CyberCloud.Metering.csproj"/>
+        <Project Path="src/CyberCloud.Metering.Tests/CyberCloud.Metering.Tests.csproj"/>
         <Project Path="src/CyberCloud.ResourceManager.Contracts/CyberCloud.ResourceManager.Contracts.csproj"/>
         <Project Path="src/CyberCloud.ResourceManager.Contracts.Tests/CyberCloud.ResourceManager.Contracts.Tests.csproj"/>
         <Project Path="src/CyberCloud.ResourceManager/CyberCloud.ResourceManager.csproj"/>

@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      docs/plan/03 § src — the .Contracts split. The metering domain's grain interfaces, wire types
+      and seams: the usage event and its idempotency key, the meter catalogue, the emission seam a
+      provider calls, the resource source a state-based sampler reads, and the sink the rollup
+      writes to.
+
+      ⚠ ONE PACKAGE, Microsoft.Orleans.Sdk — the code generator plus Orleans.Serialization, no
+      hosting. A provider emitting a UsageEvent references this assembly and does not thereby
+      acquire a silo. CyberCloud.Metering — the implementation — is where hosting starts.
+
+      ⚠ WHY THIS REFERENCES CyberCloud.Tenancy.Contracts. QuotaMeter lives there, and it is the
+      single declared meter vocabulary — see MeterCatalog. A billing meter is derived from a quota
+      family rather than declared beside it, which is the whole point: two spellings of one
+      vocabulary is the drift docs/plan/08 § The provider registry exists to prevent.
+    -->
+
+    <ItemGroup>
+        <PackageReference Include="Microsoft.Orleans.Sdk"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../CyberCloud.Core/CyberCloud.Core.csproj"/>
+        <ProjectReference Include="../CyberCloud.Core.Contracts/CyberCloud.Core.Contracts.csproj"/>
+        <ProjectReference Include="../CyberCloud.Tenancy.Contracts/CyberCloud.Tenancy.Contracts.csproj"/>
+    </ItemGroup>
+
+    <ItemGroup Label="CyberCloud.Analyzers — see CyberCloud.Core.csproj for why this is not a reference">
+        <ProjectReference Include="../CyberCloud.Analyzers/CyberCloud.Analyzers.csproj"
+                          OutputItemType="Analyzer"
+                          ReferenceOutputAssembly="false"/>
+    </ItemGroup>
+
+</Project>

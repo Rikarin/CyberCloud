@@ -1,0 +1,58 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      The grain-backed half of metering's tests: the sampler run twice over one window, the
+      redelivered event that collapses and the different window that does not, the state-based meter
+      that bills a resource which exists and is not running, the ledger that cannot be edited, the
+      quota lease released on failure, and the sink outage that leaves an hour open rather than
+      losing it.
+
+      ⚠ NO Testcontainers AND NO Aspire.Hosting, AND THAT IS THE SAME DEVIATION FROM ADR-018 THAT
+      CyberCloud.ResourceManager.Tests RECORDS, OWED BACK ON THE SAME TERMS. docs/plan/02 ADR-018
+      wants grain behaviour tested "against a real in-process TestCluster … with real storage
+      providers backed by Testcontainers". This project uses Orleans.TestingHost's TestCluster with
+      AddMemoryGrainStorage and UseInMemoryReminderService instead, because the environment this was
+      built in could not start a container.
+
+      What that costs, stated so it can be paid rather than forgotten:
+
+        - Nothing here proves the state SERIALIZES. In-memory storage keeps the object graph; a real
+          provider round-trips it. UsageRollupState.SeenKeys is a Dictionary<string, DateTimeOffset>
+          and UsageLedgerState.Entries a List<UsageLedgerEntry>, both `{ get; set; }` for exactly the
+          "STJ does not populate a get-only collection" trap — but the assertion that they round-trip
+          is owed, and for the ledger it is the assertion that matters most, because a ledger that
+          fails to deserialize is a ledger that has silently lost every entry.
+        - Nothing here proves the DURABLE tier is durable across a silo restart. Deactivation is used
+          to exercise re-activation, which keeps the same in-process store.
+        - The reminder tests exercise registration and the drive body, not Redis reminder storage
+          (docs/plan/04 § Reminders). Both grains here are IRemindable and both are driven directly.
+
+      Everything else — the idempotency key's behaviour under redelivery, the sampler's window snap,
+      the ledger's append-only shape, the rollup's ordering of ledger-then-sink-then-drop, and the
+      quota integration — is behaviour of our code and is fully exercised here.
+    -->
+
+    <ItemGroup>
+        <PackageReference Include="xunit.v3"/>
+        <PackageReference Include="Shouldly"/>
+        <PackageReference Include="Microsoft.Orleans.TestingHost"/>
+        <PackageReference Include="Microsoft.Orleans.Reminders"/>
+        <PackageReference Include="Orleans.Multitenant"/>
+    </ItemGroup>
+
+    <ItemGroup Label="Global usings">
+        <Using Include="Xunit"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../CyberCloud.Metering/CyberCloud.Metering.csproj"/>
+        <!--
+          The REAL quota grain. docs/plan/22 § Quota's "a reservation in IQuotaGrain before the
+          provider is called, released on failure" is already implemented in CyberCloud.Tenancy, and
+          QuotaIntegrationTests asserts the integration against it rather than reimplementing a
+          reservation to assert against a fake.
+        -->
+        <ProjectReference Include="../CyberCloud.Tenancy/CyberCloud.Tenancy.csproj"/>
+    </ItemGroup>
+
+</Project>
