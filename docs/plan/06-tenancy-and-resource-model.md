@@ -100,6 +100,7 @@ tenant-qualified key. `GrainKeys` is the only type allowed to build the within-t
 
 | Grain | Key within tenant |
 |---|---|
+| `ITenantGrain` | `tenant/{tenantId:N}` |
 | `ISubscriptionGrain` | `sub/{subscriptionId:N}` |
 | `IResourceGroupGrain` | `sub/{subscriptionId:N}/rg/{name}` |
 | `IResourceGrain` | `res/{resourceId:N}` |
@@ -107,7 +108,15 @@ tenant-qualified key. `GrainKeys` is the only type allowed to build the within-t
 | `IUserGrain` | `user/{userId:N}` |
 | `IEmailIndexGrain` | `idx/email/{sha256(tenantId + normalizedEmail)[..16]}` |
 | `IOperationGrain` | `op/{operationId:N}` |
+| `IQuotaGrain` | `sub/{subscriptionId:N}` — same key string as the subscription, different grain **type** |
+| `ITenantDirectoryGrain` | *(null tenant)* `platform/tenant-directory` |
+| `IShardMapGrain` | *(null tenant)* `platform/shard-map` |
 | `IClusterConnectionGrain` | *(null tenant)* `cluster/{clusterId:N}` — see below |
+
+⚠ This table is the closed set that `GrainKeys` implements, so a grain missing from it is a grain
+that cannot be addressed. The first, ninth, tenth and eleventh rows were absent from an earlier
+version while [04 § Grain taxonomy](04-orleans-topology.md) named the grains — which made those
+grains unbuildable until one document moved. If you add a grain, add its row here first.
 
 Resource grains are keyed by GUID, not by path, so a rename is a metadata update rather than a grain
 migration. The path index is a separate grain, and the two are updated in one flow with the index
@@ -192,7 +201,20 @@ The brief requires platform admins to manage tenants. The design decision is tha
 not a second API** — it is a provider.
 
 `CyberCloud.Platform` exposes `tenants`, `regions`, `shards`, `clusters`, `quotaOverrides`,
-`featureFlags` as ordinary resource types under a **platform tenant** (`Guid.Empty`, the null tenant).
+`featureFlags` as ordinary resource types under a **platform tenant** (`Guid.Empty`).
+
+⚠ **`Guid.Empty` and "the null tenant" are two different things, and an earlier version of this
+sentence said they were one.** They cannot be, and both are needed:
+
+| | What it is | Used for |
+|---|---|---|
+| **The platform tenant**, `Guid.Empty` | An ordinary tenant id that happens to be all zeroes. Its grains are tenant-qualified like any other, get a shard, and go through the same resource manager | This section's whole argument — "platform admin is not a second API, it is a provider". A provider needs a tenant to own its resources |
+| **The null tenant** | The *absence* of tenant qualification. `Orleans.Multitenant` passes the literal string `"Null"` — ⚠ so `Guid.Parse(tenantId)` throws, and this is a live path | [04 § Grain taxonomy](04-orleans-topology.md)'s Platform row: the tenant directory and the shard map. Those must be reachable **before** any tenant is resolved, which is precisely why they cannot be qualified by one |
+
+The distinction is load-bearing rather than pedantic: the directory is what tells you which shard a
+tenant is on, so a directory grain that had to be addressed *by tenant* would be circular.
+`IClusterConnectionGrain` is null-tenant for the different reason given below — one activation per
+cluster, platform-wide.
 Consequences, all good:
 
 - Admin actions go through the same resource manager, so they get the same audit, the same LRO model,
