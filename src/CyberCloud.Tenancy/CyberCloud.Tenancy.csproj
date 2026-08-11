@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    docs/plan/03 § src — the tenancy domain: tenants, subscriptions, resource groups, the two index
+    grains, the global tenant directory, the shard map, quota, and the cross-tenant authorizer.
+
+    ⚠ WHY THIS REFERENCES CyberCloud.ServiceDefaults. Two things here are not grains and cannot be:
+    the IShardMapCache implementation that docs/plan/05 § Storage provider wiring resolves inside
+    Orleans.Multitenant's configureTenantOptions callback, and the ISiloBuilder extension that wires
+    AddMultitenantCommunicationSeparation. Both are host-side seams declared in ServiceDefaults, so
+    the dependency runs upwards from it, which is the direction docs/plan/03's assembly-graph rules
+    permit — ServiceDefaults is the first assembly allowed Orleans hosting and this is above it.
+
+    ⚠ PlatformCrossTenantAuthorizer lives here rather than in CyberCloud.Authorization, which does
+    not exist yet. ADR-007 puts the ReBAC engine there, and the one thing this authorizer needs from
+    it — "does the caller hold an active platform:root#operator relation" — is behind
+    IPlatformOperatorAuthority precisely so that moving it is a registration change and not a
+    rewrite. See that interface's remarks; its default implementation denies.
+  -->
+
+  <ItemGroup>
+    <!-- Grain implementations, [PersistentState], reminders. -->
+    <PackageReference Include="Microsoft.Orleans.Server" />
+    <!-- ICrossTenantAuthorizer, IGrainCallTenantSeparator, AddMultitenantCommunicationSeparation. -->
+    <PackageReference Include="Orleans.Multitenant" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../CyberCloud.Core/CyberCloud.Core.csproj" />
+    <ProjectReference Include="../CyberCloud.Core.Contracts/CyberCloud.Core.Contracts.csproj" />
+    <ProjectReference Include="../CyberCloud.Tenancy.Contracts/CyberCloud.Tenancy.Contracts.csproj" />
+    <ProjectReference Include="../CyberCloud.ServiceDefaults/CyberCloud.ServiceDefaults.csproj" />
+  </ItemGroup>
+
+</Project>

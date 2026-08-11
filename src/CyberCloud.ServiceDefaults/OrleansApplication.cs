@@ -66,9 +66,22 @@ public static class OrleansApplication
     ///         below — <c>AddMultitenantCommunicationSeparation</c>.
     ///     </para>
     /// </remarks>
+    /// <param name="configureStorage">
+    ///     Replaces the default <c>AddCyberCloudGrainStorage(options)</c> call, for a host that
+    ///     supplies its own <c>IShardMapCache</c>.
+    ///     <para>
+    ///         ⚠ It is a <i>replacement</i> and not an addition, because the shard map is
+    ///         <b>captured</b> by the two tier configurators rather than resolved from the container
+    ///         (see <c>TenantOptionsConfigurator</c>). Wiring storage twice would leave whichever
+    ///         call ran first holding the map that actually routes writes, which is the kind of
+    ///         defect that shows up as a tenant reading an empty database. <c>CyberCloud.Tenancy</c>'s
+    ///         <c>AddCyberCloudTenancy</c> is the intended argument.
+    ///     </para>
+    /// </param>
     public static WebApplicationBuilder CreateSilo(
         string[] args,
-        Action<ISiloBuilder>? configureCluster = null)
+        Action<ISiloBuilder>? configureCluster = null,
+        Action<ISiloBuilder, CyberCloudStorageOptions>? configureStorage = null)
     {
         var builder = WebApplication.CreateBuilder(args);
 
@@ -123,7 +136,15 @@ public static class OrleansApplication
             {
                 var storageOptions = new CyberCloudStorageOptions();
                 storage.Bind(storageOptions);
-                silo.AddCyberCloudGrainStorage(storageOptions);
+
+                if (configureStorage is null)
+                {
+                    silo.AddCyberCloudGrainStorage(storageOptions);
+                }
+                else
+                {
+                    configureStorage(silo, storageOptions);
+                }
             }
 
             configureCluster?.Invoke(silo);

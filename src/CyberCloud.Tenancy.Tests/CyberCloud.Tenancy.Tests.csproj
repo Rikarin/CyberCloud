@@ -1,0 +1,53 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    docs/plan/02 ADR-018: "Grain behaviour is tested against a real in-process TestCluster
+    (Microsoft.Orleans.TestingHost) with real storage providers backed by Testcontainers, not against
+    mocked IGrainFactory." Every test here obeys that: one real silo, one real Redis, three real
+    PostgreSQL servers. Nothing in this project substitutes a grain, a storage provider or a shard.
+
+    FrameworkReference Microsoft.AspNetCore.App because the silo under test is a real
+    WebApplication — OrleansApplication.CreateSilo builds one, and testing the wiring through a
+    different host would be testing a different wiring.
+  -->
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="xunit.v3" />
+    <PackageReference Include="Shouldly" />
+    <!-- CreateSilo calls UseAutofac(), which demands an IModuleContainer at Build() time. -->
+    <PackageReference Include="Volo.Abp.Autofac" />
+  </ItemGroup>
+
+  <ItemGroup Label="Real storage — ADR-018, docs/plan/23 § Test layers (the Grain row)">
+    <PackageReference Include="Testcontainers.Redis" />
+    <PackageReference Include="Testcontainers.PostgreSql" />
+    <!-- Reading grain rows back out with plain SQL, which is how "it is in THAT database" is shown. -->
+    <PackageReference Include="Npgsql" />
+    <PackageReference Include="StackExchange.Redis" />
+    <!-- GrainId/tenant extensions, and ICrossTenantAuthorizer for the registration assertions. -->
+    <PackageReference Include="Orleans.Multitenant" />
+  </ItemGroup>
+
+  <ItemGroup Label="Orleans' own PostgreSQL DDL">
+    <!--
+      ⚠ COPIES of dotnet/orleans at tag v10.2.2, the same two files
+      CyberCloud.ServiceDefaults.Tests carries and for the same reason: the package ships no SQL and
+      nothing in this repository creates the schema on a real shard.
+    -->
+    <EmbeddedResource Include="Infrastructure/PostgreSQL-Main.sql" />
+    <EmbeddedResource Include="Infrastructure/PostgreSQL-Persistence.sql" />
+  </ItemGroup>
+
+  <ItemGroup Label="Global usings">
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../CyberCloud.Tenancy/CyberCloud.Tenancy.csproj" />
+  </ItemGroup>
+
+</Project>

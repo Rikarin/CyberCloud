@@ -171,8 +171,16 @@ public sealed class StaticShardMapCache : IShardMapCache
     ///     silos would place the same tenant on two different shards and the tenant's rows would be
     ///     split across two databases with no error anywhere. SHA-256 truncated to 32 bits is
     ///     overkill for the job and costs nothing on a path that runs once per tenant per silo.
+    ///     <para>
+    ///         ⚠ <b>Public because the real shard map has to agree with it exactly.</b>
+    ///         <c>CyberCloud.Tenancy.ShardMapGrain</c> places a brand-new tenant on the shard this
+    ///         function names, so that the answer a cache computes before the assignment has reached
+    ///         it and the answer the map recorded are the <i>same</i> shard. A second copy of this
+    ///         function in another assembly would be a second definition of "which database is this
+    ///         tenant in", and the day the two drifted a tenant's rows would split silently.
+    ///     </para>
     /// </remarks>
-    internal static uint StableHash(string value)
+    public static uint StableHash(string value)
     {
         Span<byte> digest = stackalloc byte[32];
         SHA256.HashData(Encoding.UTF8.GetBytes(value), digest);

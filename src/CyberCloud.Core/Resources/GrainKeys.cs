@@ -6,7 +6,9 @@ namespace CyberCloud.Core.Resources;
 
 /// <summary>
 ///     Which grain a key within a tenant addresses. The set is closed — it is the grain-key table at
-///     docs/plan/06:101-110, and nothing else may be a grain key.
+///     docs/plan/06 § Grain keys plus the two shapes that table omits for grains docs/plan/04
+///     § Grain taxonomy does name (<see cref="Tenant" />, <see cref="PlatformSingleton" />), and
+///     nothing else may be a grain key.
 /// </summary>
 public enum GrainKeyKind
 {
@@ -38,7 +40,20 @@ public enum GrainKeyKind
     ///     <c>IClusterConnectionGrain</c> — <c>cluster/{clusterId:N}</c>. ⚠ <b>Null tenant</b>, see
     ///     <see cref="GrainKeys.ClusterConnection" />.
     /// </summary>
-    ClusterConnection
+    ClusterConnection,
+
+    /// <summary>
+    ///     <c>ITenantGrain</c> — <c>tenant/{tenantId:N}</c>. See <see cref="GrainKeys.Tenant" /> for
+    ///     why this row is here and not in the table at docs/plan/06 § Grain keys.
+    /// </summary>
+    Tenant,
+
+    /// <summary>
+    ///     A platform singleton — <c>platform/{name}</c>, one activation worldwide. ⚠ <b>Null
+    ///     tenant</b>. <see cref="GrainKey.Name" /> carries the singleton's name; the set is closed
+    ///     and is <see cref="GrainKeys.PlatformSingletons" />.
+    /// </summary>
+    PlatformSingleton
 }
 
 /// <summary>
@@ -107,6 +122,8 @@ public readonly record struct GrainKey
         GrainKeyKind.EmailIndex => GrainKeys.EmailIndexPrefix + Digest,
         GrainKeyKind.Operation => GrainKeys.Operation(Id),
         GrainKeyKind.ClusterConnection => GrainKeys.ClusterConnection(Id),
+        GrainKeyKind.Tenant => GrainKeys.Tenant(Id),
+        GrainKeyKind.PlatformSingleton => GrainKeys.PlatformSingletonPrefix + Name,
         _ => string.Empty
     };
 }
@@ -123,7 +140,11 @@ public readonly record struct GrainKey
 ///         contains them. Nothing else in the codebase may concatenate one.
 ///     </para>
 ///     <para>
-///         <b>The eight shapes.</b> Every one of them, formatted <i>and</i> parsed — a key that can
+///         <b>The ten shapes.</b> Eight of them are the table at docs/plan/06 § Grain keys; the last
+///         two — <see cref="Tenant" /> and <see cref="PlatformSingleton" /> — are the rows that table
+///         is <i>missing</i> for grains docs/plan/04 § Grain taxonomy names in its Entity and
+///         Platform rows. See the remarks on each. Every one of them is formatted <i>and</i> parsed —
+///         a key that can
 ///         be built but not decoded is half a type, and routing a physical key back to a grain type
 ///         (in a log, in a repair tool, in a dead-letter handler) needs the other half.
 ///     </para>
@@ -136,6 +157,8 @@ public readonly record struct GrainKey
 ///         <item><term><see cref="EmailIndex" /></term><description><c>idx/email/{sha256(tenantId + normalizedEmail)[..16]}</c></description></item>
 ///         <item><term><see cref="Operation" /></term><description><c>op/{operationId:N}</c></description></item>
 ///         <item><term><see cref="ClusterConnection" /></term><description><c>cluster/{clusterId:N}</c> — <b>null tenant</b></description></item>
+///         <item><term><see cref="Tenant" /></term><description><c>tenant/{tenantId:N}</c> — not in docs/plan/06's table</description></item>
+///         <item><term><see cref="PlatformSingleton" /></term><description><c>platform/{name}</c> — <b>null tenant</b>, not in docs/plan/06's table</description></item>
 ///     </list>
 ///     <para>
 ///         ⚠ <b><see cref="Resource" /> is keyed by the resource GUID alone</b> — docs/plan/06:112-114.
@@ -211,6 +234,18 @@ public static class GrainKeys
     /// <summary><c>idx/email/</c> — the per-tenant email index.</summary>
     public const string EmailIndexPrefix = "idx/email/";
 
+    /// <summary><c>tenant/</c> — the tenant's own entity grain.</summary>
+    public const string TenantPrefix = "tenant/";
+
+    /// <summary><c>platform/</c> — a platform singleton. Null tenant.</summary>
+    public const string PlatformSingletonPrefix = "platform/";
+
+    /// <summary><c>platform/shard-map</c> — <c>IShardMapGrain</c>'s singleton name.</summary>
+    public const string ShardMapSingleton = "shard-map";
+
+    /// <summary><c>platform/tenant-directory</c> — <c>ITenantDirectoryGrain</c>'s singleton name.</summary>
+    public const string TenantDirectorySingleton = "tenant-directory";
+
     /// <summary>The <c>rg</c> literal in <c>sub/{subscriptionId:N}/rg/{name}</c>.</summary>
     public const string ResourceGroupSegment = "rg";
 
@@ -270,6 +305,80 @@ public static class GrainKeys
 
     /// <summary><c>res/{resourceId:N}</c> — <c>IResourceGrain</c>, docs/plan/06:105.</summary>
     public static string Resource(Guid resourceId) => ResourcePrefix + N(resourceId);
+
+    /// <summary><c>tenant/{tenantId:N}</c> — <c>ITenantGrain</c>.</summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>DOC DEFECT, and this row is the repair.</b> docs/plan/04 § Grain taxonomy lists
+    ///         <c>ITenantGrain</c> in the Entity row — <i>tenant-qualified, Durable, long-lived</i> —
+    ///         but the grain-key table at docs/plan/06 § Grain keys has <b>no row for it</b>. Its
+    ///         eight rows start at <c>ISubscriptionGrain</c>. Since that table is what closes this
+    ///         type's set, a tenant grain was unbuildable until one of the two documents moved.
+    ///     </para>
+    ///     <para>
+    ///         <b>Why the tenant id is repeated inside a tenant-qualified key.</b> The physical key is
+    ///         <c>{tenantId}|tenant/{tenantId:N}</c>, which looks redundant and is not, for exactly
+    ///         the reason <see cref="EmailIndex" /> puts the tenant in its digest as well as in the
+    ///         qualification: a key read outside its qualification — in a repair tool, a dead-letter
+    ///         handler, an audit export, a <c>psql</c> session — still says which tenant it is. The
+    ///         alternative, a bare <c>tenant</c> literal, is a key that means nothing on its own. The
+    ///         cost is 33 characters and the grain checks the two halves agree on activation.
+    ///     </para>
+    /// </remarks>
+    public static string Tenant(Guid tenantId) => TenantPrefix + N(tenantId);
+
+    /// <summary>
+    ///     <c>platform/{name}</c> — the key of a <b>null-tenant</b> platform singleton.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         The Platform row of docs/plan/04 § Grain taxonomy: <c>ITenantDirectoryGrain</c>,
+    ///         <c>IShardMapGrain</c>, <c>IProviderRegistryGrain</c> — null-tenant, durable, in the
+    ///         global cluster, permanent. There is exactly one activation of each worldwide, so the
+    ///         key carries no identifier at all; the grain <i>type</i> is the identity and the key is
+    ///         a constant.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>A constant key is only acceptable because these are not index grains.</b>
+    ///         docs/plan/04 § Grain taxonomy's ⚠ — "an index grain keyed by a low-cardinality value
+    ///         is a single activation serialising every create in the platform" — is about grains
+    ///         whose <i>traffic</i> scales with creates. These are read-mostly and their write rate
+    ///         is O(new tenants per day), which docs/plan/05 § The tenant directory sizes at 0.12
+    ///         writes per second. The cardinality question is asked and answered, not dodged:
+    ///         cardinality 1, traffic O(day), reads served from an in-process snapshot.
+    ///     </para>
+    ///     <para>
+    ///         The set is closed (<see cref="PlatformSingletons" />) so that "platform singleton" can
+    ///         never become a namespace somebody drops a per-tenant key into.
+    ///     </para>
+    /// </remarks>
+    /// <exception cref="ArgumentException"><paramref name="name" /> is not in <see cref="PlatformSingletons" />.</exception>
+    public static string PlatformSingleton(string name)
+    {
+        if (!PlatformSingletons.Contains(name, StringComparer.Ordinal))
+        {
+            throw new ArgumentException(
+                $"'{name}' is not a platform singleton. The set is closed and is "
+                + $"[{string.Join(", ", PlatformSingletons)}] — docs/plan/04 § Grain taxonomy, the "
+                + "Platform row. A key that varies per tenant is not a platform singleton.",
+                nameof(name));
+        }
+
+        return PlatformSingletonPrefix + name;
+    }
+
+    /// <summary><c>platform/shard-map</c> — <c>IShardMapGrain</c>, docs/plan/05 § The shard map.</summary>
+    public static string ShardMap() => PlatformSingletonPrefix + ShardMapSingleton;
+
+    /// <summary>
+    ///     <c>platform/tenant-directory</c> — <c>ITenantDirectoryGrain</c>, docs/plan/05 § The tenant
+    ///     directory.
+    /// </summary>
+    public static string TenantDirectory() => PlatformSingletonPrefix + TenantDirectorySingleton;
+
+    /// <summary>The closed set of platform-singleton names.</summary>
+    public static IReadOnlyList<string> PlatformSingletons { get; } =
+        [ShardMapSingleton, TenantDirectorySingleton];
 
     /// <summary><c>user/{userId:N}</c> — <c>IUserGrain</c>, docs/plan/06:107.</summary>
     public static string User(Guid userId) => UserPrefix + N(userId);
@@ -536,7 +645,8 @@ public static class GrainKeys
             return Invalid(
                 "A grain key within a tenant is required. It is one of 'sub/{id}', "
                 + "'sub/{id}/rg/{name}', 'res/{id}', 'user/{id}', 'op/{id}', 'cluster/{id}', "
-                + "'idx/path/{digest}' or 'idx/email/{digest}' — see docs/plan/06 § Grain keys.");
+                + "'tenant/{id}', 'platform/{singleton}', 'idx/path/{digest}' or "
+                + "'idx/email/{digest}' — see docs/plan/06 § Grain keys.");
         }
 
         var segments = keyWithinTenant.Split('/');
@@ -609,6 +719,16 @@ public static class GrainKeys
 
     static Result<GrainKey> ParseTwoSegments(string key, string[] segments)
     {
+        if (string.Equals(segments[0], "platform", StringComparison.Ordinal))
+        {
+            return PlatformSingletons.Contains(segments[1], StringComparer.Ordinal)
+                ? Result<GrainKey>.Success(
+                    new GrainKey(GrainKeyKind.PlatformSingleton, Guid.Empty, segments[1], null))
+                : Invalid(
+                    $"'{key}' is not a grain key: '{segments[1]}' is not a platform singleton. The "
+                    + $"set is closed and is [{string.Join(", ", PlatformSingletons)}].");
+        }
+
         var kind = segments[0] switch
         {
             "sub" => GrainKeyKind.Subscription,
@@ -616,6 +736,7 @@ public static class GrainKeys
             "user" => GrainKeyKind.User,
             "op" => GrainKeyKind.Operation,
             "cluster" => GrainKeyKind.ClusterConnection,
+            "tenant" => GrainKeyKind.Tenant,
             _ => GrainKeyKind.None
         };
 
@@ -623,8 +744,8 @@ public static class GrainKeys
         {
             return Invalid(
                 $"'{key}' is not a grain key: '{segments[0]}' is not one of 'sub', 'res', 'user', "
-                + "'op' or 'cluster'. The prefix is matched case-sensitively — see docs/plan/06 "
-                + "§ Grain keys.");
+                + "'op', 'cluster', 'tenant' or 'platform'. The prefix is matched case-sensitively — "
+                + "see docs/plan/06 § Grain keys.");
         }
 
         return GuidFormat.TryParseN(segments[1], out var id)

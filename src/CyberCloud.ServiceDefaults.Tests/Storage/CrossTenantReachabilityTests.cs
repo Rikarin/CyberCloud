@@ -164,9 +164,21 @@ public sealed class CrossTenantReachabilityTests(StorageFixture fixture)
         // can address any tenant's grain by its raw physical key, and nothing in the storage layer
         // is positioned to notice.
         //
-        // With the separation wired, the call below becomes an UnauthorizedAccessException naming
-        // both tenant ids. Without it, it succeeds. Asserting the current behaviour means this test
-        // fails the day the separation lands, which is the correct moment to revisit it.
+        // ⚠ ANSWERED, AND THE ANSWER IS "HALF". The separation is now wired — in
+        // CyberCloud.Tenancy's AddCyberCloudTenantSeparation — and this silo still does not have it,
+        // because THIS fixture wires storage only (OrleansApplication.CreateSilo's default path).
+        // So both assertions below are still exactly true here, and they are still worth making:
+        // they are what "storage separation without call separation" looks like.
+        //
+        // The inverted half lives in CyberCloud.Tenancy.Tests.CrossTenantReachabilityTests:
+        //
+        //   Route7a  from INSIDE a grain, the raw key now throws UnauthorizedAccessException with
+        //            both tenant ids — docs/plan/04 § Silo composition's promise, delivered.
+        //   Route7b  from OUTSIDE a grain, the raw key STILL reaches the state, even with the
+        //            separation wired. Orleans.Multitenant's TenantSeparatingCallFilter returns
+        //            without consulting the authorizer when context.SourceId is absent or is a
+        //            client, so a cluster client, a gateway or a hosted service is not covered. That
+        //            boundary is the gateway's (docs/plan/10) and does not exist yet.
         var a = fixture.SplitTenants.OnShardA;
 
         var owner = fixture.Grains.ForTenant(Id(a)).GetGrain<IDurableStateGrain>("res/route7");
