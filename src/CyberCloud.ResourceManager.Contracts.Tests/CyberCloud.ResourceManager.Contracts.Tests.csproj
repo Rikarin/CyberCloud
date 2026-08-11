@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      The pure half of the resource manager's tests: schema validation, api-version parsing and
+      projection, the closed ReconcileOutcome, the backoff arithmetic and the 60-minute timeout
+      message, and the write-trace ordering invariant.
+
+      ⚠ NO Testcontainers AND NO Aspire.Hosting HERE, AND NONE IS NEEDED. Nothing in this project
+      touches a grain, so ADR-018's "real storage" rule does not reach it — that rule is about grain
+      behaviour, and these are value types with no storage at all. The grain-backed half is
+      CyberCloud.ResourceManager.Tests, which does have something to say about it.
+    -->
+
+    <ItemGroup>
+        <PackageReference Include="xunit.v3"/>
+        <PackageReference Include="Shouldly"/>
+    </ItemGroup>
+
+    <ItemGroup Label="Global usings">
+        <Using Include="Xunit"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../CyberCloud.ResourceManager.Contracts/CyberCloud.ResourceManager.Contracts.csproj"/>
+    </ItemGroup>
+
+</Project>

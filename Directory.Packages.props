@@ -62,6 +62,16 @@
           repository applies it to a shard yet. See CyberCloud.ServiceDefaults.Tests/Storage/OrleansAdoNetSchema.cs.
         -->
         <PackageVersion Include="Microsoft.Orleans.Persistence.AdoNet" Version="$(OrleansVersion)"/>
+        <!--
+          ⚠ Microsoft.Orleans.Server does NOT bring this in, and IRemindable lives here.
+          Verified against microsoft.orleans.server.10.2.2.nuspec: its dependencies are
+          Persistence.Memory, Runtime and Sdk, and none of the three carries Orleans.Runtime.IRemindable
+          or TickStatus. So a grain that registers a reminder — CyberCloud.ResourceManager's
+          OperationGrain, per docs/plan/08 § Long-running operations — needs this reference explicitly.
+          Microsoft.Orleans.Reminders.Redis below is the storage PROVIDER (docs/plan/04 § Reminders);
+          this is the abstraction the grain implements, and a host needs both.
+        -->
+        <PackageVersion Include="Microsoft.Orleans.Reminders" Version="$(OrleansVersion)"/>
         <PackageVersion Include="Microsoft.Orleans.Reminders.Redis" Version="$(OrleansVersion)"/>
         <PackageVersion Include="Microsoft.Orleans.Streaming" Version="$(OrleansVersion)"/>
         <PackageVersion Include="Microsoft.Orleans.Serialization.SystemTextJson" Version="$(OrleansVersion)"/>

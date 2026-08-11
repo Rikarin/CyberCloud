@@ -1,0 +1,59 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      docs/plan/03 § src — the .Contracts split for the resource manager (docs/plan/08).
+
+      What lives here is everything a *provider* has to name: IResourceReconciler and its context,
+      ReconcileOutcome, the provider registry's builder surface, the schema model, the grain
+      interfaces the write path drives, and the wire types the gateway renders. A provider assembly
+      references this and CyberCloud.Kubernetes.Contracts and nothing else from the platform.
+
+      ⚠ THE REFERENCE TO CyberCloud.Kubernetes.Contracts IS DELIBERATE AND IS NOT RULE 3.
+      docs/plan/03 § Assembly graph rules, rule 3 forbids `k8s.Models` above CyberCloud.Kubernetes.
+      CyberCloud.Kubernetes.Contracts does not reference KubernetesClient at all — that is the first
+      paragraph of its own .csproj — so taking `IKubeClusterConnection` into ReconcileContext costs
+      nothing of rule 3. docs/plan/08 § The reconcile loop puts that exact type in the context record,
+      and docs/plan/09 § The command builder shows the reconciler reaching the cluster through it.
+
+      ⚠ IT DOES NOT REFERENCE CyberCloud.Authorization.Contracts, AND THAT IS THE SHARPER LINE.
+      docs/plan/07 § The enforcement seam: "Providers never call the engine. A provider that does is
+      failing a review, because authorization scattered across twenty providers is twenty places to
+      get it wrong and one place to miss." A review catches that once; a reference set catches it
+      every time. Because this assembly does not reference the one that declares ICheckGrain, a
+      provider cannot name it — which is why CallerContext carries the subject as a type and an id
+      rather than as a SubjectRef. The implementation assembly references authorization; this one
+      cannot.
+
+      ⚠ IT DOES REFERENCE CyberCloud.Tenancy.Contracts, AND THAT IS A WEAKER LINE, STATED HONESTLY.
+      docs/plan/06 § Tags, locks, and the small stuff that is not small makes ProvisioningState the
+      vocabulary "every provider uses and none invents its own", so a provider has to be able to name
+      it, and it lives in CyberCloud.Tenancy.Contracts. The cost is that IQuotaGrain and
+      IResourceIndexGrain become nameable from a provider, and steps 6 and 7 of
+      docs/plan/08 § The write path, end to end are the manager's alone. That one stays a review rule
+      rather than a reference rule, and it is called out here so nobody mistakes the reference for
+      permission. Splitting ProvisioningState down into CyberCloud.Core would close it; that is a
+      change to an assembly this task does not own.
+    -->
+
+    <PropertyGroup>
+        <IsContractsProject>true</IsContractsProject>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Microsoft.Orleans.Sdk"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../CyberCloud.Core/CyberCloud.Core.csproj"/>
+        <ProjectReference Include="../CyberCloud.Core.Contracts/CyberCloud.Core.Contracts.csproj"/>
+        <ProjectReference Include="../CyberCloud.Kubernetes.Contracts/CyberCloud.Kubernetes.Contracts.csproj"/>
+        <ProjectReference Include="../CyberCloud.Tenancy.Contracts/CyberCloud.Tenancy.Contracts.csproj"/>
+    </ItemGroup>
+
+    <ItemGroup Label="CyberCloud.Analyzers — see CyberCloud.Core.csproj for why this is not a reference">
+        <ProjectReference Include="../CyberCloud.Analyzers/CyberCloud.Analyzers.csproj"
+                          OutputItemType="Analyzer"
+                          ReferenceOutputAssembly="false"/>
+    </ItemGroup>
+
+</Project>

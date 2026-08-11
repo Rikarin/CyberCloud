@@ -1,0 +1,49 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      The grain-backed half of the resource manager's tests: the eleven-step write path and its
+      ordering, 404-versus-403, PUT idempotency, operation resumability, cancellation that completes,
+      quota lease release, a teardown that fails, and the reconciler conformance suite.
+
+      ⚠ NO Testcontainers AND NO Aspire.Hosting, AND THAT IS A DEVIATION FROM ADR-018 THAT IS OWED
+      BACK. docs/plan/02 ADR-018 wants grain behaviour tested "against a real in-process TestCluster
+      … with real storage providers backed by Testcontainers", and CyberCloud.Tenancy.Tests does
+      exactly that. This project uses Orleans.TestingHost's TestCluster with AddMemoryGrainStorage and
+      UseInMemoryReminderService instead, because the environment this was built in could not start a
+      container.
+
+      What that costs, stated so it can be paid rather than forgotten:
+
+        - Nothing here proves the state SERIALIZES. In-memory storage keeps the object graph; a real
+          provider round-trips it, which is where the "STJ does not populate a get-only collection"
+          trap bites. ResourceState and OperationGrainState are the types at risk and every collection
+          on both is `{ get; set; }` for that reason — but the assertion that it round-trips is owed.
+        - Nothing here proves the DURABLE tier is durable across a silo restart. Resumability is
+          tested by deactivating the grain, which exercises the re-drive path but keeps the same
+          in-process store.
+        - The reminder tests exercise registration and the drive body, not Redis reminder storage
+          (docs/plan/04 § Reminders).
+
+      Everything else — ordering, 404-versus-403, idempotency, cancellation, lease release, the
+      Deleting-and-visible rule — is behaviour of our code and is fully exercised here.
+    -->
+
+    <ItemGroup>
+        <PackageReference Include="xunit.v3"/>
+        <PackageReference Include="Shouldly"/>
+        <PackageReference Include="Microsoft.Orleans.TestingHost"/>
+        <PackageReference Include="Microsoft.Orleans.Reminders"/>
+        <PackageReference Include="Orleans.Multitenant"/>
+    </ItemGroup>
+
+    <ItemGroup Label="Global usings">
+        <Using Include="Xunit"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../CyberCloud.ResourceManager/CyberCloud.ResourceManager.csproj"/>
+        <!-- The real quota and index grains — steps 6 and 7 are tested against them, not against fakes. -->
+        <ProjectReference Include="../CyberCloud.Tenancy/CyberCloud.Tenancy.csproj"/>
+    </ItemGroup>
+
+</Project>
