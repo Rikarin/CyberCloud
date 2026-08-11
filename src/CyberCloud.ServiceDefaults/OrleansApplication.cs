@@ -124,7 +124,7 @@ public static class OrleansApplication
 
             if (builder.Environment.IsDevelopment())
             {
-                // ADR-004 (docs/plan/02:202): Kubernetes membership in production, and only in
+                // ADR-004 (docs/plan/02:263): Kubernetes membership in production, and only in
                 // development is there no Kubernetes API to write membership CRs into.
                 silo.UseLocalhostClustering(
                     cluster.LocalhostSiloPort,

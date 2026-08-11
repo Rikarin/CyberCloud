@@ -22,7 +22,7 @@ namespace CyberCloud.Core.Contracts.Tests;
 ///         cannot serialise a <see cref="Result" />.
 ///     </para>
 ///     <para>
-///         ADR-018 (docs/plan/02:486) makes <c>TestCluster</c> the default test host for anything
+///         ADR-018 (docs/plan/02:547) makes <c>TestCluster</c> the default test host for anything
 ///         Orleans, and this is the narrowest thing it is worth using for here: no grains are
 ///         declared (that is a later task), only the silo's own serializer is taken out of its
 ///         service provider.

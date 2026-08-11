@@ -21,7 +21,7 @@ namespace CyberCloud.Core.Contracts.Serialization;
 ///     <para>
 ///         ⚠ <b>The key is carried decomposed, not as its formatted string.</b>
 ///         <see cref="ResourceKey.ToKeyWithinTenant" /> is the <i>only</i> place allowed to format a
-///         grain key (ADR-002, docs/plan/02:147) and <see cref="ResourceKey.Parse" /> the only place
+///         grain key (ADR-002, docs/plan/02:187) and <see cref="ResourceKey.Parse" /> the only place
 ///         allowed to read one back. Putting the formatted string on the wire would make this
 ///         assembly a second implementation of that grammar the moment the format ever changed, and
 ///         a wire format that re-parses is a wire format that can be attacked by spelling. The parts

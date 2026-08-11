@@ -44,7 +44,7 @@
     <!--
       ⚠ MISSING FROM docs/plan/02 § Orleans and hosting, and required by ADR-004.
 
-      ADR-004 (docs/plan/02:211) makes `UseKubernetesHosting()` a condition of the membership
+      ADR-004 (docs/plan/02:272) makes `UseKubernetesHosting()` a condition of the membership
       decision — "the silo needs RBAC to read/write its membership CRs, and UseKubernetesHosting()
       so Orleans learns its pod identity" — and docs/plan/04:64 puts the call in the CreateSilo
       block. The extension lives in this package, which the dependency register does not list.
@@ -59,7 +59,7 @@
     <PackageVersion Include="Orleans.Multitenant" Version="4.0.0" />
 
     <!--
-      ⚠ SUPERSEDES docs/plan/02:31 and ADR-005 (docs/plan/02:216-232).
+      ⚠ SUPERSEDES docs/plan/02:31 and ADR-005 (docs/plan/02:277-293).
 
       The plan names `Rikarin.Orleans.Streaming.NATs` as "ours, and on Orleans 9", and schedules a
       0.4 EM Phase-0 task in docs/plan/24:18 to bump it to Orleans 10. That task is DROPPED: the
@@ -117,7 +117,7 @@
 
   <ItemGroup Label="Identity — ADR-015">
     <!--
-      ⚠ CORRECTED: docs/plan/02:65 and ADR-015 (docs/plan/02:433) pin 7.3.0, reasoning
+      ⚠ CORRECTED: docs/plan/02:65 and ADR-015 (docs/plan/02:481) pin 7.3.0, reasoning
       "7.3.0, not the 8.0 preview — an auth server is the last place to run a preview".
       7.4.0, 7.5.0 and 7.6.0 are all published STABLE releases, and 8.0 is still preview
       (latest: 8.0.0-preview.2.26365.61). The doc's own reasoning — newest stable, never a
