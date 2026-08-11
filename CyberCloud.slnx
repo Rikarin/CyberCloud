@@ -55,6 +55,10 @@
         -->
         <Project Path="src/CyberCloud.Analyzers/CyberCloud.Analyzers.csproj"/>
         <Project Path="src/CyberCloud.Analyzers.Tests/CyberCloud.Analyzers.Tests.csproj"/>
+        <Project Path="src/CyberCloud.Communication.Contracts/CyberCloud.Communication.Contracts.csproj"/>
+        <Project Path="src/CyberCloud.Communication.Contracts.Tests/CyberCloud.Communication.Contracts.Tests.csproj"/>
+        <Project Path="src/CyberCloud.Communication/CyberCloud.Communication.csproj"/>
+        <Project Path="src/CyberCloud.Communication.Tests/CyberCloud.Communication.Tests.csproj"/>
         <Project Path="src/CyberCloud.Core/CyberCloud.Core.csproj"/>
         <Project Path="src/CyberCloud.Core.Tests/CyberCloud.Core.Tests.csproj"/>
         <Project Path="src/CyberCloud.Core.Contracts/CyberCloud.Core.Contracts.csproj"/>

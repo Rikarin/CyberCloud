@@ -1,0 +1,54 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      docs/plan/03 § src — the .Contracts split. The sending domain's grain interfaces, wire types and
+      seams: the channel abstraction, the message a caller hands us, the suppression entry, the
+      template and its typed parameters, the spend reservation, and the webhook envelope a delivery
+      receipt arrives in.
+
+      ⚠ ONE PACKAGE, Microsoft.Orleans.Sdk — the code generator plus Orleans.Serialization, no
+      hosting. CyberCloud.Identity, CyberCloud.Monitor and the billing dunning path reference this
+      assembly to send, and must not thereby acquire a silo. CyberCloud.Communication — the
+      implementation — is where hosting starts.
+
+      ⚠ NO TWILIO, NO META CLOUD API, NO SES, AND NOT BY OVERSIGHT. IChannelProvider is the seam;
+      docs/plan/17 § The channel abstraction names the implementations and this repository ships none
+      of them. There are no credentials to test against and no network to reach, and a half-real
+      carrier client is worse than an honest refusal — it is a thing that looks sent. The refusing
+      seams live in CyberCloud.Communication/Providers and each says what a real implementation owes.
+
+      ⚠ WHY THIS DOES NOT REFERENCE CyberCloud.ResourceManager.Contracts, even though SecretRef lives
+      there. CarrierSecretRef is declared here instead, exactly as CyberCloud.Identity.Contracts
+      declares VaultSecretRef, and for the same reason: a module's wire surface should not drag the
+      resource manager's in behind it. The three types are the same shape by agreement, which
+      docs/plan/00 § Non-negotiables states once ("secrets are SecretRef handles resolved at the data
+      plane") and each module spells in its own vocabulary.
+
+      ⚠ WHY THIS DOES NOT REFERENCE CyberCloud.Tenancy.Contracts. Sending is rate- and spend-limited
+      per tenant, per channel, per day (docs/plan/17 § The parts that are actually the work), which
+      looks like quota and is not: QuotaMeter is a vocabulary of resources a subscription HOLDS, and
+      a message is not held. Reaching for IQuotaGrain would put a durable reservation on the send
+      path — see ISendLimitGrain for the split that avoids it.
+    -->
+
+    <ItemGroup>
+        <PackageReference Include="Microsoft.Orleans.Sdk"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../CyberCloud.Core/CyberCloud.Core.csproj"/>
+        <ProjectReference Include="../CyberCloud.Core.Contracts/CyberCloud.Core.Contracts.csproj"/>
+    </ItemGroup>
+
+    <ItemGroup Label="CyberCloud.Analyzers — see CyberCloud.Core.csproj for why this is not a reference">
+        <!--
+          CC1003 ([Alias] on every wire type) and CC1005 (the IdempotencyKey suppression, carrying its
+          argument) are both live here. CC1005 is the one that matters most in this assembly: BYO
+          carrier credentials are the whole reason CarrierSecretRef exists.
+        -->
+        <ProjectReference Include="../CyberCloud.Analyzers/CyberCloud.Analyzers.csproj"
+                          OutputItemType="Analyzer"
+                          ReferenceOutputAssembly="false"/>
+    </ItemGroup>
+
+</Project>

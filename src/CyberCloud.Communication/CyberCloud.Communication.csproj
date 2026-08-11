@@ -1,0 +1,61 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      docs/plan/03 § src — the sending domain: the message grain and its idempotency, the suppression
+      list, templates, senders, the per-window spend limit, the webhook router, and the channel
+      provider seams.
+
+      docs/plan/17 § CyberCloud.Communication/services, M2. This is the SENDING product. It is not
+      CyberCloud.Mail, which is Postfix/Dovecot/Rspamd and a per-tenant mailbox server — docs/plan/17
+      opens by insisting the two are different products and this assembly holds that line.
+
+      ⚠ NO TWILIO CLIENT, NO META CLOUD API CLIENT, NO SES CLIENT, DELIBERATELY. IChannelProvider is
+      the seam; this assembly ships an in-memory implementation for tests and one honest "there is no
+      carrier" refusal per channel. There are no credentials to test against and no network to reach,
+      and a half-real carrier client is worse than a seam because it looks like it sent something.
+      See IChannelProvider for exactly what a real one owes, and Providers/ChannelProviders.cs for
+      what each seam refuses with.
+
+      ⚠ CHAT IS M3 AND IS ABSENT. docs/plan/17 § Chat scopes it as threads, participants, read
+      receipts and typing over SignalR — a different shape from "dispatch one of these", so it is not
+      a sixth ChannelKind and nothing here reaches towards it.
+
+      ⚠ WHY THIS DOES NOT REFERENCE CyberCloud.Identity, CyberCloud.Monitor OR the billing module,
+      even though all three are its first customers. docs/plan/17 makes the platform this module's
+      own first customer, which is a statement about direction: they call IMessageSender, this calls
+      nobody back. An assembly reference in the other direction would make an OTP delivery able to
+      take the identity module down with it, which is exactly backwards for the module that gates
+      sign-in.
+
+      ⚠ WHY THIS DOES NOT REFERENCE CyberCloud.Metering. Every dispatch is a billable event and the
+      obvious wiring would be a direct IUsageEmitter call. It is not done here: the send path is an
+      OTP with a user waiting on it, and metering must not be able to make it slower or fail it. The
+      dispatch record is in the message grain; turning it into usage belongs to whatever wires the
+      two together in a host, on the emission seam metering already exposes.
+    -->
+
+    <ItemGroup>
+        <!-- Grain implementations and [PersistentState]. -->
+        <PackageReference Include="Microsoft.Orleans.Server"/>
+        <!-- ForTenant, GetKeyWithinTenant, GetTenantId. -->
+        <PackageReference Include="Orleans.Multitenant"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../CyberCloud.Core/CyberCloud.Core.csproj"/>
+        <ProjectReference Include="../CyberCloud.Core.Contracts/CyberCloud.Core.Contracts.csproj"/>
+        <ProjectReference Include="../CyberCloud.Communication.Contracts/CyberCloud.Communication.Contracts.csproj"/>
+    </ItemGroup>
+
+    <ItemGroup Label="CyberCloud.Analyzers — see CyberCloud.Core.csproj for why this is not a reference">
+        <!--
+          CC1003 ([Alias] on every grain-state class), CC1005 (the two IdempotencyKey suppressions,
+          each carrying its argument) and CC1006 (GrainMessageSender and WebhookRouter both hold an
+          IGrainFactory outside a grain and must qualify with ForTenant) are all live here.
+        -->
+        <ProjectReference Include="../CyberCloud.Analyzers/CyberCloud.Analyzers.csproj"
+                          OutputItemType="Analyzer"
+                          ReferenceOutputAssembly="false"/>
+    </ItemGroup>
+
+</Project>
