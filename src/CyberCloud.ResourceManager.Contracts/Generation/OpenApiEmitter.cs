@@ -1,5 +1,6 @@
 using CyberCloud.ResourceManager.Contracts.Registry;
 using System.Collections.Immutable;
+using System.Globalization;
 using System.Text.Json.Nodes;
 
 namespace CyberCloud.ResourceManager.Contracts.Generation;
@@ -145,11 +146,18 @@ public static class OpenApiEmitter {
             var component = ComponentNameOf(type.Type);
             schemas[component] = SchemaOf(type, schema.GetValueOrThrow());
 
+            // ⚠ Read off ResourceTypeRegistration.RetiredOn, which is the half of
+            // docs/plan/08 § The provider registry's 12-month notice window that the registry does
+            // carry. Without this, a version that is three months from being switched off is a
+            // document indistinguishable from a live one — and `deprecated` is the one keyword every
+            // SDK generator and every portal already knows how to surface.
+            var retiresOn = type.RetiredOn.TryGetValue(version, out var date) ? date : (DateOnly?)null;
+
             var resourcePath = PathOf(type.Type);
-            paths[resourcePath] = ResourcePathItem(type, component);
+            paths[resourcePath] = ResourcePathItem(type, component, retiresOn);
 
             foreach (var action in type.Actions.OrderBy(x => x.Name, StringComparer.Ordinal)) {
-                paths[resourcePath + "/" + action.Name] = ActionPathItem(type, action);
+                paths[resourcePath + "/" + action.Name] = ActionPathItem(type, action, retiresOn);
             }
         }
 
@@ -298,7 +306,7 @@ public static class OpenApiEmitter {
     static string ComponentNameOf(ResourceTypeName type) =>
         type.Namespace + "." + type.Type.Replace('/', '.');
 
-    static JsonObject ResourcePathItem(ResourceTypeRegistration type, string component) {
+    static JsonObject ResourcePathItem(ResourceTypeRegistration type, string component, DateOnly? retiresOn) {
         var body = new JsonObject {
             ["required"] = true,
             ["content"] = new JsonObject {
@@ -308,7 +316,7 @@ public static class OpenApiEmitter {
             }
         };
 
-        return new JsonObject {
+        var item = new JsonObject {
             ["parameters"] = ResourceParameters(),
             // A fixed member order rather than a sorted one: this is the order the four verbs are
             // read in, and sorting would put `delete` first in every path item in the document.
@@ -365,11 +373,58 @@ public static class OpenApiEmitter {
             ["x-cybercloud-resource-type"] = type.Type.ToString(),
             ["x-cybercloud-supports-tags"] = type.SupportsTags,
             ["x-cybercloud-requires-cluster"] = type.RequiresCluster,
-            ["x-cybercloud-soft-delete-days"] = type.SoftDeleteDays
+            ["x-cybercloud-soft-delete-days"] = type.SoftDeleteDays,
+            // The quota meters a write draws against. A caller who is about to be told
+            // QuotaExceeded (docs/plan/08 § Errors) can see which limit before sending.
+            ["x-cybercloud-meters"] = Meters(type)
         };
+
+        return Deprecate(item, retiresOn);
     }
 
-    static JsonObject ActionPathItem(ResourceTypeRegistration type, ActionRegistration action) {
+    static JsonArray Meters(ResourceTypeRegistration type) {
+        var meters = new JsonArray();
+
+        foreach (var meter in type.Meters
+                     .OrderBy(x => x.Meter.ToString(), StringComparer.Ordinal)
+                     .ThenBy(x => x.AmountPointer, StringComparer.Ordinal)) {
+            meters.Add(new JsonObject {
+                ["meter"] = meter.Meter.ToString(),
+                // A pointer rather than a delegate is what makes this generable at all — see the
+                // remarks on IResourceTypeBuilder.Meter.
+                ["amountPointer"] = meter.AmountPointer,
+                ["fallback"] = meter.Fallback
+            });
+        }
+
+        return meters;
+    }
+
+    /// <summary>
+    ///     Marks every operation on a path item deprecated when its api-version is under notice.
+    /// </summary>
+    static JsonObject Deprecate(JsonObject item, DateOnly? retiresOn) {
+        if (retiresOn is not { } date) {
+            return item;
+        }
+
+        var stamp = date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+
+        foreach (var method in item.ToList()) {
+            if (method.Value is JsonObject operation && !method.Key.StartsWith("x-", StringComparison.Ordinal)) {
+                operation["deprecated"] = true;
+            }
+        }
+
+        item["x-cybercloud-retires-on"] = stamp;
+        return item;
+    }
+
+    static JsonObject ActionPathItem(
+        ResourceTypeRegistration type,
+        ActionRegistration action,
+        DateOnly? retiresOn
+    ) {
         if (action.Kind is not ActionKind.Post) {
             throw new InvalidOperationException(
                 $"Action '{type.Type}/{action.Name}' declares ActionKind.{action.Kind}, and the only "
@@ -379,7 +434,7 @@ public static class OpenApiEmitter {
             );
         }
 
-        return new JsonObject {
+        var item = new JsonObject {
             ["parameters"] = ResourceParameters(),
             ["post"] = new JsonObject {
                 ["operationId"] = OperationIdOf(type.Type, Capitalise(action.Name)),
@@ -414,6 +469,8 @@ public static class OpenApiEmitter {
             ["x-cybercloud-resource-type"] = type.Type.ToString(),
             ["x-cybercloud-action"] = action.Name
         };
+
+        return Deprecate(item, retiresOn);
     }
 
     /// <summary>

@@ -66,6 +66,10 @@ static class Fixtures {
                         new("restart", ActionKind.Post, "write", Secret: false),
                         new("listKeys", ActionKind.Post, "listKeys", Secret: true)
                     ],
+                    Meters = [
+                        new(QuotaMeter.Vcpu, "/properties/sku/vcpu", 1m),
+                        new(QuotaMeter.StorageGb, "/properties/storageGb", 32m)
+                    ],
                     Chart = "managed/postgres",
                     SoftDeleteDays = 7,
                     SupportsTags = true,
@@ -100,6 +104,22 @@ static class Fixtures {
             new("/properties", SchemaKind.Nested, Required: true),
             new("/properties/charset", SchemaKind.Text, Description: "The character set.")
         ]);
+
+    /// <summary>The Postgres registry with its first api-version under a retirement notice.</summary>
+    public static IProviderRegistry RetiringPostgres(DateOnly retiresOn) =>
+        new FakeRegistry {
+            Namespaces = [Namespace],
+            Types = [
+                new ResourceTypeRegistration {
+                    Type = new(Namespace, "servers"),
+                    ApiVersions = [new(ApiVersion.Parse(FirstVersion), ServerSchema())],
+                    Actions = [new("restart", ActionKind.Post, "write", Secret: false)],
+                    RetiredOn = new Dictionary<ApiVersion, DateOnly> {
+                        [ApiVersion.Parse(FirstVersion)] = retiresOn
+                    }.ToImmutableDictionary()
+                }
+            ]
+        };
 
     /// <summary>The Postgres registry with one type's schema replaced, for the diff tests.</summary>
     public static IProviderRegistry PostgresWith(ResourceSchema schema) =>

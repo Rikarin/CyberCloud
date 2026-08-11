@@ -332,6 +332,36 @@ public sealed class OpenApiEmitterTests {
             .ShouldBe(Fixtures.Namespace + "/servers");
     }
 
+    [Fact]
+    public void QuotaMetersReachTheDocumentBecauseTheRegistryDeclaresThem() {
+        // A caller about to be told QuotaExceeded can see which limit before sending, and the amount
+        // is a JSON Pointer rather than a delegate precisely so it can be generated from.
+        var meters = Emit(Fixtures.Postgres())["paths"]![ServerPath]!["x-cybercloud-meters"]!.AsArray();
+
+        meters.Count.ShouldBe(2);
+        meters[0]!["meter"]!.GetValue<string>().ShouldBe("StorageGb");
+        meters[0]!["amountPointer"]!.GetValue<string>().ShouldBe("/properties/storageGb");
+        meters[1]!["meter"]!.GetValue<string>().ShouldBe("Vcpu");
+        meters[1]!["fallback"]!.GetValue<decimal>().ShouldBe(1m);
+    }
+
+    [Fact]
+    public void AnApiVersionUnderNoticeIsMarkedDeprecated() {
+        // ⚠ RetiredOn is the half of docs/plan/08 § The provider registry's 12-month notice window
+        // the registry does carry. Without this, a version three months from being switched off is a
+        // document indistinguishable from a live one.
+        var retiring = Fixtures.RetiringPostgres(new DateOnly(2027, 8, 1));
+        var item = Emit(retiring)["paths"]![ServerPath]!;
+
+        item["get"]!["deprecated"]!.GetValue<bool>().ShouldBeTrue();
+        item["put"]!["deprecated"]!.GetValue<bool>().ShouldBeTrue();
+        item["x-cybercloud-retires-on"]!.GetValue<string>().ShouldBe("2027-08-01");
+
+        // And a version that is not under notice says nothing, rather than saying `deprecated: false`
+        // — a keyword that is absent is a keyword nobody has to diff.
+        Emit(Fixtures.Postgres())["paths"]![ServerPath]!["get"]!["deprecated"].ShouldBeNull();
+    }
+
     // ── Schemas the emitter refuses rather than emitting ───────────────────────────────────────
 
     [Fact]
