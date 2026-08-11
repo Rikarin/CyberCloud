@@ -53,7 +53,29 @@ public enum GrainKeyKind
     ///     tenant</b>. <see cref="GrainKey.Name" /> carries the singleton's name; the set is closed
     ///     and is <see cref="GrainKeys.PlatformSingletons" />.
     /// </summary>
-    PlatformSingleton
+    PlatformSingleton,
+
+    /// <summary>
+    ///     <c>IObjectRelationsGrain</c> — <c>rel/obj/{type}/{id}</c>, docs/plan/07 § Storage.
+    /// </summary>
+    ObjectRelations,
+
+    /// <summary>
+    ///     <c>ISubjectRelationsGrain</c> — <c>rel/sub/{type}/{id}</c>, docs/plan/07 § Storage.
+    /// </summary>
+    SubjectRelations,
+
+    /// <summary>
+    ///     <c>ICheckGrain</c> — <c>rel/check/{type}/{id}</c>. See
+    ///     <see cref="GrainKeys.CheckCache" /> for why this shape is here and not in docs/plan/07.
+    /// </summary>
+    CheckCache,
+
+    /// <summary>
+    ///     <c>ITupleStoreGrain</c> — <c>rel/store/{tenantId:N}</c>. See
+    ///     <see cref="GrainKeys.TupleStore" />.
+    /// </summary>
+    TupleStore
 }
 
 /// <summary>
@@ -86,6 +108,8 @@ public readonly record struct GrainKey
 {
     readonly string? name;
     readonly string? digest;
+    readonly string? objectType;
+    readonly string? objectId;
 
     internal GrainKey(GrainKeyKind kind, Guid id, string? name, string? digest)
     {
@@ -93,6 +117,18 @@ public readonly record struct GrainKey
         Id = id;
         this.name = name;
         this.digest = digest;
+        objectType = null;
+        objectId = null;
+    }
+
+    internal GrainKey(GrainKeyKind kind, string objectType, string objectId)
+    {
+        Kind = kind;
+        Id = Guid.Empty;
+        name = null;
+        digest = null;
+        this.objectType = objectType;
+        this.objectId = objectId;
     }
 
     /// <summary>Which grain this key addresses.</summary>
@@ -106,6 +142,15 @@ public readonly record struct GrainKey
 
     /// <summary>The index digest, for the two <c>idx/</c> shapes.</summary>
     public string Digest => digest ?? string.Empty;
+
+    /// <summary>
+    ///     The ReBAC object type, for <see cref="GrainKeyKind.ObjectRelations" />,
+    ///     <see cref="GrainKeyKind.SubjectRelations" /> and <see cref="GrainKeyKind.CheckCache" />.
+    /// </summary>
+    public string ObjectType => objectType ?? string.Empty;
+
+    /// <summary>The ReBAC object id, for the same three shapes.</summary>
+    public string ObjectId => objectId ?? string.Empty;
 
     /// <summary>
     ///     Re-emits the key. <c>GrainKeys.Parse(k).GetValueOrThrow().ToString() == k</c> for every
@@ -124,6 +169,10 @@ public readonly record struct GrainKey
         GrainKeyKind.ClusterConnection => GrainKeys.ClusterConnection(Id),
         GrainKeyKind.Tenant => GrainKeys.Tenant(Id),
         GrainKeyKind.PlatformSingleton => GrainKeys.PlatformSingletonPrefix + Name,
+        GrainKeyKind.ObjectRelations => GrainKeys.ObjectRelations(ObjectType, ObjectId),
+        GrainKeyKind.SubjectRelations => GrainKeys.SubjectRelations(ObjectType, ObjectId),
+        GrainKeyKind.CheckCache => GrainKeys.CheckCache(ObjectType, ObjectId),
+        GrainKeyKind.TupleStore => GrainKeys.TupleStore(Id),
         _ => string.Empty
     };
 }
@@ -140,10 +189,11 @@ public readonly record struct GrainKey
 ///         contains them. Nothing else in the codebase may concatenate one.
 ///     </para>
 ///     <para>
-///         <b>The ten shapes.</b> Eight of them are the table at docs/plan/06 § Grain keys; the last
-///         two — <see cref="Tenant" /> and <see cref="PlatformSingleton" /> — are the rows that table
-///         is <i>missing</i> for grains docs/plan/04 § Grain taxonomy names in its Entity and
-///         Platform rows. See the remarks on each. Every one of them is formatted <i>and</i> parsed —
+///         <b>The fourteen shapes.</b> Eight of them are the table at docs/plan/06 § Grain keys; two
+///         more — <see cref="Tenant" /> and <see cref="PlatformSingleton" /> — are the rows that
+///         table is <i>missing</i> for grains docs/plan/04 § Grain taxonomy names in its Entity and
+///         Platform rows; the last four are docs/plan/07 § Storage's authorization grains. See the
+///         remarks on each. Every one of them is formatted <i>and</i> parsed —
 ///         a key that can
 ///         be built but not decoded is half a type, and routing a physical key back to a grain type
 ///         (in a log, in a repair tool, in a dead-letter handler) needs the other half.
@@ -159,7 +209,18 @@ public readonly record struct GrainKey
 ///         <item><term><see cref="ClusterConnection" /></term><description><c>cluster/{clusterId:N}</c> — <b>null tenant</b></description></item>
 ///         <item><term><see cref="Tenant" /></term><description><c>tenant/{tenantId:N}</c> — not in docs/plan/06's table</description></item>
 ///         <item><term><see cref="PlatformSingleton" /></term><description><c>platform/{name}</c> — <b>null tenant</b>, not in docs/plan/06's table</description></item>
+///         <item><term><see cref="ObjectRelations" /></term><description><c>rel/obj/{type}/{id}</c> — docs/plan/07 § Storage</description></item>
+///         <item><term><see cref="SubjectRelations" /></term><description><c>rel/sub/{type}/{id}</c> — docs/plan/07 § Storage</description></item>
+///         <item><term><see cref="CheckCache" /></term><description><c>rel/check/{type}/{id}</c> — not in docs/plan/07's table</description></item>
+///         <item><term><see cref="TupleStore" /></term><description><c>rel/store/{tenantId:N}</c> — not in docs/plan/07's table</description></item>
 ///     </list>
+///     <para>
+///         The four <c>rel/</c> shapes are docs/plan/07 § Storage's, plus the two that document
+///         names a mechanism for and never gives a key to. See each factory for which is which.
+///         ⚠ <c>rel/idx/{usersetType}/{usersetId}</c> — the Leopard membership index — is
+///         deliberately <b>absent</b>: it is M2 (docs/plan/07 § Effort and sequencing) and a key
+///         shape with no grain behind it is a shape nothing can hold to its meaning.
+///     </para>
 ///     <para>
 ///         ⚠ <b><see cref="Resource" /> is keyed by the resource GUID alone</b> — docs/plan/06:112-114.
 ///         ADR-002 once showed <c>{sub:N}/{rg}/{type}/{res:N}</c> and docs/plan/02:153-159 records
@@ -239,6 +300,21 @@ public static class GrainKeys
 
     /// <summary><c>platform/</c> — a platform singleton. Null tenant.</summary>
     public const string PlatformSingletonPrefix = "platform/";
+
+    /// <summary><c>rel/obj/</c> — <c>IObjectRelationsGrain</c>, docs/plan/07 § Storage.</summary>
+    public const string ObjectRelationsPrefix = "rel/obj/";
+
+    /// <summary><c>rel/sub/</c> — <c>ISubjectRelationsGrain</c>, docs/plan/07 § Storage.</summary>
+    public const string SubjectRelationsPrefix = "rel/sub/";
+
+    /// <summary><c>rel/check/</c> — <c>ICheckGrain</c>. Not a row in docs/plan/07's table.</summary>
+    public const string CheckCachePrefix = "rel/check/";
+
+    /// <summary><c>rel/store/</c> — <c>ITupleStoreGrain</c>. Not a row in docs/plan/07's table.</summary>
+    public const string TupleStorePrefix = "rel/store/";
+
+    /// <summary>The <c>rel</c> head shared by every authorization key shape.</summary>
+    public const string RelationSegment = "rel";
 
     /// <summary><c>platform/shard-map</c> — <c>IShardMapGrain</c>'s singleton name.</summary>
     public const string ShardMapSingleton = "shard-map";
@@ -379,6 +455,95 @@ public static class GrainKeys
     /// <summary>The closed set of platform-singleton names.</summary>
     public static IReadOnlyList<string> PlatformSingletons { get; } =
         [ShardMapSingleton, TenantDirectorySingleton];
+
+    // ── The ReBAC shapes — docs/plan/07 § Storage ──────────────────────────────────────────────
+
+    /// <summary>
+    ///     <c>rel/obj/{type}/{id}</c> — <c>IObjectRelationsGrain</c>, every tuple whose <b>object</b>
+    ///     is this one (docs/plan/07 § Storage, row 1).
+    /// </summary>
+    /// <param name="type">The object type, per <see cref="RelationNaming.IsName" />.</param>
+    /// <param name="id">The object id, per <see cref="RelationNaming.IsId" />.</param>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>The id is a string and not a <see cref="Guid" />, deliberately.</b>
+    ///         docs/plan/07 § The model says "ids are GUIDs", and for every tenant-owned object they
+    ///         are — the <c>N</c> form satisfies <see cref="RelationNaming.IsId" /> and is what
+    ///         callers pass. But docs/plan/06 § Platform administration already requires
+    ///         <c>platform:root#operator</c>, whose id is the word <c>root</c>, and docs/plan/07's
+    ///         own Azure table is written in named scopes. Forcing a GUID here would make the one
+    ///         relation the tenancy layer already depends on unrepresentable, so the rule is
+    ///         widened to <see cref="ResourceNaming" />'s — of which the <c>N</c> form is a subset.
+    ///     </para>
+    /// </remarks>
+    /// <exception cref="ArgumentException">Either component breaks <see cref="RelationNaming" />.</exception>
+    public static string ObjectRelations(string type, string id) =>
+        ObjectRelationsPrefix + EnsureObject(type, id);
+
+    /// <summary>
+    ///     <c>rel/sub/{type}/{id}</c> — <c>ISubjectRelationsGrain</c>, the reverse index: every
+    ///     tuple whose <b>subject</b> is this one (docs/plan/07 § Storage, row 2).
+    /// </summary>
+    /// <param name="type">The subject's object type.</param>
+    /// <param name="id">The subject's object id.</param>
+    /// <remarks>
+    ///     ⚠ The key carries no userset relation. <c>group:eng</c> and <c>group:eng#member</c> are
+    ///     the <i>same</i> subject grain and two different entries inside it, because the reverse
+    ///     index's question is "what does this object appear in", and both answers belong to
+    ///     whoever is asking about <c>group:eng</c>.
+    /// </remarks>
+    /// <exception cref="ArgumentException">Either component breaks <see cref="RelationNaming" />.</exception>
+    public static string SubjectRelations(string type, string id) =>
+        SubjectRelationsPrefix + EnsureObject(type, id);
+
+    /// <summary>
+    ///     <c>rel/check/{type}/{id}</c> — <c>ICheckGrain</c>, the hot-tier check cache for one
+    ///     object.
+    /// </summary>
+    /// <param name="type">The object type.</param>
+    /// <param name="id">The object id.</param>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>DOC GAP, and this shape is the repair.</b> docs/plan/07 § Check declares
+    ///         <c>ICheckGrain.CheckAsync</c> but its § Storage table has <b>three</b> rows and none
+    ///         of them is the check grain — so the document names a grain and never says what
+    ///         addresses it.
+    ///     </para>
+    ///     <para>
+    ///         <b>Keyed by the object being checked</b>, because that is what the cache key of
+    ///         docs/plan/07 § Caching across requests is anchored on:
+    ///         <c>(tenant, object, permission, subject, schemaVersion, tenantRelationVersion)</c>.
+    ///         The tenant is the qualification, the object is this key, and the remaining components
+    ///         live inside the grain's hot state. One activation per object also means the check
+    ///         path fans out no wider than the objects a walk actually visits.
+    ///     </para>
+    /// </remarks>
+    /// <exception cref="ArgumentException">Either component breaks <see cref="RelationNaming" />.</exception>
+    public static string CheckCache(string type, string id) =>
+        CheckCachePrefix + EnsureObject(type, id);
+
+    /// <summary>
+    ///     <c>rel/store/{tenantId:N}</c> — <c>ITupleStoreGrain</c>, the tenant's tuple writer and
+    ///     the source of its relation version.
+    /// </summary>
+    /// <param name="tenantId">The tenant.</param>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>DOC GAP.</b> docs/plan/07 § Consistency requires "a per-tenant monotonic version
+    ///         returned by every tuple write", and § Storage requires that the two-grain write be
+    ///         "ordered (object first, then subject) and reconciled by a sweeper". Both need a
+    ///         per-tenant thing to live in, and the document names none. This is it.
+    ///     </para>
+    ///     <para>
+    ///         <b>The tenant id is repeated inside a tenant-qualified key</b> for the same reason
+    ///         <see cref="Tenant" /> repeats it: a key read outside its qualification still says
+    ///         which tenant it is. The cardinality question (docs/plan/04 § Grain taxonomy) is
+    ///         answered the same way as for the tenant directory — one activation per tenant, on a
+    ///         path whose traffic is role assignments, which docs/plan/07 § Caching across requests
+    ///         itself calls rare. Checks never write through it.
+    ///     </para>
+    /// </remarks>
+    public static string TupleStore(Guid tenantId) => TupleStorePrefix + N(tenantId);
 
     /// <summary><c>user/{userId:N}</c> — <c>IUserGrain</c>, docs/plan/06:107.</summary>
     public static string User(Guid userId) => UserPrefix + N(userId);
@@ -645,8 +810,10 @@ public static class GrainKeys
             return Invalid(
                 "A grain key within a tenant is required. It is one of 'sub/{id}', "
                 + "'sub/{id}/rg/{name}', 'res/{id}', 'user/{id}', 'op/{id}', 'cluster/{id}', "
-                + "'tenant/{id}', 'platform/{singleton}', 'idx/path/{digest}' or "
-                + "'idx/email/{digest}' — see docs/plan/06 § Grain keys.");
+                + "'tenant/{id}', 'platform/{singleton}', 'idx/path/{digest}', "
+                + "'idx/email/{digest}', 'rel/store/{tenantId}', 'rel/obj/{type}/{id}', "
+                + "'rel/sub/{type}/{id}' or 'rel/check/{type}/{id}' — see docs/plan/06 § Grain keys "
+                + "and docs/plan/07 § Storage.");
         }
 
         var segments = keyWithinTenant.Split('/');
@@ -663,8 +830,8 @@ public static class GrainKeys
         var parsed = segments.Length switch
         {
             2 => ParseTwoSegments(keyWithinTenant, segments),
-            3 => ParseIndex(keyWithinTenant, segments),
-            4 => ParseResourceGroup(keyWithinTenant, segments),
+            3 => ParseThreeSegments(keyWithinTenant, segments),
+            4 => ParseFourSegments(keyWithinTenant, segments),
             _ => Invalid(
                 $"'{keyWithinTenant}' is not a grain key: it has "
                 + Int(segments.Length) + " '/'-separated segments and every grain key shape has 2, "
@@ -755,13 +922,30 @@ public static class GrainKeys
                 + "lower-case 'N' form, with no hyphens and no braces.");
     }
 
-    static Result<GrainKey> ParseIndex(string key, string[] segments)
+    static Result<GrainKey> ParseThreeSegments(string key, string[] segments)
     {
+        if (string.Equals(segments[0], RelationSegment, StringComparison.Ordinal))
+        {
+            if (!string.Equals(segments[1], "store", StringComparison.Ordinal))
+            {
+                return Invalid(
+                    $"'{key}' is not a grain key: the only three-segment 'rel' shape is "
+                    + "'rel/store/{tenantId}' — docs/plan/07 § Consistency. 'rel/obj', 'rel/sub' "
+                    + "and 'rel/check' take four segments.");
+            }
+
+            return GuidFormat.TryParseN(segments[2], out var tenantId)
+                ? Result<GrainKey>.Success(new GrainKey(GrainKeyKind.TupleStore, tenantId, null, null))
+                : Invalid(
+                    $"'{segments[2]}' is not a tenant id: a grain key spells GUIDs in the 32-digit "
+                    + "lower-case 'N' form, with no hyphens and no braces.");
+        }
+
         if (!string.Equals(segments[0], "idx", StringComparison.Ordinal))
         {
             return Invalid(
-                $"'{key}' is not a grain key: a three-segment key is an index and must start with "
-                + "'idx'.");
+                $"'{key}' is not a grain key: a three-segment key is an index or a tuple store and "
+                + "must start with 'idx' or 'rel'.");
         }
 
         var kind = segments[1] switch
@@ -786,14 +970,20 @@ public static class GrainKeys
                 + " of a SHA-256.");
     }
 
-    static Result<GrainKey> ParseResourceGroup(string key, string[] segments)
+    static Result<GrainKey> ParseFourSegments(string key, string[] segments)
     {
+        if (string.Equals(segments[0], RelationSegment, StringComparison.Ordinal))
+        {
+            return ParseRelation(key, segments);
+        }
+
         if (!string.Equals(segments[0], "sub", StringComparison.Ordinal)
             || !string.Equals(segments[2], ResourceGroupSegment, StringComparison.Ordinal))
         {
             return Invalid(
-                $"'{key}' is not a grain key: the only four-segment shape is "
-                + "'sub/{subscriptionId}/rg/{name}' — docs/plan/06:104.");
+                $"'{key}' is not a grain key: the four-segment shapes are "
+                + "'sub/{subscriptionId}/rg/{name}' (docs/plan/06:104) and 'rel/{obj|sub|check}/"
+                + "{type}/{id}' (docs/plan/07 § Storage).");
         }
 
         if (!GuidFormat.TryParseN(segments[1], out var subscriptionId))
@@ -808,6 +998,59 @@ public static class GrainKeys
             ? Result<GrainKey>.Failure(new Error(ErrorCode.InvalidGrainKey, error.Message))
             : Result<GrainKey>.Success(
                 new GrainKey(GrainKeyKind.ResourceGroup, subscriptionId, segments[3], null));
+    }
+
+    static Result<GrainKey> ParseRelation(string key, string[] segments)
+    {
+        var kind = segments[1] switch
+        {
+            "obj" => GrainKeyKind.ObjectRelations,
+            "sub" => GrainKeyKind.SubjectRelations,
+            "check" => GrainKeyKind.CheckCache,
+            _ => GrainKeyKind.None
+        };
+
+        if (kind == GrainKeyKind.None)
+        {
+            return Invalid(
+                $"'{key}' is not a grain key: '{segments[1]}' is not an authorization shape. The "
+                + "four-segment 'rel' shapes are 'rel/obj' (the tuples whose object this is), "
+                + "'rel/sub' (the reverse index) and 'rel/check' (the check cache) — docs/plan/07 "
+                + "§ Storage.");
+        }
+
+        var type = RelationNaming.ValidateName(segments[2], "object type");
+        if (type.TryGetError(out var typeError))
+        {
+            return Result<GrainKey>.Failure(new Error(ErrorCode.InvalidGrainKey, typeError.Message));
+        }
+
+        var id = RelationNaming.ValidateId(segments[3]);
+        return id.TryGetError(out var idError)
+            ? Result<GrainKey>.Failure(new Error(ErrorCode.InvalidGrainKey, idError.Message))
+            : Result<GrainKey>.Success(new GrainKey(kind, segments[2], segments[3]));
+    }
+
+    /// <summary>
+    ///     Validates the two components of a <c>rel/…/{type}/{id}</c> key and returns
+    ///     <c>{type}/{id}</c>.
+    /// </summary>
+    /// <exception cref="ArgumentException">Either component is not legal.</exception>
+    static string EnsureObject(string type, string id)
+    {
+        var validType = RelationNaming.ValidateName(type, "object type");
+        if (validType.TryGetError(out var typeError))
+        {
+            throw new ArgumentException(typeError.Message, nameof(type));
+        }
+
+        var validId = RelationNaming.ValidateId(id);
+        if (validId.TryGetError(out var idError))
+        {
+            throw new ArgumentException(idError.Message, nameof(id));
+        }
+
+        return type + "/" + id;
     }
 
     static bool IsDigest(string value)

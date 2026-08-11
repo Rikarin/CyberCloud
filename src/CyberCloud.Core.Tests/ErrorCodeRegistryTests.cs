@@ -38,6 +38,9 @@ public class ErrorCodeRegistryTests
         "ResourceAlreadyExists",
         "ResourceGroupNotFound",
         "ResourceNotFound",
+        // Added with CyberCloud.Authorization (docs/plan/07 § The model): a check that names a
+        // permission the schema does not define must be neither a denial nor an allow.
+        "SchemaInvalid",
         "ScopeLocked",
         "SubscriptionNotFound",
         "TenantNotFound",

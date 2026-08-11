@@ -48,6 +48,10 @@
     <Project Path="src/CyberCloud.Tenancy.Contracts.Tests/CyberCloud.Tenancy.Contracts.Tests.csproj" />
     <Project Path="src/CyberCloud.Tenancy/CyberCloud.Tenancy.csproj" />
     <Project Path="src/CyberCloud.Tenancy.Tests/CyberCloud.Tenancy.Tests.csproj" />
+    <Project Path="src/CyberCloud.Authorization.Contracts/CyberCloud.Authorization.Contracts.csproj" />
+    <Project Path="src/CyberCloud.Authorization.Contracts.Tests/CyberCloud.Authorization.Contracts.Tests.csproj" />
+    <Project Path="src/CyberCloud.Authorization/CyberCloud.Authorization.csproj" />
+    <Project Path="src/CyberCloud.Authorization.Tests/CyberCloud.Authorization.Tests.csproj" />
   </Folder>
   <Folder Name="/src/Providers/" />
   <Folder Name="/src/Hosts/" />
