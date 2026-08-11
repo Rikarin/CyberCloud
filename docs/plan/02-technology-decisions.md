@@ -24,14 +24,16 @@ Versions verified against `api.nuget.org` on 2026-08-08. These go verbatim into
 | `Microsoft.Orleans.Sdk` | 10.2.2 | every grain and contract project | Orleans 10 targets .NET 10 and is what Survival runs. Source-generated serializers, so no reflection at activation |
 | `Microsoft.Orleans.Server` / `.Client` | 10.2.2 | silo hosts / gateway | |
 | `Microsoft.Orleans.Clustering.Redis` | 10.2.2 | **local dev only** | ADR-004 — production membership is Kubernetes |
-| `Orleans.Clustering.Kubernetes` | 10.0.0 | silo hosts | `UseKubeMembership` writes silo entries as CRs in the silo's own namespace. Zero external dependencies for membership, which is the first half of "no single database" |
+| `Orleans.Clustering.Kubernetes` | ⚠ **10.0.1** | silo hosts | `UseKubeMembership` writes silo entries as CRs in the silo's own namespace. Zero external dependencies for membership, which is the first half of "no single database" |
 | `Microsoft.Orleans.Persistence.Redis` | 10.2.2 | hot tier | ADR-003 |
 | `Microsoft.Orleans.Reminders.Redis` | 10.2.2 | reminder service | Sharded with the hot tier |
 | `Microsoft.Orleans.Streaming` | 10.2.2 | everywhere | |
-| `Rikarin.Orleans.Streaming.NATs` | 9.1.0-alpha.1 → **needs a 10.x build** | streams | ⚠ **This is ours and it is on Orleans 9.** Bumping it to Orleans 10 is a prerequisite task in [24](24-roadmap.md), not a given. Fallback if it slips: `Microsoft.Orleans.Streaming.EventHubs`-shaped custom adapter over `NATS.Client.JetStream`, which is what the package already is |
+| ~~`Rikarin.Orleans.Streaming.NATs`~~ **`Microsoft.Orleans.Streaming.NATS`** | `$(OrleansVersion)-alpha.1` | streams | ⚠ **REPLACED.** The Rikarin package is not relevant; Orleans ships a first-party NATS provider built against Orleans 10, so ADR-005's fallback and [24](24-roadmap.md)'s 0.4 EM Phase-0 bump are both dropped. ⚠ **Version trap:** every release carries `-alpha.1`, and `10.2.2-rc.2.alpha.1` sorts *above* `10.2.2-alpha.1` under SemVer while being built against an Orleans RC — so the pin tracks `$(OrleansVersion)`, never "latest" |
 | `Orleans.Multitenant` | 4.0.0 | every tenant-scoped grain | ADR-002. Targets Orleans 10 on .NET 10 per its README |
 | `Microsoft.Orleans.Serialization.SystemTextJson` | 10.2.2 | grain storage serializer | Human-readable state in Redis is worth the bytes during the first year. Revisit against MemoryPack when a grain shows up in a profile |
 | `Microsoft.Orleans.TestingHost` | 10.2.2 | tests | In-process cluster per test class |
+| `Microsoft.Orleans.Persistence.AdoNet` | `$(OrleansVersion)` | durable tier | ⚠ **Was missing, and ADR-003 cannot be built without it** — the only source of `AddAdoNetGrainStorage`. It carries **no driver** (it loads `Npgsql` reflectively, so a typo in `Invariant` is a runtime `AggregateException`) and **no SQL** — see [05 § Durable](05-state-and-storage.md) |
+| `Microsoft.Orleans.Hosting.Kubernetes` | `$(OrleansVersion)` | silo hosts | ⚠ **Was missing, and ADR-004 requires it** — the only source of `UseKubernetesHosting()`. A *different* package from `Orleans.Clustering.Kubernetes` above, by a different author: that one is the contrib membership provider, this one maps `SIGTERM` to a graceful `StopAsync` with grain migration |
 
 ### ABP — used where it earns its place
 
@@ -62,10 +64,11 @@ framework we live inside.**
 | `KubernetesClient` | 19.0.2 | `CyberCloud.Kubernetes` | Generic-object + server-side-apply support is what the command builder needs. ⚠ Survival pins 18.0.13; 19 changed the generic client surface — a small migration, done once, here |
 | `Microsoft.AspNetCore.SignalR.Client` | 10.0.10 | CLI, tests | |
 | `System.CommandLine` | 2.0.10 | `cyc` | Finally stable after years of preview |
-| `OpenIddict.AspNetCore` | 7.3.0 | identity host | ADR-015. ⚠ **7.3.0, not the 8.0 preview** — an auth server is the last place to run a preview |
-| `Fido2.AspNet` | 4.0.0-beta9 | identity host | ⚠ The only maintained .NET WebAuthn library, and it is a beta with no stable successor. Wrapped behind `IPasskeyService` so replacing it is one file |
+| `OpenIddict.AspNetCore` | ⚠ **7.6.0** | identity host | ADR-015. The reasoning — newest stable, never a preview — is unchanged; 7.3.0 was a snapshot of "newest stable on 2026-08-08" and 7.4/7.5/7.6 have since shipped. 8.0 is still preview |
+| `Fido2.AspNet` | ⚠ **4.0.1** | identity host | ⚠ **The "beta with no stable successor" claim was false** — 4.0.0 and 4.0.1 are both published stable. Still wrapped behind `IPasskeyService` so replacing it is one file |
 | `Riok.Mapperly` | 4.3.1 | providers | Source-generated mapping; no AutoMapper reflection |
-| `Polly` | 8.6.5 | fabric | Retry/circuit-break on cluster connections |
+| `Polly` | 8.6.5 | fabric, **and `CyberCloud.Sdk`** | Retry/circuit-break on cluster connections. ⚠ Also the SDK's whole resilience layer, which is why rejecting `Azure.Core` cost no new dependency — see [21 § The .NET SDK](21-cli-and-sdks.md) |
+| `Konscious.Security.Cryptography.Argon2` | 1.3.1 | identity host | ⚠ **Was missing.** .NET ships no Argon2 — `System.Security.Cryptography` has PBKDF2 and stops — so [11 § Credentials](11-identity.md)'s Argon2id was unbuildable. Chosen over `Isopoh` (stale, stops at net7.0) and `NSec` (better maintained, but its libsodium binding fixes parallelism at 1 and cannot express the specified `p=4`). Its `KnownSecret` is the pepper as RFC 9106's secret input |
 | `Serilog.AspNetCore` + `.Sinks.OpenTelemetry` | 10.0.0 / 4.2.0 | all hosts | |
 | `OpenTelemetry.*` | 1.17.0 | all hosts | Traces and metrics; `AddActivityPropagation()` on the Orleans builder so a trace crosses grain calls |
 
@@ -76,7 +79,7 @@ framework we live inside.**
 | `xunit.v3` | 3.2.2 |
 | `NSubstitute` | 5.3.0 |
 | `Shouldly` | 4.3.0 |
-| `Testcontainers` | latest at bring-up — real Redis/Postgres/NATS/`k3s` in integration tests |
+| `Testcontainers` | ⚠ **4.13.0** — pinned. "Latest at bring-up" is not expressible under the Central Package Management this same document mandates above, which forbids floating versions |
 | `Nuke.Common` | 10.1.0 |
 | `Aspire.Hosting.*` | 13.4.6 — ADR-014, **local development only** |
 | `Microsoft.CodeAnalysis.CSharp` | 5.6.0 — `CyberCloud.Analyzers` builds against it |
