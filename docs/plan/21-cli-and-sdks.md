@@ -84,20 +84,45 @@ await foreach (var progress in op.GetProgressAsync())      // ← ours; Azure's 
 PostgresServerResource server = await op.WaitForCompletionAsync();
 ```
 
-| Convention | Source |
-|---|---|
-| `TokenCredential` | `Azure.Core`'s abstraction, so `DefaultAzureCredential`-shaped chaining works the same way |
-| `Response<T>` / `NullableResponse<T>` | Azure.Core |
-| `Operation<T>` + `WaitUntil` | Azure.Core |
-| `AsyncPageable<T>` | Azure.Core — `await foreach` over paged lists |
-| `{Type}Resource` / `{Type}Collection` / `{Type}Data` | Azure.ResourceManager |
-| `GetProgressAsync()` | **Ours.** Azure's LROs expose no progress; ours do ([08](08-resource-manager.md)) and the SDK should not hide it |
+⚠ **"Source" below means *whose idea*, not whose package.** Every one of these is **implemented
+here**, in our own namespace — see the decision that follows the table. Nothing named `Azure.*`
+appears in the dependency graph.
 
-⚠ **Do we depend on `Azure.Core` or reimplement it?** Decision: **depend on it.** It is MIT, it is
-excellent, it brings the retry/pipeline/diagnostics machinery for free, and it means a developer's
-existing `TokenCredential` implementations and mental model transfer directly. The cost is a
-dependency named "Azure" in our SDK's graph, which is a cosmetic objection against a real engineering
-benefit.
+| Convention | Shape borrowed from | Implemented |
+|---|---|---|
+| A `TokenCredential`-shaped credential | Azure.Core's abstraction — async, token + expiry, chainable | **Ours** |
+| `Response<T>` / `NullableResponse<T>` | Azure.Core | **Ours** |
+| `Operation<T>` + `WaitUntil` | Azure.Core | **Ours** |
+| `AsyncPageable<T>` — `await foreach` over paged lists | Azure.Core | **Ours** |
+| `{Type}Resource` / `{Type}Collection` / `{Type}Data` | Azure.ResourceManager | **Ours**, generated (§ Generation) |
+| `GetProgressAsync()` | **Nobody's.** Azure's LROs expose no progress; ours do ([08](08-resource-manager.md)) and the SDK should not hide it | **Ours** |
+| Retry, `Retry-After` on 429, correlation ids | — | **Ours**, over `Polly` 8.6.5, already in the register |
+
+⚠ **Do we depend on `Azure.Core` or reimplement it?** ~~Decision: depend on it.~~
+**DECIDED 2026-08-11: reimplement it. We take the shapes and own the code.**
+
+This row was never a decision — [25](25-risks-and-open-questions.md) listed it as open question 5
+under *"Default if unanswered"*, and the default was `Azure.Core`. Asked directly, the answer was no.
+The original justification did not survive examination:
+
+| Claim | Verdict |
+|---|---|
+| "a developer's existing `TokenCredential` implementations transfer directly" | **False.** `DefaultAzureCredential`, `ManagedIdentityCredential` and `AzureCliCredential` authenticate against **Entra**, not our identity server. The table above says `DefaultAzureCredential`-**shaped**, which is the honest word; this paragraph then claimed more than the table did |
+| "brings the retry/pipeline/diagnostics machinery for free" | **Weakened.** `Polly` 8.6.5 is already in the register for the fabric's cluster connections. The choice was never Azure.Core versus writing retry from scratch |
+| "the cost is a dependency named Azure — a cosmetic objection" | **The weakest objection was the only one listed.** The real costs are trim- and AOT-hostility, coupling our release cadence to Azure's, and pulling `System.Diagnostics.DiagnosticSource`, `System.Memory.Data` and `System.ClientModel` into a CLI that is meant to be one self-contained file |
+
+**The genuine benefit was the *shapes*, and that is what we keep** — `Response<T>`, `Operation<T>` +
+`WaitUntil`, `AsyncPageable<T>`, and a `TokenCredential`-shaped credential abstraction, all in our own
+namespace, over `Polly` and `HttpClient`. An Azure-SDK user stays instantly productive; nothing named
+`Azure.*` appears in the graph. `GetProgressAsync()` was already ours, and now the whole poller is.
+
+⚠ **The decision is also what makes the CLI's own requirement reachable.** § `cyc` above requires
+single-file **AOT** publication per RID, and the CLI depends on this SDK
+([§ Generation](#generation) — one pipeline, not two). `Azure.Core` is the trim-hostile part of that
+graph. Owning the stack means owning the serialization: source-generated `System.Text.Json`
+throughout, and an AOT warning becomes a bug we can fix rather than a dependency we must live with.
+Those two plan requirements were in direct tension and nothing had noticed, because nothing had built
+both halves.
 
 ### Generation
 
