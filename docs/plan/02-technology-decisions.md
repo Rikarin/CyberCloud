@@ -9,8 +9,8 @@
 | Language | C# 14, `LangVersion=latest` | See [00](00-vision-and-principles.md) for the subset |
 | Solution | `CyberCloud.slnx` | Plus `.slnf` filters per area for fast IDE loads |
 | Packages | Central Package Management | `Directory.Packages.props`, no floating versions |
-| Frontend | Angular 22, Tailwind 4, zoneless, SSR | Matches `~/Projects/Rikarin/xui` exactly — the library dictates the version, not the other way round |
-| Node | 22 LTS, pnpm | xUI is a pnpm workspace; the portal joins that convention |
+| Frontend | Angular 22, Tailwind 4, zoneless, SSR | The library dictates the version, not the other way round — but ⚠ read it from **npm**, not from `~/Projects/Rikarin/xui`. xUI's CI bumps the published version without reflecting it back into the checkout. `@xui/* ^2.2.0`, peering `@angular/*: 22`. See ADR-017 |
+| Node | ⚠ **unresolved** — plan says 22 LTS; the dev host runs 26.5.0 | xUI is a pnpm workspace and the portal joins that convention (pnpm 11.18 present). The Node major is *not* pinned by any `@xui` peer range, so this is our choice, not xUI's — it needs a `.nvmrc`/`engines` decision and a matching CI image before portal work starts, or local and CI will silently differ |
 
 ## Dependency register
 
@@ -61,7 +61,7 @@ framework we live inside.**
 | `NATS.Client.Core` / `.JetStream` | 3.1.0 | event backbone | ADR-005 |
 | `KubernetesClient` | 19.0.2 | `CyberCloud.Kubernetes` | Generic-object + server-side-apply support is what the command builder needs. ⚠ Survival pins 18.0.13; 19 changed the generic client surface — a small migration, done once, here |
 | `Microsoft.AspNetCore.SignalR.Client` | 10.0.10 | CLI, tests | |
-| `System.CommandLine` | 2.0.10 | `cc` | Finally stable after years of preview |
+| `System.CommandLine` | 2.0.10 | `cyc` | Finally stable after years of preview |
 | `OpenIddict.AspNetCore` | 7.3.0 | identity host | ADR-015. ⚠ **7.3.0, not the 8.0 preview** — an auth server is the last place to run a preview |
 | `Fido2.AspNet` | 4.0.0-beta9 | identity host | ⚠ The only maintained .NET WebAuthn library, and it is a beta with no stable successor. Wrapped behind `IPasskeyService` so replacing it is one file |
 | `Riok.Mapperly` | 4.3.1 | providers | Source-generated mapping; no AutoMapper reflection |
@@ -364,7 +364,7 @@ versions, and a JSON Schema per version. From that registry a build step generat
 | Surface | Generated |
 |---|---|
 | OpenAPI 3.1 document | Paths, bodies, LRO headers, error shapes |
-| `cc` CLI | Verb tree, flags, help, completion |
+| `cyc` CLI | Verb tree, flags, help, completion |
 | .NET SDK | Clients, models, `Operation<T>` pollers |
 | Portal forms | Angular reactive forms + xUI controls from the schema, with `x-cybercloud-*` hints for widgets (a `storageclass` picker, a region picker) |
 
@@ -462,8 +462,26 @@ token model also means the portal themes by changing CSS variables rather than b
 **it is built in xUI and released there**, not in the portal. The portal is xUI's largest consumer and
 therefore its best forcing function — the same relationship Vixen's editor has to its UI framework.
 
-**⚠ Version coupling.** Angular 22.0.8 / Tailwind 4.3.3 are xUI's pins today. The portal does not
-choose these; it follows. An Angular major upgrade is an xUI task first.
+**⚠ Version coupling, and where to read it from.** The portal does not choose the Angular version; it
+follows xUI, and an Angular major upgrade is an xUI task first. That much is unchanged.
+
+What *is* corrected: **the local checkout at `~/Projects/Rikarin/xui` is not the contract.** xUI's CI
+increments the package version at publish time and does not reflect it back into the repository, so
+the working tree is behind what consumers actually resolve. Read the registry, not the repo.
+
+| | Local checkout | Published on npm (2026-08-11) |
+|---|---|---|
+| Version | — (workspace) | `@xui/* ` **2.2.0** (`next`: 2.2.0-alpha.0) |
+| Angular | pinned `22.0.8` exactly | peer `@angular/*: 22` — a **major range** |
+| Tailwind | `^4.3.3` in devDependencies | **not a peer dependency at all** |
+| Other peers | — | `clsx >=2`, `luxon >=3`, `rxjs >=7`, `tailwind-merge >=3` |
+
+So the portal depends on `@xui/* ^2.2.0` from the registry and is free within Angular 22.x. The
+"90 components, one npm package each" claim is confirmed — the checkout carries 92 libraries under
+`libs/ui`, and every component this plan names by hand (`data-table`, `dock-manager`, `omnibar`,
+`node-graph`, `splitter`, `code-block`, `rich-text-editor`, `date-range-picker`, `echarts`,
+`transfer`, `tree`) exists. ⚠ Do not confuse the scoped `@xui/*` packages with the unrelated
+unscoped `xui` package on npm.
 
 ### ADR-018 — Tests are siblings, and the Orleans test host is the default
 

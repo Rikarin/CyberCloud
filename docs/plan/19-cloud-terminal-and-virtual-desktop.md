@@ -51,7 +51,7 @@ network egress from a locked-down pod.
 |---|---|
 | Shells | `bash`, `zsh`, `sh`, `pwsh`, `tmux` |
 | Editors | `vim`, `nano`, `emacs` (`-nox`) |
-| Cloud | `cc` (ours), `kubectl` + `kubectx`/`kubens`, `helm`, `k9s`, `stern` |
+| Cloud | `cyc` (ours), `kubectl` + `kubectx`/`kubens`, `helm`, `k9s`, `stern` |
 | IaC | `terraform`¹, `opentofu`, `ansible` |
 | Build | `make`, `maven`, `gradle`, `npm`, `pnpm`, `yarn`, `pip`, `uv`, `dotnet` |
 | VCS | `git`, `gh`, `glab` |
@@ -64,7 +64,7 @@ the safe default and `terraform` is included only if that read clears.
 ² Requires `NET_RAW`, which the pod does not have by default. It is present and it will fail without
 an elevated session — documented rather than silently absent.
 
-**Two variants:** `default` and `minimal` (~400 MB, shells + `cc` + `kubectl` + editors), because a
+**Two variants:** `default` and `minimal` (~400 MB, shells + `cyc` + `kubectl` + editors), because a
 40-second cold start for someone who wants to run one command is the wrong trade.
 
 ### The pod
@@ -72,7 +72,7 @@ an elevated session — documented rather than silently absent.
 | Property | Value | Why |
 |---|---|---|
 | Namespace | The tenant's `cybercloud-shell` namespace, in the subscription's cluster | Per the brief: it runs in the tenant's subscription and is billed to it |
-| Identity | The invoking user's managed identity | `cc` and `kubectl` work with no stored credential — this is the feature |
+| Identity | The invoking user's managed identity | `cyc` and `kubectl` work with no stored credential — this is the feature |
 | Resources | 0.5–2 vCPU, 1–4 GB, ephemeral storage capped | |
 | Security | Non-root, read-only root filesystem except `$HOME` and `/tmp`, no privilege escalation, seccomp `RuntimeDefault`, dropped capabilities | |
 | Network | ⚠ **Inside the tenant's VPC** — that is the point (reach your database) — with a `NetworkPolicy` denying access to the platform's own namespaces | |

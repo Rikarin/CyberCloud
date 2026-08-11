@@ -69,7 +69,7 @@ built on an unfinished manager is twenty copies of the manager's missing half.
 | Metering + quota (no invoicing) | 1.8 | [22](22-billing-metering-and-quota.md) |
 | Cloud terminal | 1.5 | [19](19-cloud-terminal-and-virtual-desktop.md) |
 | Portal M1 subset | 5.0 | [20](20-portal.md) |
-| `cc` + .NET SDK + TypeScript packaging | 3.2 | [21](21-cli-and-sdks.md) |
+| `cyc` + .NET SDK + TypeScript packaging | 3.2 | [21](21-cli-and-sdks.md) |
 | Platform hardening: supply chain, admission, isolation, log canary | 1.0 | [18](18-security-vault-and-malware-scan.md) |
 
 *(Sums to ~44; ~18 of it runs in parallel with phase 1's tail and with itself. The 26 is the critical
@@ -81,7 +81,7 @@ path, not the total.)*
 > (~8 min, with visible steps) → create a VPC and a Postgres server in it → get the connection string
 > from Vault → open the cloud terminal and `psql` into it using a managed identity → see metrics and
 > logs → invite a colleague and grant them Reader on one resource group → do all of it again from
-> `cc` → see the usage accruing.
+> `cyc` → see the usage accruing.
 
 Plus: three design-partner tenants running for four weeks with no cross-tenant incident; the chaos
 invariants green; the load suite meeting the [00](00-vision-and-principles.md) budgets at 10 % of

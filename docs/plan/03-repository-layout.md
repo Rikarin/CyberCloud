@@ -23,7 +23,7 @@ CyberCloud/
 ├── src/                          # ── all .NET ──
 ├── charts/                       # ── Helm charts we own or have forked ──
 ├── portal/                       # ── Angular 22 + xUI ──
-├── cli/                          # ── `cc` — .NET, but kept out of src/ because it ships separately ──
+├── cli/                          # ── `cyc` — .NET, but kept out of src/ because it ships separately ──
 ├── deploy/                       # ── how Cyber Cloud itself is installed ──
 ├── test/                         # ── cross-cutting: e2e, conformance, chaos, load ──
 ├── docs/

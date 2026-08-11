@@ -59,7 +59,7 @@ public readonly record struct ReconcileContext(
 
 `ReconcileOutcome` is one of `Converged`, `InProgress(reason, retryAfter)`, `Failed(error, retryable)`.
 Nothing else. A reconciler that wants to say something else wants to log, and `IReconcileLog` is how —
-those entries stream to `operation-progress` and appear in the portal and in `cc --wait`, which is what
+those entries stream to `operation-progress` and appear in the portal and in `cyc --wait`, which is what
 turns a four-minute cluster creation from a spinner into a story.
 
 **The contract every reconciler must satisfy**, checked by the conformance suite:

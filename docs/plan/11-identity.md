@@ -40,7 +40,7 @@ OpenIddict 7.3.0 (ADR-015), OAuth 2.1 + OIDC.
 | Flow | For | Notes |
 |---|---|---|
 | Authorization Code + PKCE | Portal, third-party apps | The only interactive flow. No implicit, no hybrid |
-| Device Authorization | `cc login` on a headless box | |
+| Device Authorization | `cyc login` on a headless box | |
 | Client Credentials | Service principals, CI | |
 | Refresh Token | All of the above | Rotating, one-time-use, with reuse detection → revoke the whole chain |
 | Token Exchange (RFC 8693) | Workload identity | A cluster's SA token → a platform token |

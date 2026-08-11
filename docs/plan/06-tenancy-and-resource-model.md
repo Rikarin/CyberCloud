@@ -143,7 +143,7 @@ not a second API** — it is a provider.
 Consequences, all good:
 
 - Admin actions go through the same resource manager, so they get the same audit, the same LRO model,
-  the same OpenAPI, the same CLI (`cc platform tenant list`) and the same generated forms for free.
+  the same OpenAPI, the same CLI (`cyc platform tenant list`) and the same generated forms for free.
 - Authorization is the same ReBAC engine — a platform operator holds `platform:root#operator@user:X`,
   and `Support` is a *different, weaker* relation with an expiry.
 - The admin UI (`portal/apps/admin`) is a second Angular app against the same API with a different

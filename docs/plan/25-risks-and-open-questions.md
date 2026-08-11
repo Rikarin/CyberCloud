@@ -146,14 +146,14 @@ Ordered by when they block something.
 | 7 | **Windows Server images?** ([13](13-compute-vm-containers.md)) | The VM image catalogue | Linux only until a licensing arrangement exists |
 | 8 | **Marketplace / third-party providers?** ([01](01-azure-parity-catalogue.md)) | Whether the provider model needs isolation and revenue split from the start | P1 — but the provider interface should not *preclude* it, and today it does not |
 | 9 | **Is a tenant one region forever, or is data residency per-resource?** | The tenancy model's depth | Per tenant. Per-resource residency is a much larger model |
-| 10 | **`cc` or another CLI name?** | Branding, package names, completion scripts | `cc` — short, and `cc` as a binary name is not widely taken (⚠ except as a C compiler alias on some systems; worth 10 minutes of checking before it is on 10 000 machines) |
+| 10 | ~~**`cc` or another CLI name?**~~ | — | ✅ **CLOSED — the CLI is `cyc`.** See § Corrections, item 5. The `cc` proposal is withdrawn: the ⚠ on this row was correct and understated. `cc` is not merely "a C compiler alias on some systems" — it is the POSIX-mandated name for the system C compiler, present at `/usr/bin/cc` on essentially every Linux and macOS host, and `CC` is the standard `make`/autotools variable for it, which would have made the planned `CC_*` env prefix ambiguous too. Shipping `cc` would have shadowed a build toolchain binary on 10 000 machines |
 | 11 | **BGP peering available on the fabric, and does the design need FRR-grade route policy?** (ADR-019) | Whether MetalLB is installed at all | BGP available → Cilium LB-IPAM + BGP CP, no MetalLB. L2-only → MetalLB in L2 mode. FRR-grade policy or BFD needed → MetalLB + FRR-K8s **for BGP only**, alongside Cilium. **A network-team call** |
 
 ---
 
 ## Corrections to the original brief
 
-Four, all settled, kept here because each changed what gets built.
+Six, all settled, kept here because each changed what gets built.
 
 1. **Redis alone is not a system of record.** ADR-003 splits storage into Hot and Durable, with a
    checked-in list and a build gate. Redis remains the default and the brief's instinct — fast,
@@ -170,6 +170,25 @@ Four, all settled, kept here because each changed what gets built.
    IMAP front doors with per-tenant back ends; dedicated outbound IPs by plan and volume. The instinct
    was right about reputation and wrong about ports.
    [17](17-communication-and-email.md).
+5. **The CLI is `cyc`, not `cc`.** `cc` is the POSIX name for the system C compiler and exists at
+   `/usr/bin/cc` on virtually every Linux and macOS host; `CC` is the standard `make` variable for
+   it. Installing a `cc` would shadow a build toolchain binary, and the planned `CC_*` env prefix
+   carried the same ambiguity. `cyc` was checked before adoption: no binary of that name on PATH, no
+   NuGet package id, and only an unrelated placeholder on npm — which does not matter, because the
+   CLI ships as native per-RID binaries rather than an npm package. Config is `~/.cyc/`, env prefix
+   `CYC_*`. ⚠ The platform's *other* uses of `cc` are unrelated to the binary and are unchanged: the
+   NATS subject prefix (`cc.{tenant}.…`, [04](04-orleans-topology.md)), the Redis hash tag
+   (`{cc:t:<tenantId>}`, [05](05-state-and-storage.md)) and the `cc-provider` project template.
+   [21](21-cli-and-sdks.md).
+6. **xUI is consumed from npm at its published version, not from the local checkout.** ADR-017's
+   version-coupling note named Angular 22.0.8 / Tailwind 4.3.3 as "xUI's pins today", read from
+   `~/Projects/Rikarin/xui`. That checkout is not the contract: xUI's CI increments the package
+   version on publish and does not reflect it back into the repository, so the working tree
+   understates what is released. The published truth as of 2026-08-11 is `@xui/* 2.2.0`, whose
+   peer range is `@angular/*: 22` — a **major** range, not an exact pin — and which does not peer
+   on `tailwindcss` at all. The portal therefore depends on `@xui/* ^2.2.0` from the registry and is
+   free within Angular 22.x. ADR-017's substance stands; its version numbers were a snapshot of the
+   wrong source. [20](20-portal.md).
 
 Plus one thing the brief did not raise and that the audit made unavoidable: **the licence review**
 (ADR-011). Redis, Vault, MongoDB, Elasticsearch and Terraform have all changed licences in ways that

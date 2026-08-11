@@ -52,7 +52,7 @@ status board.
 | 18 | [Security](18-security-vault-and-malware-scan.md) | OpenBao vaults, multi-engine malware scanning, posture, platform hardening |
 | 19 | [Cloud Terminal and Virtual Desktop](19-cloud-terminal-and-virtual-desktop.md) | The web console, its image, its pod, its idle economics; desktops over Guacamole |
 | 20 | [The Portal](20-portal.md) | Angular 22 + xUI, generated forms, blades, live updates, SSR, the performance budget |
-| 21 | [CLI and SDKs](21-cli-and-sdks.md) | `cc`, the Azure-shaped .NET SDK, generation, other languages, the OpenAPI contract |
+| 21 | [CLI and SDKs](21-cli-and-sdks.md) | `cyc`, the Azure-shaped .NET SDK, generation, other languages, the OpenAPI contract |
 | 22 | [Metering, Billing and Quota](22-billing-metering-and-quota.md) | The usage pipeline, rating, invoicing, cost visibility, quota, abuse |
 | 23 | [Build, CI and Testing](23-build-ci-and-testing.md) | Nuke, the architecture gates, the test layers, the chaos invariants, rollout |
 | 24 | [Roadmap](24-roadmap.md) | Five phases, exit criteria, ~90 EM, and the cut list in cutting order |

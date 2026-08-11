@@ -14,7 +14,7 @@ Three product shapes, in this order. Where they compete for effort, earlier wins
 2. **A managed-service catalogue.** Postgres, Redis, MongoDB, NATS, Kafka, ClickHouse, RabbitMQ,
    object storage, VMs, container registry, DNS, VPN, mail, telemetry. Each one is a *resource
    provider* over the control plane, not a bespoke service with its own API.
-3. **The surfaces** — portal, `cc` CLI, .NET SDK, REST, SignalR. All three are generated from, or
+3. **The surfaces** — portal, `cyc` CLI, .NET SDK, REST, SignalR. All three are generated from, or
    check themselves against, one machine-readable description of the resource model.
 
 The consequence of that ordering: **a module is done when it is a provider**, not when its pods run.

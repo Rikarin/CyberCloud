@@ -208,7 +208,7 @@ wholesale. Details, versions and per-service topology in [12](12-managed-data-se
 
 | Azure | Cyber Cloud | Verdict | How | EM |
 |---|---|---|---|---|
-| Azure CLI (`az`) | `cc` | **M1** | In the brief. System.CommandLine, verbs generated from the provider registry. [21](21-cli-and-sdks.md) | 1.5 |
+| Azure CLI (`az`) | `cyc` | **M1** | In the brief. System.CommandLine, verbs generated from the provider registry. [21](21-cli-and-sdks.md) | 1.5 |
 | Azure SDK for .NET | `CyberCloud.Sdk` | **M1** | In the brief. Azure.Core-shaped: `TokenCredential`, `Response<T>`, `Operation<T>`. Generated from OpenAPI | 1.5 |
 | Azure Portal | `CyberCloud.Portal` | **M1** | Angular 22 + xUI + Tailwind, SSR, zoneless. Resource forms generated from provider schemas. [20](20-portal.md) | 5.0 |
 | Azure DevOps / Pipelines / Repos / Artifacts | — | **✗** | Except artifact feeds — see § D. GitHub and Forgejo exist |
