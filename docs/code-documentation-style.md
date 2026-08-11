@@ -136,8 +136,12 @@ link. Use `<c>` for things the compiler can't see — a JSON key, a shell flag, 
   *and so on* not *etc.*
 - **Same thing, same word.** Don't alternate between *tenant id* and *tenant identifier*.
 - **US spelling.**
-- Cut **please**, **simply**, **easy**, **just**, and **obviously**. If it were easy the reader
-  wouldn't be reading the comment; saying so only stings when they're stuck.
+- Cut **please**, **simply**, **easy**, **just**, and **obviously** *when they belittle the reader* —
+  if it were easy they wouldn't be reading the comment, and saying so only stings when they're stuck.
+  ⚠ These words have legitimate senses and the ban does not reach them: `just past the cap` is
+  temporal, `simple name` is the C# term of art, and `easy to get backwards` is a **warning** rather
+  than a judgement of the reader — though prefer `routinely got backwards`, which says the same thing
+  and names evidence. Read every occurrence; do not blind-replace.
 - Cut **note that**, **it should be noted that**, and **in order to** — the last one is always *to*.
 
 ## Where we deviate
@@ -172,7 +176,18 @@ Cite `docs/plan` by **section**, never by line number:
 ```
 
 Line numbers rot on the next doc edit, and a citation that has silently drifted to the wrong section
-is worse than none. This has already happened twice here.
+is worse than none. Converting the 209 line citations that existed proved the point: **61 of them
+would have resolved to a different section** against the then-current docs than against the docs they
+were written from, and **three were already wrong when written**.
+
+**Name the section by its heading, truncated at the first em dash, colon or parenthetical.** The
+heading `## Hot — Redis Cluster` is cited `§ Hot`; `## Coding standards (C# 14 / .NET 10)` is
+`§ Coding standards`. This keeps citations short enough to sit inside a wrapped comment line, and it
+is what the codebase already does.
+
+⚠ **Never edit text you are quoting** — from `docs/plan`, from a dependency's own message, or from
+anywhere else. The word-choice rules below apply to prose you wrote. Editing a quotation to remove a
+banned word makes it a misquotation, which is a worse defect than the word.
 
 ## What not to document
 
