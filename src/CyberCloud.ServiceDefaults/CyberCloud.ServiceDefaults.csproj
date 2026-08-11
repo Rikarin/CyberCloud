@@ -1,0 +1,57 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    docs/plan/03:82 — "CyberCloud.ServiceDefaults/  # AddServiceDefaults, health checks, Orleans host
+    builders", and docs/plan/03:85: "the direct descendant of Survival's OrleansApplication …
+    copied in shape, not in code, because the membership and storage wiring differ".
+
+    ⚠ THIS IS THE FIRST ASSEMBLY IN THE TREE ALLOWED ORLEANS HOSTING. Everything below it —
+    CyberCloud.Core (zero packages) and CyberCloud.Core.Contracts (Microsoft.Orleans.Sdk only) —
+    stays hostable-from-anywhere on purpose, which is what lets the gateway, the CLI and the SDK
+    reference the contracts without acquiring a silo. Adding a package here is cheap; adding one
+    there is an assembly-graph change (docs/plan/03:231-241).
+
+    ⚠ WHAT SURVIVAL HAS THAT THIS DOES NOT, all deliberate:
+      * Microsoft.Extensions.ServiceDiscovery / .Http.Resilience — Aspire's, and Aspire is local
+        development only here (ADR-014). Neither is in docs/plan/02's dependency register.
+      * Newtonsoft.Json — Survival's health endpoint writes its JSON with it. System.Text.Json is
+        already in the shared framework and docs/plan/02 lists no Newtonsoft.
+      * Serilog.Sinks.Async, OpenTelemetry.Instrumentation.Process — not in the register either.
+      * Its Orleans pins. Survival mixes Microsoft.Orleans.Runtime 10.0.0 with
+        Microsoft.Orleans.Client/.Server 9.2.1; every Orleans reference here resolves through
+        $(OrleansVersion) = 10.2.2 in Directory.Packages.props.
+  -->
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup Label="Orleans — ADR-004">
+    <PackageReference Include="Microsoft.Orleans.Server" />
+    <PackageReference Include="Microsoft.Orleans.Client" />
+    <!-- UseKubeMembership / UseKubeGatewayListProvider — the contrib membership provider. -->
+    <PackageReference Include="Orleans.Clustering.Kubernetes" />
+    <!-- UseKubernetesHosting — pod identity becomes silo identity (docs/plan/04:76). -->
+    <PackageReference Include="Microsoft.Orleans.Hosting.Kubernetes" />
+  </ItemGroup>
+
+  <ItemGroup Label="ABP — ADR-006, module system only">
+    <PackageReference Include="Volo.Abp.Autofac" />
+  </ItemGroup>
+
+  <ItemGroup Label="Observability">
+    <PackageReference Include="Serilog.AspNetCore" />
+    <PackageReference Include="Serilog.Sinks.OpenTelemetry" />
+    <PackageReference Include="OpenTelemetry.Extensions.Hosting" />
+    <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.Http" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.Runtime" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../CyberCloud.Core/CyberCloud.Core.csproj" />
+    <ProjectReference Include="../CyberCloud.Core.Contracts/CyberCloud.Core.Contracts.csproj" />
+  </ItemGroup>
+
+</Project>

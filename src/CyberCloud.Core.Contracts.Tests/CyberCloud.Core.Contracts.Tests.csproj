@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    docs/plan/02 ADR-018: tests are siblings. OutputType=Exe and the Microsoft.Testing.Platform
+    switches come from the repository-root Directory.Build.props / .targets — do not repeat them
+    here, and do NOT add Microsoft.NET.Test.Sdk.
+
+    Microsoft.Orleans.Server is here, not in CyberCloud.Core.Contracts. The point of these tests is
+    that the surrogates round-trip through Orleans' OWN Serializer rather than through an inspection
+    of the attributes, and resolving `Serializer` needs the serialization session pool and the
+    codec/converter registry that the server package brings. The assembly under test keeps its single
+    Microsoft.Orleans.Sdk reference.
+  -->
+
+  <ItemGroup>
+    <PackageReference Include="xunit.v3" />
+    <PackageReference Include="Shouldly" />
+    <PackageReference Include="Microsoft.Orleans.Server" />
+    <PackageReference Include="Microsoft.Orleans.TestingHost" />
+  </ItemGroup>
+
+  <ItemGroup Label="Global usings">
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../CyberCloud.Core/CyberCloud.Core.csproj" />
+    <ProjectReference Include="../CyberCloud.Core.Contracts/CyberCloud.Core.Contracts.csproj" />
+  </ItemGroup>
+
+</Project>

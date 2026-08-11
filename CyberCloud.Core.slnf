@@ -3,7 +3,11 @@
     "path": "CyberCloud.slnx",
     "projects": [
       "src/CyberCloud.Core/CyberCloud.Core.csproj",
-      "src/CyberCloud.Core.Tests/CyberCloud.Core.Tests.csproj"
+      "src/CyberCloud.Core.Tests/CyberCloud.Core.Tests.csproj",
+      "src/CyberCloud.Core.Contracts/CyberCloud.Core.Contracts.csproj",
+      "src/CyberCloud.Core.Contracts.Tests/CyberCloud.Core.Contracts.Tests.csproj",
+      "src/CyberCloud.ServiceDefaults/CyberCloud.ServiceDefaults.csproj",
+      "src/CyberCloud.ServiceDefaults.Tests/CyberCloud.ServiceDefaults.Tests.csproj"
     ]
   }
 }

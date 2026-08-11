@@ -41,6 +41,20 @@
     <!-- ⚠ CORRECTED: docs/plan/02:27 pins 10.0.0. 10.0.1 is published and is the latest 10.x. -->
     <PackageVersion Include="Orleans.Clustering.Kubernetes" Version="10.0.1" />
 
+    <!--
+      ⚠ MISSING FROM docs/plan/02 § Orleans and hosting, and required by ADR-004.
+
+      ADR-004 (docs/plan/02:211) makes `UseKubernetesHosting()` a condition of the membership
+      decision — "the silo needs RBAC to read/write its membership CRs, and UseKubernetesHosting()
+      so Orleans learns its pod identity" — and docs/plan/04:64 puts the call in the CreateSilo
+      block. The extension lives in this package, which the dependency register does not list.
+      Orleans.Clustering.Kubernetes (above) is a DIFFERENT package by a different author and does
+      NOT provide it: that one is the contrib membership provider (`UseKubeMembership`), this one is
+      first-party Microsoft and is what maps SIGTERM to a graceful StopAsync with grain migration
+      rather than a 60-second gap (docs/plan/04:76). Survival references both, for the same reason.
+    -->
+    <PackageVersion Include="Microsoft.Orleans.Hosting.Kubernetes" Version="$(OrleansVersion)" />
+
     <!-- ADR-002. Tenant id lives in the grain key. -->
     <PackageVersion Include="Orleans.Multitenant" Version="4.0.0" />
 

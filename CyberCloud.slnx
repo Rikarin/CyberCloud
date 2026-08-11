@@ -40,6 +40,10 @@
   <Folder Name="/src/">
     <Project Path="src/CyberCloud.Core/CyberCloud.Core.csproj" />
     <Project Path="src/CyberCloud.Core.Tests/CyberCloud.Core.Tests.csproj" />
+    <Project Path="src/CyberCloud.Core.Contracts/CyberCloud.Core.Contracts.csproj" />
+    <Project Path="src/CyberCloud.Core.Contracts.Tests/CyberCloud.Core.Contracts.Tests.csproj" />
+    <Project Path="src/CyberCloud.ServiceDefaults/CyberCloud.ServiceDefaults.csproj" />
+    <Project Path="src/CyberCloud.ServiceDefaults.Tests/CyberCloud.ServiceDefaults.Tests.csproj" />
   </Folder>
   <Folder Name="/src/Providers/" />
   <Folder Name="/src/Hosts/" />
