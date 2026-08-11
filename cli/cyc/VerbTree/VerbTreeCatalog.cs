@@ -14,10 +14,18 @@ namespace CyberCloud.Cli.VerbTree;
 ///         classes instead would fuse the two and make every CLI behaviour change a generator
 ///         change."</i> The second is that <c>--api-version</c> selects between trees, and a compiled
 ///         tree can only be the one version it was compiled from — docs/plan/10 § API versioning
-///         keeps every published version alive. The third is docs/plan/21 § Extensions:
-///         <c>cyc extension add</c> loads a command group out of an
-///         <c>AssemblyLoadContext</c>, so the tree has to be constructible at run time whatever this
-///         file does.
+///         keeps every published version alive.
+///     </para>
+///     <para>
+///         ⚠ <b>There was a third reason and it is void.</b> It read: docs/plan/21 § Extensions has
+///         <c>cyc extension add</c> load a command group out of an <c>AssemblyLoadContext</c>, "so the
+///         tree has to be constructible at run time whatever this file does". That mechanism cannot
+///         exist in a single-file AOT <c>cyc</c> — measured, every managed load path throws
+///         <c>PlatformNotSupportedException</c> under NativeAOT, and writing the call fails an
+///         ordinary build with <c>error IL2026</c>. Recorded as a defect in docs/plan/21 § Extensions.
+///         ⚠ The decision this file describes is unchanged: the two reasons above were always
+///         sufficient, and an out-of-process extension model — the resolution the precedents favour —
+///         would not need a compiled tree either. Do not cite the third reason again.
 ///     </para>
 ///     <para>
 ///         ⚠ <b>Embedded rather than read from <c>generated/cli/</c> beside the executable.</b>

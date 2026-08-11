@@ -51,9 +51,70 @@ blocker.
 
 ### Extensions
 
-`cyc extension add <name>` loads a NuGet-packaged command group into an `AssemblyLoadContext`. This is
-how a provider ships CLI verbs that are not schema-shaped (`cyc shell`, `cyc postgres connect` which
+~~`cyc extension add <name>` loads a NuGet-packaged command group into an `AssemblyLoadContext`.~~ This
+is how a provider ships CLI verbs that are not schema-shaped (`cyc shell`, `cyc postgres connect` which
 actually spawns `psql`), and how third parties extend the CLI without a fork.
+
+⚠ **DEFECT 2026-08-12 — the mechanism above contradicts § `cyc` above it, and the goal survives while
+the mechanism does not. Needs a decision; nothing is built.**
+
+§ `cyc` requires `cyc` to be **single-file AOT-published per RID**, and `cli/cyc/cyc.csproj` implements
+that with `IsAotCompatible` and `EnableAotAnalyzer`. A NativeAOT binary has no JIT and cannot load a
+managed assembly at run time. Measured on osx-arm64, SDK 10.0.302, rather than reasoned about:
+
+| Probe | JIT | NativeAOT |
+|---|---|---|
+| `AssemblyLoadContext.Default.LoadFromAssemblyPath` | loads, `GetTypes()` == 1 | `PlatformNotSupportedException` |
+| a custom collectible `AssemblyLoadContext` | loads | `PlatformNotSupportedException` |
+| `Assembly.LoadFrom` | loads | `PlatformNotSupportedException` |
+| `AssemblyLoadContext.Default.LoadFromStream` | loads | `PlatformNotSupportedException` |
+| invoking a method on the loaded type | the plugin's code runs | `PlatformNotSupportedException` |
+
+The plugin file was present on disk in every AOT case, so this is a refusal and not a missing file. It
+throws — it does not degrade, and there is no narrow case that works.
+
+⚠ **It fails earlier than run time.** `TreatWarningsAsErrors` (Directory.Build.props) plus
+`EnableAotAnalyzer` means the call does not compile: adding one `LoadFromAssemblyPath` to `cli/cyc`
+fails an ordinary `dotnet build` with `error IL2026`. The mechanism cannot be written down in this
+project, let alone shipped.
+
+**Where the mistake came from.** `az` is the model for this CLI (§ `cyc`, first line), and an `az`
+extension *is* loaded in-process — `pip install` into `~/.azure/cliextensions`, then a Python `import`
+that merges commands into the host's command table. That works because `az`'s host is already an
+interpreter, so it gets dynamic loading for free. `AssemblyLoadContext` is that model transliterated
+into .NET, and the transliteration is what breaks: an AOT-compiled host does not get it for free, and
+cannot get it at all. `git`, `kubectl` and `gh` all use out-of-process executables instead — and
+`kubectl` *abandoned* a manifest-based in-process design for that convention.
+
+**Two resolutions, and this is a user decision:**
+
+| | Keeps | Costs |
+|---|---|---|
+| **(a) Out-of-process**, `git-*` / `kubectl-*` style: `cyc-<name>` executables discovered by naming convention, invoked as child processes | Single-file AOT, the whole § `cyc` publish model, and the `Azure.Core` decision that depends on it | Rewrites this section. Extensions cannot add flags to *existing* generated verbs, only new groups. `cyc shell` is unaffected — it spawns a terminal either way |
+| **(b) Revisit AOT** | This section verbatim | Reopens a decision taken deliberately on 2026-08-11 ([25](25-risks-and-open-questions.md) open question 5), whose stated justification *was* single-file AOT. Costs the no-runtime-prerequisite property |
+
+(a) is the cheaper half to give up and the one the precedents converged on, but it is still a change to
+a written plan and it is not the CLI's to make unilaterally.
+
+⚠ **Two decisions downstream of this one, recorded so they are not made by accident if (a) is taken:**
+
+1. **The trust boundary.** Any `PATH`-discovered `cyc-foo` runs with the user's credentials. The
+   precedents differ and none of them sandboxes: `kubectl`/`krew` verifies a sha256 from a manifest and
+   prints "not audited for security"; `gh` says extensions are "not verified, signed, or endorsed by
+   GitHub"; `az` verifies a digest for indexed installs, **no** digest for `--source`, and uniquely
+   lets an extension *replace a built-in* behind a runtime warning. `cyc`'s reserved-group list
+   (`CommandTree.ReservedGroups`) already refuses a *generated* group that shadows a host command; an
+   extension model needs the same rule and it does not have it yet.
+2. **Credentials.** ⚠ Do not pass a raw token in the child's environment — it lands in `ps` output and
+   in shell history via `env`. `gh`'s design is the one to copy: the token stays in the host's keychain
+   and the extension shells back out to `gh auth token`. `cyc` already has the pieces — the SDK owns
+   the credential and `cyc account` already exists.
+
+**The unimplemented half is load-bearing on documentation elsewhere.** `VerbTree/VerbTreeCatalog.cs`
+gives "`cyc extension add` loads a command group out of an `AssemblyLoadContext`" as the *third* of
+three reasons the verb tree is built at run time rather than compiled to C#. The other two reasons —
+the emitter/host split, and `--api-version` selecting between trees — are unaffected and still carry
+the decision, but that third reason is void and should not be cited again.
 
 ## The .NET SDK
 
