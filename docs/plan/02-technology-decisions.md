@@ -187,22 +187,6 @@ index entries for one name and defeat the two-phase create in
 Nothing else in the codebase may concatenate a grain key, enforced by an analyzer that flags string
 literals containing `|` in `GetGrain` arguments.
 
-**This is the reconciliation of two requirements that appear to conflict.** The brief says "GUID as
-ID"; `Orleans.Multitenant` only supports string keys. Both are satisfied: identifiers in the API, the
-database, the SDK and the URL are GUIDs. The *grain key* is a composed string that contains them.
-One type formats and parses it:
-
-```csharp
-readonly record struct ResourceKey(Guid SubscriptionId, string ResourceGroup, ResourceType Type, Guid ResourceId)
-{
-    public string ToKeyWithinTenant() => $"{SubscriptionId:N}/{ResourceGroup}/{Type}/{ResourceId:N}";
-    public static bool TryParse(string keyWithinTenant, out ResourceKey key) { … }
-}
-```
-
-Nothing else in the codebase may concatenate a grain key, enforced by an analyzer that flags string
-literals containing `|` in `GetGrain` arguments.
-
 ⚠ `ResourceId` remains a separate type and keeps subscription, resource group, type and name — it is
 the *address*, and [06 § Identifiers](06-tenancy-and-resource-model.md) is explicit that the address
 and the identity answer different questions. What changed is only that the **grain key** is derived
