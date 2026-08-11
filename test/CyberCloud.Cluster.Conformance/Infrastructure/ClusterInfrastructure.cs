@@ -11,13 +11,23 @@ namespace CyberCloud.Cluster.Conformance.Infrastructure;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>Started once per test process, and <see cref="RequireAsync" /> is the only way in.</b>
-///         A test that reached the containers directly could not report the one outcome that matters
-///         more than any assertion here — <i>Docker is not running, so this was not checked</i> — and a
-///         suite whose tests silently vanish without a daemon recreates exactly the failure the
-///         loudly-skipped originals existed to prevent. So the start is attempted once, the failure is
-///         remembered, and every test turns it into a <c>Assert.Skip</c> that names the provider, what
-///         is missing, and what the test would have proved.
+///         ⚠ <b>Started once per test process, and <see cref="TryStartAsync" /> neither throws nor
+///         skips.</b> A start that threw would fail the class, which reads as "the provider is
+///         broken"; a start that skipped would take the whole class out of the runner's output under
+///         one message. Absence of Docker is a <i>reportable outcome</i> — it is the one outcome that
+///         matters more than any assertion here, because a suite whose tests silently vanish without
+///         a daemon recreates exactly the failure the loudly-skipped originals existed to prevent. So
+///         the start is attempted once, the failure is remembered, and every test turns it into its
+///         own <c>Assert.Skip</c> built from <see cref="SkipMessage" />, naming the provider, what is
+///         missing, and what that particular test would have proved.
+///     </para>
+///     <para>
+///         ⚠ <b>One test in this assembly never touches Docker, on purpose.</b>
+///         <c>TheCaseOwnsClusterObjectsOrThisWholeSuiteWouldBeVacuous</c> reads the case and nothing
+///         else, so it runs on a machine with no daemon. That is what keeps
+///         <c>--minimum-expected-tests 1</c> satisfiable: Microsoft.Testing.Platform reports "Zero
+///         tests ran" — and fails — for a run whose every test skipped, so a suite that skipped
+///         wholesale would turn a missing daemon into a red build rather than into a visible skip.
 ///     </para>
 ///     <para>
 ///         ⚠ <b>The images are pinned, and the k3s one is pinned to
