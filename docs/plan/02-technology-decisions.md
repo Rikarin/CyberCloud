@@ -430,8 +430,14 @@ progress model**, not a spinner, and the portal must be designed for that from t
    repeat badly, and it is the single most valuable thing in that repository.
 2. **The annotated-`values.yaml` → JSON Schema → form → docs pipeline.** Their charts carry
    `## @param {type} name - description` annotations that generate `values.schema.json`, which
-   generates the dashboard form. We do the same, with the schema also generating the OpenAPI body, the
-   CLI flags and the SDK model — ADR-012.
+   generates the dashboard form. We take the *mechanism* and reverse its *direction* — see
+   "Which end authors the schema" below.
+
+   > ⚠ **CORRECTED 2026-08-11.** This clause read: "We do the same, with the schema also generating
+   > the OpenAPI body, the CLI flags and the SDK model — ADR-012." Taken literally that makes the
+   > chart the source for the API, and ADR-012 says the C# registry is. Two clauses in one document
+   > each claiming to be the one source. Found by auditing the two against the code rather than
+   > against each other.
 3. **The sizing-preset vocabulary** (`t1.micro`, `c1.large`, `s1.xlarge`, …). Users understand
    instance families; inventing our own names would be gratuitous.
 
@@ -441,6 +447,40 @@ state, FluxCD as the reconciler, Keycloak, Talos as a requirement, Outline as th
 **Their charts are a starting point, not a dependency.** Where a chart is close, fork it into
 `charts/` with the upstream commit recorded in a `SOURCE` file. A drifting vendored chart with no
 provenance is how a platform ends up unable to upgrade Postgres.
+
+#### Which end authors the schema — DECIDED 2026-08-11
+
+**The C# `ResourceSchema` is authored. The chart's `@param` annotations are generated from it and
+diffed.** A new tenant-facing field is added in C# by the provider author; `Build.Charts` rewrites the
+annotated block in `values.yaml` and fails on drift, exactly as `Build.Generate` already does for the
+four ADR-012 surfaces.
+
+**What the audit found, because two of the three obvious reasons for this decision are wrong.**
+
+- ✗ *"The chart holds facts the registry cannot."* **Refuted.** Every annotation kind
+  `charts/managed/postgres/values.yaml` uses has a `SchemaProperty` field: `@enum` → `AllowedValues`,
+  `@required` → `Required`, `@range` → `Minimum`/`Maximum`, `@widget` → `Widget`, `@secret` →
+  `Secret`, `@immutable` → `Immutable`. This document asserted the opposite until the audit checked.
+- ✓ *The gap runs the other way.* `SchemaProperty` also carries `Format`, `Pattern`,
+  `MinLength`/`MaxLength`, `DefaultJson`, `ExampleJson`, `Nullable` and `ElementKind` — seven facts
+  the annotation vocabulary has no syntax for. Authoring in the chart would mean growing seven new
+  annotation kinds before it stopped being lossy.
+- ✓ *Not every resource type has a chart.* A chart-authored schema has no answer for a resource that
+  renders no Helm release, and the first provider in the tree is one.
+
+**The 10 rows that are not API at all.** Of 36 `@param` rows in that chart, 10 are `@internal`: Helm
+plumbing (`nameOverride`), reconciler-injected identity (`platform.*`, seven rows) and an operator
+escape hatch (`imageName`). Generation covers the other 26; `@internal` rows stay hand-written in the
+chart, because they are rendering inputs and a resource body has no place for them. So the two files
+are sources for **different things** that overlap on 26 rows, not two sources for one thing.
+
+**How this went unnoticed.** The overlap is zero resource types wide today.
+`charts/managed/postgres/conformance.yaml` declares `CyberCloud.DBforPostgreSQL/servers` and no C#
+provider declares that type — it appears in `src/` only in test fixtures. `Build.Charts` checks
+`SOURCE`, `conformance.yaml`'s presence and its `resourceType` against `Chart.yaml`, and never opens a
+registry. Its own header comment describes the parse result as "the shape a `ResourceSchema` would be
+built from": the seam was seen and left open. It becomes 26 rows wide the moment the Postgres provider
+lands.
 
 ### ADR-011 — The licence audit, done once, written down
 
@@ -466,7 +506,7 @@ customer's data is on DRBD, not after.
 **Enforcement.** A build gate runs a licence scan over the chart set and the container images in the
 platform bundle, and fails on any SSPL/BUSL/AGPL image outside an allow-list with a written reason.
 
-### ADR-012 — The provider registry is the one source; four surfaces are generated
+### ADR-012 — The provider registry is the one source; five surfaces are generated
 
 **Decision.** A resource provider declares, in C#, its namespace, its resource types, their API
 versions, and a JSON Schema per version. From that registry a build step generates:
@@ -477,6 +517,13 @@ versions, and a JSON Schema per version. From that registry a build step generat
 | `cyc` CLI | Verb tree, flags, help, completion |
 | .NET SDK | Clients, models, `Operation<T>` pollers |
 | Portal forms | Angular reactive forms + xUI controls from the schema, with `x-cybercloud-*` hints for widgets (a `storageclass` picker, a region picker) |
+| Chart `@param` annotations | The non-`@internal` block of a managed chart's `values.yaml`, rewritten in place and diffed — ADR-010 § Which end authors the schema, DECIDED 2026-08-11. **Not built.** The first four have emitters and a drift gate; this one has a decision and neither |
+
+> ⚠ **CORRECTED 2026-08-11.** The heading said *four* surfaces and the table listed four. ADR-010
+> clause 2 separately made the chart's annotations the source that generates "the OpenAPI body, the
+> CLI flags and the SDK model", which is a fifth surface pointing the other way. Both clauses claimed
+> to be the one source; neither cited the other. Found by auditing each against the code — the chart
+> and the registry have never been compared by anything, because no resource type has both.
 
 **Rationale.** Four hand-written surfaces over twenty providers is eighty artifacts that drift. This is
 the mechanism behind the *2 engineer-weeks per managed service* target; without it that number is
