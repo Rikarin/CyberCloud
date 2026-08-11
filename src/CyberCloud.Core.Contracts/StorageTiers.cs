@@ -28,8 +28,7 @@ namespace CyberCloud.Core.Contracts;
 ///         tier; never rename one.
 ///     </para>
 /// </remarks>
-public static class StorageTiers
-{
+public static class StorageTiers {
     /// <summary>
     ///     Redis Cluster. Sessions, live status, observed cluster state, caches, rate counters,
     ///     terminal sessions, metric pre-aggregates. Loss costs a warm-up (docs/plan/05:68-72).

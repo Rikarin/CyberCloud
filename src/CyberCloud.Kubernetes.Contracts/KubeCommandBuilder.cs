@@ -1,6 +1,8 @@
 using System.Globalization;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.Json.Serialization;
 
 namespace CyberCloud.Kubernetes.Contracts;
 
@@ -22,8 +24,18 @@ namespace CyberCloud.Kubernetes.Contracts;
 ///     </para>
 /// </remarks>
 sealed class KubeCommandBuilder(IKubeClusterConnection connection, IChartRenderer? charts)
-    : IKubeCommandNeedsTenant, IKubeCommandNeedsResource, IKubeCommandBuilder
-{
+    : IKubeCommandNeedsTenant, IKubeCommandNeedsResource, IKubeCommandBuilder {
+    /// <summary>
+    ///     The api-version stamped when a caller does not say. docs/plan/08 § Versioning makes
+    ///     <c>api-version</c> a required query parameter on every request, so in production this is
+    ///     always overridden by <see cref="IKubeCommandBuilder.WithApiVersion" /> from the request
+    ///     that caused the reconcile; the constant exists so that the label is never absent.
+    /// </summary>
+    internal const string DefaultApiVersion = "2026-08-01";
+
+    /// <summary>The field manager used when a provider does not name itself.</summary>
+    internal const string DefaultFieldManager = "cybercloud/unspecified";
+
     readonly Dictionary<string, string> extraLabels = new(StringComparer.Ordinal);
     readonly Dictionary<string, string> extraAnnotations = new(StringComparer.Ordinal);
     readonly List<JsonObject> ownerReferences = [];
@@ -41,38 +53,26 @@ sealed class KubeCommandBuilder(IKubeClusterConnection connection, IChartRendere
     JsonElement chartValues;
     bool chartRequested;
 
-    /// <summary>
-    ///     The api-version stamped when a caller does not say. docs/plan/08 § Versioning makes
-    ///     <c>api-version</c> a required query parameter on every request, so in production this is
-    ///     always overridden by <see cref="IKubeCommandBuilder.WithApiVersion" /> from the request
-    ///     that caused the reconcile; the constant exists so that the label is never absent.
-    /// </summary>
-    internal const string DefaultApiVersion = "2026-08-01";
+    // ── The build ──────────────────────────────────────────────────────────────────────────────
 
-    /// <summary>The field manager used when a provider does not name itself.</summary>
-    internal const string DefaultFieldManager = "cybercloud/unspecified";
-
-    /// <summary>
-    ///     <c>cybercloud/{provider}</c> — ADR-013's stable per-provider field manager.
-    /// </summary>
-    /// <param name="providerNamespace">
-    ///     The provider namespace, for example <c>CyberCloud.DBforPostgreSQL</c>.
-    /// </param>
-    internal static string FieldManagerFor(string providerNamespace) =>
-        "cybercloud/" + providerNamespace.ToLowerInvariant();
+    static readonly JsonSerializerOptions ObjectJsonOptions = new(JsonSerializerDefaults.Web) {
+        // Kubernetes rejects an explicit null where it expects an absent field far more often than
+        // it treats the two alike, and an apply patch's nulls are a *deletion* instruction under
+        // server-side apply — writing `"replicas": null` would hand the field back to another
+        // manager. Omitting them is the only safe default here.
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+    };
 
     // ── Stage 1 ────────────────────────────────────────────────────────────────────────────────
 
-    IKubeCommandNeedsResource IKubeCommandNeedsTenant.WithTenantId(Guid id)
-    {
+    IKubeCommandNeedsResource IKubeCommandNeedsTenant.WithTenantId(Guid id) {
         tenantId = id;
         return this;
     }
 
     // ── Stage 2 ────────────────────────────────────────────────────────────────────────────────
 
-    IKubeCommandBuilder IKubeCommandNeedsResource.WithResourceId(ResourceId id)
-    {
+    IKubeCommandBuilder IKubeCommandNeedsResource.WithResourceId(ResourceId id) {
         resource = id;
         resourceSet = true;
         return this;
@@ -80,46 +80,38 @@ sealed class KubeCommandBuilder(IKubeClusterConnection connection, IChartRendere
 
     // ── Stage 3 — the fully-qualified builder ──────────────────────────────────────────────────
 
-    IKubeCommandBuilder IKubeCommandBuilder.WithSubscriptionId(Guid id)
-    {
+    IKubeCommandBuilder IKubeCommandBuilder.WithSubscriptionId(Guid id) {
         subscriptionOverride = id;
         return this;
     }
 
-    IKubeCommandBuilder IKubeCommandBuilder.InNamespace(string value)
-    {
+    IKubeCommandBuilder IKubeCommandBuilder.InNamespace(string value) {
         ns = value;
         return this;
     }
 
-    IKubeCommandBuilder IKubeCommandBuilder.WithKind(GroupVersionKind value)
-    {
+    IKubeCommandBuilder IKubeCommandBuilder.WithKind(GroupVersionKind value) {
         kind = value;
         return this;
     }
 
-    IKubeCommandBuilder IKubeCommandBuilder.WithFieldManager(string manager)
-    {
+    IKubeCommandBuilder IKubeCommandBuilder.WithFieldManager(string manager) {
         fieldManager = manager;
         return this;
     }
 
-    IKubeCommandBuilder IKubeCommandBuilder.WithApiVersion(string value)
-    {
+    IKubeCommandBuilder IKubeCommandBuilder.WithApiVersion(string value) {
         apiVersion = value;
         return this;
     }
 
-    IKubeCommandBuilder IKubeCommandBuilder.WithLabels(params (string Key, string Value)[] extra)
-    {
+    IKubeCommandBuilder IKubeCommandBuilder.WithLabels(params (string Key, string Value)[] extra) {
         ArgumentNullException.ThrowIfNull(extra);
 
-        foreach (var (key, value) in extra)
-        {
+        foreach (var (key, value) in extra) {
             // ⚠ THE "non-overridable" HALF OF ADR-013, enforced rather than documented. Silently
             // dropping the override would leave the caller believing it took effect.
-            if (KubeLabels.IsMandatory(key))
-            {
+            if (KubeLabels.IsMandatory(key)) {
                 throw new ArgumentException(
                     $"'{key}' is one of the seven mandatory labels and is injected by the builder, "
                     + "so it cannot be set or replaced by a caller. ADR-013 makes the set 'injected "
@@ -127,7 +119,8 @@ sealed class KubeCommandBuilder(IKubeClusterConnection connection, IChartRendere
                     + "how the reconciler finds orphans and how deletion is complete — a reconciler "
                     + "that could overwrite one could detach its own objects from the platform. "
                     + "Use a different key.",
-                    nameof(extra));
+                    nameof(extra)
+                );
             }
 
             Require(LabelSyntax.ValidateKey(key), nameof(extra));
@@ -139,18 +132,16 @@ sealed class KubeCommandBuilder(IKubeClusterConnection connection, IChartRendere
         return this;
     }
 
-    IKubeCommandBuilder IKubeCommandBuilder.WithAnnotations(params (string Key, string Value)[] extra)
-    {
+    IKubeCommandBuilder IKubeCommandBuilder.WithAnnotations(params (string Key, string Value)[] extra) {
         ArgumentNullException.ThrowIfNull(extra);
 
-        foreach (var (key, value) in extra)
-        {
-            if (KubeLabels.IsMandatoryAnnotation(key))
-            {
+        foreach (var (key, value) in extra) {
+            if (KubeLabels.IsMandatoryAnnotation(key)) {
                 throw new ArgumentException(
                     $"'{key}' is a mandatory annotation injected by the builder and cannot be "
                     + "replaced. docs/plan/09 § The command builder.",
-                    nameof(extra));
+                    nameof(extra)
+                );
             }
 
             // An annotation KEY obeys the label-key rule; an annotation VALUE does not obey the
@@ -168,23 +159,24 @@ sealed class KubeCommandBuilder(IKubeClusterConnection connection, IChartRendere
         ResourceId parent,
         GroupVersionKind ownerKind,
         string ownerName,
-        string ownerUid)
-    {
+        string ownerUid
+    ) {
         ArgumentNullException.ThrowIfNull(ownerKind);
         ArgumentException.ThrowIfNullOrEmpty(ownerName);
         ArgumentException.ThrowIfNullOrEmpty(ownerUid);
 
-        ownerReferences.Add(new JsonObject
-        {
-            ["apiVersion"] = ownerKind.ApiVersion,
-            ["kind"] = ownerKind.Kind,
-            ["name"] = ownerName,
-            ["uid"] = ownerUid,
-            // Kubernetes garbage-collects the dependent when the owner goes. This is the "→
-            // ownerReferences + cascade" of docs/plan/09 § The command builder.
-            ["blockOwnerDeletion"] = true,
-            ["controller"] = true,
-        });
+        ownerReferences.Add(
+            new() {
+                ["apiVersion"] = ownerKind.ApiVersion,
+                ["kind"] = ownerKind.Kind,
+                ["name"] = ownerName,
+                ["uid"] = ownerUid,
+                // Kubernetes garbage-collects the dependent when the owner goes. This is the "→
+                // ownerReferences + cascade" of docs/plan/09 § The command builder.
+                ["blockOwnerDeletion"] = true,
+                ["controller"] = true
+            }
+        );
 
         // The parent's identity is recorded as an annotation so that a support engineer reading the
         // object in the cluster can get from the dependent back to the owning Cyber Cloud resource
@@ -195,33 +187,28 @@ sealed class KubeCommandBuilder(IKubeClusterConnection connection, IChartRendere
         return this;
     }
 
-    IKubeCommandBuilder IKubeCommandBuilder.Chart(string chart, JsonElement values)
-    {
+    IKubeCommandBuilder IKubeCommandBuilder.Chart(string chart, JsonElement values) {
         chartRequested = true;
         chartName = chart;
         chartValues = values;
         return this;
     }
 
-    IKubeCommandBuilder IKubeCommandBuilder.Object<T>(T obj)
-    {
+    IKubeCommandBuilder IKubeCommandBuilder.Object<T>(T obj) {
         ArgumentNullException.ThrowIfNull(obj);
         body = JsonSerializer.Serialize(obj, ObjectJsonOptions);
         return this;
     }
 
-    IKubeCommandBuilder IKubeCommandBuilder.ObjectJson(string json)
-    {
+    IKubeCommandBuilder IKubeCommandBuilder.ObjectJson(string json) {
         ArgumentException.ThrowIfNullOrEmpty(json);
         body = json;
         return this;
     }
 
-    KubeCommand IKubeCommandBuilder.Build()
-    {
+    KubeCommand IKubeCommandBuilder.Build() {
         var built = BuildCore();
-        if (built.TryGetError(out var error))
-        {
+        if (built.TryGetError(out var error)) {
             throw new InvalidOperationException(error.Message);
         }
 
@@ -230,8 +217,7 @@ sealed class KubeCommandBuilder(IKubeClusterConnection connection, IChartRendere
 
     Result<KubeCommand> IKubeCommandBuilder.TryBuild() => BuildCore();
 
-    async Task<Result<ApplyOutcome>> IKubeCommandBuilder.ApplyAsync(CancellationToken cancellationToken)
-    {
+    async Task<Result<ApplyOutcome>> IKubeCommandBuilder.ApplyAsync(CancellationToken cancellationToken) {
         var built = BuildCore();
         return built.TryGetError(out var error)
             ? Result<ApplyOutcome>.Failure(error)
@@ -241,8 +227,8 @@ sealed class KubeCommandBuilder(IKubeClusterConnection connection, IChartRendere
 
     async Task<Result> IKubeCommandBuilder.DeleteAsync(
         CascadePolicy policy,
-        CancellationToken cancellationToken)
-    {
+        CancellationToken cancellationToken
+    ) {
         var built = BuildCore();
         return built.TryGetError(out var error)
             ? Result.Failure(error)
@@ -250,32 +236,19 @@ sealed class KubeCommandBuilder(IKubeClusterConnection connection, IChartRendere
                 .ConfigureAwait(false);
     }
 
-    // ── The build ──────────────────────────────────────────────────────────────────────────────
-
-    static readonly JsonSerializerOptions ObjectJsonOptions = new(JsonSerializerDefaults.Web)
-    {
-        // Kubernetes rejects an explicit null where it expects an absent field far more often than
-        // it treats the two alike, and an apply patch's nulls are a *deletion* instruction under
-        // server-side apply — writing `"replicas": null` would hand the field back to another
-        // manager. Omitting them is the only safe default here.
-        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
-    };
-
-    Result<KubeCommand> BuildCore()
-    {
-        if (!resourceSet)
-        {
+    Result<KubeCommand> BuildCore() {
+        if (!resourceSet) {
             // Unreachable through the public chain — WithResourceId is what returns this interface.
             // Kept because the class implements all three stages and this is the invariant that
             // makes that safe.
-            return Invalid("no resource id was set. This should be unreachable: WithResourceId is "
-                + "what produces an IKubeCommandBuilder.");
+            return Invalid(
+                "no resource id was set. This should be unreachable: WithResourceId is "
+                + "what produces an IKubeCommandBuilder."
+            );
         }
 
-        if (chartRequested)
-        {
-            if (charts is null)
-            {
+        if (chartRequested) {
+            if (charts is null) {
                 return Invalid(
                     $"the command renders the chart '{chartName}', and no IChartRenderer is "
                     + "registered. Helm rendering lives in CyberCloud.Kubernetes.Charts "
@@ -284,64 +257,60 @@ sealed class KubeCommandBuilder(IKubeClusterConnection connection, IChartRendere
                     + "in-process and apply the resulting objects with server-side apply — no "
                     + "HelmRelease and no Flux, because desired state must not live in the target "
                     + "cluster's etcd (ADR-001). Pass a renderer to KubeCommand.For(connection, "
-                    + "charts) once one exists, or use Object/ObjectJson.");
+                    + "charts) once one exists, or use Object/ObjectJson."
+                );
             }
 
             var rendered = charts.Render(
                 chartName!,
                 chartValues,
                 ns ?? string.Empty,
-                resource.Name);
+                resource.Name
+            );
 
-            if (rendered.TryGetError(out var renderError))
-            {
+            if (rendered.TryGetError(out var renderError)) {
                 return Result<KubeCommand>.Failure(renderError);
             }
 
             var documents = rendered.GetValueOrThrow();
-            if (documents.Count != 1)
-            {
+            if (documents.Count != 1) {
                 return Invalid(
                     $"the chart '{chartName}' rendered {documents.Count.ToString(CultureInfo.InvariantCulture)} "
                     + "objects and one KubeCommand addresses exactly one object. A multi-object "
                     + "chart is applied as one command per object; that fan-out belongs to "
                     + "CyberCloud.Kubernetes.Charts, which owns the release-level concerns "
-                    + "(ordering, hooks, pruning) this type deliberately does not.");
+                    + "(ordering, hooks, pruning) this type deliberately does not."
+                );
             }
 
             body = documents[0];
         }
 
-        if (string.IsNullOrEmpty(body))
-        {
-            return Invalid(
-                "no object was set. Call Object(...), ObjectJson(...) or Chart(...) before applying.");
+        if (string.IsNullOrEmpty(body)) {
+            return Invalid("no object was set. Call Object(...), ObjectJson(...) or Chart(...) before applying.");
         }
 
-        if (kind is null)
-        {
+        if (kind is null) {
             return Invalid(
                 "no kind was set. Call WithKind(new GroupVersionKind { Group, Version, Kind, Plural }). "
                 + "The plural is required and cannot be derived from the kind — see the remarks on "
                 + "GroupVersionKind. docs/plan/09 § Cluster connections omits it from its "
-                + "GroupVersionKind sketch, and every Kubernetes REST path needs it.");
+                + "GroupVersionKind sketch, and every Kubernetes REST path needs it."
+            );
         }
 
-        if (!kind.IsComplete)
-        {
+        if (!kind.IsComplete) {
             return Invalid(
                 $"the kind '{kind}' is incomplete: Version, Kind and Plural are all required "
-                + "(Group is empty for the core group, which is legal).");
+                + "(Group is empty for the core group, which is legal)."
+            );
         }
 
         JsonObject document;
-        try
-        {
+        try {
             document = JsonNode.Parse(body!) as JsonObject
                 ?? throw new JsonException("the body is not a JSON object");
-        }
-        catch (JsonException ex)
-        {
+        } catch (JsonException ex) {
             return Invalid($"the object body is not valid JSON: {ex.Message}");
         }
 
@@ -354,79 +323,67 @@ sealed class KubeCommandBuilder(IKubeClusterConnection connection, IChartRendere
         var subscriptionId = subscriptionOverride ?? resource.SubscriptionId;
         var labels = MandatoryLabels(subscriptionId);
 
-        foreach (var (key, value) in labels)
-        {
+        foreach (var (key, value) in labels) {
             var problem = LabelSyntax.ValidateValue(value, key);
-            if (problem.TryGetError(out var labelError))
-            {
+            if (problem.TryGetError(out var labelError)) {
                 return Result<KubeCommand>.Failure(WithLabelContext(labelError, key, value));
             }
         }
 
-        foreach (var (key, value) in extraLabels)
-        {
+        foreach (var (key, value) in extraLabels) {
             labels[key] = value;
         }
 
-        var annotations = new Dictionary<string, string>(StringComparer.Ordinal)
-        {
-            [KubeLabels.ResourcePathAnnotation] = resource.Path,
-            [KubeLabels.ReconcileHashAnnotation] = reconcileHash,
+        var annotations = new Dictionary<string, string>(StringComparer.Ordinal) {
+            [KubeLabels.ResourcePathAnnotation] = resource.Path, [KubeLabels.ReconcileHashAnnotation] = reconcileHash
         };
 
-        foreach (var (key, value) in extraAnnotations)
-        {
+        foreach (var (key, value) in extraAnnotations) {
             annotations[key] = value;
         }
 
         var name = ResolveName(document);
-        if (name is null)
-        {
+        if (name is null) {
             return Invalid(
                 "the object has no metadata.name. Server-side apply addresses an object by name, so "
-                + "there is nothing to PATCH.");
+                + "there is nothing to PATCH."
+            );
         }
 
         Inject(document, kind, ns, name, labels, annotations, ownerReferences);
 
-        return Result<KubeCommand>.Success(new KubeCommand
-        {
-            TenantId = tenantId,
-            SubscriptionId = subscriptionId,
-            ResourceId = resource.Id,
-            Target = new ObjectRef
-            {
-                Kind = kind,
-                Namespace = ns ?? string.Empty,
-                Name = name,
-            },
-            Body = document.ToJsonString(),
-            FieldManager = fieldManager ?? FieldManagerFor(resource.Type.Namespace),
-            Labels = labels,
-            Annotations = annotations,
-            ReconcileHash = reconcileHash,
-            Force = false,
-            ResourcePath = resource.Path,
-        });
+        return Result<KubeCommand>.Success(
+            new() {
+                TenantId = tenantId,
+                SubscriptionId = subscriptionId,
+                ResourceId = resource.Id,
+                Target = new() { Kind = kind, Namespace = ns ?? string.Empty, Name = name },
+                Body = document.ToJsonString(),
+                FieldManager = fieldManager ?? FieldManagerFor(resource.Type.Namespace),
+                Labels = labels,
+                Annotations = annotations,
+                ReconcileHash = reconcileHash,
+                Force = false,
+                ResourcePath = resource.Path
+            }
+        );
     }
 
     /// <summary>The seven, in ADR-013's order.</summary>
-    Dictionary<string, string> MandatoryLabels(Guid subscriptionId) => new(StringComparer.Ordinal)
-    {
-        [KubeLabels.TenantId] = KubeLabels.GuidValue(tenantId),
-        [KubeLabels.SubscriptionId] = KubeLabels.GuidValue(subscriptionId),
-        [KubeLabels.ResourceGroup] = resource.ResourceGroup,
-        [KubeLabels.ResourceId] = KubeLabels.GuidValue(resource.Id),
-        [KubeLabels.ResourceType] = KubeLabels.ResourceTypeValue(resource.Type),
-        [KubeLabels.ApiVersion] = apiVersion,
-        [KubeLabels.ManagedBy] = KubeLabels.ManagedByValue,
-    };
+    Dictionary<string, string> MandatoryLabels(Guid subscriptionId) =>
+        new(StringComparer.Ordinal) {
+            [KubeLabels.TenantId] = KubeLabels.GuidValue(tenantId),
+            [KubeLabels.SubscriptionId] = KubeLabels.GuidValue(subscriptionId),
+            [KubeLabels.ResourceGroup] = resource.ResourceGroup,
+            [KubeLabels.ResourceId] = KubeLabels.GuidValue(resource.Id),
+            [KubeLabels.ResourceType] = KubeLabels.ResourceTypeValue(resource.Type),
+            [KubeLabels.ApiVersion] = apiVersion,
+            [KubeLabels.ManagedBy] = KubeLabels.ManagedByValue
+        };
 
-    string? ResolveName(JsonObject document)
-    {
+    string? ResolveName(JsonObject document) {
         if (document["metadata"] is JsonObject metadata
-            && metadata["name"]?.GetValue<string>() is { Length: > 0 } fromBody)
-        {
+            && metadata["name"]?.GetValue<string>() is { Length: > 0 } fromBody) {
             return fromBody;
         }
 
@@ -442,34 +399,30 @@ sealed class KubeCommandBuilder(IKubeClusterConnection connection, IChartRendere
         string name,
         Dictionary<string, string> labels,
         Dictionary<string, string> annotations,
-        List<JsonObject> owners)
-    {
+        List<JsonObject> owners
+    ) {
         // apiVersion and kind are set from the GVK rather than trusted from the body: an apply patch
         // whose apiVersion disagrees with the URL is rejected, and the URL is built from the GVK.
         document["apiVersion"] = kind.ApiVersion;
         document["kind"] = kind.Kind;
 
-        if (document["metadata"] is not JsonObject metadata)
-        {
+        if (document["metadata"] is not JsonObject metadata) {
             metadata = [];
             document["metadata"] = metadata;
         }
 
         metadata["name"] = name;
 
-        if (!string.IsNullOrEmpty(ns))
-        {
+        if (!string.IsNullOrEmpty(ns)) {
             metadata["namespace"] = ns;
         }
 
         metadata["labels"] = Merge(metadata["labels"] as JsonObject, labels);
         metadata["annotations"] = Merge(metadata["annotations"] as JsonObject, annotations);
 
-        if (owners.Count > 0)
-        {
+        if (owners.Count > 0) {
             var array = new JsonArray();
-            foreach (var owner in owners)
-            {
+            foreach (var owner in owners) {
                 array.Add(owner.DeepClone());
             }
 
@@ -482,20 +435,16 @@ sealed class KubeCommandBuilder(IKubeClusterConnection connection, IChartRendere
     ///     "non-overridable" means when the override attempt is inside the rendered object rather
     ///     than in a <c>WithLabels</c> call.
     /// </summary>
-    static JsonObject Merge(JsonObject? existing, Dictionary<string, string> injected)
-    {
+    static JsonObject Merge(JsonObject? existing, Dictionary<string, string> injected) {
         var result = new JsonObject();
 
-        if (existing is not null)
-        {
-            foreach (var (key, value) in existing)
-            {
+        if (existing is not null) {
+            foreach (var (key, value) in existing) {
                 result[key] = value?.DeepClone();
             }
         }
 
-        foreach (var (key, value) in injected)
-        {
+        foreach (var (key, value) in injected) {
             result[key] = value;
         }
 
@@ -511,30 +460,25 @@ sealed class KubeCommandBuilder(IKubeClusterConnection connection, IChartRendere
     ///     reflection order and is not contractually stable. A no-op detector that reports a change
     ///     because a field moved is worse than no detector: it turns every reconcile into an apply.
     /// </remarks>
-    static string Canonical(JsonNode? node)
-    {
+    static string Canonical(JsonNode? node) {
         var writerOptions = new JsonWriterOptions { Indented = false };
         using var stream = new MemoryStream();
-        using (var writer = new Utf8JsonWriter(stream, writerOptions))
-        {
+        using (var writer = new Utf8JsonWriter(stream, writerOptions)) {
             WriteCanonical(node, writer);
         }
 
-        return System.Text.Encoding.UTF8.GetString(stream.ToArray());
+        return Encoding.UTF8.GetString(stream.ToArray());
     }
 
-    static void WriteCanonical(JsonNode? node, Utf8JsonWriter writer)
-    {
-        switch (node)
-        {
+    static void WriteCanonical(JsonNode? node, Utf8JsonWriter writer) {
+        switch (node) {
             case null:
                 writer.WriteNullValue();
                 break;
 
             case JsonObject obj:
                 writer.WriteStartObject();
-                foreach (var (key, value) in obj.OrderBy(x => x.Key, StringComparer.Ordinal))
-                {
+                foreach (var (key, value) in obj.OrderBy(x => x.Key, StringComparer.Ordinal)) {
                     writer.WritePropertyName(key);
                     WriteCanonical(value, writer);
                 }
@@ -544,8 +488,7 @@ sealed class KubeCommandBuilder(IKubeClusterConnection connection, IChartRendere
 
             case JsonArray array:
                 writer.WriteStartArray();
-                foreach (var item in array)
-                {
+                foreach (var item in array) {
                     WriteCanonical(item, writer);
                 }
 
@@ -560,25 +503,25 @@ sealed class KubeCommandBuilder(IKubeClusterConnection connection, IChartRendere
 
     static Error WithLabelContext(Error error, string key, string value) =>
         key == KubeLabels.ResourceType
-            ? new Error(
+            ? new(
                 error.Code,
                 error.Message
                 + " ⚠ This is the resource TYPE label, whose value is derived from the resource "
                 + "type and is the one member of ADR-013's seven that is not length-bounded by "
                 + "construction: a ResourceTypeName may be a namespace of two or more 63-character "
                 + "segments plus a type path of up to three, so '"
-                + value + "' can exceed the 63-character label cap. It is rejected rather than "
+                + value
+                + "' can exceed the 63-character label cap. It is rejected rather than "
                 + "truncated, because truncation maps two distinct resource types onto one label "
                 + "value and silently breaks orphan detection and billing attribution — the two "
                 + "things ADR-013 says the labels exist for. Shorten the provider namespace or the "
                 + "type path.",
-                error.Target)
+                error.Target
+            )
             : error;
 
-    static void Require(Result outcome, string parameterName)
-    {
-        if (outcome.TryGetError(out var error))
-        {
+    static void Require(Result outcome, string parameterName) {
+        if (outcome.TryGetError(out var error)) {
             throw new ArgumentException(error.Message, parameterName);
         }
     }
@@ -586,5 +529,15 @@ sealed class KubeCommandBuilder(IKubeClusterConnection connection, IChartRendere
     static Result<KubeCommand> Invalid(string message) =>
         Result<KubeCommand>.Failure(
             ErrorCode.InvalidRequestBody,
-            "The Kubernetes command cannot be built: " + message);
+            "The Kubernetes command cannot be built: " + message
+        );
+
+    /// <summary>
+    ///     <c>cybercloud/{provider}</c> — ADR-013's stable per-provider field manager.
+    /// </summary>
+    /// <param name="providerNamespace">
+    ///     The provider namespace, for example <c>CyberCloud.DBforPostgreSQL</c>.
+    /// </param>
+    internal static string FieldManagerFor(string providerNamespace) =>
+        "cybercloud/" + providerNamespace.ToLowerInvariant();
 }

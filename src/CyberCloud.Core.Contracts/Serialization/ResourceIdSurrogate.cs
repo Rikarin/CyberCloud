@@ -28,8 +28,7 @@ namespace CyberCloud.Core.Contracts.Serialization;
 /// </remarks>
 [GenerateSerializer]
 [Alias("CyberCloud.Core.ResourceId")]
-public struct ResourceIdSurrogate
-{
+public struct ResourceIdSurrogate {
     /// <summary>The owning tenant.</summary>
     [Id(0)]
     public Guid TenantId { get; set; }
@@ -57,8 +56,7 @@ public struct ResourceIdSurrogate
 
 /// <summary>The <see cref="ResourceId" /> ↔ <see cref="ResourceIdSurrogate" /> converter.</summary>
 [RegisterConverter]
-public sealed class ResourceIdSurrogateConverter : IConverter<ResourceId, ResourceIdSurrogate>
-{
+public sealed class ResourceIdSurrogateConverter : IConverter<ResourceId, ResourceIdSurrogate> {
     /// <inheritdoc />
     public ResourceId ConvertFromSurrogate(in ResourceIdSurrogate surrogate) =>
         surrogate.ResourceGroup is null || surrogate.Name is null
@@ -69,19 +67,19 @@ public sealed class ResourceIdSurrogateConverter : IConverter<ResourceId, Resour
                 surrogate.ResourceGroup,
                 surrogate.Type,
                 surrogate.Name,
-                surrogate.Id);
+                surrogate.Id
+            );
 
     /// <inheritdoc />
     public ResourceIdSurrogate ConvertToSurrogate(in ResourceId value) =>
         value.Name is null
             ? default
-            : new ResourceIdSurrogate
-            {
+            : new ResourceIdSurrogate {
                 TenantId = value.TenantId,
                 SubscriptionId = value.SubscriptionId,
                 ResourceGroup = value.ResourceGroup,
                 Type = value.Type,
                 Name = value.Name,
-                Id = value.Id,
+                Id = value.Id
             };
 }

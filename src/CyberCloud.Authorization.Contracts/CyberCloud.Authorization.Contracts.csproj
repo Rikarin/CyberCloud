@@ -1,42 +1,42 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!--
-    docs/plan/03 § src — the .Contracts split, for ADR-007's ReBAC engine. Grain interfaces and wire
-    types: object and subject references, relation tuples, the consistency token, the check result,
-    and the Azure-shaped role-assignment view.
-
-    ⚠ ONE PACKAGE, for the same reason CyberCloud.Tenancy.Contracts has one. Microsoft.Orleans.Sdk
-    is the code generator plus Orleans.Serialization; no hosting, no clustering, no storage. The
-    gateway, the resource manager, the CLI and the SDK reference this assembly to call the check
-    grain, and none of them acquires a silo by doing so.
-  -->
-
-  <PropertyGroup>
     <!--
-      ⚠ CA1720 ("identifier contains type name") fires on every `Object` member and every `@object`
-      parameter in this assembly, and it is wrong here for a specific reason rather than a
-      convenience one.
-
-      "Object" is not a stand-in for a CLR type in this domain — it is one of the three nouns
-      docs/plan/07 § The model defines, alongside "relation" and "subject", and a relation tuple is
-      literally written `object#relation@subject`. Renaming it to Entity/Target/Scope would make
-      every method signature disagree with the document, the tuple grammar, the Zanzibar paper and
-      the regression corpus's own checked-in text at once. CA1720 exists to stop `GetInt(int int1)`;
-      this is the case it cannot tell apart.
-
-      Scoped to this assembly and to CyberCloud.Authorization. Nothing else in the repository is
-      allowed to name a member `Object`.
+      docs/plan/03 § src — the .Contracts split, for ADR-007's ReBAC engine. Grain interfaces and wire
+      types: object and subject references, relation tuples, the consistency token, the check result,
+      and the Azure-shaped role-assignment view.
+  
+      ⚠ ONE PACKAGE, for the same reason CyberCloud.Tenancy.Contracts has one. Microsoft.Orleans.Sdk
+      is the code generator plus Orleans.Serialization; no hosting, no clustering, no storage. The
+      gateway, the resource manager, the CLI and the SDK reference this assembly to call the check
+      grain, and none of them acquires a silo by doing so.
     -->
-    <NoWarn>$(NoWarn);CA1720</NoWarn>
-  </PropertyGroup>
 
-  <ItemGroup>
-    <PackageReference Include="Microsoft.Orleans.Sdk" />
-  </ItemGroup>
+    <PropertyGroup>
+        <!--
+          ⚠ CA1720 ("identifier contains type name") fires on every `Object` member and every `@object`
+          parameter in this assembly, and it is wrong here for a specific reason rather than a
+          convenience one.
+    
+          "Object" is not a stand-in for a CLR type in this domain — it is one of the three nouns
+          docs/plan/07 § The model defines, alongside "relation" and "subject", and a relation tuple is
+          literally written `object#relation@subject`. Renaming it to Entity/Target/Scope would make
+          every method signature disagree with the document, the tuple grammar, the Zanzibar paper and
+          the regression corpus's own checked-in text at once. CA1720 exists to stop `GetInt(int int1)`;
+          this is the case it cannot tell apart.
+    
+          Scoped to this assembly and to CyberCloud.Authorization. Nothing else in the repository is
+          allowed to name a member `Object`.
+        -->
+        <NoWarn>$(NoWarn);CA1720</NoWarn>
+    </PropertyGroup>
 
-  <ItemGroup>
-    <ProjectReference Include="../CyberCloud.Core/CyberCloud.Core.csproj" />
-    <ProjectReference Include="../CyberCloud.Core.Contracts/CyberCloud.Core.Contracts.csproj" />
-  </ItemGroup>
+    <ItemGroup>
+        <PackageReference Include="Microsoft.Orleans.Sdk"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../CyberCloud.Core/CyberCloud.Core.csproj"/>
+        <ProjectReference Include="../CyberCloud.Core.Contracts/CyberCloud.Core.Contracts.csproj"/>
+    </ItemGroup>
 
 </Project>

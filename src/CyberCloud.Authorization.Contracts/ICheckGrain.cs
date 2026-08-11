@@ -17,8 +17,11 @@ namespace CyberCloud.Authorization.Contracts;
 ///     </para>
 ///     <para>
 ///         ⚠ <b>The signature is not quite docs/plan/07 § Check's.</b> The document writes
-///         <c>CheckAsync(ObjectRef @object, string permission, SubjectRef subject,
-///         ConsistencyToken? token)</c> — a free function with the object as a parameter and
+///         <c>
+///             CheckAsync(ObjectRef @object, string permission, SubjectRef subject,
+///             ConsistencyToken? token)
+///         </c>
+///         — a free function with the object as a parameter and
 ///         consistency expressed as a nullable token. Two changes, both forced:
 ///     </para>
 ///     <list type="bullet">
@@ -34,15 +37,16 @@ namespace CyberCloud.Authorization.Contracts;
 ///     </list>
 /// </remarks>
 [Alias("CyberCloud.Authorization.ICheckGrain")]
-public interface ICheckGrain : IGrainWithStringKey
-{
+public interface ICheckGrain : IGrainWithStringKey {
     /// <summary>
     ///     Whether <paramref name="subject" /> has <paramref name="permission" /> on this object.
     /// </summary>
     /// <param name="permission">A permission or relation name in the schema.</param>
     /// <param name="subject">The subject.</param>
-    /// <param name="consistency">How fresh the answer has to be. Defaults to
-    ///     <see cref="ConsistencyMode.MinimizeLatency" /> when null.</param>
+    /// <param name="consistency">
+    ///     How fresh the answer has to be. Defaults to
+    ///     <see cref="ConsistencyMode.MinimizeLatency" /> when null.
+    /// </param>
     /// <remarks>
     ///     <para>
     ///         Evaluation is the bounded, memoized search of docs/plan/07 § Check: expand the
@@ -57,7 +61,10 @@ public interface ICheckGrain : IGrainWithStringKey
     ///     </para>
     /// </remarks>
     Task<Result<CheckResult>> CheckAsync(
-        string permission, SubjectRef subject, Consistency? consistency);
+        string permission,
+        SubjectRef subject,
+        Consistency? consistency
+    );
 
     /// <summary>
     ///     The Azure-shaped role assignments visible at this scope, direct and inherited —

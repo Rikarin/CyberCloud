@@ -1,6 +1,4 @@
-using CyberCloud.Core;
 using CyberCloud.Core.Contracts.Serialization;
-using CyberCloud.Core.Resources;
 using Shouldly;
 
 namespace CyberCloud.Core.Contracts.Tests;
@@ -24,11 +22,9 @@ namespace CyberCloud.Core.Contracts.Tests;
 ///         be written on day one.
 ///     </para>
 /// </remarks>
-public sealed class CrossVersionPayloadTests
-{
+public sealed class CrossVersionPayloadTests {
     [Fact]
-    public void AnUnwrittenResultSurrogateIsAFailure()
-    {
+    public void AnUnwrittenResultSurrogateIsAFailure() {
         // The shape Orleans produces when a peer wrote no fields at all. If [Id(0)] were an
         // IsFailure flag instead of IsSuccess, this same code would read it as a success.
         var round = new ResultSurrogateConverter().ConvertFromSurrogate(default);
@@ -39,8 +35,7 @@ public sealed class CrossVersionPayloadTests
     }
 
     [Fact]
-    public void AnUnwrittenGenericResultSurrogateIsAFailure()
-    {
+    public void AnUnwrittenGenericResultSurrogateIsAFailure() {
         var round = new ResultSurrogateConverter<int>().ConvertFromSurrogate(default);
 
         round.IsFailure.ShouldBeTrue();
@@ -48,39 +43,36 @@ public sealed class CrossVersionPayloadTests
     }
 
     [Fact]
-    public void AFailureWithNoErrorIsStillAFailure()
-    {
+    public void AFailureWithNoErrorIsStillAFailure() {
         var round = new ResultSurrogateConverter()
-            .ConvertFromSurrogate(new ResultSurrogate { IsSuccess = false, Error = null });
+            .ConvertFromSurrogate(new() { IsSuccess = false, Error = null });
 
         round.IsFailure.ShouldBeTrue();
         round.Error!.Message.ShouldContain("no error attached");
     }
 
     [Fact]
-    public void ASuccessWithNoValueIsDowngradedToAFailureRatherThanThrowing()
-    {
+    public void ASuccessWithNoValueIsDowngradedToAFailureRatherThanThrowing() {
         // Result<T> is constrained T : notnull, so Result<T>.Success(null) throws. A peer that
         // claims success and sends nothing must not take the silo's thread with it.
         var round = new ResultSurrogateConverter<string>()
-            .ConvertFromSurrogate(new ResultSurrogate<string> { IsSuccess = true, Value = null });
+            .ConvertFromSurrogate(new() { IsSuccess = true, Value = null });
 
         round.IsFailure.ShouldBeTrue();
         round.Error!.Code.ShouldBe(ErrorCode.InternalError);
     }
 
     [Fact]
-    public void AnUnknownErrorCodeBecomesInternalErrorAndKeepsItsToken()
-    {
+    public void AnUnknownErrorCodeBecomesInternalErrorAndKeepsItsToken() {
         // ErrorCode is a closed registry with a private constructor, so a code from a newer silo
         // cannot be manufactured. Dropping it silently would make an upgrade read as an outage in
         // the logs; preserving it in the message keeps the same grep working.
         var round = new ErrorSurrogateConverter().ConvertFromSurrogate(
-            new ErrorSurrogate
-            {
+            new() {
                 Code = "SomethingVersionNPlusOneKnows",
-                Message = "the quota meter 'gpu' is not provisioned in this region.",
-            });
+                Message = "the quota meter 'gpu' is not provisioned in this region."
+            }
+        );
 
         round.Code.ShouldBe(ErrorCode.InternalError);
         round.Message.ShouldContain("SomethingVersionNPlusOneKnows");
@@ -88,71 +80,66 @@ public sealed class CrossVersionPayloadTests
     }
 
     [Fact]
-    public void AnErrorWithNoMessageGetsOneRatherThanThrowing()
-    {
+    public void AnErrorWithNoMessageGetsOneRatherThanThrowing() {
         // Core's Error constructor rejects a blank message, so the value has to come from somewhere.
-        var round = new ErrorSurrogateConverter().ConvertFromSurrogate(
-            new ErrorSurrogate { Code = ErrorCode.Conflict.Value });
+        var round = new ErrorSurrogateConverter().ConvertFromSurrogate(new() { Code = ErrorCode.Conflict.Value });
 
         round.Code.ShouldBe(ErrorCode.Conflict);
         round.Message.ShouldNotBeNullOrWhiteSpace();
     }
 
     [Fact]
-    public void AnErrorWithNoDetailsGetsAnEmptyArrayNotADefaultOne()
-    {
+    public void AnErrorWithNoDetailsGetsAnEmptyArrayNotADefaultOne() {
         // ImmutableArray<T>.IsDefault is the trap here: a default array throws on enumeration, and
         // Core's Error normalises it on construction. Assert the normalisation survives the wire.
         var round = new ErrorSurrogateConverter().ConvertFromSurrogate(
-            new ErrorSurrogate { Code = ErrorCode.Conflict.Value, Message = "x", Details = null });
+            new() { Code = ErrorCode.Conflict.Value, Message = "x", Details = null }
+        );
 
         round.Details.IsDefault.ShouldBeFalse();
         round.Details.Length.ShouldBe(0);
     }
 
     [Fact]
-    public void AMalformedResourceTypeNameThrowsRatherThanBeingAccepted()
-    {
+    public void AMalformedResourceTypeNameThrowsRatherThanBeingAccepted() {
         // The one deliberate exception to "substitute, do not throw": a type path whose segments
         // are not what the grammar allows shifts the type/name boundary in ResourceId.TryParsePath,
         // so the receiver would treat a value the sender did not write as an address.
         Should.Throw<ArgumentException>(() =>
             new ResourceTypeNameSurrogateConverter().ConvertFromSurrogate(
-                new ResourceTypeNameSurrogate { Namespace = "NoDotHere", Type = "servers" }));
+                new() { Namespace = "NoDotHere", Type = "servers" }
+            )
+        );
 
         Should.Throw<ArgumentException>(() =>
             new ResourceTypeNameSurrogateConverter().ConvertFromSurrogate(
-                new ResourceTypeNameSurrogate
-                {
-                    Namespace = "CyberCloud.Compute",
-                    Type = "a/b/c/d/e",
-                }));
+                new() { Namespace = "CyberCloud.Compute", Type = "a/b/c/d/e" }
+            )
+        );
     }
 
     [Fact]
-    public void AHalfWrittenResourceIdIsTheEmptyIdRatherThanAThrow()
-    {
+    public void AHalfWrittenResourceIdIsTheEmptyIdRatherThanAThrow() {
         // A peer that wrote the GUIDs and not the names. There is no valid ResourceId to build, and
         // default(ResourceId) is what Core already uses for "no address".
         var round = new ResourceIdSurrogateConverter().ConvertFromSurrogate(
-            new ResourceIdSurrogate { TenantId = Guid.NewGuid(), SubscriptionId = Guid.NewGuid() });
+            new() { TenantId = Guid.NewGuid(), SubscriptionId = Guid.NewGuid() }
+        );
 
-        round.ShouldBe(default(ResourceId));
+        round.ShouldBe(default);
     }
 
     [Fact]
-    public void AMalformedResourceGroupNameInAResourceIdThrows()
-    {
+    public void AMalformedResourceGroupNameInAResourceIdThrows() {
         // The complement of the test above: the payload is complete but the value breaks the naming
         // rules, which is the separator-injection defence ResourceId's remarks describe. Accepting
         // it would produce a ResourceId whose Path re-parses as a different id.
         Should.Throw<ArgumentException>(() =>
             new ResourceIdSurrogateConverter().ConvertFromSurrogate(
-                new ResourceIdSurrogate
-                {
-                    ResourceGroup = "prod/../other",
-                    Type = new ResourceTypeName("CyberCloud.Compute", "virtualMachines"),
-                    Name = "vm1",
-                }));
+                new() {
+                    ResourceGroup = "prod/../other", Type = new("CyberCloud.Compute", "virtualMachines"), Name = "vm1"
+                }
+            )
+        );
     }
 }

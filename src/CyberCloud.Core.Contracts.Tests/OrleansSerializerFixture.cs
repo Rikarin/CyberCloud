@@ -26,23 +26,22 @@ namespace CyberCloud.Core.Contracts.Tests;
 ///         <c>Microsoft.Orleans.Core.Abstractions</c>).
 ///     </para>
 /// </remarks>
-public sealed class OrleansSerializerFixture : IDisposable
-{
+public sealed class OrleansSerializerFixture : IDisposable {
     readonly ServiceProvider provider;
 
+    /// <summary>Orleans' own serializer.</summary>
+    public Serializer Serializer { get; }
+
     /// <summary>Builds the service provider and resolves the serializer.</summary>
-    public OrleansSerializerFixture()
-    {
+    public OrleansSerializerFixture() {
         var services = new ServiceCollection();
         services.AddSerializer(builder =>
-            builder.AddAssembly(typeof(ResultSurrogate).Assembly));
+            builder.AddAssembly(typeof(ResultSurrogate).Assembly)
+        );
 
         provider = services.BuildServiceProvider();
         Serializer = provider.GetRequiredService<Serializer>();
     }
-
-    /// <summary>Orleans' own serializer.</summary>
-    public Serializer Serializer { get; }
 
     /// <summary>Serialises to bytes and back. The only round-trip helper these tests use.</summary>
     public T RoundTrip<T>(T value) => Serializer.Deserialize<T>(Serializer.SerializeToArray(value));

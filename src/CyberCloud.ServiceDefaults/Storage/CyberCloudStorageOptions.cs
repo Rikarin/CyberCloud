@@ -14,8 +14,7 @@ namespace CyberCloud.ServiceDefaults.Storage;
 ///         omission.
 ///     </para>
 /// </remarks>
-public sealed class CyberCloudStorageOptions
-{
+public sealed class CyberCloudStorageOptions {
     /// <summary>The configuration section this binds from.</summary>
     public const string SectionName = "CyberCloud:Storage";
 
@@ -41,8 +40,7 @@ public sealed class CyberCloudStorageOptions
 ///         is <see cref="IShardMapCache.HotHashTagFor" />.
 ///     </para>
 /// </remarks>
-public sealed class HotTierOptions
-{
+public sealed class HotTierOptions {
     /// <summary>
     ///     The StackExchange.Redis configuration string for the cluster — every node, comma
     ///     separated, exactly as a client would be given it.
@@ -65,8 +63,7 @@ public sealed class HotTierOptions
 ///     The durable tier — the shard table and the connection-pool arithmetic that docs/plan/05
 ///     § Storage provider wiring says is "obvious in retrospect and fatal in production".
 /// </summary>
-public sealed class DurableTierOptions
-{
+public sealed class DurableTierOptions {
     /// <summary>
     ///     Shard id → Npgsql connection string, one entry per PostgreSQL server. docs/plan/05
     ///     § Durable: "N plain Postgres servers that do not know about each other".

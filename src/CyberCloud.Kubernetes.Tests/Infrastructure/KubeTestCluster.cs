@@ -1,4 +1,3 @@
-using System.Globalization;
 using CyberCloud.Core.Contracts;
 using CyberCloud.Core.Resources;
 using CyberCloud.Core.Time;
@@ -9,6 +8,9 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using Orleans.Multitenant;
 using Orleans.TestingHost;
+using System.Collections.Concurrent;
+using System.Globalization;
+using System.Reflection;
 
 namespace CyberCloud.Kubernetes.Tests.Infrastructure;
 
@@ -16,8 +18,7 @@ namespace CyberCloud.Kubernetes.Tests.Infrastructure;
 ///     An <see cref="IClusterOperatorAuthority" /> a test can switch on and off — the same device
 ///     <c>SwitchablePlatformOperatorAuthority</c> is in the tenancy suite.
 /// </summary>
-public sealed class SwitchableClusterOperatorAuthority : IClusterOperatorAuthority
-{
+public sealed class SwitchableClusterOperatorAuthority : IClusterOperatorAuthority {
     /// <summary>The operator id to report, or <see langword="null" /> to deny.</summary>
     public static string? Operator { get; set; }
 
@@ -34,8 +35,7 @@ public sealed class SwitchableClusterOperatorAuthority : IClusterOperatorAuthori
 ///     alternative, waiting 90 seconds, is the test nobody runs. Advancing is monotonic and forward
 ///     only, so it cannot disturb the tests in this collection that do not read the clock.
 /// </remarks>
-public sealed class SharedTestClock : IClock
-{
+public sealed class SharedTestClock : IClock {
     /// <summary>The one instance the silo resolves.</summary>
     public static SharedTestClock Instance { get; } = new();
 
@@ -48,23 +48,22 @@ public sealed class SharedTestClock : IClock
 }
 
 /// <summary>An <see cref="IKubeApiClientFactory" /> that hands out one shared fake.</summary>
-public sealed class FakeApiClientFactory : IKubeApiClientFactory
-{
+public sealed class FakeApiClientFactory : IKubeApiClientFactory {
     /// <summary>The client every connection gets. Static so the test and the silo share it.</summary>
     public static RecordingApiClient Client { get; } = new();
 
     /// <inheritdoc />
     public Task<Result<IKubeApiClient>> ConnectAsync(
         ClusterConnectionDescriptor descriptor,
-        CancellationToken cancellationToken = default) =>
-        Task.FromResult(Result<IKubeApiClient>.Success((IKubeApiClient)Client));
+        CancellationToken cancellationToken = default
+    ) =>
+        Task.FromResult(Result<IKubeApiClient>.Success(Client));
 }
 
 /// <summary>Captures log lines so a test can assert that an edge was logged.</summary>
-public sealed class LogCapture : ILoggerProvider
-{
+public sealed class LogCapture : ILoggerProvider {
     /// <summary>Every line, as rendered.</summary>
-    public static System.Collections.Concurrent.ConcurrentBag<(LogLevel Level, string Message)> Lines { get; } = [];
+    public static ConcurrentBag<(LogLevel Level, string Message)> Lines { get; } = [];
 
     /// <inheritdoc />
     public ILogger CreateLogger(string categoryName) => new Sink();
@@ -72,10 +71,10 @@ public sealed class LogCapture : ILoggerProvider
     /// <inheritdoc />
     public void Dispose() => GC.SuppressFinalize(this);
 
-    sealed class Sink : ILogger
-    {
+    sealed class Sink : ILogger {
         public IDisposable? BeginScope<TState>(TState state)
-            where TState : notnull => null;
+            where TState : notnull =>
+            null;
 
         public bool IsEnabled(LogLevel logLevel) => true;
 
@@ -84,7 +83,8 @@ public sealed class LogCapture : ILoggerProvider
             EventId eventId,
             TState state,
             Exception? exception,
-            Func<TState, Exception, string> formatter) =>
+            Func<TState, Exception, string> formatter
+        ) =>
             Lines.Add((logLevel, formatter(state, exception!)));
     }
 }
@@ -93,16 +93,19 @@ public sealed class LogCapture : ILoggerProvider
 ///     A grain that makes a grain call on behalf of a test.
 /// </summary>
 /// <remarks>
-///     ⚠ <b>The same reason <c>IReacherGrain</c> exists in the tenancy suite, and it is load-bearing
-///     here.</b> The caller's tenant is read from <c>IGrainCallContext.SourceId</c>, which is
+///     ⚠
+///     <b>
+///         The same reason <c>IReacherGrain</c> exists in the tenancy suite, and it is load-bearing
+///         here.
+///     </b>
+///     The caller's tenant is read from <c>IGrainCallContext.SourceId</c>, which is
 ///     <see langword="null" /> for a call made by a client. A test calling the connection grain
 ///     directly is a client, so it could only ever exercise the <see cref="CallerKind.Client" />
 ///     path. Routing through a tenant-qualified grain is the only way to put a real tenant on the
 ///     calling side.
 /// </remarks>
 [Alias("CyberCloud.Kubernetes.Tests.IKubeReacher")]
-public interface IKubeReacherGrain : IGrainWithStringKey
-{
+public interface IKubeReacherGrain : IGrainWithStringKey {
     /// <summary>Calls <c>GetHealthAsync</c> on a cluster connection.</summary>
     /// <param name="clusterId">The cluster.</param>
     [Alias("Health")]
@@ -159,18 +162,17 @@ public interface IKubeReacherGrain : IGrainWithStringKey
     Task<IReadOnlyList<string>> ProbeUncheckedMethodsAsync(
         Guid clusterId,
         ClusterConnectionDescriptor descriptor,
-        KubeCommand command);
+        KubeCommand command
+    );
 }
 
 /// <inheritdoc />
-public sealed class KubeReacherGrain : Grain, IKubeReacherGrain
-{
-    IClusterConnectionGrain Connection(Guid clusterId) =>
-        GrainFactory.GetGrain<IClusterConnectionGrain>(GrainKeys.ClusterConnection(clusterId));
+public sealed class KubeReacherGrain : Grain, IKubeReacherGrain {
+    static GroupVersionKind SampleKind =>
+        new() { Group = "apps", Version = "v1", Kind = "Deployment", Plural = "deployments" };
 
     /// <inheritdoc />
-    public async Task<string> ReachHealthAsync(Guid clusterId)
-    {
+    public async Task<string> ReachHealthAsync(Guid clusterId) {
         var outcome = await Connection(clusterId).GetHealthAsync();
         return outcome.IsSuccess
             ? outcome.GetValueOrThrow().State.ToString()
@@ -178,8 +180,7 @@ public sealed class KubeReacherGrain : Grain, IKubeReacherGrain
     }
 
     /// <inheritdoc />
-    public async Task<string> ReachApplyAsync(Guid clusterId, KubeCommand command)
-    {
+    public async Task<string> ReachApplyAsync(Guid clusterId, KubeCommand command) {
         var outcome = await Connection(clusterId).ApplyAsync(command);
         return outcome.IsSuccess
             ? outcome.GetValueOrThrow().Result.ToString()
@@ -187,25 +188,24 @@ public sealed class KubeReacherGrain : Grain, IKubeReacherGrain
     }
 
     /// <inheritdoc />
-    public async Task<string> ReachAttachAsync(ClusterConnectionDescriptor descriptor)
-    {
+    public async Task<string> ReachAttachAsync(ClusterConnectionDescriptor descriptor) {
         var outcome = await Connection(descriptor.ClusterId).AttachAsync(descriptor);
         return outcome.IsSuccess ? "ok" : $"<{outcome.Error!.Code}>";
     }
 
     /// <inheritdoc />
-    public async Task<string> ReachWatchAsync(Guid clusterId)
-    {
-        var outcome = await Connection(clusterId).WatchAsync(
-            new GroupVersionKind { Group = "apps", Version = "v1", Kind = "Deployment", Plural = "deployments" },
-            string.Empty);
+    public async Task<string> ReachWatchAsync(Guid clusterId) {
+        var outcome = await Connection(clusterId)
+            .WatchAsync(
+                new() { Group = "apps", Version = "v1", Kind = "Deployment", Plural = "deployments" },
+                string.Empty
+            );
 
         return outcome.IsSuccess ? outcome.GetValueOrThrow().LabelSelector : $"<{outcome.Error!.Code}>";
     }
 
     /// <inheritdoc />
-    public async Task<string> ReachPingAsync(Guid clusterId)
-    {
+    public async Task<string> ReachPingAsync(Guid clusterId) {
         var outcome = await Connection(clusterId).PingAsync();
         return outcome.IsSuccess
             ? outcome.GetValueOrThrow().State.ToString()
@@ -213,8 +213,7 @@ public sealed class KubeReacherGrain : Grain, IKubeReacherGrain
     }
 
     /// <inheritdoc />
-    public async Task<string> ReachApplyMessageAsync(Guid clusterId, KubeCommand command)
-    {
+    public async Task<string> ReachApplyMessageAsync(Guid clusterId, KubeCommand command) {
         var outcome = await Connection(clusterId).ApplyAsync(command);
         return outcome.IsSuccess
             ? outcome.GetValueOrThrow().Message
@@ -222,21 +221,19 @@ public sealed class KubeReacherGrain : Grain, IKubeReacherGrain
     }
 
     /// <inheritdoc />
-    public Task<string?> MyTenantAsync() =>
-        Task.FromResult(AddressableExtensions.GetTenantId(this));
+    public Task<string?> MyTenantAsync() => Task.FromResult(this.GetTenantId());
 
     /// <inheritdoc />
     public async Task<IReadOnlyList<string>> ProbeUncheckedMethodsAsync(
         Guid clusterId,
         ClusterConnectionDescriptor descriptor,
-        KubeCommand command)
-    {
+        KubeCommand command
+    ) {
         var connection = Connection(clusterId);
         var unchecked_ = new List<string>();
 
         foreach (var method in typeof(IClusterConnectionGrain)
-            .GetMethods(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance))
-        {
+                     .GetMethods(BindingFlags.Public | BindingFlags.Instance)) {
             var arguments = method.GetParameters()
                 .Select(p => Sample(p.ParameterType, descriptor, command))
                 .ToArray();
@@ -247,8 +244,7 @@ public sealed class KubeReacherGrain : Grain, IKubeReacherGrain
             var result = task.GetType().GetProperty("Result")!.GetValue(task)!;
             var isFailure = (bool)result.GetType().GetProperty("IsFailure")!.GetValue(result)!;
 
-            if (!isFailure)
-            {
+            if (!isFailure) {
                 unchecked_.Add(method.Name);
             }
         }
@@ -256,46 +252,38 @@ public sealed class KubeReacherGrain : Grain, IKubeReacherGrain
         return unchecked_;
     }
 
-    static object Sample(Type type, ClusterConnectionDescriptor descriptor, KubeCommand command)
-    {
-        if (type == typeof(ClusterConnectionDescriptor))
-        {
+    IClusterConnectionGrain Connection(Guid clusterId) =>
+        GrainFactory.GetGrain<IClusterConnectionGrain>(GrainKeys.ClusterConnection(clusterId));
+
+    static object Sample(Type type, ClusterConnectionDescriptor descriptor, KubeCommand command) {
+        if (type == typeof(ClusterConnectionDescriptor)) {
             return descriptor;
         }
 
-        if (type == typeof(KubeCommand))
-        {
+        if (type == typeof(KubeCommand)) {
             return command;
         }
 
-        if (type == typeof(ObjectRef))
-        {
+        if (type == typeof(ObjectRef)) {
             return new ObjectRef { Kind = SampleKind, Namespace = "ns", Name = "main" };
         }
 
-        if (type == typeof(GroupVersionKind))
-        {
+        if (type == typeof(GroupVersionKind)) {
             return SampleKind;
         }
 
-        if (type == typeof(string))
-        {
+        if (type == typeof(string)) {
             return string.Empty;
         }
 
-        if (type == typeof(CascadePolicy))
-        {
+        if (type == typeof(CascadePolicy)) {
             return CascadePolicy.Background;
         }
 
         throw new NotSupportedException(
-            $"{type} has no sample value; add one so the probe keeps covering the whole interface.");
+            $"{type} has no sample value; add one so the probe keeps covering the whole interface."
+        );
     }
-
-    static GroupVersionKind SampleKind => new()
-    {
-        Group = "apps", Version = "v1", Kind = "Deployment", Plural = "deployments",
-    };
 }
 
 /// <summary>
@@ -310,47 +298,39 @@ public sealed class KubeReacherGrain : Grain, IKubeReacherGrain
 ///     grain's own check would never be reached and this suite would be testing Orleans' separation
 ///     instead of ours.
 /// </remarks>
-public sealed class AllowIntoNullTenant : ICrossTenantAuthorizer
-{
+public sealed class AllowIntoNullTenant : ICrossTenantAuthorizer {
     /// <inheritdoc />
-    public bool IsAccessAuthorized(string? sourceTenantId, string? targetTenantId) =>
-        targetTenantId is null;
+    public bool IsAccessAuthorized(string? sourceTenantId, string? targetTenantId) => targetTenantId is null;
 }
 
 /// <summary>The separator: everything except Orleans' own system grains.</summary>
-public sealed class AllCallsSeparated : IGrainCallTenantSeparator
-{
+public sealed class AllCallsSeparated : IGrainCallTenantSeparator {
     /// <inheritdoc />
-    public bool IsTenantSeparatedCall(IIncomingGrainCallContext context)
-    {
+    public bool IsTenantSeparatedCall(IIncomingGrainCallContext context) {
         ArgumentNullException.ThrowIfNull(context);
         return !context.InterfaceName.StartsWith("Orleans.", StringComparison.Ordinal);
     }
 }
 
 /// <summary>An in-process Orleans cluster with the Kubernetes fabric wired as production wires it.</summary>
-public sealed class KubeTestCluster : IAsyncLifetime
-{
+public sealed class KubeTestCluster : IAsyncLifetime {
     TestCluster cluster = null!;
 
     /// <summary>The cluster's grain factory. ⚠ Tenant-unaware — a client, in the filter's terms.</summary>
     public IGrainFactory Grains => cluster.GrainFactory;
 
     /// <summary>A tenant-qualified grain factory.</summary>
-    public TenantGrainFactory For(Guid tenant) =>
-        Grains.ForTenant(tenant.ToString("D", CultureInfo.InvariantCulture));
+    public TenantGrainFactory For(Guid tenant) => Grains.ForTenant(tenant.ToString("D", CultureInfo.InvariantCulture));
 
     /// <summary>A reacher grain inside a tenant — the only way to be a grain-side caller.</summary>
-    public IKubeReacherGrain Reacher(Guid tenant) =>
-        For(tenant).GetGrain<IKubeReacherGrain>("reacher");
+    public IKubeReacherGrain Reacher(Guid tenant) => For(tenant).GetGrain<IKubeReacherGrain>("reacher");
 
     /// <summary>The connection grain, reached as a client would.</summary>
     public IClusterConnectionGrain Connection(Guid clusterId) =>
         Grains.GetGrain<IClusterConnectionGrain>(GrainKeys.ClusterConnection(clusterId));
 
     /// <inheritdoc />
-    public async ValueTask InitializeAsync()
-    {
+    public async ValueTask InitializeAsync() {
         var builder = new TestClusterBuilder(1);
         builder.AddSiloBuilderConfigurator<SiloConfigurator>();
         cluster = builder.Build();
@@ -358,37 +338,33 @@ public sealed class KubeTestCluster : IAsyncLifetime
     }
 
     /// <inheritdoc />
-    public async ValueTask DisposeAsync()
-    {
-        if (cluster is not null)
-        {
+    public async ValueTask DisposeAsync() {
+        if (cluster is not null) {
             await cluster.StopAllSilosAsync();
             await cluster.DisposeAsync();
         }
     }
 
-    sealed class SiloConfigurator : ISiloConfigurator
-    {
-        public void Configure(ISiloBuilder silo)
-        {
+    sealed class SiloConfigurator : ISiloConfigurator {
+        public void Configure(ISiloBuilder silo) {
             silo.AddMemoryGrainStorage(StorageTiers.Durable);
 
-            silo.ConfigureServices(services =>
-            {
-                services.AddSingleton<ILoggerProvider, LogCapture>();
-                services.AddSingleton<IClock>(SharedTestClock.Instance);
-                services.TryAddSingleton<IClusterOperatorAuthority, SwitchableClusterOperatorAuthority>();
-                services.TryAddSingleton<IKubeApiClientFactory, FakeApiClientFactory>();
+            silo.ConfigureServices(services => {
+                    services.AddSingleton<ILoggerProvider, LogCapture>();
+                    services.AddSingleton<IClock>(SharedTestClock.Instance);
+                    services.TryAddSingleton<IClusterOperatorAuthority, SwitchableClusterOperatorAuthority>();
+                    services.TryAddSingleton<IKubeApiClientFactory, FakeApiClientFactory>();
 
-                // The health timer is off: a test asserting a health transition cannot share a
-                // process with a loop quietly repairing it. Same argument as
-                // TenancyRefreshOptions.RunBackgroundRefresh.
-                services.Configure<KubernetesOptions>(o =>
-                {
-                    o.RunHealthTimer = false;
-                    o.InformerStaggerWindow = TimeSpan.Zero;
-                });
-            });
+                    // The health timer is off: a test asserting a health transition cannot share a
+                    // process with a loop quietly repairing it. Same argument as
+                    // TenancyRefreshOptions.RunBackgroundRefresh.
+                    services.Configure<KubernetesOptions>(o => {
+                            o.RunHealthTimer = false;
+                            o.InformerStaggerWindow = TimeSpan.Zero;
+                        }
+                    );
+                }
+            );
 
             // The production wiring, which is what registers ClusterConnectionTenantFilter.
             silo.AddCyberCloudKubernetes();
@@ -397,15 +373,15 @@ public sealed class KubeTestCluster : IAsyncLifetime
             // PlatformCrossTenantAuthorizer does — so the connection grain's own check is reached.
             silo.AddMultitenantCommunicationSeparation(
                 _ => new AllowIntoNullTenant(),
-                _ => new AllCallsSeparated());
+                _ => new AllCallsSeparated()
+            );
         }
     }
 }
 
 /// <summary>Binds <see cref="KubeTestCluster" /> to the classes that share it.</summary>
 [CollectionDefinition(Name)]
-public sealed class KubeClusterSuite : ICollectionFixture<KubeTestCluster>
-{
+public sealed class KubeClusterSuite : ICollectionFixture<KubeTestCluster> {
     /// <summary>The collection name.</summary>
     public const string Name = "kube-test-cluster";
 }

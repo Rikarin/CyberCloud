@@ -4,16 +4,14 @@ using Shouldly;
 namespace CyberCloud.Core.Tests;
 
 /// <summary>The naming rule from docs/plan/06:87-90.</summary>
-public class ResourceNamingTests
-{
+public class ResourceNamingTests {
     // ── Boundary lengths: 0, 1, 63, 64 ─────────────────────────────────────────────────────────
     // docs/plan/09 caps a Kubernetes label value at 63, and docs/plan/08:84 puts the resource id in
     // a label, so 63 must pass and 64 must not. The off-by-one here is the difference between "a
     // name you can use" and "an object the API server rejects at apply time, in production".
 
     [Fact]
-    public void ZeroCharacterNameIsRejected()
-    {
+    public void ZeroCharacterNameIsRejected() {
         var result = ResourceNaming.Validate(string.Empty);
 
         result.IsFailure.ShouldBeTrue();
@@ -22,15 +20,13 @@ public class ResourceNamingTests
     }
 
     [Fact]
-    public void OneCharacterNameIsAccepted()
-    {
+    public void OneCharacterNameIsAccepted() {
         ResourceNaming.IsValid("a").ShouldBeTrue();
         ResourceNaming.IsValid("0").ShouldBeTrue();
     }
 
     [Fact]
-    public void SixtyThreeCharacterNameIsAccepted()
-    {
+    public void SixtyThreeCharacterNameIsAccepted() {
         var name = new string('a', 63);
 
         name.Length.ShouldBe(ResourceNaming.MaxLength);
@@ -38,8 +34,7 @@ public class ResourceNamingTests
     }
 
     [Fact]
-    public void SixtyFourCharacterNameIsRejectedAndTheMessageSaysBothNumbers()
-    {
+    public void SixtyFourCharacterNameIsRejectedAndTheMessageSaysBothNumbers() {
         var name = new string('a', 64);
 
         var result = ResourceNaming.Validate(name);
@@ -50,8 +45,7 @@ public class ResourceNamingTests
     }
 
     [Fact]
-    public void NullNameIsRejectedWithoutThrowing()
-    {
+    public void NullNameIsRejectedWithoutThrowing() {
         var result = ResourceNaming.Validate(null);
 
         result.IsFailure.ShouldBeTrue();
@@ -64,22 +58,20 @@ public class ResourceNamingTests
     // contain a separator. This is where that assumption is actually enforced.
 
     [Fact]
-    public void EveryInjectionCharacterIsRejected()
-    {
-        foreach (var (value, why) in Corpus.InjectionCharacters)
-        {
-            foreach (var candidate in new[] { value, "pg" + value, value + "pg", "pg" + value + "x" })
-            {
-                ResourceNaming.IsValid(candidate).ShouldBeFalse(
-                    $"'{Corpus.Printable(candidate)}' must be rejected — it contains "
-                    + $"{Corpus.Printable(value)}, {why}");
+    public void EveryInjectionCharacterIsRejected() {
+        foreach (var (value, why) in Corpus.InjectionCharacters) {
+            foreach (var candidate in new[] { value, "pg" + value, value + "pg", "pg" + value + "x" }) {
+                ResourceNaming.IsValid(candidate)
+                    .ShouldBeFalse(
+                        $"'{Corpus.Printable(candidate)}' must be rejected — it contains "
+                        + $"{Corpus.Printable(value)}, {why}"
+                    );
             }
         }
     }
 
     [Fact]
-    public void TheRejectionMessageNamesTheOffendingCharacterAndItsCodePoint()
-    {
+    public void TheRejectionMessageNamesTheOffendingCharacterAndItsCodePoint() {
         var result = ResourceNaming.Validate("pg|prod");
 
         result.IsFailure.ShouldBeTrue();
@@ -88,8 +80,7 @@ public class ResourceNamingTests
     }
 
     [Fact]
-    public void AControlCharacterIsQuotedRatherThanPastedIntoTheMessage()
-    {
+    public void AControlCharacterIsQuotedRatherThanPastedIntoTheMessage() {
         // A NUL or a newline reaching a log line verbatim is how one message becomes two.
         var result = ResourceNaming.Validate("pg\0prod");
 
@@ -105,48 +96,43 @@ public class ResourceNamingTests
     [InlineData("-pg")]
     [InlineData("pg-")]
     [InlineData("-")]
-    public void AHyphenAtEitherEndIsRejected(string name) =>
-        ResourceNaming.IsValid(name).ShouldBeFalse();
+    public void AHyphenAtEitherEndIsRejected(string name) => ResourceNaming.IsValid(name).ShouldBeFalse();
 
     [Theory]
     [InlineData("pg-prod")]
     [InlineData("a-b-c-d")]
     [InlineData("pg--prod")]
     [InlineData("0-9")]
-    public void AHyphenInTheMiddleIsAccepted(string name) =>
-        ResourceNaming.IsValid(name).ShouldBeTrue();
+    public void AHyphenInTheMiddleIsAccepted(string name) => ResourceNaming.IsValid(name).ShouldBeTrue();
 
     // ── The message is the mitigation (docs/plan/06:92-94) ─────────────────────────────────────
 
     [Fact]
-    public void TheMessageStatesTheRuleTheLimitAndWhyWeDoNotMangle()
-    {
-        var result = ResourceNaming.Validate("PG-A7f3", "resource name");
+    public void TheMessageStatesTheRuleTheLimitAndWhyWeDoNotMangle() {
+        var result = ResourceNaming.Validate("PG-A7f3");
 
         result.IsFailure.ShouldBeTrue();
         var message = result.Error!.Message;
 
-        message.ShouldContain("'PG-A7f3'", Case.Sensitive);          // names the actual value
-        message.ShouldContain(ResourceNaming.Pattern);               // states the rule
-        message.ShouldContain("DNS-1123");                           // says where it comes from
-        message.ShouldContain("63");                                 // states the limit
-        message.ShouldContain("pg-a7f3");                            // the support ticket it prevents
-        message.ShouldContain("docs/plan/06");                       // where to read more
+        message.ShouldContain("'PG-A7f3'", Case.Sensitive); // names the actual value
+        message.ShouldContain(ResourceNaming.Pattern); // states the rule
+        message.ShouldContain("DNS-1123"); // says where it comes from
+        message.ShouldContain("63"); // states the limit
+        message.ShouldContain("pg-a7f3"); // the support ticket it prevents
+        message.ShouldContain("docs/plan/06"); // where to read more
     }
 
     [Fact]
-    public void TheKindIsWovenIntoTheMessageSoTheCallerKnowsWhichFieldIsWrong()
-    {
+    public void TheKindIsWovenIntoTheMessageSoTheCallerKnowsWhichFieldIsWrong() {
         ResourceNaming.Validate("BAD", "resource group name").Error!.Message
             .ShouldContain("is not a valid resource group name");
 
-        ResourceNaming.Validate("BAD", "resource name").Error!.Message
+        ResourceNaming.Validate("BAD").Error!.Message
             .ShouldContain("is not a valid resource name");
     }
 
     [Fact]
-    public void ATargetIsCarriedThroughSoThePortalCanHighlightTheField()
-    {
+    public void ATargetIsCarriedThroughSoThePortalCanHighlightTheField() {
         var result = ResourceNaming.Validate("BAD", "resource name", "/properties/name");
 
         result.Error!.Target.ShouldBe("/properties/name");
@@ -155,11 +141,9 @@ public class ResourceNamingTests
     // ── The generated corpus ───────────────────────────────────────────────────────────────────
 
     [Fact]
-    public void EveryGeneratedNameIsValidAndUsableAsAKubernetesLabelValue()
-    {
+    public void EveryGeneratedNameIsValidAndUsableAsAKubernetesLabelValue() {
         var count = 0;
-        foreach (var name in Corpus.ValidNames(5_000, seed: 1))
-        {
+        foreach (var name in Corpus.ValidNames(5_000, 1)) {
             count++;
             ResourceNaming.IsValid(name).ShouldBeTrue($"generated name '{name}' should be valid");
             name.Length.ShouldBeLessThanOrEqualTo(63);

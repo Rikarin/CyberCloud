@@ -7,11 +7,11 @@ namespace CyberCloud.Kubernetes.Apply;
 public sealed record ListPage(
     IReadOnlyList<string> Items,
     string ResourceVersion,
-    string ContinueToken);
+    string ContinueToken
+);
 
 /// <summary>What kind of change a watch reported.</summary>
-public enum KubeWatchEventKind
-{
+public enum KubeWatchEventKind {
     /// <summary>Not an event.</summary>
     Unknown = 0,
 
@@ -39,7 +39,7 @@ public enum KubeWatchEventKind
     Bookmark = 4,
 
     /// <summary>The API server sent an error frame — usually a 410 Gone in disguise.</summary>
-    Error = 5,
+    Error = 5
 }
 
 /// <summary>One event from a watch.</summary>
@@ -57,8 +57,7 @@ public sealed record KubeWatchEvent(KubeWatchEventKind Kind, string Json, string
 ///     are all testable without an API server and none of them re-exports Kubernetes types upward.
 ///     The <c>KubernetesClient</c> reference is confined to <see cref="KubeApiClient" />.
 /// </remarks>
-public interface IKubeApiClient : IDisposable
-{
+public interface IKubeApiClient : IDisposable {
     /// <summary>Checks the API server answers, for <c>PingAsync</c>.</summary>
     /// <param name="cancellationToken">The caller's token.</param>
     /// <returns>The server's version string on success.</returns>
@@ -88,7 +87,8 @@ public interface IKubeApiClient : IDisposable
     Task<Result> DeleteAsync(
         ObjectRef target,
         CascadePolicy policy,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default
+    );
 
     /// <summary>Lists a kind, for an informer's initial or resumed list.</summary>
     /// <param name="kind">The kind.</param>
@@ -111,7 +111,8 @@ public interface IKubeApiClient : IDisposable
         string? resourceVersion = null,
         string? continueToken = null,
         int? limit = null,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default
+    );
 
     /// <summary>
     ///     Watches a kind from <paramref name="resourceVersion" /> onwards.
@@ -131,5 +132,6 @@ public interface IKubeApiClient : IDisposable
         string ns,
         string labelSelector,
         string resourceVersion,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default
+    );
 }

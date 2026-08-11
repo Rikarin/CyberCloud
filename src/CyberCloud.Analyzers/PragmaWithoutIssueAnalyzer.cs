@@ -1,9 +1,9 @@
-using System.Collections.Immutable;
-using System.Text.RegularExpressions;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Diagnostics;
+using System.Collections.Immutable;
+using System.Text.RegularExpressions;
 
 namespace CyberCloud.Analyzers;
 
@@ -31,29 +31,31 @@ namespace CyberCloud.Analyzers;
 ///         <b>What is deliberately not covered.</b> <c>#pragma warning restore</c> — restoring is the
 ///         good half. And <c>&lt;NoWarn&gt;</c> in a project file, which is MSBuild rather than C#:
 ///         this repository's existing suppressions are all of that kind, each argued in a comment
-///         beside it (<c>CyberCloud.Core.csproj</c> says so in as many words: <i>"These are the ONLY
-///         two suppressions in this assembly and neither is a <c>#pragma</c>"</i>). Making the
+///         beside it (<c>CyberCloud.Core.csproj</c> says so in as many words:
+///         <i>
+///             "These are the ONLY
+///             two suppressions in this assembly and neither is a <c>#pragma</c>"
+///         </i>
+///         ). Making the
 ///         project-file half a gate is a build-target job, not an analyzer's, and it is not claimed
 ///         here.
 ///     </para>
 /// </remarks>
 [DiagnosticAnalyzer(LanguageNames.CSharp)]
-public sealed class PragmaWithoutIssueAnalyzer : DiagnosticAnalyzer
-{
+public sealed class PragmaWithoutIssueAnalyzer : DiagnosticAnalyzer {
     /// <summary>A URL, a <c>#123</c>, or a <c>PROJ-123</c> tracker key.</summary>
     static readonly Regex IssueLink = new(
         @"https?://\S+|#\d+|\b[A-Z][A-Z0-9]+-\d+\b",
-        RegexOptions.CultureInvariant);
+        RegexOptions.CultureInvariant
+    );
 
     /// <inheritdoc />
     public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics { get; } =
         ImmutableArray.Create(Rules.PragmaWithoutIssue);
 
     /// <inheritdoc />
-    public override void Initialize(AnalysisContext context)
-    {
-        if (context is null)
-        {
+    public override void Initialize(AnalysisContext context) {
+        if (context is null) {
             return;
         }
 
@@ -67,25 +69,25 @@ public sealed class PragmaWithoutIssueAnalyzer : DiagnosticAnalyzer
         context.RegisterSyntaxTreeAction(Analyze);
     }
 
-    static void Analyze(SyntaxTreeAnalysisContext context)
-    {
+    static void Analyze(SyntaxTreeAnalysisContext context) {
         var root = context.Tree.GetRoot(context.CancellationToken);
 
-        foreach (var node in root.DescendantNodes(descendIntoTrivia: true))
-        {
+        foreach (var node in root.DescendantNodes(descendIntoTrivia: true)) {
             if (node is not PragmaWarningDirectiveTriviaSyntax directive
                 || !directive.DisableOrRestoreKeyword.IsKind(SyntaxKind.DisableKeyword)
-                || HasIssueLink(directive))
-            {
+                || HasIssueLink(directive)) {
                 continue;
             }
 
             var codes = string.Join(", ", directive.ErrorCodes.Select(x => x.ToString()));
 
-            context.ReportDiagnostic(Diagnostic.Create(
-                Rules.PragmaWithoutIssue,
-                directive.GetLocation(),
-                codes.Length == 0 ? "(everything)" : codes));
+            context.ReportDiagnostic(
+                Diagnostic.Create(
+                    Rules.PragmaWithoutIssue,
+                    directive.GetLocation(),
+                    codes.Length == 0 ? "(everything)" : codes
+                )
+            );
         }
     }
 
@@ -98,8 +100,7 @@ public sealed class PragmaWithoutIssueAnalyzer : DiagnosticAnalyzer
     ///     spelling — <c>#pragma warning disable CA1822 // https://…</c> — and the leading half
     ///     covers the case where the justification needs a line of its own.
     /// </remarks>
-    static bool HasIssueLink(PragmaWarningDirectiveTriviaSyntax directive)
-    {
+    static bool HasIssueLink(PragmaWarningDirectiveTriviaSyntax directive) {
         // Trailing: the comment on the directive's own line.
         //
         // ⚠ It is inside the directive node, NOT on EndOfDirectiveToken as one would expect —
@@ -110,8 +111,7 @@ public sealed class PragmaWithoutIssueAnalyzer : DiagnosticAnalyzer
         // contain matches IssueLink on its own: an error code is `CA1822` or a bare number, neither
         // of which has a hyphen-digit tail, and the leading `#` of `#pragma` is followed by a letter
         // rather than a digit.
-        if (IssueLink.IsMatch(directive.ToFullString()))
-        {
+        if (IssueLink.IsMatch(directive.ToFullString())) {
             return true;
         }
 
@@ -123,27 +123,22 @@ public sealed class PragmaWithoutIssueAnalyzer : DiagnosticAnalyzer
         var directiveIndex = -1;
         var leading = token.LeadingTrivia;
 
-        for (var i = 0; i < leading.Count; i++)
-        {
-            if (leading[i] == parentTrivia)
-            {
+        for (var i = 0; i < leading.Count; i++) {
+            if (leading[i] == parentTrivia) {
                 directiveIndex = i;
                 break;
             }
         }
 
-        for (var i = directiveIndex - 1; i >= 0; i--)
-        {
+        for (var i = directiveIndex - 1; i >= 0; i--) {
             var trivia = leading[i];
 
-            if (trivia.IsKind(SyntaxKind.WhitespaceTrivia) || trivia.IsKind(SyntaxKind.EndOfLineTrivia))
-            {
+            if (trivia.IsKind(SyntaxKind.WhitespaceTrivia) || trivia.IsKind(SyntaxKind.EndOfLineTrivia)) {
                 continue;
             }
 
             if (trivia.IsKind(SyntaxKind.SingleLineCommentTrivia)
-                || trivia.IsKind(SyntaxKind.MultiLineCommentTrivia))
-            {
+                || trivia.IsKind(SyntaxKind.MultiLineCommentTrivia)) {
                 return IssueLink.IsMatch(trivia.ToFullString());
             }
 

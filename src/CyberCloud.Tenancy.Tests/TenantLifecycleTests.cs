@@ -1,3 +1,4 @@
+using CyberCloud.Core.Resources;
 using CyberCloud.Tenancy.Contracts;
 using CyberCloud.Tenancy.Tests.Infrastructure;
 using Shouldly;
@@ -8,25 +9,20 @@ namespace CyberCloud.Tenancy.Tests;
 ///     docs/plan/06 § Tenant lifecycle, as behaviour rather than as a table.
 /// </summary>
 [Collection(TenancySuite.Name)]
-public sealed class TenantLifecycleTests(TenancyCluster cluster)
-{
-    static Guid Tenant(int n) => TenancyCluster.Tenant(51_000 + n);
-
+public sealed class TenantLifecycleTests(TenancyCluster cluster) {
     [Fact]
-    public async Task ATenantIsCreatedInProvisioningWithNoApiAccessYet()
-    {
+    public async Task ATenantIsCreatedInProvisioningWithNoApiAccessYet() {
         var grain = cluster.TenantGrain(Tenant(1));
 
         var created = (await grain.CreateAsync("life-1", "Life 1", "eu-central")).GetValueOrThrow();
 
         created.Status.ShouldBe(TenantStatus.Provisioning);
-        (await grain.AreControlPlaneWritesAllowedAsync()).GetValueOrThrow().ShouldBeFalse(
-            "Provisioning means 'no API access yet'.");
+        (await grain.AreControlPlaneWritesAllowedAsync()).GetValueOrThrow()
+            .ShouldBeFalse("Provisioning means 'no API access yet'.");
     }
 
     [Fact]
-    public async Task CreationIsIdempotentBecauseEveryStepIsReDrivable()
-    {
+    public async Task CreationIsIdempotentBecauseEveryStepIsReDrivable() {
         // docs/plan/06 § Tenant lifecycle: "Every step is idempotent and re-drivable."
         var grain = cluster.TenantGrain(Tenant(2));
 
@@ -37,8 +33,7 @@ public sealed class TenantLifecycleTests(TenancyCluster cluster)
     }
 
     [Fact]
-    public async Task ARedriveWithDifferentArgumentsIsAConflictNotARename()
-    {
+    public async Task ARedriveWithDifferentArgumentsIsAConflictNotARename() {
         var grain = cluster.TenantGrain(Tenant(3));
 
         (await grain.CreateAsync("life-3", "Life 3", "eu-central")).IsSuccess.ShouldBeTrue();
@@ -50,8 +45,7 @@ public sealed class TenantLifecycleTests(TenancyCluster cluster)
     }
 
     [Fact]
-    public async Task SuspendedRejectsControlPlaneWritesAndSaysNothingAboutTheDataPlane()
-    {
+    public async Task SuspendedRejectsControlPlaneWritesAndSaysNothingAboutTheDataPlane() {
         // ⚠ The row with the most consequence: "Data plane keeps running, control-plane writes
         // rejected 403. Deliberate: suspending a tenant should not take their production down
         // without notice."
@@ -74,21 +68,19 @@ public sealed class TenantLifecycleTests(TenancyCluster cluster)
     }
 
     [Fact]
-    public async Task WarnedStillAllowsWritesBecauseItIsABannerNotABlock()
-    {
+    public async Task WarnedStillAllowsWritesBecauseItIsABannerNotABlock() {
         var grain = cluster.TenantGrain(Tenant(5));
 
         (await grain.CreateAsync("life-5", "Life 5", "eu-central")).IsSuccess.ShouldBeTrue();
         (await grain.SetStatusAsync(TenantStatus.Active, "ok")).IsSuccess.ShouldBeTrue();
         (await grain.SetStatusAsync(TenantStatus.Warned, "payment overdue")).IsSuccess.ShouldBeTrue();
 
-        (await grain.AreControlPlaneWritesAllowedAsync()).GetValueOrThrow().ShouldBeTrue(
-            "Warned is 'Portal banner; writes allowed'.");
+        (await grain.AreControlPlaneWritesAllowedAsync()).GetValueOrThrow()
+            .ShouldBeTrue("Warned is 'Portal banner; writes allowed'.");
     }
 
     [Fact]
-    public async Task PurgedIsTerminalAndNothingComesBackFromIt()
-    {
+    public async Task PurgedIsTerminalAndNothingComesBackFromIt() {
         var grain = cluster.TenantGrain(Tenant(6));
 
         (await grain.CreateAsync("life-6", "Life 6", "eu-central")).IsSuccess.ShouldBeTrue();
@@ -105,8 +97,7 @@ public sealed class TenantLifecycleTests(TenancyCluster cluster)
     }
 
     [Fact]
-    public async Task APendingDeletionTenantCanBeRestoredBecauseTheTombstoneIsThirtyDays()
-    {
+    public async Task APendingDeletionTenantCanBeRestoredBecauseTheTombstoneIsThirtyDays() {
         // "PendingDeletion | 30-day tombstone | Nothing runs, nothing is billed, everything is
         // restorable."
         var grain = cluster.TenantGrain(Tenant(7));
@@ -121,8 +112,7 @@ public sealed class TenantLifecycleTests(TenancyCluster cluster)
     }
 
     [Fact]
-    public async Task AnIllegalTransitionNamesTheOnesThatAreLegal()
-    {
+    public async Task AnIllegalTransitionNamesTheOnesThatAreLegal() {
         var grain = cluster.TenantGrain(Tenant(8));
 
         (await grain.CreateAsync("life-8", "Life 8", "eu-central")).IsSuccess.ShouldBeTrue();
@@ -136,8 +126,7 @@ public sealed class TenantLifecycleTests(TenancyCluster cluster)
     }
 
     [Fact]
-    public async Task AStatusChangeNeedsAReasonBecauseTheAuditLogIsWrittenFromIt()
-    {
+    public async Task AStatusChangeNeedsAReasonBecauseTheAuditLogIsWrittenFromIt() {
         var grain = cluster.TenantGrain(Tenant(9));
 
         (await grain.CreateAsync("life-9", "Life 9", "eu-central")).IsSuccess.ShouldBeTrue();
@@ -149,8 +138,7 @@ public sealed class TenantLifecycleTests(TenancyCluster cluster)
     }
 
     [Fact]
-    public async Task TheEtagAdvancesOnEveryChangeSoIfMatchCanWork()
-    {
+    public async Task TheEtagAdvancesOnEveryChangeSoIfMatchCanWork() {
         // docs/plan/06 § Tags, locks: "etag enables If-Match and is the only way to make concurrent
         // portal edits safe."
         var grain = cluster.TenantGrain(Tenant(10));
@@ -163,8 +151,7 @@ public sealed class TenantLifecycleTests(TenancyCluster cluster)
     }
 
     [Fact]
-    public async Task ASlugMustBeADnsLabelBecauseItBecomesAKubernetesObjectName()
-    {
+    public async Task ASlugMustBeADnsLabelBecauseItBecomesAKubernetesObjectName() {
         // docs/plan/06 § Identifiers: DNS-1123, "chosen because these names end up as Kubernetes
         // object names and the alternative is a mangling function nobody can invert".
         var grain = cluster.TenantGrain(Tenant(11));
@@ -176,8 +163,7 @@ public sealed class TenantLifecycleTests(TenancyCluster cluster)
     }
 
     [Fact]
-    public async Task ATenantMustBeHomedToARegion()
-    {
+    public async Task ATenantMustBeHomedToARegion() {
         // docs/plan/04 § The clusters, plural: "A tenant is homed to exactly one region at
         // creation." Not optional, and not defaulted — a default would silently home every tenant
         // in whichever region the first silo happened to be.
@@ -190,8 +176,7 @@ public sealed class TenantLifecycleTests(TenancyCluster cluster)
     }
 
     [Fact]
-    public async Task TheTenantGrainsStateSurvivesADeactivation()
-    {
+    public async Task TheTenantGrainsStateSurvivesADeactivation() {
         var grain = cluster.TenantGrain(Tenant(13));
 
         (await grain.CreateAsync("life-13", "Life 13", "us-east")).IsSuccess.ShouldBeTrue();
@@ -206,8 +191,7 @@ public sealed class TenantLifecycleTests(TenancyCluster cluster)
     }
 
     [Fact]
-    public async Task ASubscriptionOwnsItsResourceGroupsAndTheNameIsUniqueWithinIt()
-    {
+    public async Task ASubscriptionOwnsItsResourceGroupsAndTheNameIsUniqueWithinIt() {
         // docs/plan/06 § The hierarchy: a resource group name is unique within its subscription, not
         // within the tenant — so the same name in two subscriptions is two groups.
         var tenant = Tenant(14);
@@ -228,13 +212,13 @@ public sealed class TenantLifecycleTests(TenancyCluster cluster)
         (await cluster.SubscriptionGrain(tenant, first).ListResourceGroupsAsync()).GetValueOrThrow()
             .ShouldBe(["app"]);
 
-        cluster.ResourceGroupGrain(tenant, first, "app").GetGrainId()
+        cluster.ResourceGroupGrain(tenant, first, "app")
+            .GetGrainId()
             .ShouldNotBe(cluster.ResourceGroupGrain(tenant, second, "app").GetGrainId());
     }
 
     [Fact]
-    public async Task AResourceGroupCannotBeCreatedInASubscriptionThatDoesNotExist()
-    {
+    public async Task AResourceGroupCannotBeCreatedInASubscriptionThatDoesNotExist() {
         var tenant = Tenant(15);
         (await cluster.TenantGrain(tenant).CreateAsync("life-15", "L", "eu-central")).IsSuccess
             .ShouldBeTrue();
@@ -247,8 +231,7 @@ public sealed class TenantLifecycleTests(TenancyCluster cluster)
     }
 
     [Fact]
-    public async Task AResourceGroupNameMustBeADnsLabelToo()
-    {
+    public async Task AResourceGroupNameMustBeADnsLabelToo() {
         var tenant = Tenant(16);
         var subscription = Guid.NewGuid();
 
@@ -265,8 +248,7 @@ public sealed class TenantLifecycleTests(TenancyCluster cluster)
     }
 
     [Fact]
-    public async Task AMembershipRecordPointingOutsideTheGroupIsRefused()
-    {
+    public async Task AMembershipRecordPointingOutsideTheGroupIsRefused() {
         // The guard that keeps "delete the group, delete its contents" from deleting somebody
         // else's contents.
         var tenant = Tenant(17);
@@ -279,13 +261,14 @@ public sealed class TenantLifecycleTests(TenancyCluster cluster)
         (await cluster.SubscriptionGrain(tenant, subscription)
             .CreateResourceGroupAsync("mine", "eu-central")).IsSuccess.ShouldBeTrue();
 
-        var elsewhere = new Core.Resources.ResourceId(
+        var elsewhere = new ResourceId(
             tenant,
             subscription,
             "somebody-elses",
-            new Core.Resources.ResourceTypeName("CyberCloud.Compute", "virtualMachines"),
+            new("CyberCloud.Compute", "virtualMachines"),
             "vm-1",
-            Guid.NewGuid());
+            Guid.NewGuid()
+        );
 
         var refused = await cluster.ResourceGroupGrain(tenant, subscription, "mine")
             .BeginCreateAsync(elsewhere);
@@ -293,4 +276,6 @@ public sealed class TenantLifecycleTests(TenancyCluster cluster)
         refused.IsFailure.ShouldBeTrue();
         refused.Error!.Code.ShouldBe(ErrorCode.InvalidResourceId);
     }
+
+    static Guid Tenant(int n) => TenancyCluster.Tenant(51_000 + n);
 }

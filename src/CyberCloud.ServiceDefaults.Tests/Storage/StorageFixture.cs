@@ -1,13 +1,12 @@
-using System.Globalization;
-using System.Net;
-using System.Net.Sockets;
 using CyberCloud.ServiceDefaults.Storage;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
+using System.Globalization;
+using System.Net;
+using System.Net.Sockets;
 using Testcontainers.PostgreSql;
 using Testcontainers.Redis;
-using Volo.Abp;
 using Volo.Abp.Modularity;
 
 namespace CyberCloud.ServiceDefaults.Tests.Storage;
@@ -34,8 +33,7 @@ sealed class StorageSiloModule : AbpModule;
 ///         <see cref="RedisClusterHashTagTests" />.
 ///     </para>
 /// </remarks>
-public sealed class StorageFixture : IAsyncLifetime
-{
+public sealed class StorageFixture : IAsyncLifetime {
     /// <summary>The first durable shard's id.</summary>
     public const string ShardA = "durable-00";
 
@@ -95,24 +93,24 @@ public sealed class StorageFixture : IAsyncLifetime
     /// </remarks>
     public (Guid First, Guid Second) CotenantsOnOneShard { get; private set; }
 
+    /// <summary>Every configured durable shard id.</summary>
+    public static IReadOnlyList<string> AllShards => [ShardA, ShardB];
+
     /// <inheritdoc />
-    public async ValueTask InitializeAsync()
-    {
+    public async ValueTask InitializeAsync() {
         var token = TestContext.Current.CancellationToken;
 
         await Task.WhenAll(
             redis.StartAsync(token),
             shardA.StartAsync(token),
-            shardB.StartAsync(token));
+            shardB.StartAsync(token)
+        );
 
-        var connections = new Dictionary<string, string>(StringComparer.Ordinal)
-        {
-            [ShardA] = Shard(shardA, ShardA),
-            [ShardB] = Shard(shardB, ShardB),
+        var connections = new Dictionary<string, string>(StringComparer.Ordinal) {
+            [ShardA] = Shard(shardA, ShardA), [ShardB] = Shard(shardB, ShardB)
         };
 
-        foreach (var connectionString in connections.Values)
-        {
+        foreach (var connectionString in connections.Values) {
             await OrleansAdoNetSchema.CreateAsync(connectionString, token);
         }
 
@@ -123,16 +121,11 @@ public sealed class StorageFixture : IAsyncLifetime
     }
 
     /// <inheritdoc />
-    public async ValueTask DisposeAsync()
-    {
-        if (silo is not null)
-        {
-            try
-            {
+    public async ValueTask DisposeAsync() {
+        if (silo is not null) {
+            try {
                 await silo.StopAsync();
-            }
-            catch (InvalidOperationException)
-            {
+            } catch (InvalidOperationException) {
                 // Never started; nothing to stop.
             }
 
@@ -142,44 +135,49 @@ public sealed class StorageFixture : IAsyncLifetime
         await Task.WhenAll(
             redis.DisposeAsync().AsTask(),
             shardA.DisposeAsync().AsTask(),
-            shardB.DisposeAsync().AsTask());
+            shardB.DisposeAsync().AsTask()
+        );
     }
 
     /// <summary>Opens a connection to one shard, for reading rows back with plain SQL.</summary>
     /// <param name="shard">The shard id.</param>
     /// <param name="cancellationToken">The test's cancellation token.</param>
-    public async Task<NpgsqlConnection> OpenShardAsync(string shard, CancellationToken cancellationToken)
-    {
+    public async Task<NpgsqlConnection> OpenShardAsync(string shard, CancellationToken cancellationToken) {
         // Pooling off for the same reason as OrleansAdoNetSchema: these connections are the test
         // looking at the database, and they must not show up in the silo's per-shard backend count.
         var connection = new NpgsqlConnection(
-            new NpgsqlConnectionStringBuilder(Connections.Durable(shard)) { Pooling = false }.ConnectionString);
+            new NpgsqlConnectionStringBuilder(Connections.Durable(shard)) { Pooling = false }.ConnectionString
+        );
 
         await connection.OpenAsync(cancellationToken);
         return connection;
     }
 
-    /// <summary>Every configured durable shard id.</summary>
-    public static IReadOnlyList<string> AllShards => [ShardA, ShardB];
+    /// <summary>A GUID that is a pure function of its index, so tenant ids are stable across runs.</summary>
+    public static Guid Tenant(int index) {
+        Span<byte> bytes = stackalloc byte[16];
+        bytes.Clear();
+        BitConverter.TryWriteBytes(bytes, index);
+        bytes[15] = 0x5C;
+        return new(bytes);
+    }
 
-    static PostgreSqlContainer NewShard() => new PostgreSqlBuilder("postgres:17-alpine")
-        .WithDatabase("cybercloud")
-        .WithUsername("cybercloud")
-        .WithPassword("cybercloud")
-        .Build();
+    static PostgreSqlContainer NewShard() =>
+        new PostgreSqlBuilder("postgres:17-alpine")
+            .WithDatabase("cybercloud")
+            .WithUsername("cybercloud")
+            .WithPassword("cybercloud")
+            .Build();
 
     static string Shard(PostgreSqlContainer container, string shard) =>
-        new NpgsqlConnectionStringBuilder(container.GetConnectionString())
-        {
+        new NpgsqlConnectionStringBuilder(container.GetConnectionString()) {
             // So pg_stat_activity can be asked "how many backends does this silo hold open against
             // this shard" — the observable half of the MaxPoolSize claim.
-            ApplicationName = ApplicationNamePrefix + shard,
+            ApplicationName = ApplicationNamePrefix + shard
         }.ConnectionString;
 
-    async Task<WebApplication> StartSiloAsync(Dictionary<string, string> connections)
-    {
-        List<string> args =
-        [
+    async Task<WebApplication> StartSiloAsync(Dictionary<string, string> connections) {
+        List<string> args = [
             "--environment", "Development",
             "--urls", "http://127.0.0.1:0",
             $"--{CyberCloudClusterOptions.SectionName}:LocalhostSiloPort={FreePort()}",
@@ -187,11 +185,14 @@ public sealed class StorageFixture : IAsyncLifetime
             $"--{CyberCloudStorageOptions.SectionName}:Hot:ConnectionString={redis.GetConnectionString()}",
             $"--{CyberCloudStorageOptions.SectionName}:Durable:MaxPoolSize=5",
             $"--{CyberCloudStorageOptions.SectionName}:Durable:BootstrapShard={ShardA}",
-            $"--{CyberCloudStorageOptions.SectionName}:Durable:NullTenantShard={ShardA}",
+            $"--{CyberCloudStorageOptions.SectionName}:Durable:NullTenantShard={ShardA}"
         ];
 
-        args.AddRange(connections.Select(x =>
-            $"--{CyberCloudStorageOptions.SectionName}:Durable:Shards:{x.Key}={x.Value}"));
+        args.AddRange(
+            connections.Select(x =>
+                $"--{CyberCloudStorageOptions.SectionName}:Durable:Shards:{x.Key}={x.Value}"
+            )
+        );
 
         var builder = OrleansApplication.CreateSilo([.. args]);
         await builder.Services.AddApplicationAsync<StorageSiloModule>();
@@ -205,19 +206,17 @@ public sealed class StorageFixture : IAsyncLifetime
     ///     Walks GUIDs until two of them hash to different shards. Deterministic — the same seed
     ///     produces the same pair on every machine and every run, so a failure is reproducible.
     /// </summary>
-    static (Guid, Guid) FindSplitPair(IEnumerable<string> shards)
-    {
+    static (Guid, Guid) FindSplitPair(IEnumerable<string> shards) {
         var map = MapOver(shards);
         var first = Tenant(0);
 
-        for (var i = 1; i < 1000; i++)
-        {
+        for (var i = 1; i < 1000; i++) {
             var candidate = Tenant(i);
             if (!string.Equals(
                     map.DurableShardFor(candidate.ToString("D", CultureInfo.InvariantCulture)),
                     map.DurableShardFor(first.ToString("D", CultureInfo.InvariantCulture)),
-                    StringComparison.Ordinal))
-            {
+                    StringComparison.Ordinal
+                )) {
                 return (first, candidate);
             }
         }
@@ -225,49 +224,36 @@ public sealed class StorageFixture : IAsyncLifetime
         throw new InvalidOperationException("1000 tenants all hashed to one shard — the placement function is broken.");
     }
 
-    static (Guid, Guid) FindCotenantPair(IEnumerable<string> shards)
-    {
+    static (Guid, Guid) FindCotenantPair(IEnumerable<string> shards) {
         var map = MapOver(shards);
         var first = Tenant(0);
 
-        for (var i = 1; i < 1000; i++)
-        {
+        for (var i = 1; i < 1000; i++) {
             var candidate = Tenant(i);
             if (string.Equals(
                     map.DurableShardFor(candidate.ToString("D", CultureInfo.InvariantCulture)),
                     map.DurableShardFor(first.ToString("D", CultureInfo.InvariantCulture)),
-                    StringComparison.Ordinal))
-            {
+                    StringComparison.Ordinal
+                )) {
                 return (first, candidate);
             }
         }
 
-        throw new InvalidOperationException("1000 tenants and no two shared a shard — the placement function is broken.");
+        throw new InvalidOperationException(
+            "1000 tenants and no two shared a shard — the placement function is broken."
+        );
     }
 
-    static StaticShardMapCache MapOver(IEnumerable<string> shards)
-    {
+    static StaticShardMapCache MapOver(IEnumerable<string> shards) {
         var options = new CyberCloudStorageOptions();
-        foreach (var shard in shards)
-        {
+        foreach (var shard in shards) {
             options.Durable.Shards[shard] = "Host=unused";
         }
 
-        return new StaticShardMapCache(options);
+        return new(options);
     }
 
-    /// <summary>A GUID that is a pure function of its index, so tenant ids are stable across runs.</summary>
-    public static Guid Tenant(int index)
-    {
-        Span<byte> bytes = stackalloc byte[16];
-        bytes.Clear();
-        BitConverter.TryWriteBytes(bytes, index);
-        bytes[15] = 0x5C;
-        return new Guid(bytes);
-    }
-
-    static int FreePort()
-    {
+    static int FreePort() {
         using var socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
         socket.Bind(new IPEndPoint(IPAddress.Loopback, 0));
         return ((IPEndPoint)socket.LocalEndPoint!).Port;
@@ -276,8 +262,7 @@ public sealed class StorageFixture : IAsyncLifetime
 
 /// <summary>Binds <see cref="StorageFixture" /> to the classes that share it.</summary>
 [CollectionDefinition(Name)]
-public sealed class StorageSuite : ICollectionFixture<StorageFixture>
-{
+public sealed class StorageSuite : ICollectionFixture<StorageFixture> {
     /// <summary>The collection name.</summary>
     public const string Name = "storage-containers";
 }

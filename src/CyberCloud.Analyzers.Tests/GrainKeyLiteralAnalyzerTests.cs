@@ -4,17 +4,16 @@ namespace CyberCloud.Analyzers.Tests;
 ///     CC1004 — <c>docs/plan/02 § ADR-002</c>: "an analyzer that flags string literals containing
 ///     <c>|</c> in <c>GetGrain</c> arguments".
 /// </summary>
-public sealed class GrainKeyLiteralAnalyzerTests
-{
+public sealed class GrainKeyLiteralAnalyzerTests {
     const string Grains = """
-        using Orleans;
-        using Orleans.Multitenant;
-        using CyberCloud.Core.Resources;
+                          using Orleans;
+                          using Orleans.Multitenant;
+                          using CyberCloud.Core.Resources;
 
-        public interface IResourceGrain : IGrainWithStringKey
-        {
-        }
-        """;
+                          public interface IResourceGrain : IGrainWithStringKey
+                          {
+                          }
+                          """;
 
     // ── positive ─────────────────────────────────────────────────────────────────────────────────
 
@@ -24,12 +23,13 @@ public sealed class GrainKeyLiteralAnalyzerTests
             Grains
             + """
 
-            public sealed class Reader
-            {
-                public IResourceGrain Get(IGrainFactory grains) =>
-                    grains.GetGrain<IResourceGrain>({|CC1004:"tenant-a|res/1"|});
-            }
-            """);
+              public sealed class Reader
+              {
+                  public IResourceGrain Get(IGrainFactory grains) =>
+                      grains.GetGrain<IResourceGrain>({|CC1004:"tenant-a|res/1"|});
+              }
+              """
+        );
 
     [Fact]
     public Task AnInterpolatedKeyCarryingTheTenantSeparatorIsReported() =>
@@ -37,12 +37,13 @@ public sealed class GrainKeyLiteralAnalyzerTests
             Grains
             + """
 
-            public sealed class Reader
-            {
-                public IResourceGrain Get(IGrainFactory grains, string tenant) =>
-                    grains.GetGrain<IResourceGrain>({|CC1004:$"{tenant}|res/1"|});
-            }
-            """);
+              public sealed class Reader
+              {
+                  public IResourceGrain Get(IGrainFactory grains, string tenant) =>
+                      grains.GetGrain<IResourceGrain>({|CC1004:$"{tenant}|res/1"|});
+              }
+              """
+        );
 
     /// <summary>
     ///     ⚠ Going through <c>ForTenant</c> does not license a hand-forged key — the qualification is
@@ -55,12 +56,13 @@ public sealed class GrainKeyLiteralAnalyzerTests
             Grains
             + """
 
-            public sealed class Reader
-            {
-                public IResourceGrain Get(IGrainFactory grains) =>
-                    grains.ForTenant("t").GetGrain<IResourceGrain>({|CC1004:"a|b"|});
-            }
-            """);
+              public sealed class Reader
+              {
+                  public IResourceGrain Get(IGrainFactory grains) =>
+                      grains.ForTenant("t").GetGrain<IResourceGrain>({|CC1004:"a|b"|});
+              }
+              """
+        );
 
     // ── negative ─────────────────────────────────────────────────────────────────────────────────
 
@@ -70,12 +72,13 @@ public sealed class GrainKeyLiteralAnalyzerTests
             Grains
             + """
 
-            public sealed class Reader
-            {
-                public IResourceGrain Get(IGrainFactory grains, System.Guid id) =>
-                    grains.ForTenant("t").GetGrain<IResourceGrain>(GrainKeys.Resource(id));
-            }
-            """);
+              public sealed class Reader
+              {
+                  public IResourceGrain Get(IGrainFactory grains, System.Guid id) =>
+                      grains.ForTenant("t").GetGrain<IResourceGrain>(GrainKeys.Resource(id));
+              }
+              """
+        );
 
     [Fact]
     public Task AnOrdinaryLiteralKeyIsCorrect() =>
@@ -83,12 +86,13 @@ public sealed class GrainKeyLiteralAnalyzerTests
             Grains
             + """
 
-            public sealed class Reader
-            {
-                public IResourceGrain Get(IGrainFactory grains) =>
-                    grains.ForTenant("t").GetGrain<IResourceGrain>("res/00000000000000000000000000000000");
-            }
-            """);
+              public sealed class Reader
+              {
+                  public IResourceGrain Get(IGrainFactory grains) =>
+                      grains.ForTenant("t").GetGrain<IResourceGrain>("res/00000000000000000000000000000000");
+              }
+              """
+        );
 
     /// <summary>
     ///     ⚠ The near-miss that a naive "any literal with a pipe near the word GetGrain" rule would
@@ -108,7 +112,8 @@ public sealed class GrainKeyLiteralAnalyzerTests
             {
                 public string Get(Silo silo) => silo.GetGrain("wheat|barley");
             }
-            """);
+            """
+        );
 
     /// <summary>A pipe in a string that is not a <c>GetGrain</c> argument is just a pipe.</summary>
     [Fact]
@@ -117,9 +122,10 @@ public sealed class GrainKeyLiteralAnalyzerTests
             Grains
             + """
 
-            public sealed class Reader
-            {
-                public string Describe() => "tenant|resource";
-            }
-            """);
+              public sealed class Reader
+              {
+                  public string Describe() => "tenant|resource";
+              }
+              """
+        );
 }

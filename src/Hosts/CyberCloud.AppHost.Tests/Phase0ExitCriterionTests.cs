@@ -1,8 +1,7 @@
-using System.Globalization;
 using CyberCloud.Silo.Host.Hello;
 using Npgsql;
 using Orleans.Multitenant;
-using Orleans.Runtime;
+using System.Globalization;
 
 namespace CyberCloud.AppHost.Tests;
 
@@ -21,19 +20,15 @@ namespace CyberCloud.AppHost.Tests;
 ///     </para>
 /// </remarks>
 [Collection(LocalTopologySuite.Name)]
-public sealed class Phase0ExitCriterionTests(LocalTopology topology)
-{
+public sealed class Phase0ExitCriterionTests(LocalTopology topology) {
     /// <summary>A tenant id that is a pure function of nothing, so runs are comparable.</summary>
     static readonly Guid Tenant = new("0d1f0dfe-4c7e-4f2c-9b5b-2f9b4d0a0001");
 
     /// <summary>A second tenant, on (probably) the other shard.</summary>
     static readonly Guid OtherTenant = new("0d1f0dfe-4c7e-4f2c-9b5b-2f9b4d0a0002");
 
-    static string Id(Guid tenant) => tenant.ToString("D", CultureInfo.InvariantCulture);
-
     [Fact]
-    public void TheColdStartIsReported()
-    {
+    public void TheColdStartIsReported() {
         // ⚠ Reported, not asserted at a threshold. ADR-014's justification is that Aspire is "the
         // best local-orchestration experience .NET has", which is a claim about seconds — but the
         // number depends on the image cache, the machine and whether Docker Desktop is warm, so a
@@ -41,7 +36,8 @@ public sealed class Phase0ExitCriterionTests(LocalTopology topology)
         // a regression visible in the log of the run that caused it.
         TestContext.Current.TestOutputHelper?.WriteLine(
             $"AppHost cold start (StartAsync until both silos healthy): "
-            + $"{topology.ColdStart.TotalSeconds:F1} s");
+            + $"{topology.ColdStart.TotalSeconds:F1} s"
+        );
 
         TestContext.Current.TestOutputHelper?.WriteLine(topology.States());
 
@@ -49,8 +45,7 @@ public sealed class Phase0ExitCriterionTests(LocalTopology topology)
     }
 
     [Fact]
-    public async Task AHelloWorldTenantScopedGrainRoundTripsThroughBothStorageTiers()
-    {
+    public async Task AHelloWorldTenantScopedGrainRoundTripsThroughBothStorageTiers() {
         var grain = topology.Client
             .ForTenant(Id(Tenant))
             .GetGrain<IHelloGrain>("hello/phase-0");
@@ -71,20 +66,21 @@ public sealed class Phase0ExitCriterionTests(LocalTopology topology)
 
         readBack.HotGreeting.ShouldBe(
             "hello, cyber cloud",
-            "the hot tier did not return what was written to it — Redis is not storing the grain.");
+            "the hot tier did not return what was written to it — Redis is not storing the grain."
+        );
 
         readBack.DurableGreeting.ShouldBe(
             "hello, cyber cloud",
             "the durable tier did not return what was written to it — PostgreSQL is not storing the "
-            + "grain.");
+            + "grain."
+        );
 
         readBack.HotWrites.ShouldBe(1);
         readBack.DurableWrites.ShouldBe(1);
     }
 
     [Fact]
-    public async Task TheDurableRowLandsOnOneTenantShardAndNeverOnThePlatformShard()
-    {
+    public async Task TheDurableRowLandsOnOneTenantShardAndNeverOnThePlatformShard() {
         var token = TestContext.Current.CancellationToken;
 
         var grain = topology.Client
@@ -95,26 +91,26 @@ public sealed class Phase0ExitCriterionTests(LocalTopology topology)
 
         var rows = new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal);
 
-        foreach (var shard in (string[])
-                 [
+        foreach (var shard in (string[]) [
                      CyberCloudResources.ShardA,
                      CyberCloudResources.ShardB,
-                     CyberCloudResources.PlatformShard,
-                 ])
-        {
+                     CyberCloudResources.PlatformShard
+                 ]) {
             rows[shard] = await GrainTypesAsync(shard, token);
         }
 
         TestContext.Current.TestOutputHelper?.WriteLine(
             string.Join(
                 Environment.NewLine,
-                rows.Select(x => $"{x.Key}: {string.Join(", ", x.Value)}")));
+                rows.Select(x => $"{x.Key}: {string.Join(", ", x.Value)}")
+            )
+        );
 
         var helloOn = rows.ToDictionary(
             x => x.Key,
-            x => x.Value.Count(
-                type => type.Contains("hello", StringComparison.OrdinalIgnoreCase)),
-            StringComparer.Ordinal);
+            x => x.Value.Count(type => type.Contains("hello", StringComparison.OrdinalIgnoreCase)),
+            StringComparer.Ordinal
+        );
 
         // ⚠ The platform shard is the assertion that matters. GrainBackedShardMapCache excludes the
         // configured NullTenantShard from the placement list precisely so that a tenant's state
@@ -122,49 +118,51 @@ public sealed class Phase0ExitCriterionTests(LocalTopology topology)
         // a tenant's rows would be sharing a database with the platform's own, and the "N plain
         // Postgres servers" story of docs/plan/05 § Durable would be one server with everything on
         // it.
-        helloOn[CyberCloudResources.PlatformShard].ShouldBe(
-            0,
-            "a tenant-scoped grain was stored on the null-tenant platform shard.");
+        helloOn[CyberCloudResources.PlatformShard]
+            .ShouldBe(
+                0,
+                "a tenant-scoped grain was stored on the null-tenant platform shard."
+            );
 
         (helloOn[CyberCloudResources.ShardA] + helloOn[CyberCloudResources.ShardB])
             .ShouldBeGreaterThan(
                 0,
                 "the durable state of a tenant-scoped grain is on neither tenant shard, so nothing "
-                + "was written to PostgreSQL at all.");
+                + "was written to PostgreSQL at all."
+            );
     }
 
     [Fact]
-    public async Task TheK3sApiServerAnswersKubernetes()
-    {
+    public async Task TheK3sApiServerAnswersKubernetes() {
         // The k3s API server is reachable and speaks Kubernetes. Anonymous authentication is off in
         // k3s, so the honest evidence is a Kubernetes `Status` object with reason Unauthorized —
         // which no port-forward, no proxy and no half-started container produces. Anything that is
         // not the API server answers with a connection failure or with something that is not JSON.
-        using var handler = new HttpClientHandler
-        {
+        using var handler = new HttpClientHandler {
             // Local, self-signed, and generated fresh at container start. Verifying it would mean
             // parsing the kubeconfig's CA out for a test whose subject is reachability.
             ServerCertificateCustomValidationCallback =
-                HttpClientHandler.DangerousAcceptAnyServerCertificateValidator,
+                HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
         };
 
         using var http = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(30) };
 
         var response = await http.GetAsync(
             new Uri($"https://127.0.0.1:{CyberCloudResources.K3sApiPort}/version"),
-            TestContext.Current.CancellationToken);
+            TestContext.Current.CancellationToken
+        );
 
         var body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
 
         body.ShouldContain(
             "\"apiVersion\"",
             customMessage: "https://127.0.0.1:6443/version did not answer with a Kubernetes object, "
-            + "so nothing can reach the k3s API server.");
+            + "so nothing can reach the k3s API server."
+        );
     }
 
     [Fact]
-    public async Task TheKubeconfigIsWrittenWhereSomethingOutsideTheContainerCanReadIt()
-    {
+    public async Task TheKubeconfigIsWrittenWhereSomethingOutsideTheContainerCanReadIt() {
         // ⚠ Aspire has no "copy a file out of a container when it is ready", so this is a bind mount
         // plus `--write-kubeconfig`, and the thing that can silently fail is the file mode: k3s
         // writes 0600 by default, which is root-owned inside the container and unreadable outside
@@ -172,50 +170,64 @@ public sealed class Phase0ExitCriterionTests(LocalTopology topology)
         var path = Path.Combine(
             TestPaths.AppHostDirectory,
             ".k3s",
-            "kubeconfig.yaml");
+            "kubeconfig.yaml"
+        );
 
-        File.Exists(path).ShouldBeTrue(
-            $"k3s did not write a kubeconfig to {path}, so CyberCloud.Kubernetes has no way to "
-            + "reach the local cluster.");
+        File.Exists(path)
+            .ShouldBeTrue(
+                $"k3s did not write a kubeconfig to {path}, so CyberCloud.Kubernetes has no way to "
+                + "reach the local cluster."
+            );
 
         var kubeconfig = await File.ReadAllTextAsync(path, TestContext.Current.CancellationToken);
 
         kubeconfig.ShouldContain(
             $"127.0.0.1:{CyberCloudResources.K3sApiPort}",
             customMessage: "the kubeconfig names an address that is not the one the API server is "
-            + "published on.");
+            + "published on."
+        );
     }
+
+    static string Id(Guid tenant) => tenant.ToString("D", CultureInfo.InvariantCulture);
 
     /// <summary>
     ///     Every <c>graintypestring</c> stored on one shard.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>Read back as a list rather than counted with a <c>LIKE '%HelloGrain%'</c>, because
-    ///     the stored string is not the CLR type name.</b> Orleans 7 and later store the <i>grain
-    ///     type name</i> — the class name with a <c>Grain</c> suffix stripped and lower-cased — so
+    ///     ⚠
+    ///     <b>
+    ///         Read back as a list rather than counted with a <c>LIKE '%HelloGrain%'</c>, because
+    ///         the stored string is not the CLR type name.
+    ///     </b>
+    ///     Orleans 7 and later store the
+    ///     <i>
+    ///         grain
+    ///         type name
+    ///     </i>
+    ///     — the class name with a <c>Grain</c> suffix stripped and lower-cased — so
     ///     <c>HelloGrain</c> is stored as <c>hello</c> and that <c>LIKE</c> matches nothing while the
     ///     row is sitting right there. Observed: the round-trip test passed and this one reported
     ///     zero rows on every shard, which reads as "PostgreSQL is not storing anything". Returning
     ///     the strings means a future mismatch shows what is actually stored.
     /// </remarks>
-    async Task<IReadOnlyList<string>> GrainTypesAsync(string shard, CancellationToken cancellationToken)
-    {
+    async Task<IReadOnlyList<string>> GrainTypesAsync(string shard, CancellationToken cancellationToken) {
         var connectionString = await topology.ShardConnectionStringAsync(shard, cancellationToken);
 
         await using var connection = new NpgsqlConnection(
-            new NpgsqlConnectionStringBuilder(connectionString) { Pooling = false }.ConnectionString);
+            new NpgsqlConnectionStringBuilder(connectionString) { Pooling = false }.ConnectionString
+        );
 
         await connection.OpenAsync(cancellationToken);
 
         await using var command = new NpgsqlCommand(
             "SELECT graintypestring FROM orleansstorage;",
-            connection);
+            connection
+        );
 
         var types = new List<string>();
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
 
-        while (await reader.ReadAsync(cancellationToken))
-        {
+        while (await reader.ReadAsync(cancellationToken)) {
             types.Add(reader.GetString(0));
         }
 
@@ -236,20 +248,15 @@ public sealed class Phase0ExitCriterionTests(LocalTopology topology)
 ///         <c>ArtifactsPath</c>.
 ///     </para>
 /// </remarks>
-static class TestPaths
-{
+static class TestPaths {
     public static string AppHostDirectory { get; } =
         Path.Combine(RepositoryRoot(), "src", "Hosts", "CyberCloud.AppHost");
 
-    static string RepositoryRoot()
-    {
-        var directory = new DirectoryInfo(
-            Path.GetDirectoryName(typeof(TestPaths).Assembly.Location)!);
+    static string RepositoryRoot() {
+        var directory = new DirectoryInfo(Path.GetDirectoryName(typeof(TestPaths).Assembly.Location)!);
 
-        while (directory is not null)
-        {
-            if (File.Exists(Path.Combine(directory.FullName, "CyberCloud.slnx")))
-            {
+        while (directory is not null) {
+            if (File.Exists(Path.Combine(directory.FullName, "CyberCloud.slnx"))) {
                 return directory.FullName;
             }
 
@@ -257,6 +264,7 @@ static class TestPaths
         }
 
         throw new InvalidOperationException(
-            "No CyberCloud.slnx above the test assembly, so the repository root cannot be found.");
+            "No CyberCloud.slnx above the test assembly, so the repository root cannot be found."
+        );
     }
 }

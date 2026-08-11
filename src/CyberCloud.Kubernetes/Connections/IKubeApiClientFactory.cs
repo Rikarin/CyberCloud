@@ -1,6 +1,7 @@
 using CyberCloud.Core.Time;
 using CyberCloud.Kubernetes.Apply;
 using k8s;
+using System.Text;
 
 namespace CyberCloud.Kubernetes.Connections;
 
@@ -13,14 +14,14 @@ namespace CyberCloud.Kubernetes.Connections;
 ///     (docs/plan/18) and does not exist yet; and the grain has to be testable against a k3s
 ///     container whose kubeconfig is a local file, which is not how production resolves one.
 /// </remarks>
-public interface IKubeApiClientFactory
-{
+public interface IKubeApiClientFactory {
     /// <summary>Connects to a cluster.</summary>
     /// <param name="descriptor">Which cluster and how to authenticate.</param>
     /// <param name="cancellationToken">The activation's token.</param>
     Task<Result<IKubeApiClient>> ConnectAsync(
         ClusterConnectionDescriptor descriptor,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default
+    );
 }
 
 /// <summary>
@@ -28,16 +29,22 @@ public interface IKubeApiClientFactory
 ///     an explicit refusal for the kinds docs/plan/09 defers.
 /// </summary>
 /// <remarks>
-///     ⚠ <b><see cref="ClusterConnectionKind.AgentInitiated" /> throws rather than silently
-///     misbehaving</b>, and the message points at the document. docs/plan/09 § Cluster connections:
-///     <i>"AgentInitiated is not optional and is easy to defer into a crisis. The brief's 'connection
-///     string to kubernetes' implies inbound reachability, and for a tenant's on-prem cluster that is
-///     usually false. Budget it as part of the fabric (1.5 EM, M2) rather than discovering it at the
-///     first on-prem customer."</i> A stub that pretended to connect would be exactly the way to
+///     ⚠
+///     <b>
+///         <see cref="ClusterConnectionKind.AgentInitiated" /> throws rather than silently
+///         misbehaving
+///     </b>
+///     , and the message points at the document. docs/plan/09 § Cluster connections:
+///     <i>
+///         "AgentInitiated is not optional and is easy to defer into a crisis. The brief's 'connection
+///         string to kubernetes' implies inbound reachability, and for a tenant's on-prem cluster that is
+///         usually false. Budget it as part of the fabric (1.5 EM, M2) rather than discovering it at the
+///         first on-prem customer."
+///     </i>
+///     A stub that pretended to connect would be exactly the way to
 ///     discover it at the first on-prem customer.
 /// </remarks>
-public sealed class KubeApiClientFactory(IClock clock) : IKubeApiClientFactory
-{
+public sealed class KubeApiClientFactory(IClock clock) : IKubeApiClientFactory {
     /// <summary>
     ///     Resolves a credential reference to kubeconfig YAML.
     /// </summary>
@@ -53,12 +60,11 @@ public sealed class KubeApiClientFactory(IClock clock) : IKubeApiClientFactory
     /// <inheritdoc />
     public async Task<Result<IKubeApiClient>> ConnectAsync(
         ClusterConnectionDescriptor descriptor,
-        CancellationToken cancellationToken = default)
-    {
+        CancellationToken cancellationToken = default
+    ) {
         ArgumentNullException.ThrowIfNull(descriptor);
 
-        switch (descriptor.Kind)
-        {
+        switch (descriptor.Kind) {
             case ClusterConnectionKind.AgentInitiated:
                 return Result<IKubeApiClient>.Failure(
                     ErrorCode.InternalError,
@@ -69,7 +75,8 @@ public sealed class KubeApiClientFactory(IClock clock) : IKubeApiClientFactory
                     + "gateway so that a compromised agent cannot act as another tenant. That "
                     + "authorization work — not the tunnel — is the expensive half. Until it exists, "
                     + "a cluster behind NAT with no inbound path cannot be connected; use "
-                    + "Kubeconfig or ServiceAccountToken against a reachable endpoint.");
+                    + "Kubeconfig or ServiceAccountToken against a reachable endpoint."
+                );
 
             case ClusterConnectionKind.ServiceAccountToken:
             case ClusterConnectionKind.InHouse:
@@ -81,45 +88,43 @@ public sealed class KubeApiClientFactory(IClock clock) : IKubeApiClientFactory
                 return Result<IKubeApiClient>.Failure(
                     ErrorCode.InvalidRequestBody,
                     $"Cluster {descriptor.ClusterId:D} has no connection kind. The kinds are the "
-                    + "table at docs/plan/09 § Cluster connections.");
+                    + "table at docs/plan/09 § Cluster connections."
+                );
         }
 
-        if (ResolveKubeconfig is null)
-        {
+        if (ResolveKubeconfig is null) {
             return Result<IKubeApiClient>.Failure(
                 ErrorCode.InternalError,
                 $"No kubeconfig resolver is registered, so cluster {descriptor.ClusterId:D} cannot "
                 + "be reached. docs/plan/09 § Cluster connections keeps the kubeconfig in Vault and "
                 + "CyberCloud.KeyVault (docs/plan/18) is not built yet, so the resolver has to be "
-                + "supplied at registration time — see KubeApiClientFactory.ResolveKubeconfig.");
+                + "supplied at registration time — see KubeApiClientFactory.ResolveKubeconfig."
+            );
         }
 
         var resolved = await ResolveKubeconfig(descriptor.CredentialRef, cancellationToken)
             .ConfigureAwait(false);
 
-        if (resolved.TryGetError(out var error))
-        {
+        if (resolved.TryGetError(out var error)) {
             return Result<IKubeApiClient>.Failure(error);
         }
 
-        try
-        {
-            using var yaml = new MemoryStream(
-                System.Text.Encoding.UTF8.GetBytes(resolved.GetValueOrThrow()));
+        try {
+            using var yaml = new MemoryStream(Encoding.UTF8.GetBytes(resolved.GetValueOrThrow()));
 
             var config = await KubernetesClientConfiguration
                 .BuildConfigFromConfigFileAsync(yaml)
                 .ConfigureAwait(false);
 
             return Result<IKubeApiClient>.Success(
-                new KubeApiClient(new k8s.Kubernetes(config), descriptor.ClusterId, clock));
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
+                new KubeApiClient(new k8s.Kubernetes(config), descriptor.ClusterId, clock)
+            );
+        } catch (Exception ex) when (ex is not OperationCanceledException) {
             return Result<IKubeApiClient>.Failure(
                 ErrorCode.InternalError,
                 $"The kubeconfig for cluster {descriptor.ClusterId:D} could not be used: "
-                + $"{ex.GetType().Name}: {ex.Message}");
+                + $"{ex.GetType().Name}: {ex.Message}"
+            );
         }
     }
 }

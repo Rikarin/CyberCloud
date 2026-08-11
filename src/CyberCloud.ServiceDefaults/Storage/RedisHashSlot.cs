@@ -25,15 +25,13 @@ namespace CyberCloud.ServiceDefaults.Storage;
 ///         labelled XMODEM) over the key bytes, modulo 16 384, with the hash tag rule applied first.
 ///     </para>
 /// </remarks>
-public static class RedisHashSlot
-{
+public static class RedisHashSlot {
     /// <summary>The number of slots in a Redis Cluster keyspace.</summary>
     public const int SlotCount = 16384;
 
     /// <summary>The slot a key would be routed to.</summary>
     /// <param name="key">The full key, braces and all.</param>
-    public static int Of(string key)
-    {
+    public static int Of(string key) {
         ArgumentNullException.ThrowIfNull(key);
 
         return Crc16(Encoding.UTF8.GetBytes(HashTagOf(key))) % SlotCount;
@@ -62,13 +60,11 @@ public static class RedisHashSlot
     ///         </item>
     ///     </list>
     /// </remarks>
-    public static string HashTagOf(string key)
-    {
+    public static string HashTagOf(string key) {
         ArgumentNullException.ThrowIfNull(key);
 
         var open = key.IndexOf('{', StringComparison.Ordinal);
-        if (open < 0)
-        {
+        if (open < 0) {
             return key;
         }
 
@@ -77,16 +73,13 @@ public static class RedisHashSlot
     }
 
     /// <summary>CRC16-CCITT/XMODEM, the function Redis Cluster uses to pick a slot.</summary>
-    static int Crc16(ReadOnlySpan<byte> data)
-    {
+    static int Crc16(ReadOnlySpan<byte> data) {
         var crc = 0;
 
-        foreach (var b in data)
-        {
+        foreach (var b in data) {
             crc ^= b << 8;
 
-            for (var bit = 0; bit < 8; bit++)
-            {
+            for (var bit = 0; bit < 8; bit++) {
                 crc = (crc & 0x8000) != 0
                     ? ((crc << 1) ^ 0x1021) & 0xFFFF
                     : (crc << 1) & 0xFFFF;

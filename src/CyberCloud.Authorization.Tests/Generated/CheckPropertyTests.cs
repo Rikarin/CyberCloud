@@ -1,15 +1,17 @@
-using System.Diagnostics;
-using System.Globalization;
 using CyberCloud.Authorization.Contracts;
 using CyberCloud.Authorization.Evaluation;
 using CyberCloud.Authorization.Tests.Infrastructure;
 using Shouldly;
+using System.Diagnostics;
 
 namespace CyberCloud.Authorization.Tests.Generated;
 
 /// <summary>
-///     docs/plan/07 § Testing, bullet one: <i>"<c>Check</c> agrees with a slow, obviously-correct
-///     reference evaluator on … random graphs including cycles, deep nesting, and negation."</i>
+///     docs/plan/07 § Testing, bullet one:
+///     <i>
+///         "<c>Check</c> agrees with a slow, obviously-correct
+///         reference evaluator on … random graphs including cycles, deep nesting, and negation."
+///     </i>
 /// </summary>
 /// <remarks>
 ///     <para>
@@ -31,8 +33,7 @@ namespace CyberCloud.Authorization.Tests.Generated;
 ///         cycle semantics, the rewrite algebra and negation.
 ///     </para>
 /// </remarks>
-public sealed class CheckPropertyTests
-{
+public sealed class CheckPropertyTests {
     /// <summary>How many graphs the per-PR run covers.</summary>
     public const int Graphs = 20_000;
 
@@ -45,48 +46,49 @@ public sealed class CheckPropertyTests
         new() { MaxDepth = 512, MaxBreadth = 100_000 };
 
     [Fact]
-    public async Task CheckAgreesWithTheReferenceEvaluatorOnEveryGeneratedGraph()
-    {
+    public async Task CheckAgreesWithTheReferenceEvaluatorOnEveryGeneratedGraph() {
         var comparisons = 0;
         var allowed = 0;
         var withNegation = 0;
 
-        for (var seed = 0; seed < Graphs; seed++)
-        {
+        for (var seed = 0; seed < Graphs; seed++) {
             var graph = RandomGraphs.Generate(seed);
             var reader = new InMemoryRelationReader(graph.Tuples);
 
-            foreach (var (target, name, subject) in graph.Queries)
-            {
+            foreach (var (target, name, subject) in graph.Queries) {
                 var evaluator = new CheckEvaluator(graph.Schema, reader, Unbounded);
 
                 var actual = await evaluator.EvaluateAsync(
-                    target, name, subject, TestContext.Current.CancellationToken);
+                    target,
+                    name,
+                    subject,
+                    TestContext.Current.CancellationToken
+                );
 
                 actual.IsSuccess.ShouldBeTrue(actual.Error?.Message);
 
-                var expected = ReferenceEvaluator.Evaluate(
-                    graph.Schema, graph.Tuples, target, name, subject);
+                var expected = ReferenceEvaluator.Evaluate(graph.Schema, graph.Tuples, target, name, subject);
 
                 var evaluation = actual.GetValueOrThrow();
 
                 evaluation.Outcome.ShouldBeOneOf(
                     CheckOutcome.Allowed,
-                    CheckOutcome.Denied);
+                    CheckOutcome.Denied
+                );
 
                 evaluation.Allowed.ShouldBe(
                     expected,
                     $"Check and the reference evaluator disagree on {target}#{name}@{subject}."
-                    + Environment.NewLine + graph.Describe());
+                    + Environment.NewLine
+                    + graph.Describe()
+                );
 
                 comparisons++;
-                if (expected)
-                {
+                if (expected) {
                     allowed++;
                 }
 
-                if (graph.Schema.Member(target.Type, name)?.ContainsNegation == true)
-                {
+                if (graph.Schema.Member(target.Type, name)?.ContainsNegation == true) {
                     withNegation++;
                 }
             }
@@ -100,70 +102,65 @@ public sealed class CheckPropertyTests
         allowed.ShouldBeGreaterThan(
             comparisons / 20,
             "fewer than 5% of comparisons were allows — the generator has stopped producing "
-            + "reachable grants and the suite is no longer testing the positive direction");
+            + "reachable grants and the suite is no longer testing the positive direction"
+        );
 
         withNegation.ShouldBeGreaterThan(
             comparisons / 20,
-            "docs/plan/07 § Testing asks for negation to be covered");
+            "docs/plan/07 § Testing asks for negation to be covered"
+        );
     }
 
     [Fact]
-    public void MostGeneratedGraphsContainACycle()
-    {
+    public void MostGeneratedGraphsContainACycle() {
         // A "cycles" property test over acyclic graphs is the classic way to test nothing. This
         // measures the generator rather than trusting it.
         var cyclic = 0;
 
-        for (var seed = 0; seed < 2_000; seed++)
-        {
-            if (HasCycle(RandomGraphs.Generate(seed).Tuples))
-            {
+        for (var seed = 0; seed < 2_000; seed++) {
+            if (HasCycle(RandomGraphs.Generate(seed).Tuples)) {
                 cyclic++;
             }
         }
 
         cyclic.ShouldBeGreaterThan(
             1_000,
-            "fewer than half the generated graphs contain a cycle in their object graph");
+            "fewer than half the generated graphs contain a cycle in their object graph"
+        );
     }
 
     [Fact]
-    public void EveryGeneratedSchemaBuilds()
-    {
+    public void EveryGeneratedSchemaBuilds() {
         // The generator assembles rewrites that satisfy SchemaBuilder's rules by construction. If
         // that ever stops being true, this fails here rather than as a confusing disagreement in
         // the comparison above.
-        for (var seed = 0; seed < 2_000; seed++)
-        {
+        for (var seed = 0; seed < 2_000; seed++) {
             var graph = RandomGraphs.Generate(seed);
             graph.Schema.TypeNames.Length.ShouldBe(RandomGraphs.Types.Count);
         }
     }
 
     [Fact]
-    public async Task EveryGeneratedGraphTerminatesQuickly()
-    {
+    public async Task EveryGeneratedGraphTerminatesQuickly() {
         // The memo is what stops a diamond from being exponential and a cycle from being infinite.
         // A regression in either shows up here as a timeout rather than as a hung CI job.
         var stopwatch = Stopwatch.StartNew();
 
-        for (var seed = 0; seed < 2_000; seed++)
-        {
+        for (var seed = 0; seed < 2_000; seed++) {
             var graph = RandomGraphs.Generate(seed);
             var reader = new InMemoryRelationReader(graph.Tuples);
 
-            foreach (var (target, name, subject) in graph.Queries)
-            {
+            foreach (var (target, name, subject) in graph.Queries) {
                 var evaluator = new CheckEvaluator(graph.Schema, reader, Unbounded);
-                await evaluator.EvaluateAsync(
-                    target, name, subject, TestContext.Current.CancellationToken);
+                await evaluator.EvaluateAsync(target, name, subject, TestContext.Current.CancellationToken);
             }
         }
 
         stopwatch.Elapsed.ShouldBeLessThan(
             TimeSpan.FromSeconds(30),
             "8 000 checks over generated graphs should be far under a second per thousand; if this "
-            + "fails, the memo has stopped memoizing");
+            + "fails, the memo has stopped memoizing"
+        );
     }
 
     /// <summary>
@@ -175,15 +172,12 @@ public sealed class CheckPropertyTests
     [Fact]
     public void ExhaustiveSeeds() => Graphs.ShouldBeGreaterThanOrEqualTo(20_000);
 
-    static bool HasCycle(IReadOnlyList<RelationTuple> tuples)
-    {
+    static bool HasCycle(IReadOnlyList<RelationTuple> tuples) {
         Dictionary<string, List<string>> edges = new(StringComparer.Ordinal);
 
-        foreach (var tuple in tuples)
-        {
+        foreach (var tuple in tuples) {
             var from = tuple.Object.ToString();
-            if (!edges.TryGetValue(from, out var to))
-            {
+            if (!edges.TryGetValue(from, out var to)) {
                 to = [];
                 edges[from] = to;
             }
@@ -201,27 +195,22 @@ public sealed class CheckPropertyTests
         string node,
         Dictionary<string, List<string>> edges,
         HashSet<string> visited,
-        HashSet<string> stack)
-    {
-        if (stack.Contains(node))
-        {
+        HashSet<string> stack
+    ) {
+        if (stack.Contains(node)) {
             return true;
         }
 
-        if (!visited.Add(node))
-        {
+        if (!visited.Add(node)) {
             return false;
         }
 
         stack.Add(node);
 
-        try
-        {
+        try {
             return edges.TryGetValue(node, out var next)
-                   && next.Any(x => Walk(x, edges, visited, stack));
-        }
-        finally
-        {
+                && next.Any(x => Walk(x, edges, visited, stack));
+        } finally {
             stack.Remove(node);
         }
     }

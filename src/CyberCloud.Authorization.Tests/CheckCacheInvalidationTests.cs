@@ -8,21 +8,21 @@ namespace CyberCloud.Authorization.Tests;
 ///     ⚠ <b>Cache invalidation is deliberately crude — and it is per tenant.</b>
 /// </summary>
 /// <remarks>
-///     docs/plan/07 § Caching across requests: <i>"The tenant relation version is bumped on every
-///     tuple write, so a write invalidates the tenant's whole check cache. That is crude and it is
-///     right: tuple writes are rare (role assignments), checks are constant, and a fine-grained
-///     invalidation graph is a second consistency problem to get wrong."</i> Two things follow and
+///     docs/plan/07 § Caching across requests:
+///     <i>
+///         "The tenant relation version is bumped on every
+///         tuple write, so a write invalidates the tenant's whole check cache. That is crude and it is
+///         right: tuple writes are rare (role assignments), checks are constant, and a fine-grained
+///         invalidation graph is a second consistency problem to get wrong."
+///     </i>
+///     Two things follow and
 ///     both are tested here: a write really does invalidate, and one tenant's write must not
 ///     invalidate another's.
 /// </remarks>
 [Collection(AuthorizationSuite.Name)]
-public sealed class CheckCacheInvalidationTests(AuthorizationCluster cluster)
-{
-    static ObjectRef Scope(string id) => ObjectRef.Of(ObjectTypes.ResourceGroup, id);
-
+public sealed class CheckCacheInvalidationTests(AuthorizationCluster cluster) {
     [Fact]
-    public async Task AWriteInvalidatesEveryCachedAnswerOnTheObject()
-    {
+    public async Task AWriteInvalidatesEveryCachedAnswerOnTheObject() {
         var tenant = AuthorizationCluster.Tenant(300);
         var scope = Scope("cache1");
 
@@ -41,9 +41,11 @@ public sealed class CheckCacheInvalidationTests(AuthorizationCluster cluster)
         dave.FromCache.ShouldBeFalse();
 
         // ⚠ Crude: alice's and carol's answers went too, even though neither was about dave.
-        (await cluster.Check(tenant, scope).CachedEntryCountAsync()).GetValueOrThrow().ShouldBe(
-            1,
-            "a tuple write invalidates the whole cache, not the entries a graph says are affected");
+        (await cluster.Check(tenant, scope).CachedEntryCountAsync()).GetValueOrThrow()
+            .ShouldBe(
+                1,
+                "a tuple write invalidates the whole cache, not the entries a graph says are affected"
+            );
 
         var alice = await Ask(tenant, scope, "alice", Consistency.MinimizeLatency);
         alice.FromCache.ShouldBeFalse("alice's cached answer was dropped by the unrelated write");
@@ -51,8 +53,7 @@ public sealed class CheckCacheInvalidationTests(AuthorizationCluster cluster)
     }
 
     [Fact]
-    public async Task OneTenantsWriteDoesNotInvalidateAnothersCache()
-    {
+    public async Task OneTenantsWriteDoesNotInvalidateAnothersCache() {
         // ⚠ The version is PER TENANT. If it were global, every role assignment anywhere in the
         // platform would cold-start every other tenant's check cache — which is the failure mode
         // that turns a crude-but-right invalidation into an outage.
@@ -66,9 +67,8 @@ public sealed class CheckCacheInvalidationTests(AuthorizationCluster cluster)
         (await Ask(b, scope, "bob", Consistency.AtLeastAsFresh(tokenB))).FromCache.ShouldBeFalse();
 
         // Tenant A writes several more times.
-        ConsistencyToken latestA = tokenA;
-        for (var i = 0; i < 3; i++)
-        {
+        var latestA = tokenA;
+        for (var i = 0; i < 3; i++) {
             latestA = await cluster.WriteAsync(a, $"resourceGroup:cache2#reader@user:noise{i}");
         }
 
@@ -86,7 +86,8 @@ public sealed class CheckCacheInvalidationTests(AuthorizationCluster cluster)
         var stillStale = await Ask(a, scope, "alice", Consistency.MinimizeLatency);
         stillStale.FromCache.ShouldBeTrue(
             "MinimizeLatency takes any cached result, so the stale entry is still served — see "
-            + "ConsistencyTests for what that costs");
+            + "ConsistencyTests for what that costs"
+        );
         stillStale.Token.Version.ShouldBe(tokenA.Version);
 
         var fresh = await Ask(a, scope, "alice", Consistency.AtLeastAsFresh(latestA));
@@ -95,8 +96,7 @@ public sealed class CheckCacheInvalidationTests(AuthorizationCluster cluster)
     }
 
     [Fact]
-    public async Task TheTwoTenantsAreOnDifferentDurableShardsSoThisIsNotOneStorePretendingToBeTwo()
-    {
+    public async Task TheTwoTenantsAreOnDifferentDurableShardsSoThisIsNotOneStorePretendingToBeTwo() {
         var (a, b) = cluster.SplitPair(320);
 
         cluster.DurableShardOf(a).ShouldNotBe(cluster.DurableShardOf(b));
@@ -112,8 +112,7 @@ public sealed class CheckCacheInvalidationTests(AuthorizationCluster cluster)
     }
 
     [Fact]
-    public async Task ATruncatedAnswerIsNeverWrittenToTheCache()
-    {
+    public async Task ATruncatedAnswerIsNeverWrittenToTheCache() {
         // A cap did not compute an answer. Caching "I gave up" would make one unlucky walk
         // permanent for as long as the tenant's version stands still — which for a read-mostly
         // tenant is a very long time.
@@ -121,17 +120,18 @@ public sealed class CheckCacheInvalidationTests(AuthorizationCluster cluster)
         var scope = ObjectRef.Of(ObjectTypes.ResourceGroup, "deep0");
 
         // Thirteen parent hops: one past the documented depth cap of 12.
-        for (var i = 0; i < 13; i++)
-        {
+        for (var i = 0; i < 13; i++) {
             await cluster.WriteAsync(tenant, $"resourceGroup:deep{i}#parent@resourceGroup:deep{i + 1}");
         }
 
         var token = await cluster.WriteAsync(tenant, "resourceGroup:deep13#owner@user:alice");
 
-        var result = await cluster.Check(tenant, scope).CheckAsync(
-            Permissions.Read,
-            SubjectRef.Of(ObjectTypes.User, "alice"),
-            Consistency.AtLeastAsFresh(token));
+        var result = await cluster.Check(tenant, scope)
+            .CheckAsync(
+                Permissions.Read,
+                SubjectRef.Of(ObjectTypes.User, "alice"),
+                Consistency.AtLeastAsFresh(token)
+            );
 
         var check = result.GetValueOrThrow();
         check.Allowed.ShouldBeFalse();
@@ -141,10 +141,11 @@ public sealed class CheckCacheInvalidationTests(AuthorizationCluster cluster)
         (await cluster.Check(tenant, scope).CachedEntryCountAsync()).GetValueOrThrow().ShouldBe(0);
     }
 
-    async Task<CheckResult> Ask(Guid tenant, ObjectRef scope, string user, Consistency consistency)
-    {
-        var result = await cluster.Check(tenant, scope).CheckAsync(
-            Permissions.Read, SubjectRef.Of(ObjectTypes.User, user), consistency);
+    static ObjectRef Scope(string id) => ObjectRef.Of(ObjectTypes.ResourceGroup, id);
+
+    async Task<CheckResult> Ask(Guid tenant, ObjectRef scope, string user, Consistency consistency) {
+        var result = await cluster.Check(tenant, scope)
+            .CheckAsync(Permissions.Read, SubjectRef.Of(ObjectTypes.User, user), consistency);
 
         result.IsSuccess.ShouldBeTrue(result.Error?.Message);
         return result.GetValueOrThrow();

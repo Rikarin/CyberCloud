@@ -1,7 +1,7 @@
-using System.Collections.Concurrent;
 using Microsoft.Extensions.Options;
 using Orleans.Configuration;
 using Orleans.Storage;
+using System.Collections.Concurrent;
 
 namespace CyberCloud.ServiceDefaults.Storage;
 
@@ -47,8 +47,22 @@ namespace CyberCloud.ServiceDefaults.Storage;
 ///         </item>
 ///     </list>
 /// </remarks>
-public sealed class DurableTierConfigurator
-{
+public sealed class DurableTierConfigurator {
+    /// <summary>
+    ///     The ADO.NET invariant name for Npgsql. docs/plan/05 § Storage provider wiring spells it
+    ///     as a literal and so does this, because Orleans'
+    ///     <c>AdoNetInvariants.InvariantNamePostgreSql</c> is <c>internal</c>.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ The provider resolves this by <b>reflection over an assembly name</b>, not by a
+    ///     compile-time reference: <c>DbConnectionFactory.GetFactory("Npgsql")</c> does
+    ///     <c>Assembly.Load("Npgsql")</c> and reads the static <c>Instance</c> field of
+    ///     <c>Npgsql.NpgsqlFactory</c>. So the <c>Npgsql</c> package must be in the host's output
+    ///     even though nothing in the storage path binds to a type from it, and a typo in this string
+    ///     is a runtime <c>AggregateException</c> at first grain write rather than a compile error.
+    /// </remarks>
+    public const string NpgsqlInvariant = "Npgsql";
+
     static readonly SystemTextJsonGrainStorageSerializer Serializer = new();
 
     /// <summary>
@@ -65,8 +79,11 @@ public sealed class DurableTierConfigurator
     ///         hands it to <c>configureTenantOptions</c> — so <b>every</b> Orleans default that
     ///         arrives via <c>IPostConfigureOptions</c> or <c>IConfigureNamedOptions</c> is simply
     ///         absent on the tenant instances. The observed failure is
-    ///         <c>OrleansConfigurationException: Invalid AdoNetGrainStorageOptions values for
-    ///         AdoNetGrainStorage &lt;tenantId&gt;. HashPicker is required.</c> on the first durable
+    ///         <c>
+    ///             OrleansConfigurationException: Invalid AdoNetGrainStorageOptions values for
+    ///             AdoNetGrainStorage &lt;tenantId&gt;. HashPicker is required.
+    ///         </c>
+    ///         on the first durable
     ///         write of the first tenant.
     ///     </para>
     ///     <para>
@@ -81,38 +98,11 @@ public sealed class DurableTierConfigurator
     /// </remarks>
     static readonly IStorageHasherPicker HashPicker = new StorageHasherPicker([new OrleansDefaultHasher()]);
 
-    /// <summary>
-    ///     The ADO.NET invariant name for Npgsql. docs/plan/05 § Storage provider wiring spells it
-    ///     as a literal and so does this, because Orleans'
-    ///     <c>AdoNetInvariants.InvariantNamePostgreSql</c> is <c>internal</c>.
-    /// </summary>
-    /// <remarks>
-    ///     ⚠ The provider resolves this by <b>reflection over an assembly name</b>, not by a
-    ///     compile-time reference: <c>DbConnectionFactory.GetFactory("Npgsql")</c> does
-    ///     <c>Assembly.Load("Npgsql")</c> and reads the static <c>Instance</c> field of
-    ///     <c>Npgsql.NpgsqlFactory</c>. So the <c>Npgsql</c> package must be in the host's output
-    ///     even though nothing in the storage path binds to a type from it, and a typo in this string
-    ///     is a runtime <c>AggregateException</c> at first grain write rather than a compile error.
-    /// </remarks>
-    public const string NpgsqlInvariant = "Npgsql";
-
     readonly IShardMapCache shardMap;
     readonly IShardConnections connections;
     readonly ConcurrentDictionary<string, int> invocationsPerTenant = new(StringComparer.Ordinal);
 
     long invocations;
-
-    /// <summary>Creates the configurator.</summary>
-    /// <param name="shardMap">The in-process shard map — supplies the shard id.</param>
-    /// <param name="connections">The connection table — supplies the shard's connection string.</param>
-    public DurableTierConfigurator(IShardMapCache shardMap, IShardConnections connections)
-    {
-        ArgumentNullException.ThrowIfNull(shardMap);
-        ArgumentNullException.ThrowIfNull(connections);
-
-        this.shardMap = shardMap;
-        this.connections = connections;
-    }
 
     /// <summary>How many times <see cref="ConfigureForTenant" /> has run since the silo started.</summary>
     public long Invocations => Interlocked.Read(ref invocations);
@@ -123,11 +113,21 @@ public sealed class DurableTierConfigurator
     /// <summary>The shard each tenant was routed to, for diagnostics and tests.</summary>
     public ConcurrentDictionary<string, string> ShardPerTenant { get; } = new(StringComparer.Ordinal);
 
+    /// <summary>Creates the configurator.</summary>
+    /// <param name="shardMap">The in-process shard map — supplies the shard id.</param>
+    /// <param name="connections">The connection table — supplies the shard's connection string.</param>
+    public DurableTierConfigurator(IShardMapCache shardMap, IShardConnections connections) {
+        ArgumentNullException.ThrowIfNull(shardMap);
+        ArgumentNullException.ThrowIfNull(connections);
+
+        this.shardMap = shardMap;
+        this.connections = connections;
+    }
+
     /// <summary>Fills in one tenant's <c>AdoNetGrainStorageOptions</c>.</summary>
     /// <param name="options">The options instance for this tenant only.</param>
     /// <param name="tenantId">The tenant id extracted from the grain key.</param>
-    public void ConfigureForTenant(AdoNetGrainStorageOptions options, string tenantId)
-    {
+    public void ConfigureForTenant(AdoNetGrainStorageOptions options, string tenantId) {
         ArgumentNullException.ThrowIfNull(options);
 
         Interlocked.Increment(ref invocations);
@@ -155,8 +155,7 @@ public sealed class DurableTierConfigurator
     /// </summary>
     /// <param name="options">The bootstrap provider's options.</param>
     /// <param name="bootstrapShard">The shard to point it at.</param>
-    public void ConfigureBootstrap(AdoNetGrainStorageOptions options, string bootstrapShard)
-    {
+    public void ConfigureBootstrap(AdoNetGrainStorageOptions options, string bootstrapShard) {
         ArgumentNullException.ThrowIfNull(options);
 
         options.ConnectionString = connections.Durable(bootstrapShard);
@@ -189,6 +188,7 @@ public sealed class DurableTierConfigurator
         IServiceProvider services,
         string providerName,
         string tenantProviderName,
-        AdoNetGrainStorageOptions options) =>
+        AdoNetGrainStorageOptions options
+    ) =>
         [Options.Create(options)];
 }

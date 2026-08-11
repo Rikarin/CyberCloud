@@ -1,45 +1,45 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!--
-    docs/plan/03 § src, ADR-007 — the Zanzibar-derived ReBAC engine. M1 subset (docs/plan/07
-    § Effort and sequencing): the schema builder, the tuple grains, Check with the memo and the two
-    caps, the hot-tier check cache, consistency tokens, and the Azure-shaped role-assignment view.
+    <!--
+      docs/plan/03 § src, ADR-007 — the Zanzibar-derived ReBAC engine. M1 subset (docs/plan/07
+      § Effort and sequencing): the schema builder, the tuple grains, Check with the memo and the two
+      caps, the hot-tier check cache, consistency tokens, and the Azure-shaped role-assignment view.
+  
+      ⚠ NOT IN HERE, and each is a milestone rather than an omission:
+        * IMembershipIndexGrain (the Leopard index) and its rebuilder  — M2. The evaluator's fast-path
+          branch is IMembershipIndex, whose M1 implementation answers "not indexed" for everything, so
+          the walk is always taken. See that interface.
+        * ListObjects and the resource-graph access column             — M2. ISubjectRelationsGrain is
+          written now because the write path is two-grain now; the reverse rewrite walk is not.
+        * Expand's full tree rendering                                 — M2.
+        * Time-bounded relations (JIT roles) and delegation            — M3.
+  
+      ⚠ NO REFERENCE TO CyberCloud.Tenancy, deliberately. Tenancy's PlatformCrossTenantAuthorizer
+      declares IPlatformOperatorAuthority precisely so that the platform:root#operator question can be
+      answered from here later without either assembly referencing the other — see that interface's
+      remarks. Wiring the two together is a host-side registration, not a project reference.
+  
+      ⚠ NO REFERENCE TO CyberCloud.ServiceDefaults either. Everything here is a grain or a pure
+      evaluator; there is no host-side seam of the kind that forced CyberCloud.Tenancy to reference it.
+    -->
 
-    ⚠ NOT IN HERE, and each is a milestone rather than an omission:
-      * IMembershipIndexGrain (the Leopard index) and its rebuilder  — M2. The evaluator's fast-path
-        branch is IMembershipIndex, whose M1 implementation answers "not indexed" for everything, so
-        the walk is always taken. See that interface.
-      * ListObjects and the resource-graph access column             — M2. ISubjectRelationsGrain is
-        written now because the write path is two-grain now; the reverse rewrite walk is not.
-      * Expand's full tree rendering                                 — M2.
-      * Time-bounded relations (JIT roles) and delegation            — M3.
+    <PropertyGroup>
+        <!-- See CyberCloud.Authorization.Contracts.csproj: "object" is one of docs/plan/07's three
+             nouns, not a stand-in for a CLR type. Scoped to the two authorization assemblies. -->
+        <NoWarn>$(NoWarn);CA1720</NoWarn>
+    </PropertyGroup>
 
-    ⚠ NO REFERENCE TO CyberCloud.Tenancy, deliberately. Tenancy's PlatformCrossTenantAuthorizer
-    declares IPlatformOperatorAuthority precisely so that the platform:root#operator question can be
-    answered from here later without either assembly referencing the other — see that interface's
-    remarks. Wiring the two together is a host-side registration, not a project reference.
+    <ItemGroup>
+        <!-- Grain implementations and [PersistentState]. -->
+        <PackageReference Include="Microsoft.Orleans.Server"/>
+        <!-- GetTenantId / GetKeyWithinTenant / ForTenant on the grain and the factory. -->
+        <PackageReference Include="Orleans.Multitenant"/>
+    </ItemGroup>
 
-    ⚠ NO REFERENCE TO CyberCloud.ServiceDefaults either. Everything here is a grain or a pure
-    evaluator; there is no host-side seam of the kind that forced CyberCloud.Tenancy to reference it.
-  -->
-
-  <PropertyGroup>
-    <!-- See CyberCloud.Authorization.Contracts.csproj: "object" is one of docs/plan/07's three
-         nouns, not a stand-in for a CLR type. Scoped to the two authorization assemblies. -->
-    <NoWarn>$(NoWarn);CA1720</NoWarn>
-  </PropertyGroup>
-
-  <ItemGroup>
-    <!-- Grain implementations and [PersistentState]. -->
-    <PackageReference Include="Microsoft.Orleans.Server" />
-    <!-- GetTenantId / GetKeyWithinTenant / ForTenant on the grain and the factory. -->
-    <PackageReference Include="Orleans.Multitenant" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <ProjectReference Include="../CyberCloud.Core/CyberCloud.Core.csproj" />
-    <ProjectReference Include="../CyberCloud.Core.Contracts/CyberCloud.Core.Contracts.csproj" />
-    <ProjectReference Include="../CyberCloud.Authorization.Contracts/CyberCloud.Authorization.Contracts.csproj" />
-  </ItemGroup>
+    <ItemGroup>
+        <ProjectReference Include="../CyberCloud.Core/CyberCloud.Core.csproj"/>
+        <ProjectReference Include="../CyberCloud.Core.Contracts/CyberCloud.Core.Contracts.csproj"/>
+        <ProjectReference Include="../CyberCloud.Authorization.Contracts/CyberCloud.Authorization.Contracts.csproj"/>
+    </ItemGroup>
 
 </Project>

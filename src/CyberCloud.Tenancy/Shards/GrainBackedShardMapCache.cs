@@ -1,7 +1,7 @@
-using System.Collections.Immutable;
-using System.Globalization;
 using CyberCloud.ServiceDefaults.Storage;
 using CyberCloud.Tenancy.Contracts;
+using System.Collections.Immutable;
+using System.Globalization;
 
 namespace CyberCloud.Tenancy.Shards;
 
@@ -12,8 +12,10 @@ namespace CyberCloud.Tenancy.Shards;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         <b>The four stubbed things in <see cref="StaticShardMapCache" />, and what each becomes
-///         here.</b>
+///         <b>
+///             The four stubbed things in <see cref="StaticShardMapCache" />, and what each becomes
+///             here.
+///         </b>
 ///     </para>
 ///     <list type="number">
 ///         <item>
@@ -39,8 +41,12 @@ namespace CyberCloud.Tenancy.Shards;
 ///         </item>
 ///     </list>
 ///     <para>
-///         ⚠ <b>The fallback for an unrecorded tenant is the deterministic hash, and that is safe for
-///         a reason worth stating.</b> A tenant with no recorded assignment has never been created,
+///         ⚠
+///         <b>
+///             The fallback for an unrecorded tenant is the deterministic hash, and that is safe for
+///             a reason worth stating.
+///         </b>
+///         A tenant with no recorded assignment has never been created,
 ///         so it has no durable state anywhere and there is nothing to move. The moment it <i>is</i>
 ///         created, <see cref="IShardMapGrain.AssignAsync" /> records the shard this same hash names
 ///         (see <c>ShardMapGrain.Place</c>) unless that shard is out of the rotation — so in the
@@ -50,8 +56,7 @@ namespace CyberCloud.Tenancy.Shards;
 ///         here because a recorded assignment is always preferred.
 ///     </para>
 /// </remarks>
-public sealed class GrainBackedShardMapCache : IShardMapCache
-{
+public sealed class GrainBackedShardMapCache : IShardMapCache {
     readonly ImmutableDictionary<string, string> durablePins;
     readonly ImmutableDictionary<string, string> hotOverrides;
     readonly string? nullTenantShard;
@@ -59,11 +64,19 @@ public sealed class GrainBackedShardMapCache : IShardMapCache
 
     volatile Snapshot current;
 
+    /// <inheritdoc />
+    public long Version => current.Version;
+
+    /// <summary>How many tenants the loaded snapshot has a recorded assignment for.</summary>
+    public int RecordedAssignments => current.Assignments.Count;
+
+    /// <summary>The shard list the cache is currently placing unassigned tenants over.</summary>
+    public IReadOnlyList<string> Shards => current.Shards;
+
     /// <summary>Builds the cache with configuration only. The grain fills it in afterwards.</summary>
     /// <param name="options">The bound <c>CyberCloud:Storage</c> section.</param>
     /// <exception cref="InvalidOperationException">No durable shards are configured.</exception>
-    public GrainBackedShardMapCache(CyberCloudStorageOptions options)
-    {
+    public GrainBackedShardMapCache(CyberCloudStorageOptions options) {
         ArgumentNullException.ThrowIfNull(options);
 
         durablePins = options.Durable.Pins.ToImmutableDictionary(StringComparer.Ordinal);
@@ -80,7 +93,8 @@ public sealed class GrainBackedShardMapCache : IShardMapCache
         // none can place nothing.
         var placeable = options.Durable.Shards.Keys
             .Where(x => options.Durable.NullTenantShard is null
-                || !string.Equals(x, options.Durable.NullTenantShard, StringComparison.Ordinal))
+                || !string.Equals(x, options.Durable.NullTenantShard, StringComparison.Ordinal)
+            )
             .Order(StringComparer.Ordinal)
             .ToList();
 
@@ -88,54 +102,44 @@ public sealed class GrainBackedShardMapCache : IShardMapCache
             ? [.. placeable]
             : [.. options.Durable.Shards.Keys.Order(StringComparer.Ordinal)];
 
-        if (options.Durable.Shards.Count == 0)
-        {
+        if (options.Durable.Shards.Count == 0) {
             throw new InvalidOperationException(
                 $"{CyberCloudStorageOptions.SectionName}:Durable:Shards is empty. The durable tier "
                 + "is N independent PostgreSQL servers (docs/plan/05 § Durable) and a silo with none "
-                + "of them cannot store a tenant, a subscription or a resource.");
+                + "of them cannot store a tenant, a subscription or a resource."
+            );
         }
 
-        foreach (var (tenantId, shard) in durablePins)
-        {
-            if (!options.Durable.Shards.ContainsKey(shard))
-            {
+        foreach (var (tenantId, shard) in durablePins) {
+            if (!options.Durable.Shards.ContainsKey(shard)) {
                 throw new InvalidOperationException(
                     $"Tenant {tenantId} is pinned to durable shard '{shard}', which is not in "
-                    + $"{CyberCloudStorageOptions.SectionName}:Durable:Shards.");
+                    + $"{CyberCloudStorageOptions.SectionName}:Durable:Shards."
+                );
             }
         }
 
-        if (nullTenantShard is not null && !options.Durable.Shards.ContainsKey(nullTenantShard))
-        {
+        if (nullTenantShard is not null && !options.Durable.Shards.ContainsKey(nullTenantShard)) {
             throw new InvalidOperationException(
                 $"{CyberCloudStorageOptions.SectionName}:Durable:NullTenantShard is "
-                + $"'{nullTenantShard}', which is not in the shard table.");
+                + $"'{nullTenantShard}', which is not in the shard table."
+            );
         }
 
-        current = new Snapshot(0, configuredShards, ImmutableDictionary<Guid, string>.Empty);
+        current = new(0, configuredShards, ImmutableDictionary<Guid, string>.Empty);
     }
 
     /// <inheritdoc />
-    public long Version => current.Version;
-
-    /// <summary>How many tenants the loaded snapshot has a recorded assignment for.</summary>
-    public int RecordedAssignments => current.Assignments.Count;
-
-    /// <inheritdoc />
-    public string DurableShardFor(string tenantId)
-    {
+    public string DurableShardFor(string tenantId) {
         ArgumentException.ThrowIfNullOrEmpty(tenantId);
 
         // A configured pin is the operator's word and beats everything, including the map — that is
         // the read-only half of docs/plan/05 § The shard map's PinAsync, and the half that works.
-        if (durablePins.TryGetValue(tenantId, out var pinned))
-        {
+        if (durablePins.TryGetValue(tenantId, out var pinned)) {
             return pinned;
         }
 
-        if (!Guid.TryParse(tenantId, out var id))
-        {
+        if (!Guid.TryParse(tenantId, out var id)) {
             // Orleans.Multitenant's null-tenant sentinel — the literal "Null" by default. ⚠ This is
             // the branch docs/plan/05 § Storage provider wiring's `Guid.Parse(tenantId)` throws on,
             // and it is on a live path: every Platform grain is null-tenant AND durable.
@@ -143,8 +147,7 @@ public sealed class GrainBackedShardMapCache : IShardMapCache
         }
 
         var snapshot = current;
-        if (snapshot.Assignments.TryGetValue(id, out var recorded))
-        {
+        if (snapshot.Assignments.TryGetValue(id, out var recorded)) {
             return recorded;
         }
 
@@ -155,18 +158,17 @@ public sealed class GrainBackedShardMapCache : IShardMapCache
     }
 
     /// <inheritdoc />
-    public string HotHashTagFor(string tenantId)
-    {
+    public string HotHashTagFor(string tenantId) {
         ArgumentException.ThrowIfNullOrEmpty(tenantId);
 
-        if (hotOverrides.TryGetValue(tenantId, out var overridden))
-        {
+        if (hotOverrides.TryGetValue(tenantId, out var overridden)) {
             return overridden;
         }
 
-        return StaticShardMapCache.HotTagPrefix + (Guid.TryParse(tenantId, out var id)
-            ? id.ToString("N", CultureInfo.InvariantCulture)
-            : tenantId);
+        return StaticShardMapCache.HotTagPrefix
+            + (Guid.TryParse(tenantId, out var id)
+                ? id.ToString("N", CultureInfo.InvariantCulture)
+                : tenantId);
     }
 
     /// <summary>
@@ -180,19 +182,17 @@ public sealed class GrainBackedShardMapCache : IShardMapCache
     ///     while a storage provider is being built; a reader there must never see a half-applied
     ///     delta, and must never take a lock of its own.
     /// </remarks>
-    public bool Apply(ShardMapSnapshot snapshot)
-    {
+    public bool Apply(ShardMapSnapshot snapshot) {
         ArgumentNullException.ThrowIfNull(snapshot);
 
         var previous = current;
-        if (snapshot.Version < previous.Version)
-        {
+        if (snapshot.Version < previous.Version) {
             // An older snapshot than the one loaded. Discard it rather than going backwards: a cache
             // that regressed would re-place tenants it had already learned about.
             return false;
         }
 
-        ImmutableArray<string> shards = snapshot.DurableShards.Count > 0
+        var shards = snapshot.DurableShards.Count > 0
             ? [.. snapshot.DurableShards]
             : previous.Shards;
 
@@ -200,8 +200,7 @@ public sealed class GrainBackedShardMapCache : IShardMapCache
             ? ImmutableDictionary.CreateBuilder<Guid, string>()
             : previous.Assignments.ToBuilder();
 
-        foreach (var assignment in snapshot.Assignments)
-        {
+        foreach (var assignment in snapshot.Assignments) {
             builder[assignment.TenantId] = assignment.DurableShard;
         }
 
@@ -214,14 +213,12 @@ public sealed class GrainBackedShardMapCache : IShardMapCache
         return changed;
     }
 
-    /// <summary>The shard list the cache is currently placing unassigned tenants over.</summary>
-    public IReadOnlyList<string> Shards => current.Shards;
-
     static string Hash(string value, ImmutableArray<string> shards) =>
         shards[(int)(StaticShardMapCache.StableHash(value) % (uint)shards.Length)];
 
     sealed record Snapshot(
         long Version,
         ImmutableArray<string> Shards,
-        ImmutableDictionary<Guid, string> Assignments);
+        ImmutableDictionary<Guid, string> Assignments
+    );
 }

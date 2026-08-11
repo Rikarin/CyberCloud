@@ -5,8 +5,7 @@ namespace CyberCloud.Analyzers.Tests;
 ///     named <c>*Password</c>, <c>*Secret</c>, <c>*Token</c>, <c>*Key</c> outside
 ///     <c>CyberCloud.Vault</c>".
 /// </summary>
-public sealed class SecretInGrainStateAnalyzerTests
-{
+public sealed class SecretInGrainStateAnalyzerTests {
     // ── positive — all four suffixes, because the list is the non-negotiable ─────────────────────
 
     [Fact]
@@ -21,7 +20,8 @@ public sealed class SecretInGrainStateAnalyzerTests
             {
                 [Id(0)] public string {|CC1005:ApiToken|} { get; set; } = "";
             }
-            """);
+            """
+        );
 
     [Fact]
     public Task AnIdAnnotatedPasswordFieldIsReported() =>
@@ -35,7 +35,8 @@ public sealed class SecretInGrainStateAnalyzerTests
             {
                 [Id(0)] public string {|CC1005:AdminPassword|} = "";
             }
-            """);
+            """
+        );
 
     [Fact]
     public Task AnIdAnnotatedSecretIsReported() =>
@@ -49,7 +50,8 @@ public sealed class SecretInGrainStateAnalyzerTests
             {
                 [Id(0)] public string {|CC1005:ClientSecret|} { get; set; } = "";
             }
-            """);
+            """
+        );
 
     [Fact]
     public Task AnIdAnnotatedKeyIsReported() =>
@@ -63,7 +65,8 @@ public sealed class SecretInGrainStateAnalyzerTests
             {
                 [Id(0)] public string {|CC1005:SigningKey|} { get; set; } = "";
             }
-            """);
+            """
+        );
 
     /// <summary>The bare noun counts: <c>*Password</c> is a suffix glob, not "must have a prefix".</summary>
     [Fact]
@@ -78,7 +81,8 @@ public sealed class SecretInGrainStateAnalyzerTests
             {
                 [Id(0)] public string {|CC1005:Password|} { get; set; } = "";
             }
-            """);
+            """
+        );
 
     // ── negative ─────────────────────────────────────────────────────────────────────────────────
 
@@ -101,7 +105,8 @@ public sealed class SecretInGrainStateAnalyzerTests
 
                 public string ApiToken { get; set; } = "";
             }
-            """);
+            """
+        );
 
     /// <summary>The ordinary members of a real grain-state type, none of which is a secret.</summary>
     [Fact]
@@ -119,7 +124,8 @@ public sealed class SecretInGrainStateAnalyzerTests
                 [Id(2)] public string DisplayName { get; set; } = "";
                 [Id(3)] public string HomeRegion { get; set; } = "";
             }
-            """);
+            """
+        );
 
     /// <summary>
     ///     ⚠ The suffix match is <b>ordinal and case-sensitive</b>, which is what stops it firing on
@@ -140,7 +146,8 @@ public sealed class SecretInGrainStateAnalyzerTests
                 [Id(0)] public int Monkey { get; set; }
                 [Id(1)] public int Donkey { get; set; }
             }
-            """);
+            """
+        );
 
     /// <summary>
     ///     <c>CyberCloud.Vault</c> is the one assembly allowed to hold the value — docs/plan/00
@@ -160,7 +167,8 @@ public sealed class SecretInGrainStateAnalyzerTests
                 [Id(0)] public string ClientSecret { get; set; } = "";
             }
             """,
-            assemblyName: "CyberCloud.Vault");
+            "CyberCloud.Vault"
+        );
 
     /// <summary>
     ///     ⚠ And an assembly cannot opt out by having a name that merely starts with the same
@@ -179,5 +187,6 @@ public sealed class SecretInGrainStateAnalyzerTests
                 [Id(0)] public string {|CC1005:ClientSecret|} { get; set; } = "";
             }
             """,
-            assemblyName: "CyberCloud.VaultAdjacent");
+            "CyberCloud.VaultAdjacent"
+        );
 }

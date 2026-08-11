@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 
 namespace CyberCloud.Kubernetes.Contracts;
@@ -16,8 +17,12 @@ namespace CyberCloud.Kubernetes.Contracts;
 ///         not a thing that can be typed.
 ///     </para>
 ///     <para>
-///         ⚠ <b>docs/plan/09 § The command builder declares <c>public static class KubeCommand</c>
-///         and, four lines later, <c>KubeCommand Build();</c>.</b> Those cannot both be true — a
+///         ⚠
+///         <b>
+///             docs/plan/09 § The command builder declares <c>public static class KubeCommand</c>
+///             and, four lines later, <c>KubeCommand Build();</c>.
+///         </b>
+///         Those cannot both be true — a
 ///         static class cannot be a return type. The repair, which preserves both spellings the
 ///         document uses, is for <c>KubeCommand</c> to be an ordinary sealed record carrying a
 ///         <see langword="static" /> <see cref="For" />: <c>KubeCommand.For(connection)</c> reads
@@ -26,15 +31,7 @@ namespace CyberCloud.Kubernetes.Contracts;
 /// </remarks>
 [GenerateSerializer]
 [Alias("CyberCloud.Kubernetes.KubeCommand")]
-public sealed record KubeCommand
-{
-    // Internal so that only KubeCommandBuilder can mint one. A record's positional/init surface
-    // would otherwise let a caller construct an unlabelled command directly, which is the exact
-    // hole the type-state chain exists to close.
-    internal KubeCommand()
-    {
-    }
-
+public sealed record KubeCommand {
     /// <summary>The tenant that owns the resource being written.</summary>
     [Id(0)]
     public Guid TenantId { get; init; }
@@ -97,6 +94,11 @@ public sealed record KubeCommand
     [Id(10)]
     public string ResourcePath { get; init; } = string.Empty;
 
+    // Internal so that only KubeCommandBuilder can mint one. A record's positional/init surface
+    // would otherwise let a caller construct an unlabelled command directly, which is the exact
+    // hole the type-state chain exists to close.
+    internal KubeCommand() { }
+
     /// <summary>
     ///     Starts the type-state chain — ADR-013 and docs/plan/09 § The command builder.
     /// </summary>
@@ -114,8 +116,8 @@ public sealed record KubeCommand
     /// </returns>
     public static IKubeCommandNeedsTenant For(
         IKubeClusterConnection connection,
-        IChartRenderer? charts = null)
-    {
+        IChartRenderer? charts = null
+    ) {
         ArgumentNullException.ThrowIfNull(connection);
         return new KubeCommandBuilder(connection, charts);
     }
@@ -129,8 +131,7 @@ public sealed record KubeCommand
 ///     <c>Build()</c>, an <c>InNamespace</c>, a <c>WithLabels</c> — would make some unlabelled
 ///     command expressible, and ADR-013's whole claim is that none is.
 /// </remarks>
-public interface IKubeCommandNeedsTenant
-{
+public interface IKubeCommandNeedsTenant {
     /// <summary>Names the owning tenant and advances to stage 2.</summary>
     /// <param name="tenantId">The tenant. Becomes <c>cybercloud.io/tenant-id</c>.</param>
     IKubeCommandNeedsResource WithTenantId(Guid tenantId);
@@ -139,8 +140,7 @@ public interface IKubeCommandNeedsTenant
 /// <summary>
 ///     Stage 2 of the type-state chain. The only thing you can do is name the resource.
 /// </summary>
-public interface IKubeCommandNeedsResource
-{
+public interface IKubeCommandNeedsResource {
     /// <summary>Names the resource and advances to the fully-qualified stage.</summary>
     /// <param name="resourceId">
     ///     The resource. Supplies <c>resource-id</c>, and by inference <c>subscription-id</c>,
@@ -154,13 +154,16 @@ public interface IKubeCommandNeedsResource
 ///     <c>DeleteAsync</c> exist.
 /// </summary>
 /// <remarks>
-///     ADR-013: <i>"<c>Build()</c> and <c>Apply()</c> exist only on the fully-qualified interface, so
-///     an unlabelled object does not compile."</i> That is a compile-time claim and it is proved as
+///     ADR-013:
+///     <i>
+///         "<c>Build()</c> and <c>Apply()</c> exist only on the fully-qualified interface, so
+///         an unlabelled object does not compile."
+///     </i>
+///     That is a compile-time claim and it is proved as
 ///     one — <c>CompileFailureTests</c> compiles the illegal call with Roslyn and asserts the
 ///     diagnostic, rather than asserting an exception at run time.
 /// </remarks>
-public interface IKubeCommandBuilder
-{
+public interface IKubeCommandBuilder {
     /// <summary>Overrides the inferred subscription — for platform objects. docs/plan/09.</summary>
     /// <param name="id">The subscription to bill to.</param>
     IKubeCommandBuilder WithSubscriptionId(Guid id);
@@ -207,7 +210,8 @@ public interface IKubeCommandBuilder
         ResourceId parent,
         GroupVersionKind ownerKind,
         string ownerName,
-        string ownerUid);
+        string ownerUid
+    );
 
     /// <summary>Overrides the field manager. Defaults to <c>cybercloud/{provider}</c>.</summary>
     /// <param name="manager">The field manager name.</param>
@@ -248,12 +252,16 @@ public interface IKubeCommandBuilder
     // document writes them is worth more here than cross-language override ergonomics on an
     // interface no other language will implement. The neighbouring ObjectJson(string) gives anyone
     // who dislikes the name an alternative.
-    [System.Diagnostics.CodeAnalysis.SuppressMessage(
-        "Naming", "CA1720:Identifier contains type name",
-        Justification = "The name is docs/plan/09 § The command builder's, verbatim.")]
-    [System.Diagnostics.CodeAnalysis.SuppressMessage(
-        "Naming", "CA1716:Identifiers should not match keywords",
-        Justification = "The name is docs/plan/09 § The command builder's, verbatim.")]
+    [SuppressMessage(
+        "Naming",
+        "CA1720:Identifier contains type name",
+        Justification = "The name is docs/plan/09 § The command builder's, verbatim."
+    )]
+    [SuppressMessage(
+        "Naming",
+        "CA1716:Identifiers should not match keywords",
+        Justification = "The name is docs/plan/09 § The command builder's, verbatim."
+    )]
     IKubeCommandBuilder Object<T>(T obj)
         where T : notnull;
 
@@ -285,7 +293,8 @@ public interface IKubeCommandBuilder
     /// <param name="cancellationToken">The reconcile's token.</param>
     Task<Result> DeleteAsync(
         CascadePolicy policy = CascadePolicy.Background,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default
+    );
 }
 
 /// <summary>
@@ -303,8 +312,7 @@ public interface IKubeCommandBuilder
 ///         builder's shape is settled before the renderer exists. Nothing implements it yet.
 ///     </para>
 /// </remarks>
-public interface IChartRenderer
-{
+public interface IChartRenderer {
     /// <summary>Renders a chart to Kubernetes object documents.</summary>
     /// <param name="chart">The chart name.</param>
     /// <param name="values">The values document.</param>
@@ -314,5 +322,6 @@ public interface IChartRenderer
         string chart,
         JsonElement values,
         string releaseNamespace,
-        string releaseName);
+        string releaseName
+    );
 }

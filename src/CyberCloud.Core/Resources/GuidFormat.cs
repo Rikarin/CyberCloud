@@ -15,8 +15,7 @@ namespace CyberCloud.Core.Resources;
 ///     <c>ResourceIdTests.OnlyTheHyphenatedLowerCaseGuidFormIsAcceptedInAPath</c>, which fails
 ///     without the length guard below.
 /// </remarks>
-static class GuidFormat
-{
+static class GuidFormat {
     /// <summary>The length of the hyphenated <c>D</c> form.</summary>
     public const int DLength = 36;
 
@@ -24,10 +23,8 @@ static class GuidFormat
     public const int NLength = 32;
 
     /// <summary>Parses the <c>D</c> form and nothing else — no whitespace, no braces, no <c>N</c>.</summary>
-    public static bool TryParseD(string value, out Guid result)
-    {
-        if (value.Length != DLength)
-        {
+    public static bool TryParseD(string value, out Guid result) {
+        if (value.Length != DLength) {
             result = default;
             return false;
         }
@@ -36,10 +33,8 @@ static class GuidFormat
     }
 
     /// <summary>Parses the <c>N</c> form and nothing else.</summary>
-    public static bool TryParseN(string value, out Guid result)
-    {
-        if (value.Length != NLength)
-        {
+    public static bool TryParseN(string value, out Guid result) {
+        if (value.Length != NLength) {
             result = default;
             return false;
         }

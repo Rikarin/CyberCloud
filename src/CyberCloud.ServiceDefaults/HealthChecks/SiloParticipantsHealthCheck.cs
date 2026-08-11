@@ -15,8 +15,12 @@ namespace CyberCloud.ServiceDefaults.HealthChecks;
 ///         write it.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Degraded, not Unhealthy, and that is the point of keeping it separate from
-///         <see cref="SiloReadinessHealthCheck" />.</b> A participant that has not made progress is
+///         ⚠
+///         <b>
+///             Degraded, not Unhealthy, and that is the point of keeping it separate from
+///             <see cref="SiloReadinessHealthCheck" />.
+///         </b>
+///         A participant that has not made progress is
 ///         a strong signal and a weak proof: a silo genuinely idle for the interval reports the
 ///         same thing as a wedged one. Mapping it to Unhealthy would make an idle cluster evict
 ///         itself. It is here to be scraped and alerted on, not to move a pod out of a Service.
@@ -29,21 +33,20 @@ namespace CyberCloud.ServiceDefaults.HealthChecks;
 ///     </para>
 /// </remarks>
 sealed class SiloParticipantsHealthCheck(IEnumerable<IHealthCheckParticipant> participants)
-    : IHealthCheck
-{
+    : IHealthCheck {
     long lastCheckedTicks = DateTime.UtcNow.ToBinary();
 
     /// <inheritdoc />
     public Task<HealthCheckResult> CheckHealthAsync(
         HealthCheckContext context,
-        CancellationToken cancellationToken = default)
-    {
-        var lastChecked = DateTime.FromBinary(
-            Interlocked.Exchange(ref lastCheckedTicks, DateTime.UtcNow.ToBinary()));
+        CancellationToken cancellationToken = default
+    ) {
+        var lastChecked = DateTime.FromBinary(Interlocked.Exchange(ref lastCheckedTicks, DateTime.UtcNow.ToBinary()));
 
         var complaints = participants
             .Select(participant =>
-                (participant, healthy: participant.CheckHealth(lastChecked, out var reason), reason))
+                (participant, healthy: participant.CheckHealth(lastChecked, out var reason), reason)
+            )
             .Where(x => !x.healthy)
             .Select(x => $"{x.participant.GetType().Name}: {x.reason}")
             .ToList();
@@ -53,6 +56,8 @@ sealed class SiloParticipantsHealthCheck(IEnumerable<IHealthCheckParticipant> pa
                 ? HealthCheckResult.Healthy($"{lastChecked:O} → now: all participants progressed.")
                 : HealthCheckResult.Degraded(
                     $"{complaints.Count} Orleans subsystem(s) reported no progress since "
-                    + $"{lastChecked:O}: {string.Join("; ", complaints)}"));
+                    + $"{lastChecked:O}: {string.Join("; ", complaints)}"
+                )
+        );
     }
 }

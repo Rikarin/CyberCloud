@@ -1,7 +1,8 @@
-using System.Reflection;
+using CyberCloud.Core;
 using CyberCloud.Core.Contracts;
 using CyberCloud.Core.Contracts.Serialization;
 using Shouldly;
+using System.Reflection;
 
 namespace CyberCloud.ServiceDefaults.Tests;
 
@@ -15,31 +16,28 @@ namespace CyberCloud.ServiceDefaults.Tests;
 ///         part of the tree are asserted here, where they are at least run on every PR.
 ///     </para>
 /// </remarks>
-public sealed class AssemblyGraphTests
-{
-    static readonly Assembly Core = typeof(CyberCloud.Core.Result).Assembly;
+public sealed class AssemblyGraphTests {
+    static readonly Assembly Core = typeof(Result).Assembly;
     static readonly Assembly Contracts = typeof(ResultSurrogate).Assembly;
     static readonly Assembly ServiceDefaults = typeof(OrleansApplication).Assembly;
 
-    static IEnumerable<string> ReferencesOf(Assembly assembly) =>
-        assembly.GetReferencedAssemblies().Select(x => x.Name ?? string.Empty);
-
     [Fact]
-    public void CoreReferencesNothingButTheSharedFramework()
-    {
+    public void CoreReferencesNothingButTheSharedFramework() {
         // Rule 1 (docs/plan/03:235). The package-level version of this is `dotnet list package`
         // reporting "No packages were found for this framework"; this is the assembly-level one,
         // which also catches a reference acquired through a ProjectReference.
         ReferencesOf(Core)
             .Where(name => !name.StartsWith("System.", StringComparison.Ordinal)
-                && !string.Equals(name, "netstandard", StringComparison.Ordinal))
-            .ShouldBeEmpty("CyberCloud.Core is contracts, identifiers, error codes and pure "
-                + "functions. docs/plan/03:235.");
+                && !string.Equals(name, "netstandard", StringComparison.Ordinal)
+            )
+            .ShouldBeEmpty(
+                "CyberCloud.Core is contracts, identifiers, error codes and pure "
+                + "functions. docs/plan/03:235."
+            );
     }
 
     [Fact]
-    public void ContractsReferencesOrleansSerializationAndNoHosting()
-    {
+    public void ContractsReferencesOrleansSerializationAndNoHosting() {
         var references = ReferencesOf(Contracts).ToList();
 
         references.ShouldContain("Orleans.Serialization.Abstractions");
@@ -48,8 +46,7 @@ public sealed class AssemblyGraphTests
     }
 
     [Fact]
-    public void NothingHereReferencesTheKubernetesClient()
-    {
+    public void NothingHereReferencesTheKubernetesClient() {
         // Rule 3 (docs/plan/03:238) — "no assembly above CyberCloud.Kubernetes references
         // k8s.Models".
         //
@@ -62,18 +59,17 @@ public sealed class AssemblyGraphTests
         // statements are compatible and the distinction is the whole content of this test: the
         // library is in the closure because Orleans' Kubernetes integration needs it; no code we
         // write touches it.
-        foreach (var assembly in new[] { Core, Contracts, ServiceDefaults })
-        {
+        foreach (var assembly in new[] { Core, Contracts, ServiceDefaults }) {
             ReferencesOf(assembly)
                 .Where(name => name.StartsWith("k8s", StringComparison.OrdinalIgnoreCase)
-                    || name.Contains("KubernetesClient", StringComparison.OrdinalIgnoreCase))
+                    || name.Contains("KubernetesClient", StringComparison.OrdinalIgnoreCase)
+                )
                 .ShouldBeEmpty($"{assembly.GetName().Name} binds to the Kubernetes client.");
         }
     }
 
     [Fact]
-    public void ServiceDefaultsIsTheFirstAssemblyWithOrleansHosting()
-    {
+    public void ServiceDefaultsIsTheFirstAssemblyWithOrleansHosting() {
         // The positive half: hosting IS allowed here, and the point of the rule is that it is
         // allowed nowhere below.
         ReferencesOf(ServiceDefaults).ShouldContain("Orleans.Runtime");
@@ -82,8 +78,7 @@ public sealed class AssemblyGraphTests
     }
 
     [Fact]
-    public void TheStorageTierAndStreamProviderNamesAreWhereBothEndsCanSeeThem()
-    {
+    public void TheStorageTierAndStreamProviderNamesAreWhereBothEndsCanSeeThem() {
         // A grain in a provider assembly and the silo host both name these, and the provider
         // assembly must not reference the host. Asserting the assembly, not just the value, is what
         // stops somebody "tidying" them into ServiceDefaults.
@@ -94,4 +89,7 @@ public sealed class AssemblyGraphTests
         StorageTiers.Durable.ShouldBe("Durable");
         StreamProviders.Events.ShouldBe("Events");
     }
+
+    static IEnumerable<string> ReferencesOf(Assembly assembly) =>
+        assembly.GetReferencedAssemblies().Select(x => x.Name ?? string.Empty);
 }

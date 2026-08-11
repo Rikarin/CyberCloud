@@ -1,7 +1,7 @@
-using System.Globalization;
-using System.Reflection;
 using CyberCloud.Authorization.Contracts;
 using Shouldly;
+using System.Globalization;
+using System.Reflection;
 
 namespace CyberCloud.Authorization.Tests;
 
@@ -12,40 +12,42 @@ namespace CyberCloud.Authorization.Tests;
 ///     <see cref="PermissionNameTests" /> is about: the scanner sees what is loaded, and today what
 ///     is loaded is this class.
 /// </remarks>
-public sealed class SampleApplicationService
-{
+public sealed class SampleApplicationService {
     /// <summary>A method whose permission is named with the schema's own constants.</summary>
     [RequiresPermission(ObjectTypes.ResourceGroup, Permissions.Delete)]
-    public static void DeleteResourceGroup()
-    {
-    }
+    public static void DeleteResourceGroup() { }
 
     /// <summary>A method whose permission is named with a string literal, which also compiles.</summary>
     [RequiresPermission("subscription", "assignRole")]
-    public static void AssignRole()
-    {
-    }
+    public static void AssignRole() { }
 }
 
 /// <summary>A deliberately wrong attribute, used to prove the scanner is not vacuous.</summary>
-sealed class MisspelledService
-{
+sealed class MisspelledService {
     [RequiresPermission("resourceGroup", "delet")]
-    public static void Typo()
-    {
-    }
+    public static void Typo() { }
 }
 
 /// <summary>
-///     ⚠ <b>What is actually enforceable about permission names today, versus what docs/plan/07
-///     claims.</b>
+///     ⚠
+///     <b>
+///         What is actually enforceable about permission names today, versus what docs/plan/07
+///         claims.
+///     </b>
 /// </summary>
 /// <remarks>
 ///     <para>
-///         docs/plan/07 § The model: <i>"The schema is <b>C# and compiled</b>, not a DSL file. It
-///         gets type checking, IDE navigation, and — the real reason — <b>the analyzer can then
-///         verify that every <c>[Authorize]</c> on a provider's application service names a
-///         permission that exists</b>."</i>
+///         docs/plan/07 § The model:
+///         <i>
+///             "The schema is <b>C# and compiled</b>, not a DSL file. It
+///             gets type checking, IDE navigation, and — the real reason —
+///             <b>
+///                 the analyzer can then
+///                 verify that every <c>[Authorize]</c> on a provider's application service names a
+///                 permission that exists
+///             </b>
+///             ."
+///         </i>
 ///     </para>
 ///     <para>
 ///         <b>THERE IS NO SUCH ANALYZER.</b> A Roslyn analyzer needs
@@ -68,20 +70,21 @@ sealed class MisspelledService
 ///         rejects a wrong name rather than finding nothing to reject.
 ///     </para>
 /// </remarks>
-public sealed class PermissionNameTests
-{
+public sealed class PermissionNameTests {
     [Fact]
-    public void EveryRequiresPermissionAttributeNamesAPermissionTheSchemaDefines()
-    {
+    public void EveryRequiresPermissionAttributeNamesAPermissionTheSchemaDefines() {
         var found = Scan(x => x != typeof(MisspelledService)).ToList();
 
         found.ShouldNotBeEmpty(
             "the scanner found no [RequiresPermission] at all. That is a pass only if nothing in "
             + "the repository uses it; the floor below is what distinguishes 'nothing to check' "
-            + "from 'the scan is broken'.");
+            + "from 'the scan is broken'."
+        );
 
         found.Count.ShouldBeGreaterThanOrEqualTo(
-            2, "SampleApplicationService carries two; a lower count means the scan lost assemblies");
+            2,
+            "SampleApplicationService carries two; a lower count means the scan lost assemblies"
+        );
 
         var unknown = found
             .Where(x => CyberCloudSchema.Instance.Member(x.ObjectType, x.Permission) is null)
@@ -91,12 +94,12 @@ public sealed class PermissionNameTests
         unknown.ShouldBeEmpty(
             "an attribute names a permission the shipped schema does not define. docs/plan/07 "
             + "§ The model calls a typo'd permission name 'a silent allow-nothing or, worse in the "
-            + "wrong evaluator, a silent allow-everything'.");
+            + "wrong evaluator, a silent allow-everything'."
+        );
     }
 
     [Fact]
-    public void TheScannerActuallyRejectsATypo()
-    {
+    public void TheScannerActuallyRejectsATypo() {
         // ⚠ Without this, the test above could be green because the scanner finds nothing, or
         // because Member(...) never returns null. MisspelledService exists to be caught.
         var typo = Scan(x => x == typeof(MisspelledService)).ToList();
@@ -106,8 +109,7 @@ public sealed class PermissionNameTests
     }
 
     [Fact]
-    public void EveryPermissionConstantIsDefinedOnAtLeastOneType()
-    {
+    public void EveryPermissionConstantIsDefinedOnAtLeastOneType() {
         // The compile-time half, such as it is: a call site that uses `Permissions.Delete` cannot
         // typo it, because a typo is CS0117. This asserts the constants themselves are not stale —
         // a constant naming a permission no type declares would compile at every call site and
@@ -120,8 +122,7 @@ public sealed class PermissionNameTests
 
         constants.ShouldNotBeEmpty();
 
-        foreach (var permission in constants)
-        {
+        foreach (var permission in constants) {
             CyberCloudSchema.Instance.TypeNames
                 .Any(type => CyberCloudSchema.Instance.Member(type, permission)?.IsPermission == true)
                 .ShouldBeTrue($"'{permission}' is a constant no object type declares as a permission");
@@ -129,16 +130,14 @@ public sealed class PermissionNameTests
     }
 
     [Fact]
-    public void EveryRelationConstantIsDeclaredOnAtLeastOneType()
-    {
+    public void EveryRelationConstantIsDeclaredOnAtLeastOneType() {
         var constants = typeof(Relations)
             .GetFields(BindingFlags.Public | BindingFlags.Static)
             .Where(x => x.IsLiteral && x.FieldType == typeof(string))
             .Select(x => (string)x.GetRawConstantValue()!)
             .ToList();
 
-        foreach (var relation in constants)
-        {
+        foreach (var relation in constants) {
             CyberCloudSchema.Instance.TypeNames
                 .Any(type => CyberCloudSchema.Instance.Member(type, relation)?.IsPermission == false)
                 .ShouldBeTrue($"'{relation}' is a constant no object type declares as a relation");
@@ -146,23 +145,20 @@ public sealed class PermissionNameTests
     }
 
     [Fact]
-    public void EveryObjectTypeConstantIsInTheSchema()
-    {
+    public void EveryObjectTypeConstantIsInTheSchema() {
         var constants = typeof(ObjectTypes)
             .GetFields(BindingFlags.Public | BindingFlags.Static)
             .Where(x => x.IsLiteral && x.FieldType == typeof(string))
             .Select(x => (string)x.GetRawConstantValue()!)
             .ToList();
 
-        foreach (var type in constants)
-        {
+        foreach (var type in constants) {
             CyberCloudSchema.Instance.HasType(type).ShouldBeTrue(type);
         }
     }
 
     [Fact]
-    public void TheSchemaItselfIsTheStrongestGateAndItRunsAtStartup()
-    {
+    public void TheSchemaItselfIsTheStrongestGateAndItRunsAtStartup() {
         // The one enforcement that is genuinely airtight, and it covers a DIFFERENT mistake from
         // the one the document describes: a typo INSIDE the schema cannot reach production at all,
         // because SchemaBuilder.Build() throws rather than returning a schema with an unresolvable
@@ -174,40 +170,47 @@ public sealed class PermissionNameTests
             Schema.DefineType("doc")
                 .Relation("owner", Rewrite.This)
                 .Permission("act", Rewrite.Rel("ownr"))
-                .Build());
+                .Build()
+        );
     }
 
     static IEnumerable<(string ObjectType, string Permission, string Where)> Scan(
-        Func<Type, bool> include) =>
+        Func<Type, bool> include
+    ) =>
         AppDomain.CurrentDomain.GetAssemblies()
             .Where(x => x.GetName().Name?.StartsWith("CyberCloud", StringComparison.Ordinal) == true)
             .SelectMany(SafeTypes)
             .Where(include)
             .SelectMany(type => type
-                .GetMembers(BindingFlags.Public | BindingFlags.NonPublic
-                    | BindingFlags.Instance | BindingFlags.Static)
+                .GetMembers(
+                    BindingFlags.Public
+                    | BindingFlags.NonPublic
+                    | BindingFlags.Instance
+                    | BindingFlags.Static
+                )
                 .SelectMany(member => member
                     .GetCustomAttributes<RequiresPermissionAttribute>()
                     .Select(attribute => (
                         attribute.ObjectType,
                         attribute.Permission,
-                        Where: string.Create(
-                            CultureInfo.InvariantCulture, $"{type.FullName}.{member.Name}"))))
-                .Concat(type
-                    .GetCustomAttributes<RequiresPermissionAttribute>()
-                    .Select(attribute => (
-                        attribute.ObjectType,
-                        attribute.Permission,
-                        Where: type.FullName ?? type.Name))));
+                        Where: string.Create(CultureInfo.InvariantCulture, $"{type.FullName}.{member.Name}"))
+                    )
+                )
+                .Concat(
+                    type
+                        .GetCustomAttributes<RequiresPermissionAttribute>()
+                        .Select(attribute => (
+                            attribute.ObjectType,
+                            attribute.Permission,
+                            Where: type.FullName ?? type.Name)
+                        )
+                )
+            );
 
-    static IEnumerable<Type> SafeTypes(Assembly assembly)
-    {
-        try
-        {
+    static IEnumerable<Type> SafeTypes(Assembly assembly) {
+        try {
             return assembly.GetTypes();
-        }
-        catch (ReflectionTypeLoadException loaded)
-        {
+        } catch (ReflectionTypeLoadException loaded) {
             return loaded.Types.Where(x => x is not null)!;
         }
     }

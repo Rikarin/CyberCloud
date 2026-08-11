@@ -1,30 +1,30 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!--
-    docs/plan/03 § src — the .Contracts split for the Kubernetes fabric (docs/plan/09).
+    <!--
+      docs/plan/03 § src — the .Contracts split for the Kubernetes fabric (docs/plan/09).
+  
+      ⚠ THIS ASSEMBLY DELIBERATELY DOES NOT REFERENCE KubernetesClient, AND THAT IS RULE 3.
+      docs/plan/03 § Assembly graph rules, rule 3: "No assembly above CyberCloud.Kubernetes references
+      k8s.Models." Every provider reconciler references THIS assembly to build and send a KubeCommand,
+      so if a single `k8s.Models` type appeared in a signature here, rule 3 would be broken for every
+      provider in the platform at once — transitively and invisibly. The whole surface below is
+      therefore expressed in JSON, GUIDs and strings.
+  
+      That has one consequence worth stating rather than discovering: the command builder — the
+      ADR-013 type-state chain — lives HERE and not in CyberCloud.Kubernetes, because it is pure
+      (labels, validation, a JSON body) and because its callers are exactly the assemblies that must
+      not see k8s.Models. docs/plan/03 § src describes CyberCloud.Kubernetes as "connections, command
+      builder, informers, SSA"; the builder's *interfaces and label injection* are here and everything
+      that touches a live API server is there. See the remarks on KubeCommand.
+    -->
 
-    ⚠ THIS ASSEMBLY DELIBERATELY DOES NOT REFERENCE KubernetesClient, AND THAT IS RULE 3.
-    docs/plan/03 § Assembly graph rules, rule 3: "No assembly above CyberCloud.Kubernetes references
-    k8s.Models." Every provider reconciler references THIS assembly to build and send a KubeCommand,
-    so if a single `k8s.Models` type appeared in a signature here, rule 3 would be broken for every
-    provider in the platform at once — transitively and invisibly. The whole surface below is
-    therefore expressed in JSON, GUIDs and strings.
+    <ItemGroup>
+        <PackageReference Include="Microsoft.Orleans.Sdk"/>
+    </ItemGroup>
 
-    That has one consequence worth stating rather than discovering: the command builder — the
-    ADR-013 type-state chain — lives HERE and not in CyberCloud.Kubernetes, because it is pure
-    (labels, validation, a JSON body) and because its callers are exactly the assemblies that must
-    not see k8s.Models. docs/plan/03 § src describes CyberCloud.Kubernetes as "connections, command
-    builder, informers, SSA"; the builder's *interfaces and label injection* are here and everything
-    that touches a live API server is there. See the remarks on KubeCommand.
-  -->
-
-  <ItemGroup>
-    <PackageReference Include="Microsoft.Orleans.Sdk" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <ProjectReference Include="../CyberCloud.Core/CyberCloud.Core.csproj" />
-    <ProjectReference Include="../CyberCloud.Core.Contracts/CyberCloud.Core.Contracts.csproj" />
-  </ItemGroup>
+    <ItemGroup>
+        <ProjectReference Include="../CyberCloud.Core/CyberCloud.Core.csproj"/>
+        <ProjectReference Include="../CyberCloud.Core.Contracts/CyberCloud.Core.Contracts.csproj"/>
+    </ItemGroup>
 
 </Project>

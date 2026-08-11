@@ -4,8 +4,7 @@ namespace CyberCloud.Analyzers.Tests;
 ///     CC1003 — <c>docs/plan/00 § Coding standards</c> and <c>docs/plan/04 § Failure and upgrade</c>:
 ///     every <c>[GenerateSerializer]</c> type has a stable <c>[Alias]</c>.
 /// </summary>
-public sealed class GenerateSerializerAliasAnalyzerTests
-{
+public sealed class GenerateSerializerAliasAnalyzerTests {
     // ── positive ─────────────────────────────────────────────────────────────────────────────────
 
     [Fact]
@@ -19,7 +18,8 @@ public sealed class GenerateSerializerAliasAnalyzerTests
             {
                 [Id(0)] public string Slug { get; set; } = "";
             }
-            """);
+            """
+        );
 
     [Fact]
     public Task AGenerateSerializerRecordStructWithNoAliasIsReported() =>
@@ -29,7 +29,8 @@ public sealed class GenerateSerializerAliasAnalyzerTests
 
             [GenerateSerializer]
             public readonly record struct {|CC1003:ShardAssignment|}([property: Id(0)] string Shard);
-            """);
+            """
+        );
 
     [Fact]
     public Task AGenerateSerializerEnumWithNoAliasIsReported() =>
@@ -43,7 +44,8 @@ public sealed class GenerateSerializerAliasAnalyzerTests
                 Active,
                 Suspended,
             }
-            """);
+            """
+        );
 
     // ── negative ─────────────────────────────────────────────────────────────────────────────────
 
@@ -59,7 +61,8 @@ public sealed class GenerateSerializerAliasAnalyzerTests
             {
                 [Id(0)] public string Slug { get; set; } = "";
             }
-            """);
+            """
+        );
 
     /// <summary>
     ///     ⚠ The attribute order must not matter, and a rule written against the syntax list rather
@@ -76,7 +79,8 @@ public sealed class GenerateSerializerAliasAnalyzerTests
             {
                 [Id(0)] public string Slug { get; set; } = "";
             }
-            """);
+            """
+        );
 
     /// <summary>
     ///     A type that is not a wire type carries neither attribute and is nobody's business.
@@ -90,7 +94,8 @@ public sealed class GenerateSerializerAliasAnalyzerTests
             {
                 public string Slug { get; set; } = "";
             }
-            """);
+            """
+        );
 
     /// <summary>
     ///     <c>[Alias]</c> on a grain interface without <c>[GenerateSerializer]</c> — the normal
@@ -106,5 +111,6 @@ public sealed class GenerateSerializerAliasAnalyzerTests
             public interface ITenantGrain : IGrainWithStringKey
             {
             }
-            """);
+            """
+        );
 }

@@ -1,41 +1,41 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!--
-    docs/plan/24 § Phase 0's exit criterion, as a test rather than as an instruction.
-
-    ⚠ THIS SUITE STARTS THE REAL APPHOST. Not a re-implementation of it, not a TestCluster shaped
-    like it: `DistributedApplicationTestingBuilder.CreateAsync<…>` runs CyberCloud.AppHost's own
-    Program.cs, which starts the real Redis, PostgreSQL, NATS and k3s containers and launches the
-    two silo processes. A test that rebuilt the topology in-process would be a test of the test.
-
-    ⚠ IT IS THEREFORE SLOW AND IT IS A PER-PR TEST ANYWAY. docs/plan/23 § CI shape budgets `Test`
-    at 3 minutes and this suite is a large fraction of it. The alternative — moving it to the
-    nightly E2E suite — would mean the one criterion Phase 0 is defined by is not checked on the
-    changes most likely to break it, which are changes to the AppHost and to CreateSilo.
-  -->
-
-  <ItemGroup>
-    <FrameworkReference Include="Microsoft.AspNetCore.App" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <PackageReference Include="xunit.v3" />
-    <PackageReference Include="Shouldly" />
-    <PackageReference Include="Aspire.Hosting.Testing" />
-  </ItemGroup>
-
-  <ItemGroup>
     <!--
-      The AppHost is the system under test. Aspire.AppHost.Sdk's targets flow through this reference
-      and generate the `Projects.CyberCloud_AppHost` metadata type the testing builder takes.
+      docs/plan/24 § Phase 0's exit criterion, as a test rather than as an instruction.
+  
+      ⚠ THIS SUITE STARTS THE REAL APPHOST. Not a re-implementation of it, not a TestCluster shaped
+      like it: `DistributedApplicationTestingBuilder.CreateAsync<…>` runs CyberCloud.AppHost's own
+      Program.cs, which starts the real Redis, PostgreSQL, NATS and k3s containers and launches the
+      two silo processes. A test that rebuilt the topology in-process would be a test of the test.
+  
+      ⚠ IT IS THEREFORE SLOW AND IT IS A PER-PR TEST ANYWAY. docs/plan/23 § CI shape budgets `Test`
+      at 3 minutes and this suite is a large fraction of it. The alternative — moving it to the
+      nightly E2E suite — would mean the one criterion Phase 0 is defined by is not checked on the
+      changes most likely to break it, which are changes to the AppHost and to CreateSilo.
     -->
-    <ProjectReference Include="../CyberCloud.AppHost/CyberCloud.AppHost.csproj" />
-    <!-- IHelloGrain and its generated client proxy. -->
-    <ProjectReference Include="../CyberCloud.Silo.Host/CyberCloud.Silo.Host.csproj" />
-  </ItemGroup>
 
-  <ItemGroup Label="Global usings">
-    <Using Include="Xunit" />
-  </ItemGroup>
+    <ItemGroup>
+        <FrameworkReference Include="Microsoft.AspNetCore.App"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Include="xunit.v3"/>
+        <PackageReference Include="Shouldly"/>
+        <PackageReference Include="Aspire.Hosting.Testing"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <!--
+          The AppHost is the system under test. Aspire.AppHost.Sdk's targets flow through this reference
+          and generate the `Projects.CyberCloud_AppHost` metadata type the testing builder takes.
+        -->
+        <ProjectReference Include="../CyberCloud.AppHost/CyberCloud.AppHost.csproj"/>
+        <!-- IHelloGrain and its generated client proxy. -->
+        <ProjectReference Include="../CyberCloud.Silo.Host/CyberCloud.Silo.Host.csproj"/>
+    </ItemGroup>
+
+    <ItemGroup Label="Global usings">
+        <Using Include="Xunit"/>
+    </ItemGroup>
 
 </Project>

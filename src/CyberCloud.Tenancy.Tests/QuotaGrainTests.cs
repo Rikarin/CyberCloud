@@ -5,13 +5,20 @@ using Shouldly;
 namespace CyberCloud.Tenancy.Tests;
 
 /// <summary>
-///     docs/plan/06 § Quota: <b>"Reservation, not a counter increment — the lease is released if the
-///     operation fails, and expires on its own if the operation grain dies."</b>
+///     docs/plan/06 § Quota:
+///     <b>
+///         "Reservation, not a counter increment — the lease is released if the
+///         operation fails, and expires on its own if the operation grain dies."
+///     </b>
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>The distinction between a reservation and a counter is the whole point of these
-///         tests, and it is testable in exactly two places</b>: an operation that fails must give the
+///         ⚠
+///         <b>
+///             The distinction between a reservation and a counter is the whole point of these
+///             tests, and it is testable in exactly two places
+///         </b>
+///         : an operation that fails must give the
 ///         quota back, and an operation that is abandoned must lose it anyway. A counter has neither
 ///         property — it has no owner to release it and no expiry to reclaim it, so the only repair
 ///         for a leaked increment is a manual reconciliation nobody will run.
@@ -23,13 +30,9 @@ namespace CyberCloud.Tenancy.Tests;
 ///     </para>
 /// </remarks>
 [Collection(TenancySuite.Name)]
-public sealed class QuotaGrainTests(TenancyCluster cluster)
-{
-    static Guid Tenant(int n) => TenancyCluster.Tenant(5000 + n);
-
+public sealed class QuotaGrainTests(TenancyCluster cluster) {
     [Fact]
-    public async Task AReservationIsNotCommittedUsageUntilItIsCommitted()
-    {
+    public async Task AReservationIsNotCommittedUsageUntilItIsCommitted() {
         var (quota, _) = Quota(1);
 
         (await quota.SetLimitAsync(QuotaMeter.Vcpu, 10m)).IsSuccess.ShouldBeTrue();
@@ -50,8 +53,7 @@ public sealed class QuotaGrainTests(TenancyCluster cluster)
     }
 
     [Fact]
-    public async Task AReservationCountsAgainstTheLimitWhileItIsHeld()
-    {
+    public async Task AReservationCountsAgainstTheLimitWhileItIsHeld() {
         // Otherwise two concurrent creates would both pass the check and the subscription would end
         // up over its limit, with no single moment at which anything was wrong.
         var (quota, _) = Quota(2);
@@ -67,8 +69,7 @@ public sealed class QuotaGrainTests(TenancyCluster cluster)
     }
 
     [Fact]
-    public async Task AFailedOperationReleasesItsLeaseAndTheQuotaIsAvailableImmediately()
-    {
+    public async Task AFailedOperationReleasesItsLeaseAndTheQuotaIsAvailableImmediately() {
         // ⚠ HALF ONE OF THE RESERVATION PROPERTY: "the lease is released if the operation fails".
         var (quota, _) = Quota(3);
 
@@ -85,13 +86,12 @@ public sealed class QuotaGrainTests(TenancyCluster cluster)
         var retried = await quota.TryReserveAsync(QuotaMeter.Vcpu, 4m, Guid.NewGuid());
         retried.IsSuccess.ShouldBeTrue("the released quota is available at once, not after a sweep.");
 
-        (await quota.GetUsageAsync(QuotaMeter.Vcpu)).GetValueOrThrow().Committed.ShouldBe(
-            0m, "a released lease was never usage.");
+        (await quota.GetUsageAsync(QuotaMeter.Vcpu)).GetValueOrThrow()
+            .Committed.ShouldBe(0m, "a released lease was never usage.");
     }
 
     [Fact]
-    public async Task AnAbandonedLeaseExpiresOnItsOwnEvenAcrossADeactivation()
-    {
+    public async Task AnAbandonedLeaseExpiresOnItsOwnEvenAcrossADeactivation() {
         // ⚠ HALF TWO, AND THE ONE A COUNTER CANNOT HAVE: "expires on its own if the operation grain
         // dies". The quota grain is deactivated for the whole lease, so nothing is running to
         // notice — and the quota still comes back, because expiry is evaluated on read.
@@ -109,17 +109,17 @@ public sealed class QuotaGrainTests(TenancyCluster cluster)
 
         var revived = Quota(key);
 
-        (await revived.ListLeasesAsync()).GetValueOrThrow().ShouldBeEmpty(
-            "an expired lease is swept the moment the grain is asked anything.");
+        (await revived.ListLeasesAsync()).GetValueOrThrow()
+            .ShouldBeEmpty("an expired lease is swept the moment the grain is asked anything.");
 
         var afterExpiry = await revived.TryReserveAsync(QuotaMeter.Vcpu, 9m, Guid.NewGuid());
         afterExpiry.IsSuccess.ShouldBeTrue(
-            "the abandoned lease's quota came back with no timer, no reminder and no operator.");
+            "the abandoned lease's quota came back with no timer, no reminder and no operator."
+        );
     }
 
     [Fact]
-    public async Task AnExpiredLeaseCannotBeCommitted()
-    {
+    public async Task AnExpiredLeaseCannotBeCommitted() {
         // The race the expiry creates, and the safe answer: the slow operation must not commit
         // quota that has already been handed to somebody else.
         var (quota, key) = Quota(5);
@@ -138,8 +138,7 @@ public sealed class QuotaGrainTests(TenancyCluster cluster)
     }
 
     [Fact]
-    public async Task ALeaseCannotBeCommittedTwice()
-    {
+    public async Task ALeaseCannotBeCommittedTwice() {
         var (quota, _) = Quota(6);
 
         (await quota.SetLimitAsync(QuotaMeter.Vcpu, 10m)).IsSuccess.ShouldBeTrue();
@@ -148,14 +147,14 @@ public sealed class QuotaGrainTests(TenancyCluster cluster)
 
         (await quota.CommitAsync(lease.LeaseId)).IsSuccess.ShouldBeTrue();
         (await quota.CommitAsync(lease.LeaseId)).IsFailure.ShouldBeTrue(
-            "double-committing would bill twice for one resource.");
+            "double-committing would bill twice for one resource."
+        );
 
         (await quota.GetUsageAsync(QuotaMeter.Vcpu)).GetValueOrThrow().Committed.ShouldBe(3m);
     }
 
     [Fact]
-    public async Task ReleasingAnAlreadyGoneLeaseIsANoOp()
-    {
+    public async Task ReleasingAnAlreadyGoneLeaseIsANoOp() {
         var (quota, _) = Quota(7);
 
         (await quota.SetLimitAsync(QuotaMeter.Vcpu, 10m)).IsSuccess.ShouldBeTrue();
@@ -164,12 +163,12 @@ public sealed class QuotaGrainTests(TenancyCluster cluster)
 
         (await quota.ReleaseAsync(lease.LeaseId)).IsSuccess.ShouldBeTrue();
         (await quota.ReleaseAsync(lease.LeaseId)).IsSuccess.ShouldBeTrue(
-            "the failure path is re-driven from a reminder and must be safe to run twice.");
+            "the failure path is re-driven from a reminder and must be safe to run twice."
+        );
     }
 
     [Fact]
-    public async Task ALeaseNeedsAnOwningOperationBecauseThatIsWhatMakesItALeaseAndNotACounter()
-    {
+    public async Task ALeaseNeedsAnOwningOperationBecauseThatIsWhatMakesItALeaseAndNotACounter() {
         var (quota, _) = Quota(8);
 
         var refused = await quota.TryReserveAsync(QuotaMeter.Vcpu, 1m, Guid.Empty);
@@ -180,8 +179,7 @@ public sealed class QuotaGrainTests(TenancyCluster cluster)
     }
 
     [Fact]
-    public async Task CommittedQuotaComesBackWhenTheResourceIsDeleted()
-    {
+    public async Task CommittedQuotaComesBackWhenTheResourceIsDeleted() {
         var (quota, _) = Quota(9);
 
         (await quota.SetLimitAsync(QuotaMeter.Vcpu, 10m)).IsSuccess.ShouldBeTrue();
@@ -193,8 +191,7 @@ public sealed class QuotaGrainTests(TenancyCluster cluster)
     }
 
     [Fact]
-    public async Task AMeterCannotBeDrivenNegative()
-    {
+    public async Task AMeterCannotBeDrivenNegative() {
         var (quota, _) = Quota(10);
 
         var refused = await quota.ReturnAsync(QuotaMeter.Vcpu, 1m);
@@ -205,8 +202,7 @@ public sealed class QuotaGrainTests(TenancyCluster cluster)
     }
 
     [Fact]
-    public async Task QuotaSurvivesTheGrainDyingBecauseItIsDurable()
-    {
+    public async Task QuotaSurvivesTheGrainDyingBecauseItIsDurable() {
         var (quota, key) = Quota(11);
 
         (await quota.SetLimitAsync(QuotaMeter.StorageGb, 500m)).IsSuccess.ShouldBeTrue();
@@ -223,8 +219,7 @@ public sealed class QuotaGrainTests(TenancyCluster cluster)
     }
 
     [Fact]
-    public async Task ConcurrentReservationsAreSerialisedAndTheLimitHolds()
-    {
+    public async Task ConcurrentReservationsAreSerialisedAndTheLimitHolds() {
         // ⚠ docs/plan/06 § Quota: "The quota grain is per-subscription and therefore serialises
         // every create in that subscription. That is correct — quota is exactly the thing that needs
         // a single writer." This is that sentence as an experiment: twenty concurrent reservations
@@ -234,8 +229,12 @@ public sealed class QuotaGrainTests(TenancyCluster cluster)
 
         (await quota.SetLimitAsync(QuotaMeter.PublicIps, 5m)).IsSuccess.ShouldBeTrue();
 
-        var attempts = await Task.WhenAll(Enumerable.Range(0, 20).Select(_ =>
-            quota.TryReserveAsync(QuotaMeter.PublicIps, 1m, Guid.NewGuid())));
+        var attempts = await Task.WhenAll(
+            Enumerable.Range(0, 20)
+                .Select(_ =>
+                    quota.TryReserveAsync(QuotaMeter.PublicIps, 1m, Guid.NewGuid())
+                )
+        );
 
         attempts.Count(x => x.IsSuccess).ShouldBe(5);
         attempts.Count(x => x.IsFailure).ShouldBe(15);
@@ -245,8 +244,7 @@ public sealed class QuotaGrainTests(TenancyCluster cluster)
     }
 
     [Fact]
-    public async Task TheQuotaGrainAndTheSubscriptionGrainShareAKeyAndAreStillTwoGrains()
-    {
+    public async Task TheQuotaGrainAndTheSubscriptionGrainShareAKeyAndAreStillTwoGrains() {
         // The key shape decision: IQuotaGrain reuses sub/{id}. Orleans addresses an activation by
         // (grain type, key), so this is one subscription with two grains, not a collision.
         var tenant = Tenant(13);
@@ -260,10 +258,14 @@ public sealed class QuotaGrainTests(TenancyCluster cluster)
         var quota = cluster.QuotaGrain(tenant, subscription);
         (await quota.SetLimitAsync(QuotaMeter.Clusters, 3m)).IsSuccess.ShouldBeTrue();
 
-        cluster.SubscriptionGrain(tenant, subscription).GetGrainId().Key.ToString()
+        cluster.SubscriptionGrain(tenant, subscription)
+            .GetGrainId()
+            .Key.ToString()
             .ShouldBe(quota.GetGrainId().Key.ToString());
 
-        cluster.SubscriptionGrain(tenant, subscription).GetGrainId().Type.ToString()
+        cluster.SubscriptionGrain(tenant, subscription)
+            .GetGrainId()
+            .Type.ToString()
             .ShouldNotBe(quota.GetGrainId().Type.ToString());
 
         (await cluster.SubscriptionGrain(tenant, subscription).GetAsync()).GetValueOrThrow()
@@ -272,24 +274,22 @@ public sealed class QuotaGrainTests(TenancyCluster cluster)
     }
 
     [Fact]
-    public async Task EveryMeterHasADefaultLimitSoAnUnconfiguredSubscriptionIsNotUnlimited()
-    {
+    public async Task EveryMeterHasADefaultLimitSoAnUnconfiguredSubscriptionIsNotUnlimited() {
         var (quota, _) = Quota(14);
 
-        foreach (var meter in Enum.GetValues<QuotaMeter>().Where(x => x != QuotaMeter.Unknown))
-        {
-            (await quota.GetUsageAsync(meter)).GetValueOrThrow().Limit.ShouldBeGreaterThan(
-                0m, $"{meter} has no default limit, so it is effectively unlimited.");
+        foreach (var meter in Enum.GetValues<QuotaMeter>().Where(x => x != QuotaMeter.Unknown)) {
+            (await quota.GetUsageAsync(meter)).GetValueOrThrow()
+                .Limit.ShouldBeGreaterThan(0m, $"{meter} has no default limit, so it is effectively unlimited.");
         }
     }
 
-    (IQuotaGrain Quota, (Guid Tenant, Guid Subscription) Key) Quota(int n)
-    {
+    static Guid Tenant(int n) => TenancyCluster.Tenant(5000 + n);
+
+    (IQuotaGrain Quota, (Guid Tenant, Guid Subscription) Key) Quota(int n) {
         var tenant = Tenant(n);
         var subscription = TenancyCluster.Tenant(6000 + n);
         return (cluster.QuotaGrain(tenant, subscription), (tenant, subscription));
     }
 
-    IQuotaGrain Quota((Guid Tenant, Guid Subscription) key) =>
-        cluster.QuotaGrain(key.Tenant, key.Subscription);
+    IQuotaGrain Quota((Guid Tenant, Guid Subscription) key) => cluster.QuotaGrain(key.Tenant, key.Subscription);
 }

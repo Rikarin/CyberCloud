@@ -24,60 +24,19 @@ namespace CyberCloud.Analyzers;
 ///         which, and why.
 ///     </para>
 /// </remarks>
-public static class Rules
-{
-    /// <summary>Analyzer diagnostic categories, one per plan concern.</summary>
-    public static class Categories
-    {
-        /// <summary>Blocking, <c>async void</c>, and everything else that stalls an activation.</summary>
-        public const string Async = "CyberCloud.Async";
-
-        /// <summary>Wire-contract shape — <c>[GenerateSerializer]</c>, <c>[Alias]</c>, <c>[Id(n)]</c>.</summary>
-        public const string Serialization = "CyberCloud.Serialization";
-
-        /// <summary>Grain keys and tenant qualification.</summary>
-        public const string Tenancy = "CyberCloud.Tenancy";
-
-        /// <summary>The non-negotiables that are security properties rather than style.</summary>
-        public const string Security = "CyberCloud.Security";
-
-        /// <summary>Repository hygiene rules from docs/plan/00 § Non-negotiables.</summary>
-        public const string Hygiene = "CyberCloud.Hygiene";
-    }
-
-    /// <summary>The diagnostic ids, as constants, so a suppression can be grepped back to a rule.</summary>
-    public static class Ids
-    {
-        /// <summary><see cref="BlockingWaitInSynchronousMethod" />.</summary>
-        public const string BlockingWaitInSynchronousMethod = "CC1001";
-
-        /// <summary><see cref="AsyncVoid" />.</summary>
-        public const string AsyncVoid = "CC1002";
-
-        /// <summary><see cref="GenerateSerializerWithoutAlias" />.</summary>
-        public const string GenerateSerializerWithoutAlias = "CC1003";
-
-        /// <summary><see cref="GrainKeyLiteral" />.</summary>
-        public const string GrainKeyLiteral = "CC1004";
-
-        /// <summary><see cref="SecretInGrainState" />.</summary>
-        public const string SecretInGrainState = "CC1005";
-
-        /// <summary><see cref="UnqualifiedGrainReference" />.</summary>
-        public const string UnqualifiedGrainReference = "CC1006";
-
-        /// <summary><see cref="PragmaWithoutIssue" />.</summary>
-        public const string PragmaWithoutIssue = "CC1007";
-    }
-
+public static class Rules {
     /// <summary>
     ///     CC1001 — <c>.Result</c>, <c>.Wait()</c> or <c>.GetAwaiter().GetResult()</c> on a task from
     ///     a method that is not <c>async</c>.
     /// </summary>
     /// <remarks>
-    ///     docs/plan/00 § Coding standards: <i>"No <c>async void</c>, no <c>.Result</c>, no
-    ///     <c>.Wait()</c> — analyzer-enforced. Grain code is single-threaded per activation and
-    ///     blocking it deadlocks the silo."</i> ⚠ <c>CA1849</c>, which <c>.editorconfig</c> already
+    ///     docs/plan/00 § Coding standards:
+    ///     <i>
+    ///         "No <c>async void</c>, no <c>.Result</c>, no
+    ///         <c>.Wait()</c> — analyzer-enforced. Grain code is single-threaded per activation and
+    ///         blocking it deadlocks the silo."
+    ///     </i>
+    ///     ⚠ <c>CA1849</c>, which <c>.editorconfig</c> already
     ///     has on as an error, fires only when the blocking call sits inside an <i>already-</i>
     ///     <c>async</c> method. That is not the shape that deadlocks a silo. This rule is the other
     ///     half and deliberately does <b>not</b> overlap: it fires only in a synchronous context.
@@ -90,11 +49,11 @@ public static class Rules
         + "(docs/plan/00 § Coding standards). CA1849 does not cover this shape.",
         Categories.Async,
         DiagnosticSeverity.Warning,
-        isEnabledByDefault: true,
-        description:
+        true,
         "CA1849 only reports a blocking call inside an already-async method. A synchronous method "
         + "that calls task.Result, task.Wait() or task.GetAwaiter().GetResult() is the shape that "
-        + "deadlocks an Orleans activation, and nothing shipping with the SDK reports it.");
+        + "deadlocks an Orleans activation, and nothing shipping with the SDK reports it."
+    );
 
     /// <summary>CC1002 — an <c>async void</c> method, local function or lambda.</summary>
     /// <remarks>
@@ -111,11 +70,11 @@ public static class Rules
         + "(docs/plan/00 § Coding standards).",
         Categories.Async,
         DiagnosticSeverity.Warning,
-        isEnabledByDefault: true,
-        description:
+        true,
         "An async void member cannot be awaited and cannot be caught: its exceptions are raised on "
         + "whatever thread the continuation lands on. docs/plan/00 § Coding standards bans it "
-        + "outright.");
+        + "outright."
+    );
 
     /// <summary>CC1003 — a <c>[GenerateSerializer]</c> type with no <c>[Alias]</c>.</summary>
     /// <remarks>
@@ -134,16 +93,20 @@ public static class Rules
         + "(docs/plan/04 § Failure and upgrade).",
         Categories.Serialization,
         DiagnosticSeverity.Warning,
-        isEnabledByDefault: true,
-        description:
+        true,
         "Orleans resolves a payload's type by its [Alias] when one is present and by its CLR name "
-        + "when it is not. Without an alias a rename is a silent wire break between silo versions.");
+        + "when it is not. Without an alias a rename is a silent wire break between silo versions."
+    );
 
     /// <summary>CC1004 — a hand-built grain key: a string literal containing <c>|</c>.</summary>
     /// <remarks>
-    ///     docs/plan/02 § ADR-002: <i>"Nothing else in the codebase may concatenate a grain key,
-    ///     enforced by an analyzer that flags string literals containing <c>|</c> in
-    ///     <c>GetGrain</c> arguments."</i> <c>|</c> is <c>Orleans.Multitenant</c>'s tenant separator;
+    ///     docs/plan/02 § ADR-002:
+    ///     <i>
+    ///         "Nothing else in the codebase may concatenate a grain key,
+    ///         enforced by an analyzer that flags string literals containing <c>|</c> in
+    ///         <c>GetGrain</c> arguments."
+    ///     </i>
+    ///     <c>|</c> is <c>Orleans.Multitenant</c>'s tenant separator;
     ///     a literal containing one is either a forged tenant qualification or a key that will be
     ///     parsed as one.
     /// </remarks>
@@ -155,18 +118,20 @@ public static class Rules
         + "ForTenant — docs/plan/02 § ADR-002.",
         Categories.Tenancy,
         DiagnosticSeverity.Warning,
-        isEnabledByDefault: true,
-        description:
+        true,
         "Orleans.Multitenant encodes the tenant into the physical grain key as "
         + "{tenantId}|{keyWithinTenant}. A literal key containing '|' either forges that "
-        + "qualification or collides with it. GrainKeys is the one type allowed to format a key.");
+        + "qualification or collides with it. GrainKeys is the one type allowed to format a key."
+    );
 
     /// <summary>CC1005 — a secret-shaped name on an <c>[Id]</c>-annotated member.</summary>
     /// <remarks>
     ///     docs/plan/00 § Non-negotiables, the "Secrets never reach grain state" row:
-    ///     <i>"Analyzer bans <c>[Id]</c>-annotated members named <c>*Password</c>, <c>*Secret</c>,
-    ///     <c>*Token</c>, <c>*Key</c> outside <c>CyberCloud.Vault</c>; secrets are <c>SecretRef</c>
-    ///     handles resolved at the data plane."</i>
+    ///     <i>
+    ///         "Analyzer bans <c>[Id]</c>-annotated members named <c>*Password</c>, <c>*Secret</c>,
+    ///         <c>*Token</c>, <c>*Key</c> outside <c>CyberCloud.Vault</c>; secrets are <c>SecretRef</c>
+    ///         handles resolved at the data plane."
+    ///     </i>
     /// </remarks>
     public static readonly DiagnosticDescriptor SecretInGrainState = new(
         Ids.SecretInGrainState,
@@ -176,11 +141,11 @@ public static class Rules
         + "(docs/plan/00 § Non-negotiables). Only CyberCloud.Vault may hold the value.",
         Categories.Security,
         DiagnosticSeverity.Warning,
-        isEnabledByDefault: true,
-        description:
+        true,
         "An [Id(n)] member is written to the durable tier and travels on the wire between silos. A "
         + "secret that reaches grain state is a secret in every backup, every replica and every "
-        + "serialization trace of that grain.");
+        + "serialization trace of that grain."
+    );
 
     /// <summary>CC1006 — a raw <c>IGrainFactory.GetGrain</c> from code that is not a grain.</summary>
     /// <remarks>
@@ -206,18 +171,22 @@ public static class Rules
         + "null-tenant key for a platform grain (docs/plan/00 § Non-negotiables, docs/plan/10).",
         Categories.Security,
         DiagnosticSeverity.Warning,
-        isEnabledByDefault: true,
-        description:
+        true,
         "TenantSeparatingCallFilter attributes an incoming call to the calling grain's tenant and "
         + "returns without consulting ICrossTenantAuthorizer when there is no source grain, or when "
         + "the source is a client or a system target. Anything holding an IGrainFactory outside a "
         + "grain — the gateway, the CLI, a hosted service — is therefore permanently outside it, "
-        + "and must establish the tenant itself with ForTenant.");
+        + "and must establish the tenant itself with ForTenant."
+    );
 
     /// <summary>CC1007 — <c>#pragma warning disable</c> with no linked issue.</summary>
     /// <remarks>
-    ///     docs/plan/00 § Non-negotiables, the "Warnings are errors" row: <i>"no
-    ///     <c>#pragma warning disable</c> without a linked issue"</i>. Nothing built in reports this.
+    ///     docs/plan/00 § Non-negotiables, the "Warnings are errors" row:
+    ///     <i>
+    ///         "no
+    ///         <c>#pragma warning disable</c> without a linked issue"
+    ///     </i>
+    ///     . Nothing built in reports this.
     /// </remarks>
     public static readonly DiagnosticDescriptor PragmaWithoutIssue = new(
         Ids.PragmaWithoutIssue,
@@ -227,8 +196,50 @@ public static class Rules
         + "(docs/plan/00 § Non-negotiables).",
         Categories.Hygiene,
         DiagnosticSeverity.Warning,
-        isEnabledByDefault: true,
-        description:
+        true,
         "A suppression with no link is permanent by default: nobody can tell whether it is a "
-        + "known-and-tracked compromise or a warning somebody silenced on a Friday.");
+        + "known-and-tracked compromise or a warning somebody silenced on a Friday."
+    );
+
+    /// <summary>Analyzer diagnostic categories, one per plan concern.</summary>
+    public static class Categories {
+        /// <summary>Blocking, <c>async void</c>, and everything else that stalls an activation.</summary>
+        public const string Async = "CyberCloud.Async";
+
+        /// <summary>Wire-contract shape — <c>[GenerateSerializer]</c>, <c>[Alias]</c>, <c>[Id(n)]</c>.</summary>
+        public const string Serialization = "CyberCloud.Serialization";
+
+        /// <summary>Grain keys and tenant qualification.</summary>
+        public const string Tenancy = "CyberCloud.Tenancy";
+
+        /// <summary>The non-negotiables that are security properties rather than style.</summary>
+        public const string Security = "CyberCloud.Security";
+
+        /// <summary>Repository hygiene rules from docs/plan/00 § Non-negotiables.</summary>
+        public const string Hygiene = "CyberCloud.Hygiene";
+    }
+
+    /// <summary>The diagnostic ids, as constants, so a suppression can be grepped back to a rule.</summary>
+    public static class Ids {
+        /// <summary><see cref="BlockingWaitInSynchronousMethod" />.</summary>
+        public const string BlockingWaitInSynchronousMethod = "CC1001";
+
+        /// <summary><see cref="AsyncVoid" />.</summary>
+        public const string AsyncVoid = "CC1002";
+
+        /// <summary><see cref="GenerateSerializerWithoutAlias" />.</summary>
+        public const string GenerateSerializerWithoutAlias = "CC1003";
+
+        /// <summary><see cref="GrainKeyLiteral" />.</summary>
+        public const string GrainKeyLiteral = "CC1004";
+
+        /// <summary><see cref="SecretInGrainState" />.</summary>
+        public const string SecretInGrainState = "CC1005";
+
+        /// <summary><see cref="UnqualifiedGrainReference" />.</summary>
+        public const string UnqualifiedGrainReference = "CC1006";
+
+        /// <summary><see cref="PragmaWithoutIssue" />.</summary>
+        public const string PragmaWithoutIssue = "CC1007";
+    }
 }

@@ -1,6 +1,6 @@
-using System.Text;
 using Orleans.Multitenant;
 using StackExchange.Redis;
+using System.Text;
 
 namespace CyberCloud.ServiceDefaults.Storage;
 
@@ -28,18 +28,24 @@ namespace CyberCloud.ServiceDefaults.Storage;
 ///         any multi-key command a <c>CROSSSLOT</c> error at runtime.
 ///     </para>
 ///     <para>
-///         ⚠ <b>The layout carries no <c>ServiceId</c>, and that is docs/plan/05's layout, not an
-///         oversight here.</b> Orleans' own default Redis key is
+///         ⚠
+///         <b>
+///             The layout carries no <c>ServiceId</c>, and that is docs/plan/05's layout, not an
+///             oversight here.
+///         </b>
+///         Orleans' own default Redis key is
 ///         <c>{ServiceId}/state/{grainId}/{grainType}</c>. Dropping the service id means two Orleans
 ///         clusters pointed at one Redis Cluster — staging and production, or a blue/green pair —
 ///         share keys and overwrite each other's state. The mitigation the plan implies is that a
 ///         cluster gets its own Redis; that is worth being deliberate about rather than discovering.
 ///     </para>
 /// </remarks>
-public sealed class TenantHotKeys
-{
+public sealed class TenantHotKeys {
     readonly string tenantId;
     readonly byte[] prefix;
+
+    /// <summary>The tag body, without braces. Exposed so tests and diagnostics can assert on it.</summary>
+    public string HashTag { get; }
 
     /// <summary>Binds the layout to one tenant.</summary>
     /// <param name="tenantId">
@@ -49,27 +55,23 @@ public sealed class TenantHotKeys
     ///     The tag body from <see cref="IShardMapCache.HotHashTagFor" /> — normally
     ///     <c>cc:t:&lt;tenantId&gt;</c>, or an operator override for a pinned tenant.
     /// </param>
-    public TenantHotKeys(string tenantId, string hashTag)
-    {
+    public TenantHotKeys(string tenantId, string hashTag) {
         ArgumentException.ThrowIfNullOrEmpty(tenantId);
         ArgumentException.ThrowIfNullOrEmpty(hashTag);
 
-        if (hashTag.Contains('{', StringComparison.Ordinal) || hashTag.Contains('}', StringComparison.Ordinal))
-        {
+        if (hashTag.Contains('{', StringComparison.Ordinal) || hashTag.Contains('}', StringComparison.Ordinal)) {
             throw new ArgumentException(
                 $"Hash tag '{hashTag}' contains a brace. The braces are added here; a tag that "
                 + "carries its own would nest, and Redis takes the FIRST '{' to the FIRST following "
                 + "'}', so the effective tag would be something nobody wrote.",
-                nameof(hashTag));
+                nameof(hashTag)
+            );
         }
 
         this.tenantId = tenantId;
         HashTag = hashTag;
         prefix = Encoding.UTF8.GetBytes("{" + hashTag + "}:");
     }
-
-    /// <summary>The tag body, without braces. Exposed so tests and diagnostics can assert on it.</summary>
-    public string HashTag { get; }
 
     /// <summary>
     ///     The <c>RedisStorageOptions.GetStorageKey</c> implementation for this tenant.
@@ -89,18 +91,17 @@ public sealed class TenantHotKeys
     ///         leak that no test downstream would notice.
     ///     </para>
     /// </remarks>
-    public RedisKey Key(string grainType, GrainId grainId)
-    {
+    public RedisKey Key(string grainType, GrainId grainId) {
         ArgumentNullException.ThrowIfNull(grainType);
 
         var actual = grainId.GetTenantId();
         if (!string.Equals(actual ?? string.Empty, tenantId, StringComparison.Ordinal)
-            && actual is not null)
-        {
+            && actual is not null) {
             throw new InvalidOperationException(
                 $"Grain {grainId} belongs to tenant '{actual}' but was routed to the hot-tier "
                 + $"storage provider for tenant '{tenantId}'. Refusing to write it under the wrong "
-                + "tenant's hash tag (docs/plan/05 § Storage provider wiring).");
+                + "tenant's hash tag (docs/plan/05 § Storage provider wiring)."
+            );
         }
 
         var within = grainId.GetKeyWithinTenant() ?? grainId.Key.ToString();
@@ -123,10 +124,9 @@ public sealed class TenantHotKeys
     /// <summary>Creates the layout for a tenant, resolving the tag through the shard map.</summary>
     /// <param name="shardMap">The in-process shard map.</param>
     /// <param name="tenantId">The tenant id from <c>configureTenantOptions</c>.</param>
-    public static TenantHotKeys For(IShardMapCache shardMap, string tenantId)
-    {
+    public static TenantHotKeys For(IShardMapCache shardMap, string tenantId) {
         ArgumentNullException.ThrowIfNull(shardMap);
 
-        return new TenantHotKeys(tenantId, shardMap.HotHashTagFor(tenantId));
+        return new(tenantId, shardMap.HotHashTagFor(tenantId));
     }
 }

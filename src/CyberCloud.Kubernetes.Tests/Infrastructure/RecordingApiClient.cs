@@ -1,5 +1,5 @@
-using System.Runtime.CompilerServices;
 using CyberCloud.Kubernetes.Apply;
+using System.Runtime.CompilerServices;
 
 namespace CyberCloud.Kubernetes.Tests.Infrastructure;
 
@@ -15,17 +15,17 @@ namespace CyberCloud.Kubernetes.Tests.Infrastructure;
 ///     always present". Those are properties of <i>our</i> code, and the only way to test the 410
 ///     branch against a real cluster would be to wait for etcd to compact.
 /// </remarks>
-public sealed class RecordingApiClient : IKubeApiClient
-{
+public sealed class RecordingApiClient : IKubeApiClient {
     /// <summary>Every list call, in order.</summary>
-    public List<(GroupVersionKind Kind, string Namespace, string Selector, string? ResourceVersion, string? Continue)> Lists { get; } = [];
+    public List<(GroupVersionKind Kind, string Namespace, string Selector, string? ResourceVersion, string? Continue)>
+        Lists { get; } = [];
 
     /// <summary>The pages to answer with, in order. Reused when exhausted.</summary>
     public Queue<Result<ListPage>> Pages { get; } = new();
 
     /// <summary>Answered when <see cref="Pages" /> is empty.</summary>
     public Result<ListPage> DefaultPage { get; set; } =
-        Result<ListPage>.Success(new ListPage([], "rv-1", string.Empty));
+        Result<ListPage>.Success(new([], "rv-1", string.Empty));
 
     /// <summary>What <see cref="PingAsync" /> answers.</summary>
     public Result<string> PingResult { get; set; } = Result<string>.Success("v1.35.0");
@@ -37,8 +37,7 @@ public sealed class RecordingApiClient : IKubeApiClient
     public List<KubeWatchEvent> WatchEvents { get; } = [];
 
     /// <inheritdoc />
-    public Task<Result<string>> PingAsync(CancellationToken cancellationToken = default)
-    {
+    public Task<Result<string>> PingAsync(CancellationToken cancellationToken = default) {
         Pings++;
         return Task.FromResult(PingResult);
     }
@@ -49,14 +48,14 @@ public sealed class RecordingApiClient : IKubeApiClient
 
     /// <inheritdoc />
     public Task<Result<ApplyOutcome>> ApplyAsync(KubeCommand command, CancellationToken cancellationToken = default) =>
-        Task.FromResult(Result<ApplyOutcome>.Success(new ApplyOutcome
-        {
-            Result = ApplyResult.Created,
-            Target = command.Target,
-        }));
+        Task.FromResult(Result<ApplyOutcome>.Success(new() { Result = ApplyResult.Created, Target = command.Target }));
 
     /// <inheritdoc />
-    public Task<Result> DeleteAsync(ObjectRef target, CascadePolicy policy, CancellationToken cancellationToken = default) =>
+    public Task<Result> DeleteAsync(
+        ObjectRef target,
+        CascadePolicy policy,
+        CancellationToken cancellationToken = default
+    ) =>
         Task.FromResult(Result.Success);
 
     /// <inheritdoc />
@@ -67,8 +66,8 @@ public sealed class RecordingApiClient : IKubeApiClient
         string? resourceVersion = null,
         string? continueToken = null,
         int? limit = null,
-        CancellationToken cancellationToken = default)
-    {
+        CancellationToken cancellationToken = default
+    ) {
         Lists.Add((kind, ns, labelSelector, resourceVersion, continueToken));
         return Task.FromResult(Pages.Count > 0 ? Pages.Dequeue() : DefaultPage);
     }
@@ -79,10 +78,9 @@ public sealed class RecordingApiClient : IKubeApiClient
         string ns,
         string labelSelector,
         string resourceVersion,
-        [EnumeratorCancellation] CancellationToken cancellationToken = default)
-    {
-        foreach (var change in WatchEvents)
-        {
+        [EnumeratorCancellation] CancellationToken cancellationToken = default
+    ) {
+        foreach (var change in WatchEvents) {
             cancellationToken.ThrowIfCancellationRequested();
             yield return change;
         }
@@ -91,7 +89,5 @@ public sealed class RecordingApiClient : IKubeApiClient
     }
 
     /// <inheritdoc />
-    public void Dispose()
-    {
-    }
+    public void Dispose() { }
 }

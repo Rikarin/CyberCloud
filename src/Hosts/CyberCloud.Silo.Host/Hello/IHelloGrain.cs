@@ -19,8 +19,7 @@ namespace CyberCloud.Silo.Host.Hello;
 ///         tenant, not that a comment says so.
 ///     </para>
 /// </remarks>
-public interface IHelloGrain : IGrainWithStringKey
-{
+public interface IHelloGrain : IGrainWithStringKey {
     /// <summary>
     ///     Writes the greeting to <b>both</b> tiers and returns what each one holds afterwards.
     /// </summary>
@@ -67,23 +66,28 @@ public interface IHelloGrain : IGrainWithStringKey
 /// <summary>What both tiers hold, after a write or after a re-read.</summary>
 [GenerateSerializer]
 [Alias("CyberCloud.Silo.Host.Hello.HelloRoundTrip")]
-public sealed record HelloRoundTrip
-{
+public sealed record HelloRoundTrip {
     /// <summary>The greeting the hot tier holds.</summary>
-    [Id(0)] public required string HotGreeting { get; init; }
+    [Id(0)]
+    public required string HotGreeting { get; init; }
 
     /// <summary>The greeting the durable tier holds.</summary>
-    [Id(1)] public required string DurableGreeting { get; init; }
+    [Id(1)]
+    public required string DurableGreeting { get; init; }
 
     /// <summary>How many writes the hot tier has seen.</summary>
-    [Id(2)] public required int HotWrites { get; init; }
+    [Id(2)]
+    public required int HotWrites { get; init; }
 
     /// <summary>How many writes the durable tier has seen.</summary>
-    [Id(3)] public required int DurableWrites { get; init; }
+    [Id(3)]
+    public required int DurableWrites { get; init; }
 
     /// <summary>The tenant the activation is qualified with, as the storage layer sees it.</summary>
-    [Id(4)] public required string TenantId { get; init; }
+    [Id(4)]
+    public required string TenantId { get; init; }
 
     /// <summary>The silo that answered.</summary>
-    [Id(5)] public required string SiloAddress { get; init; }
+    [Id(5)]
+    public required string SiloAddress { get; init; }
 }

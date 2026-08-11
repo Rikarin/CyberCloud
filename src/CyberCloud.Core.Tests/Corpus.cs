@@ -1,5 +1,6 @@
-using System.Globalization;
 using CyberCloud.Core.Resources;
+using System.Globalization;
+using System.Text;
 
 namespace CyberCloud.Core.Tests;
 
@@ -21,15 +22,13 @@ namespace CyberCloud.Core.Tests;
 ///         name alone.
 ///     </para>
 /// </remarks>
-static class Corpus
-{
+static class Corpus {
     /// <summary>
     ///     The characters that make identifier code dangerous. Each one is a separator in one of
     ///     the two encodings this assembly owns, an escape in the other, or a thing that looks like
     ///     one to a human reading a log line.
     /// </summary>
-    public static readonly (string Value, string Why)[] InjectionCharacters =
-    [
+    public static readonly (string Value, string Why)[] InjectionCharacters = [
         ("|", "the Orleans.Multitenant tenant/key separator (verified against 4.0.0)"),
         ("||", "the Orleans.Multitenant escaped separator"),
         ("/", "the resource id path separator AND the grain key separator"),
@@ -60,18 +59,15 @@ static class Corpus
     ///     Generates <paramref name="count" /> names that satisfy
     ///     <see cref="ResourceNaming" />, spread across the whole legal length range.
     /// </summary>
-    public static IEnumerable<string> ValidNames(int count, int seed)
-    {
+    public static IEnumerable<string> ValidNames(int count, int seed) {
         const string first = "abcdefghijklmnopqrstuvwxyz0123456789";
         const string middle = "abcdefghijklmnopqrstuvwxyz0123456789-";
 
         var random = new Random(seed);
-        for (var i = 0; i < count; i++)
-        {
+        for (var i = 0; i < count; i++) {
             // Bias towards the boundaries: a generator that only ever produces 20-character names
             // never tests the thing that breaks.
-            var length = (i % 8) switch
-            {
+            var length = (i % 8) switch {
                 0 => ResourceNaming.MinLength,
                 1 => 2,
                 2 => ResourceNaming.MaxLength,
@@ -81,37 +77,31 @@ static class Corpus
 
             var chars = new char[length];
             chars[0] = first[random.Next(first.Length)];
-            for (var j = 1; j < length; j++)
-            {
+            for (var j = 1; j < length; j++) {
                 chars[j] = middle[random.Next(middle.Length)];
             }
 
-            if (length > 1)
-            {
+            if (length > 1) {
                 chars[^1] = first[random.Next(first.Length)];
             }
 
-            yield return new string(chars);
+            yield return new(chars);
         }
     }
 
     /// <summary>Generates valid provider namespaces, including mixed case.</summary>
-    public static IEnumerable<string> ValidNamespaces(int count, int seed)
-    {
+    public static IEnumerable<string> ValidNamespaces(int count, int seed) {
         string[] heads = ["CyberCloud", "cybercloud", "Contoso", "a", "X9"];
-        string[] tails =
-        [
+        string[] tails = [
             "DBforPostgreSQL", "Cache", "Network", "Storage", "Compute", "Platform",
             "dbforpostgresql", "K8s", "A1"
         ];
 
         var random = new Random(seed);
-        for (var i = 0; i < count; i++)
-        {
+        for (var i = 0; i < count; i++) {
             var segments = random.Next(2, 4);
             var value = heads[random.Next(heads.Length)];
-            for (var j = 1; j < segments; j++)
-            {
+            for (var j = 1; j < segments; j++) {
                 value += "." + tails[random.Next(tails.Length)];
             }
 
@@ -120,21 +110,17 @@ static class Corpus
     }
 
     /// <summary>Generates valid type paths, at every legal nesting depth.</summary>
-    public static IEnumerable<string> ValidTypePaths(int count, int seed)
-    {
-        string[] segments =
-        [
+    public static IEnumerable<string> ValidTypePaths(int count, int seed) {
+        string[] segments = [
             "servers", "databases", "redis", "virtualMachines", "agentPools", "zones",
             "recordSets", "a", "X1", "vaults", "secrets"
         ];
 
         var random = new Random(seed);
-        for (var i = 0; i < count; i++)
-        {
-            var depth = (i % 3) + 1;
+        for (var i = 0; i < count; i++) {
+            var depth = i % 3 + 1;
             var value = segments[random.Next(segments.Length)];
-            for (var j = 1; j < depth; j++)
-            {
+            for (var j = 1; j < depth; j++) {
                 value += "/" + segments[random.Next(segments.Length)];
             }
 
@@ -143,15 +129,13 @@ static class Corpus
     }
 
     /// <summary>Generates <paramref name="count" /> fully populated resource ids.</summary>
-    public static IEnumerable<ResourceId> ResourceIds(int count, int seed)
-    {
+    public static IEnumerable<ResourceId> ResourceIds(int count, int seed) {
         var random = new Random(seed);
         using var names = ValidNames(count * 2, seed + 1).GetEnumerator();
         using var namespaces = ValidNamespaces(count, seed + 2).GetEnumerator();
         using var typePaths = ValidTypePaths(count, seed + 3).GetEnumerator();
 
-        for (var i = 0; i < count; i++)
-        {
+        for (var i = 0; i < count; i++) {
             names.MoveNext();
             var group = names.Current;
             names.MoveNext();
@@ -159,13 +143,14 @@ static class Corpus
             namespaces.MoveNext();
             typePaths.MoveNext();
 
-            yield return new ResourceId(
+            yield return new(
                 NextGuid(random),
                 NextGuid(random),
                 group,
-                new ResourceTypeName(namespaces.Current, typePaths.Current),
+                new(namespaces.Current, typePaths.Current),
                 name,
-                NextGuid(random));
+                NextGuid(random)
+            );
         }
     }
 
@@ -178,8 +163,7 @@ static class Corpus
     ///     round trip, tenant-qualification safety, and above all that no two shapes can produce the
     ///     same string — are properties <i>across</i> the shapes, not within one.
     /// </remarks>
-    public static IEnumerable<string> EveryGrainKeyShapeFor(ResourceId id)
-    {
+    public static IEnumerable<string> EveryGrainKeyShapeFor(ResourceId id) {
         yield return GrainKeys.Subscription(id.SubscriptionId);
         yield return GrainKeys.ResourceGroup(id.SubscriptionId, id.ResourceGroup);
         yield return GrainKeys.Resource(id.Id);
@@ -194,21 +178,20 @@ static class Corpus
     ///     Generates syntactically distinct email addresses — no two differ only by ASCII case, so
     ///     no two may ever share an index key.
     /// </summary>
-    public static IEnumerable<string> DistinctEmails(int count, int seed)
-    {
-        string[] domains =
-        [
+    public static IEnumerable<string> DistinctEmails(int count, int seed) {
+        string[] domains = [
             "example.com", "example.org", "mail.example.com", "a.co", "sub.domain.example",
             "EXAMPLE.COM", "Example.Com"
         ];
 
         var random = new Random(seed);
-        for (var i = 0; i < count; i++)
-        {
+        for (var i = 0; i < count; i++) {
             // The local part carries the loop counter, which is what makes the set distinct even
             // when the random suffix repeats.
-            var local = "user" + i.ToString(CultureInfo.InvariantCulture)
-                + "." + (char)('a' + random.Next(26))
+            var local = "user"
+                + i.ToString(CultureInfo.InvariantCulture)
+                + "."
+                + (char)('a' + random.Next(26))
                 + random.Next(1000).ToString(CultureInfo.InvariantCulture);
 
             yield return local + "@" + domains[random.Next(domains.Length)];
@@ -216,25 +199,19 @@ static class Corpus
     }
 
     /// <summary>A GUID from a seeded <see cref="Random" />, so the corpus is reproducible.</summary>
-    public static Guid NextGuid(Random random)
-    {
+    public static Guid NextGuid(Random random) {
         var bytes = new byte[16];
         random.NextBytes(bytes);
-        return new Guid(bytes);
+        return new(bytes);
     }
 
     /// <summary>Renders a string with its control characters visible, for assertion messages.</summary>
-    public static string Printable(string value)
-    {
-        var builder = new System.Text.StringBuilder(value.Length + 8);
-        foreach (var c in value)
-        {
-            if (char.IsControl(c) || c > 0x7E)
-            {
+    public static string Printable(string value) {
+        var builder = new StringBuilder(value.Length + 8);
+        foreach (var c in value) {
+            if (char.IsControl(c) || c > 0x7E) {
                 builder.Append("\\u").Append(((int)c).ToString("X4", CultureInfo.InvariantCulture));
-            }
-            else
-            {
+            } else {
                 builder.Append(c);
             }
         }

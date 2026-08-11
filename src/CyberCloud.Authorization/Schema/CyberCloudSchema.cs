@@ -3,8 +3,7 @@ using static CyberCloud.Authorization.Rewrite;
 namespace CyberCloud.Authorization;
 
 /// <summary>The object types the built-in schema defines. Constants so a typo is <c>CS0117</c>.</summary>
-public static class ObjectTypes
-{
+public static class ObjectTypes {
     /// <summary>The tenant — docs/plan/06 § The hierarchy, the top of it.</summary>
     public const string Tenant = "tenant";
 
@@ -28,8 +27,7 @@ public static class ObjectTypes
 }
 
 /// <summary>The relation names the built-in schema defines.</summary>
-public static class Relations
-{
+public static class Relations {
     /// <summary>The scope one level up. The tupleset every inheritance rewrite follows.</summary>
     public const string Parent = "parent";
 
@@ -61,8 +59,7 @@ public static class Relations
 ///     compile error. Nothing forces a caller to; see
 ///     <c>RequiresPermissionAttribute</c> for exactly how far enforcement actually goes.
 /// </remarks>
-public static class Permissions
-{
+public static class Permissions {
     /// <summary>Read the object.</summary>
     public const string Read = "read";
 
@@ -104,8 +101,12 @@ public static class Permissions
 ///         <item>
 ///             <term>Inheritance sub → rg → resource</term>
 ///             <description>
-///                 <c>From("parent", …)</c> on every role of every scope. <b>No tuple is written per
-///                 resource</b>, which is the whole argument for <c>From(…)</c> and is what
+///                 <c>From("parent", …)</c> on every role of every scope.
+///                 <b>
+///                     No tuple is written per
+///                     resource
+///                 </b>
+///                 , which is the whole argument for <c>From(…)</c> and is what
 ///                 <c>RoleAssignmentViewTests</c> asserts.
 ///             </description>
 ///         </item>
@@ -118,8 +119,12 @@ public static class Permissions
 ///         </item>
 ///     </list>
 ///     <para>
-///         ⚠ <b>Only <see cref="Permissions.AssignRole" /> carries the deny check, and that is the
-///         document's shape rather than a simplification.</b> docs/plan/07 § The model's example
+///         ⚠
+///         <b>
+///             Only <see cref="Permissions.AssignRole" /> carries the deny check, and that is the
+///             document's shape rather than a simplification.
+///         </b>
+///         docs/plan/07 § The model's example
 ///         puts <c>&amp; !Rel("suspended")</c> on <c>assignRole</c> and on nothing else. Extending
 ///         it to <c>delete</c> or <c>write</c> is a schema change and a version bump, not an edit.
 ///     </para>
@@ -130,8 +135,7 @@ public static class Permissions
 ///         known type rather than an unknown one.
 ///     </para>
 /// </remarks>
-public static class CyberCloudSchema
-{
+public static class CyberCloudSchema {
     /// <summary>
     ///     The schema version. ⚠ Bump on <b>every</b> change to the rewrites below: it is a
     ///     component of the check cache key (docs/plan/07 § Caching across requests), and a cached
@@ -145,83 +149,86 @@ public static class CyberCloudSchema
     static AuthorizationSchema Build() =>
         Schema.Create(SchemaVersion)
             .DefineType(ObjectTypes.Tenant)
-                .Role(Relations.Owner, This)
-                .Role(Relations.Contributor, This | Rel(Relations.Owner))
-                .Role(Relations.Reader, This | Rel(Relations.Contributor))
-                .Relation(Relations.Suspended)
-                .Permission(Permissions.Read, Rel(Relations.Reader))
-                .Permission(Permissions.Write, Rel(Relations.Contributor))
-                .Permission(Permissions.Delete, Rel(Relations.Owner))
-                .Permission(
-                    Permissions.AssignRole,
-                    Rel(Relations.Owner) & !Rel(Relations.Suspended))
-
+            .Role(Relations.Owner, This)
+            .Role(Relations.Contributor, This | Rel(Relations.Owner))
+            .Role(Relations.Reader, This | Rel(Relations.Contributor))
+            .Relation(Relations.Suspended)
+            .Permission(Permissions.Read, Rel(Relations.Reader))
+            .Permission(Permissions.Write, Rel(Relations.Contributor))
+            .Permission(Permissions.Delete, Rel(Relations.Owner))
+            .Permission(
+                Permissions.AssignRole,
+                Rel(Relations.Owner) & !Rel(Relations.Suspended)
+            )
             .DefineType(ObjectTypes.Subscription)
-                .Relation(Relations.Parent)
-                .Role(Relations.Owner, This | From(Relations.Parent, Relations.Owner))
-                .Role(
-                    Relations.Contributor,
-                    This | From(Relations.Parent, Relations.Contributor) | Rel(Relations.Owner))
-                .Role(
-                    Relations.Reader,
-                    This | From(Relations.Parent, Relations.Reader) | Rel(Relations.Contributor))
-                .Relation(Relations.Suspended)
-                .Permission(Permissions.Read, Rel(Relations.Reader))
-                .Permission(Permissions.Write, Rel(Relations.Contributor))
-                .Permission(Permissions.Delete, Rel(Relations.Owner))
-                .Permission(
-                    Permissions.AssignRole,
-                    Rel(Relations.Owner) & !Rel(Relations.Suspended))
-
+            .Relation(Relations.Parent)
+            .Role(Relations.Owner, This | From(Relations.Parent, Relations.Owner))
+            .Role(
+                Relations.Contributor,
+                This | From(Relations.Parent, Relations.Contributor) | Rel(Relations.Owner)
+            )
+            .Role(
+                Relations.Reader,
+                This | From(Relations.Parent, Relations.Reader) | Rel(Relations.Contributor)
+            )
+            .Relation(Relations.Suspended)
+            .Permission(Permissions.Read, Rel(Relations.Reader))
+            .Permission(Permissions.Write, Rel(Relations.Contributor))
+            .Permission(Permissions.Delete, Rel(Relations.Owner))
+            .Permission(
+                Permissions.AssignRole,
+                Rel(Relations.Owner) & !Rel(Relations.Suspended)
+            )
             .DefineType(ObjectTypes.ResourceGroup)
-                .Relation(Relations.Parent)
-                .Role(Relations.Owner, This | From(Relations.Parent, Relations.Owner))
-                .Role(
-                    Relations.Contributor,
-                    This | From(Relations.Parent, Relations.Contributor) | Rel(Relations.Owner))
-                .Role(
-                    Relations.Reader,
-                    This | From(Relations.Parent, Relations.Reader) | Rel(Relations.Contributor))
-                .Relation(Relations.Suspended)
-                .Permission(Permissions.Read, Rel(Relations.Reader))
-                .Permission(Permissions.Write, Rel(Relations.Contributor))
-                .Permission(Permissions.Delete, Rel(Relations.Owner))
-                .Permission(
-                    Permissions.AssignRole,
-                    Rel(Relations.Owner) & !Rel(Relations.Suspended))
-
+            .Relation(Relations.Parent)
+            .Role(Relations.Owner, This | From(Relations.Parent, Relations.Owner))
+            .Role(
+                Relations.Contributor,
+                This | From(Relations.Parent, Relations.Contributor) | Rel(Relations.Owner)
+            )
+            .Role(
+                Relations.Reader,
+                This | From(Relations.Parent, Relations.Reader) | Rel(Relations.Contributor)
+            )
+            .Relation(Relations.Suspended)
+            .Permission(Permissions.Read, Rel(Relations.Reader))
+            .Permission(Permissions.Write, Rel(Relations.Contributor))
+            .Permission(Permissions.Delete, Rel(Relations.Owner))
+            .Permission(
+                Permissions.AssignRole,
+                Rel(Relations.Owner) & !Rel(Relations.Suspended)
+            )
             .DefineType(ObjectTypes.Resource)
-                .Relation(Relations.Parent)
-                .Role(Relations.Owner, This | From(Relations.Parent, Relations.Owner))
-                .Role(
-                    Relations.Contributor,
-                    This | From(Relations.Parent, Relations.Contributor) | Rel(Relations.Owner))
-                .Role(
-                    Relations.Reader,
-                    This | From(Relations.Parent, Relations.Reader) | Rel(Relations.Contributor))
-                .Relation(Relations.Suspended)
-                .Permission(Permissions.Read, Rel(Relations.Reader))
-                .Permission(Permissions.Write, Rel(Relations.Contributor))
-                .Permission(Permissions.Delete, Rel(Relations.Owner))
-                .Permission(
-                    Permissions.AssignRole,
-                    Rel(Relations.Owner) & !Rel(Relations.Suspended))
-
+            .Relation(Relations.Parent)
+            .Role(Relations.Owner, This | From(Relations.Parent, Relations.Owner))
+            .Role(
+                Relations.Contributor,
+                This | From(Relations.Parent, Relations.Contributor) | Rel(Relations.Owner)
+            )
+            .Role(
+                Relations.Reader,
+                This | From(Relations.Parent, Relations.Reader) | Rel(Relations.Contributor)
+            )
+            .Relation(Relations.Suspended)
+            .Permission(Permissions.Read, Rel(Relations.Reader))
+            .Permission(Permissions.Write, Rel(Relations.Contributor))
+            .Permission(Permissions.Delete, Rel(Relations.Owner))
+            .Permission(
+                Permissions.AssignRole,
+                Rel(Relations.Owner) & !Rel(Relations.Suspended)
+            )
             .DefineType(ObjectTypes.Group)
-                // Direct only, and nested groups work because a tuple's SUBJECT may itself be the
-                // userset `group:platform#member` — docs/plan/07 § The model's fourth example.
-                // That nesting is walked by the evaluator, which is exactly the cost the Leopard
-                // index removes in M2.
-                .Relation(Relations.Member)
-                .Role(Relations.Owner, This)
-                .Permission(Permissions.Read, Rel(Relations.Member))
-                .Permission(Permissions.Write, Rel(Relations.Owner))
-
+            // Direct only, and nested groups work because a tuple's SUBJECT may itself be the
+            // userset `group:platform#member` — docs/plan/07 § The model's fourth example.
+            // That nesting is walked by the evaluator, which is exactly the cost the Leopard
+            // index removes in M2.
+            .Relation(Relations.Member)
+            .Role(Relations.Owner, This)
+            .Permission(Permissions.Read, Rel(Relations.Member))
+            .Permission(Permissions.Write, Rel(Relations.Owner))
             .DefineType(ObjectTypes.Platform)
-                .Relation(Relations.Operator)
-                .Permission(Permissions.Administer, Rel(Relations.Operator))
-
+            .Relation(Relations.Operator)
+            .Permission(Permissions.Administer, Rel(Relations.Operator))
             .DefineType(ObjectTypes.User)
-
             .Build();
 }

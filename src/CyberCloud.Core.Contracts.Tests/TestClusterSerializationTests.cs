@@ -1,4 +1,3 @@
-using CyberCloud.Core;
 using CyberCloud.Core.Resources;
 using Microsoft.Extensions.DependencyInjection;
 using Orleans.Serialization;
@@ -28,39 +27,37 @@ namespace CyberCloud.Core.Contracts.Tests;
 ///         service provider.
 ///     </para>
 /// </remarks>
-public sealed class TestClusterSerializationTests : IAsyncLifetime
-{
+public sealed class TestClusterSerializationTests : IAsyncLifetime {
     TestCluster cluster = null!;
     Serializer serializer = null!;
 
     /// <inheritdoc />
-    public async ValueTask InitializeAsync()
-    {
+    public async ValueTask InitializeAsync() {
         cluster = new TestClusterBuilder(1).Build();
         await cluster.DeployAsync();
         serializer = cluster.Client.ServiceProvider.GetRequiredService<Serializer>();
     }
 
     /// <inheritdoc />
-    public async ValueTask DisposeAsync()
-    {
+    public async ValueTask DisposeAsync() {
         await cluster.StopAllSilosAsync();
         await cluster.DisposeAsync();
     }
 
     [Fact]
-    public void TheClusterFindsTheConvertersWithoutBeingToldAboutThisAssembly()
-    {
+    public void TheClusterFindsTheConvertersWithoutBeingToldAboutThisAssembly() {
         // No AddAssembly call anywhere: the silo discovered CyberCloud.Core.Contracts through the
         // manifest the code generator emitted.
         var original = Result<ResourceId>.Success(
-            new ResourceId(
+            new(
                 Guid.Parse("2b4a1c66-2e70-4a9d-9d0a-1f7ec1f1a4b3"),
                 Guid.Parse("6f0f1f0e-1234-4c8b-9a3d-aabbccddeeff"),
                 "prod",
-                new ResourceTypeName("CyberCloud.DBforPostgreSQL", "servers"),
+                new("CyberCloud.DBforPostgreSQL", "servers"),
                 "orders-db",
-                Guid.Parse("11112222-3333-4444-5555-666677778888")));
+                Guid.Parse("11112222-3333-4444-5555-666677778888")
+            )
+        );
 
         var round = serializer.Deserialize<Result<ResourceId>>(serializer.SerializeToArray(original));
 
@@ -68,8 +65,7 @@ public sealed class TestClusterSerializationTests : IAsyncLifetime
     }
 
     [Fact]
-    public void DefaultResultIsStillAFailureInsideARealSilo()
-    {
+    public void DefaultResultIsStillAFailureInsideARealSilo() {
         var round = serializer.Deserialize<Result>(serializer.SerializeToArray(default(Result)));
 
         round.IsFailure.ShouldBeTrue();
@@ -77,8 +73,7 @@ public sealed class TestClusterSerializationTests : IAsyncLifetime
     }
 
     [Fact]
-    public void AFailedResultIsStillAFailureInsideARealSilo()
-    {
+    public void AFailedResultIsStillAFailureInsideARealSilo() {
         var original = Result<int>.Failure(ErrorCode.QuotaExceeded, "vcpu: requested 8, available 2.");
         var round = serializer.Deserialize<Result<int>>(serializer.SerializeToArray(original));
 
@@ -88,8 +83,7 @@ public sealed class TestClusterSerializationTests : IAsyncLifetime
     }
 
     [Fact]
-    public void TheSiloCanCopyAResultWithoutSerialisingIt()
-    {
+    public void TheSiloCanCopyAResultWithoutSerialisingIt() {
         // Orleans short-circuits an in-cluster call to a DeepCopy rather than a serialize/deserialize
         // pair. That path goes through the surrogate's copier, not its codec, and it is the path
         // every same-silo grain call actually takes — so a surrogate that round-trips but copies

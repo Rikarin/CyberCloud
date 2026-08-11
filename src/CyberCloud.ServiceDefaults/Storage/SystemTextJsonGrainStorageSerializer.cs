@@ -1,7 +1,7 @@
+using Orleans.Storage;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using Orleans.Storage;
 
 namespace CyberCloud.ServiceDefaults.Storage;
 
@@ -26,8 +26,12 @@ namespace CyberCloud.ServiceDefaults.Storage;
 ///         no dependency and no Newtonsoft.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Choosing JSON changes what the evolution rules in docs/plan/05 § Serialization
-///         actually protect.</b> Rules 2 and 5 there — "<c>[Id(n)]</c> numbers are never reused,
+///         ⚠
+///         <b>
+///             Choosing JSON changes what the evolution rules in docs/plan/05 § Serialization
+///             actually protect.
+///         </b>
+///         Rules 2 and 5 there — "<c>[Id(n)]</c> numbers are never reused,
 ///         never reordered", "renaming a type without <c>[Alias]</c> is a data-loss bug" — describe
 ///         the <i>Orleans binary</i> wire format, where the number is the identity of a member and
 ///         the alias is the identity of a type. Under JSON neither attribute is read at all: the
@@ -37,8 +41,9 @@ namespace CyberCloud.ServiceDefaults.Storage;
 ///         has to check names, and docs/plan/05 does not say so.
 ///     </para>
 /// </remarks>
-public sealed class SystemTextJsonGrainStorageSerializer : IGrainStorageSerializer
-{
+public sealed class SystemTextJsonGrainStorageSerializer : IGrainStorageSerializer {
+    readonly JsonSerializerOptions options;
+
     /// <summary>The options every durable payload is written with.</summary>
     /// <remarks>
     ///     <para>
@@ -49,8 +54,12 @@ public sealed class SystemTextJsonGrainStorageSerializer : IGrainStorageSerializ
     ///         distinction to save bytes trades the exact property the format was chosen for.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The encoder is the setting that decides whether the format delivers what it was
-    ///         chosen for.</b> <c>System.Text.Json</c>'s default escapes far more than JSON requires
+    ///         ⚠
+    ///         <b>
+    ///             The encoder is the setting that decides whether the format delivers what it was
+    ///             chosen for.
+    ///         </b>
+    ///         <c>System.Text.Json</c>'s default escapes far more than JSON requires
     ///         — every non-ASCII character, and <c>&lt;</c>, <c>&gt;</c>, <c>&amp;</c>, <c>'</c>,
     ///         <c>+</c> — so a resource called <c>Müller's Datenbank</c> is stored as
     ///         <c>"Müller's Datenbank"</c>. That is still valid JSON and it is not
@@ -63,36 +72,30 @@ public sealed class SystemTextJsonGrainStorageSerializer : IGrainStorageSerializ
     ///         its own boundary, which is where the escaping belongs.
     ///     </para>
     /// </remarks>
-    public static JsonSerializerOptions DefaultOptions { get; } = new(JsonSerializerDefaults.General)
-    {
+    public static JsonSerializerOptions DefaultOptions { get; } = new(JsonSerializerDefaults.General) {
         DefaultIgnoreCondition = JsonIgnoreCondition.Never,
         WriteIndented = false,
-        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
     };
-
-    readonly JsonSerializerOptions options;
 
     /// <summary>Creates a serializer with <see cref="DefaultOptions" />.</summary>
     public SystemTextJsonGrainStorageSerializer()
-        : this(DefaultOptions)
-    {
-    }
+        : this(DefaultOptions) { }
 
     /// <summary>Creates a serializer with explicit options.</summary>
     /// <param name="options">The <see cref="System.Text.Json" /> options to use.</param>
-    public SystemTextJsonGrainStorageSerializer(JsonSerializerOptions options)
-    {
+    public SystemTextJsonGrainStorageSerializer(JsonSerializerOptions options) {
         this.options = options;
     }
 
     /// <inheritdoc />
-    public BinaryData Serialize<T>(T input) =>
-        new(JsonSerializer.SerializeToUtf8Bytes(input, options));
+    public BinaryData Serialize<T>(T input) => new(JsonSerializer.SerializeToUtf8Bytes(input, options));
 
     /// <inheritdoc />
     public T Deserialize<T>(BinaryData input) =>
         JsonSerializer.Deserialize<T>(input.ToMemory().Span, options)
         ?? throw new InvalidOperationException(
             $"Grain state deserialised to null for {typeof(T)}. The stored payload was "
-            + $"{input.ToMemory().Length} bytes.");
+            + $"{input.ToMemory().Length} bytes."
+        );
 }

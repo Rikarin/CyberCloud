@@ -31,8 +31,7 @@ namespace CyberCloud.Tenancy.Contracts;
 ///     </para>
 /// </remarks>
 [Alias("CyberCloud.Tenancy.IResourceGroupGrain")]
-public interface IResourceGroupGrain : IGrainWithStringKey
-{
+public interface IResourceGroupGrain : IGrainWithStringKey {
     /// <summary>Creates the group. Idempotent on the same region.</summary>
     /// <param name="tenantId">The owning tenant.</param>
     /// <param name="region">The region its resources default to.</param>

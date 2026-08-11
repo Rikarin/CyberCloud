@@ -1,6 +1,6 @@
+using Shouldly;
 using System.Collections.Immutable;
 using System.Reflection;
-using Shouldly;
 
 namespace CyberCloud.Core.Tests;
 
@@ -8,17 +8,19 @@ namespace CyberCloud.Core.Tests;
 ///     The error-code registry is a closed, checked-in set, and this is the gate on additions —
 ///     docs/plan/08:184-186.
 /// </summary>
-public class ErrorCodeRegistryTests
-{
+public class ErrorCodeRegistryTests {
     /// <summary>
     ///     ⚠ <b>THE GOLDEN SET. Changing a line here is changing the public API contract.</b>
-    ///     docs/plan/08:184: <i>"code is a stable, documented, greppable identifier. It is part of
-    ///     the API contract; changing one is a breaking change."</i> Adding a code means adding a
+    ///     docs/plan/08:184:
+    ///     <i>
+    ///         "code is a stable, documented, greppable identifier. It is part of
+    ///         the API contract; changing one is a breaking change."
+    ///     </i>
+    ///     Adding a code means adding a
     ///     line here and to <see cref="ErrorCode.All" />; removing or renaming one means a
     ///     deprecation, not an edit.
     /// </summary>
-    static readonly ImmutableArray<string> Golden =
-    [
+    static readonly ImmutableArray<string> Golden = [
         "AuthorizationFailed",
         "Conflict",
         "InternalError",
@@ -48,8 +50,7 @@ public class ErrorCodeRegistryTests
     ];
 
     [Fact]
-    public void TheRegistryMatchesTheGoldenSetExactly()
-    {
+    public void TheRegistryMatchesTheGoldenSetExactly() {
         var actual = ErrorCode.All.Select(x => x.Value).Order(StringComparer.Ordinal).ToImmutableArray();
 
         actual.ShouldBe(
@@ -57,12 +58,12 @@ public class ErrorCodeRegistryTests
             "the error-code registry changed. Every code is part of the public API contract "
             + "(docs/plan/08:184) — if this is an addition, add it to the golden set above in the "
             + "same commit; if it is a rename or a removal, it is a breaking change and needs a "
-            + "deprecation, not an edit.");
+            + "deprecation, not an edit."
+        );
     }
 
     [Fact]
-    public void EveryDeclaredCodeIsInAll()
-    {
+    public void EveryDeclaredCodeIsInAll() {
         // Catches the "declared a field, forgot the All list" mistake, which would otherwise make
         // a code exist but be unresolvable from the wire.
         var declared = typeof(ErrorCode)
@@ -72,20 +73,20 @@ public class ErrorCodeRegistryTests
             .ToImmutableArray();
 
         declared.Length.ShouldBe(ErrorCode.All.Length);
-        foreach (var code in declared)
-        {
+        foreach (var code in declared) {
             ErrorCode.All.ShouldContain(code, $"{code.Value} is declared but missing from All");
         }
     }
 
     [Fact]
     public void CodesAreUnique() =>
-        ErrorCode.All.Select(x => x.Value).Distinct(StringComparer.Ordinal).Count()
+        ErrorCode.All.Select(x => x.Value)
+            .Distinct(StringComparer.Ordinal)
+            .Count()
             .ShouldBe(ErrorCode.All.Length);
 
     [Fact]
-    public void TheSetIsClosedThereIsNoPublicConstructor()
-    {
+    public void TheSetIsClosedThereIsNoPublicConstructor() {
         // This is what makes a code impossible to invent: no public constructor, no public
         // conversion from string, no factory. The compiler is the gate, not a convention.
         typeof(ErrorCode)
@@ -99,10 +100,8 @@ public class ErrorCodeRegistryTests
     }
 
     [Fact]
-    public void EveryCodeResolvesFromItsWireValue()
-    {
-        foreach (var code in ErrorCode.All)
-        {
+    public void EveryCodeResolvesFromItsWireValue() {
+        foreach (var code in ErrorCode.All) {
             ErrorCode.TryFromValue(code.Value, out var resolved).ShouldBeTrue();
             resolved.ShouldBeSameAs(code);
         }
@@ -112,21 +111,18 @@ public class ErrorCodeRegistryTests
     [InlineData(null)]
     [InlineData("")]
     [InlineData("NotACode")]
-    [InlineData("quotaexceeded")]   // ordinal: casing is part of the contract
+    [InlineData("quotaexceeded")] // ordinal: casing is part of the contract
     [InlineData(" QuotaExceeded")]
-    public void AnUnregisteredValueDoesNotResolve(string? value)
-    {
+    public void AnUnregisteredValueDoesNotResolve(string? value) {
         ErrorCode.TryFromValue(value, out var code).ShouldBeFalse();
         code.ShouldBeNull();
     }
 
     [Fact]
-    public void CodeStringsAreGreppableIdentifiers()
-    {
+    public void CodeStringsAreGreppableIdentifiers() {
         // A code that is not a bare PascalCase identifier is a code that grep, a JSON schema enum
         // and a CLI `--query` filter will each mangle differently.
-        foreach (var code in ErrorCode.All)
-        {
+        foreach (var code in ErrorCode.All) {
             code.Value.ShouldNotBeNullOrWhiteSpace();
             char.IsAsciiLetterUpper(code.Value[0]).ShouldBeTrue($"{code.Value} must start upper");
             code.Value.ShouldAllBe(c => char.IsAsciiLetterOrDigit(c));
@@ -135,8 +131,7 @@ public class ErrorCodeRegistryTests
     }
 
     [Fact]
-    public void EqualityIsReferenceEqualityWhichForAClosedSetIsValueEquality()
-    {
+    public void EqualityIsReferenceEqualityWhichForAClosedSetIsValueEquality() {
         ErrorCode.TryFromValue("QuotaExceeded", out var a).ShouldBeTrue();
 
         (a == ErrorCode.QuotaExceeded).ShouldBeTrue();

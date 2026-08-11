@@ -4,11 +4,9 @@ using Shouldly;
 namespace CyberCloud.Core.Tests;
 
 /// <summary><see cref="IClock" /> and <see cref="SystemClock" /> — docs/plan/03:60.</summary>
-public class ClockTests
-{
+public class ClockTests {
     [Fact]
-    public void TheSystemClockReadsTheSystemClock()
-    {
+    public void TheSystemClockReadsTheSystemClock() {
         var before = DateTimeOffset.UtcNow;
         var now = new SystemClock().UtcNow;
         var after = DateTimeOffset.UtcNow;
@@ -21,8 +19,7 @@ public class ClockTests
     public void TheClockIsAlwaysUtc() => new SystemClock().UtcNow.Offset.ShouldBe(TimeSpan.Zero);
 
     [Fact]
-    public void ATimeProviderCanBeSubstitutedWithoutASecondImplementation()
-    {
+    public void ATimeProviderCanBeSubstitutedWithoutASecondImplementation() {
         // The reason SystemClock takes a TimeProvider: every duration in the platform is minutes
         // to days (a 5-minute index lease, a 60-minute operation timeout, a 30-day tombstone), and
         // none of them is testable against a clock you cannot advance.
@@ -41,8 +38,7 @@ public class ClockTests
         Should.Throw<ArgumentNullException>(() => new SystemClock(null!));
 
     [Fact]
-    public void TheInterfaceExposesNothingButTheInstant()
-    {
+    public void TheInterfaceExposesNothingButTheInstant() {
         // Narrowing TimeProvider to one property is the point (see the remarks on IClock): a grain
         // that can start a timer outside Orleans' scheduler breaks its own single-threaded
         // contract, so the timer surface must not be reachable through this interface.
@@ -50,8 +46,7 @@ public class ClockTests
         typeof(IClock).GetMethods().Select(x => x.Name).ShouldBe(["get_UtcNow"]);
     }
 
-    sealed class FrozenTimeProvider(DateTimeOffset instant) : TimeProvider
-    {
+    sealed class FrozenTimeProvider(DateTimeOffset instant) : TimeProvider {
         public override DateTimeOffset GetUtcNow() => instant;
     }
 }

@@ -25,8 +25,7 @@ namespace CyberCloud.Core.Time;
 ///         single-threaded contract. Narrowing the surface to one property is the point.
 ///     </para>
 /// </remarks>
-public interface IClock
-{
+public interface IClock {
     /// <summary>The current instant, in UTC.</summary>
     DateTimeOffset UtcNow { get; }
 }

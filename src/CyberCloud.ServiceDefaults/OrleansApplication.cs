@@ -1,4 +1,3 @@
-using System.Net;
 using CyberCloud.ServiceDefaults.Storage;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.Configuration;
@@ -7,6 +6,7 @@ using Microsoft.Extensions.Hosting;
 using Orleans.Clustering.Kubernetes;
 using Orleans.Configuration;
 using Serilog;
+using System.Net;
 
 namespace CyberCloud.ServiceDefaults;
 
@@ -50,8 +50,7 @@ namespace CyberCloud.ServiceDefaults;
 ///         constraint is checked rather than remembered.
 ///     </para>
 /// </remarks>
-public static class OrleansApplication
-{
+public static class OrleansApplication {
     /// <summary>
     ///     A silo host. docs/plan/04:41.
     /// </summary>
@@ -82,8 +81,8 @@ public static class OrleansApplication
     public static WebApplicationBuilder CreateSilo(
         string[] args,
         Action<ISiloBuilder>? configureCluster = null,
-        Action<ISiloBuilder, CyberCloudStorageOptions>? configureStorage = null)
-    {
+        Action<ISiloBuilder, CyberCloudStorageOptions>? configureStorage = null
+    ) {
         var builder = WebApplication.CreateBuilder(args);
 
         ConfigureHost(builder);
@@ -92,92 +91,86 @@ public static class OrleansApplication
 
         var cluster = BindClusterOptions(builder);
 
-        builder.UseOrleans(silo =>
-        {
-            silo.Configure<ClusterOptions>(options =>
-            {
-                options.ClusterId = cluster.ClusterId;
-                options.ServiceId = cluster.ServiceId;
-            });
+        builder.UseOrleans(silo => {
+                silo.Configure<ClusterOptions>(options => {
+                        options.ClusterId = cluster.ClusterId;
+                        options.ServiceId = cluster.ServiceId;
+                    }
+                );
 
-            // ⚠ NOT OPTIONAL — docs/plan/04:78. Without this, an Activity does not cross a grain
-            // call: distributed tracing stops at the gateway and every latency investigation
-            // becomes archaeology. ConfigureOpenTelemetry() collecting
-            // "Microsoft.Orleans.Application" is the other half and is useless without this one.
-            silo.AddActivityPropagation();
+                // ⚠ NOT OPTIONAL — docs/plan/04:78. Without this, an Activity does not cross a grain
+                // call: distributed tracing stops at the gateway and every latency investigation
+                // becomes archaeology. ConfigureOpenTelemetry() collecting
+                // "Microsoft.Orleans.Application" is the other half and is useless without this one.
+                silo.AddActivityPropagation();
 
-            // ── The two grain-storage tiers ── docs/plan/04 § Silo composition, docs/plan/05.
-            //
-            // Wired only when CyberCloud:Storage is configured, and that condition is the design
-            // rather than a convenience:
-            //
-            //  * calling it unconditionally would make a configured Redis and a configured Postgres
-            //    a precondition of `CreateSilo` returning a usable host, so every host test in this
-            //    repository would need two containers to assert anything about health checks;
-            //  * a silo with no configured storage is a silo that CANNOT PERSIST A GRAIN, and that
-            //    has to stay visible rather than degrade into an in-memory provider nobody chose.
-            //    `SiloHostTests.TheSiloHasNoGrainStorageUnlessTheStorageSectionIsConfigured` is the
-            //    assertion.
-            //
-            // What is STILL a seam here, and why:
-            //
-            //   .AddMultitenantStreams(StreamProviders.Events, NatsStreamProvider.Configure)
-            //   .AddMultitenantCommunicationSeparation(_ => new PlatformCrossTenantAuthorizer())
-            //   .UseRedisReminderService(o => o.ConfigureSharded())
-            //
-            // ⚠ AddMultitenantCommunicationSeparation is the one that matters and it is NOT here.
-            // docs/plan/04 § Silo composition calls it "not optional"; its argument is an
-            // ICrossTenantAuthorizer and authorization is CyberCloud.Authorization's (ADR-007), so
-            // referencing it from ServiceDefaults would invert the assembly graph. It plugs in
-            // through `configureCluster`, immediately after this call. Until it is wired, a grain
-            // still cannot be *stored* in the wrong tenant's shard — the key selects the store —
-            // but one grain can still *call* another tenant's grain.
-            var storage = builder.Configuration.GetSection(CyberCloudStorageOptions.SectionName);
-            if (storage.Exists())
-            {
-                var storageOptions = new CyberCloudStorageOptions();
-                storage.Bind(storageOptions);
-
-                if (configureStorage is null)
-                {
-                    silo.AddCyberCloudGrainStorage(storageOptions);
-                }
-                else
-                {
-                    configureStorage(silo, storageOptions);
-                }
-            }
-
-            configureCluster?.Invoke(silo);
-
-            if (builder.Environment.IsDevelopment())
-            {
-                // ADR-004 (docs/plan/02 § ADR-004): Kubernetes membership in production, and only in
-                // development is there no Kubernetes API to write membership CRs into.
+                // ── The two grain-storage tiers ── docs/plan/04 § Silo composition, docs/plan/05.
                 //
-                // ⚠ The third argument is what makes a SECOND local silo join the FIRST one's
-                // cluster instead of starting its own — see CyberCloudClusterOptions
-                // .LocalhostPrimarySiloPort, where the silent-two-clusters failure is written out.
-                silo.UseLocalhostClustering(
-                    cluster.LocalhostSiloPort,
-                    cluster.LocalhostGatewayPort,
-                    cluster.LocalhostPrimarySiloPort == 0
-                        ? null
-                        : new IPEndPoint(IPAddress.Loopback, cluster.LocalhostPrimarySiloPort));
-            }
-            else
-            {
-                // Membership as custom resources in the silo's own namespace. No clustering
-                // database — ADR-004.
-                silo.UseKubeMembership();
+                // Wired only when CyberCloud:Storage is configured, and that condition is the design
+                // rather than a convenience:
+                //
+                //  * calling it unconditionally would make a configured Redis and a configured Postgres
+                //    a precondition of `CreateSilo` returning a usable host, so every host test in this
+                //    repository would need two containers to assert anything about health checks;
+                //  * a silo with no configured storage is a silo that CANNOT PERSIST A GRAIN, and that
+                //    has to stay visible rather than degrade into an in-memory provider nobody chose.
+                //    `SiloHostTests.TheSiloHasNoGrainStorageUnlessTheStorageSectionIsConfigured` is the
+                //    assertion.
+                //
+                // What is STILL a seam here, and why:
+                //
+                //   .AddMultitenantStreams(StreamProviders.Events, NatsStreamProvider.Configure)
+                //   .AddMultitenantCommunicationSeparation(_ => new PlatformCrossTenantAuthorizer())
+                //   .UseRedisReminderService(o => o.ConfigureSharded())
+                //
+                // ⚠ AddMultitenantCommunicationSeparation is the one that matters and it is NOT here.
+                // docs/plan/04 § Silo composition calls it "not optional"; its argument is an
+                // ICrossTenantAuthorizer and authorization is CyberCloud.Authorization's (ADR-007), so
+                // referencing it from ServiceDefaults would invert the assembly graph. It plugs in
+                // through `configureCluster`, immediately after this call. Until it is wired, a grain
+                // still cannot be *stored* in the wrong tenant's shard — the key selects the store —
+                // but one grain can still *call* another tenant's grain.
+                var storage = builder.Configuration.GetSection(CyberCloudStorageOptions.SectionName);
+                if (storage.Exists()) {
+                    var storageOptions = new CyberCloudStorageOptions();
+                    storage.Bind(storageOptions);
 
-                // Pod identity becomes silo identity, so a SIGTERM from a rolling update is a
-                // graceful StopAsync with grain migration rather than a 60-second gap
-                // (docs/plan/04:76). This one is on Services, not on the silo builder — that is
-                // the package's shape, not a mistake.
-                builder.Services.UseKubernetesHosting();
+                    if (configureStorage is null) {
+                        silo.AddCyberCloudGrainStorage(storageOptions);
+                    } else {
+                        configureStorage(silo, storageOptions);
+                    }
+                }
+
+                configureCluster?.Invoke(silo);
+
+                if (builder.Environment.IsDevelopment()) {
+                    // ADR-004 (docs/plan/02 § ADR-004): Kubernetes membership in production, and only in
+                    // development is there no Kubernetes API to write membership CRs into.
+                    //
+                    // ⚠ The third argument is what makes a SECOND local silo join the FIRST one's
+                    // cluster instead of starting its own — see CyberCloudClusterOptions
+                    // .LocalhostPrimarySiloPort, where the silent-two-clusters failure is written out.
+                    silo.UseLocalhostClustering(
+                        cluster.LocalhostSiloPort,
+                        cluster.LocalhostGatewayPort,
+                        cluster.LocalhostPrimarySiloPort == 0
+                            ? null
+                            : new IPEndPoint(IPAddress.Loopback, cluster.LocalhostPrimarySiloPort)
+                    );
+                } else {
+                    // Membership as custom resources in the silo's own namespace. No clustering
+                    // database — ADR-004.
+                    silo.UseKubeMembership();
+
+                    // Pod identity becomes silo identity, so a SIGTERM from a rolling update is a
+                    // graceful StopAsync with grain migration rather than a 60-second gap
+                    // (docs/plan/04:76). This one is on Services, not on the silo builder — that is
+                    // the package's shape, not a mistake.
+                    builder.Services.UseKubernetesHosting();
+                }
             }
-        });
+        );
 
         return builder;
     }
@@ -195,8 +188,8 @@ public static class OrleansApplication
     /// </remarks>
     public static WebApplicationBuilder CreateClient(
         string[] args,
-        Action<IClientBuilder>? configureClient = null)
-    {
+        Action<IClientBuilder>? configureClient = null
+    ) {
         var builder = WebApplication.CreateBuilder(args);
 
         ConfigureHost(builder);
@@ -205,31 +198,28 @@ public static class OrleansApplication
 
         var cluster = BindClusterOptions(builder);
 
-        builder.UseOrleansClient(client =>
-        {
-            client.Configure<ClusterOptions>(options =>
-            {
-                options.ClusterId = cluster.ClusterId;
-                options.ServiceId = cluster.ServiceId;
-            });
+        builder.UseOrleansClient(client => {
+                client.Configure<ClusterOptions>(options => {
+                        options.ClusterId = cluster.ClusterId;
+                        options.ServiceId = cluster.ServiceId;
+                    }
+                );
 
-            // The gateway end of docs/plan/04:78. A trace that reaches the gateway and stops there
-            // is the exact symptom this prevents, and the gateway is where it would be missed.
-            client.AddActivityPropagation();
+                // The gateway end of docs/plan/04:78. A trace that reaches the gateway and stops there
+                // is the exact symptom this prevents, and the gateway is where it would be missed.
+                client.AddActivityPropagation();
 
-            configureClient?.Invoke(client);
+                configureClient?.Invoke(client);
 
-            if (builder.Environment.IsDevelopment())
-            {
-                client.UseLocalhostClustering(cluster.LocalhostGatewayPort);
+                if (builder.Environment.IsDevelopment()) {
+                    client.UseLocalhostClustering(cluster.LocalhostGatewayPort);
+                } else {
+                    // The read side of UseKubeMembership: the gateway list comes from the same silo
+                    // custom resources, so a client needs no clustering database either (ADR-004).
+                    client.UseKubeGatewayListProvider();
+                }
             }
-            else
-            {
-                // The read side of UseKubeMembership: the gateway list comes from the same silo
-                // custom resources, so a client needs no clustering database either (ADR-004).
-                client.UseKubeGatewayListProvider();
-            }
-        });
+        );
 
         return builder;
     }
@@ -259,8 +249,7 @@ public static class OrleansApplication
     ///         and mounted secrets reach the logger, which is how it is configured in a cluster.
     ///     </para>
     /// </remarks>
-    static void ConfigureHost(WebApplicationBuilder builder)
-    {
+    static void ConfigureHost(WebApplicationBuilder builder) {
         builder.Host.AddAppSettingsSecretsJson().UseAutofac();
 
         builder.Services.AddSerilog((services, logger) => logger
@@ -269,11 +258,11 @@ public static class OrleansApplication
             .Enrich.FromLogContext()
             // The OTLP sink, so logs land in the same pipeline as traces (docs/plan/16). It is a
             // no-op without OTEL_EXPORTER_OTLP_ENDPOINT, which is what makes a local run quiet.
-            .WriteTo.OpenTelemetry());
+            .WriteTo.OpenTelemetry()
+        );
     }
 
-    static CyberCloudClusterOptions BindClusterOptions(WebApplicationBuilder builder)
-    {
+    static CyberCloudClusterOptions BindClusterOptions(WebApplicationBuilder builder) {
         var section = builder.Configuration.GetSection(CyberCloudClusterOptions.SectionName);
         builder.Services.Configure<CyberCloudClusterOptions>(section);
 

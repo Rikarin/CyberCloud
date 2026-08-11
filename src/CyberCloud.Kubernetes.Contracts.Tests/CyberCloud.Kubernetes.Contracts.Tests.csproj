@@ -1,32 +1,32 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!--
-    The pure half of the Kubernetes fabric's tests: the seven labels against Kubernetes' real
-    validation rules, the type-state chain, and the ADR-013 compile-failure proof.
+    <!--
+      The pure half of the Kubernetes fabric's tests: the seven labels against Kubernetes' real
+      validation rules, the type-state chain, and the ADR-013 compile-failure proof.
+  
+      ⚠ Microsoft.CodeAnalysis.CSharp is here for ONE test class, and it is the point of that class.
+      ADR-013's claim is "an unlabelled object does not compile" — a compile-time claim. Asserting it
+      with a runtime exception would be asserting something else entirely, so CompileFailureTests
+      compiles real C# against the real CyberCloud.Kubernetes.Contracts assembly with Roslyn and
+      asserts the diagnostic. See that file.
+  
+      ⚠ NOT k3s, NOT Orleans. Everything here runs in milliseconds with no Docker, which is what keeps
+      the label rules — the ones that fail at admission six minutes into a provision — cheap enough to
+      assert exhaustively. The cluster-backed tests are in CyberCloud.Kubernetes.Tests.
+    -->
 
-    ⚠ Microsoft.CodeAnalysis.CSharp is here for ONE test class, and it is the point of that class.
-    ADR-013's claim is "an unlabelled object does not compile" — a compile-time claim. Asserting it
-    with a runtime exception would be asserting something else entirely, so CompileFailureTests
-    compiles real C# against the real CyberCloud.Kubernetes.Contracts assembly with Roslyn and
-    asserts the diagnostic. See that file.
+    <ItemGroup>
+        <PackageReference Include="xunit.v3"/>
+        <PackageReference Include="Shouldly"/>
+        <PackageReference Include="Microsoft.CodeAnalysis.CSharp"/>
+    </ItemGroup>
 
-    ⚠ NOT k3s, NOT Orleans. Everything here runs in milliseconds with no Docker, which is what keeps
-    the label rules — the ones that fail at admission six minutes into a provision — cheap enough to
-    assert exhaustively. The cluster-backed tests are in CyberCloud.Kubernetes.Tests.
-  -->
+    <ItemGroup Label="Global usings">
+        <Using Include="Xunit"/>
+    </ItemGroup>
 
-  <ItemGroup>
-    <PackageReference Include="xunit.v3" />
-    <PackageReference Include="Shouldly" />
-    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" />
-  </ItemGroup>
-
-  <ItemGroup Label="Global usings">
-    <Using Include="Xunit" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <ProjectReference Include="../CyberCloud.Kubernetes.Contracts/CyberCloud.Kubernetes.Contracts.csproj" />
-  </ItemGroup>
+    <ItemGroup>
+        <ProjectReference Include="../CyberCloud.Kubernetes.Contracts/CyberCloud.Kubernetes.Contracts.csproj"/>
+    </ItemGroup>
 
 </Project>

@@ -1,6 +1,3 @@
-using System.Globalization;
-using System.Net;
-using System.Net.Sockets;
 using CyberCloud.Core.Resources;
 using CyberCloud.Core.Time;
 using CyberCloud.ServiceDefaults;
@@ -11,12 +8,13 @@ using CyberCloud.Tenancy.Separation;
 using CyberCloud.Tenancy.Shards;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
 using Npgsql;
 using Orleans.Multitenant;
+using System.Globalization;
+using System.Net;
+using System.Net.Sockets;
 using Testcontainers.PostgreSql;
 using Testcontainers.Redis;
-using Volo.Abp;
 using Volo.Abp.Modularity;
 
 namespace CyberCloud.Tenancy.Tests.Infrastructure;
@@ -34,8 +32,7 @@ sealed class TenancySiloModule : AbpModule;
 ///     <c>Effective</c> collapse — rather than a shortened copy of it. <see cref="IClock" />'s own
 ///     remarks make this the reason the interface exists.
 /// </remarks>
-public sealed class TestClock : IClock
-{
+public sealed class TestClock : IClock {
     /// <inheritdoc />
     public DateTimeOffset UtcNow { get; private set; } =
         new(2026, 8, 11, 12, 0, 0, TimeSpan.Zero);
@@ -46,8 +43,7 @@ public sealed class TestClock : IClock
 }
 
 /// <summary>An <see cref="IPlatformOperatorAuthority" /> a test can switch on and off.</summary>
-public sealed class SwitchablePlatformOperatorAuthority : IPlatformOperatorAuthority
-{
+public sealed class SwitchablePlatformOperatorAuthority : IPlatformOperatorAuthority {
     /// <summary>The operator id to report, or <see langword="null" /> to deny.</summary>
     public string? Operator { get; set; }
 
@@ -56,8 +52,7 @@ public sealed class SwitchablePlatformOperatorAuthority : IPlatformOperatorAutho
 }
 
 /// <summary>An <see cref="ICrossTenantDelegationStore" /> a test can add pairs to.</summary>
-public sealed class SwitchableDelegationStore : ICrossTenantDelegationStore
-{
+public sealed class SwitchableDelegationStore : ICrossTenantDelegationStore {
     /// <summary>The (source, target) pairs currently delegated.</summary>
     public HashSet<(string Source, string Target)> Delegations { get; } = [];
 
@@ -87,8 +82,7 @@ public sealed class SwitchableDelegationStore : ICrossTenantDelegationStore
 ///         deployed silo would have.
 ///     </para>
 /// </remarks>
-public sealed class TenancyCluster : IAsyncLifetime
-{
+public sealed class TenancyCluster : IAsyncLifetime {
     /// <summary>The first tenant-carrying durable shard.</summary>
     public const string ShardA = "durable-00";
 
@@ -118,16 +112,13 @@ public sealed class TenancyCluster : IAsyncLifetime
     public TestClock Clock => (TestClock)silo.Services.GetRequiredService<IClock>();
 
     /// <summary>The shard map the storage layer is actually routing with.</summary>
-    public GrainBackedShardMapCache ShardMap =>
-        silo.Services.GetRequiredService<GrainBackedShardMapCache>();
+    public GrainBackedShardMapCache ShardMap => silo.Services.GetRequiredService<GrainBackedShardMapCache>();
 
     /// <summary>The shard-map refresher, so a test can pull a delta on demand.</summary>
-    public ShardMapRefresher ShardMapRefresher =>
-        silo.Services.GetRequiredService<ShardMapRefresher>();
+    public ShardMapRefresher ShardMapRefresher => silo.Services.GetRequiredService<ShardMapRefresher>();
 
     /// <summary>The in-process tenant directory mirror.</summary>
-    public TenantDirectoryCache Directory =>
-        silo.Services.GetRequiredService<TenantDirectoryCache>();
+    public TenantDirectoryCache Directory => silo.Services.GetRequiredService<TenantDirectoryCache>();
 
     /// <summary>The cross-tenant authorizer the silo is using.</summary>
     public PlatformCrossTenantAuthorizer Authorizer =>
@@ -160,13 +151,12 @@ public sealed class TenancyCluster : IAsyncLifetime
     public static IReadOnlyList<string> TenantShards => [ShardA, ShardB];
 
     /// <summary>A GUID that is a pure function of its index, so ids are stable across runs.</summary>
-    public static Guid Tenant(int index)
-    {
+    public static Guid Tenant(int index) {
         Span<byte> bytes = stackalloc byte[16];
         bytes.Clear();
         BitConverter.TryWriteBytes(bytes, index);
         bytes[15] = 0x5C;
-        return new Guid(bytes);
+        return new(bytes);
     }
 
     /// <summary>A tenant id in the form every call site uses to qualify a grain.</summary>
@@ -176,8 +166,7 @@ public sealed class TenancyCluster : IAsyncLifetime
     public TenantGrainFactory For(Guid tenant) => Grains.ForTenant(Id(tenant));
 
     /// <summary>The tenant's own grain.</summary>
-    public ITenantGrain TenantGrain(Guid tenant) =>
-        For(tenant).GetGrain<ITenantGrain>(GrainKeys.Tenant(tenant));
+    public ITenantGrain TenantGrain(Guid tenant) => For(tenant).GetGrain<ITenantGrain>(GrainKeys.Tenant(tenant));
 
     /// <summary>A subscription grain in a tenant.</summary>
     public ISubscriptionGrain SubscriptionGrain(Guid tenant, Guid subscription) =>
@@ -200,38 +189,33 @@ public sealed class TenancyCluster : IAsyncLifetime
         For(tenant).GetGrain<IEmailIndexGrain>(GrainKeys.EmailIndex(tenant, email));
 
     /// <summary>The shard map grain — null tenant, one worldwide.</summary>
-    public IShardMapGrain ShardMapGrain() =>
-        Grains.GetGrain<IShardMapGrain>(GrainKeys.ShardMap());
+    public IShardMapGrain ShardMapGrain() => Grains.GetGrain<IShardMapGrain>(GrainKeys.ShardMap());
 
     /// <summary>The tenant directory grain — null tenant, one worldwide.</summary>
     public ITenantDirectoryGrain DirectoryGrain() =>
         Grains.GetGrain<ITenantDirectoryGrain>(GrainKeys.TenantDirectory());
 
     /// <inheritdoc />
-    public async ValueTask InitializeAsync()
-    {
+    public async ValueTask InitializeAsync() {
         var token = TestContext.Current.CancellationToken;
 
         await Task.WhenAll(
             redis.StartAsync(token),
             shardA.StartAsync(token),
             shardB.StartAsync(token),
-            platform.StartAsync(token));
+            platform.StartAsync(token)
+        );
 
-        var connections = new Dictionary<string, string>(StringComparer.Ordinal)
-        {
-            [ShardA] = Shard(shardA),
-            [ShardB] = Shard(shardB),
-            [PlatformShard] = Shard(platform),
+        var connections = new Dictionary<string, string>(StringComparer.Ordinal) {
+            [ShardA] = Shard(shardA), [ShardB] = Shard(shardB), [PlatformShard] = Shard(platform)
         };
 
-        foreach (var connectionString in connections.Values)
-        {
+        foreach (var connectionString in connections.Values) {
             await OrleansAdoNetSchema.CreateAsync(connectionString, token);
         }
 
-        SplitTenants = FindPair(different: true);
-        CotenantsOnOneShard = FindPair(different: false);
+        SplitTenants = FindPair(true);
+        CotenantsOnOneShard = FindPair(false);
 
         silo = await StartSiloAsync(connections);
 
@@ -243,16 +227,11 @@ public sealed class TenancyCluster : IAsyncLifetime
     }
 
     /// <inheritdoc />
-    public async ValueTask DisposeAsync()
-    {
-        if (silo is not null)
-        {
-            try
-            {
+    public async ValueTask DisposeAsync() {
+        if (silo is not null) {
+            try {
                 await silo.StopAsync();
-            }
-            catch (InvalidOperationException)
-            {
+            } catch (InvalidOperationException) {
                 // Never started.
             }
 
@@ -263,17 +242,18 @@ public sealed class TenancyCluster : IAsyncLifetime
             redis.DisposeAsync().AsTask(),
             shardA.DisposeAsync().AsTask(),
             shardB.DisposeAsync().AsTask(),
-            platform.DisposeAsync().AsTask());
+            platform.DisposeAsync().AsTask()
+        );
     }
 
     /// <summary>Opens a connection to one shard, for reading rows back with plain SQL.</summary>
     /// <param name="shard">The shard id.</param>
     /// <param name="cancellationToken">The test's cancellation token.</param>
-    public async Task<NpgsqlConnection> OpenShardAsync(string shard, CancellationToken cancellationToken)
-    {
+    public async Task<NpgsqlConnection> OpenShardAsync(string shard, CancellationToken cancellationToken) {
         var connection = new NpgsqlConnection(
             new NpgsqlConnectionStringBuilder(Connections.Durable(shard)) { Pooling = false }
-                .ConnectionString);
+                .ConnectionString
+        );
 
         await connection.OpenAsync(cancellationToken);
         return connection;
@@ -293,24 +273,21 @@ public sealed class TenancyCluster : IAsyncLifetime
     public Task BlackholeThePlatformShardAsync(CancellationToken cancellationToken) =>
         platform.StopAsync(cancellationToken);
 
-    static PostgreSqlContainer NewShard() => new PostgreSqlBuilder("postgres:17-alpine")
-        .WithDatabase("cybercloud")
-        .WithUsername("cybercloud")
-        .WithPassword("cybercloud")
-        .Build();
+    static PostgreSqlContainer NewShard() =>
+        new PostgreSqlBuilder("postgres:17-alpine")
+            .WithDatabase("cybercloud")
+            .WithUsername("cybercloud")
+            .WithPassword("cybercloud")
+            .Build();
 
     static string Shard(PostgreSqlContainer container) =>
-        new NpgsqlConnectionStringBuilder(container.GetConnectionString())
-        {
+        new NpgsqlConnectionStringBuilder(container.GetConnectionString()) {
             // Short, so that a blackholed shard fails fast rather than making the suite wait.
-            Timeout = 3,
-            CommandTimeout = 5,
+            Timeout = 3, CommandTimeout = 5
         }.ConnectionString;
 
-    async Task<WebApplication> StartSiloAsync(Dictionary<string, string> connections)
-    {
-        List<string> args =
-        [
+    async Task<WebApplication> StartSiloAsync(Dictionary<string, string> connections) {
+        List<string> args = [
             "--environment", "Development",
             "--urls", "http://127.0.0.1:0",
             $"--{CyberCloudClusterOptions.SectionName}:LocalhostSiloPort={FreePort()}",
@@ -322,33 +299,39 @@ public sealed class TenancyCluster : IAsyncLifetime
             // so without this the storage layer would hash the literal string "Null" into the tenant
             // shard list — deterministic but arbitrary. docs/plan/05 § Storage provider wiring's
             // Guid.Parse(tenantId) would not even get that far.
-            $"--{CyberCloudStorageOptions.SectionName}:Durable:NullTenantShard={PlatformShard}",
+            $"--{CyberCloudStorageOptions.SectionName}:Durable:NullTenantShard={PlatformShard}"
         ];
 
-        args.AddRange(connections.Select(x =>
-            $"--{CyberCloudStorageOptions.SectionName}:Durable:Shards:{x.Key}={x.Value}"));
+        args.AddRange(
+            connections.Select(x =>
+                $"--{CyberCloudStorageOptions.SectionName}:Durable:Shards:{x.Key}={x.Value}"
+            )
+        );
 
         var builder = OrleansApplication.CreateSilo(
             [.. args],
-            configureCluster: silo => silo.ConfigureServices(services =>
-            {
-                // Registered BEFORE AddCyberCloudTenancy's TryAdd calls run, so these win.
-                services.AddSingleton<IClock, TestClock>();
-                services.AddSingleton<SwitchablePlatformOperatorAuthority>();
-                services.AddSingleton<SwitchableDelegationStore>();
-                services.AddSingleton<IPlatformOperatorAuthority>(
-                    sp => sp.GetRequiredService<SwitchablePlatformOperatorAuthority>());
-                services.AddSingleton<ICrossTenantDelegationStore>(
-                    sp => sp.GetRequiredService<SwitchableDelegationStore>());
+            silo => silo.ConfigureServices(services => {
+                    // Registered BEFORE AddCyberCloudTenancy's TryAdd calls run, so these win.
+                    services.AddSingleton<IClock, TestClock>();
+                    services.AddSingleton<SwitchablePlatformOperatorAuthority>();
+                    services.AddSingleton<SwitchableDelegationStore>();
+                    services.AddSingleton<IPlatformOperatorAuthority>(sp =>
+                        sp.GetRequiredService<SwitchablePlatformOperatorAuthority>()
+                    );
+                    services.AddSingleton<ICrossTenantDelegationStore>(sp =>
+                        sp.GetRequiredService<SwitchableDelegationStore>()
+                    );
 
-                // ⚠ The background refresh loops are OFF and every test drives RefreshAsync by
-                // hand. A test that asserts on cache MISSES cannot share a process with a loop that
-                // is quietly filling the cache — the assertion would pass or fail on timing, which
-                // is how a suite earns a `[Skip]`. The method the tests call is the method the loop
-                // calls, so nothing is stubbed out; only the schedule is.
-                services.Configure<TenancyRefreshOptions>(o => o.RunBackgroundRefresh = false);
-            }),
-            configureStorage: (silo, options) => silo.AddCyberCloudTenancy(options));
+                    // ⚠ The background refresh loops are OFF and every test drives RefreshAsync by
+                    // hand. A test that asserts on cache MISSES cannot share a process with a loop that
+                    // is quietly filling the cache — the assertion would pass or fail on timing, which
+                    // is how a suite earns a `[Skip]`. The method the tests call is the method the loop
+                    // calls, so nothing is stubbed out; only the schedule is.
+                    services.Configure<TenancyRefreshOptions>(o => o.RunBackgroundRefresh = false);
+                }
+            ),
+            (silo, options) => silo.AddCyberCloudTenancy(options)
+        );
 
         await builder.Services.AddApplicationAsync<TenancySiloModule>();
 
@@ -361,33 +344,28 @@ public sealed class TenancyCluster : IAsyncLifetime
     ///     Two tenants the <i>real</i> placement function puts on different shards (or the same
     ///     one). Deterministic, so a failure is reproducible on every machine.
     /// </summary>
-    static (Guid, Guid) FindPair(bool different)
-    {
+    static (Guid, Guid) FindPair(bool different) {
         var map = MapOverTenantShards();
         var first = Tenant(0);
         var firstShard = map.DurableShardFor(Id(first));
 
-        for (var i = 1; i < 1000; i++)
-        {
+        for (var i = 1; i < 1000; i++) {
             var candidate = Tenant(i);
-            var same = string.Equals(
-                map.DurableShardFor(Id(candidate)), firstShard, StringComparison.Ordinal);
+            var same = string.Equals(map.DurableShardFor(Id(candidate)), firstShard, StringComparison.Ordinal);
 
-            if (same != different)
-            {
+            if (same != different) {
                 return (first, candidate);
             }
         }
 
         throw new InvalidOperationException(
-            "1000 tenants and no pair with the wanted placement — the placement function is broken.");
+            "1000 tenants and no pair with the wanted placement — the placement function is broken."
+        );
     }
 
-    static GrainBackedShardMapCache MapOverTenantShards()
-    {
+    static GrainBackedShardMapCache MapOverTenantShards() {
         var options = new CyberCloudStorageOptions();
-        foreach (var shard in AllShards)
-        {
+        foreach (var shard in AllShards) {
             options.Durable.Shards[shard] = "Host=unused";
         }
 
@@ -397,13 +375,12 @@ public sealed class TenancyCluster : IAsyncLifetime
 
         // The fallback must place over the TENANT shards only, which is what the shard map grain is
         // configured with, so the pair this picks is the pair the running silo will agree with.
-        map.Apply(new ShardMapSnapshot { Version = 1, DurableShards = [.. TenantShards] });
+        map.Apply(new() { Version = 1, DurableShards = [.. TenantShards] });
 
         return map;
     }
 
-    static int FreePort()
-    {
+    static int FreePort() {
         using var socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
         socket.Bind(new IPEndPoint(IPAddress.Loopback, 0));
         return ((IPEndPoint)socket.LocalEndPoint!).Port;
@@ -412,8 +389,7 @@ public sealed class TenancyCluster : IAsyncLifetime
 
 /// <summary>Binds <see cref="TenancyCluster" /> to the classes that share it.</summary>
 [CollectionDefinition(Name)]
-public sealed class TenancySuite : ICollectionFixture<TenancyCluster>
-{
+public sealed class TenancySuite : ICollectionFixture<TenancyCluster> {
     /// <summary>The collection name.</summary>
     public const string Name = "tenancy-cluster";
 }
@@ -424,13 +400,16 @@ public sealed class TenancySuite : ICollectionFixture<TenancyCluster>
 /// <remarks>
 ///     xUnit gives each collection its own fixture instance, so this is a separate silo with its own
 ///     four containers. It costs a second bring-up and it buys the only honest version of
-///     docs/plan/23's chaos-invariant 5: <c>TenantDirectoryBlackholeTests</c> <b>stops the
-///     PostgreSQL server</b> that carries the global directory, which is not something a test can do
+///     docs/plan/23's chaos-invariant 5: <c>TenantDirectoryBlackholeTests</c>
+///     <b>
+///         stops the
+///         PostgreSQL server
+///     </b>
+///     that carries the global directory, which is not something a test can do
 ///     to a fixture other tests are still using.
 /// </remarks>
 [CollectionDefinition(Name)]
-public sealed class DestructiveTenancySuite : ICollectionFixture<TenancyCluster>
-{
+public sealed class DestructiveTenancySuite : ICollectionFixture<TenancyCluster> {
     /// <summary>The collection name.</summary>
     public const string Name = "tenancy-cluster-destructive";
 }
@@ -446,20 +425,16 @@ public sealed class DestructiveTenancySuite : ICollectionFixture<TenancyCluster>
 ///     tests exist to rule out.
 /// </remarks>
 [CollectionDefinition(Name)]
-public sealed class ShardMapSuite : ICollectionFixture<TenancyCluster>
-{
+public sealed class ShardMapSuite : ICollectionFixture<TenancyCluster> {
     /// <summary>The collection name.</summary>
     public const string Name = "tenancy-cluster-shardmap";
 }
 
 /// <summary>Tiny assertion helper, so the fixture does not depend on Shouldly's namespace.</summary>
-static class FixtureAssertions
-{
+static class FixtureAssertions {
     /// <summary>Throws if the value is false.</summary>
-    public static void ShouldBeTrueOrThrow(this bool value)
-    {
-        if (!value)
-        {
+    public static void ShouldBeTrueOrThrow(this bool value) {
+        if (!value) {
             throw new InvalidOperationException("A fixture precondition failed.");
         }
     }

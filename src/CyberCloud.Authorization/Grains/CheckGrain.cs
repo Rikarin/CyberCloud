@@ -1,10 +1,10 @@
-using System.Globalization;
 using CyberCloud.Authorization.Contracts;
 using CyberCloud.Authorization.Evaluation;
 using CyberCloud.Core;
 using CyberCloud.Core.Contracts;
 using CyberCloud.Core.Resources;
 using Orleans.Multitenant;
+using System.Globalization;
 
 namespace CyberCloud.Authorization.Grains;
 
@@ -21,14 +21,18 @@ namespace CyberCloud.Authorization.Grains;
 ///     </para>
 ///     <list type="table">
 ///         <item>
-///             <term><c>MinimizeLatency</c></term>
+///             <term>
+///                 <c>MinimizeLatency</c>
+///             </term>
 ///             <description>
 ///                 any stamp, and <b>the tenant version is not even read</b> — which is what makes
 ///                 it the fast mode, and what makes the revoke-then-stale-read bug real.
 ///             </description>
 ///         </item>
 ///         <item>
-///             <term><c>AtLeastAsFresh(token)</c></term>
+///             <term>
+///                 <c>AtLeastAsFresh(token)</c>
+///             </term>
 ///             <description>
 ///                 a stamp at or after the token, otherwise a walk. On a walk it also drops every
 ///                 entry stamped before the current version — docs/plan/07's "crude and right"
@@ -36,7 +40,9 @@ namespace CyberCloud.Authorization.Grains;
 ///             </description>
 ///         </item>
 ///         <item>
-///             <term><c>FullyConsistent</c></term>
+///             <term>
+///                 <c>FullyConsistent</c>
+///             </term>
 ///             <description>
 ///                 never reads the cache, and the walk re-reads every object's durable row.
 ///             </description>
@@ -59,15 +65,14 @@ public sealed class CheckGrain(
     [PersistentState("check", StorageTiers.Hot)] IPersistentState<CheckCacheState> cache,
     AuthorizationSchema schema,
     AuthorizationLimits limits,
-    IMembershipIndex membershipIndex)
-    : Grain, ICheckGrain
-{
+    IMembershipIndex membershipIndex
+)
+    : Grain, ICheckGrain {
     Guid tenantId;
     ObjectRef self = new();
 
     /// <inheritdoc />
-    public override Task OnActivateAsync(CancellationToken cancellationToken)
-    {
+    public override Task OnActivateAsync(CancellationToken cancellationToken) {
         tenantId = AuthorizationGrainKeys.TenantOf(this);
         self = AuthorizationGrainKeys.DecodeObject(this, GrainKeyKind.CheckCache);
         return Task.CompletedTask;
@@ -75,34 +80,36 @@ public sealed class CheckGrain(
 
     /// <inheritdoc />
     public async Task<Result<CheckResult>> CheckAsync(
-        string permission, SubjectRef subject, Consistency? consistency)
-    {
-        if (subject is null || !subject.IsValid)
-        {
+        string permission,
+        SubjectRef subject,
+        Consistency? consistency
+    ) {
+        if (subject is null || !subject.IsValid) {
             return Result<CheckResult>.Failure(
                 ErrorCode.InvalidRequestBody,
                 $"'{subject}' is not a well-formed subject. It is 'type:id' or "
-                + "'type:id#relation' — docs/plan/07 § The model.");
+                + "'type:id#relation' — docs/plan/07 § The model."
+            );
         }
 
         var mode = consistency ?? Consistency.MinimizeLatency;
 
-        if (mode.Mode == ConsistencyMode.AtLeastAsFresh && mode.Token is null)
-        {
+        if (mode.Mode == ConsistencyMode.AtLeastAsFresh && mode.Token is null) {
             return Result<CheckResult>.Failure(
                 ErrorCode.InvalidRequestBody,
                 "AtLeastAsFresh needs the token the write returned. Without one there is nothing to "
                 + "be at least as fresh as, and silently downgrading to MinimizeLatency is exactly "
-                + "the revoke-then-stale-read bug docs/plan/07 § Consistency exists to prevent.");
+                + "the revoke-then-stale-read bug docs/plan/07 § Consistency exists to prevent."
+            );
         }
 
-        if (mode.Token is not null && mode.Token.TenantId != tenantId)
-        {
+        if (mode.Token is not null && mode.Token.TenantId != tenantId) {
             return Result<CheckResult>.Failure(
                 ErrorCode.AuthorizationFailed,
                 $"The token names tenant {mode.Token.TenantId:D} and this object is in tenant "
                 + $"{tenantId:D}. A token is a per-tenant version (docs/plan/07 § Consistency) and "
-                + "comparing one tenant's against another's would make freshness meaningless.");
+                + "comparing one tenant's against another's would make freshness meaningless."
+            );
         }
 
         var key = CacheKey(permission, subject);
@@ -111,22 +118,21 @@ public sealed class CheckGrain(
             && cache.State.Entries.TryGetValue(key, out var cached)
             && cached.SchemaVersion == schema.Version
             && (mode.Mode == ConsistencyMode.MinimizeLatency
-                || cached.Version >= mode.Token!.Version))
-        {
+                || cached.Version >= mode.Token!.Version)) {
             AuthorizationMetrics.RecordCacheHit();
 
-            return Result<CheckResult>.Success(new CheckResult
-            {
-                Allowed = cached.Allowed,
-                Outcome = cached.Allowed ? CheckOutcome.Allowed : CheckOutcome.Denied,
-                Token = new ConsistencyToken { TenantId = tenantId, Version = cached.Version },
-                FromCache = true,
-            });
+            return Result<CheckResult>.Success(
+                new() {
+                    Allowed = cached.Allowed,
+                    Outcome = cached.Allowed ? CheckOutcome.Allowed : CheckOutcome.Denied,
+                    Token = new() { TenantId = tenantId, Version = cached.Version },
+                    FromCache = true
+                }
+            );
         }
 
         var token = await StoreGrain().GetTokenAsync();
-        if (token.TryGetError(out var tokenError))
-        {
+        if (token.TryGetError(out var tokenError)) {
             return Result<CheckResult>.Failure(tokenError);
         }
 
@@ -134,78 +140,70 @@ public sealed class CheckGrain(
 
         var evaluator = new CheckEvaluator(
             schema,
-            new GrainRelationReader(
-                GrainFactory, tenantId, forceDurable: mode.Mode == ConsistencyMode.FullyConsistent),
+            new GrainRelationReader(GrainFactory, tenantId, mode.Mode == ConsistencyMode.FullyConsistent),
             limits,
-            membershipIndex);
+            membershipIndex
+        );
 
-        var evaluated = await evaluator.EvaluateAsync(
-            self, permission, subject, CancellationToken.None);
+        var evaluated = await evaluator.EvaluateAsync(self, permission, subject, CancellationToken.None);
 
-        if (evaluated.TryGetError(out var error))
-        {
+        if (evaluated.TryGetError(out var error)) {
             return Result<CheckResult>.Failure(error);
         }
 
         var evaluation = evaluated.GetValueOrThrow();
         var dirty = DropEntriesOlderThan(current.Version);
 
-        if (evaluation.IsCacheable)
-        {
-            cache.State.Entries[key] = new CheckCacheEntry
-            {
-                Allowed = evaluation.Allowed,
-                Version = current.Version,
-                SchemaVersion = schema.Version,
+        if (evaluation.IsCacheable) {
+            cache.State.Entries[key] = new() {
+                Allowed = evaluation.Allowed, Version = current.Version, SchemaVersion = schema.Version
             };
 
             dirty = true;
         }
 
-        if (dirty)
-        {
+        if (dirty) {
             await cache.WriteStateAsync();
         }
 
-        return Result<CheckResult>.Success(new CheckResult
-        {
-            Allowed = evaluation.Allowed,
-            Outcome = evaluation.Outcome,
-            Token = current,
-            FromCache = false,
-            TriplesVisited = evaluation.TriplesVisited,
-            MaxDepthReached = evaluation.MaxDepthReached,
-            CapDetail = evaluation.CapDetail,
-        });
+        return Result<CheckResult>.Success(
+            new() {
+                Allowed = evaluation.Allowed,
+                Outcome = evaluation.Outcome,
+                Token = current,
+                FromCache = false,
+                TriplesVisited = evaluation.TriplesVisited,
+                MaxDepthReached = evaluation.MaxDepthReached,
+                CapDetail = evaluation.CapDetail
+            }
+        );
     }
 
     /// <inheritdoc />
     public async Task<Result<IReadOnlyList<RoleAssignment>>> ListRoleAssignmentsAsync(
-        bool includeInherited)
-    {
+        bool includeInherited
+    ) {
         var type = schema.Type(self.Type);
-        if (type is null)
-        {
+        if (type is null) {
             return Result<IReadOnlyList<RoleAssignment>>.Failure(
                 ErrorCode.SchemaInvalid,
                 $"'{self.Type}' is not an object type in schema version "
-                + schema.Version.ToString(CultureInfo.InvariantCulture) + ".");
+                + schema.Version.ToString(CultureInfo.InvariantCulture)
+                + "."
+            );
         }
 
         var roles = type.Roles;
         var direct = await ObjectGrain(self).ListRoleAssignmentsAsync([.. roles]);
-        if (direct.TryGetError(out var error))
-        {
+        if (direct.TryGetError(out var error)) {
             return Result<IReadOnlyList<RoleAssignment>>.Failure(error);
         }
 
         List<RoleAssignment> assignments = [.. direct.GetValueOrThrow()];
 
-        if (includeInherited)
-        {
+        if (includeInherited) {
             var inherited = await WalkAncestorsAsync(roles);
-            if (inherited.TryGetError(out var walkError))
-            {
+            if (inherited.TryGetError(out var walkError)) {
                 return Result<IReadOnlyList<RoleAssignment>>.Failure(walkError);
             }
 
@@ -216,13 +214,11 @@ public sealed class CheckGrain(
     }
 
     /// <inheritdoc />
-    public Task<Result<int>> CachedEntryCountAsync() =>
-        Task.FromResult(Result<int>.Success(cache.State.Entries.Count));
+    public Task<Result<int>> CachedEntryCountAsync() => Task.FromResult(Result<int>.Success(cache.State.Entries.Count));
 
     /// <inheritdoc />
-    public Task DeactivateAsync()
-    {
-        this.DeactivateOnIdle();
+    public Task DeactivateAsync() {
+        DeactivateOnIdle();
         return Task.CompletedTask;
     }
 
@@ -238,23 +234,20 @@ public sealed class CheckGrain(
     ///     would not honour.
     /// </remarks>
     async Task<Result<IReadOnlyList<RoleAssignment>>> WalkAncestorsAsync(
-        IReadOnlyList<string> roles)
-    {
+        IReadOnlyList<string> roles
+    ) {
         List<RoleAssignment> inherited = [];
         var current = self;
         var currentType = schema.Type(self.Type);
 
-        for (var depth = 0; depth < limits.MaxDepth && currentType is not null; depth++)
-        {
+        for (var depth = 0; depth < limits.MaxDepth && currentType is not null; depth++) {
             var snapshot = await ObjectGrain(current).ReadAsync();
-            if (snapshot.TryGetError(out var error))
-            {
+            if (snapshot.TryGetError(out var error)) {
                 return Result<IReadOnlyList<RoleAssignment>>.Failure(error);
             }
 
             var parents = snapshot.GetValueOrThrow().Subjects(Relations.Parent);
-            if (parents.Count == 0)
-            {
+            if (parents.Count == 0) {
                 break;
             }
 
@@ -263,8 +256,7 @@ public sealed class CheckGrain(
             // the evaluator reaches only through one of them.
             var parent = parents[0].Object;
             var parentType = schema.Type(parent.Type);
-            if (parentType is null)
-            {
+            if (parentType is null) {
                 break;
             }
 
@@ -273,28 +265,23 @@ public sealed class CheckGrain(
                 .Where(role => parentType.Roles.Contains(role, StringComparer.Ordinal))
                 .ToList();
 
-            if (inheritable.Count > 0)
-            {
+            if (inheritable.Count > 0) {
                 var assignments = await ObjectGrain(parent).ListRoleAssignmentsAsync(inheritable);
-                if (assignments.TryGetError(out var listError))
-                {
+                if (assignments.TryGetError(out var listError)) {
                     return Result<IReadOnlyList<RoleAssignment>>.Failure(listError);
                 }
 
-                inherited.AddRange(assignments.GetValueOrThrow().Select(x => x with
-                {
-                    Scope = self,
-                    Inherited = true,
-                    InheritedFrom = parent,
-                }));
+                inherited.AddRange(
+                    assignments.GetValueOrThrow()
+                        .Select(x => x with { Scope = self, Inherited = true, InheritedFrom = parent })
+                );
             }
 
             current = parent;
             currentType = parentType;
             roles = inheritable;
 
-            if (roles.Count == 0)
-            {
+            if (roles.Count == 0) {
                 break;
             }
         }
@@ -304,21 +291,21 @@ public sealed class CheckGrain(
 
     static bool InheritsThroughParent(SchemaType type, string role) =>
         type.Member(role) is { } member
-        && member.Expression.DescendantsAndSelf().Any(node =>
-            node is TuplesetExpression tupleset
-            && string.Equals(tupleset.Tupleset, Relations.Parent, StringComparison.Ordinal)
-            && string.Equals(tupleset.Computed, role, StringComparison.Ordinal));
+        && member.Expression.DescendantsAndSelf()
+            .Any(node =>
+                node is TuplesetExpression tupleset
+                && string.Equals(tupleset.Tupleset, Relations.Parent, StringComparison.Ordinal)
+                && string.Equals(tupleset.Computed, role, StringComparison.Ordinal)
+            );
 
     /// <summary>
     ///     The two components of docs/plan/07 § Caching across requests' cache key that are not
     ///     this grain's identity. The separator is a character <c>RelationNaming</c> excludes from
     ///     every name, so no (permission, subject) pair can be re-cut into a different one.
     /// </summary>
-    static string CacheKey(string permission, SubjectRef subject) =>
-        permission + "\u0001" + subject;
+    static string CacheKey(string permission, SubjectRef subject) => permission + "\u0001" + subject;
 
-    bool DropEntriesOlderThan(long version)
-    {
+    bool DropEntriesOlderThan(long version) {
         // docs/plan/07 § Caching across requests: "a write invalidates the tenant's whole check
         // cache. That is crude and it is right." Crude, at the granularity one grain can be crude
         // at: everything this object has cached under an older version goes.
@@ -327,8 +314,7 @@ public sealed class CheckGrain(
             .Select(x => x.Key)
             .ToList();
 
-        foreach (var key in stale)
-        {
+        foreach (var key in stale) {
             cache.State.Entries.Remove(key);
         }
 
@@ -341,6 +327,5 @@ public sealed class CheckGrain(
 
     IObjectRelationsGrain ObjectGrain(ObjectRef @object) =>
         GrainFactory.ForTenant(tenantId.ToString("D", CultureInfo.InvariantCulture))
-            .GetGrain<IObjectRelationsGrain>(
-                GrainKeys.ObjectRelations(@object.Type, @object.Id));
+            .GetGrain<IObjectRelationsGrain>(GrainKeys.ObjectRelations(@object.Type, @object.Id));
 }

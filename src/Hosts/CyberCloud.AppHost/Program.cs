@@ -1,5 +1,6 @@
-using System.Globalization;
 using CyberCloud.AppHost;
+using Projects;
+using System.Globalization;
 
 // ═══════════════════════════════════════════════════════════════════════════════════════════════
 //  CyberCloud.AppHost — docs/plan/24 § Phase 0:
@@ -95,13 +96,14 @@ var k3s = builder
         "--tls-san=127.0.0.1",
         "--tls-san=host.docker.internal",
         "--write-kubeconfig=/output/kubeconfig.yaml",
-        "--write-kubeconfig-mode=666")
+        "--write-kubeconfig-mode=666"
+    )
     .WithBindMount(kubeconfigDirectory, "/output")
     .WithEndpoint(
-        port: CyberCloudResources.K3sApiPort,
-        targetPort: CyberCloudResources.K3sApiPort,
-        scheme: "https",
-        name: "api",
+        CyberCloudResources.K3sApiPort,
+        CyberCloudResources.K3sApiPort,
+        "https",
+        "api",
         // ⚠ isProxied: false, and it is the difference between a kubeconfig that works and one that
         // lies. Aspire's default is to publish the container port on a random host port and put its
         // own proxy on the named one — which is invisible under `dotnet run` (the proxy does listen
@@ -109,7 +111,8 @@ var k3s = builder
         // `Connection refused (127.0.0.1:6443)` while k3s was up and healthy. Unproxied, Docker
         // publishes 6443 → 6443 itself, so the address baked into the kubeconfig by
         // `--write-kubeconfig` is the address that works, in both.
-        isProxied: false);
+        isProxied: false
+    );
 
 // ── The durable schema ─────────────────────────────────────────────────────────────────────────
 //
@@ -121,7 +124,7 @@ var k3s = builder
 // same program with the same argument is what a Helm pre-install hook Job would run; nothing about
 // this step is Aspire-shaped, which is the point.
 var durableSchema = builder
-    .AddProject<Projects.CyberCloud_Silo_Host>(CyberCloudResources.DurableSchema)
+    .AddProject<CyberCloud_Silo_Host>(CyberCloudResources.DurableSchema)
     .WithArgs("--apply-durable-schema")
     .WithDurableShards(shardA, shardB, platformShard)
     .WaitFor(postgres);
@@ -143,7 +146,7 @@ var durableSchema = builder
 // TWO ONE-SILO CLUSTERS — see CyberCloudClusterOptions.LocalhostPrimarySiloPort. Silo 2 names silo
 // 1 as the primary; that is the line that makes this a two-silo cluster rather than two clusters.
 var siloOne = builder
-    .AddProject<Projects.CyberCloud_Silo_Host>(CyberCloudResources.SiloOne)
+    .AddProject<CyberCloud_Silo_Host>(CyberCloudResources.SiloOne)
     .WithCyberCloudStorage(redis, shardA, shardB, platformShard)
     .WithReference(nats)
     .WithOrleansPorts(CyberCloudResources.SiloOnePort, CyberCloudResources.SiloOneGatewayPort)
@@ -159,13 +162,14 @@ var siloOne = builder
     .WaitFor(redis);
 
 builder
-    .AddProject<Projects.CyberCloud_Silo_Host>(CyberCloudResources.SiloTwo)
+    .AddProject<CyberCloud_Silo_Host>(CyberCloudResources.SiloTwo)
     .WithCyberCloudStorage(redis, shardA, shardB, platformShard)
     .WithReference(nats)
     .WithOrleansPorts(CyberCloudResources.SiloTwoPort, CyberCloudResources.SiloTwoGatewayPort)
     .WithEnvironment(
         "CyberCloud__Cluster__LocalhostPrimarySiloPort",
-        CyberCloudResources.SiloOnePort.ToString(CultureInfo.InvariantCulture))
+        CyberCloudResources.SiloOnePort.ToString(CultureInfo.InvariantCulture)
+    )
     .WithHttpEndpoint()
     .WithHttpHealthCheck("/health")
     // ⚠ The development membership table lives in silo 1's process, so silo 2 cannot join before

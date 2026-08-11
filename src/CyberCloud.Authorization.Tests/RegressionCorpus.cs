@@ -11,7 +11,8 @@ public sealed record CorpusExpectation(
     string Object,
     string Permission,
     string Subject,
-    bool Expected);
+    bool Expected
+);
 
 /// <summary>
 ///     One named authorization bug, as a tuple set and the answers it must produce.
@@ -29,25 +30,34 @@ public sealed record CorpusCase(
     string Name,
     string Why,
     IReadOnlyList<string> Tuples,
-    IReadOnlyList<CorpusExpectation> Expectations)
-{
+    IReadOnlyList<CorpusExpectation> Expectations
+) {
     /// <summary>The tuples, parsed.</summary>
-    public IReadOnlyList<RelationTuple> Parsed() =>
-        [.. Tuples.Select(x => RelationTuple.Parse(x).GetValueOrThrow())];
+    public IReadOnlyList<RelationTuple> Parsed() => [.. Tuples.Select(x => RelationTuple.Parse(x).GetValueOrThrow())];
 
     /// <inheritdoc />
     public override string ToString() => Name;
 }
 
 /// <summary>
-///     ⚠ <b>THE REGRESSION CORPUS. docs/plan/07 § Testing: "every authorization bug ever found
-///     becomes a named test with its tuple set checked in. <b>This corpus is the real asset; the
-///     code is replaceable.</b>"</b>
+///     ⚠
+///     <b>
+///         THE REGRESSION CORPUS. docs/plan/07 § Testing: "every authorization bug ever found
+///         becomes a named test with its tuple set checked in.
+///         <b>
+///             This corpus is the real asset; the
+///             code is replaceable.
+///         </b>
+///         "
+///     </b>
 /// </summary>
 /// <remarks>
 ///     <para>
-///         <b>How to add to it, in one paragraph, because a corpus nobody can add to stops
-///         growing.</b> Add a <see cref="CorpusCase" /> to <see cref="Cases" /> with a name that will
+///         <b>
+///             How to add to it, in one paragraph, because a corpus nobody can add to stops
+///             growing.
+///         </b>
+///         Add a <see cref="CorpusCase" /> to <see cref="Cases" /> with a name that will
 ///         still mean something in three years, a <c>Why</c> that says what the <i>wrong</i> answer
 ///         was, the tuple set in the <c>object#relation@subject</c> grammar, and the expectations.
 ///         Nothing else. <c>RegressionCorpusTests</c> runs every case twice: once against the
@@ -68,12 +78,10 @@ public sealed record CorpusCase(
 ///         that existed at some point during this work. They are not illustrations.
 ///     </para>
 /// </remarks>
-public static class RegressionCorpus
-{
+public static class RegressionCorpus {
     /// <summary>Every case. Append-only in spirit: a case is fixed or explained, never deleted.</summary>
-    public static IReadOnlyList<CorpusCase> Cases { get; } =
-    [
-        new CorpusCase(
+    public static IReadOnlyList<CorpusCase> Cases { get; } = [
+        new(
             "inherited-owner-needs-no-tuple-at-the-resource",
             "docs/plan/07 § Azure RBAC row 3. A role assigned at the subscription must grant on "
             + "every resource under it with no tuple written per resource. A naive implementation "
@@ -82,31 +90,33 @@ public static class RegressionCorpus
             [
                 "subscription:c1sub#owner@user:alice",
                 "resourceGroup:c1rg#parent@subscription:c1sub",
-                "resource:c1res#parent@resourceGroup:c1rg",
+                "resource:c1res#parent@resourceGroup:c1rg"
             ],
             [
-                new CorpusExpectation("resource:c1res", "delete", "user:alice", true),
-                new CorpusExpectation("resource:c1res", "write", "user:alice", true),
-                new CorpusExpectation("resource:c1res", "read", "user:alice", true),
-                new CorpusExpectation("resource:c1res", "delete", "user:mallory", false),
-            ]),
+                new("resource:c1res", "delete", "user:alice", true),
+                new("resource:c1res", "write", "user:alice", true),
+                new("resource:c1res", "read", "user:alice", true),
+                new("resource:c1res", "delete", "user:mallory", false)
+            ]
+        ),
 
-        new CorpusCase(
+        new(
             "deny-assignment-removes-access-that-a-role-grants",
             "docs/plan/07 § Azure RBAC row 4 and § Caching across requests. ADDING the #suspended "
             + "tuple must REMOVE assignRole. The wrong answer is 'still allowed', which is what any "
             + "cache that assumes more tuples can only grant more will produce.",
             [
                 "subscription:c2sub#owner@user:alice",
-                "subscription:c2sub#suspended@user:alice",
+                "subscription:c2sub#suspended@user:alice"
             ],
             [
-                new CorpusExpectation("subscription:c2sub", "assignRole", "user:alice", false),
-                new CorpusExpectation("subscription:c2sub", "delete", "user:alice", true),
-                new CorpusExpectation("subscription:c2sub", "read", "user:alice", true),
-            ]),
+                new("subscription:c2sub", "assignRole", "user:alice", false),
+                new("subscription:c2sub", "delete", "user:alice", true),
+                new("subscription:c2sub", "read", "user:alice", true)
+            ]
+        ),
 
-        new CorpusCase(
+        new(
             "a-suspension-at-the-parent-does-not-inherit",
             "The observable consequence of confining negation to the same object. `suspended` is "
             + "direct-only, so suspending the parent does NOT suspend the child. Recorded here so "
@@ -116,28 +126,30 @@ public static class RegressionCorpus
             [
                 "subscription:c3sub#owner@user:alice",
                 "subscription:c3sub#suspended@user:alice",
-                "resourceGroup:c3rg#parent@subscription:c3sub",
+                "resourceGroup:c3rg#parent@subscription:c3sub"
             ],
             [
-                new CorpusExpectation("subscription:c3sub", "assignRole", "user:alice", false),
-                new CorpusExpectation("resourceGroup:c3rg", "assignRole", "user:alice", true),
-            ]),
+                new("subscription:c3sub", "assignRole", "user:alice", false),
+                new("resourceGroup:c3rg", "assignRole", "user:alice", true)
+            ]
+        ),
 
-        new CorpusCase(
+        new(
             "a-parent-cycle-terminates-and-denies",
             "docs/plan/07 § Check: cycles are broken by the memo. Two resource groups that are each "
             + "other's parent must not hang the check and must not grant. The wrong answers are a "
             + "stack overflow, a hang, and an allow.",
             [
                 "resourceGroup:c4a#parent@resourceGroup:c4b",
-                "resourceGroup:c4b#parent@resourceGroup:c4a",
+                "resourceGroup:c4b#parent@resourceGroup:c4a"
             ],
             [
-                new CorpusExpectation("resourceGroup:c4a", "read", "user:alice", false),
-                new CorpusExpectation("resourceGroup:c4b", "read", "user:alice", false),
-            ]),
+                new("resourceGroup:c4a", "read", "user:alice", false),
+                new("resourceGroup:c4b", "read", "user:alice", false)
+            ]
+        ),
 
-        new CorpusCase(
+        new(
             "a-grant-inside-a-parent-cycle-is-still-found",
             "The other half of the cycle case, and the one a naive fix breaks: an implementation "
             + "that bails out on any cycle rather than returning 'false for this path' would deny "
@@ -145,15 +157,16 @@ public static class RegressionCorpus
             [
                 "resourceGroup:c5a#parent@resourceGroup:c5b",
                 "resourceGroup:c5b#parent@resourceGroup:c5a",
-                "resourceGroup:c5b#owner@user:alice",
+                "resourceGroup:c5b#owner@user:alice"
             ],
             [
-                new CorpusExpectation("resourceGroup:c5a", "read", "user:alice", true),
-                new CorpusExpectation("resourceGroup:c5b", "read", "user:alice", true),
-                new CorpusExpectation("resourceGroup:c5a", "read", "user:mallory", false),
-            ]),
+                new("resourceGroup:c5a", "read", "user:alice", true),
+                new("resourceGroup:c5b", "read", "user:alice", true),
+                new("resourceGroup:c5a", "read", "user:mallory", false)
+            ]
+        ),
 
-        new CorpusCase(
+        new(
             "a-group-membership-cycle-terminates",
             "The same shape one level up. group:eng#member@group:ops#member and back — the userset "
             + "recursion of docs/plan/07 § Check step 3, closed into a loop. Nobody is a member, and "
@@ -161,13 +174,14 @@ public static class RegressionCorpus
             [
                 "resourceGroup:c6rg#reader@group:c6eng#member",
                 "group:c6eng#member@group:c6ops#member",
-                "group:c6ops#member@group:c6eng#member",
+                "group:c6ops#member@group:c6eng#member"
             ],
             [
-                new CorpusExpectation("resourceGroup:c6rg", "read", "user:alice", false),
-            ]),
+                new("resourceGroup:c6rg", "read", "user:alice", false)
+            ]
+        ),
 
-        new CorpusCase(
+        new(
             "nested-group-membership-resolves-without-an-index",
             "docs/plan/07 § The Leopard index is M2, and M1 has to be correct without it. Three "
             + "levels of group nesting must resolve by walking. The wrong answer is a deny, which "
@@ -176,14 +190,15 @@ public static class RegressionCorpus
                 "resourceGroup:c7rg#reader@group:c7a#member",
                 "group:c7a#member@group:c7b#member",
                 "group:c7b#member@group:c7c#member",
-                "group:c7c#member@user:carol",
+                "group:c7c#member@user:carol"
             ],
             [
-                new CorpusExpectation("resourceGroup:c7rg", "read", "user:carol", true),
-                new CorpusExpectation("resourceGroup:c7rg", "read", "user:mallory", false),
-            ]),
+                new("resourceGroup:c7rg", "read", "user:carol", true),
+                new("resourceGroup:c7rg", "read", "user:mallory", false)
+            ]
+        ),
 
-        new CorpusCase(
+        new(
             "a-userset-subject-is-not-its-object-half",
             "`group:eng` and `group:eng#member` are different subjects and must never collapse: one "
             + "is the group itself, the other is everyone in it. The wrong answer is that being "
@@ -191,14 +206,15 @@ public static class RegressionCorpus
             + "the group object itself inherits its own members' access.",
             [
                 "resourceGroup:c8rg#owner@group:c8eng",
-                "group:c8eng#member@user:bob",
+                "group:c8eng#member@user:bob"
             ],
             [
-                new CorpusExpectation("resourceGroup:c8rg", "read", "group:c8eng", true),
-                new CorpusExpectation("resourceGroup:c8rg", "read", "user:bob", false),
-            ]),
+                new("resourceGroup:c8rg", "read", "group:c8eng", true),
+                new("resourceGroup:c8rg", "read", "user:bob", false)
+            ]
+        ),
 
-        new CorpusCase(
+        new(
             "a-diamond-does-not-double-count-or-lose-a-grant",
             "The shape docs/plan/07 § Check names as the reason the memo exists. Two resource "
             + "groups under one subscription, and a resource whose parent chain reaches it. The "
@@ -208,31 +224,33 @@ public static class RegressionCorpus
                 "subscription:c9sub#owner@user:alice",
                 "resourceGroup:c9left#parent@subscription:c9sub",
                 "resourceGroup:c9right#parent@subscription:c9sub",
-                "resource:c9res#parent@resourceGroup:c9left",
+                "resource:c9res#parent@resourceGroup:c9left"
             ],
             [
-                new CorpusExpectation("resource:c9res", "read", "user:alice", true),
-                new CorpusExpectation("resourceGroup:c9right", "read", "user:alice", true),
-            ]),
+                new("resource:c9res", "read", "user:alice", true),
+                new("resourceGroup:c9right", "read", "user:alice", true)
+            ]
+        ),
 
-        new CorpusCase(
+        new(
             "role-hierarchy-is-one-directional",
             "owner implies contributor implies reader, and never the other way. The wrong answer is "
             + "a reader who can delete, which is the mistake a symmetric Rel(…) union produces.",
             [
                 "resourceGroup:c10rg#reader@user:rachel",
-                "resourceGroup:c10rg#owner@user:olivia",
+                "resourceGroup:c10rg#owner@user:olivia"
             ],
             [
-                new CorpusExpectation("resourceGroup:c10rg", "read", "user:rachel", true),
-                new CorpusExpectation("resourceGroup:c10rg", "write", "user:rachel", false),
-                new CorpusExpectation("resourceGroup:c10rg", "delete", "user:rachel", false),
-                new CorpusExpectation("resourceGroup:c10rg", "read", "user:olivia", true),
-                new CorpusExpectation("resourceGroup:c10rg", "write", "user:olivia", true),
-                new CorpusExpectation("resourceGroup:c10rg", "delete", "user:olivia", true),
-            ]),
+                new("resourceGroup:c10rg", "read", "user:rachel", true),
+                new("resourceGroup:c10rg", "write", "user:rachel", false),
+                new("resourceGroup:c10rg", "delete", "user:rachel", false),
+                new("resourceGroup:c10rg", "read", "user:olivia", true),
+                new("resourceGroup:c10rg", "write", "user:olivia", true),
+                new("resourceGroup:c10rg", "delete", "user:olivia", true)
+            ]
+        ),
 
-        new CorpusCase(
+        new(
             "an-intersection-across-a-cycle-is-not-defeated-by-a-memoized-false",
             "⚠ FOUND BY CheckPropertyTests, on a generated graph, and not by any hand-written test. "
             + "An in-progress false returned to break a cycle is correct for the path it is on and "
@@ -243,29 +261,31 @@ public static class RegressionCorpus
             [
                 "resourceGroup:c11a#parent@resourceGroup:c11b",
                 "resourceGroup:c11b#parent@resourceGroup:c11a",
-                "resourceGroup:c11b#owner@user:alice",
+                "resourceGroup:c11b#owner@user:alice"
             ],
             [
-                new CorpusExpectation("resourceGroup:c11a", "delete", "user:alice", true),
-                new CorpusExpectation("resourceGroup:c11b", "delete", "user:alice", true),
-                new CorpusExpectation("resourceGroup:c11a", "assignRole", "user:alice", true),
-            ]),
+                new("resourceGroup:c11a", "delete", "user:alice", true),
+                new("resourceGroup:c11b", "delete", "user:alice", true),
+                new("resourceGroup:c11a", "assignRole", "user:alice", true)
+            ]
+        ),
 
-        new CorpusCase(
+        new(
             "a-tuple-on-an-unknown-relation-is-inert-rather-than-a-wildcard",
             "A tuple naming a relation the schema does not compute must grant nothing. The wrong "
             + "answer is an allow — docs/plan/07 § The model's 'silent allow-everything', which it "
             + "calls the worse of the two failure modes.",
             [
-                "resourceGroup:c12rg#suspended@user:alice",
+                "resourceGroup:c12rg#suspended@user:alice"
             ],
             [
-                new CorpusExpectation("resourceGroup:c12rg", "read", "user:alice", false),
-                new CorpusExpectation("resourceGroup:c12rg", "delete", "user:alice", false),
-                new CorpusExpectation("resourceGroup:c12rg", "assignRole", "user:alice", false),
-            ]),
+                new("resourceGroup:c12rg", "read", "user:alice", false),
+                new("resourceGroup:c12rg", "delete", "user:alice", false),
+                new("resourceGroup:c12rg", "assignRole", "user:alice", false)
+            ]
+        ),
 
-        new CorpusCase(
+        new(
             "a-group-granted-at-a-subscription-reaches-a-resource",
             "The two mechanisms composed: a userset subject AND inheritance, which is the shape "
             + "almost every real role assignment has. Neither feature is exercised by the other's "
@@ -275,11 +295,12 @@ public static class RegressionCorpus
                 "subscription:c13sub#contributor@group:c13eng#member",
                 "group:c13eng#member@user:bob",
                 "resourceGroup:c13rg#parent@subscription:c13sub",
-                "resource:c13res#parent@resourceGroup:c13rg",
+                "resource:c13res#parent@resourceGroup:c13rg"
             ],
             [
-                new CorpusExpectation("resource:c13res", "write", "user:bob", true),
-                new CorpusExpectation("resource:c13res", "delete", "user:bob", false),
-            ]),
+                new("resource:c13res", "write", "user:bob", true),
+                new("resource:c13res", "delete", "user:bob", false)
+            ]
+        )
     ];
 }

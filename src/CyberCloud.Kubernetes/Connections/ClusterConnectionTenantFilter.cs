@@ -34,15 +34,12 @@ namespace CyberCloud.Kubernetes.Connections;
 ///         default.
 ///     </para>
 /// </remarks>
-public sealed class ClusterConnectionTenantFilter : IIncomingGrainCallFilter
-{
+public sealed class ClusterConnectionTenantFilter : IIncomingGrainCallFilter {
     /// <inheritdoc />
-    public async Task Invoke(IIncomingGrainCallContext context)
-    {
+    public async Task Invoke(IIncomingGrainCallContext context) {
         ArgumentNullException.ThrowIfNull(context);
 
-        using (CallerTenant.Enter(Resolve(context.SourceId)))
-        {
+        using (CallerTenant.Enter(Resolve(context.SourceId))) {
             await context.Invoke().ConfigureAwait(false);
         }
     }
@@ -50,12 +47,20 @@ public sealed class ClusterConnectionTenantFilter : IIncomingGrainCallFilter
     /// <summary>Classifies the calling activation.</summary>
     /// <param name="source">The source of the call, from the runtime.</param>
     /// <remarks>
-    ///     ⚠ <b>The client check comes FIRST, and leaving it out is a real hole rather than a
-    ///     tidiness point.</b> An Orleans client is not "no source" — it has a <see cref="GrainId" />
+    ///     ⚠
+    ///     <b>
+    ///         The client check comes FIRST, and leaving it out is a real hole rather than a
+    ///         tidiness point.
+    ///     </b>
+    ///     An Orleans client is not "no source" — it has a <see cref="GrainId" />
     ///     of its own, whose key carries no tenant, so <c>GetTenantId()</c> returns
     ///     <see langword="null" /> for it exactly as it does for a genuine null-tenant platform
-    ///     grain. Classifying on the tenant id alone therefore promotes <i>every cluster client in
-    ///     the platform</i> — the gateway, a hosted service, a test — to
+    ///     grain. Classifying on the tenant id alone therefore promotes
+    ///     <i>
+    ///         every cluster client in
+    ///         the platform
+    ///     </i>
+    ///     — the gateway, a hosted service, a test — to
     ///     <see cref="CallerKind.NullTenant" />, which
     ///     <c>ClusterConnectionGrain.EnsureCallerMayReach</c> allows. That is a total bypass of the
     ///     only tenancy check this grain has.
@@ -67,22 +72,19 @@ public sealed class ClusterConnectionTenantFilter : IIncomingGrainCallFilter
     ///         predicate rather than a string comparison on the key.
     ///     </para>
     /// </remarks>
-    static CallerTenant Resolve(GrainId? source)
-    {
-        if (source is not { } id)
-        {
+    static CallerTenant Resolve(GrainId? source) {
+        if (source is not { } id) {
             return CallerTenant.Client;
         }
 
-        if (GrainTypePrefix.IsClient(id))
-        {
+        if (id.IsClient()) {
             return CallerTenant.Client;
         }
 
         // A system target is Orleans' own infrastructure (the catalog, the directory, the
         // management grain). It is not a tenant and it is not platform code of ours, so it gets the
         // same "not a tenant" classification a client does rather than being trusted.
-        return GrainTypePrefix.IsSystemTarget(id)
+        return id.IsSystemTarget()
             ? CallerTenant.Client
             : CallerTenant.FromTenantId(id.GetTenantId());
     }

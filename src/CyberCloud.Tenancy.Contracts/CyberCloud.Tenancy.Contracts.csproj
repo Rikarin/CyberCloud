@@ -1,29 +1,29 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!--
-    docs/plan/03 § src — the .Contracts split. Grain interfaces and wire types for the tenancy
-    domain: tenants, subscriptions, resource groups, the two index grains, the shard map, the tenant
-    directory and quota.
+    <!--
+      docs/plan/03 § src — the .Contracts split. Grain interfaces and wire types for the tenancy
+      domain: tenants, subscriptions, resource groups, the two index grains, the shard map, the tenant
+      directory and quota.
+  
+      ⚠ ONE PACKAGE, for the same reason CyberCloud.Core.Contracts has one. Microsoft.Orleans.Sdk is
+      the code generator plus Orleans.Serialization; no hosting, no clustering, no storage. The
+      gateway, the CLI and the SDK reference this assembly to call these grains, and none of them
+      acquires a silo by doing so. CyberCloud.Tenancy — the implementation — is where hosting starts.
+    -->
 
-    ⚠ ONE PACKAGE, for the same reason CyberCloud.Core.Contracts has one. Microsoft.Orleans.Sdk is
-    the code generator plus Orleans.Serialization; no hosting, no clustering, no storage. The
-    gateway, the CLI and the SDK reference this assembly to call these grains, and none of them
-    acquires a silo by doing so. CyberCloud.Tenancy — the implementation — is where hosting starts.
-  -->
+    <ItemGroup>
+        <PackageReference Include="Microsoft.Orleans.Sdk"/>
+    </ItemGroup>
 
-  <ItemGroup>
-    <PackageReference Include="Microsoft.Orleans.Sdk" />
-  </ItemGroup>
+    <ItemGroup>
+        <ProjectReference Include="../CyberCloud.Core/CyberCloud.Core.csproj"/>
+        <ProjectReference Include="../CyberCloud.Core.Contracts/CyberCloud.Core.Contracts.csproj"/>
+    </ItemGroup>
 
-  <ItemGroup>
-    <ProjectReference Include="../CyberCloud.Core/CyberCloud.Core.csproj" />
-    <ProjectReference Include="../CyberCloud.Core.Contracts/CyberCloud.Core.Contracts.csproj" />
-  </ItemGroup>
-
-  <ItemGroup Label="CyberCloud.Analyzers — see CyberCloud.Core.csproj for why this is not a reference">
-    <ProjectReference Include="../CyberCloud.Analyzers/CyberCloud.Analyzers.csproj"
-                      OutputItemType="Analyzer"
-                      ReferenceOutputAssembly="false" />
-  </ItemGroup>
+    <ItemGroup Label="CyberCloud.Analyzers — see CyberCloud.Core.csproj for why this is not a reference">
+        <ProjectReference Include="../CyberCloud.Analyzers/CyberCloud.Analyzers.csproj"
+                          OutputItemType="Analyzer"
+                          ReferenceOutputAssembly="false"/>
+    </ItemGroup>
 
 </Project>

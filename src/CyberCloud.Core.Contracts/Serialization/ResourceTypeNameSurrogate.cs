@@ -27,8 +27,7 @@ namespace CyberCloud.Core.Contracts.Serialization;
 /// </remarks>
 [GenerateSerializer]
 [Alias("CyberCloud.Core.ResourceTypeName")]
-public struct ResourceTypeNameSurrogate
-{
+public struct ResourceTypeNameSurrogate {
     /// <summary>The provider namespace, for example <c>CyberCloud.DBforPostgreSQL</c>.</summary>
     [Id(0)]
     public string? Namespace { get; set; }
@@ -41,8 +40,7 @@ public struct ResourceTypeNameSurrogate
 /// <summary>The <see cref="ResourceTypeName" /> ↔ <see cref="ResourceTypeNameSurrogate" /> converter.</summary>
 [RegisterConverter]
 public sealed class ResourceTypeNameSurrogateConverter
-    : IConverter<ResourceTypeName, ResourceTypeNameSurrogate>
-{
+    : IConverter<ResourceTypeName, ResourceTypeNameSurrogate> {
     /// <inheritdoc />
     public ResourceTypeName ConvertFromSurrogate(in ResourceTypeNameSurrogate surrogate) =>
         surrogate.Namespace is null && surrogate.Type is null

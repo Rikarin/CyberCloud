@@ -4,8 +4,7 @@ using CyberCloud.Kubernetes.Informers;
 namespace CyberCloud.Kubernetes;
 
 /// <summary>Configuration for the Kubernetes fabric — docs/plan/09.</summary>
-public sealed class KubernetesOptions
-{
+public sealed class KubernetesOptions {
     /// <summary>The configuration section: <c>CyberCloud:Kubernetes</c>.</summary>
     public const string SectionName = "CyberCloud:Kubernetes";
 

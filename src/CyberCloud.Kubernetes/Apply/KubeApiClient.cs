@@ -1,10 +1,13 @@
-using System.Globalization;
-using System.Net;
-using System.Text.Json;
 using CyberCloud.Core.Time;
 using k8s;
 using k8s.Autorest;
 using k8s.Models;
+using System.Globalization;
+using System.Net;
+using System.Net.Sockets;
+using System.Runtime.CompilerServices;
+using System.Security.Authentication;
+using System.Text.Json;
 
 namespace CyberCloud.Kubernetes.Apply;
 
@@ -14,8 +17,11 @@ namespace CyberCloud.Kubernetes.Apply;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         <b>Everything goes through <c>ICustomObjectsOperations</c>, including built-in kinds, and
-///         that is deliberate.</b> The fabric applies whatever a provider renders — a
+///         <b>
+///             Everything goes through <c>ICustomObjectsOperations</c>, including built-in kinds, and
+///             that is deliberate.
+///         </b>
+///         The fabric applies whatever a provider renders — a
 ///         <c>Deployment</c>, a <c>Service</c>, a <c>Cluster</c> from CloudNativePG — so it needs one
 ///         code path keyed by group/version/plural rather than one generated method per kind. The
 ///         custom-objects operations are exactly that path: they are not "for CRDs", they are the
@@ -23,8 +29,12 @@ namespace CyberCloud.Kubernetes.Apply;
 ///     </para>
 ///     <para>
 ///         ⚠ <b>Not <c>GenericClient</c>, and this is the constraint that shaped the class.</b>
-///         <c>GenericClient.PatchAsync&lt;T&gt;(V1Patch, name, ct)</c> has <b>no <c>fieldManager</c>
-///         and no <c>force</c> parameter</b> — in 18.0.13 and in 19.0.2 alike, verified against both
+///         <c>GenericClient.PatchAsync&lt;T&gt;(V1Patch, name, ct)</c> has
+///         <b>
+///             no <c>fieldManager</c>
+///             and no <c>force</c> parameter
+///         </b>
+///         — in 18.0.13 and in 19.0.2 alike, verified against both
 ///         assemblies. The API server <i>requires</i> <c>fieldManager</c> on an apply patch, so
 ///         server-side apply is simply not expressible through <c>GenericClient</c>. ADR-013 makes a
 ///         stable per-provider field manager the whole basis of conflict detection, so the choice
@@ -38,31 +48,30 @@ namespace CyberCloud.Kubernetes.Apply;
 ///         a JSON document under that content type is correct and is what every client does.)
 ///     </para>
 ///     <para>
-///         ⚠ <b><c>force</c> is passed as <c>command.Force</c>, which the builder pins to
-///         <see langword="false" />.</b> Passing <see langword="true" /> would make the API server
+///         ⚠
+///         <b>
+///             <c>force</c> is passed as <c>command.Force</c>, which the builder pins to
+///             <see langword="false" />.
+///         </b>
+///         Passing <see langword="true" /> would make the API server
 ///         take ownership of a conflicting field silently — the exact "silent revert" ADR-013 says
 ///         server-side apply exists to replace with a named drift event.
 ///     </para>
 /// </remarks>
 public sealed class KubeApiClient(IKubernetes client, Guid clusterId, IClock clock, bool ownsClient = true)
-    : IKubeApiClient
-{
+    : IKubeApiClient {
     /// <summary>The default page size for an informer's list.</summary>
     public const int DefaultListPageSize = 500;
 
     /// <inheritdoc />
-    public async Task<Result<string>> PingAsync(CancellationToken cancellationToken = default)
-    {
-        try
-        {
+    public async Task<Result<string>> PingAsync(CancellationToken cancellationToken = default) {
+        try {
             using var response = await client.Version
                 .GetCodeWithHttpMessagesAsync(cancellationToken: cancellationToken)
                 .ConfigureAwait(false);
 
             return Result<string>.Success(response.Body?.GitVersion ?? "unknown");
-        }
-        catch (Exception ex) when (IsTransport(ex))
-        {
+        } catch (Exception ex) when (IsTransport(ex)) {
             return Result<string>.Failure(Unreachable(ex));
         }
     }
@@ -70,43 +79,40 @@ public sealed class KubeApiClient(IKubernetes client, Guid clusterId, IClock clo
     /// <inheritdoc />
     public async Task<Result<KubeObject>> GetAsync(
         ObjectRef target,
-        CancellationToken cancellationToken = default)
-    {
+        CancellationToken cancellationToken = default
+    ) {
         ArgumentNullException.ThrowIfNull(target);
 
-        try
-        {
+        try {
             using var response = target.IsClusterScoped
                 ? await client.CustomObjects.GetClusterCustomObjectWithHttpMessagesAsync(
-                    target.Kind.Group,
-                    target.Kind.Version,
-                    target.Kind.Plural,
-                    target.Name,
-                    cancellationToken: cancellationToken).ConfigureAwait(false)
+                        target.Kind.Group,
+                        target.Kind.Version,
+                        target.Kind.Plural,
+                        target.Name,
+                        cancellationToken: cancellationToken
+                    )
+                    .ConfigureAwait(false)
                 : await client.CustomObjects.GetNamespacedCustomObjectWithHttpMessagesAsync(
-                    target.Kind.Group,
-                    target.Kind.Version,
-                    target.Namespace,
-                    target.Kind.Plural,
-                    target.Name,
-                    cancellationToken: cancellationToken).ConfigureAwait(false);
+                        target.Kind.Group,
+                        target.Kind.Version,
+                        target.Namespace,
+                        target.Kind.Plural,
+                        target.Name,
+                        cancellationToken: cancellationToken
+                    )
+                    .ConfigureAwait(false);
 
             var json = Serialize(response.Body);
-            return Result<KubeObject>.Success(new KubeObject
-            {
-                Ref = target,
-                Json = json,
-                ResourceVersion = ResourceVersionOf(json),
-            });
-        }
-        catch (HttpOperationException ex) when (ex.Response?.StatusCode == HttpStatusCode.NotFound)
-        {
+            return Result<KubeObject>.Success(
+                new() { Ref = target, Json = json, ResourceVersion = ResourceVersionOf(json) }
+            );
+        } catch (HttpOperationException ex) when (ex.Response?.StatusCode == HttpStatusCode.NotFound) {
             return Result<KubeObject>.Failure(
                 ErrorCode.ResourceNotFound,
-                $"{target} does not exist in cluster {clusterId:D}.");
-        }
-        catch (Exception ex) when (IsTransport(ex))
-        {
+                $"{target} does not exist in cluster {clusterId:D}."
+            );
+        } catch (Exception ex) when (IsTransport(ex)) {
             return Result<KubeObject>.Failure(Unreachable(ex));
         }
     }
@@ -114,8 +120,8 @@ public sealed class KubeApiClient(IKubernetes client, Guid clusterId, IClock clo
     /// <inheritdoc />
     public async Task<Result<ApplyOutcome>> ApplyAsync(
         KubeCommand command,
-        CancellationToken cancellationToken = default)
-    {
+        CancellationToken cancellationToken = default
+    ) {
         ArgumentNullException.ThrowIfNull(command);
 
         var target = command.Target;
@@ -138,8 +144,7 @@ public sealed class KubeApiClient(IKubernetes client, Guid clusterId, IClock clo
         var existing = await GetAsync(target, cancellationToken).ConfigureAwait(false);
 
         if (existing.TryGetError(out var readError)
-            && readError.Code != ErrorCode.ResourceNotFound)
-        {
+            && readError.Code != ErrorCode.ResourceNotFound) {
             return Result<ApplyOutcome>.Failure(readError);
         }
 
@@ -147,41 +152,43 @@ public sealed class KubeApiClient(IKubernetes client, Guid clusterId, IClock clo
         var priorVersion = existing.ValueOrDefault?.ResourceVersion ?? string.Empty;
 
         object body;
-        try
-        {
+        try {
             body = new V1Patch(
                 JsonSerializer.Deserialize<JsonElement>(command.Body),
-                V1Patch.PatchType.ApplyPatch);
-        }
-        catch (JsonException ex)
-        {
+                V1Patch.PatchType.ApplyPatch
+            );
+        } catch (JsonException ex) {
             return Result<ApplyOutcome>.Failure(
                 ErrorCode.InvalidRequestBody,
-                $"The command's body is not valid JSON: {ex.Message}");
+                $"The command's body is not valid JSON: {ex.Message}"
+            );
         }
 
-        try
-        {
+        try {
             using var response = target.IsClusterScoped
                 ? await client.CustomObjects.PatchClusterCustomObjectWithHttpMessagesAsync(
-                    body,
-                    target.Kind.Group,
-                    target.Kind.Version,
-                    target.Kind.Plural,
-                    target.Name,
-                    fieldManager: command.FieldManager,
-                    force: command.Force,
-                    cancellationToken: cancellationToken).ConfigureAwait(false)
+                        body,
+                        target.Kind.Group,
+                        target.Kind.Version,
+                        target.Kind.Plural,
+                        target.Name,
+                        fieldManager: command.FieldManager,
+                        force: command.Force,
+                        cancellationToken: cancellationToken
+                    )
+                    .ConfigureAwait(false)
                 : await client.CustomObjects.PatchNamespacedCustomObjectWithHttpMessagesAsync(
-                    body,
-                    target.Kind.Group,
-                    target.Kind.Version,
-                    target.Namespace,
-                    target.Kind.Plural,
-                    target.Name,
-                    fieldManager: command.FieldManager,
-                    force: command.Force,
-                    cancellationToken: cancellationToken).ConfigureAwait(false);
+                        body,
+                        target.Kind.Group,
+                        target.Kind.Version,
+                        target.Namespace,
+                        target.Kind.Plural,
+                        target.Name,
+                        fieldManager: command.FieldManager,
+                        force: command.Force,
+                        cancellationToken: cancellationToken
+                    )
+                    .ConfigureAwait(false);
 
             var json = Serialize(response.Body);
             var newVersion = ResourceVersionOf(json);
@@ -192,17 +199,16 @@ public sealed class KubeApiClient(IKubernetes client, Guid clusterId, IClock clo
                     ? ApplyResult.Unchanged
                     : ApplyResult.Updated;
 
-            return Result<ApplyOutcome>.Success(new ApplyOutcome
-            {
-                Result = result,
-                Target = target,
-                ResourceVersion = newVersion,
-                ReconcileHash = command.ReconcileHash,
-                Message = string.Empty,
-            });
-        }
-        catch (HttpOperationException ex) when (ex.Response?.StatusCode == HttpStatusCode.Conflict)
-        {
+            return Result<ApplyOutcome>.Success(
+                new() {
+                    Result = result,
+                    Target = target,
+                    ResourceVersion = newVersion,
+                    ReconcileHash = command.ReconcileHash,
+                    Message = string.Empty
+                }
+            );
+        } catch (HttpOperationException ex) when (ex.Response?.StatusCode == HttpStatusCode.Conflict) {
             // ⚠ THE ADR-013 PAYOFF, and the one branch that must not be an error.
             //
             // The field is NOT overwritten (force is false), the apply did NOT take effect, and this
@@ -212,30 +218,28 @@ public sealed class KubeApiClient(IKubernetes client, Guid clusterId, IClock clo
             // drift, it has a name, and docs/plan/08's drift detection is what consumes it.
             var conflicts = ConflictParser.Parse(ex.Response.Content);
 
-            return Result<ApplyOutcome>.Success(new ApplyOutcome
-            {
-                Result = ApplyResult.Conflict,
-                Target = target,
-                ResourceVersion = priorVersion,
-                ReconcileHash = command.ReconcileHash,
-                Drift = new DriftEvent
-                {
-                    ResourceId = command.ResourceId,
-                    ClusterId = clusterId,
+            return Result<ApplyOutcome>.Success(
+                new() {
+                    Result = ApplyResult.Conflict,
                     Target = target,
-                    FieldManager = command.FieldManager,
-                    Conflicts = conflicts,
-                    DetectedAt = clock.UtcNow,
-                },
-                Message = conflicts.Count > 0
-                    ? $"{conflicts.Count.ToString(CultureInfo.InvariantCulture)} field(s) on {target} "
+                    ResourceVersion = priorVersion,
+                    ReconcileHash = command.ReconcileHash,
+                    Drift = new() {
+                        ResourceId = command.ResourceId,
+                        ClusterId = clusterId,
+                        Target = target,
+                        FieldManager = command.FieldManager,
+                        Conflicts = conflicts,
+                        DetectedAt = clock.UtcNow
+                    },
+                    Message = conflicts.Count > 0
+                        ? $"{conflicts.Count.ToString(CultureInfo.InvariantCulture)} field(s) on {target} "
                         + $"are owned by another field manager and were not overwritten: "
                         + string.Join(", ", conflicts)
-                    : "The apply conflicted with another field manager. " + ex.Response.Content,
-            });
-        }
-        catch (Exception ex) when (IsTransport(ex))
-        {
+                        : "The apply conflicted with another field manager. " + ex.Response.Content
+                }
+            );
+        } catch (Exception ex) when (IsTransport(ex)) {
             return Result<ApplyOutcome>.Failure(Unreachable(ex));
         }
     }
@@ -244,47 +248,45 @@ public sealed class KubeApiClient(IKubernetes client, Guid clusterId, IClock clo
     public async Task<Result> DeleteAsync(
         ObjectRef target,
         CascadePolicy policy,
-        CancellationToken cancellationToken = default)
-    {
+        CancellationToken cancellationToken = default
+    ) {
         ArgumentNullException.ThrowIfNull(target);
 
-        var propagation = policy switch
-        {
+        var propagation = policy switch {
             CascadePolicy.Foreground => "Foreground",
             CascadePolicy.Orphan => "Orphan",
-            _ => "Background",
+            _ => "Background"
         };
 
-        try
-        {
+        try {
             using var response = target.IsClusterScoped
                 ? await client.CustomObjects.DeleteClusterCustomObjectWithHttpMessagesAsync(
-                    target.Kind.Group,
-                    target.Kind.Version,
-                    target.Kind.Plural,
-                    target.Name,
-                    propagationPolicy: propagation,
-                    cancellationToken: cancellationToken).ConfigureAwait(false)
+                        target.Kind.Group,
+                        target.Kind.Version,
+                        target.Kind.Plural,
+                        target.Name,
+                        propagationPolicy: propagation,
+                        cancellationToken: cancellationToken
+                    )
+                    .ConfigureAwait(false)
                 : await client.CustomObjects.DeleteNamespacedCustomObjectWithHttpMessagesAsync(
-                    target.Kind.Group,
-                    target.Kind.Version,
-                    target.Namespace,
-                    target.Kind.Plural,
-                    target.Name,
-                    propagationPolicy: propagation,
-                    cancellationToken: cancellationToken).ConfigureAwait(false);
+                        target.Kind.Group,
+                        target.Kind.Version,
+                        target.Namespace,
+                        target.Kind.Plural,
+                        target.Name,
+                        propagationPolicy: propagation,
+                        cancellationToken: cancellationToken
+                    )
+                    .ConfigureAwait(false);
 
             return Result.Success;
-        }
-        catch (HttpOperationException ex) when (ex.Response?.StatusCode == HttpStatusCode.NotFound)
-        {
+        } catch (HttpOperationException ex) when (ex.Response?.StatusCode == HttpStatusCode.NotFound) {
             // Deleting what is already gone is the desired end state. docs/plan/06 § Two-phase
             // create makes delete idempotent so a retried teardown converges instead of alternating
             // between 404 and success.
             return Result.Success;
-        }
-        catch (Exception ex) when (IsTransport(ex))
-        {
+        } catch (Exception ex) when (IsTransport(ex)) {
             return Result.Failure(Unreachable(ex));
         }
     }
@@ -297,37 +299,38 @@ public sealed class KubeApiClient(IKubernetes client, Guid clusterId, IClock clo
         string? resourceVersion = null,
         string? continueToken = null,
         int? limit = null,
-        CancellationToken cancellationToken = default)
-    {
+        CancellationToken cancellationToken = default
+    ) {
         ArgumentNullException.ThrowIfNull(kind);
 
-        try
-        {
+        try {
             using var response = string.IsNullOrEmpty(ns)
                 ? await client.CustomObjects.ListClusterCustomObjectWithHttpMessagesAsync(
-                    kind.Group,
-                    kind.Version,
-                    kind.Plural,
-                    continueParameter: continueToken,
-                    labelSelector: labelSelector,
-                    limit: limit ?? DefaultListPageSize,
-                    resourceVersion: resourceVersion,
-                    cancellationToken: cancellationToken).ConfigureAwait(false)
+                        kind.Group,
+                        kind.Version,
+                        kind.Plural,
+                        continueParameter: continueToken,
+                        labelSelector: labelSelector,
+                        limit: limit ?? DefaultListPageSize,
+                        resourceVersion: resourceVersion,
+                        cancellationToken: cancellationToken
+                    )
+                    .ConfigureAwait(false)
                 : await client.CustomObjects.ListNamespacedCustomObjectWithHttpMessagesAsync(
-                    kind.Group,
-                    kind.Version,
-                    ns,
-                    kind.Plural,
-                    continueParameter: continueToken,
-                    labelSelector: labelSelector,
-                    limit: limit ?? DefaultListPageSize,
-                    resourceVersion: resourceVersion,
-                    cancellationToken: cancellationToken).ConfigureAwait(false);
+                        kind.Group,
+                        kind.Version,
+                        ns,
+                        kind.Plural,
+                        continueParameter: continueToken,
+                        labelSelector: labelSelector,
+                        limit: limit ?? DefaultListPageSize,
+                        resourceVersion: resourceVersion,
+                        cancellationToken: cancellationToken
+                    )
+                    .ConfigureAwait(false);
 
             return Result<ListPage>.Success(ReadPage(Serialize(response.Body)));
-        }
-        catch (HttpOperationException ex) when (ex.Response?.StatusCode == HttpStatusCode.Gone)
-        {
+        } catch (HttpOperationException ex) when (ex.Response?.StatusCode == HttpStatusCode.Gone) {
             // ⚠ HTTP 410 — the resourceVersion we resumed from has been compacted out of etcd's
             // history. docs/plan/09 § Observing bounds the resume with exactly this caveat: "resume
             // from the last resourceVersion WHERE THE API SERVER STILL HAS IT". This is that
@@ -336,10 +339,9 @@ public sealed class KubeApiClient(IKubernetes client, Guid clusterId, IClock clo
                 ErrorCode.PreconditionFailed,
                 $"The API server no longer has resourceVersion '{resourceVersion}' for {kind} — it "
                 + "has been compacted. The informer must fall back to a full list. This is the "
-                + "expected outcome of a resume that arrives too late, not a fault.");
-        }
-        catch (Exception ex) when (IsTransport(ex))
-        {
+                + "expected outcome of a resume that arrives too late, not a fault."
+            );
+        } catch (Exception ex) when (IsTransport(ex)) {
             return Result<ListPage>.Failure(Unreachable(ex));
         }
     }
@@ -350,8 +352,8 @@ public sealed class KubeApiClient(IKubernetes client, Guid clusterId, IClock clo
         string ns,
         string labelSelector,
         string resourceVersion,
-        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
-    {
+        [EnumeratorCancellation] CancellationToken cancellationToken = default
+    ) {
         ArgumentNullException.ThrowIfNull(kind);
 
         // ⚠ allowWatchBookmarks: true is not an optimisation, it is what keeps a resume viable on a
@@ -362,17 +364,18 @@ public sealed class KubeApiClient(IKubernetes client, Guid clusterId, IClock clo
                 kind.Version,
                 ns,
                 kind.Plural,
-                allowWatchBookmarks: true,
+                true,
                 labelSelector: labelSelector,
                 resourceVersion: resourceVersion,
                 watch: true,
-                cancellationToken: cancellationToken)
+                cancellationToken: cancellationToken
+            )
             .ConfigureAwait(false);
 
-        using (response)
-        {
+        using (response) {
             var stream = await response.Response.Content
-                .ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
+                .ReadAsStreamAsync(cancellationToken)
+                .ConfigureAwait(false);
 
             using var reader = new StreamReader(stream);
 
@@ -385,32 +388,33 @@ public sealed class KubeApiClient(IKubernetes client, Guid clusterId, IClock clo
             // have, and the WatcherExt overloads are marked [Obsolete] as of 18.0.4 with a
             // replacement that only exists for the strongly-typed ClientSets path. Depending on an
             // obsolete generic helper to do something we can do exactly is the worse trade.
-            while (!cancellationToken.IsCancellationRequested)
-            {
+            while (!cancellationToken.IsCancellationRequested) {
                 var line = await reader.ReadLineAsync(cancellationToken).ConfigureAwait(false);
-                if (line is null)
-                {
+                if (line is null) {
                     yield break;
                 }
 
-                if (line.Length == 0)
-                {
+                if (line.Length == 0) {
                     continue;
                 }
 
                 var parsed = ReadFrame(line);
-                if (parsed is not null)
-                {
+                if (parsed is not null) {
                     yield return parsed;
                 }
             }
         }
     }
 
-    static KubeWatchEvent? ReadFrame(string line)
-    {
-        try
-        {
+    /// <inheritdoc />
+    public void Dispose() {
+        if (ownsClient) {
+            client.Dispose();
+        }
+    }
+
+    static KubeWatchEvent? ReadFrame(string line) {
+        try {
             using var document = JsonDocument.Parse(line);
             var root = document.RootElement;
 
@@ -418,36 +422,23 @@ public sealed class KubeApiClient(IKubernetes client, Guid clusterId, IClock clo
                 ? t.GetString()
                 : null;
 
-            var kind = type switch
-            {
+            var kind = type switch {
                 "ADDED" => KubeWatchEventKind.Added,
                 "MODIFIED" => KubeWatchEventKind.Modified,
                 "DELETED" => KubeWatchEventKind.Deleted,
                 "BOOKMARK" => KubeWatchEventKind.Bookmark,
                 "ERROR" => KubeWatchEventKind.Error,
-                _ => KubeWatchEventKind.Unknown,
+                _ => KubeWatchEventKind.Unknown
             };
 
-            if (!root.TryGetProperty("object", out var obj))
-            {
+            if (!root.TryGetProperty("object", out var obj)) {
                 return null;
             }
 
             var json = obj.GetRawText();
-            return new KubeWatchEvent(kind, json, ResourceVersionOf(json));
-        }
-        catch (JsonException)
-        {
+            return new(kind, json, ResourceVersionOf(json));
+        } catch (JsonException) {
             return null;
-        }
-    }
-
-    /// <inheritdoc />
-    public void Dispose()
-    {
-        if (ownsClient)
-        {
-            client.Dispose();
         }
     }
 
@@ -462,74 +453,61 @@ public sealed class KubeApiClient(IKubernetes client, Guid clusterId, IClock clo
     ///     <c>System.Text.Json</c> and hands back the DOM node. Re-serializing rather than assuming
     ///     the runtime type keeps this correct if that ever changes.
     /// </remarks>
-    static string Serialize(object? body) => body switch
-    {
-        null => "{}",
-        JsonElement element => element.GetRawText(),
-        string text => text,
-        _ => JsonSerializer.Serialize(body),
-    };
+    static string Serialize(object? body) =>
+        body switch {
+            null => "{}",
+            JsonElement element => element.GetRawText(),
+            string text => text,
+            _ => JsonSerializer.Serialize(body)
+        };
 
-    static string ResourceVersionOf(string json)
-    {
-        try
-        {
+    static string ResourceVersionOf(string json) {
+        try {
             using var document = JsonDocument.Parse(json);
             return document.RootElement.TryGetProperty("metadata", out var metadata)
                 && metadata.TryGetProperty("resourceVersion", out var version)
                 && version.ValueKind == JsonValueKind.String
                     ? version.GetString() ?? string.Empty
                     : string.Empty;
-        }
-        catch (JsonException)
-        {
+        } catch (JsonException) {
             return string.Empty;
         }
     }
 
-    static ListPage ReadPage(string json)
-    {
+    static ListPage ReadPage(string json) {
         List<string> items = [];
         var resourceVersion = string.Empty;
         var continueToken = string.Empty;
 
-        try
-        {
+        try {
             using var document = JsonDocument.Parse(json);
             var root = document.RootElement;
 
-            if (root.TryGetProperty("metadata", out var metadata))
-            {
+            if (root.TryGetProperty("metadata", out var metadata)) {
                 if (metadata.TryGetProperty("resourceVersion", out var version)
-                    && version.ValueKind == JsonValueKind.String)
-                {
+                    && version.ValueKind == JsonValueKind.String) {
                     resourceVersion = version.GetString() ?? string.Empty;
                 }
 
                 if (metadata.TryGetProperty("continue", out var cont)
-                    && cont.ValueKind == JsonValueKind.String)
-                {
+                    && cont.ValueKind == JsonValueKind.String) {
                     continueToken = cont.GetString() ?? string.Empty;
                 }
             }
 
-            if (root.TryGetProperty("items", out var array) && array.ValueKind == JsonValueKind.Array)
-            {
-                foreach (var item in array.EnumerateArray())
-                {
+            if (root.TryGetProperty("items", out var array) && array.ValueKind == JsonValueKind.Array) {
+                foreach (var item in array.EnumerateArray()) {
                     items.Add(item.GetRawText());
                 }
             }
-        }
-        catch (JsonException)
-        {
+        } catch (JsonException) {
             // A list body that will not parse is not a partial list — it is nothing. Returning an
             // empty page with no cursor makes the informer re-list rather than advance past objects
             // it never saw.
-            return new ListPage([], string.Empty, string.Empty);
+            return new([], string.Empty, string.Empty);
         }
 
-        return new ListPage(items, resourceVersion, continueToken);
+        return new(items, resourceVersion, continueToken);
     }
 
     // ── Failure classification ─────────────────────────────────────────────────────────────────
@@ -545,22 +523,24 @@ public sealed class KubeApiClient(IKubernetes client, Guid clusterId, IClock clo
     ///     the ones handled explicitly above, because a 400 or a 422 is us sending a malformed
     ///     object and must not be reported to a tenant as "cannot reach your cluster".
     /// </remarks>
-    static bool IsTransport(Exception ex) => ex switch
-    {
-        HttpOperationException http => http.Response is null
-            || (int)http.Response.StatusCode >= 500
-            || http.Response.StatusCode == HttpStatusCode.RequestTimeout
-            || http.Response.StatusCode == HttpStatusCode.TooManyRequests,
-        HttpRequestException => true,
-        TaskCanceledException => true,
-        TimeoutException => true,
-        System.Net.Sockets.SocketException => true,
-        System.Security.Authentication.AuthenticationException => true,
-        KubernetesException => true,
-        _ => false,
-    };
+    static bool IsTransport(Exception ex) =>
+        ex switch {
+            HttpOperationException http => http.Response is null
+                || (int)http.Response.StatusCode >= 500
+                || http.Response.StatusCode == HttpStatusCode.RequestTimeout
+                || http.Response.StatusCode == HttpStatusCode.TooManyRequests,
+            HttpRequestException => true,
+            TaskCanceledException => true,
+            TimeoutException => true,
+            SocketException => true,
+            AuthenticationException => true,
+            KubernetesException => true,
+            _ => false
+        };
 
-    Error Unreachable(Exception ex) => new(
-        ErrorCode.InternalError,
-        $"Cluster {clusterId:D} did not answer: {ex.GetType().Name}: {ex.Message}");
+    Error Unreachable(Exception ex) =>
+        new(
+            ErrorCode.InternalError,
+            $"Cluster {clusterId:D} did not answer: {ex.GetType().Name}: {ex.Message}"
+        );
 }

@@ -24,8 +24,7 @@ namespace CyberCloud.ServiceDefaults.Storage;
 ///         it. See that type's remarks for exactly what is stubbed.
 ///     </para>
 /// </remarks>
-public interface IShardMapCache
-{
+public interface IShardMapCache {
     /// <summary>
     ///     The directory version this snapshot was built from. <c>0</c> means "never refreshed from
     ///     the shard map grain" — which is what <see cref="StaticShardMapCache" /> always reports.

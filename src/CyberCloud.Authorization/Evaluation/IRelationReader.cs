@@ -8,8 +8,12 @@ namespace CyberCloud.Authorization.Evaluation;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>Only the forward direction exists here, and that is the point of docs/plan/07
-///         § Storage's asymmetry.</b> <c>Check</c> walks forward from the object, so the evaluator
+///         ⚠
+///         <b>
+///             Only the forward direction exists here, and that is the point of docs/plan/07
+///             § Storage's asymmetry.
+///         </b>
+///         <c>Check</c> walks forward from the object, so the evaluator
 ///         can only ever read <c>IObjectRelationsGrain</c>. There is deliberately no way for it to
 ///         reach the reverse index, which is what makes "a subject index missing an entry costs a
 ///         <c>ListObjects</c> a miss, not a <c>Check</c> an incorrect answer" true by construction
@@ -23,13 +27,14 @@ namespace CyberCloud.Authorization.Evaluation;
 ///         differs.
 ///     </para>
 /// </remarks>
-public interface IRelationReader
-{
+public interface IRelationReader {
     /// <summary>Every tuple whose object is <paramref name="target" />.</summary>
     /// <param name="target">The object. Named `target` only because CA1716 forbids `object` on an interface member.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     ValueTask<Result<ObjectRelationsSnapshot>> ReadAsync(
-        ObjectRef target, CancellationToken cancellationToken);
+        ObjectRef target,
+        CancellationToken cancellationToken
+    );
 }
 
 /// <summary>
@@ -56,8 +61,7 @@ public interface IRelationReader
 ///         token a check was given. Nothing in M1 can test that, because nothing in M1 has a version.
 ///     </para>
 /// </remarks>
-public interface IMembershipIndex
-{
+public interface IMembershipIndex {
     /// <summary>
     ///     Whether <paramref name="subject" /> is in the userset, or <see langword="null" /> when
     ///     the userset is not indexed (or the index is behind) and the walk must be taken.
@@ -66,17 +70,22 @@ public interface IMembershipIndex
     /// <param name="subject">The subject being tested.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     ValueTask<bool?> TryTestMembershipAsync(
-        SubjectRef userset, SubjectRef subject, CancellationToken cancellationToken);
+        SubjectRef userset,
+        SubjectRef subject,
+        CancellationToken cancellationToken
+    );
 }
 
 /// <summary>The M1 membership index: there isn't one. Always answers "walk it".</summary>
-public sealed class NoMembershipIndex : IMembershipIndex
-{
+public sealed class NoMembershipIndex : IMembershipIndex {
     /// <summary>The single instance.</summary>
     public static NoMembershipIndex Instance { get; } = new();
 
     /// <inheritdoc />
     public ValueTask<bool?> TryTestMembershipAsync(
-        SubjectRef userset, SubjectRef subject, CancellationToken cancellationToken) =>
+        SubjectRef userset,
+        SubjectRef subject,
+        CancellationToken cancellationToken
+    ) =>
         ValueTask.FromResult<bool?>(null);
 }

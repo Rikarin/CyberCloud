@@ -1,309 +1,309 @@
 <Project>
 
-  <!--
-    Central Package Management — docs/plan/02 § Dependency register.
-
-    Rules:
-      * Every version lives here. A `PackageReference` in a .csproj carries NO `Version=` attribute;
-        with CPM on, one is NU1008 and a hard restore failure.
-      * No floating versions, no wildcards, no version ranges (docs/plan/02 § Platform baseline).
-      * A package that is not in docs/plan/02's register needs an ADR before it is added here.
-
-    The three corrections below are marked ⚠ CORRECTED and each says why. They are audit findings
-    against docs/plan/02, not drift — fix the doc, do not "fix" this file back.
-  -->
-
-  <PropertyGroup>
-    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
-    <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
-    <CentralPackageVersionOverrideEnabled>false</CentralPackageVersionOverrideEnabled>
-  </PropertyGroup>
-
-  <PropertyGroup Label="Version groups">
-    <OrleansVersion>10.2.2</OrleansVersion>
-    <AbpVersion>10.6.0</AbpVersion>
-    <OpenTelemetryVersion>1.17.0</OpenTelemetryVersion>
-    <AspireVersion>13.4.6</AspireVersion>
-  </PropertyGroup>
-
-  <!-- ══════════════ Orleans and hosting — docs/plan/02 § Orleans and hosting ══════════════ -->
-  <ItemGroup Label="Orleans">
-    <PackageVersion Include="Microsoft.Orleans.Sdk" Version="$(OrleansVersion)" />
-    <PackageVersion Include="Microsoft.Orleans.Server" Version="$(OrleansVersion)" />
-    <PackageVersion Include="Microsoft.Orleans.Client" Version="$(OrleansVersion)" />
-    <PackageVersion Include="Microsoft.Orleans.Clustering.Redis" Version="$(OrleansVersion)" />
-    <PackageVersion Include="Microsoft.Orleans.Persistence.Redis" Version="$(OrleansVersion)" />
-
     <!--
-      ⚠ MISSING FROM docs/plan/02 § Orleans and hosting, and required by ADR-003.
-
-      ADR-003 makes the durable tier "PostgreSQL, sharded by tenant" and docs/plan/04 § Silo
-      composition puts `AddMultitenantGrainStorage<AdoNetGrainStorage, AdoNetGrainStorageOptions>`
-      in the CreateSilo block, but the dependency register lists no ADO.NET persistence package at
-      all — it lists Persistence.Redis and stops. This is that package, and it is the only one that
-      provides `AddAdoNetGrainStorage`, `Orleans.Storage.AdoNetGrainStorage`,
-      `Orleans.Configuration.AdoNetGrainStorageOptions` and
-      `Orleans.Configuration.AdoNetGrainStorageOptionsValidator`. Confirmed published at 10.2.2
-      (`dotnet package search Microsoft.Orleans.Persistence.AdoNet`, exact match), so it tracks
-      $(OrleansVersion) like every other first-party Orleans reference.
-
-      ⚠ It does NOT contain a PostgreSQL driver, and it does not reference one. The provider loads
-      the driver by reflection at first use: `DbConnectionFactory` does `Assembly.Load("Npgsql")`
-      and reads the static `Instance` field off `Npgsql.NpgsqlFactory`, keyed by the `Invariant`
-      string "Npgsql". So `Npgsql` (already in the register, below) is a *runtime* dependency of
-      any host that wires the durable tier, and dropping it produces an AggregateException on the
-      first grain write rather than a build error.
-
-      ⚠ It also ships NO SQL. docs/plan/05 § Durable quotes the OrleansStorage column list but no
-      document says who creates the table, and the package has no .sql content and no embedded
-      resources (verified: GetManifestResourceNames() is empty). The DDL lives in the dotnet/orleans
-      repository — src/AdoNet/Shared/PostgreSQL-Main.sql and
-      src/AdoNet/Orleans.Persistence.AdoNet/PostgreSQL-Persistence.sql — and nothing in this
-      repository applies it to a shard yet. See CyberCloud.ServiceDefaults.Tests/Storage/OrleansAdoNetSchema.cs.
+      Central Package Management — docs/plan/02 § Dependency register.
+  
+      Rules:
+        * Every version lives here. A `PackageReference` in a .csproj carries NO `Version=` attribute;
+          with CPM on, one is NU1008 and a hard restore failure.
+        * No floating versions, no wildcards, no version ranges (docs/plan/02 § Platform baseline).
+        * A package that is not in docs/plan/02's register needs an ADR before it is added here.
+  
+      The three corrections below are marked ⚠ CORRECTED and each says why. They are audit findings
+      against docs/plan/02, not drift — fix the doc, do not "fix" this file back.
     -->
-    <PackageVersion Include="Microsoft.Orleans.Persistence.AdoNet" Version="$(OrleansVersion)" />
-    <PackageVersion Include="Microsoft.Orleans.Reminders.Redis" Version="$(OrleansVersion)" />
-    <PackageVersion Include="Microsoft.Orleans.Streaming" Version="$(OrleansVersion)" />
-    <PackageVersion Include="Microsoft.Orleans.Serialization.SystemTextJson" Version="$(OrleansVersion)" />
-    <PackageVersion Include="Microsoft.Orleans.TestingHost" Version="$(OrleansVersion)" />
 
-    <!-- ⚠ CORRECTED: docs/plan/02:27 pins 10.0.0. 10.0.1 is published and is the latest 10.x. -->
-    <PackageVersion Include="Orleans.Clustering.Kubernetes" Version="10.0.1" />
+    <PropertyGroup>
+        <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+        <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
+        <CentralPackageVersionOverrideEnabled>false</CentralPackageVersionOverrideEnabled>
+    </PropertyGroup>
 
-    <!--
-      ⚠ MISSING FROM docs/plan/02 § Orleans and hosting, and required by ADR-004.
+    <PropertyGroup Label="Version groups">
+        <OrleansVersion>10.2.2</OrleansVersion>
+        <AbpVersion>10.6.0</AbpVersion>
+        <OpenTelemetryVersion>1.17.0</OpenTelemetryVersion>
+        <AspireVersion>13.4.6</AspireVersion>
+    </PropertyGroup>
 
-      ADR-004 (docs/plan/02:272) makes `UseKubernetesHosting()` a condition of the membership
-      decision — "the silo needs RBAC to read/write its membership CRs, and UseKubernetesHosting()
-      so Orleans learns its pod identity" — and docs/plan/04:64 puts the call in the CreateSilo
-      block. The extension lives in this package, which the dependency register does not list.
-      Orleans.Clustering.Kubernetes (above) is a DIFFERENT package by a different author and does
-      NOT provide it: that one is the contrib membership provider (`UseKubeMembership`), this one is
-      first-party Microsoft and is what maps SIGTERM to a graceful StopAsync with grain migration
-      rather than a 60-second gap (docs/plan/04:76). Survival references both, for the same reason.
-    -->
-    <PackageVersion Include="Microsoft.Orleans.Hosting.Kubernetes" Version="$(OrleansVersion)" />
+    <!-- ══════════════ Orleans and hosting — docs/plan/02 § Orleans and hosting ══════════════ -->
+    <ItemGroup Label="Orleans">
+        <PackageVersion Include="Microsoft.Orleans.Sdk" Version="$(OrleansVersion)"/>
+        <PackageVersion Include="Microsoft.Orleans.Server" Version="$(OrleansVersion)"/>
+        <PackageVersion Include="Microsoft.Orleans.Client" Version="$(OrleansVersion)"/>
+        <PackageVersion Include="Microsoft.Orleans.Clustering.Redis" Version="$(OrleansVersion)"/>
+        <PackageVersion Include="Microsoft.Orleans.Persistence.Redis" Version="$(OrleansVersion)"/>
 
-    <!-- ADR-002. Tenant id lives in the grain key. -->
-    <PackageVersion Include="Orleans.Multitenant" Version="4.0.0" />
+        <!--
+          ⚠ MISSING FROM docs/plan/02 § Orleans and hosting, and required by ADR-003.
+    
+          ADR-003 makes the durable tier "PostgreSQL, sharded by tenant" and docs/plan/04 § Silo
+          composition puts `AddMultitenantGrainStorage<AdoNetGrainStorage, AdoNetGrainStorageOptions>`
+          in the CreateSilo block, but the dependency register lists no ADO.NET persistence package at
+          all — it lists Persistence.Redis and stops. This is that package, and it is the only one that
+          provides `AddAdoNetGrainStorage`, `Orleans.Storage.AdoNetGrainStorage`,
+          `Orleans.Configuration.AdoNetGrainStorageOptions` and
+          `Orleans.Configuration.AdoNetGrainStorageOptionsValidator`. Confirmed published at 10.2.2
+          (`dotnet package search Microsoft.Orleans.Persistence.AdoNet`, exact match), so it tracks
+          $(OrleansVersion) like every other first-party Orleans reference.
+    
+          ⚠ It does NOT contain a PostgreSQL driver, and it does not reference one. The provider loads
+          the driver by reflection at first use: `DbConnectionFactory` does `Assembly.Load("Npgsql")`
+          and reads the static `Instance` field off `Npgsql.NpgsqlFactory`, keyed by the `Invariant`
+          string "Npgsql". So `Npgsql` (already in the register, below) is a *runtime* dependency of
+          any host that wires the durable tier, and dropping it produces an AggregateException on the
+          first grain write rather than a build error.
+    
+          ⚠ It also ships NO SQL. docs/plan/05 § Durable quotes the OrleansStorage column list but no
+          document says who creates the table, and the package has no .sql content and no embedded
+          resources (verified: GetManifestResourceNames() is empty). The DDL lives in the dotnet/orleans
+          repository — src/AdoNet/Shared/PostgreSQL-Main.sql and
+          src/AdoNet/Orleans.Persistence.AdoNet/PostgreSQL-Persistence.sql — and nothing in this
+          repository applies it to a shard yet. See CyberCloud.ServiceDefaults.Tests/Storage/OrleansAdoNetSchema.cs.
+        -->
+        <PackageVersion Include="Microsoft.Orleans.Persistence.AdoNet" Version="$(OrleansVersion)"/>
+        <PackageVersion Include="Microsoft.Orleans.Reminders.Redis" Version="$(OrleansVersion)"/>
+        <PackageVersion Include="Microsoft.Orleans.Streaming" Version="$(OrleansVersion)"/>
+        <PackageVersion Include="Microsoft.Orleans.Serialization.SystemTextJson" Version="$(OrleansVersion)"/>
+        <PackageVersion Include="Microsoft.Orleans.TestingHost" Version="$(OrleansVersion)"/>
 
-    <!--
-      ⚠ SUPERSEDES docs/plan/02:31 and ADR-005 (docs/plan/02:277-293).
+        <!-- ⚠ CORRECTED: docs/plan/02:27 pins 10.0.0. 10.0.1 is published and is the latest 10.x. -->
+        <PackageVersion Include="Orleans.Clustering.Kubernetes" Version="10.0.1"/>
 
-      The plan names `Rikarin.Orleans.Streaming.NATs` as "ours, and on Orleans 9", and schedules a
-      0.4 EM Phase-0 task in docs/plan/24:18 to bump it to Orleans 10. That task is DROPPED: the
-      Rikarin package is not relevant. Orleans now ships a first-party NATS stream provider,
-      `Microsoft.Orleans.Streaming.NATS`, built against Orleans 10 and targeting net10.0.
-      ADR-005's stated fallback (a hand-rolled adapter over NATS.Client.JetStream) is not needed.
+        <!--
+          ⚠ MISSING FROM docs/plan/02 § Orleans and hosting, and required by ADR-004.
+    
+          ADR-004 (docs/plan/02:272) makes `UseKubernetesHosting()` a condition of the membership
+          decision — "the silo needs RBAC to read/write its membership CRs, and UseKubernetesHosting()
+          so Orleans learns its pod identity" — and docs/plan/04:64 puts the call in the CreateSilo
+          block. The extension lives in this package, which the dependency register does not list.
+          Orleans.Clustering.Kubernetes (above) is a DIFFERENT package by a different author and does
+          NOT provide it: that one is the contrib membership provider (`UseKubeMembership`), this one is
+          first-party Microsoft and is what maps SIGTERM to a graceful StopAsync with grain migration
+          rather than a 60-second gap (docs/plan/04:76). Survival references both, for the same reason.
+        -->
+        <PackageVersion Include="Microsoft.Orleans.Hosting.Kubernetes" Version="$(OrleansVersion)"/>
 
-      ⚠ VERSION TRAP — do not "take the latest". Every published version carries an `-alpha.1`
-      suffix, so there is no stable release and SemVer prerelease ordering is misleading here:
-      `10.2.2-rc.2.alpha.1` sorts ABOVE `10.2.2-alpha.1` (because "rc" > "alpha" alphabetically),
-      but it is built against Orleans `10.2.2-rc.2`, and taking it would drag an Orleans release
-      candidate into a graph pinned to 10.2.2 stable. Verified against the registration index:
-          10.2.2-alpha.1        -> Microsoft.Orleans.Streaming [10.2.2, )       ← matches our pin
-          10.2.2-rc.2.alpha.1   -> Microsoft.Orleans.Streaming [10.2.2-rc.2, )  ← do NOT use
-      So the pin tracks $(OrleansVersion) with an `-alpha.1` suffix, NOT the highest version.
+        <!-- ADR-002. Tenant id lives in the grain key. -->
+        <PackageVersion Include="Orleans.Multitenant" Version="4.0.0"/>
 
-      ⚠ It is still a prerelease and it also pulls NATS.Net [2.7.2,), a different client package
-      from the NATS.Client.Core/.JetStream pair named in docs/plan/02:61. Whether both can coexist
-      is untested — no project references this yet.
-    -->
-    <PackageVersion Include="Microsoft.Orleans.Streaming.NATS" Version="$(OrleansVersion)-alpha.1" />
-  </ItemGroup>
+        <!--
+          ⚠ SUPERSEDES docs/plan/02:31 and ADR-005 (docs/plan/02:277-293).
+    
+          The plan names `Rikarin.Orleans.Streaming.NATs` as "ours, and on Orleans 9", and schedules a
+          0.4 EM Phase-0 task in docs/plan/24:18 to bump it to Orleans 10. That task is DROPPED: the
+          Rikarin package is not relevant. Orleans now ships a first-party NATS stream provider,
+          `Microsoft.Orleans.Streaming.NATS`, built against Orleans 10 and targeting net10.0.
+          ADR-005's stated fallback (a hand-rolled adapter over NATS.Client.JetStream) is not needed.
+    
+          ⚠ VERSION TRAP — do not "take the latest". Every published version carries an `-alpha.1`
+          suffix, so there is no stable release and SemVer prerelease ordering is misleading here:
+          `10.2.2-rc.2.alpha.1` sorts ABOVE `10.2.2-alpha.1` (because "rc" > "alpha" alphabetically),
+          but it is built against Orleans `10.2.2-rc.2`, and taking it would drag an Orleans release
+          candidate into a graph pinned to 10.2.2 stable. Verified against the registration index:
+              10.2.2-alpha.1        -> Microsoft.Orleans.Streaming [10.2.2, )       ← matches our pin
+              10.2.2-rc.2.alpha.1   -> Microsoft.Orleans.Streaming [10.2.2-rc.2, )  ← do NOT use
+          So the pin tracks $(OrleansVersion) with an `-alpha.1` suffix, NOT the highest version.
+    
+          ⚠ It is still a prerelease and it also pulls NATS.Net [2.7.2,), a different client package
+          from the NATS.Client.Core/.JetStream pair named in docs/plan/02:61. Whether both can coexist
+          is untested — no project references this yet.
+        -->
+        <PackageVersion Include="Microsoft.Orleans.Streaming.NATS" Version="$(OrleansVersion)-alpha.1"/>
+    </ItemGroup>
 
-  <!-- ══════════════ ABP — docs/plan/02 § ABP, ADR-006 ══════════════ -->
-  <ItemGroup Label="ABP">
-    <PackageVersion Include="Volo.Abp.Autofac" Version="$(AbpVersion)" />
-    <PackageVersion Include="Volo.Abp.AspNetCore.Mvc" Version="$(AbpVersion)" />
-    <PackageVersion Include="Volo.Abp.AspNetCore.SignalR" Version="$(AbpVersion)" />
-    <PackageVersion Include="Volo.Abp.Ddd.Domain" Version="$(AbpVersion)" />
-    <PackageVersion Include="Volo.Abp.Ddd.Application" Version="$(AbpVersion)" />
-    <!-- ⚠ Attribute plumbing only — the policy source is CyberCloud.Authorization (ADR-007). -->
-    <PackageVersion Include="Volo.Abp.Authorization" Version="$(AbpVersion)" />
-    <PackageVersion Include="Volo.Abp.EntityFrameworkCore.PostgreSql" Version="$(AbpVersion)" />
-    <PackageVersion Include="Volo.Abp.AspNetCore.Serilog" Version="$(AbpVersion)" />
-    <PackageVersion Include="Volo.Abp.TestBase" Version="$(AbpVersion)" />
-  </ItemGroup>
+    <!-- ══════════════ ABP — docs/plan/02 § ABP, ADR-006 ══════════════ -->
+    <ItemGroup Label="ABP">
+        <PackageVersion Include="Volo.Abp.Autofac" Version="$(AbpVersion)"/>
+        <PackageVersion Include="Volo.Abp.AspNetCore.Mvc" Version="$(AbpVersion)"/>
+        <PackageVersion Include="Volo.Abp.AspNetCore.SignalR" Version="$(AbpVersion)"/>
+        <PackageVersion Include="Volo.Abp.Ddd.Domain" Version="$(AbpVersion)"/>
+        <PackageVersion Include="Volo.Abp.Ddd.Application" Version="$(AbpVersion)"/>
+        <!-- ⚠ Attribute plumbing only — the policy source is CyberCloud.Authorization (ADR-007). -->
+        <PackageVersion Include="Volo.Abp.Authorization" Version="$(AbpVersion)"/>
+        <PackageVersion Include="Volo.Abp.EntityFrameworkCore.PostgreSql" Version="$(AbpVersion)"/>
+        <PackageVersion Include="Volo.Abp.AspNetCore.Serilog" Version="$(AbpVersion)"/>
+        <PackageVersion Include="Volo.Abp.TestBase" Version="$(AbpVersion)"/>
+    </ItemGroup>
 
-  <!-- ══════════════ Data, transport, Kubernetes — docs/plan/02 § Data, transport, Kubernetes ══════════════ -->
-  <ItemGroup Label="Data and transport">
-    <PackageVersion Include="StackExchange.Redis" Version="3.1.13" />
-    <PackageVersion Include="Npgsql" Version="10.0.3" />
-    <PackageVersion Include="NATS.Client.Core" Version="3.1.0" />
-    <PackageVersion Include="NATS.Client.JetStream" Version="3.1.0" />
-  </ItemGroup>
+    <!-- ══════════════ Data, transport, Kubernetes — docs/plan/02 § Data, transport, Kubernetes ══════════════ -->
+    <ItemGroup Label="Data and transport">
+        <PackageVersion Include="StackExchange.Redis" Version="3.1.13"/>
+        <PackageVersion Include="Npgsql" Version="10.0.3"/>
+        <PackageVersion Include="NATS.Client.Core" Version="3.1.0"/>
+        <PackageVersion Include="NATS.Client.JetStream" Version="3.1.0"/>
+    </ItemGroup>
 
-  <ItemGroup Label="Kubernetes">
-    <!-- ⚠ Survival pins 18.0.13; 19 changed the generic client surface — docs/plan/02:62. -->
-    <PackageVersion Include="KubernetesClient" Version="19.0.2" />
-  </ItemGroup>
+    <ItemGroup Label="Kubernetes">
+        <!-- ⚠ Survival pins 18.0.13; 19 changed the generic client surface — docs/plan/02:62. -->
+        <PackageVersion Include="KubernetesClient" Version="19.0.2"/>
+    </ItemGroup>
 
-  <ItemGroup Label="Surfaces">
-    <PackageVersion Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.10" />
-    <PackageVersion Include="System.CommandLine" Version="2.0.10" />
-  </ItemGroup>
+    <ItemGroup Label="Surfaces">
+        <PackageVersion Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.10"/>
+        <PackageVersion Include="System.CommandLine" Version="2.0.10"/>
+    </ItemGroup>
 
-  <ItemGroup Label="Identity — ADR-015">
-    <!--
-      ⚠ CORRECTED: docs/plan/02:65 and ADR-015 (docs/plan/02:481) pin 7.3.0, reasoning
-      "7.3.0, not the 8.0 preview — an auth server is the last place to run a preview".
-      7.4.0, 7.5.0 and 7.6.0 are all published STABLE releases, and 8.0 is still preview
-      (latest: 8.0.0-preview.2.26365.61). The doc's own reasoning — newest stable, never a
-      preview — therefore points at 7.6.0, not at 7.3.0. The 7.3.0 pin was a snapshot of
-      "newest stable on 2026-08-08", not a decision to stay on 7.3.x.
-    -->
-    <PackageVersion Include="OpenIddict.AspNetCore" Version="7.6.0" />
-    <PackageVersion Include="OpenIddict.Abstractions" Version="7.6.0" />
-    <PackageVersion Include="OpenIddict.Core" Version="7.6.0" />
-    <PackageVersion Include="OpenIddict.Server.AspNetCore" Version="7.6.0" />
-    <PackageVersion Include="OpenIddict.Validation.AspNetCore" Version="7.6.0" />
+    <ItemGroup Label="Identity — ADR-015">
+        <!--
+          ⚠ CORRECTED: docs/plan/02:65 and ADR-015 (docs/plan/02:481) pin 7.3.0, reasoning
+          "7.3.0, not the 8.0 preview — an auth server is the last place to run a preview".
+          7.4.0, 7.5.0 and 7.6.0 are all published STABLE releases, and 8.0 is still preview
+          (latest: 8.0.0-preview.2.26365.61). The doc's own reasoning — newest stable, never a
+          preview — therefore points at 7.6.0, not at 7.3.0. The 7.3.0 pin was a snapshot of
+          "newest stable on 2026-08-08", not a decision to stay on 7.3.x.
+        -->
+        <PackageVersion Include="OpenIddict.AspNetCore" Version="7.6.0"/>
+        <PackageVersion Include="OpenIddict.Abstractions" Version="7.6.0"/>
+        <PackageVersion Include="OpenIddict.Core" Version="7.6.0"/>
+        <PackageVersion Include="OpenIddict.Server.AspNetCore" Version="7.6.0"/>
+        <PackageVersion Include="OpenIddict.Validation.AspNetCore" Version="7.6.0"/>
 
-    <!--
-      ⚠ CORRECTED: docs/plan/02:66 pins 4.0.0-beta9 and justifies it with "it is a beta with no
-      stable successor". That justification is REFUTED — Fido2.AspNet 4.0.0 and 4.0.1 are both
-      published stable releases. Pinned at 4.0.1, the newest. Still wrapped behind IPasskeyService
-      so replacing the library is one file, per the same doc line.
-    -->
-    <PackageVersion Include="Fido2.AspNet" Version="4.0.1" />
-    <PackageVersion Include="Fido2.Models" Version="4.0.1" />
-  </ItemGroup>
+        <!--
+          ⚠ CORRECTED: docs/plan/02:66 pins 4.0.0-beta9 and justifies it with "it is a beta with no
+          stable successor". That justification is REFUTED — Fido2.AspNet 4.0.0 and 4.0.1 are both
+          published stable releases. Pinned at 4.0.1, the newest. Still wrapped behind IPasskeyService
+          so replacing the library is one file, per the same doc line.
+        -->
+        <PackageVersion Include="Fido2.AspNet" Version="4.0.1"/>
+        <PackageVersion Include="Fido2.Models" Version="4.0.1"/>
+    </ItemGroup>
 
-  <ItemGroup Label="Mapping and resilience">
-    <PackageVersion Include="Riok.Mapperly" Version="4.3.1" />
-    <PackageVersion Include="Polly" Version="8.6.5" />
-  </ItemGroup>
+    <ItemGroup Label="Mapping and resilience">
+        <PackageVersion Include="Riok.Mapperly" Version="4.3.1"/>
+        <PackageVersion Include="Polly" Version="8.6.5"/>
+    </ItemGroup>
 
-  <!-- ══════════════ Observability — docs/plan/02, ADR-016 ══════════════ -->
-  <ItemGroup Label="Serilog">
-    <PackageVersion Include="Serilog.AspNetCore" Version="10.0.0" />
-    <PackageVersion Include="Serilog.Sinks.OpenTelemetry" Version="4.2.0" />
-  </ItemGroup>
+    <!-- ══════════════ Observability — docs/plan/02, ADR-016 ══════════════ -->
+    <ItemGroup Label="Serilog">
+        <PackageVersion Include="Serilog.AspNetCore" Version="10.0.0"/>
+        <PackageVersion Include="Serilog.Sinks.OpenTelemetry" Version="4.2.0"/>
+    </ItemGroup>
 
-  <ItemGroup Label="OpenTelemetry">
-    <PackageVersion Include="OpenTelemetry" Version="$(OpenTelemetryVersion)" />
-    <PackageVersion Include="OpenTelemetry.Extensions.Hosting" Version="$(OpenTelemetryVersion)" />
-    <PackageVersion Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="$(OpenTelemetryVersion)" />
-    <PackageVersion Include="OpenTelemetry.Instrumentation.AspNetCore" Version="$(OpenTelemetryVersion)" />
-    <PackageVersion Include="OpenTelemetry.Instrumentation.Http" Version="$(OpenTelemetryVersion)" />
-    <PackageVersion Include="OpenTelemetry.Instrumentation.Runtime" Version="$(OpenTelemetryVersion)" />
-  </ItemGroup>
+    <ItemGroup Label="OpenTelemetry">
+        <PackageVersion Include="OpenTelemetry" Version="$(OpenTelemetryVersion)"/>
+        <PackageVersion Include="OpenTelemetry.Extensions.Hosting" Version="$(OpenTelemetryVersion)"/>
+        <PackageVersion Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="$(OpenTelemetryVersion)"/>
+        <PackageVersion Include="OpenTelemetry.Instrumentation.AspNetCore" Version="$(OpenTelemetryVersion)"/>
+        <PackageVersion Include="OpenTelemetry.Instrumentation.Http" Version="$(OpenTelemetryVersion)"/>
+        <PackageVersion Include="OpenTelemetry.Instrumentation.Runtime" Version="$(OpenTelemetryVersion)"/>
+    </ItemGroup>
 
-  <!-- ══════════════ Test and build — docs/plan/02 § Test and build, ADR-018 ══════════════ -->
-  <ItemGroup Label="Test">
-    <PackageVersion Include="xunit.v3" Version="3.2.2" />
-    <PackageVersion Include="NSubstitute" Version="5.3.0" />
-    <PackageVersion Include="Shouldly" Version="4.3.0" />
-    <!--
-      docs/plan/02:79 says "Testcontainers — latest at bring-up". CPM forbids a floating version, so
-      it is pinned here and re-evaluated when the first integration test lands. 4.13.0 is the newest
-      published version at the time this file was written.
-    -->
-    <PackageVersion Include="Testcontainers" Version="4.13.0" />
-    <PackageVersion Include="Testcontainers.Redis" Version="4.13.0" />
-    <PackageVersion Include="Testcontainers.PostgreSql" Version="4.13.0" />
-    <PackageVersion Include="Testcontainers.K3s" Version="4.13.0" />
-    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.8.1" />
-    <!--
-      ⚠ For ONE test class, and it is the only honest way to assert what ADR-013 claims.
-      ADR-013 (docs/plan/02) says of the type-state command builder: "Build() and Apply() exist only
-      on the fully-qualified interface, so an unlabelled object does not compile." That is a claim
-      about the compiler, and a test that asserted a runtime exception instead would be asserting a
-      different — weaker — property. CompileFailureTests in CyberCloud.Kubernetes.Contracts.Tests
-      compiles real source against the real contracts assembly and asserts the diagnostic id.
-      ⚠ The version lives in the Roslyn group below, NOT here. Two parallel branches each added a
-      `Microsoft.CodeAnalysis.CSharp` pin — 5.0.0 for this compile-failure test, 5.6.0 for
-      CyberCloud.Analyzers — and the merge produced `error NU1506: Duplicate 'PackageVersion' items`.
-      Neither branch could have seen the other; this is exactly the cross-branch drift a per-branch
-      gate cannot catch.
+    <!-- ══════════════ Test and build — docs/plan/02 § Test and build, ADR-018 ══════════════ -->
+    <ItemGroup Label="Test">
+        <PackageVersion Include="xunit.v3" Version="3.2.2"/>
+        <PackageVersion Include="NSubstitute" Version="5.3.0"/>
+        <PackageVersion Include="Shouldly" Version="4.3.0"/>
+        <!--
+          docs/plan/02:79 says "Testcontainers — latest at bring-up". CPM forbids a floating version, so
+          it is pinned here and re-evaluated when the first integration test lands. 4.13.0 is the newest
+          published version at the time this file was written.
+        -->
+        <PackageVersion Include="Testcontainers" Version="4.13.0"/>
+        <PackageVersion Include="Testcontainers.Redis" Version="4.13.0"/>
+        <PackageVersion Include="Testcontainers.PostgreSql" Version="4.13.0"/>
+        <PackageVersion Include="Testcontainers.K3s" Version="4.13.0"/>
+        <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.8.1"/>
+        <!--
+          ⚠ For ONE test class, and it is the only honest way to assert what ADR-013 claims.
+          ADR-013 (docs/plan/02) says of the type-state command builder: "Build() and Apply() exist only
+          on the fully-qualified interface, so an unlabelled object does not compile." That is a claim
+          about the compiler, and a test that asserted a runtime exception instead would be asserting a
+          different — weaker — property. CompileFailureTests in CyberCloud.Kubernetes.Contracts.Tests
+          compiles real source against the real contracts assembly and asserts the diagnostic id.
+          ⚠ The version lives in the Roslyn group below, NOT here. Two parallel branches each added a
+          `Microsoft.CodeAnalysis.CSharp` pin — 5.0.0 for this compile-failure test, 5.6.0 for
+          CyberCloud.Analyzers — and the merge produced `error NU1506: Duplicate 'PackageVersion' items`.
+          Neither branch could have seen the other; this is exactly the cross-branch drift a per-branch
+          gate cannot catch.
+    
+          Resolved to the single 5.6.0 pin below, for the analyzers' reason (it is a ceiling set by the
+          compiler that loads the analyzer, not a preference). The 5.0.0 argument was an NU1608 against
+          `Microsoft.CodeAnalysis.Workspaces.Common 5.0.0`'s exact constraint on `…Common`; that no
+          longer binds, because the Roslyn group pins `Microsoft.CodeAnalysis.CSharp.Workspaces` at
+          5.6.0 and transitive pinning lifts the whole family together. Verified by restore.
+        -->
+    </ItemGroup>
 
-      Resolved to the single 5.6.0 pin below, for the analyzers' reason (it is a ceiling set by the
-      compiler that loads the analyzer, not a preference). The 5.0.0 argument was an NU1608 against
-      `Microsoft.CodeAnalysis.Workspaces.Common 5.0.0`'s exact constraint on `…Common`; that no
-      longer binds, because the Roslyn group pins `Microsoft.CodeAnalysis.CSharp.Workspaces` at
-      5.6.0 and transitive pinning lifts the whole family together. Verified by restore.
-    -->
-  </ItemGroup>
+    <ItemGroup Label="Build">
+        <PackageVersion Include="Nuke.Common" Version="10.1.0"/>
+    </ItemGroup>
 
-  <ItemGroup Label="Build">
-    <PackageVersion Include="Nuke.Common" Version="10.1.0" />
-  </ItemGroup>
+    <!-- ══════════════ Roslyn — CyberCloud.Analyzers and its tests ══════════════ -->
+    <ItemGroup Label="Roslyn">
+        <!--
+          ⚠ MISSING FROM docs/plan/02's dependency register, all four of them, and that is a doc gap
+          rather than drift: docs/plan/00 § Coding standards, docs/plan/00 § Non-negotiables,
+          docs/plan/02 ADR-002 and docs/plan/04 § Failure and upgrade each assert "analyzer-enforced",
+          and § Test and build lists no analyzer-authoring or analyzer-testing package at all. An
+          analyzer cannot be written, and certainly cannot be tested, without these. Register them in
+          docs/plan/02 § Test and build.
+    
+          ⚠ VERSION RULE: Microsoft.CodeAnalysis.* must not exceed the compiler that loads the analyzer.
+          global.json rolls forward to SDK 10.0.302, whose csc reports 5.6.0-2.26329.109, so 5.6.0 —
+          the released build of that same compiler — is the ceiling and is what is pinned. Taking a
+          newer Roslyn than the SDK's would produce an analyzer the SDK cannot load, and the symptom is
+          a build warning about a missing analyzer assembly rather than an error.
+    
+          ⚠ netstandard2.0 is still the required analyzer TFM at 5.6.0 — checked, not assumed:
+          ~/.nuget/packages/microsoft.codeanalysis.csharp/5.6.0/lib/ contains net10.0, net8.0 AND
+          netstandard2.0. See the header of src/CyberCloud.Analyzers/CyberCloud.Analyzers.csproj.
+        -->
+        <PackageVersion Include="Microsoft.CodeAnalysis.CSharp" Version="5.6.0"/>
 
-  <!-- ══════════════ Roslyn — CyberCloud.Analyzers and its tests ══════════════ -->
-  <ItemGroup Label="Roslyn">
-    <!--
-      ⚠ MISSING FROM docs/plan/02's dependency register, all four of them, and that is a doc gap
-      rather than drift: docs/plan/00 § Coding standards, docs/plan/00 § Non-negotiables,
-      docs/plan/02 ADR-002 and docs/plan/04 § Failure and upgrade each assert "analyzer-enforced",
-      and § Test and build lists no analyzer-authoring or analyzer-testing package at all. An
-      analyzer cannot be written, and certainly cannot be tested, without these. Register them in
-      docs/plan/02 § Test and build.
+        <!-- The RS1xxx analyzer-authoring rules. Referenced by CyberCloud.Analyzers as an analyzer. -->
+        <PackageVersion Include="Microsoft.CodeAnalysis.Analyzers" Version="5.6.0"/>
 
-      ⚠ VERSION RULE: Microsoft.CodeAnalysis.* must not exceed the compiler that loads the analyzer.
-      global.json rolls forward to SDK 10.0.302, whose csc reports 5.6.0-2.26329.109, so 5.6.0 —
-      the released build of that same compiler — is the ceiling and is what is pinned. Taking a
-      newer Roslyn than the SDK's would produce an analyzer the SDK cannot load, and the symptom is
-      a build warning about a missing analyzer assembly rather than an error.
+        <!--
+          The analyzer test harness — docs/plan/02 § Test and build has no equivalent, which is the doc
+          gap noted above. This is the base package, NOT `…Analyzer.Testing.XUnit`: that variant binds
+          to xUnit v2, and ADR-018 makes this repository xunit.v3. The base package ships
+          Microsoft.CodeAnalysis.Testing.DefaultVerifier, which needs no test framework at all.
+        -->
+        <PackageVersion Include="Microsoft.CodeAnalysis.CSharp.Analyzer.Testing" Version="1.1.4"/>
 
-      ⚠ netstandard2.0 is still the required analyzer TFM at 5.6.0 — checked, not assumed:
-      ~/.nuget/packages/microsoft.codeanalysis.csharp/5.6.0/lib/ contains net10.0, net8.0 AND
-      netstandard2.0. See the header of src/CyberCloud.Analyzers/CyberCloud.Analyzers.csproj.
-    -->
-    <PackageVersion Include="Microsoft.CodeAnalysis.CSharp" Version="5.6.0" />
+        <!--
+          ⚠ NOT A DIRECT REFERENCE — a transitive pin, and it is load-bearing.
+          Microsoft.CodeAnalysis.CSharp.Analyzer.Testing 1.1.4 declares its Roslyn dependency as a
+          *floor* of 1.0.1, and NuGet resolves a floor to the floor. Restoring it alone drags in
+          Microsoft.CodeAnalysis.CSharp.Workspaces 1.0.1, a .NET Framework-only package, and produces
+          four NU1701 warnings — which MSBuildTreatWarningsAsErrors turns into a failed build. Verified
+          both ways in a scratch project. CentralPackageTransitivePinningEnabled (Directory.Build.props)
+          lifts it to 5.6.0 because this line exists.
+        -->
+        <PackageVersion Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="5.6.0"/>
 
-    <!-- The RS1xxx analyzer-authoring rules. Referenced by CyberCloud.Analyzers as an analyzer. -->
-    <PackageVersion Include="Microsoft.CodeAnalysis.Analyzers" Version="5.6.0" />
+        <!--
+          ⚠ ALSO A TRANSITIVE PIN, and pinning the line above is not sufficient — this is a DIFFERENT
+          package id. `Microsoft.CodeAnalysis.CSharp.Workspaces` and
+          `Microsoft.CodeAnalysis.Workspaces.Common` are separate packages, and only the latter carries
+          an EXACT constraint on `Microsoft.CodeAnalysis.Common`. Left unpinned it resolves to 5.0.0,
+          whose `(= 5.0.0)` then collides with the 5.6.0 the rest of this group pins:
+    
+            error NU1608: Microsoft.CodeAnalysis.Workspaces.Common 5.0.0 requires
+            Microsoft.CodeAnalysis.Common (= 5.0.0) but version 5.6.0 was resolved
+    
+          — fatal rather than a warning because docs/plan/00 § Non-negotiables makes warnings errors.
+          Found by merging two parallel branches that had each pinned Microsoft.CodeAnalysis.CSharp
+          differently; neither branch's own gate could see it. Pin the whole family or none of it.
+        -->
+        <PackageVersion Include="Microsoft.CodeAnalysis.Workspaces.Common" Version="5.6.0"/>
+    </ItemGroup>
 
-    <!--
-      The analyzer test harness — docs/plan/02 § Test and build has no equivalent, which is the doc
-      gap noted above. This is the base package, NOT `…Analyzer.Testing.XUnit`: that variant binds
-      to xUnit v2, and ADR-018 makes this repository xunit.v3. The base package ships
-      Microsoft.CodeAnalysis.Testing.DefaultVerifier, which needs no test framework at all.
-    -->
-    <PackageVersion Include="Microsoft.CodeAnalysis.CSharp.Analyzer.Testing" Version="1.1.4" />
-
-    <!--
-      ⚠ NOT A DIRECT REFERENCE — a transitive pin, and it is load-bearing.
-      Microsoft.CodeAnalysis.CSharp.Analyzer.Testing 1.1.4 declares its Roslyn dependency as a
-      *floor* of 1.0.1, and NuGet resolves a floor to the floor. Restoring it alone drags in
-      Microsoft.CodeAnalysis.CSharp.Workspaces 1.0.1, a .NET Framework-only package, and produces
-      four NU1701 warnings — which MSBuildTreatWarningsAsErrors turns into a failed build. Verified
-      both ways in a scratch project. CentralPackageTransitivePinningEnabled (Directory.Build.props)
-      lifts it to 5.6.0 because this line exists.
-    -->
-    <PackageVersion Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="5.6.0" />
-
-    <!--
-      ⚠ ALSO A TRANSITIVE PIN, and pinning the line above is not sufficient — this is a DIFFERENT
-      package id. `Microsoft.CodeAnalysis.CSharp.Workspaces` and
-      `Microsoft.CodeAnalysis.Workspaces.Common` are separate packages, and only the latter carries
-      an EXACT constraint on `Microsoft.CodeAnalysis.Common`. Left unpinned it resolves to 5.0.0,
-      whose `(= 5.0.0)` then collides with the 5.6.0 the rest of this group pins:
-
-        error NU1608: Microsoft.CodeAnalysis.Workspaces.Common 5.0.0 requires
-        Microsoft.CodeAnalysis.Common (= 5.0.0) but version 5.6.0 was resolved
-
-      — fatal rather than a warning because docs/plan/00 § Non-negotiables makes warnings errors.
-      Found by merging two parallel branches that had each pinned Microsoft.CodeAnalysis.CSharp
-      differently; neither branch's own gate could see it. Pin the whole family or none of it.
-    -->
-    <PackageVersion Include="Microsoft.CodeAnalysis.Workspaces.Common" Version="5.6.0" />
-  </ItemGroup>
-
-  <!-- ══════════════ Aspire — ADR-014, LOCAL DEVELOPMENT ONLY ══════════════ -->
-  <ItemGroup Label="Aspire">
-    <PackageVersion Include="Aspire.Hosting.AppHost" Version="$(AspireVersion)" />
-    <PackageVersion Include="Aspire.Hosting.Redis" Version="$(AspireVersion)" />
-    <PackageVersion Include="Aspire.Hosting.PostgreSQL" Version="$(AspireVersion)" />
-    <PackageVersion Include="Aspire.Hosting.NATS" Version="$(AspireVersion)" />
-    <!--
-      ⚠ The exit criterion in docs/plan/24 § Phase 0 is a statement about the AppHost, so the only
-      honest way to test it is to run the AppHost. Aspire.Hosting.Testing starts the real
-      DistributedApplication in-process — the same containers, the same silo processes — which is
-      what CyberCloud.AppHost.Tests does. It is `Aspire.Hosting.*` and therefore inside ADR-014's
-      register line; it is also test-only, so it does not weaken "Aspire is local development only".
-    -->
-    <PackageVersion Include="Aspire.Hosting.Testing" Version="$(AspireVersion)" />
-  </ItemGroup>
+    <!-- ══════════════ Aspire — ADR-014, LOCAL DEVELOPMENT ONLY ══════════════ -->
+    <ItemGroup Label="Aspire">
+        <PackageVersion Include="Aspire.Hosting.AppHost" Version="$(AspireVersion)"/>
+        <PackageVersion Include="Aspire.Hosting.Redis" Version="$(AspireVersion)"/>
+        <PackageVersion Include="Aspire.Hosting.PostgreSQL" Version="$(AspireVersion)"/>
+        <PackageVersion Include="Aspire.Hosting.NATS" Version="$(AspireVersion)"/>
+        <!--
+          ⚠ The exit criterion in docs/plan/24 § Phase 0 is a statement about the AppHost, so the only
+          honest way to test it is to run the AppHost. Aspire.Hosting.Testing starts the real
+          DistributedApplication in-process — the same containers, the same silo processes — which is
+          what CyberCloud.AppHost.Tests does. It is `Aspire.Hosting.*` and therefore inside ADR-014's
+          register line; it is also test-only, so it does not weaken "Aspire is local development only".
+        -->
+        <PackageVersion Include="Aspire.Hosting.Testing" Version="$(AspireVersion)"/>
+    </ItemGroup>
 
 </Project>

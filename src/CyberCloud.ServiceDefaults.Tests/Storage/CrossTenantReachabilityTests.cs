@@ -1,4 +1,3 @@
-using System.Globalization;
 using CyberCloud.Core.Contracts;
 using CyberCloud.ServiceDefaults.Storage;
 using Microsoft.Extensions.DependencyInjection;
@@ -8,6 +7,7 @@ using Orleans.Multitenant;
 using Orleans.Storage;
 using Shouldly;
 using StackExchange.Redis;
+using System.Globalization;
 
 namespace CyberCloud.ServiceDefaults.Tests.Storage;
 
@@ -27,16 +27,12 @@ namespace CyberCloud.ServiceDefaults.Tests.Storage;
 ///     </para>
 /// </remarks>
 [Collection(StorageSuite.Name)]
-public sealed class CrossTenantReachabilityTests(StorageFixture fixture)
-{
+public sealed class CrossTenantReachabilityTests(StorageFixture fixture) {
     const string SharedKeyWithinTenant = "res/the-same-key-in-both-tenants";
     const string Secret = "tenant-A-only-payload";
 
-    static string Id(Guid tenant) => tenant.ToString("D", CultureInfo.InvariantCulture);
-
     [Fact]
-    public async Task Route1_TheSameKeyUnderTenantBIsADifferentGrainWithNoState()
-    {
+    public async Task Route1_TheSameKeyUnderTenantBIsADifferentGrainWithNoState() {
         var (a, b) = fixture.SplitTenants;
 
         await fixture.Grains.ForTenant(Id(a)).GetGrain<IDurableStateGrain>(SharedKeyWithinTenant).WriteAsync(Secret);
@@ -48,8 +44,7 @@ public sealed class CrossTenantReachabilityTests(StorageFixture fixture)
     }
 
     [Fact]
-    public async Task Route2_TenantBsShardDatabaseDoesNotContainTenantAsBytes()
-    {
+    public async Task Route2_TenantBsShardDatabaseDoesNotContainTenantAsBytes() {
         var token = TestContext.Current.CancellationToken;
         var (a, b) = fixture.SplitTenants;
 
@@ -59,15 +54,15 @@ public sealed class CrossTenantReachabilityTests(StorageFixture fixture)
         await using var connection = await fixture.OpenShardAsync(shardOfB, token);
         await using var command = new NpgsqlCommand(
             "SELECT count(*) FROM orleansstorage WHERE position(convert_to(@needle, 'UTF8') in payloadbinary) > 0",
-            connection);
+            connection
+        );
         command.Parameters.AddWithValue("needle", Secret);
 
         (await command.ExecuteScalarAsync(token)).ShouldBe(0L);
     }
 
     [Fact]
-    public async Task Route3_TenantBsConfiguredConnectionStringPointsAtTenantBsServer()
-    {
+    public async Task Route3_TenantBsConfiguredConnectionStringPointsAtTenantBsServer() {
         // The structural half of route 2: it is not that B's provider looks and finds nothing, it is
         // that B's provider is holding a connection string for a different PostgreSQL server. Run
         // through the production configurator, not a re-implementation of it.
@@ -89,8 +84,7 @@ public sealed class CrossTenantReachabilityTests(StorageFixture fixture)
     }
 
     [Fact]
-    public async Task Route4_ForgingTheTenantInsideTheKeyDoesNotChangeTheTenant()
-    {
+    public async Task Route4_ForgingTheTenantInsideTheKeyDoesNotChangeTheTenant() {
         // ADR-002: Orleans.Multitenant copies the key WITHIN the tenant verbatim, so an inner key
         // that itself looks like "A|res/x" produces "B|A|res/x" — still tenant B, because the
         // terminator is the first undoubled '|' and the tenant id cannot contain one.
@@ -106,8 +100,7 @@ public sealed class CrossTenantReachabilityTests(StorageFixture fixture)
     }
 
     [Fact]
-    public void Route5_TenantBsHotKeyBuilderRefusesAGrainThatBelongsToTenantA()
-    {
+    public void Route5_TenantBsHotKeyBuilderRefusesAGrainThatBelongsToTenantA() {
         // The strongest form of "physically cannot": tenant B's hot-tier provider has no expression
         // in it that produces a key inside tenant A's hash tag — the tag is captured when the
         // provider is built. Feed it A's grain id and it throws rather than composing one.
@@ -121,8 +114,7 @@ public sealed class CrossTenantReachabilityTests(StorageFixture fixture)
     }
 
     [Fact]
-    public async Task Route6_TenantBsHashTagNamespaceContainsNoneOfTenantAsKeys()
-    {
+    public async Task Route6_TenantBsHashTagNamespaceContainsNoneOfTenantAsKeys() {
         var (a, b) = fixture.SplitTenants;
 
         await fixture.Grains.ForTenant(Id(a)).GetGrain<IHotStateGrain>("res/route6").WriteAsync(Secret);
@@ -136,14 +128,12 @@ public sealed class CrossTenantReachabilityTests(StorageFixture fixture)
         tagOfA.ShouldNotBe(tagOfB);
 
         var keysOfA = new List<string>();
-        await foreach (var key in server.KeysAsync(pattern: "{" + tagOfA + "}:*"))
-        {
+        await foreach (var key in server.KeysAsync(pattern: "{" + tagOfA + "}:*")) {
             keysOfA.Add(key.ToString());
         }
 
         var keysOfB = new List<string>();
-        await foreach (var key in server.KeysAsync(pattern: "{" + tagOfB + "}:*"))
-        {
+        await foreach (var key in server.KeysAsync(pattern: "{" + tagOfB + "}:*")) {
             keysOfB.Add(key.ToString());
         }
 
@@ -156,8 +146,7 @@ public sealed class CrossTenantReachabilityTests(StorageFixture fixture)
     }
 
     [Fact]
-    public async Task Route7_ARawGrainKeyDOESReachTheOtherTenantAndOnlyCommunicationSeparationStopsIt()
-    {
+    public async Task Route7_ARawGrainKeyDOESReachTheOtherTenantAndOnlyCommunicationSeparationStopsIt() {
         // ⚠ THE FINDING. This is not a storage defect — storage is obeying the key, which is the
         // contract. It is the residual hole docs/plan/04 § Silo composition calls out when it says
         // AddMultitenantCommunicationSeparation is "not optional": anything holding an IGrainFactory
@@ -193,16 +182,18 @@ public sealed class CrossTenantReachabilityTests(StorageFixture fixture)
         (await byRawKey.ReadAsync()).ShouldBe(
             Secret,
             "storage routes by the tenant in the key, so a caller that can name the key reaches the "
-            + "state. AddMultitenantCommunicationSeparation is what makes naming it insufficient.");
+            + "state. AddMultitenantCommunicationSeparation is what makes naming it insufficient."
+        );
 
-        fixture.Services.GetServices<ICrossTenantAuthorizer>().ShouldBeEmpty(
-            "if a cross-tenant authorizer has been registered, communication separation is on and "
-            + "this test's expectation is now inverted — update it, do not delete it.");
+        fixture.Services.GetServices<ICrossTenantAuthorizer>()
+            .ShouldBeEmpty(
+                "if a cross-tenant authorizer has been registered, communication separation is on and "
+                + "this test's expectation is now inverted — update it, do not delete it."
+            );
     }
 
     [Fact]
-    public async Task CotenantsOnOneShardAreSeparatedByTheKeyAndNothingElse()
-    {
+    public async Task CotenantsOnOneShardAreSeparatedByTheKeyAndNothingElse() {
         // The case a single-shard test would miss and a two-shard test could accidentally skip: two
         // tenants whose rows are in the SAME PostgreSQL server. Separation here is entirely the
         // grain key, which is exactly what ADR-002 claims and is worth pinning.
@@ -223,13 +214,12 @@ public sealed class CrossTenantReachabilityTests(StorageFixture fixture)
         await using var connection = await fixture.OpenShardAsync(shard, token);
         await using var command = new NpgsqlCommand(
             "SELECT grainidextensionstring FROM orleansstorage WHERE grainidextensionstring LIKE '%res/cotenant' ORDER BY 1",
-            connection);
+            connection
+        );
 
         var keys = new List<string>();
-        await using (var reader = await command.ExecuteReaderAsync(token))
-        {
-            while (await reader.ReadAsync(token))
-            {
+        await using (var reader = await command.ExecuteReaderAsync(token)) {
+            while (await reader.ReadAsync(token)) {
                 keys.Add(reader.GetString(0));
             }
         }
@@ -240,8 +230,7 @@ public sealed class CrossTenantReachabilityTests(StorageFixture fixture)
     }
 
     [Fact]
-    public async Task BothTiersRouteByTheTenantInTheGrainKeyRatherThanByAmbientState()
-    {
+    public async Task BothTiersRouteByTheTenantInTheGrainKeyRatherThanByAmbientState() {
         // Belt and braces on the mechanism itself: MultitenantStorage picks the per-tenant provider
         // from grainId.GetTenantId(). Drive the provider directly with two grain ids and confirm the
         // two writes land in two shards.
@@ -256,12 +245,14 @@ public sealed class CrossTenantReachabilityTests(StorageFixture fixture)
         await storage.WriteStateAsync(
             StorageFixture.ProviderTestGrainType,
             idA,
-            new GrainState<NoteState>(new NoteState { Note = "direct-A" }));
+            new GrainState<NoteState>(new() { Note = "direct-A" })
+        );
 
         await storage.WriteStateAsync(
             StorageFixture.ProviderTestGrainType,
             idB,
-            new GrainState<NoteState>(new NoteState { Note = "direct-B" }));
+            new GrainState<NoteState>(new() { Note = "direct-B" })
+        );
 
         (await CountOf("direct-A", fixture.ShardMap.DurableShardFor(Id(a)), token)).ShouldBe(1L);
         (await CountOf("direct-A", fixture.ShardMap.DurableShardFor(Id(b)), token)).ShouldBe(0L);
@@ -269,12 +260,14 @@ public sealed class CrossTenantReachabilityTests(StorageFixture fixture)
         (await CountOf("direct-B", fixture.ShardMap.DurableShardFor(Id(a)), token)).ShouldBe(0L);
     }
 
-    async Task<long> CountOf(string needle, string shard, CancellationToken token)
-    {
+    static string Id(Guid tenant) => tenant.ToString("D", CultureInfo.InvariantCulture);
+
+    async Task<long> CountOf(string needle, string shard, CancellationToken token) {
         await using var connection = await fixture.OpenShardAsync(shard, token);
         await using var command = new NpgsqlCommand(
             "SELECT count(*) FROM orleansstorage WHERE position(convert_to(@needle, 'UTF8') in payloadbinary) > 0",
-            connection);
+            connection
+        );
         command.Parameters.AddWithValue("needle", needle);
 
         return (long)(await command.ExecuteScalarAsync(token))!;

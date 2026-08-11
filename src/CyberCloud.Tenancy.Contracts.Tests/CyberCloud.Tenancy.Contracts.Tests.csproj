@@ -1,30 +1,30 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!--
-    docs/plan/02 ADR-018: tests are siblings. OutputType=Exe and the Microsoft.Testing.Platform
-    switches come from the repository-root Directory.Build.props / .targets — do not repeat them
-    here, and do NOT add Microsoft.NET.Test.Sdk.
+    <!--
+      docs/plan/02 ADR-018: tests are siblings. OutputType=Exe and the Microsoft.Testing.Platform
+      switches come from the repository-root Directory.Build.props / .targets — do not repeat them
+      here, and do NOT add Microsoft.NET.Test.Sdk.
+  
+      This project is the wire-contract gate for CyberCloud.Tenancy.Contracts: the [Id(n)] baseline
+      manifest, the [Alias] manifest, and a real Orleans serializer round-trip of every wire type. It
+      is the sibling of CyberCloud.Core.Contracts.Tests/WireContractTests and applies the same rules to
+      a different assembly — the manifests are per-assembly because the numbers are per-type and the
+      assemblies version independently.
+    -->
 
-    This project is the wire-contract gate for CyberCloud.Tenancy.Contracts: the [Id(n)] baseline
-    manifest, the [Alias] manifest, and a real Orleans serializer round-trip of every wire type. It
-    is the sibling of CyberCloud.Core.Contracts.Tests/WireContractTests and applies the same rules to
-    a different assembly — the manifests are per-assembly because the numbers are per-type and the
-    assemblies version independently.
-  -->
+    <ItemGroup>
+        <PackageReference Include="xunit.v3"/>
+        <PackageReference Include="Shouldly"/>
+        <!-- A real serializer, built the way a silo builds one. No mock of the wire. -->
+        <PackageReference Include="Microsoft.Orleans.Server"/>
+    </ItemGroup>
 
-  <ItemGroup>
-    <PackageReference Include="xunit.v3" />
-    <PackageReference Include="Shouldly" />
-    <!-- A real serializer, built the way a silo builds one. No mock of the wire. -->
-    <PackageReference Include="Microsoft.Orleans.Server" />
-  </ItemGroup>
+    <ItemGroup Label="Global usings">
+        <Using Include="Xunit"/>
+    </ItemGroup>
 
-  <ItemGroup Label="Global usings">
-    <Using Include="Xunit" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <ProjectReference Include="../CyberCloud.Tenancy.Contracts/CyberCloud.Tenancy.Contracts.csproj" />
-  </ItemGroup>
+    <ItemGroup>
+        <ProjectReference Include="../CyberCloud.Tenancy.Contracts/CyberCloud.Tenancy.Contracts.csproj"/>
+    </ItemGroup>
 
 </Project>

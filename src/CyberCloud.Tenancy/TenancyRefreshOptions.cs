@@ -19,8 +19,7 @@ namespace CyberCloud.Tenancy;
 ///         see <c>TenantDirectoryCache</c>, where "indefinitely" is load-bearing.
 ///     </para>
 /// </remarks>
-public sealed class TenancyRefreshOptions
-{
+public sealed class TenancyRefreshOptions {
     /// <summary>How often to poll <c>IShardMapGrain.GetSnapshotAsync</c>.</summary>
     public TimeSpan ShardMapInterval { get; set; } = TimeSpan.FromSeconds(15);
 

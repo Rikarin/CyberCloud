@@ -6,8 +6,12 @@ namespace CyberCloud.ServiceDefaults.HealthChecks;
 /// <remarks>
 ///     <para>
 ///         ⚠ <b>The split is the whole design; the tag strings are incidental.</b> A liveness probe
-///         that fails <i>restarts the pod</i>; a readiness probe that fails <i>removes it from the
-///         Service</i>. Putting a cluster-wide or dependency-wide condition behind
+///         that fails <i>restarts the pod</i>; a readiness probe that fails
+///         <i>
+///             removes it from the
+///             Service
+///         </i>
+///         . Putting a cluster-wide or dependency-wide condition behind
 ///         <see cref="Live" /> means a Redis blip restarts thirty silos and moves two million
 ///         grains — the health check causing the outage it was added to detect.
 ///     </para>
@@ -23,8 +27,7 @@ namespace CyberCloud.ServiceDefaults.HealthChecks;
 ///         </item>
 ///     </list>
 /// </remarks>
-public static class HealthCheckTags
-{
+public static class HealthCheckTags {
     /// <summary>Liveness — the Kubernetes <c>livenessProbe</c>. Process-local conditions only.</summary>
     public const string Live = "live";
 

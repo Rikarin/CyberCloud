@@ -1,11 +1,10 @@
-using System.Globalization;
 using CyberCloud.Core.Contracts;
-using CyberCloud.ServiceDefaults.Storage;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
 using Orleans.Multitenant;
 using Orleans.Storage;
 using Shouldly;
+using System.Globalization;
 
 namespace CyberCloud.ServiceDefaults.Tests.Storage;
 
@@ -14,13 +13,9 @@ namespace CyberCloud.ServiceDefaults.Tests.Storage;
 ///     nowhere else, it is readable JSON, and a stale etag loses.
 /// </summary>
 [Collection(StorageSuite.Name)]
-public sealed class DurableTierTests(StorageFixture fixture)
-{
-    static string Id(Guid tenant) => tenant.ToString("D", CultureInfo.InvariantCulture);
-
+public sealed class DurableTierTests(StorageFixture fixture) {
     [Fact]
-    public async Task AGrainsRowExistsOnItsOwnShardAndOnNoOther()
-    {
+    public async Task AGrainsRowExistsOnItsOwnShardAndOnNoOther() {
         var token = TestContext.Current.CancellationToken;
         var (a, b) = fixture.SplitTenants;
 
@@ -40,8 +35,7 @@ public sealed class DurableTierTests(StorageFixture fixture)
     }
 
     [Fact]
-    public async Task TheStoredPayloadIsHumanReadableJsonWhenReadWithPlainSql()
-    {
+    public async Task TheStoredPayloadIsHumanReadableJsonWhenReadWithPlainSql() {
         // docs/plan/05 § Serialization: the entire stated reason for choosing JSON over MemoryPack
         // for this tier is that in year two someone answers "what did this look like before the bad
         // deploy" with psql. That is a testable claim, so it is a test.
@@ -65,7 +59,8 @@ public sealed class DurableTierTests(StorageFixture fixture)
         // JSON-ness comes from the serializer, not from the column.
         await using var command = new NpgsqlCommand(
             "SELECT convert_from(payloadbinary, 'UTF8') FROM orleansstorage WHERE grainidextensionstring LIKE '%res/readable'",
-            connection);
+            connection
+        );
 
         var payload = (string?)await command.ExecuteScalarAsync(token);
 
@@ -77,19 +72,17 @@ public sealed class DurableTierTests(StorageFixture fixture)
     }
 
     [Fact]
-    public async Task TheSchemaHasNoPayloadJsonColumnWhateverThePlanSays()
-    {
+    public async Task TheSchemaHasNoPayloadJsonColumnWhateverThePlanSays() {
         var token = TestContext.Current.CancellationToken;
         await using var connection = await fixture.OpenShardAsync(StorageFixture.ShardA, token);
         await using var command = new NpgsqlCommand(
             "SELECT column_name FROM information_schema.columns WHERE table_name = 'orleansstorage' ORDER BY column_name",
-            connection);
+            connection
+        );
 
         var columns = new List<string>();
-        await using (var reader = await command.ExecuteReaderAsync(token))
-        {
-            while (await reader.ReadAsync(token))
-            {
+        await using (var reader = await command.ExecuteReaderAsync(token)) {
+            while (await reader.ReadAsync(token)) {
                 columns.Add(reader.GetString(0));
             }
         }
@@ -101,8 +94,7 @@ public sealed class DurableTierTests(StorageFixture fixture)
     }
 
     [Fact]
-    public async Task AStaleEtagLosesWithInconsistentStateExceptionRatherThanWinningQuietly()
-    {
+    public async Task AStaleEtagLosesWithInconsistentStateExceptionRatherThanWinningQuietly() {
         // Two writers, one grain, one stale view of the version. Driven through the storage provider
         // rather than the grain because a grain will not let you hold a stale IGrainState — and the
         // etag is the mechanism that makes that safe, so it is the mechanism under test.
@@ -113,25 +105,25 @@ public sealed class DurableTierTests(StorageFixture fixture)
 
         var storage = fixture.Services.GetRequiredKeyedService<IGrainStorage>(StorageTiers.Durable);
 
-        var first = new GrainState<NoteState>(new NoteState { Note = "first" });
+        var first = new GrainState<NoteState>(new() { Note = "first" });
         await storage.WriteStateAsync(StorageFixture.ProviderTestGrainType, grainId, first);
         first.ETag.ShouldNotBeNull();
 
-        var stale = new GrainState<NoteState>(new NoteState { Note = "stale" }) { ETag = null };
+        var stale = new GrainState<NoteState>(new() { Note = "stale" }) { ETag = null };
 
-        var thrown = await Should.ThrowAsync<InconsistentStateException>(
-            () => storage.WriteStateAsync(StorageFixture.ProviderTestGrainType, grainId, stale));
+        var thrown = await Should.ThrowAsync<InconsistentStateException>(() =>
+            storage.WriteStateAsync(StorageFixture.ProviderTestGrainType, grainId, stale)
+        );
 
         thrown.Message.ShouldContain("Version conflict");
 
-        var readBack = new GrainState<NoteState>(new NoteState());
+        var readBack = new GrainState<NoteState>(new());
         await storage.ReadStateAsync(StorageFixture.ProviderTestGrainType, grainId, readBack);
         readBack.State.Note.ShouldBe("first");
     }
 
     [Fact]
-    public async Task ANullTenantGrainReachesTheConfiguredPlatformShardInsteadOfThrowing()
-    {
+    public async Task ANullTenantGrainReachesTheConfiguredPlatformShardInsteadOfThrowing() {
         // docs/plan/04 § Grain taxonomy makes the tenant directory, the shard map and the provider
         // registry null-tenant AND durable. docs/plan/05 § Storage provider wiring's body would
         // throw FormatException on the first activation of any of them.
@@ -149,8 +141,7 @@ public sealed class DurableTierTests(StorageFixture fixture)
     }
 
     [Fact]
-    public async Task TheDurableProviderIsTheMultitenantWrapperAndNotABarePostgresProvider()
-    {
+    public async Task TheDurableProviderIsTheMultitenantWrapperAndNotABarePostgresProvider() {
         var storage = fixture.Services.GetRequiredKeyedService<IGrainStorage>(StorageTiers.Durable);
 
         // If this ever becomes AdoNetGrainStorage, every tenant shares one connection string and the
@@ -160,17 +151,18 @@ public sealed class DurableTierTests(StorageFixture fixture)
         await Task.CompletedTask;
     }
 
-    async Task<List<string>> RowsOn(string shard, CancellationToken token)
-    {
+    static string Id(Guid tenant) => tenant.ToString("D", CultureInfo.InvariantCulture);
+
+    async Task<List<string>> RowsOn(string shard, CancellationToken token) {
         await using var connection = await fixture.OpenShardAsync(shard, token);
         await using var command = new NpgsqlCommand(
             "SELECT coalesce(convert_from(payloadbinary, 'UTF8'), '') FROM orleansstorage",
-            connection);
+            connection
+        );
 
         var rows = new List<string>();
         await using var reader = await command.ExecuteReaderAsync(token);
-        while (await reader.ReadAsync(token))
-        {
+        while (await reader.ReadAsync(token)) {
             rows.Add(reader.GetString(0));
         }
 

@@ -1,82 +1,78 @@
 <Solution>
-
-  <!--
-    docs/plan/03 § Top level. The XML solution format (SDK 9.0.200+, the default in SDK 10).
-
-    Verified on SDK 10.0.302: `dotnet sln CyberCloud.slnx list` and `dotnet build CyberCloud.slnx`
-    both work, and a `.slnf` filter CAN name a `.slnx` in its "solution.path" — `dotnet sln <f>.slnf
-    list` and `dotnet build <f>.slnf` were both exercised against this file with a real project in it.
-
-    There are no <Project> entries yet — this repository currently contains build infrastructure
-    only. The folders below are the shape the first assemblies drop into. Solution folders mirror
-    the repository tree; add a project under the folder that matches its location on disk.
-
-    ── Filter membership (docs/plan/03), recorded here because .slnf is strict JSON and rejects
-       comments — verified: a `//` comment makes `dotnet sln … list` fail with
-       "'/' is invalid after a value" ──
-
-      CyberCloud.Core.slnf       src/CyberCloud.Core*, src/CyberCloud.Tenancy*,
-                                 src/CyberCloud.Authorization*, src/CyberCloud.Kubernetes*,
-                                 src/CyberCloud.Analyzers* (+ their .Tests siblings)
-                                 — the fast IDE load. The analyzers are in this filter because
-                                 every project in it references them, and an analyzer you cannot
-                                 open is an analyzer you edit by guessing.
-      CyberCloud.Providers.slnf  src/Providers/** (+ .Contracts/.Application/.Tests/.Conformance)
-      CyberCloud.Hosts.slnf      src/Hosts/**
-
-    All three filters are currently empty ("projects": []), which loads and builds cleanly. Populate
-    each as its projects land — a filter naming a project that is not in this .slnx will not load.
-  -->
-
-  <Folder Name="/solution items/">
-    <File Path=".editorconfig" />
-    <File Path=".gitignore" />
-    <File Path="Directory.Build.props" />
-    <File Path="Directory.Build.targets" />
-    <File Path="Directory.Packages.props" />
-    <File Path="global.json" />
-    <File Path=".config/dotnet-tools.json" />
-  </Folder>
-
-  <Folder Name="/build/" />
-
-  <Folder Name="/src/">
     <!--
-      ⚠ CyberCloud.Analyzers is the ONE netstandard2.0 project in the tree (docs/plan/02 § Platform
-      baseline's single-TFM rule has this one documented exception — a Roslyn analyzer is loaded by
-      the compiler, which may be running on .NET Framework). The five projects it polices reference
-      it with OutputItemType="Analyzer", not as an ordinary reference.
+      docs/plan/03 § Top level. The XML solution format (SDK 9.0.200+, the default in SDK 10).
+  
+      Verified on SDK 10.0.302: `dotnet sln CyberCloud.slnx list` and `dotnet build CyberCloud.slnx`
+      both work, and a `.slnf` filter CAN name a `.slnx` in its "solution.path" — `dotnet sln <f>.slnf
+      list` and `dotnet build <f>.slnf` were both exercised against this file with a real project in it.
+  
+      There are no <Project> entries yet — this repository currently contains build infrastructure
+      only. The folders below are the shape the first assemblies drop into. Solution folders mirror
+      the repository tree; add a project under the folder that matches its location on disk.
+  
+      ── Filter membership (docs/plan/03), recorded here because .slnf is strict JSON and rejects
+         comments — verified: a `//` comment makes `dotnet sln … list` fail with
+         "'/' is invalid after a value" ──
+  
+        CyberCloud.Core.slnf       src/CyberCloud.Core*, src/CyberCloud.Tenancy*,
+                                   src/CyberCloud.Authorization*, src/CyberCloud.Kubernetes*,
+                                   src/CyberCloud.Analyzers* (+ their .Tests siblings)
+                                   — the fast IDE load. The analyzers are in this filter because
+                                   every project in it references them, and an analyzer you cannot
+                                   open is an analyzer you edit by guessing.
+        CyberCloud.Providers.slnf  src/Providers/** (+ .Contracts/.Application/.Tests/.Conformance)
+        CyberCloud.Hosts.slnf      src/Hosts/**
+  
+      All three filters are currently empty ("projects": []), which loads and builds cleanly. Populate
+      each as its projects land — a filter naming a project that is not in this .slnx will not load.
     -->
-    <Project Path="src/CyberCloud.Analyzers/CyberCloud.Analyzers.csproj" />
-    <Project Path="src/CyberCloud.Analyzers.Tests/CyberCloud.Analyzers.Tests.csproj" />
-    <Project Path="src/CyberCloud.Core/CyberCloud.Core.csproj" />
-    <Project Path="src/CyberCloud.Core.Tests/CyberCloud.Core.Tests.csproj" />
-    <Project Path="src/CyberCloud.Core.Contracts/CyberCloud.Core.Contracts.csproj" />
-    <Project Path="src/CyberCloud.Core.Contracts.Tests/CyberCloud.Core.Contracts.Tests.csproj" />
-    <Project Path="src/CyberCloud.ServiceDefaults/CyberCloud.ServiceDefaults.csproj" />
-    <Project Path="src/CyberCloud.ServiceDefaults.Tests/CyberCloud.ServiceDefaults.Tests.csproj" />
-    <Project Path="src/CyberCloud.Tenancy.Contracts/CyberCloud.Tenancy.Contracts.csproj" />
-    <Project Path="src/CyberCloud.Tenancy.Contracts.Tests/CyberCloud.Tenancy.Contracts.Tests.csproj" />
-    <Project Path="src/CyberCloud.Tenancy/CyberCloud.Tenancy.csproj" />
-    <Project Path="src/CyberCloud.Tenancy.Tests/CyberCloud.Tenancy.Tests.csproj" />
-    <Project Path="src/CyberCloud.Authorization.Contracts/CyberCloud.Authorization.Contracts.csproj" />
-    <Project Path="src/CyberCloud.Authorization.Contracts.Tests/CyberCloud.Authorization.Contracts.Tests.csproj" />
-    <Project Path="src/CyberCloud.Authorization/CyberCloud.Authorization.csproj" />
-    <Project Path="src/CyberCloud.Authorization.Tests/CyberCloud.Authorization.Tests.csproj" />
-    <Project Path="src/CyberCloud.Kubernetes.Contracts/CyberCloud.Kubernetes.Contracts.csproj" />
-    <Project Path="src/CyberCloud.Kubernetes.Contracts.Tests/CyberCloud.Kubernetes.Contracts.Tests.csproj" />
-    <Project Path="src/CyberCloud.Kubernetes/CyberCloud.Kubernetes.csproj" />
-    <Project Path="src/CyberCloud.Kubernetes.Tests/CyberCloud.Kubernetes.Tests.csproj" />
-  </Folder>
-  <Folder Name="/src/Providers/" />
 
-  <Folder Name="/src/Hosts/">
-    <Project Path="src/Hosts/CyberCloud.Silo.Host/CyberCloud.Silo.Host.csproj" />
-    <Project Path="src/Hosts/CyberCloud.AppHost/CyberCloud.AppHost.csproj" />
-    <Project Path="src/Hosts/CyberCloud.AppHost.Tests/CyberCloud.AppHost.Tests.csproj" />
-  </Folder>
+    <Folder Name="/solution items/">
+        <File Path=".editorconfig"/>
+        <File Path=".gitignore"/>
+        <File Path="Directory.Build.props"/>
+        <File Path="Directory.Build.targets"/>
+        <File Path="Directory.Packages.props"/>
+        <File Path="global.json"/>
+        <File Path=".config/dotnet-tools.json"/>
+    </Folder>
 
-  <Folder Name="/cli/" />
-  <Folder Name="/test/" />
+    <Folder Name="/build/"/>
 
+    <Folder Name="/src/">
+        <!--
+          ⚠ CyberCloud.Analyzers is the ONE netstandard2.0 project in the tree (docs/plan/02 § Platform
+          baseline's single-TFM rule has this one documented exception — a Roslyn analyzer is loaded by
+          the compiler, which may be running on .NET Framework). The five projects it polices reference
+          it with OutputItemType="Analyzer", not as an ordinary reference.
+        -->
+        <Project Path="src/CyberCloud.Analyzers/CyberCloud.Analyzers.csproj"/>
+        <Project Path="src/CyberCloud.Analyzers.Tests/CyberCloud.Analyzers.Tests.csproj"/>
+        <Project Path="src/CyberCloud.Core/CyberCloud.Core.csproj"/>
+        <Project Path="src/CyberCloud.Core.Tests/CyberCloud.Core.Tests.csproj"/>
+        <Project Path="src/CyberCloud.Core.Contracts/CyberCloud.Core.Contracts.csproj"/>
+        <Project Path="src/CyberCloud.Core.Contracts.Tests/CyberCloud.Core.Contracts.Tests.csproj"/>
+        <Project Path="src/CyberCloud.ServiceDefaults/CyberCloud.ServiceDefaults.csproj"/>
+        <Project Path="src/CyberCloud.ServiceDefaults.Tests/CyberCloud.ServiceDefaults.Tests.csproj"/>
+        <Project Path="src/CyberCloud.Tenancy.Contracts/CyberCloud.Tenancy.Contracts.csproj"/>
+        <Project Path="src/CyberCloud.Tenancy.Contracts.Tests/CyberCloud.Tenancy.Contracts.Tests.csproj"/>
+        <Project Path="src/CyberCloud.Tenancy/CyberCloud.Tenancy.csproj"/>
+        <Project Path="src/CyberCloud.Tenancy.Tests/CyberCloud.Tenancy.Tests.csproj"/>
+        <Project Path="src/CyberCloud.Authorization.Contracts/CyberCloud.Authorization.Contracts.csproj"/>
+        <Project Path="src/CyberCloud.Authorization.Contracts.Tests/CyberCloud.Authorization.Contracts.Tests.csproj"/>
+        <Project Path="src/CyberCloud.Authorization/CyberCloud.Authorization.csproj"/>
+        <Project Path="src/CyberCloud.Authorization.Tests/CyberCloud.Authorization.Tests.csproj"/>
+        <Project Path="src/CyberCloud.Kubernetes.Contracts/CyberCloud.Kubernetes.Contracts.csproj"/>
+        <Project Path="src/CyberCloud.Kubernetes.Contracts.Tests/CyberCloud.Kubernetes.Contracts.Tests.csproj"/>
+        <Project Path="src/CyberCloud.Kubernetes/CyberCloud.Kubernetes.csproj"/>
+        <Project Path="src/CyberCloud.Kubernetes.Tests/CyberCloud.Kubernetes.Tests.csproj"/>
+    </Folder>
+    <Folder Name="/src/Providers/"/>
+    <Folder Name="/src/Hosts/">
+        <Project Path="src/Hosts/CyberCloud.Silo.Host/CyberCloud.Silo.Host.csproj"/>
+        <Project Path="src/Hosts/CyberCloud.AppHost/CyberCloud.AppHost.csproj"/>
+        <Project Path="src/Hosts/CyberCloud.AppHost.Tests/CyberCloud.AppHost.Tests.csproj"/>
+    </Folder>
+    <Folder Name="/cli/"/>
+    <Folder Name="/test/"/>
 </Solution>

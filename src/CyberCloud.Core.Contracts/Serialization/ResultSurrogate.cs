@@ -1,4 +1,3 @@
-
 namespace CyberCloud.Core.Contracts.Serialization;
 
 /// <summary>
@@ -27,8 +26,7 @@ namespace CyberCloud.Core.Contracts.Serialization;
 /// </remarks>
 [GenerateSerializer]
 [Alias("CyberCloud.Core.Result")]
-public struct ResultSurrogate
-{
+public struct ResultSurrogate {
     /// <summary>
     ///     Whether the operation succeeded. <c>[Id(0)]</c> and <c>false</c>-by-default on purpose —
     ///     see the remarks on the type.
@@ -43,8 +41,7 @@ public struct ResultSurrogate
 
 /// <summary>The <see cref="Result" /> ↔ <see cref="ResultSurrogate" /> converter.</summary>
 [RegisterConverter]
-public sealed class ResultSurrogateConverter : IConverter<Result, ResultSurrogate>
-{
+public sealed class ResultSurrogateConverter : IConverter<Result, ResultSurrogate> {
     /// <inheritdoc />
     public Result ConvertFromSurrogate(in ResultSurrogate surrogate) =>
         surrogate.IsSuccess
@@ -83,8 +80,7 @@ public sealed class ResultSurrogateConverter : IConverter<Result, ResultSurrogat
 [GenerateSerializer]
 [Alias("CyberCloud.Core.Result`1")]
 public struct ResultSurrogate<T>
-    where T : notnull
-{
+    where T : notnull {
     /// <summary>Whether the operation succeeded. See the remarks on <see cref="ResultSurrogate" />.</summary>
     [Id(0)]
     public bool IsSuccess { get; set; }
@@ -111,13 +107,10 @@ public struct ResultSurrogate<T>
 /// </remarks>
 [RegisterConverter]
 public sealed class ResultSurrogateConverter<T> : IConverter<Result<T>, ResultSurrogate<T>>
-    where T : notnull
-{
+    where T : notnull {
     /// <inheritdoc />
-    public Result<T> ConvertFromSurrogate(in ResultSurrogate<T> surrogate)
-    {
-        if (!surrogate.IsSuccess)
-        {
+    public Result<T> ConvertFromSurrogate(in ResultSurrogate<T> surrogate) {
+        if (!surrogate.IsSuccess) {
             return Result<T>.Failure(surrogate.Error ?? WireErrors.MissingError);
         }
 
@@ -130,10 +123,5 @@ public sealed class ResultSurrogateConverter<T> : IConverter<Result<T>, ResultSu
 
     /// <inheritdoc />
     public ResultSurrogate<T> ConvertToSurrogate(in Result<T> value) =>
-        new()
-        {
-            IsSuccess = value.IsSuccess,
-            Value = value.ValueOrDefault,
-            Error = value.Error,
-        };
+        new() { IsSuccess = value.IsSuccess, Value = value.ValueOrDefault, Error = value.Error };
 }

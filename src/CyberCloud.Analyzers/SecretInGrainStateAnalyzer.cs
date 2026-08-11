@@ -1,6 +1,6 @@
-using System.Collections.Immutable;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Diagnostics;
+using System.Collections.Immutable;
 
 namespace CyberCloud.Analyzers;
 
@@ -10,9 +10,12 @@ namespace CyberCloud.Analyzers;
 /// <remarks>
 ///     <para>
 ///         docs/plan/00 § Non-negotiables, the "Secrets never reach grain state" row, verbatim:
-///         <i>"Analyzer bans <c>[Id]</c>-annotated members named <c>*Password</c>, <c>*Secret</c>,
-///         <c>*Token</c>, <c>*Key</c> outside <c>CyberCloud.Vault</c>; secrets are <c>SecretRef</c>
-///         handles resolved at the data plane."</i> The suffix list is that sentence, not a
+///         <i>
+///             "Analyzer bans <c>[Id]</c>-annotated members named <c>*Password</c>, <c>*Secret</c>,
+///             <c>*Token</c>, <c>*Key</c> outside <c>CyberCloud.Vault</c>; secrets are <c>SecretRef</c>
+///             handles resolved at the data plane."
+///         </i>
+///         The suffix list is that sentence, not a
 ///         judgement call — widening or narrowing it is a change to the non-negotiable and belongs
 ///         in the document first.
 ///     </para>
@@ -35,8 +38,7 @@ namespace CyberCloud.Analyzers;
 ///     </para>
 /// </remarks>
 [DiagnosticAnalyzer(LanguageNames.CSharp)]
-public sealed class SecretInGrainStateAnalyzer : DiagnosticAnalyzer
-{
+public sealed class SecretInGrainStateAnalyzer : DiagnosticAnalyzer {
     /// <summary>docs/plan/00 § Non-negotiables, exactly as written there.</summary>
     static readonly string[] SecretSuffixes = ["Password", "Secret", "Token", "Key"];
 
@@ -45,10 +47,8 @@ public sealed class SecretInGrainStateAnalyzer : DiagnosticAnalyzer
         ImmutableArray.Create(Rules.SecretInGrainState);
 
     /// <inheritdoc />
-    public override void Initialize(AnalysisContext context)
-    {
-        if (context is null)
-        {
+    public override void Initialize(AnalysisContext context) {
+        if (context is null) {
             return;
         }
 
@@ -57,45 +57,44 @@ public sealed class SecretInGrainStateAnalyzer : DiagnosticAnalyzer
         context.RegisterCompilationStartAction(OnCompilationStart);
     }
 
-    static void OnCompilationStart(CompilationStartAnalysisContext context)
-    {
+    static void OnCompilationStart(CompilationStartAnalysisContext context) {
         // ⚠ The vault is the one assembly allowed to hold a secret value. It does not exist yet
         // (docs/plan/18); writing the exemption now means the rule does not have to be revisited
         // when it lands, and means an assembly cannot opt out by being named CyberCloud.VaultThing.
         var assembly = context.Compilation.AssemblyName;
         if (string.Equals(assembly, WellKnown.VaultAssembly, StringComparison.Ordinal)
-            || (assembly is not null && assembly.StartsWith(WellKnown.VaultAssembly + ".", StringComparison.Ordinal)))
-        {
+            || (assembly is not null && assembly.StartsWith(WellKnown.VaultAssembly + ".", StringComparison.Ordinal))) {
             return;
         }
 
         var idAttribute = context.Compilation.GetTypeByMetadataName(WellKnown.IdAttribute);
-        if (idAttribute is null)
-        {
+        if (idAttribute is null) {
             return;
         }
 
         context.RegisterSymbolAction(
             symbolContext => AnalyzeMember(symbolContext, idAttribute),
             SymbolKind.Property,
-            SymbolKind.Field);
+            SymbolKind.Field
+        );
     }
 
-    static void AnalyzeMember(SymbolAnalysisContext context, INamedTypeSymbol idAttribute)
-    {
+    static void AnalyzeMember(SymbolAnalysisContext context, INamedTypeSymbol idAttribute) {
         var member = context.Symbol;
 
         var suffix = SecretSuffix(member.Name);
-        if (suffix is null || !HasIdAttribute(member, idAttribute))
-        {
+        if (suffix is null || !HasIdAttribute(member, idAttribute)) {
             return;
         }
 
-        context.ReportDiagnostic(Diagnostic.Create(
-            Rules.SecretInGrainState,
-            member.Locations.Length > 0 ? member.Locations[0] : Location.None,
-            member.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat),
-            suffix));
+        context.ReportDiagnostic(
+            Diagnostic.Create(
+                Rules.SecretInGrainState,
+                member.Locations.Length > 0 ? member.Locations[0] : Location.None,
+                member.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat),
+                suffix
+            )
+        );
     }
 
     /// <summary>
@@ -105,12 +104,9 @@ public sealed class SecretInGrainStateAnalyzer : DiagnosticAnalyzer
     ///     Ordinal and case-sensitive. A name that <i>is</i> the suffix ("Token") counts too — the
     ///     plan's <c>*Password</c> notation is a suffix glob, not a "must have a prefix" rule.
     /// </remarks>
-    static string? SecretSuffix(string name)
-    {
-        foreach (var suffix in SecretSuffixes)
-        {
-            if (name.EndsWith(suffix, StringComparison.Ordinal))
-            {
+    static string? SecretSuffix(string name) {
+        foreach (var suffix in SecretSuffixes) {
+            if (name.EndsWith(suffix, StringComparison.Ordinal)) {
                 return suffix;
             }
         }
@@ -118,12 +114,9 @@ public sealed class SecretInGrainStateAnalyzer : DiagnosticAnalyzer
         return null;
     }
 
-    static bool HasIdAttribute(ISymbol symbol, INamedTypeSymbol idAttribute)
-    {
-        foreach (var applied in symbol.GetAttributes())
-        {
-            if (SymbolEqualityComparer.Default.Equals(applied.AttributeClass, idAttribute))
-            {
+    static bool HasIdAttribute(ISymbol symbol, INamedTypeSymbol idAttribute) {
+        foreach (var applied in symbol.GetAttributes()) {
+            if (SymbolEqualityComparer.Default.Equals(applied.AttributeClass, idAttribute)) {
                 return true;
             }
         }
@@ -132,17 +125,12 @@ public sealed class SecretInGrainStateAnalyzer : DiagnosticAnalyzer
         // parameter, and the generated property inherits nothing. Orleans reads the attribute from
         // the field the property is backed by, so check that too.
         if (symbol is IPropertySymbol { GetMethod: not null } property
-            && property.ContainingType is not null)
-        {
-            foreach (var candidate in property.ContainingType.GetMembers())
-            {
+            && property.ContainingType is not null) {
+            foreach (var candidate in property.ContainingType.GetMembers()) {
                 if (candidate is IFieldSymbol field
-                    && SymbolEqualityComparer.Default.Equals(field.AssociatedSymbol, property))
-                {
-                    foreach (var applied in field.GetAttributes())
-                    {
-                        if (SymbolEqualityComparer.Default.Equals(applied.AttributeClass, idAttribute))
-                        {
+                    && SymbolEqualityComparer.Default.Equals(field.AssociatedSymbol, property)) {
+                    foreach (var applied in field.GetAttributes()) {
+                        if (SymbolEqualityComparer.Default.Equals(applied.AttributeClass, idAttribute)) {
                             return true;
                         }
                     }

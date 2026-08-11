@@ -19,14 +19,12 @@ namespace CyberCloud.ServiceDefaults.Tests.Storage;
 ///         them; the only observable difference is the one asserted below.
 ///     </para>
 /// </remarks>
-public sealed class HotTierEvictionTests : IAsyncLifetime
-{
+public sealed class HotTierEvictionTests : IAsyncLifetime {
     IContainer container = null!;
     ConnectionMultiplexer multiplexer = null!;
 
     /// <inheritdoc />
-    public async ValueTask InitializeAsync()
-    {
+    public async ValueTask InitializeAsync() {
         var token = TestContext.Current.CancellationToken;
 
         container = new ContainerBuilder("redis:8-alpine")
@@ -40,23 +38,21 @@ public sealed class HotTierEvictionTests : IAsyncLifetime
         // allowAdmin, because the first assertion is CONFIG GET maxmemory-policy and that is an
         // admin command as far as StackExchange.Redis is concerned.
         multiplexer = await ConnectionMultiplexer.ConnectAsync(
-            $"{container.Hostname}:{container.GetMappedPublicPort(6379)},allowAdmin=true");
+            $"{container.Hostname}:{container.GetMappedPublicPort(6379)},allowAdmin=true"
+        );
     }
 
     /// <inheritdoc />
-    public async ValueTask DisposeAsync()
-    {
+    public async ValueTask DisposeAsync() {
         multiplexer?.Dispose();
 
-        if (container is not null)
-        {
+        if (container is not null) {
             await container.DisposeAsync();
         }
     }
 
     [Fact]
-    public void ThePolicyIsNoevictionAndNotAnLruVariant()
-    {
+    public void ThePolicyIsNoevictionAndNotAnLruVariant() {
         var server = multiplexer.GetServer(multiplexer.GetEndPoints()[0]);
 
         server.ConfigGet("maxmemory-policy").Single().Value.ShouldBe("noeviction");
@@ -64,8 +60,7 @@ public sealed class HotTierEvictionTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task AFullHotTierFailsTheWriteLoudlyAndKeepsWhatItAlreadyHad()
-    {
+    public async Task AFullHotTierFailsTheWriteLoudlyAndKeepsWhatItAlreadyHad() {
         var token = TestContext.Current.CancellationToken;
         var database = multiplexer.GetDatabase();
         var payload = new string('x', 256 * 1024);
@@ -74,16 +69,12 @@ public sealed class HotTierEvictionTests : IAsyncLifetime
 
         RedisServerException? refused = null;
 
-        for (var i = 0; i < 200 && refused is null; i++)
-        {
+        for (var i = 0; i < 200 && refused is null; i++) {
             token.ThrowIfCancellationRequested();
 
-            try
-            {
+            try {
                 await database.StringSetAsync($"{{cc:t:filler}}:Session:{i}", payload);
-            }
-            catch (RedisServerException ex)
-            {
+            } catch (RedisServerException ex) {
                 refused = ex;
             }
         }

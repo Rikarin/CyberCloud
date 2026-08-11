@@ -19,8 +19,7 @@ namespace CyberCloud.Kubernetes.Contracts;
 ///         requires.
 ///     </para>
 /// </remarks>
-public interface IKubeClusterConnection
-{
+public interface IKubeClusterConnection {
     /// <summary>The cluster's resource GUID.</summary>
     Guid ClusterId { get; }
 
@@ -47,5 +46,6 @@ public interface IKubeClusterConnection
     Task<Result> DeleteAsync(
         KubeCommand command,
         CascadePolicy policy = CascadePolicy.Background,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default
+    );
 }

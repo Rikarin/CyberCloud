@@ -8,12 +8,15 @@ namespace CyberCloud.Kubernetes.Informers;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         The failure this exists to prevent, quoting docs/plan/09 § Observing: <i>"The informer
-///         cache is in one silo's memory and is lost when that silo dies. Re-establishing it is a
-///         full list + watch, which for a large cluster is seconds and a burst of API load …
-///         stagger re-establishment across clusters so a silo restart does not stampede every
-///         tenant's API server at once. … a 30-silo rolling deploy without staggering is a
-///         synchronized list storm."</i>
+///         The failure this exists to prevent, quoting docs/plan/09 § Observing:
+///         <i>
+///             "The informer
+///             cache is in one silo's memory and is lost when that silo dies. Re-establishing it is a
+///             full list + watch, which for a large cluster is seconds and a burst of API load …
+///             stagger re-establishment across clusters so a silo restart does not stampede every
+///             tenant's API server at once. … a 30-silo rolling deploy without staggering is a
+///             synchronized list storm."
+///         </i>
 ///     </para>
 ///     <para>
 ///         <b>Why the delay is a function of the cluster id and nothing else.</b> There is exactly
@@ -33,8 +36,7 @@ namespace CyberCloud.Kubernetes.Informers;
 ///         releases, which is the property that matters.
 ///     </para>
 /// </remarks>
-public static class InformerStagger
-{
+public static class InformerStagger {
     /// <summary>
     ///     The default window re-establishment is spread over — 30 seconds.
     /// </summary>
@@ -58,10 +60,8 @@ public static class InformerStagger
     ///     must never be configured with.
     /// </param>
     /// <returns>A delay in <c>[0, window)</c>.</returns>
-    public static TimeSpan DelayFor(Guid clusterId, TimeSpan window)
-    {
-        if (window <= TimeSpan.Zero)
-        {
+    public static TimeSpan DelayFor(Guid clusterId, TimeSpan window) {
+        if (window <= TimeSpan.Zero) {
             return TimeSpan.Zero;
         }
 
@@ -80,8 +80,7 @@ public static class InformerStagger
     ///     worth asserting a distribution over.
     /// </summary>
     /// <param name="clusterId">The cluster.</param>
-    public static double Fraction(Guid clusterId)
-    {
+    public static double Fraction(Guid clusterId) {
         Span<byte> id = stackalloc byte[16];
         clusterId.TryWriteBytes(id);
 

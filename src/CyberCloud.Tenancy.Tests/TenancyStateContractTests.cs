@@ -1,7 +1,7 @@
-using System.Globalization;
-using System.Reflection;
 using CyberCloud.Core.Contracts;
 using Shouldly;
+using System.Globalization;
+using System.Reflection;
 
 namespace CyberCloud.Tenancy.Tests;
 
@@ -22,12 +22,10 @@ namespace CyberCloud.Tenancy.Tests;
 ///         one: <c>[Id(n)]</c> numbers are never reused and never reordered.
 ///     </para>
 /// </remarks>
-public sealed class TenancyStateContractTests
-{
+public sealed class TenancyStateContractTests {
     static readonly Assembly Tenancy = typeof(TenantState).Assembly;
 
-    static readonly (string Type, int Id, string Member)[] Baseline =
-    [
+    static readonly (string Type, int Id, string Member)[] Baseline = [
         ("TenantState", 0, "Descriptor"),
         ("TenantState", 1, "Subscriptions"),
         ("TenantState", 2, "LastStatusReason"),
@@ -52,18 +50,17 @@ public sealed class TenancyStateContractTests
 
         ("QuotaState", 0, "Committed"),
         ("QuotaState", 1, "Limits"),
-        ("QuotaState", 2, "Leases"),
+        ("QuotaState", 2, "Leases")
     ];
 
-    static readonly (string Type, string Alias)[] Aliases =
-    [
+    static readonly (string Type, string Alias)[] Aliases = [
         ("IndexState", "CyberCloud.Tenancy.State.Index"),
         ("QuotaState", "CyberCloud.Tenancy.State.Quota"),
         ("ResourceGroupState", "CyberCloud.Tenancy.State.ResourceGroup"),
         ("ShardMapState", "CyberCloud.Tenancy.State.ShardMap"),
         ("SubscriptionState", "CyberCloud.Tenancy.State.Subscription"),
         ("TenantDirectoryState", "CyberCloud.Tenancy.State.TenantDirectory"),
-        ("TenantState", "CyberCloud.Tenancy.State.Tenant"),
+        ("TenantState", "CyberCloud.Tenancy.State.Tenant")
     ];
 
     static IEnumerable<Type> StateTypes =>
@@ -77,7 +74,8 @@ public sealed class TenancyStateContractTests
             .ShouldBeEmpty(
                 "docs/plan/05 § Serialization, rule 5: 'Renaming a type without [Alias] is a "
                 + "data-loss bug.' For state that means the row is still in PostgreSQL and nothing "
-                + "can read it.");
+                + "can read it."
+            );
 
     [Fact]
     public void TheAliasesAreTheOnesRecordedHere() =>
@@ -88,14 +86,14 @@ public sealed class TenancyStateContractTests
             .ShouldBe(Aliases.OrderBy(x => x.Type, StringComparer.Ordinal).ToList());
 
     [Fact]
-    public void TheIdManifestMatchesTheBaseline()
-    {
+    public void TheIdManifestMatchesTheBaseline() {
         var actual = StateTypes
             .SelectMany(type => type
                 .GetMembers(BindingFlags.Public | BindingFlags.Instance)
                 .Select(member => (member, id: member.GetCustomAttribute<IdAttribute>()))
                 .Where(x => x.id is not null)
-                .Select(x => (Type: type.Name, Id: (int)x.id!.Id, Member: x.member.Name)))
+                .Select(x => (Type: type.Name, Id: (int)x.id!.Id, Member: x.member.Name))
+            )
             .OrderBy(x => x.Type, StringComparer.Ordinal)
             .ThenBy(x => x.Id)
             .ToList();
@@ -103,28 +101,29 @@ public sealed class TenancyStateContractTests
         actual.ShouldBe(
             Baseline.OrderBy(x => x.Type, StringComparer.Ordinal).ThenBy(x => x.Id).ToList(),
             "[Id(n)] numbers are never reused and never reordered — and unlike a wire payload, the "
-            + "old bytes are still in the database.");
+            + "old bytes are still in the database."
+        );
     }
 
     [Fact]
-    public void EveryPublicMemberOfEveryStateTypeIsNumbered()
-    {
+    public void EveryPublicMemberOfEveryStateTypeIsNumbered() {
         var unnumbered = StateTypes
             .SelectMany(type => type
                 .GetProperties(BindingFlags.Public | BindingFlags.Instance)
                 .Where(p => p.GetCustomAttribute<IdAttribute>() is null)
-                .Select(p => string.Create(CultureInfo.InvariantCulture, $"{type.Name}.{p.Name}")))
+                .Select(p => string.Create(CultureInfo.InvariantCulture, $"{type.Name}.{p.Name}"))
+            )
             .OrderBy(x => x, StringComparer.Ordinal)
             .ToList();
 
         unnumbered.ShouldBeEmpty(
             "a property with no [Id(n)] is not persisted at all — it reads back as its default on "
-            + "the next activation, silently.");
+            + "the next activation, silently."
+        );
     }
 
     [Fact]
-    public void EveryGrainBindsItsPrimaryStateToTheDurableTier()
-    {
+    public void EveryGrainBindsItsPrimaryStateToTheDurableTier() {
         // docs/plan/05 § Choosing a tier and the enforcement paragraph beneath it: "every grain type
         // in durable-grains.txt must bind its primary state to Durable". That checked-in list does
         // not exist yet (docs/plan/23's architecture gates are unimplemented — build/Build.
@@ -138,10 +137,10 @@ public sealed class TenancyStateContractTests
         grains.Count.ShouldBe(
             8,
             "the tenancy grains: tenant, subscription, resource group, resource index, email "
-            + "index, tenant directory, shard map, quota.");
+            + "index, tenant directory, shard map, quota."
+        );
 
-        foreach (var grain in grains)
-        {
+        foreach (var grain in grains) {
             var bindings = grain.GetConstructors()
                 .SelectMany(c => c.GetParameters())
                 .Select(p => p.GetCustomAttribute<PersistentStateAttribute>())
@@ -155,7 +154,8 @@ public sealed class TenancyStateContractTests
                 $"{grain.Name} binds state to a tier other than Durable. docs/plan/04 § Grain "
                 + "taxonomy puts every kind in this assembly in the Durable column; a Hot binding "
                 + "here needs an argument, and docs/plan/05's checked-in durable-grains.txt is "
-                + "where it would go.");
+                + "where it would go."
+            );
         }
     }
 
@@ -166,11 +166,13 @@ public sealed class TenancyStateContractTests
         // and in every backup; a secret there is a secret in every backup forever.
         StateTypes
             .SelectMany(t => t.GetProperties(BindingFlags.Public | BindingFlags.Instance)
-                .Select(p => $"{t.Name}.{p.Name}"))
+                .Select(p => $"{t.Name}.{p.Name}")
+            )
             .Where(name =>
                 name.EndsWith("Password", StringComparison.OrdinalIgnoreCase)
                 || name.EndsWith("Secret", StringComparison.OrdinalIgnoreCase)
                 || name.EndsWith("Token", StringComparison.OrdinalIgnoreCase)
-                || name.EndsWith("Key", StringComparison.OrdinalIgnoreCase))
+                || name.EndsWith("Key", StringComparison.OrdinalIgnoreCase)
+            )
             .ShouldBeEmpty();
 }

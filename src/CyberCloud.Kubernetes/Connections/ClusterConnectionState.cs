@@ -5,8 +5,12 @@ namespace CyberCloud.Kubernetes.Connections;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>Every property is <c>{ get; set; }</c>, including the dictionary, and the dictionary
-///         is the reason.</b> The durable tier serializes grain state with
+///         ⚠
+///         <b>
+///             Every property is <c>{ get; set; }</c>, including the dictionary, and the dictionary
+///             is the reason.
+///         </b>
+///         The durable tier serializes grain state with
 ///         <c>SystemTextJsonGrainStorageSerializer</c>, and <c>System.Text.Json</c> <b>silently</b>
 ///         does not populate a get-only collection property on read: it constructs the object, finds
 ///         no setter, and moves on — leaving an empty dictionary and no error anywhere. For
@@ -20,8 +24,7 @@ namespace CyberCloud.Kubernetes.Connections;
 ///         serializer is concerned. Only <i>get-only</i> members are the trap.
 ///     </para>
 /// </remarks>
-public sealed class ClusterConnectionState
-{
+public sealed class ClusterConnectionState {
     /// <summary>
     ///     The cluster, its owning tenant and how to authenticate. <see langword="null" /> until the
     ///     first <c>AttachAsync</c>.

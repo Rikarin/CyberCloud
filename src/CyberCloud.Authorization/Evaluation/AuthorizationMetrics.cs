@@ -22,8 +22,7 @@ namespace CyberCloud.Authorization.Evaluation;
 ///         way to hold the instrument to its word.
 ///     </para>
 /// </remarks>
-public static class AuthorizationMetrics
-{
+public static class AuthorizationMetrics {
     /// <summary>The meter name, for the OpenTelemetry registration.</summary>
     public const string MeterName = "CyberCloud.Authorization";
 
@@ -33,20 +32,21 @@ public static class AuthorizationMetrics
         Source.CreateCounter<long>("cybercloud.authz.checks", "{check}", "Checks evaluated.");
 
     static readonly Counter<long> CacheHitsCounter =
-        Source.CreateCounter<long>(
-            "cybercloud.authz.cache_hits", "{check}", "Checks served from the hot-tier cache.");
+        Source.CreateCounter<long>("cybercloud.authz.cache_hits", "{check}", "Checks served from the hot-tier cache.");
 
     static readonly Counter<long> DepthCapCounter =
         Source.CreateCounter<long>(
             "cybercloud.authz.depth_cap_exceeded",
             "{check}",
-            "Checks denied because the depth cap was reached. ⚠ Each one may be a wrong deny.");
+            "Checks denied because the depth cap was reached. ⚠ Each one may be a wrong deny."
+        );
 
     static readonly Counter<long> BreadthCapCounter =
         Source.CreateCounter<long>(
             "cybercloud.authz.breadth_cap_exceeded",
             "{check}",
-            "Checks denied because the breadth cap was reached. ⚠ Each one may be a wrong deny.");
+            "Checks denied because the breadth cap was reached. ⚠ Each one may be a wrong deny."
+        );
 
     static long checks;
     static long cacheHits;
@@ -69,26 +69,22 @@ public static class AuthorizationMetrics
     /// <summary>How many were denied because a node reached <c>AuthorizationLimits.MaxBreadth</c>.</summary>
     public static long BreadthCapExceeded => Interlocked.Read(ref breadthCapExceeded);
 
-    internal static void RecordCheck()
-    {
+    internal static void RecordCheck() {
         Interlocked.Increment(ref checks);
         ChecksCounter.Add(1);
     }
 
-    internal static void RecordCacheHit()
-    {
+    internal static void RecordCacheHit() {
         Interlocked.Increment(ref cacheHits);
         CacheHitsCounter.Add(1);
     }
 
-    internal static void RecordDepthCap()
-    {
+    internal static void RecordDepthCap() {
         Interlocked.Increment(ref depthCapExceeded);
         DepthCapCounter.Add(1);
     }
 
-    internal static void RecordBreadthCap()
-    {
+    internal static void RecordBreadthCap() {
         Interlocked.Increment(ref breadthCapExceeded);
         BreadthCapCounter.Add(1);
     }

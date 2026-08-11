@@ -8,8 +8,12 @@ namespace CyberCloud.AppHost;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>Everything here writes <c>CyberCloud__…</c> environment variables rather than
-///         <c>ConnectionStrings__…</c>, and that is not a style choice.</b> Aspire's
+///         ⚠
+///         <b>
+///             Everything here writes <c>CyberCloud__…</c> environment variables rather than
+///             <c>ConnectionStrings__…</c>, and that is not a style choice.
+///         </b>
+///         Aspire's
 ///         <c>WithReference(resource)</c> injects <c>ConnectionStrings__&lt;name&gt;</c>, which is
 ///         what an <c>Aspire.*</c> client integration reads. This repository has no Aspire client
 ///         integrations — <c>CyberCloud.ServiceDefaults.csproj</c> lists, with reasons, what
@@ -20,8 +24,7 @@ namespace CyberCloud.AppHost;
 ///         behaves identically.
 ///     </para>
 /// </remarks>
-public static class CyberCloudResourceExtensions
-{
+public static class CyberCloudResourceExtensions {
     const string StoragePrefix = "CyberCloud__Storage__";
     const string ClusterPrefix = "CyberCloud__Cluster__";
 
@@ -40,8 +43,8 @@ public static class CyberCloudResourceExtensions
     /// </remarks>
     public static IResourceBuilder<PostgresDatabaseResource> AddShard(
         this IResourceBuilder<PostgresServerResource> postgres,
-        string shard)
-    {
+        string shard
+    ) {
         ArgumentNullException.ThrowIfNull(postgres);
         ArgumentException.ThrowIfNullOrWhiteSpace(shard);
 
@@ -65,9 +68,8 @@ public static class CyberCloudResourceExtensions
         IResourceBuilder<IResourceWithConnectionString> redis,
         IResourceBuilder<IResourceWithConnectionString> shardA,
         IResourceBuilder<IResourceWithConnectionString> shardB,
-        IResourceBuilder<IResourceWithConnectionString> platformShard)
-        where T : IResourceWithEnvironment
-    {
+        IResourceBuilder<IResourceWithConnectionString> platformShard
+    ) where T : IResourceWithEnvironment {
         ArgumentNullException.ThrowIfNull(builder);
 
         return builder
@@ -86,8 +88,12 @@ public static class CyberCloudResourceExtensions
     /// <returns>The same builder, for chaining.</returns>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b><c>NullTenantShard</c> is the setting that would otherwise be discovered in
-    ///         production.</b> Every Platform grain in docs/plan/04 § Grain taxonomy — the tenant
+    ///         ⚠
+    ///         <b>
+    ///             <c>NullTenantShard</c> is the setting that would otherwise be discovered in
+    ///             production.
+    ///         </b>
+    ///         Every Platform grain in docs/plan/04 § Grain taxonomy — the tenant
     ///         directory, the shard map, the provider registry — is null-tenant and durable, and
     ///         <c>Orleans.Multitenant</c> hands the storage layer the literal string <c>"Null"</c>
     ///         for those. Unset, they hash that sentinel into the tenant shard list: deterministic,
@@ -105,9 +111,8 @@ public static class CyberCloudResourceExtensions
         this IResourceBuilder<T> builder,
         IResourceBuilder<IResourceWithConnectionString> shardA,
         IResourceBuilder<IResourceWithConnectionString> shardB,
-        IResourceBuilder<IResourceWithConnectionString> platformShard)
-        where T : IResourceWithEnvironment
-    {
+        IResourceBuilder<IResourceWithConnectionString> platformShard
+    ) where T : IResourceWithEnvironment {
         ArgumentNullException.ThrowIfNull(builder);
 
         return builder
@@ -115,10 +120,12 @@ public static class CyberCloudResourceExtensions
             .WithEnvironment($"{StoragePrefix}Durable__Shards__{CyberCloudResources.ShardB}", shardB)
             .WithEnvironment(
                 $"{StoragePrefix}Durable__Shards__{CyberCloudResources.PlatformShard}",
-                platformShard)
+                platformShard
+            )
             .WithEnvironment(
                 $"{StoragePrefix}Durable__NullTenantShard",
-                CyberCloudResources.PlatformShard)
+                CyberCloudResources.PlatformShard
+            )
             .WithEnvironment($"{StoragePrefix}Durable__BootstrapShard", CyberCloudResources.ShardA);
     }
 
@@ -141,9 +148,8 @@ public static class CyberCloudResourceExtensions
     public static IResourceBuilder<T> WithOrleansPorts<T>(
         this IResourceBuilder<T> builder,
         int siloPort,
-        int gatewayPort)
-        where T : IResourceWithEnvironment
-    {
+        int gatewayPort
+    ) where T : IResourceWithEnvironment {
         ArgumentNullException.ThrowIfNull(builder);
 
         return builder
@@ -163,9 +169,11 @@ public static class CyberCloudResourceExtensions
             .WithEnvironment("DOTNET_ENVIRONMENT", "Development")
             .WithEnvironment(
                 $"{ClusterPrefix}LocalhostSiloPort",
-                siloPort.ToString(CultureInfo.InvariantCulture))
+                siloPort.ToString(CultureInfo.InvariantCulture)
+            )
             .WithEnvironment(
                 $"{ClusterPrefix}LocalhostGatewayPort",
-                gatewayPort.ToString(CultureInfo.InvariantCulture));
+                gatewayPort.ToString(CultureInfo.InvariantCulture)
+            );
     }
 }

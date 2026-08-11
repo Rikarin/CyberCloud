@@ -1,5 +1,5 @@
-using System.Globalization;
 using Npgsql;
+using System.Globalization;
 
 namespace CyberCloud.ServiceDefaults.Storage;
 
@@ -8,8 +8,12 @@ namespace CyberCloud.ServiceDefaults.Storage;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>The durable tier does not create its own schema, and until this type landed nothing
-///         in the repository outside two test projects did either.</b> The facts, established rather
+///         ⚠
+///         <b>
+///             The durable tier does not create its own schema, and until this type landed nothing
+///             in the repository outside two test projects did either.
+///         </b>
+///         The facts, established rather
 ///         than assumed:
 ///     </para>
 ///     <list type="number">
@@ -57,16 +61,14 @@ namespace CyberCloud.ServiceDefaults.Storage;
 ///         missing component.
 ///     </para>
 /// </remarks>
-public static class OrleansAdoNetSchema
-{
+public static class OrleansAdoNetSchema {
     /// <summary>
     ///     The two scripts, in the order they must run. Embedded copies of <c>dotnet/orleans</c> at
     ///     tag <c>v10.2.2</c> — see the <c>EmbeddedResource</c> items in the project file.
     /// </summary>
-    static readonly string[] Scripts =
-    [
+    static readonly string[] Scripts = [
         "CyberCloud.ServiceDefaults.Storage.PostgreSQL-Main.sql",
-        "CyberCloud.ServiceDefaults.Storage.PostgreSQL-Persistence.sql",
+        "CyberCloud.ServiceDefaults.Storage.PostgreSQL-Persistence.sql"
     ];
 
     /// <summary>
@@ -80,8 +82,8 @@ public static class OrleansAdoNetSchema
     /// </returns>
     public static async Task<bool> ApplyAsync(
         string connectionString,
-        CancellationToken cancellationToken = default)
-    {
+        CancellationToken cancellationToken = default
+    ) {
         ArgumentException.ThrowIfNullOrWhiteSpace(connectionString);
 
         // ⚠ Pooling off, deliberately. A pooled connection opened here would stay as an idle
@@ -90,17 +92,16 @@ public static class OrleansAdoNetSchema
         // per shard by application_name. A one-shot job must not leave a connection behind in the
         // pool that the silo then inherits.
         await using var connection = new NpgsqlConnection(
-            new NpgsqlConnectionStringBuilder(connectionString) { Pooling = false }.ConnectionString);
+            new NpgsqlConnectionStringBuilder(connectionString) { Pooling = false }.ConnectionString
+        );
 
         await connection.OpenAsync(cancellationToken);
 
-        if (await AlreadyAppliedAsync(connection, cancellationToken))
-        {
+        if (await AlreadyAppliedAsync(connection, cancellationToken)) {
             return false;
         }
 
-        foreach (var name in Scripts)
-        {
+        foreach (var name in Scripts) {
             await using var command = new NpgsqlCommand(Read(name), connection);
             await command.ExecuteNonQueryAsync(cancellationToken);
         }
@@ -121,27 +122,25 @@ public static class OrleansAdoNetSchema
     /// </remarks>
     public static async Task<IReadOnlyDictionary<string, bool>> ApplyAsync(
         DurableTierOptions durable,
-        CancellationToken cancellationToken = default)
-    {
+        CancellationToken cancellationToken = default
+    ) {
         ArgumentNullException.ThrowIfNull(durable);
 
         var applied = new Dictionary<string, bool>(StringComparer.Ordinal);
 
-        foreach (var (shard, connectionString) in durable.Shards.OrderBy(x => x.Key, StringComparer.Ordinal))
-        {
-            try
-            {
+        foreach (var (shard, connectionString) in durable.Shards.OrderBy(x => x.Key, StringComparer.Ordinal)) {
+            try {
                 applied[shard] = await ApplyAsync(connectionString, cancellationToken);
-            }
-            catch (NpgsqlException failure)
-            {
+            } catch (NpgsqlException failure) {
                 throw new InvalidOperationException(
                     string.Create(
                         CultureInfo.InvariantCulture,
                         $"Could not create the Orleans grain-storage schema on durable shard "
                         + $"'{shard}'. A silo bound to this shard will fail on its first grain write "
-                        + $"with 'relation \"orleansquery\" does not exist'."),
-                    failure);
+                        + $"with 'relation \"orleansquery\" does not exist'."
+                    ),
+                    failure
+                );
             }
         }
 
@@ -156,32 +155,37 @@ public static class OrleansAdoNetSchema
     /// <remarks>
     ///     ⚠ <b>The <c>::text</c> is not cosmetic.</b> <c>to_regclass</c> returns PostgreSQL's
     ///     <c>regclass</c> OID-alias type, which Npgsql 10 has no <c>object</c> reader for:
-    ///     <c>ExecuteScalarAsync</c> throws <c>InvalidCastException: Reading as 'System.Object' is
-    ///     not supported for fields having DataTypeName 'regclass'</c>. Observed — it took down the
+    ///     <c>ExecuteScalarAsync</c> throws
+    ///     <c>
+    ///         InvalidCastException: Reading as 'System.Object' is
+    ///         not supported for fields having DataTypeName 'regclass'
+    ///     </c>
+    ///     . Observed — it took down the
     ///     schema job with exit code 134 and left both silos waiting on it forever, which presents as
     ///     "the AppHost hangs" rather than as a cast error.
     /// </remarks>
     static async Task<bool> AlreadyAppliedAsync(
         NpgsqlConnection connection,
-        CancellationToken cancellationToken)
-    {
+        CancellationToken cancellationToken
+    ) {
         await using var probe = new NpgsqlCommand(
             "SELECT to_regclass('orleansquery')::text;",
-            connection);
+            connection
+        );
 
         var result = await probe.ExecuteScalarAsync(cancellationToken);
 
         return result is not null && result != DBNull.Value;
     }
 
-    static string Read(string resourceName)
-    {
+    static string Read(string resourceName) {
         var assembly = typeof(OrleansAdoNetSchema).Assembly;
 
         using var stream = assembly.GetManifestResourceStream(resourceName)
             ?? throw new InvalidOperationException(
                 $"Embedded resource '{resourceName}' is missing. Available: "
-                + string.Join(", ", assembly.GetManifestResourceNames()));
+                + string.Join(", ", assembly.GetManifestResourceNames())
+            );
 
         using var reader = new StreamReader(stream);
         return reader.ReadToEnd();

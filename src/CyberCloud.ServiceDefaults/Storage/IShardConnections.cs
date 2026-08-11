@@ -8,15 +8,18 @@ namespace CyberCloud.ServiceDefaults.Storage;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>The durable side must return the <i>same string instance content</i> for every tenant
-///         on a shard.</b> Npgsql keys its connection pool by connection string, so a per-tenant
+///         ⚠
+///         <b>
+///             The durable side must return the <i>same string instance content</i> for every tenant
+///             on a shard.
+///         </b>
+///         Npgsql keys its connection pool by connection string, so a per-tenant
 ///         string means a per-tenant pool and the <c>MaxPoolSize</c> arithmetic in docs/plan/05
 ///         § Storage provider wiring stops being per-shard. This interface exists partly to make that
 ///         a single implementation detail rather than something every call site could get wrong.
 ///     </para>
 /// </remarks>
-public interface IShardConnections
-{
+public interface IShardConnections {
     /// <summary>The Npgsql connection string for a durable shard.</summary>
     /// <param name="shard">A shard id from <see cref="IShardMapCache.DurableShardFor" />.</param>
     /// <exception cref="KeyNotFoundException">The shard is not in the configured shard table.</exception>

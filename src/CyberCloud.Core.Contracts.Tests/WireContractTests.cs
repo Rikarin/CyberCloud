@@ -1,7 +1,7 @@
-using System.Globalization;
-using System.Reflection;
 using CyberCloud.Core.Contracts.Serialization;
 using Shouldly;
+using System.Globalization;
+using System.Reflection;
 
 namespace CyberCloud.Core.Contracts.Tests;
 
@@ -27,13 +27,15 @@ namespace CyberCloud.Core.Contracts.Tests;
 ///         were ever dropped from this project.
 ///     </para>
 /// </remarks>
-public sealed class WireContractTests
-{
+public sealed class WireContractTests {
     static readonly Assembly Contracts = typeof(ResultSurrogate).Assembly;
 
     /// <summary>
-    ///     The <c>[Id(n)]</c> baseline. docs/plan/05:183 — <i>"numbers are never reused, never
-    ///     reordered. Removing a member leaves its number burned."</i>
+    ///     The <c>[Id(n)]</c> baseline. docs/plan/05:183 —
+    ///     <i>
+    ///         "numbers are never reused, never
+    ///         reordered. Removing a member leaves its number burned."
+    ///     </i>
     /// </summary>
     /// <remarks>
     ///     ⚠ <b>This list is append-only.</b> A failure here is not a test to update — it is the
@@ -43,8 +45,7 @@ public sealed class WireContractTests
     ///     is free (the number is the contract, the name is not) and the string here changes with
     ///     it.
     /// </remarks>
-    static readonly (string Type, int Id, string Member)[] Baseline =
-    [
+    static readonly (string Type, int Id, string Member)[] Baseline = [
         ("ErrorSurrogate", 0, "Code"),
         ("ErrorSurrogate", 1, "Message"),
         ("ErrorSurrogate", 2, "Target"),
@@ -65,7 +66,7 @@ public sealed class WireContractTests
         ("ResourceIdSurrogate", 2, "ResourceGroup"),
         ("ResourceIdSurrogate", 3, "Type"),
         ("ResourceIdSurrogate", 4, "Name"),
-        ("ResourceIdSurrogate", 5, "Id"),
+        ("ResourceIdSurrogate", 5, "Id")
 
         // ⚠ ResourceKeySurrogate's four entries were REMOVED, not burned, and that is the one
         // exception this list's own rule allows. The append-only rule protects numbers that a
@@ -83,21 +84,19 @@ public sealed class WireContractTests
     ///     by its full name, since that is the concept, and carry no "Surrogate" suffix, since the
     ///     surrogate is an implementation detail that the far side never sees.
     /// </remarks>
-    static readonly (string Type, string Alias)[] Aliases =
-    [
+    static readonly (string Type, string Alias)[] Aliases = [
         ("ErrorSurrogate", "CyberCloud.Core.Error"),
         ("ResultSurrogate", "CyberCloud.Core.Result"),
         ("ResultSurrogate`1", "CyberCloud.Core.Result`1"),
         ("ResourceTypeNameSurrogate", "CyberCloud.Core.ResourceTypeName"),
-        ("ResourceIdSurrogate", "CyberCloud.Core.ResourceId"),
+        ("ResourceIdSurrogate", "CyberCloud.Core.ResourceId")
     ];
 
     static IEnumerable<Type> GeneratedSerializerTypes =>
         Contracts.GetTypes().Where(t => t.GetCustomAttribute<GenerateSerializerAttribute>() is not null);
 
     [Fact]
-    public void EveryGenerateSerializerTypeHasAnAlias()
-    {
+    public void EveryGenerateSerializerTypeHasAnAlias() {
         var missing = GeneratedSerializerTypes
             .Where(t => t.GetCustomAttribute<AliasAttribute>() is null)
             .Select(t => t.Name)
@@ -107,12 +106,12 @@ public sealed class WireContractTests
         missing.ShouldBeEmpty(
             "docs/plan/04:177 makes a rolling upgrade depend on every [GenerateSerializer] type "
             + "having a stable [Alias]. A type without one is renamed-into-a-data-loss-bug waiting "
-            + "to happen.");
+            + "to happen."
+        );
     }
 
     [Fact]
-    public void EveryAliasIsUnique()
-    {
+    public void EveryAliasIsUnique() {
         var duplicates = GeneratedSerializerTypes
             .Select(t => t.GetCustomAttribute<AliasAttribute>()?.Alias)
             .Where(a => a is not null)
@@ -125,8 +124,7 @@ public sealed class WireContractTests
     }
 
     [Fact]
-    public void TheAliasesAreTheOnesRecordedHere()
-    {
+    public void TheAliasesAreTheOnesRecordedHere() {
         var actual = GeneratedSerializerTypes
             .Select(t => (Type: t.Name, Alias: t.GetCustomAttribute<AliasAttribute>()?.Alias ?? "<none>"))
             .OrderBy(x => x.Type, StringComparer.Ordinal)
@@ -135,7 +133,8 @@ public sealed class WireContractTests
         actual.ShouldBe(
             Aliases.OrderBy(x => x.Type, StringComparer.Ordinal).ToList(),
             "an alias changed, or a [GenerateSerializer] type was added without recording its "
-            + "alias. Both are wire-contract changes.");
+            + "alias. Both are wire-contract changes."
+        );
     }
 
     [Fact]
@@ -149,14 +148,14 @@ public sealed class WireContractTests
             .ShouldBeEmpty();
 
     [Fact]
-    public void TheIdManifestMatchesTheBaseline()
-    {
+    public void TheIdManifestMatchesTheBaseline() {
         var actual = GeneratedSerializerTypes
             .SelectMany(type => type
                 .GetMembers(BindingFlags.Public | BindingFlags.Instance)
                 .Select(member => (member, id: member.GetCustomAttribute<IdAttribute>()))
                 .Where(x => x.id is not null)
-                .Select(x => (Type: type.Name, Id: (int)x.id!.Id, Member: x.member.Name)))
+                .Select(x => (Type: type.Name, Id: (int)x.id!.Id, Member: x.member.Name))
+            )
             .OrderBy(x => x.Type, StringComparer.Ordinal)
             .ThenBy(x => x.Id)
             .ToList();
@@ -165,24 +164,25 @@ public sealed class WireContractTests
             Baseline.OrderBy(x => x.Type, StringComparer.Ordinal).ThenBy(x => x.Id).ToList(),
             "docs/plan/05:183: [Id(n)] numbers are never reused and never reordered. If this fails "
             + "because a member was added, append it to Baseline with the next unused number. If it "
-            + "fails for any other reason, the wire contract just broke.");
+            + "fails for any other reason, the wire contract just broke."
+        );
     }
 
     [Fact]
-    public void NoTypeReusesAnIdNumber()
-    {
-        foreach (var group in Baseline.GroupBy(x => x.Type, StringComparer.Ordinal))
-        {
+    public void NoTypeReusesAnIdNumber() {
+        foreach (var group in Baseline.GroupBy(x => x.Type, StringComparer.Ordinal)) {
             var ids = group.Select(x => x.Id).ToList();
-            ids.Distinct().Count().ShouldBe(
-                ids.Count,
-                $"{group.Key} declares the same [Id(n)] twice.");
+            ids.Distinct()
+                .Count()
+                .ShouldBe(
+                    ids.Count,
+                    $"{group.Key} declares the same [Id(n)] twice."
+                );
         }
     }
 
     [Fact]
-    public void EveryConverterIsRegistered()
-    {
+    public void EveryConverterIsRegistered() {
         // A surrogate with no [RegisterConverter] compiles, publishes an alias, passes every test
         // above, and silently never participates in serialization.
         var surrogates = GeneratedSerializerTypes.Select(t => t.Name).ToHashSet(StringComparer.Ordinal);
@@ -198,8 +198,7 @@ public sealed class WireContractTests
     }
 
     [Fact]
-    public void TheBaselineNamesEveryPublicMemberOfEverySurrogate()
-    {
+    public void TheBaselineNamesEveryPublicMemberOfEverySurrogate() {
         // The direction the manifest test cannot cover on its own: a member added WITHOUT an [Id]
         // is invisible to Orleans and is silently dropped on the wire.
         var unnumbered = GeneratedSerializerTypes
@@ -207,13 +206,17 @@ public sealed class WireContractTests
                 .GetProperties(BindingFlags.Public | BindingFlags.Instance)
                 .Where(p => p.GetCustomAttribute<IdAttribute>() is null)
                 .Select(p => string.Create(
-                    CultureInfo.InvariantCulture,
-                    $"{type.Name}.{p.Name}")))
+                        CultureInfo.InvariantCulture,
+                        $"{type.Name}.{p.Name}"
+                    )
+                )
+            )
             .OrderBy(x => x, StringComparer.Ordinal)
             .ToList();
 
         unnumbered.ShouldBeEmpty(
             "a public property on a [GenerateSerializer] type with no [Id(n)] is not serialised. "
-            + "docs/plan/00:173 requires an explicit [Id(n)] on every member of every wire type.");
+            + "docs/plan/00:173 requires an explicit [Id(n)] on every member of every wire type."
+        );
     }
 }

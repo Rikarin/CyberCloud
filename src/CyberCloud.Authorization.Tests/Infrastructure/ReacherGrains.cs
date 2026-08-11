@@ -1,4 +1,5 @@
 using CyberCloud.Authorization.Contracts;
+using Orleans.Multitenant;
 
 namespace CyberCloud.Authorization.Tests.Infrastructure;
 
@@ -17,8 +18,7 @@ namespace CyberCloud.Authorization.Tests.Infrastructure;
 ///     between a leak and a leak of everyone's permissions.
 /// </remarks>
 [Alias("CyberCloud.Authorization.Tests.IAuthorizationReacherGrain")]
-public interface IAuthorizationReacherGrain : IGrainWithStringKey
-{
+public interface IAuthorizationReacherGrain : IGrainWithStringKey {
     /// <summary>Calls <c>IObjectRelationsGrain.ReadAsync</c> by raw physical key.</summary>
     /// <param name="physicalKey">The whole key, tenant prefix and all.</param>
     Task<int> ReachObjectRelationsByRawKeyAsync(string physicalKey);
@@ -47,42 +47,39 @@ public interface IAuthorizationReacherGrain : IGrainWithStringKey
 }
 
 /// <inheritdoc />
-public sealed class AuthorizationReacherGrain : Grain, IAuthorizationReacherGrain
-{
+public sealed class AuthorizationReacherGrain : Grain, IAuthorizationReacherGrain {
     /// <inheritdoc />
-    public async Task<int> ReachObjectRelationsByRawKeyAsync(string physicalKey)
-    {
+    public async Task<int> ReachObjectRelationsByRawKeyAsync(string physicalKey) {
         var reached = await GrainFactory.GetGrain<IObjectRelationsGrain>(physicalKey).ReadAsync();
         return reached.IsSuccess ? reached.GetValueOrThrow().Count : -1;
     }
 
     /// <inheritdoc />
-    public async Task<int> ReachSubjectRelationsByRawKeyAsync(string physicalKey)
-    {
+    public async Task<int> ReachSubjectRelationsByRawKeyAsync(string physicalKey) {
         var reached = await GrainFactory.GetGrain<ISubjectRelationsGrain>(physicalKey).ListAsync();
         return reached.IsSuccess ? reached.GetValueOrThrow().Count : -1;
     }
 
     /// <inheritdoc />
     public async Task<bool> ReachCheckByRawKeyAsync(
-        string physicalKey, string permission, string subject)
-    {
-        var reached = await GrainFactory.GetGrain<ICheckGrain>(physicalKey).CheckAsync(
-            permission, SubjectRef.Parse(subject).GetValueOrThrow(), Consistency.FullyConsistent);
+        string physicalKey,
+        string permission,
+        string subject
+    ) {
+        var reached = await GrainFactory.GetGrain<ICheckGrain>(physicalKey)
+            .CheckAsync(permission, SubjectRef.Parse(subject).GetValueOrThrow(), Consistency.FullyConsistent);
 
         return reached.IsSuccess && reached.GetValueOrThrow().Allowed;
     }
 
     /// <inheritdoc />
-    public async Task<long> ReachTupleStoreByRawKeyAsync(string physicalKey)
-    {
+    public async Task<long> ReachTupleStoreByRawKeyAsync(string physicalKey) {
         var reached = await GrainFactory.GetGrain<ITupleStoreGrain>(physicalKey).GetTokenAsync();
         return reached.IsSuccess ? reached.GetValueOrThrow().Version : -1;
     }
 
     /// <inheritdoc />
-    public async Task<bool> WriteThroughTupleStoreByRawKeyAsync(string physicalKey, string tuple)
-    {
+    public async Task<bool> WriteThroughTupleStoreByRawKeyAsync(string physicalKey, string tuple) {
         var written = await GrainFactory.GetGrain<ITupleStoreGrain>(physicalKey)
             .WriteAsync(RelationTuple.Parse(tuple).GetValueOrThrow());
 
@@ -90,6 +87,5 @@ public sealed class AuthorizationReacherGrain : Grain, IAuthorizationReacherGrai
     }
 
     /// <inheritdoc />
-    public Task<string?> MyTenantAsync() =>
-        Task.FromResult(Orleans.Multitenant.AddressableExtensions.GetTenantId(this));
+    public Task<string?> MyTenantAsync() => Task.FromResult(AddressableExtensions.GetTenantId(this));
 }

@@ -1,19 +1,18 @@
-using System.Collections.Immutable;
 using Shouldly;
+using System.Collections.Immutable;
 
 namespace CyberCloud.Core.Tests;
 
 /// <summary><see cref="Error" /> — the one error shape, docs/plan/08 § Errors.</summary>
-public class ErrorTests
-{
+public class ErrorTests {
     [Fact]
-    public void TheWorkedExampleFromTheDocumentIsRepresentable()
-    {
+    public void TheWorkedExampleFromTheDocumentIsRepresentable() {
         var error = new Error(
             ErrorCode.QuotaExceeded,
             "Subscription quota for 'vcpu' in region 'eu-central' would be exceeded "
             + "(requested 8, available 2).",
-            "/properties/sku");
+            "/properties/sku"
+        );
 
         error.Code.Value.ShouldBe("QuotaExceeded");
         error.Target.ShouldBe("/properties/sku");
@@ -22,8 +21,7 @@ public class ErrorTests
     }
 
     [Fact]
-    public void DetailsDefaultToEmptyRatherThanToADefaultImmutableArray()
-    {
+    public void DetailsDefaultToEmptyRatherThanToADefaultImmutableArray() {
         // A default ImmutableArray<T> throws on almost every member. Normalising it at the door
         // means no consumer has to remember IsDefaultOrEmpty.
         var error = new Error(ErrorCode.InternalError, "x");
@@ -34,8 +32,7 @@ public class ErrorTests
     }
 
     [Fact]
-    public void DetailsNest()
-    {
+    public void DetailsNest() {
         var child = new Error(ErrorCode.InvalidResourceName, "bad name");
         var parent = new Error(ErrorCode.InvalidRequestBody, "body is wrong", null, [child]);
 
@@ -76,12 +73,10 @@ public class ErrorTests
         Should.Throw<ArgumentException>(() => new Error(ErrorCode.InternalError, message!));
 
     [Fact]
-    public void ANullCodeThrows() =>
-        Should.Throw<ArgumentNullException>(() => new Error(null!, "x"));
+    public void ANullCodeThrows() => Should.Throw<ArgumentNullException>(() => new Error(null!, "x"));
 
     [Fact]
-    public void ThereIsNoPlaceToPutAStackTrace()
-    {
+    public void ThereIsNoPlaceToPutAStackTrace() {
         // docs/plan/08:190 — "No exception details, ever." Asserted structurally rather than by
         // review: if someone adds an Exception-shaped member, this fails.
         var members = typeof(Error)
@@ -97,29 +92,26 @@ public class ErrorTests
     }
 
     [Fact]
-    public void EqualityComparesDetailsByContentNotByArrayReference()
-    {
-        var a = new Error(ErrorCode.Conflict, "x", "/a", [new Error(ErrorCode.InternalError, "d")]);
-        var b = new Error(ErrorCode.Conflict, "x", "/a", [new Error(ErrorCode.InternalError, "d")]);
+    public void EqualityComparesDetailsByContentNotByArrayReference() {
+        var a = new Error(ErrorCode.Conflict, "x", "/a", [new(ErrorCode.InternalError, "d")]);
+        var b = new Error(ErrorCode.Conflict, "x", "/a", [new(ErrorCode.InternalError, "d")]);
 
         a.ShouldBe(b);
         a.GetHashCode().ShouldBe(b.GetHashCode());
 
-        a.ShouldNotBe(new Error(ErrorCode.Conflict, "x", "/a"));
+        a.ShouldNotBe(new(ErrorCode.Conflict, "x", "/a"));
     }
 
     [Fact]
-    public void WithTargetKeepsEverythingElse()
-    {
+    public void WithTargetKeepsEverythingElse() {
         var error = new Error(ErrorCode.Conflict, "x", "/a");
 
-        error.WithTarget("/b").ShouldBe(new Error(ErrorCode.Conflict, "x", "/b"));
+        error.WithTarget("/b").ShouldBe(new(ErrorCode.Conflict, "x", "/b"));
         error.WithTarget(null).Target.ShouldBeNull();
     }
 
     [Fact]
-    public void ToStringIsUsefulInAnAssertionMessage()
-    {
+    public void ToStringIsUsefulInAnAssertionMessage() {
         new Error(ErrorCode.Conflict, "taken").ToString().ShouldBe("Conflict: taken");
         new Error(ErrorCode.Conflict, "taken", "/a").ToString().ShouldBe("Conflict (/a): taken");
     }

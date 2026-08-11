@@ -7,8 +7,12 @@ namespace CyberCloud.ServiceDefaults.HealthChecks;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>This is the check a rolling upgrade depends on, and the one it is easiest to write
-///         a lie for.</b> docs/plan/00:197 budgets <i>zero</i> failed tenant requests across a
+///         ⚠
+///         <b>
+///             This is the check a rolling upgrade depends on, and the one it is easiest to write
+///             a lie for.
+///         </b>
+///         docs/plan/00:197 budgets <i>zero</i> failed tenant requests across a
 ///         rolling upgrade of a 30-silo cluster. Kubernetes adds a pod to a Service's endpoints the
 ///         moment its readiness probe passes and removes it the moment the probe fails, so a
 ///         readiness check that answers "the process is running" hands traffic to a silo that has
@@ -51,55 +55,53 @@ namespace CyberCloud.ServiceDefaults.HealthChecks;
 /// </remarks>
 sealed class SiloReadinessHealthCheck(
     IGrainFactory grains,
-    ILocalSiloDetails localSilo)
-    : IHealthCheck
-{
+    ILocalSiloDetails localSilo
+)
+    : IHealthCheck {
     /// <inheritdoc />
     public async Task<HealthCheckResult> CheckHealthAsync(
         HealthCheckContext context,
-        CancellationToken cancellationToken = default)
-    {
+        CancellationToken cancellationToken = default
+    ) {
         Dictionary<SiloAddress, SiloStatus> hosts;
-        try
-        {
+        try {
             // The grain call IS the probe. IManagementGrain is Orleans' own system grain, so this
             // asserts the runtime end to end without this assembly declaring a grain of its own.
             hosts = await grains.GetGrain<IManagementGrain>(0).GetHosts().ConfigureAwait(false);
-        }
-        catch (Exception error) when (error is not OperationCanceledException)
-        {
+        } catch (Exception error) when (error is not OperationCanceledException) {
             return HealthCheckResult.Unhealthy(
                 "This silo could not complete a grain call to IManagementGrain, so it cannot route "
                 + "messages. Not ready.",
-                error);
+                error
+            );
         }
 
-        if (!hosts.TryGetValue(localSilo.SiloAddress, out var status))
-        {
+        if (!hosts.TryGetValue(localSilo.SiloAddress, out var status)) {
             return HealthCheckResult.Unhealthy(
                 $"This silo ({localSilo.SiloAddress}) is not in the membership snapshot it just "
-                + "read. It has not joined the cluster, so nothing will be routed to it.");
+                + "read. It has not joined the cluster, so nothing will be routed to it."
+            );
         }
 
-        return status switch
-        {
-            SiloStatus.Active => HealthCheckResult.Healthy(
-                $"Active, in a cluster of {hosts.Count} silo(s)."),
+        return status switch {
+            SiloStatus.Active => HealthCheckResult.Healthy($"Active, in a cluster of {hosts.Count} silo(s)."),
 
             // Startup. Reporting anything but Unhealthy here is what admits traffic to a silo that
             // cannot serve it — see the remarks.
             SiloStatus.Created or SiloStatus.Joining => HealthCheckResult.Unhealthy(
                 $"This silo is {status} and is not serving yet. docs/plan/00:196 budgets 20 s from "
                 + "cold start to serving; if this persists past that, membership is the place to "
-                + "look."),
+                + "look."
+            ),
 
             // Shutdown. The pod must leave the Service's endpoints BEFORE Orleans stops accepting,
             // or the requests in flight during the gap are the failed ones docs/plan/00:197 forbids.
             SiloStatus.ShuttingDown or SiloStatus.Stopping or SiloStatus.Dead =>
                 HealthCheckResult.Unhealthy(
-                    $"This silo is {status} and is draining. Remove it from the load balancer."),
+                    $"This silo is {status} and is draining. Remove it from the load balancer."
+                ),
 
-            _ => HealthCheckResult.Unhealthy($"This silo reports the unexpected status {status}."),
+            _ => HealthCheckResult.Unhealthy($"This silo reports the unexpected status {status}.")
         };
     }
 }
