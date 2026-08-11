@@ -147,54 +147,99 @@ partial class Build
         shards.Parent.CreateDirectory();
         shards.WriteAllText("CyberCloud__Storage__Durable__Shards__probe=Host=127.0.0.1;Database=probe\n");
 
+        // ⚠ EVERY CASE THAT PARSES ARGUMENTS PASSES A CONTEXT THAT CANNOT EXIST, AND THAT IS A
+        // BELT-AND-BRACES SAFETY MEASURE RATHER THAN A DETAIL.
+        //
+        // The cases below are chosen to die in the script's argument handling, before its first
+        // cluster call. But "chosen to" is a claim about the script as it is today: a run against a
+        // version whose guards have been REMOVED — precisely the regression this check exists to
+        // catch — sails past them and reaches `kubectl version` against the ambient kubeconfig.
+        // Observed exactly that while testing this file. A context nothing can resolve makes the
+        // worst case a failed kubectl rather than an install into whatever the developer was last
+        // pointed at.
+        const string unresolvable = "cybercloud-bootstrap-selftest-no-such-context";
+
         // Syntax before behaviour: a parse error would otherwise surface as every case below failing
         // for the same unhelpful reason.
-        Refuses(bash, "-n is a syntax check, not a run", $"-n {BootstrapScript}", expectFailure: false);
+        Refuses(bash, "-n is a syntax check, not a run", $"-n {BootstrapScript}", null);
 
-        Refuses(bash, "--help prints usage and exits 0", $"{BootstrapScript} --help", expectFailure: false);
+        Refuses(bash, "--help prints usage", $"{BootstrapScript} --help", null, "Usage:");
 
-        Refuses(bash, "no arguments at all", $"{BootstrapScript}", expectFailure: true);
+        // ⚠ THE FOUR CASES BELOW ARE INDEPENDENT, AND MAKING THEM SO TOOK TWO ATTEMPTS.
+        //
+        // The first version asserted only on the exit code, and each case supplied only the argument
+        // under test. Deleting the script's `--image is required` guard outright still failed every
+        // case, because `--shards` was missing too and its guard fired second — so a case only ever
+        // proved that SOME guard fired, which is not a check on any particular one.
+        //
+        // Two changes fix it, and both are needed. Each case now supplies everything EXCEPT the one
+        // thing under test, and each asserts on the MESSAGE rather than on the exit code — because
+        // a script that has stopped guarding still exits non-zero, one step later, for a reason that
+        // has nothing to do with the guard.
+        Refuses(bash, "no --image", $"{BootstrapScript} --context {unresolvable} --shards {shards}", "--image is required");
 
-        Refuses(bash, "--image without --shards", $"{BootstrapScript} --image ghcr.io/x@sha256:0 ", expectFailure: true);
+        Refuses(bash, "no --shards", $"{BootstrapScript} --context {unresolvable} --image ghcr.io/x@sha256:0", "--shards is required");
 
         Refuses(
             bash,
             "--shards naming a file that does not exist",
-            $"{BootstrapScript} --image ghcr.io/x@sha256:0 --shards {ArtifactsDirectory / "e2e" / "absent.env"}",
-            expectFailure: true);
+            $"{BootstrapScript} --context {unresolvable} --image ghcr.io/x@sha256:0 --shards {ArtifactsDirectory / "e2e" / "absent.env"}",
+            "does not exist");
 
-        Refuses(bash, "an argument it does not know", $"{BootstrapScript} --wat", expectFailure: true);
+        Refuses(bash, "an argument it does not know", $"{BootstrapScript} --wat", "unknown argument");
 
         Log.Information(
-            "E2E: bootstrap.sh preflight exercised — 6 case(s), no cluster touched. docs/plan/09 "
-            + "§ The platform's own cluster: \"exercised by every e2e run, so it cannot rot\".");
+            "E2E: bootstrap.sh preflight exercised — 7 case(s), each pinned to its own message, no "
+            + "cluster touched. docs/plan/09 § The platform's own cluster: \"exercised by every e2e "
+            + "run, so it cannot rot\".");
 
         BootstrapDryRun(bash, shards);
     }
 
-    /// <summary>Runs one bootstrap case and asserts it ended the way the script promises.</summary>
-    void Refuses(Tool bash, string what, string arguments, bool expectFailure)
+    /// <summary>
+    ///     Runs one bootstrap case and asserts it ended the way the script promises.
+    /// </summary>
+    /// <param name="bash">The shell.</param>
+    /// <param name="what">The case, for the failure message.</param>
+    /// <param name="arguments">What to run.</param>
+    /// <param name="refusal">
+    ///     The text the refusal must contain, or <see langword="null" /> for a case that must
+    ///     succeed. ⚠ A substring of the script's own message, so a rewording that keeps the meaning
+    ///     is fine and a deletion is not.
+    /// </param>
+    /// <param name="says">Text a successful case must print. Only <c>--help</c> uses it.</param>
+    void Refuses(Tool bash, string what, string arguments, string? refusal, string? says = null)
     {
         var exitCode = 0;
 
-        bash(
+        var output = bash(
             arguments,
             workingDirectory: RootDirectory,
             logOutput: false,
             exitHandler: process => exitCode = process.ExitCode);
 
-        var failed = exitCode != 0;
+        var text = string.Join('\n', output.Select(x => x.Text));
+
+        if (refusal is null)
+        {
+            Assert.True(
+                exitCode == 0 && (says is null || text.Contains(says, StringComparison.Ordinal)),
+                $"deploy/bootstrap/bootstrap.sh, case \"{what}\": expected exit 0"
+                + (says is null ? string.Empty : $" and output containing \"{says}\"")
+                + $", got {exitCode}. This is the script an operator runs when nothing else works; it "
+                + $"has to at least parse and answer --help.\n{text}");
+
+            return;
+        }
 
         Assert.True(
-            failed == expectFailure,
-            $"deploy/bootstrap/bootstrap.sh, case \"{what}\": expected exit "
-            + $"{(expectFailure ? "non-zero" : "0")} and got {exitCode}. "
-            + (expectFailure
-                ? "The script's preflight comment says every check there is one an operator would "
-                + "otherwise make halfway through, under pressure — a guard that stopped guarding is "
-                + "a partial install to unpick."
-                : "This is the script an operator runs when nothing else works; it has to at least "
-                + "parse and answer --help."));
+            exitCode != 0 && text.Contains(refusal, StringComparison.Ordinal),
+            $"deploy/bootstrap/bootstrap.sh, case \"{what}\": expected a non-zero exit whose message "
+            + $"contains \"{refusal}\", got {exitCode}. ⚠ The exit code alone is not the assertion: a "
+            + "script that has stopped guarding still exits non-zero one step later, from the cluster "
+            + "call, and that is a partial install to unpick rather than a refusal. The script's own "
+            + "preflight comment says every check there is one an operator would otherwise make "
+            + $"halfway through, under pressure.\n{text}");
     }
 
     /// <summary>
