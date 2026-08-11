@@ -216,6 +216,14 @@
     <PackageVersion Include="Aspire.Hosting.Redis" Version="$(AspireVersion)" />
     <PackageVersion Include="Aspire.Hosting.PostgreSQL" Version="$(AspireVersion)" />
     <PackageVersion Include="Aspire.Hosting.NATS" Version="$(AspireVersion)" />
+    <!--
+      ⚠ The exit criterion in docs/plan/24 § Phase 0 is a statement about the AppHost, so the only
+      honest way to test it is to run the AppHost. Aspire.Hosting.Testing starts the real
+      DistributedApplication in-process — the same containers, the same silo processes — which is
+      what CyberCloud.AppHost.Tests does. It is `Aspire.Hosting.*` and therefore inside ADR-014's
+      register line; it is also test-only, so it does not weaken "Aspire is local development only".
+    -->
+    <PackageVersion Include="Aspire.Hosting.Testing" Version="$(AspireVersion)" />
   </ItemGroup>
 
 </Project>

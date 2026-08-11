@@ -50,7 +50,12 @@
     <Project Path="src/CyberCloud.Tenancy.Tests/CyberCloud.Tenancy.Tests.csproj" />
   </Folder>
   <Folder Name="/src/Providers/" />
-  <Folder Name="/src/Hosts/" />
+
+  <Folder Name="/src/Hosts/">
+    <Project Path="src/Hosts/CyberCloud.Silo.Host/CyberCloud.Silo.Host.csproj" />
+    <Project Path="src/Hosts/CyberCloud.AppHost/CyberCloud.AppHost.csproj" />
+    <Project Path="src/Hosts/CyberCloud.AppHost.Tests/CyberCloud.AppHost.Tests.csproj" />
+  </Folder>
 
   <Folder Name="/cli/" />
   <Folder Name="/test/" />

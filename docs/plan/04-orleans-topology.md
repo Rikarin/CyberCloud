@@ -74,7 +74,20 @@ public static async Task<WebApplicationBuilder> CreateSiloAsync<TSiloModule>(str
             // was hit on the first machine this ran on, and the failure is an AddressInUseException
             // from a socket bind inside Orleans naming neither the port nor the holder. It also
             // makes running two silos locally impossible without editing code.
-            b.UseLocalhostClustering(options.SiloPort, options.GatewayPort);
+            //
+            // ⚠ AND THE THIRD ARGUMENT IS NOT OPTIONAL FOR THE SECOND SILO. With it omitted,
+            // UseLocalhostClustering defaults the primary-silo endpoint to 127.0.0.1:<its own
+            // siloPort>, so two silos started on distinct ports each hold their own development
+            // membership table: two one-silo clusters, both healthy, neither aware of the other,
+            // with no error anywhere. 24 § Phase 0's exit criterion is a TWO-SILO cluster, so the
+            // non-primary silo must name the primary's port —
+            // CyberCloudClusterOptions.LocalhostPrimarySiloPort, 0 meaning "I am the primary".
+            b.UseLocalhostClustering(
+                options.SiloPort,
+                options.GatewayPort,
+                options.PrimarySiloPort == 0
+                    ? null
+                    : new IPEndPoint(IPAddress.Loopback, options.PrimarySiloPort));
         else
         {
             b.UseKubeMembership();

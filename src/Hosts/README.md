@@ -28,4 +28,29 @@ process boundary rather than by discipline.
 A host is the **only** thing allowed to reference a provider *implementation* assembly, and the
 gateway is not allowed to reference one at all — only `.Contracts` and `.Application`.
 
-See [docs/plan/03 § Hosts](../../docs/plan/03-repository-layout.md).
+## What exists today
+
+`CyberCloud.Silo.Host` and `CyberCloud.AppHost`. The other six are named above because
+[docs/plan/03 § Hosts](../../docs/plan/03-repository-layout.md) names them; none of them exists yet.
+
+`./build.sh Compile` then:
+
+```
+dotnet run --project src/Hosts/CyberCloud.AppHost
+```
+
+brings up Redis, one PostgreSQL server carrying three shard databases, NATS, a k3s in Docker, and
+**two** silos — [docs/plan/24 § Phase 0](../../docs/plan/24-roadmap.md)'s exit criterion.
+`CyberCloud.AppHost.Tests` runs that same AppHost and asserts the criterion; it is a per-PR test.
+
+⚠ **The AppHost fixes five ports** — 11111/30011 and 11112/30012 for the two silos' Orleans sockets,
+6443 for the k3s API server. Orleans' sockets are opened from configuration rather than from an
+Aspire endpoint, so Aspire cannot allocate them and cannot detect a collision. A second `dotnet run`,
+or a `dotnet run` beside `CyberCloud.AppHost.Tests`, fails with `AddressInUseException`.
+
+⚠ **`CyberCloud.Silo.Host --apply-durable-schema`** is a one-shot mode, not a silo. It creates the
+Orleans grain-storage schema on every configured durable shard and exits;
+`Microsoft.Orleans.Persistence.AdoNet` ships no SQL and does not migrate, so without it a silo fails
+at start. The AppHost runs it as its own resource and both silos `WaitForCompletion` on it. Nothing
+in `deploy/` or `charts/` runs it yet — see
+`CyberCloud.ServiceDefaults/Storage/OrleansAdoNetSchema.cs`.

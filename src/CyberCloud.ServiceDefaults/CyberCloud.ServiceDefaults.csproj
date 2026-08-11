@@ -77,6 +77,20 @@
     <PackageReference Include="OpenTelemetry.Instrumentation.Runtime" />
   </ItemGroup>
 
+  <ItemGroup Label="Orleans' own PostgreSQL DDL — see Storage/OrleansAdoNetSchema.cs">
+    <!--
+      ⚠ COPIES of dotnet/orleans at tag v10.2.2:
+          src/AdoNet/Shared/PostgreSQL-Main.sql
+          src/AdoNet/Orleans.Persistence.AdoNet/PostgreSQL-Persistence.sql
+      Microsoft.Orleans.Persistence.AdoNet ships no SQL and no embedded resources. They are here,
+      rather than only in the two test projects that already carried a copy each, because the
+      durable tier is unusable without them and a Helm pre-install Job needs the same bytes a local
+      `dotnet run` uses.
+    -->
+    <EmbeddedResource Include="Storage/PostgreSQL-Main.sql" />
+    <EmbeddedResource Include="Storage/PostgreSQL-Persistence.sql" />
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="../CyberCloud.Core/CyberCloud.Core.csproj" />
     <ProjectReference Include="../CyberCloud.Core.Contracts/CyberCloud.Core.Contracts.csproj" />

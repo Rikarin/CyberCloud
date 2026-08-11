@@ -77,4 +77,32 @@ public sealed class CyberCloudClusterOptions
     /// <summary>The client-facing gateway port used in development only. See
     ///     <see cref="LocalhostSiloPort" />.</summary>
     public int LocalhostGatewayPort { get; set; } = 30000;
+
+    /// <summary>
+    ///     The <see cref="LocalhostSiloPort" /> of the silo that holds the development membership
+    ///     table. <c>0</c> — the default — means "this silo is that silo".
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>Without this, two local silos are two clusters, and nothing says so.</b>
+    ///         <c>UseLocalhostClustering(siloPort, gatewayPort)</c> defaults the primary-silo
+    ///         endpoint to <c>127.0.0.1:siloPort</c> — <i>the caller's own port</i>. So two silos
+    ///         started with distinct <see cref="LocalhostSiloPort" />s each become their own primary,
+    ///         each holds its own <c>IMembershipTableGrain</c>, and each reports a healthy
+    ///         single-silo cluster. There is no error, no warning, and
+    ///         <c>IManagementGrain.GetHosts()</c> returns one entry on both — which looks exactly
+    ///         like a cluster that has not finished forming yet.
+    ///     </para>
+    ///     <para>
+    ///         docs/plan/24 § Phase 0's exit criterion is a <b>two-silo</b> cluster, so the second
+    ///         silo has to be told where the first one is. Set this on every silo except the primary.
+    ///     </para>
+    ///     <para>
+    ///         The cost of the development membership provider is that the primary is a single point
+    ///         of failure for membership — kill it and the survivors cannot agree. That is Orleans'
+    ///         documented property of <c>UseLocalhostClustering</c>, it is why ADR-004 does not use
+    ///         it in production, and it is acceptable for a laptop.
+    ///     </para>
+    /// </remarks>
+    public int LocalhostPrimarySiloPort { get; set; }
 }

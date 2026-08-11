@@ -1,3 +1,4 @@
+using System.Net;
 using CyberCloud.ServiceDefaults.Storage;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.Configuration;
@@ -153,9 +154,16 @@ public static class OrleansApplication
             {
                 // ADR-004 (docs/plan/02 § ADR-004): Kubernetes membership in production, and only in
                 // development is there no Kubernetes API to write membership CRs into.
+                //
+                // ⚠ The third argument is what makes a SECOND local silo join the FIRST one's
+                // cluster instead of starting its own — see CyberCloudClusterOptions
+                // .LocalhostPrimarySiloPort, where the silent-two-clusters failure is written out.
                 silo.UseLocalhostClustering(
                     cluster.LocalhostSiloPort,
-                    cluster.LocalhostGatewayPort);
+                    cluster.LocalhostGatewayPort,
+                    cluster.LocalhostPrimarySiloPort == 0
+                        ? null
+                        : new IPEndPoint(IPAddress.Loopback, cluster.LocalhostPrimarySiloPort));
             }
             else
             {

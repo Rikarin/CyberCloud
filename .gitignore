@@ -211,3 +211,11 @@ desktop.ini
 *~
 *.swp
 *.swo
+
+# ══════════════════════════════════════════════════════════════════════════════════════════════
+# Aspire local development — ADR-014
+# ══════════════════════════════════════════════════════════════════════════════════════════════
+# The kubeconfig k3s writes into its bind-mounted /output. It is regenerated on every `dotnet run`
+# of CyberCloud.AppHost and carries that run's client certificate, so it is worthless the moment
+# the container stops and is a credential while it is alive.
+src/Hosts/CyberCloud.AppHost/.k3s/

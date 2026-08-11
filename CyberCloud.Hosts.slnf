@@ -1,6 +1,10 @@
 {
   "solution": {
     "path": "CyberCloud.slnx",
-    "projects": []
+    "projects": [
+      "src/Hosts/CyberCloud.Silo.Host/CyberCloud.Silo.Host.csproj",
+      "src/Hosts/CyberCloud.AppHost/CyberCloud.AppHost.csproj",
+      "src/Hosts/CyberCloud.AppHost.Tests/CyberCloud.AppHost.Tests.csproj"
+    ]
   }
 }
