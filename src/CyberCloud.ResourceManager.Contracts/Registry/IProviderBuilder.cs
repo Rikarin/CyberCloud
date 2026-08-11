@@ -149,13 +149,62 @@ public interface IResourceTypeBuilder : IProviderBuilder {
     ///     Whether the response carries secret material. ⚠ A <c>secret: true</c> action is the only
     ///     path a secret value leaves by, is always audited, and its response is never cached.
     /// </param>
+    /// <param name="request">
+    ///     The shape of the <c>POST</c> body, or <see langword="null" /> for an action that takes none.
+    ///     Validated by the same <see cref="ResourceSchema.Validate" /> a resource body is.
+    /// </param>
+    /// <param name="response">
+    ///     The shape of the <c>200</c> body, or <see langword="null" /> when the action declares none.
+    ///     ⚠ For a secret action this is the description of what leaves the platform.
+    /// </param>
+    /// <param name="longRunning">
+    ///     Whether the action returns <c>202</c> and an operation to poll. ⚠ Not derivable from
+    ///     anything else in the declaration — <c>restart</c> and <c>listKeys</c> are both
+    ///     <see cref="ActionKind.Post" /> and only one of them does work.
+    /// </param>
     /// <returns>The same builder.</returns>
     /// <remarks>
     ///     ⚠ An action never creates — docs/plan/08 § The write path, end to end. A <c>POST</c> to a
     ///     name that does not exist is a <c>404</c>, and that is checked by the manager rather than by
     ///     each action's handler.
+    ///     <para>
+    ///         The last three parameters are optional so that every existing declaration still means
+    ///         what it meant. An action that declares none of them is an action whose shape the
+    ///         registry does not know, and the generated document says exactly that rather than
+    ///         inventing one — see the remarks on <see cref="ActionRegistration" />.
+    ///     </para>
     /// </remarks>
-    IResourceTypeBuilder Action(string name, ActionKind kind, string permission, bool secret = false);
+    IResourceTypeBuilder Action(
+        string name,
+        ActionKind kind,
+        string permission,
+        bool secret = false,
+        ResourceSchema? request = null,
+        ResourceSchema? response = null,
+        bool longRunning = false
+    );
+
+    /// <summary>
+    ///     Names this type for the surfaces a human reads — CLI verb groups, portal breadcrumbs,
+    ///     generated help.
+    /// </summary>
+    /// <param name="name">The singular display name, for example <c>PostgreSQL server</c>.</param>
+    /// <param name="plural">The plural, for example <c>PostgreSQL servers</c>.</param>
+    /// <param name="shortName">
+    ///     The short form docs/plan/21 § Grammar's alias table maps — <c>postgres</c>, <c>aks</c>.
+    ///     Empty for a type with no short form.
+    /// </param>
+    /// <param name="summary">One sentence, for group help and a blade header.</param>
+    /// <returns>The same builder.</returns>
+    /// <remarks>
+    ///     ⚠ <b>The alias belongs here rather than in the CLI.</b> docs/plan/21 § Grammar calls the
+    ///     alias table "the <i>only</i> hand-maintained part of the CLI's surface"; a table listing
+    ///     twenty providers' short names is hand-maintained in a place where nobody adding the
+    ///     twenty-first provider will look. Declared next to the type, it is generated like everything
+    ///     else and a duplicate is a silo-start failure rather than a CLI that resolves one of two
+    ///     verbs.
+    /// </remarks>
+    IResourceTypeBuilder Display(string name, string plural, string shortName = "", string summary = "");
 
     /// <summary>Names the Helm chart this type renders.</summary>
     /// <param name="chart">
@@ -177,19 +226,40 @@ public interface IResourceTypeBuilder : IProviderBuilder {
     /// <summary>Declares that this type carries tags.</summary>
     /// <returns>The same builder.</returns>
     /// <remarks>
-    ///     At most 50 pairs, indexed into the resource-graph projection —
+    ///     At most <see cref="TagRules.MaxTags" /> pairs, indexed into the resource-graph projection —
     ///     docs/plan/06 § Tags, locks. A type that does not declare this refuses a body with tags
     ///     rather than accepting and dropping them.
+    ///     <para>
+    ///         ⚠ <b>Declaring this changes the type's generated body schema</b>: <see cref="TagRules" />
+    ///         is emitted as a <c>tags</c> property on every surface. A provider must <i>not</i>
+    ///         declare <c>/tags</c> itself — <see cref="ResourceSchema.Of" /> refuses one — because two
+    ///         descriptions of the platform's own bag is the drift ADR-012 exists to remove.
+    ///     </para>
     /// </remarks>
     IResourceTypeBuilder SupportsTags();
 
-    /// <summary>Declares that this type is placed into a cluster.</summary>
+    /// <summary>Declares that this type is placed into a cluster, and where its id comes from.</summary>
+    /// <param name="clusterIdPointer">
+    ///     The RFC 6901 pointer to the cluster id in the body. Defaults to the platform's own
+    ///     <c>/properties/clusterId</c>, which is what every type used before the pointer was a
+    ///     registry fact.
+    /// </param>
     /// <returns>The same builder.</returns>
     /// <remarks>
-    ///     docs/plan/06 § The hierarchy makes a cluster a first-class resource that others are placed
-    ///     into, so a managed Postgres has a required <c>clusterId</c>. A type that does not declare
-    ///     this is a clusterless provider — a DNS zone, a mail domain, a role assignment — and its
-    ///     <see cref="ReconcileContext.Cluster" /> is <see langword="null" />.
+    ///     <para>
+    ///         docs/plan/06 § The hierarchy makes a cluster a first-class resource that others are
+    ///         placed into, so a managed Postgres has a required <c>clusterId</c>. A type that does not
+    ///         declare this is a clusterless provider — a DNS zone, a mail domain, a role assignment —
+    ///         and its <see cref="ReconcileContext.Cluster" /> is <see langword="null" />.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Every api-version's schema must declare <paramref name="clusterIdPointer" /> as a
+    ///         required string, and the builder refuses the type otherwise.</b> Without that check the
+    ///         flag was a promise nothing kept: the reconcile driver demanded a connection, the
+    ///         manager looked for the id at a hard-coded pointer, and a provider that had not declared
+    ///         the property found out one resource at a time, after the caller had already been told
+    ///         <c>202</c>.
+    ///     </para>
     /// </remarks>
-    IResourceTypeBuilder RequiresCluster();
+    IResourceTypeBuilder RequiresCluster(string clusterIdPointer = ClusterPlacement.DefaultPointer);
 }

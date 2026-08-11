@@ -72,10 +72,20 @@ public sealed class WidgetDeclarationTests {
         command.FieldManager.ShouldBe(SampleWidgets.FieldManager);
     }
 
+    /// <remarks>
+    ///     ⚠ The cluster id is a real GUID in every case here, and it did not have to be until the
+    ///     schema could declare <c>SchemaFormat.Uuid</c>. A body whose only fault was meant to be a
+    ///     missing <c>message</c> now also fails on <c>clusterId: "x"</c>, and the first problem is
+    ///     the one in <see cref="Error.Target" /> — so the fixture has to be valid in every respect
+    ///     but the one under test. That is the format check working, not the test being brittle.
+    /// </remarks>
     [Theory]
-    [InlineData("""{"properties":{"clusterId":"x","message":"m"}}""", "/location")]
-    [InlineData("""{"location":"eu","properties":{"message":"m"}}""", "/properties/clusterId")]
-    [InlineData("""{"location":"eu","properties":{"clusterId":"x"}}""", "/properties/message")]
+    [InlineData("""{"properties":{"clusterId":"7b6a5c4d-0000-4000-8000-000000000001","message":"m"}}""", "/location")]
+    [InlineData("""{"location":"eu-central","properties":{"message":"m"}}""", "/properties/clusterId")]
+    [InlineData(
+        """{"location":"eu-central","properties":{"clusterId":"7b6a5c4d-0000-4000-8000-000000000001"}}""",
+        "/properties/message"
+    )]
     public void EveryRequiredPropertyIsActuallyRequired(string body, string expectedTarget) {
         using var document = JsonDocument.Parse(body);
 

@@ -161,6 +161,30 @@ public static class OpenApiArtifacts {
         );
     }
 
+    /// <summary>
+    ///     The emitted documents, keyed by api-version — the input <see cref="DerivedSurfaces" />
+    ///     reads.
+    /// </summary>
+    /// <param name="registry">The built registry.</param>
+    /// <remarks>
+    ///     ⚠ <b>Emitted afresh rather than read back off disk, and the difference is a failure mode.</b>
+    ///     docs/plan/21 § Generation makes the three derived surfaces read the OpenAPI document; if
+    ///     they read the <i>checked-in</i> file, a drifted document would silently seed three more
+    ///     drifted files and the CLI would describe an API nobody had generated. This is the same
+    ///     bytes <see cref="Generate" /> writes, from the same registry, in the same process.
+    /// </remarks>
+    public static IReadOnlyDictionary<string, JsonObject> Documents(IProviderRegistry registry) {
+        ArgumentNullException.ThrowIfNull(registry);
+
+        var byVersion = new Dictionary<string, JsonObject>(StringComparer.Ordinal);
+
+        foreach (var version in OpenApiEmitter.ApiVersionsOf(registry)) {
+            byVersion[version.Value] = OpenApiEmitter.Emit(registry, version);
+        }
+
+        return byVersion;
+    }
+
     static GeneratedDocument Emit(
         string fileName,
         string apiVersion,

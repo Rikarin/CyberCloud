@@ -45,8 +45,25 @@ public sealed class SampleProvider : IResourceProvider {
             // POST to drive — docs/plan/08 § The write path, end to end: POST "appears only for
             // actions on an existing resource … never for creation", and a suite with no action
             // registered cannot check the second half.
-            .Action("ping", ActionKind.Post, "write")
+            //
+            // Its request and response shapes are declared because an undeclared action is the one
+            // part of the API surface with no contract: the emitted document said `schema: {}` and the
+            // manager validated nothing. Declaring them costs no behaviour here — the handler is still
+            // a no-op — and makes the action's parameters refusable and generable like everything else.
+            .Action(
+                "ping",
+                ActionKind.Post,
+                "write",
+                request: SampleWidgets.PingRequest,
+                response: SampleWidgets.PingResponse
+            )
+            // What a person sees. docs/plan/21 § Grammar's alias table is generated from this rather
+            // than hand-maintained in the CLI, and a portal breadcrumb has a word to draw.
+            .Display("Widget", "Widgets", shortName: "widget", summary: "A ConfigMap with two fields in it.")
             .SupportsTags()
-            .RequiresCluster();
+            // The pointer is the default and is stated anyway: it is the fact ProviderBuilder checks
+            // the schema against, and reading it here is how the next provider learns the flag has a
+            // second half.
+            .RequiresCluster(ClusterPlacement.DefaultPointer);
     }
 }

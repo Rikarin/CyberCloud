@@ -24,6 +24,7 @@ static class Program {
     /// </summary>
     static int Main(string[] arguments) {
         string? output = null;
+        string? derived = null;
         string? report = null;
         var write = true;
         var providerAssemblies = new List<string>();
@@ -32,6 +33,10 @@ static class Program {
             switch (arguments[i]) {
                 case "--output" when i + 1 < arguments.Length:
                     output = arguments[++i];
+                    break;
+
+                case "--derived-output" when i + 1 < arguments.Length:
+                    derived = arguments[++i];
                     break;
 
                 case "--report" when i + 1 < arguments.Length:
@@ -48,8 +53,9 @@ static class Program {
 
                 default:
                     Console.Error.WriteLine(
-                        $"Unrecognised argument '{arguments[i]}'. Usage: --output <dir> [--report <file>] "
-                        + "[--check] [--provider-assembly <path>]..."
+                        $"Unrecognised argument '{arguments[i]}'. Usage: --output <dir> "
+                        + "[--derived-output <dir>] [--report <file>] [--check] "
+                        + "[--provider-assembly <path>]..."
                     );
 
                     return BadArguments;
@@ -70,13 +76,28 @@ static class Program {
                 Console.WriteLine(line);
             }
 
+            // ⚠ The other three read the documents this process just emitted, not the files on disk —
+            // docs/plan/21 § Generation's one hop. See OpenApiArtifacts.Documents for why reading the
+            // checked-in file back would let one drifted document seed three more.
+            var surfaces = derived is { Length: > 0 }
+                ? DerivedSurfaces.Generate(OpenApiArtifacts.Documents(registry), derived, write)
+                : new DerivedReport([], []);
+
+            foreach (var line in DerivedSurfaces.Describe(surfaces)) {
+                Console.WriteLine(line);
+            }
+
             // ⚠ Said on every run, including the clean ones. docs/plan/02 § ADR-012 names four
-            // surfaces and this step produces one of them; a log that only mentions OpenAPI reads like
-            // the pipeline is finished.
+            // surfaces; a log that did not say which of them ran reads like the pipeline is finished
+            // whatever it did.
             Console.WriteLine(
-                "OpenAPI only. The `cyc` verb tree, the .NET and TypeScript SDKs and the portal forms "
-                + "are ADR-012's other three surfaces and are generated from this document — "
-                + "docs/plan/21 § Generation. None of the three is written yet."
+                derived is { Length: > 0 }
+                    ? "All four of ADR-012's surfaces: the OpenAPI document, the cyc verb tree, the "
+                      + ".NET SDK and the portal forms. The last three are generated from the first — "
+                      + "docs/plan/21 § Generation. ⚠ The TypeScript, Python and Go SDKs and the "
+                      + "Terraform provider are docs/plan/21 § Other SDKs and are not written."
+                    : "OpenAPI only: no --derived-output was given, so the cyc verb tree, the .NET SDK "
+                      + "and the portal forms were not written."
             );
 
             if (report is { Length: > 0 }) {
@@ -86,7 +107,10 @@ static class Program {
                     Directory.CreateDirectory(directory);
                 }
 
-                File.WriteAllBytes(report, DeterministicJson.ToBytes(Render(generated, providerAssemblies.Count)));
+                File.WriteAllBytes(
+                    report,
+                    DeterministicJson.ToBytes(Render(generated, surfaces, providerAssemblies.Count))
+                );
             }
 
             return Ok;
@@ -106,7 +130,7 @@ static class Program {
     /// <summary>
     ///     The report <c>build/Build.Generate.cs</c> and <c>build/Build.Architecture.cs</c> read.
     /// </summary>
-    static JsonObject Render(GenerationReport generated, int assembliesScanned) {
+    static JsonObject Render(GenerationReport generated, DerivedReport surfaces, int assembliesScanned) {
         var documents = new JsonArray();
 
         foreach (var document in generated.Documents) {
@@ -120,10 +144,28 @@ static class Program {
             });
         }
 
+        var derived = new JsonArray();
+
+        foreach (var document in surfaces.Documents) {
+            derived.Add(new JsonObject {
+                ["apiVersion"] = document.ApiVersion,
+                ["drifted"] = document.Drifted,
+                ["file"] = document.FileName,
+                ["problems"] = Lines(document.Problems),
+                ["published"] = document.Published,
+                ["surface"] = document.Surface
+            });
+        }
+
         return new JsonObject {
             ["apiVersions"] = generated.ApiVersions,
             ["assembliesScanned"] = assembliesScanned,
-            ["clean"] = generated.IsClean,
+            ["clean"] = generated.IsClean && surfaces.IsClean,
+            // ⚠ A separate array rather than merged into `documents`: the two are gated differently.
+            // A published OpenAPI document is diffed for compatibility; a derived surface is not,
+            // because docs/plan/21 § Generation makes it a function of the document that already was.
+            ["derived"] = derived,
+            ["derivedStale"] = Lines(surfaces.Stale),
             ["documents"] = documents,
             ["providers"] = generated.Providers,
             ["resourceTypes"] = generated.ResourceTypes,

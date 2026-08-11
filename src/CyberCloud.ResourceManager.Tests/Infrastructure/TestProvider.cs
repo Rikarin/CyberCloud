@@ -298,9 +298,34 @@ public sealed class TestingProvider : IResourceProvider {
             .Permissions("read", "write", "delete")
             .Action("restart", ActionKind.Post, "write")
             .Action("listKeys", ActionKind.Post, "listKeys", secret: true)
+            // ⚠ The one action with a declared request, and it is here so the write path's action-body
+            // validation has something to refuse. An action that declares no request takes whatever it
+            // is given, which is what `restart` and `listKeys` above still do — both branches are real.
+            .Action(
+                "resize",
+                ActionKind.Post,
+                "write",
+                request: ResizeRequest,
+                response: ResizeResponse,
+                longRunning: true
+            )
+            .Display("Testing widget", "Testing widgets", shortName: "twidget")
             .SupportsSoftDelete(7)
             .SupportsTags();
     }
+
+    /// <summary>The shape a <c>POST …/resize</c> must satisfy.</summary>
+    public static ResourceSchema ResizeRequest { get; } =
+        ResourceSchema.Of(
+            [
+                new("/size", SchemaKind.WholeNumber, Required: true) { Minimum = 1, Maximum = 8 },
+                new("/tier", SchemaKind.Text) { AllowedValues = ["basic", "standard"] }
+            ]
+        );
+
+    /// <summary>What a <c>POST …/resize</c> returns.</summary>
+    public static ResourceSchema ResizeResponse { get; } =
+        ResourceSchema.Of([new("/accepted", SchemaKind.Boolean, Required: true)]);
 
     /// <summary>A body that satisfies <see cref="Schema2026" />.</summary>
     /// <param name="size">The size, which is also the vcpu quota draw.</param>

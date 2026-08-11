@@ -252,8 +252,140 @@ public enum SchemaKind {
     /// <summary>A JSON object. Its members are separate properties with deeper pointers.</summary>
     Nested = 5,
 
-    /// <summary>A JSON array. Element shape is not modelled; that is a later api-version's problem.</summary>
+    /// <summary>
+    ///     A JSON array. ⚠ Its element shape is <see cref="Registry.SchemaProperty.ElementKind" /> — a
+    ///     <i>scalar</i> kind, not a nested tree.
+    /// </summary>
+    /// <remarks>
+    ///     An array of objects is deliberately not expressible: an element schema would need its own
+    ///     pointer space (<c>/properties/rules/0/port</c> addresses one element, not the shape), and
+    ///     the flat pointer list is what makes <see cref="Registry.ResourceSchema.Validate" /> an index rather
+    ///     than a tree walk. Declaring <see cref="Registry.SchemaProperty.ElementKind" /> as <see cref="Nested" /> is refused
+    ///     rather than half-modelled — docs/plan/20 § The shape that makes 100 resource types
+    ///     affordable maps "array of objects" onto <c>@xui/data-table</c>, and that is the api-version
+    ///     that will need the tree.
+    /// </remarks>
     Array = 6
+}
+
+/// <summary>
+///     The semantic refinement of a <see cref="SchemaKind.Text" />, and the one keyword every OpenAPI
+///     consumer already knows how to act on.
+/// </summary>
+/// <remarks>
+///     <para>
+///         ⚠ <b>A format is <i>checked</i>, not merely printed.</b> JSON Schema makes <c>format</c>
+///         an annotation that validators may ignore; <see cref="Registry.ResourceSchema.Validate" /> does not
+///         ignore it. A registry fact that the write path did not enforce would be exactly the
+///         "documentation rather than a contract" failure docs/plan/08 § The provider registry exists
+///         to prevent — the generated document and the runtime have to agree in both directions.
+///     </para>
+///     <para>
+///         <b>Four are JSON Schema's own and two are this platform's.</b> The platform pair is spelled
+///         with a <c>cybercloud-</c> prefix in the emitted document so that a generic OpenAPI tool
+///         treats them as the unknown formats they are rather than guessing.
+///     </para>
+/// </remarks>
+[Alias("CyberCloud.ResourceManager.SchemaFormat")]
+public enum SchemaFormat {
+    /// <summary>Never assigned. The value is an unrefined string.</summary>
+    None = 0,
+
+    /// <summary>
+    ///     A GUID in hyphenated <c>D</c> form. ⚠ Braced, parenthesised and bare-hex forms are refused,
+    ///     for the reason <see cref="GuidFormat" /> gives: one resource, one spelling.
+    /// </summary>
+    Uuid = 1,
+
+    /// <summary>An RFC 3339 timestamp. ⚠ Offset required — a local time has no meaning on the wire.</summary>
+    DateTime = 2,
+
+    /// <summary>An absolute URI. A relative one is refused: the body is not resolved against a base.</summary>
+    Uri = 3,
+
+    /// <summary>An e-mail address, checked for shape rather than for deliverability.</summary>
+    Email = 4,
+
+    /// <summary>
+    ///     A Cyber Cloud region — <c>eu-central</c>. Emitted as <c>cybercloud-region</c> and mapped to
+    ///     docs/plan/20's region picker.
+    /// </summary>
+    Region = 5,
+
+    /// <summary>
+    ///     A fully qualified <see cref="ResourceId" /> path. Emitted as
+    ///     <c>cybercloud-resource-id</c>; checked with <see cref="ResourceId.TryParsePath" />, which is
+    ///     the same parser the gateway uses, so a body that names a resource names one that could
+    ///     exist.
+    /// </summary>
+    ResourceId = 6
+}
+
+/// <summary>
+///     Which control docs/plan/20 § The shape that makes 100 resource types affordable renders a
+///     property with — ADR-012's promised <c>x-cybercloud-*</c> hint.
+/// </summary>
+/// <remarks>
+///     <para>
+///         ⚠ <b>ADR-012 promised this and <see cref="Registry.SchemaProperty" /> had no slot for it, which is
+///         the plan and the code contradicting each other.</b> docs/plan/02 § ADR-012's portal row
+///         reads <i>"Angular reactive forms + xUI controls from the schema, with <c>x-cybercloud-*</c>
+///         hints for widgets (a <c>storageclass</c> picker, a region picker)"</i>. With nowhere to
+///         declare one, the portal emitter would have had to infer a widget from a property's
+///         <i>name</i> — and a renderer that keys on "the property is called region" is a second
+///         interpretation of the schema, which is the drift ADR-012 exists to remove.
+///     </para>
+///     <para>
+///         <b>The members are docs/plan/20's list, exactly.</b> That document names
+///         <c>region, cluster, storageclass, subnet, sku, secret-ref, cron, cidr, duration</c> plus
+///         <c>x-cozy-preset</c>. A tenth widget is a change to that document first and to this enum
+///         second, so a provider cannot invent a control the portal has no code for.
+///     </para>
+///     <para>
+///         ⚠ <b>A hint is a hint. It is not validation and it never narrows the body.</b>
+///         <see cref="SchemaFormat" /> and <see cref="Registry.SchemaProperty.Pattern" /> are where a
+///         constraint goes. A widget that implied a constraint would let a provider tighten the API by
+///         changing a rendering hint, and the compatibility diff deliberately treats every
+///         <c>x-</c> extension as prose.
+///     </para>
+/// </remarks>
+[Alias("CyberCloud.ResourceManager.WidgetHint")]
+public enum WidgetHint {
+    /// <summary>Never assigned. The renderer picks from <c>type</c>, <c>enum</c> and <c>format</c>.</summary>
+    None = 0,
+
+    /// <summary>Region picker with capacity and latency hints.</summary>
+    Region = 1,
+
+    /// <summary>Cluster picker, filtered by subscription and capability.</summary>
+    Cluster = 2,
+
+    /// <summary>Storage-class picker.</summary>
+    StorageClass = 3,
+
+    /// <summary>Subnet picker.</summary>
+    Subnet = 4,
+
+    /// <summary>Sku picker.</summary>
+    Sku = 5,
+
+    /// <summary>A Vault <c>SecretRef</c> picker. ⚠ Never a plain value — docs/plan/20.</summary>
+    SecretRef = 6,
+
+    /// <summary>Cron-expression editor.</summary>
+    Cron = 7,
+
+    /// <summary>CIDR editor.</summary>
+    Cidr = 8,
+
+    /// <summary>Duration editor.</summary>
+    Duration = 9,
+
+    /// <summary>The <c>t1.micro</c>/<c>c1.large</c> family picker of docs/plan/12.</summary>
+    CozyPreset = 10,
+
+    /// <summary>A key/value bag — <c>@xui/tag-input</c>.</summary>
+    TagInput = 11
 }
 
 /// <summary>

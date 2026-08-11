@@ -1,0 +1,191 @@
+{
+  "format": "1",
+  "apiVersion": "2026-08-01",
+  "generatedFrom": "openapi/2026-08-01.json",
+  "description": "Portal form schemas at api-version 2026-08-01. Generated from the OpenAPI document — docs/plan/21 § Generation — and consumed by libs/resource-forms' schema-renderer (docs/plan/20).",
+  "forms": {
+    "CyberCloud.Sample/widgets": {
+      "resourceType": "CyberCloud.Sample/widgets",
+      "apiVersion": "2026-08-01",
+      "title": "Widget",
+      "plural": "Widgets",
+      "summary": "A ConfigMap with two fields in it.",
+      "overrideKey": "CyberCloud.Sample/widgets@2026-08-01",
+      "coveredPointers": [
+        "/location",
+        "/properties",
+        "/properties/allowedCidrs",
+        "/properties/clusterId",
+        "/properties/enabled",
+        "/properties/message",
+        "/properties/replicas",
+        "/properties/retiredOn",
+        "/properties/tier",
+        "/tags"
+      ],
+      "supportsTags": true,
+      "requiresCluster": true,
+      "clusterIdPointer": "/properties/clusterId",
+      "softDeleteDays": 0,
+      "fields": [
+        {
+          "jsonPointer": "/location",
+          "name": "location",
+          "label": "Location",
+          "control": "xui-region",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "The region the widget is billed in.",
+          "format": "cybercloud-region",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new Widget to change it.",
+          "placeholder": "eu-central"
+        },
+        {
+          "jsonPointer": "/properties",
+          "name": "properties",
+          "label": "Properties",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "The widget's own settings."
+        },
+        {
+          "jsonPointer": "/properties/allowedCidrs",
+          "name": "allowedCidrs",
+          "label": "Allowed cidrs",
+          "control": "xui-cidr",
+          "type": "array",
+          "required": false,
+          "section": "general",
+          "hint": "The ranges the widget claims to serve. Shape only; nothing enforces it.",
+          "placeholder": [
+            "10.0.0.0/8"
+          ]
+        },
+        {
+          "jsonPointer": "/properties/clusterId",
+          "name": "clusterId",
+          "label": "Cluster id",
+          "control": "xui-cluster",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "The cluster whose namespace holds the widget's ConfigMap.",
+          "format": "uuid",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new Widget to change it."
+        },
+        {
+          "jsonPointer": "/properties/enabled",
+          "name": "enabled",
+          "label": "Enabled",
+          "control": "xui-switch",
+          "type": "boolean",
+          "required": false,
+          "section": "general",
+          "hint": "Whether the widget is switched on. Defaults to off when absent.",
+          "default": false
+        },
+        {
+          "jsonPointer": "/properties/message",
+          "name": "message",
+          "label": "Message",
+          "control": "xui-input",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "What the ConfigMap's 'message' key says.",
+          "minLength": 1,
+          "maxLength": 1024,
+          "placeholder": "hello"
+        },
+        {
+          "jsonPointer": "/properties/replicas",
+          "name": "replicas",
+          "label": "Replicas",
+          "control": "xui-slider",
+          "type": "integer",
+          "required": false,
+          "section": "general",
+          "hint": "How many copies of the ConfigMap's message the widget claims to hold.",
+          "minimum": 1,
+          "maximum": 9,
+          "default": 1
+        },
+        {
+          "jsonPointer": "/properties/retiredOn",
+          "name": "retiredOn",
+          "label": "Retired on",
+          "control": "xui-input",
+          "type": "string",
+          "required": false,
+          "section": "general",
+          "hint": "When the widget was retired, or null while it is live.",
+          "nullable": true,
+          "format": "date-time"
+        },
+        {
+          "jsonPointer": "/properties/tier",
+          "name": "tier",
+          "label": "Tier",
+          "control": "xui-sku",
+          "type": "string",
+          "required": false,
+          "section": "general",
+          "hint": "How much the widget's ConfigMap is allowed to say.",
+          "choices": [
+            {
+              "value": "free",
+              "label": "Free"
+            },
+            {
+              "value": "basic",
+              "label": "Basic"
+            },
+            {
+              "value": "standard",
+              "label": "Standard"
+            },
+            {
+              "value": "premium",
+              "label": "Premium"
+            }
+          ],
+          "default": "free"
+        },
+        {
+          "jsonPointer": "/tags",
+          "name": "tags",
+          "label": "Tags",
+          "control": "xui-tag-input",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+          "maxProperties": 50
+        }
+      ],
+      "actions": [
+        {
+          "name": "ping",
+          "label": "Ping",
+          "permission": "write",
+          "longRunning": false,
+          "secret": false,
+          "fields": [
+            {
+              "jsonPointer": "/echo",
+              "name": "echo",
+              "label": "Echo",
+              "control": "xui-input",
+              "required": false
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

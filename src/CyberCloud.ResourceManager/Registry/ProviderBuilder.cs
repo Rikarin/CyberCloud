@@ -114,7 +114,15 @@ sealed class ProviderBuilder(string providerNamespace) : IResourceTypeBuilder {
     }
 
     /// <inheritdoc />
-    public IResourceTypeBuilder Action(string name, ActionKind kind, string permission, bool secret = false) {
+    public IResourceTypeBuilder Action(
+        string name,
+        ActionKind kind,
+        string permission,
+        bool secret = false,
+        ResourceSchema? request = null,
+        ResourceSchema? response = null,
+        bool longRunning = false
+    ) {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         ArgumentException.ThrowIfNullOrWhiteSpace(permission);
 
@@ -132,7 +140,36 @@ sealed class ProviderBuilder(string providerNamespace) : IResourceTypeBuilder {
             }
         }
 
-        draft.Actions.Add(new(name, kind, permission, secret));
+        // ⚠ A secret response with no declared shape is legal and is the honest rendering of "we have
+        // not said". It is worth flagging in review rather than refusing here: docs/plan/08 § The
+        // provider registry allows an action to exist before its response is modelled, and refusing
+        // would make declaring the shape a prerequisite for having the action at all.
+        draft.Actions.Add(
+            new(name, kind, permission, secret) {
+                Request = request,
+                Response = response,
+                LongRunning = longRunning
+            }
+        );
+
+        return this;
+    }
+
+    /// <inheritdoc />
+    public IResourceTypeBuilder Display(string name, string plural, string shortName = "", string summary = "") {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        ArgumentException.ThrowIfNullOrWhiteSpace(plural);
+
+        var draft = Open(nameof(Display));
+
+        if (!draft.Display.IsEmpty) {
+            throw new InvalidOperationException(
+                $"'{draft.Type}' is named twice. Two display names for one type would make which one a "
+                + "portal breadcrumb shows depend on declaration order."
+            );
+        }
+
+        draft.Display = new(name, plural, shortName, summary);
         return this;
     }
 
@@ -157,13 +194,28 @@ sealed class ProviderBuilder(string providerNamespace) : IResourceTypeBuilder {
     }
 
     /// <inheritdoc />
-    public IResourceTypeBuilder RequiresCluster() {
-        Open(nameof(RequiresCluster)).RequiresCluster = true;
+    public IResourceTypeBuilder RequiresCluster(string clusterIdPointer = ClusterPlacement.DefaultPointer) {
+        ArgumentException.ThrowIfNullOrEmpty(clusterIdPointer);
+
+        if (clusterIdPointer[0] != '/') {
+            throw new ArgumentException(
+                $"'{clusterIdPointer}' is not a JSON Pointer. The cluster id is addressed the same way "
+                + "every other property is — see SchemaProperty.JsonPointer.",
+                nameof(clusterIdPointer)
+            );
+        }
+
+        var draft = Open(nameof(RequiresCluster));
+        draft.RequiresCluster = true;
+        draft.ClusterIdPointer = clusterIdPointer;
         return this;
     }
 
     /// <summary>Freezes the drafts into registrations, checking what only the whole can check.</summary>
-    /// <exception cref="InvalidOperationException">A type declares no api-version.</exception>
+    /// <exception cref="InvalidOperationException">
+    ///     A type declares no api-version, or declares <c>RequiresCluster</c> without the property
+    ///     that supplies the cluster id.
+    /// </exception>
     public ImmutableArray<ResourceTypeRegistration> Build() {
         var built = ImmutableArray.CreateBuilder<ResourceTypeRegistration>(drafts.Count);
 
@@ -175,6 +227,8 @@ sealed class ProviderBuilder(string providerNamespace) : IResourceTypeBuilder {
                     + "be a type nothing can reach. docs/plan/08 § The provider registry."
                 );
             }
+
+            CheckClusterPlacement(draft);
 
             built.Add(
                 new() {
@@ -191,12 +245,76 @@ sealed class ProviderBuilder(string providerNamespace) : IResourceTypeBuilder {
                     Chart = draft.Chart,
                     SoftDeleteDays = draft.SoftDeleteDays,
                     SupportsTags = draft.SupportsTags,
-                    RequiresCluster = draft.RequiresCluster
+                    RequiresCluster = draft.RequiresCluster,
+                    ClusterIdPointer = draft.RequiresCluster ? draft.ClusterIdPointer : string.Empty,
+                    Display = draft.Display
                 }
             );
         }
 
         return built.DrainToImmutable();
+    }
+
+    /// <summary>
+    ///     Gives <c>RequiresCluster</c> its schema consequence: every api-version must declare the
+    ///     property that supplies the cluster id, as a required string.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>This is the check whose absence made the flag dangerous.</b> Before it,
+    ///         <c>RequiresCluster()</c> and the property that satisfies it lived in different files and
+    ///         nothing connected them — the sample provider's own remarks said so. A type that declared
+    ///         the flag and forgot the property started cleanly, accepted a <c>PUT</c>, answered
+    ///         <c>202</c>, and then failed at reconcile time for every resource, one at a time, after
+    ///         the caller had already been told the write was accepted.
+    ///     </para>
+    ///     <para>
+    ///         <b>Every version, not just the newest.</b> An api-version is served forever
+    ///         (docs/plan/08 § The provider registry), so a type that dropped the property in a later
+    ///         version would still be reachable at the earlier one — and the manager reads one pointer
+    ///         for all of them.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Required, not merely declared.</b> An optional cluster id is a body that validates
+    ///         and then cannot be placed, which is the same failure one step later.
+    ///     </para>
+    /// </remarks>
+    static void CheckClusterPlacement(TypeDraft draft) {
+        if (!draft.RequiresCluster) {
+            return;
+        }
+
+        foreach (var version in draft.ApiVersions) {
+            SchemaProperty? declared = null;
+
+            foreach (var property in version.Schema.Properties) {
+                if (string.Equals(property.JsonPointer, draft.ClusterIdPointer, StringComparison.Ordinal)) {
+                    declared = property;
+                    break;
+                }
+            }
+
+            if (declared is not { } clusterId) {
+                throw new InvalidOperationException(
+                    $"'{draft.Type}' declares RequiresCluster('{draft.ClusterIdPointer}') and its "
+                    + $"api-version '{version.Version}' does not declare that property. The reconcile "
+                    + "driver refuses a pass with no cluster connection and the manager resolves one by "
+                    + "reading this pointer out of the body, so the type would accept every write and "
+                    + "fail every reconcile — docs/plan/08 § The provider registry."
+                );
+            }
+
+            if (clusterId.Kind is not SchemaKind.Text || !clusterId.Required) {
+                throw new InvalidOperationException(
+                    $"'{draft.Type}' declares RequiresCluster('{draft.ClusterIdPointer}') and its "
+                    + $"api-version '{version.Version}' declares that property as "
+                    + $"{(clusterId.Required ? "a required" : "an optional")} "
+                    + $"SchemaKind.{clusterId.Kind}. A cluster id is a required string: "
+                    + "an optional one is a body that validates and then cannot be placed, which is the "
+                    + "same failure one step later."
+                );
+            }
+        }
     }
 
     ProviderBuilder AddMeter(QuotaMeter meter, string pointer, decimal fallback) {
@@ -260,5 +378,9 @@ sealed class ProviderBuilder(string providerNamespace) : IResourceTypeBuilder {
         public bool SupportsTags { get; set; }
 
         public bool RequiresCluster { get; set; }
+
+        public string ClusterIdPointer { get; set; } = ClusterPlacement.DefaultPointer;
+
+        public DisplayMetadata Display { get; set; }
     }
 }

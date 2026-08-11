@@ -698,11 +698,10 @@ partial class Build
     ///     docs/plan/23 § The architecture gates, row <b>Generated surfaces</b>: "OpenAPI/CLI/SDK/forms
     ///     regenerate byte-identically from the registry."
     ///     <para>
-    ///         ⚠ <b>One of the four, and the row says so rather than implying four.</b>
-    ///         docs/plan/21 § Generation makes the OpenAPI document the surface the CLI, the SDKs and
-    ///         the portal forms are generated <i>from</i>, so this is the one that has to exist first
-    ///         — but a row reading "Enforced" over one surface when the doc names four would be the
-    ///         kind of true-and-misleading tick <see cref="GateStatus.Vacuous" /> exists to avoid.
+    ///         ⚠ <b>All four, at last, and the message says which.</b> docs/plan/21 § Generation makes
+    ///         the OpenAPI document the surface the CLI, the SDK and the portal forms are generated
+    ///         <i>from</i>, so the four are one chain rather than four independent generators — and a
+    ///         drift anywhere in it fails here.
     ///     </para>
     ///     <para>
     ///         ⚠ <b>Counted in resource types rather than in documents.</b> An empty registry still
@@ -740,11 +739,33 @@ partial class Build
                 + "docs/plan/08 § The provider registry");
         }
 
+        foreach (var surface in Generation.Derived)
+        {
+            foreach (var problem in surface.Problems)
+                violations.Add($"generated/{surface.File} is not usable — {problem}");
+
+            if (surface.Drifted)
+            {
+                violations.Add(
+                    $"generated/{surface.File} is not what the OpenAPI document generates. Run "
+                    + "./build.sh Generate and commit the result — docs/plan/23 § The architecture "
+                    + "gates, row Generated surfaces");
+            }
+        }
+
+        foreach (var stale in Generation.DerivedStale)
+        {
+            violations.Add(
+                $"generated/{stale} is checked in and nothing produces it. A generated surface nobody "
+                + "generates is one nobody can reproduce");
+        }
+
         return GateOutcome.From(
             "Generated surfaces",
             Generation.ResourceTypes,
-            $"resource type(s) over {Generation.Documents.Count} OpenAPI document(s), regenerated and "
-            + "compared byte-for-byte; the CLI, SDK and portal-form surfaces are not generated yet",
+            $"resource type(s) over {Generation.Documents.Count} OpenAPI document(s) and "
+            + $"{Generation.Derived.Count} derived file(s) — the cyc verb tree, the .NET SDK and the "
+            + "portal forms — all regenerated and compared byte-for-byte",
             violations);
     }
 

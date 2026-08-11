@@ -33,6 +33,23 @@ partial class Build
     /// </summary>
     AbsolutePath OpenApiDirectory => RootDirectory / "openapi";
 
+    /// <summary>
+    ///     Where ADR-012's other three surfaces are checked in — the <c>cyc</c> verb tree, the .NET
+    ///     SDK and the portal form schemas.
+    ///     <para>
+    ///         ⚠ Tracked, for the same reason <c>openapi/</c> is: docs/plan/23 § The architecture
+    ///         gates asks that all four "regenerate byte-identically", and a byte comparison needs a
+    ///         previous copy. Under <c>artifacts/</c> — which is gitignored — a fresh clone would have
+    ///         nothing to compare against and every run would report "new", which is a gate that can
+    ///         only pass.
+    ///     </para>
+    ///     <para>
+    ///         A separate root from <c>openapi/</c> because docs/plan/10 § Shape makes the gateway
+    ///         serve that directory as files, and these three are not served to anyone.
+    ///     </para>
+    /// </summary>
+    AbsolutePath DerivedSurfacesDirectory => RootDirectory / "generated";
+
     /// <summary>Where docs/plan/03 § Providers puts every provider. Matched at any depth below.</summary>
     AbsolutePath ProvidersRoot => RootDirectory / "src" / "Providers";
 
@@ -143,6 +160,27 @@ partial class Build
                 + "notice window — docs/plan/08 § The provider registry.");
         }
 
+        foreach (var surface in report.Derived)
+        {
+            foreach (var problem in surface.Problems)
+                failures.Add($"{DerivedSurfacesDirectory.Name}/{surface.File} is not usable: {problem}");
+
+            if (surface.Drifted && surface.Published)
+            {
+                failures.Add(
+                    $"{DerivedSurfacesDirectory.Name}/{surface.File} was not what the OpenAPI document "
+                    + "generates. It has been rewritten in place — review the diff and commit it. "
+                    + "docs/plan/23 § The architecture gates, row Generated surfaces.");
+            }
+        }
+
+        foreach (var stale in report.DerivedStale)
+        {
+            failures.Add(
+                $"{DerivedSurfacesDirectory.Name}/{stale} is checked in and this run did not produce "
+                + "it. A generated surface nothing generates is one nobody can reproduce.");
+        }
+
         if (failures.Count == 0)
         {
             Log.Information(
@@ -171,13 +209,23 @@ partial class Build
         IReadOnlyList<string> StructuralProblems,
         IReadOnlyList<string> BreakingChanges);
 
+    sealed record DerivedFile(
+        string Surface,
+        string File,
+        string ApiVersion,
+        bool Published,
+        bool Drifted,
+        IReadOnlyList<string> Problems);
+
     sealed record GenerationReport(
         int Providers,
         int ResourceTypes,
         int ApiVersions,
         int AssembliesScanned,
         IReadOnlyList<GeneratedFile> Documents,
-        IReadOnlyList<string> Stale);
+        IReadOnlyList<string> Stale,
+        IReadOnlyList<DerivedFile> Derived,
+        IReadOnlyList<string> DerivedStale);
 
     /// <summary>
     ///     Runs the generator and parses its report.
@@ -202,7 +250,12 @@ partial class Build
             $"{GeneratorProject} has no built assembly. Run ./build.sh Compile first, in the same "
             + $"configuration ({Configuration}).");
 
-        var arguments = new List<string> { "--output", OpenApiDirectory, "--report", GenerationReportFile };
+        var arguments = new List<string>
+        {
+            "--output", OpenApiDirectory,
+            "--derived-output", DerivedSurfacesDirectory,
+            "--report", GenerationReportFile
+        };
 
         if (!write)
             arguments.Add("--check");
@@ -254,13 +307,27 @@ partial class Build
             .OrderBy(x => x.File, StringComparer.Ordinal)
             .ToList();
 
+        var derived = (root["derived"] as JsonArray ?? new JsonArray())
+            .Select(x => x!.AsObject())
+            .Select(x => new DerivedFile(
+                x["surface"]!.GetValue<string>(),
+                x["file"]!.GetValue<string>(),
+                x["apiVersion"]!.GetValue<string>(),
+                x["published"]!.GetValue<bool>(),
+                x["drifted"]!.GetValue<bool>(),
+                Strings(x["problems"])))
+            .OrderBy(x => x.File, StringComparer.Ordinal)
+            .ToList();
+
         return new(
             root["providers"]!.GetValue<int>(),
             root["resourceTypes"]!.GetValue<int>(),
             root["apiVersions"]!.GetValue<int>(),
             root["assembliesScanned"]!.GetValue<int>(),
             documents,
-            Strings(root["stale"]));
+            Strings(root["stale"]),
+            derived,
+            Strings(root["derivedStale"]));
     }
 
     static List<string> Strings(JsonNode? node) =>

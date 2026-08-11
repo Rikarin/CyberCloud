@@ -1,0 +1,434 @@
+{
+  "format": "1",
+  "apiVersion": "2026-08-01",
+  "generatedFrom": "openapi/2026-08-01.json",
+  "description": "The cyc verb tree at api-version 2026-08-01. Generated from the OpenAPI document — docs/plan/21 § Generation. Hand edits are overwritten by ./build.sh Generate and fail the Generated surfaces gate.",
+  "globalFlags": [
+    {
+      "name": "--output",
+      "type": "string",
+      "summary": "table for humans, json for scripts. tsv because cut exists.",
+      "choices": [
+        "table",
+        "json",
+        "yaml",
+        "tsv",
+        "none"
+      ],
+      "default": "table"
+    },
+    {
+      "name": "--query",
+      "type": "string",
+      "summary": "A JMESPath expression over the response — docs/plan/21 § Decisions."
+    },
+    {
+      "name": "--api-version",
+      "type": "string",
+      "summary": "Required on every request and defaulted to the version this tree was generated from. There is no 'latest' — docs/plan/10 § API versioning.",
+      "default": "2026-08-01"
+    }
+  ],
+  "exitCodes": {
+    "ok": 0,
+    "clientError": 1,
+    "usage": 2,
+    "auth": 3,
+    "serverError": 4,
+    "timeout": 5
+  },
+  "groups": {
+    "sample": {
+      "name": "sample",
+      "summary": "Commands for the CyberCloud.Sample provider.",
+      "commands": {
+        "widgets": {
+          "name": "widgets",
+          "resourceType": "CyberCloud.Sample/widgets",
+          "title": "Widget",
+          "plural": "Widgets",
+          "summary": "A ConfigMap with two fields in it.",
+          "verbs": {
+            "create": {
+              "name": "create",
+              "summary": "Create or replace a Widget.",
+              "method": "PUT",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Sample/widgets/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": true,
+              "flags": [
+                {
+                  "name": "--allowed-cidrs",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The ranges the widget claims to serve. Shape only; nothing enforces it.",
+                  "jsonPointer": "/properties/allowedCidrs",
+                  "repeated": true,
+                  "widget": "cidr",
+                  "example": [
+                    "10.0.0.0/8"
+                  ]
+                },
+                {
+                  "name": "--cluster-id",
+                  "type": "string",
+                  "required": true,
+                  "alias": "--cluster",
+                  "summary": "The cluster whose namespace holds the widget's ConfigMap.",
+                  "jsonPointer": "/properties/clusterId",
+                  "immutable": true,
+                  "widget": "cluster"
+                },
+                {
+                  "name": "--enabled",
+                  "type": "switch",
+                  "required": false,
+                  "summary": "Whether the widget is switched on. Defaults to off when absent.",
+                  "jsonPointer": "/properties/enabled",
+                  "default": false
+                },
+                {
+                  "name": "--location",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The region the widget is billed in.",
+                  "jsonPointer": "/location",
+                  "immutable": true,
+                  "widget": "region",
+                  "example": "eu-central"
+                },
+                {
+                  "name": "--message",
+                  "type": "string",
+                  "required": true,
+                  "summary": "What the ConfigMap's 'message' key says.",
+                  "jsonPointer": "/properties/message",
+                  "example": "hello"
+                },
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group."
+                },
+                {
+                  "name": "--replicas",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "How many copies of the ConfigMap's message the widget claims to hold.",
+                  "jsonPointer": "/properties/replicas",
+                  "default": 1
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy."
+                },
+                {
+                  "name": "--retired-on",
+                  "type": "string",
+                  "required": false,
+                  "summary": "When the widget was retired, or null while it is live.",
+                  "jsonPointer": "/properties/retiredOn",
+                  "nullable": true
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tags",
+                  "type": "keyValue",
+                  "required": false,
+                  "summary": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+                  "jsonPointer": "/tags",
+                  "widget": "tag-input"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--tier",
+                  "type": "string",
+                  "required": false,
+                  "summary": "How much the widget's ConfigMap is allowed to say.",
+                  "jsonPointer": "/properties/tier",
+                  "choices": [
+                    "free",
+                    "basic",
+                    "standard",
+                    "premium"
+                  ],
+                  "widget": "sku",
+                  "default": "free"
+                }
+              ],
+              "waitFlags": [
+                "--wait",
+                "--no-wait"
+              ]
+            },
+            "delete": {
+              "name": "delete",
+              "summary": "Delete a Widget. Permanent.",
+              "method": "DELETE",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Sample/widgets/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": true,
+              "flags": [
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group."
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy."
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "env": "CYC_TENANT"
+                }
+              ],
+              "waitFlags": [
+                "--wait",
+                "--no-wait"
+              ]
+            },
+            "ping": {
+              "name": "ping",
+              "summary": "ping a Widget.",
+              "method": "POST",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Sample/widgets/{resourceName}/ping",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--echo",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Text the response repeats back.",
+                  "jsonPointer": "/echo",
+                  "default": "pong"
+                },
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group."
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy."
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "env": "CYC_TENANT"
+                }
+              ],
+              "action": "ping",
+              "permission": "write"
+            },
+            "show": {
+              "name": "show",
+              "summary": "Read a Widget.",
+              "method": "GET",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Sample/widgets/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group."
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy."
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "env": "CYC_TENANT"
+                }
+              ]
+            },
+            "update": {
+              "name": "update",
+              "summary": "Amend a Widget. Only the flags given are changed.",
+              "method": "PATCH",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Sample/widgets/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": true,
+              "flags": [
+                {
+                  "name": "--allowed-cidrs",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The ranges the widget claims to serve. Shape only; nothing enforces it.",
+                  "jsonPointer": "/properties/allowedCidrs",
+                  "repeated": true,
+                  "widget": "cidr",
+                  "example": [
+                    "10.0.0.0/8"
+                  ]
+                },
+                {
+                  "name": "--cluster-id",
+                  "type": "string",
+                  "required": false,
+                  "alias": "--cluster",
+                  "summary": "The cluster whose namespace holds the widget's ConfigMap.",
+                  "jsonPointer": "/properties/clusterId",
+                  "immutable": true,
+                  "widget": "cluster"
+                },
+                {
+                  "name": "--enabled",
+                  "type": "switch",
+                  "required": false,
+                  "summary": "Whether the widget is switched on. Defaults to off when absent.",
+                  "jsonPointer": "/properties/enabled",
+                  "default": false
+                },
+                {
+                  "name": "--location",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The region the widget is billed in.",
+                  "jsonPointer": "/location",
+                  "immutable": true,
+                  "widget": "region",
+                  "example": "eu-central"
+                },
+                {
+                  "name": "--message",
+                  "type": "string",
+                  "required": false,
+                  "summary": "What the ConfigMap's 'message' key says.",
+                  "jsonPointer": "/properties/message",
+                  "example": "hello"
+                },
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group."
+                },
+                {
+                  "name": "--replicas",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "How many copies of the ConfigMap's message the widget claims to hold.",
+                  "jsonPointer": "/properties/replicas",
+                  "default": 1
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy."
+                },
+                {
+                  "name": "--retired-on",
+                  "type": "string",
+                  "required": false,
+                  "summary": "When the widget was retired, or null while it is live.",
+                  "jsonPointer": "/properties/retiredOn",
+                  "nullable": true
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tags",
+                  "type": "keyValue",
+                  "required": false,
+                  "summary": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+                  "jsonPointer": "/tags",
+                  "widget": "tag-input"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--tier",
+                  "type": "string",
+                  "required": false,
+                  "summary": "How much the widget's ConfigMap is allowed to say.",
+                  "jsonPointer": "/properties/tier",
+                  "choices": [
+                    "free",
+                    "basic",
+                    "standard",
+                    "premium"
+                  ],
+                  "widget": "sku",
+                  "default": "free"
+                }
+              ],
+              "waitFlags": [
+                "--wait",
+                "--no-wait"
+              ]
+            }
+          },
+          "alias": "widget"
+        }
+      }
+    }
+  }
+}

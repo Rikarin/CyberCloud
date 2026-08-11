@@ -1,6 +1,7 @@
 using CyberCloud.ResourceManager.Contracts.Registry;
 using System.Collections.Immutable;
 using System.Globalization;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 
 namespace CyberCloud.ResourceManager.Contracts.Generation;
@@ -157,7 +158,45 @@ public static class OpenApiEmitter {
             paths[resourcePath] = ResourcePathItem(type, component, retiresOn);
 
             foreach (var action in type.Actions.OrderBy(x => x.Name, StringComparer.Ordinal)) {
-                paths[resourcePath + "/" + action.Name] = ActionPathItem(type, action, retiresOn);
+                // ⚠ An action's request and response are components rather than inline schemas, for
+                // the reason every other body is one: an SDK generator names a model after the
+                // component key, and an inline schema gets an invented name that changes when the
+                // generator does.
+                var requestComponent = ActionComponentOf(component, action.Name, "Request");
+                var responseComponent = ActionComponentOf(component, action.Name, "Response");
+
+                if (action.Request is { } request) {
+                    schemas[requestComponent] = BodySchema(
+                        type.Type + "/" + action.Name,
+                        request,
+                        withTags: false,
+                        requestComponent,
+                        "The body of a POST to " + type.Type + "/" + action.Name + "."
+                    );
+                }
+
+                if (action.Response is { } response) {
+                    schemas[responseComponent] = BodySchema(
+                        type.Type + "/" + action.Name,
+                        response,
+                        withTags: false,
+                        responseComponent,
+                        "What " + type.Type + "/" + action.Name + " returns."
+                        + (action.Secret
+                            ? " ⚠ Secret material. docs/plan/08 § The provider registry makes a "
+                            + "secret action the only path a secret value leaves by; this schema is "
+                            + "therefore the complete list of what does."
+                            : string.Empty)
+                    );
+                }
+
+                paths[resourcePath + "/" + action.Name] = ActionPathItem(
+                    type,
+                    action,
+                    retiresOn,
+                    action.Request is null ? null : requestComponent,
+                    action.Response is null ? null : responseComponent
+                );
             }
         }
 
@@ -244,7 +283,11 @@ public static class OpenApiEmitter {
 
             types.Add(new JsonObject {
                 ["type"] = type.Type.ToString(),
-                ["apiVersions"] = declaredVersions
+                ["apiVersions"] = declaredVersions,
+                // The CLI's verb tree is built from this file rather than from every per-version
+                // document, so the name and the short form have to be here too — docs/plan/21
+                // § Grammar's alias table, generated.
+                ["display"] = Display(type)
             });
         }
 
@@ -363,16 +406,32 @@ public static class OpenApiEmitter {
             ["delete"] = new JsonObject {
                 ["operationId"] = OperationIdOf(type.Type, "Delete"),
                 ["summary"] = "Delete a " + type.Type + ".",
+                ["description"] = type.SoftDeleteDays > 0
+                    ? "A deleted "
+                    + type.Type
+                    + " is recoverable for "
+                    + type.SoftDeleteDays.ToString(CultureInfo.InvariantCulture)
+                    + " day(s) — docs/plan/06 § Tags, locks. ⚠ The recovery verb is not in this "
+                    + "document: nothing in the resource manager reads SoftDeleteDays yet, so this "
+                    + "is the window the platform promises and not a window it currently honours."
+                    : "The delete is permanent: this type declares no soft-delete window.",
                 ["responses"] = Accepted(),
-                ["x-cybercloud-permission"] = type.DeletePermission
+                ["x-cybercloud-permission"] = type.DeletePermission,
+                ["x-cybercloud-soft-delete-days"] = type.SoftDeleteDays
             },
             // Registry facts with no representation in a body. They are here rather than dropped
             // because the CLI and the portal-form emitters need them and this document is what
             // docs/plan/21 § Generation generates those from — and they are extensions rather than
             // properties because none of them is a field a caller sends.
             ["x-cybercloud-resource-type"] = type.Type.ToString(),
+            ["x-cybercloud-display"] = Display(type),
             ["x-cybercloud-supports-tags"] = type.SupportsTags,
             ["x-cybercloud-requires-cluster"] = type.RequiresCluster,
+            // ⚠ The pointer, not just the flag. `requires-cluster: true` told a generated surface
+            // that a cluster was needed and not which field carries it, so a CLI could not offer a
+            // --cluster flag and a form could not put the cluster picker on the right control. It is
+            // also the fact ProviderBuilder now checks the schema against.
+            ["x-cybercloud-cluster-id-pointer"] = type.ClusterIdPointer,
             ["x-cybercloud-soft-delete-days"] = type.SoftDeleteDays,
             // The quota meters a write draws against. A caller who is about to be told
             // QuotaExceeded (docs/plan/08 § Errors) can see which limit before sending.
@@ -380,6 +439,37 @@ public static class OpenApiEmitter {
         };
 
         return Deprecate(item, retiresOn);
+    }
+
+    /// <summary>
+    ///     What a type is called, for the surfaces a human reads.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>Always emitted, and it says whether anybody declared it.</b> A CLI verb tree and a
+    ///         portal breadcrumb need a name; the registry's fallback is the type's own path segment,
+    ///         which is what those surfaces would have invented anyway. Emitting the fallback here
+    ///         rather than in three downstream emitters means the three cannot invent three different
+    ///         names — and <c>declared: false</c> makes "nobody has named this type yet" a fact you can
+    ///         grep the published document for.
+    ///     </para>
+    ///     <para>
+    ///         The fallback for the plural is the singular, because English pluralisation is not
+    ///         computable — the same reason <c>GroupVersionKind.Plural</c> is carried rather than
+    ///         derived.
+    ///     </para>
+    /// </remarks>
+    static JsonObject Display(ResourceTypeRegistration type) {
+        var segment = type.Type.Type.Split('/')[^1];
+        var name = type.Display.Name.Length > 0 ? type.Display.Name : segment;
+
+        return new JsonObject {
+            ["name"] = name,
+            ["plural"] = type.Display.Plural.Length > 0 ? type.Display.Plural : name,
+            ["alias"] = type.Display.Alias,
+            ["summary"] = type.Display.Summary,
+            ["declared"] = !type.Display.IsEmpty
+        };
     }
 
     static JsonArray Meters(ResourceTypeRegistration type) {
@@ -420,10 +510,16 @@ public static class OpenApiEmitter {
         return item;
     }
 
+    /// <summary>The component key of an action's request or response schema.</summary>
+    static string ActionComponentOf(string typeComponent, string action, string role) =>
+        typeComponent + "." + Capitalise(action) + role;
+
     static JsonObject ActionPathItem(
         ResourceTypeRegistration type,
         ActionRegistration action,
-        DateOnly? retiresOn
+        DateOnly? retiresOn,
+        string? requestComponent,
+        string? responseComponent
     ) {
         if (action.Kind is not ActionKind.Post) {
             throw new InvalidOperationException(
@@ -434,38 +530,63 @@ public static class OpenApiEmitter {
             );
         }
 
-        var item = new JsonObject {
-            ["parameters"] = ResourceParameters(),
-            ["post"] = new JsonObject {
-                ["operationId"] = OperationIdOf(type.Type, Capitalise(action.Name)),
-                ["summary"] = action.Name + " a " + type.Type + ".",
-                ["description"] =
-                    "An action never creates: a POST to a name that does not exist is a 404 — "
-                    + "docs/plan/08 § The write path, end to end."
-                    + (action.Secret
-                        ? " ⚠ The response carries secret material. It is always audited and is never "
-                        + "cached — docs/plan/08 § The provider registry."
-                        : string.Empty),
-                ["responses"] = new JsonObject {
-                    ["200"] = new JsonObject {
-                        // ⚠ An unconstrained schema, and it is a reported registry gap rather than a
-                        // shrug: ActionRegistration carries a name, a kind, a permission and a secret
-                        // flag, and no request or response schema. There is nothing to narrow this to
-                        // without inventing it, and inventing it here is exactly how the registry
-                        // stops being the single source.
-                        ["description"] =
-                            "The action's result. ⚠ Unconstrained: the registry declares no request or "
-                            + "response schema for an action, so no generated surface can type this.",
-                        ["content"] = new JsonObject {
-                            ["application/json"] = new JsonObject {
-                                ["schema"] = new JsonObject()
-                            }
+        var post = new JsonObject {
+            ["operationId"] = OperationIdOf(type.Type, Capitalise(action.Name)),
+            ["summary"] = action.Name + " a " + type.Type + ".",
+            ["description"] =
+                "An action never creates: a POST to a name that does not exist is a 404 — "
+                + "docs/plan/08 § The write path, end to end."
+                + (action.Secret
+                    ? " ⚠ The response carries secret material. It is always audited and is never "
+                    + "cached — docs/plan/08 § The provider registry."
+                    : string.Empty)
+                + (action.LongRunning
+                    ? " This action is long-running: it answers 202 and an operation to poll, like "
+                    + "every other write."
+                    : string.Empty)
+        };
+
+        if (requestComponent is { }) {
+            post["requestBody"] = new JsonObject {
+                ["required"] = true,
+                ["content"] = new JsonObject {
+                    ["application/json"] = new JsonObject {
+                        ["schema"] = Ref("schemas", requestComponent)
+                    }
+                }
+            };
+        }
+
+        // ⚠ Long-running actions answer 202 and nothing else, exactly as a PUT does — there is one
+        // long-running shape in this platform and an action that does work is not a second one.
+        post["responses"] = action.LongRunning
+            ? Accepted()
+            : new JsonObject {
+                ["200"] = new JsonObject {
+                    ["description"] = responseComponent is null
+                        // ⚠ Still reported rather than invented, for an action whose author has not
+                        // declared a response. The registry can now say; this one has not.
+                        ? "The action's result. ⚠ Unconstrained: this action declares no response "
+                        + "schema, so no generated surface can type it. Declare one on "
+                        + "IResourceTypeBuilder.Action."
+                        : "The action's result.",
+                    ["content"] = new JsonObject {
+                        ["application/json"] = new JsonObject {
+                            ["schema"] = responseComponent is null
+                                ? new JsonObject()
+                                : Ref("schemas", responseComponent)
                         }
                     }
-                }.WithErrors(),
-                ["x-cybercloud-permission"] = action.Permission,
-                ["x-cybercloud-secret"] = action.Secret
-            },
+                }
+            }.WithErrors();
+
+        post["x-cybercloud-permission"] = action.Permission;
+        post["x-cybercloud-secret"] = action.Secret;
+        post["x-cybercloud-long-running"] = action.LongRunning;
+
+        var item = new JsonObject {
+            ["parameters"] = ResourceParameters(),
+            ["post"] = post,
             ["x-cybercloud-resource-type"] = type.Type.ToString(),
             ["x-cybercloud-action"] = action.Name
         };
@@ -579,13 +700,57 @@ public static class OpenApiEmitter {
     ///         </item>
     ///     </list>
     /// </remarks>
-    static JsonObject SchemaOf(ResourceTypeRegistration type, ResourceSchema schema) {
+    static JsonObject SchemaOf(ResourceTypeRegistration type, ResourceSchema schema) =>
+        BodySchema(
+            type.Type.ToString(),
+            schema,
+            type.SupportsTags,
+            type.Type.ToString(),
+            "The body of a " + type.Type + ". Generated from the provider registry's schema, which is "
+            + "the same object the write path validates against — docs/plan/08 § The provider registry."
+        );
+
+    /// <summary>
+    ///     One <see cref="ResourceSchema" /> as a JSON Schema object — a resource body, or an action's
+    ///     request or response.
+    /// </summary>
+    /// <param name="owner">What to name in an error message when the schema cannot be expressed.</param>
+    /// <param name="schema">The registry's schema.</param>
+    /// <param name="withTags">Whether the platform's tag bag belongs in it.</param>
+    /// <param name="title">The <c>title</c> keyword.</param>
+    /// <param name="description">The <c>description</c> keyword.</param>
+    /// <remarks>
+    ///     ⚠ <b>An action's body goes through the same method as a resource's, and that is the point of
+    ///     giving <c>ActionRegistration</c> schemas at all.</b> An action's parameters are now
+    ///     described, constrained and generated by exactly the machinery a resource's properties are,
+    ///     rather than by a second convention nobody would keep in step.
+    /// </remarks>
+    static JsonObject BodySchema(
+        string owner,
+        ResourceSchema schema,
+        bool withTags,
+        string title,
+        string description
+    ) {
         var byParent = new Dictionary<string, List<SchemaProperty>>(StringComparer.Ordinal);
 
         foreach (var property in schema.Properties) {
+            // ⚠ Re-checked here even though ResourceSchema.Of already refuses one, because a schema
+            // can be built by object initialiser and reach an emitter without passing through Of. A
+            // constraint that contradicts its kind reaches the document as a keyword no validator will
+            // apply — a promise the write path does not keep.
+            var incoherences = property.Incoherences();
+
+            if (!incoherences.IsEmpty) {
+                throw new InvalidOperationException(
+                    $"'{owner}' declares '{property.JsonPointer}' incoherently: "
+                    + string.Join(" ", incoherences)
+                );
+            }
+
             if (property.Kind is SchemaKind.Unknown) {
                 throw new InvalidOperationException(
-                    $"'{type.Type}' declares '{property.JsonPointer}' with SchemaKind.Unknown, which is "
+                    $"'{owner}' declares '{property.JsonPointer}' with SchemaKind.Unknown, which is "
                     + "the never-assigned member. A property with no kind cannot be validated or "
                     + "generated."
                 );
@@ -593,7 +758,7 @@ public static class OpenApiEmitter {
 
             if (property.Required && property.ReadOnly) {
                 throw new InvalidOperationException(
-                    $"'{type.Type}' declares '{property.JsonPointer}' as both required and read-only. "
+                    $"'{owner}' declares '{property.JsonPointer}' as both required and read-only. "
                     + "Required means required on a PUT and read-only means refused on a PUT, so every "
                     + "PUT would fail twice over — see the remarks on SchemaProperty."
                 );
@@ -613,7 +778,7 @@ public static class OpenApiEmitter {
 
                 if (parent is null) {
                     throw new InvalidOperationException(
-                        $"'{type.Type}' declares '{property.JsonPointer}' but not its parent "
+                        $"'{owner}' declares '{property.JsonPointer}' but not its parent "
                         + $"'{property.ParentPointer}'. ResourceSchema.Validate refuses every undeclared "
                         + "pointer, so the parent is rejected and this property is unreachable — every "
                         + "request would fail whatever it sent."
@@ -622,8 +787,8 @@ public static class OpenApiEmitter {
 
                 if (parent.Value.Kind is not SchemaKind.Nested) {
                     throw new InvalidOperationException(
-                        $"'{type.Type}' declares '{property.JsonPointer}' inside "
-                        + $"'{property.ParentPointer}', which is a {JsonTypeOf(parent.Value.Kind)} and "
+                        $"'{owner}' declares '{property.JsonPointer}' inside "
+                        + $"'{property.ParentPointer}', which is a {SchemaVocabulary.JsonTypeOf(parent.Value.Kind)} and "
                         + "not an object. Only a SchemaKind.Nested property can carry members."
                     );
                 }
@@ -638,13 +803,49 @@ public static class OpenApiEmitter {
         }
 
         var root = ObjectAt(string.Empty, byParent, schema.RejectsUnknownProperties);
-        root["title"] = type.Type.ToString();
-        root["description"] =
-            "The body of a " + type.Type + ". Generated from the provider registry's schema, which is "
-            + "the same object the write path validates against — docs/plan/08 § The provider registry.";
+
+        if (withTags) {
+            // ⚠ THE fix, and the reason this branch exists at all. The write path accepts a root-level
+            // `tags` object for a type that declares SupportsTags (ResourceSchema.Validate's allowTags)
+            // and a schema declares only the provider's own properties — so the emitted body said
+            // `additionalProperties: false` and named no `tags`, over an API that took one. The
+            // published document under-described the API in the one direction that matters: a
+            // generated SDK had no member, a generated CLI no flag, a generated form no control, and a
+            // caller reading the contract would have concluded tags were not supported.
+            if (root["properties"] is JsonObject members) {
+                members[TagRules.Name] = TagsSchema();
+                root["properties"] = Sorted(members);
+            }
+        }
+
+        root["title"] = title;
+        root["description"] = description;
 
         return Sorted(root);
     }
+
+    /// <summary>
+    ///     The platform's tag bag, identical for every type that declares <c>SupportsTags</c>.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ Every number and name here is <see cref="TagRules" />', which the resource grain's cap
+    ///     also reads. <c>maxProperties</c> is a true statement about the API rather than about
+    ///     <see cref="ResourceSchema.Validate" />: the cap applies to the <i>merged</i> tag set and is
+    ///     enforced by the grain, because a <c>PATCH</c> adding one tag to forty-nine is the request
+    ///     that crosses it and the schema only ever sees the patch.
+    /// </remarks>
+    static JsonObject TagsSchema() =>
+        new() {
+            ["type"] = "object",
+            ["description"] =
+                "Key/value tags, at most "
+                + TagRules.MaxTags.ToString(CultureInfo.InvariantCulture)
+                + " pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the "
+                + "merged set, so a PATCH that adds one tag to a full bag is refused.",
+            ["additionalProperties"] = new JsonObject { ["type"] = "string" },
+            ["maxProperties"] = TagRules.MaxTags,
+            ["x-cybercloud-widget"] = SchemaVocabulary.Of(WidgetHint.TagInput)
+        };
 
     static JsonObject ObjectAt(
         string pointer,
@@ -685,15 +886,45 @@ public static class OpenApiEmitter {
         Dictionary<string, List<SchemaProperty>> byParent,
         bool rejectsUnknown
     ) {
-        var node = property.Kind is SchemaKind.Nested
-            ? ObjectAt(property.JsonPointer, byParent, rejectsUnknown)
-            : new JsonObject { ["type"] = JsonTypeOf(property.Kind) };
+        JsonObject node;
 
-        if (property.Kind is SchemaKind.Array) {
-            // ⚠ Unconstrained, and reported: SchemaKind's own remarks say "element shape is not
-            // modelled; that is a later api-version's problem". An `items` this emitter made up would
-            // be a claim the write path does not check.
-            node["items"] = new JsonObject();
+        switch (property.Kind) {
+            case SchemaKind.Nested:
+                node = ObjectAt(property.JsonPointer, byParent, rejectsUnknown);
+                break;
+
+            case SchemaKind.Array:
+                node = new JsonObject {
+                    ["type"] = "array",
+                    // ⚠ Typed, at last. `items: {}` reached an SDK generator as `object[]` and gave a
+                    // CLI no way to type a repeated flag. The value constraints — enum, format,
+                    // pattern, bounds — belong on the element rather than on the array, which is also
+                    // where ResourceSchema.Validate applies them.
+                    ["items"] = Sorted(
+                        Constrained(
+                            new JsonObject { ["type"] = SchemaVocabulary.JsonTypeOf(property.ElementKind) },
+                            property
+                        )
+                    )
+                };
+
+                break;
+
+            default:
+                node = Constrained(
+                    new JsonObject { ["type"] = SchemaVocabulary.JsonTypeOf(property.Kind) },
+                    property
+                );
+
+                break;
+        }
+
+        if (property.Nullable) {
+            // OpenAPI 3.1 is JSON Schema 2020-12, where nullability is a type union rather than 3.0's
+            // `nullable: true`. ⚠ The union is on the property and never on an array's `items`: a
+            // nullable array may be absent-as-null, and a null *element* is a separate declaration
+            // this model deliberately does not have — see ResourceSchema.ValueProblems.
+            node["type"] = new JsonArray { node["type"]?.DeepClone(), "null" };
         }
 
         if (property.Description.Length > 0) {
@@ -712,22 +943,102 @@ public static class OpenApiEmitter {
             node["x-cybercloud-secret"] = true;
         }
 
+        if (property.Widget is not WidgetHint.None) {
+            // ADR-012's promised hint, and the first time the registry has had anywhere to put one.
+            node["x-cybercloud-widget"] = SchemaVocabulary.Of(property.Widget);
+        }
+
+        if (property.Immutable) {
+            node["x-cybercloud-immutable"] = true;
+        }
+
+        if (Literal(property.DefaultJson) is { } fallback) {
+            node["default"] = fallback;
+        }
+
+        if (Literal(property.ExampleJson) is { } example) {
+            node["example"] = example;
+        }
+
         return Sorted(node);
     }
 
-    static string JsonTypeOf(SchemaKind kind) =>
-        kind switch {
-            SchemaKind.Text => "string",
-            SchemaKind.Number => "number",
-            SchemaKind.WholeNumber => "integer",
-            SchemaKind.Boolean => "boolean",
-            SchemaKind.Nested => "object",
-            SchemaKind.Array => "array",
-            _ => throw new InvalidOperationException(
-                $"SchemaKind.{kind} has no JSON type. Every member but Unknown maps to one — see the "
-                + "remarks on SchemaKind."
-            )
-        };
+    /// <summary>
+    ///     Adds the value constraints — the keywords that narrow what a scalar may be.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Every keyword here is one <see cref="ResourceSchema.Validate" /> enforces.</b> That is
+    ///     the whole claim: a caller reading the document and the write path refusing a body are
+    ///     reading one declaration. A keyword emitted here that the validator did not apply would be
+    ///     the drift ADR-012 exists to remove, pointing the other way — documentation the runtime does
+    ///     not honour.
+    /// </remarks>
+    static JsonObject Constrained(JsonObject node, SchemaProperty property) {
+        if (!property.AllowedValues.IsEmpty) {
+            var values = new JsonArray();
+
+            // ⚠ Declaration order, not sorted. `enum` is a set to the compatibility diff, so order
+            // carries no contract — but it is the order a provider wrote and therefore the order a
+            // generated CLI's completion and a portal's select will show, and re-ordering it would
+            // move `standard` above `basic` in every dropdown for no reason.
+            foreach (var allowed in property.AllowedValues) {
+                values.Add(allowed);
+            }
+
+            node["enum"] = values;
+        }
+
+        if (SchemaVocabulary.Of(property.Format) is { Length: > 0 } format) {
+            node["format"] = format;
+        }
+
+        if (property.Minimum is { } low) {
+            node["minimum"] = low;
+        }
+
+        if (property.Maximum is { } high) {
+            node["maximum"] = high;
+        }
+
+        if (property.MinLength is { } shortest) {
+            node["minLength"] = shortest;
+        }
+
+        if (property.MaxLength is { } longest) {
+            node["maxLength"] = longest;
+        }
+
+        if (property.Pattern.Length > 0) {
+            // ⚠ Anchored in the document because it is anchored in the validator. JSON Schema's
+            // `pattern` is a search; ours is a whole-value match, and emitting the bare pattern would
+            // publish a looser rule than the one the API applies.
+            node["pattern"] = "^(?:" + property.Pattern + ")$";
+        }
+
+        return node;
+    }
+
+    /// <summary>A declared JSON literal, or <see langword="null" /> when there is none.</summary>
+    /// <exception cref="InvalidOperationException">The literal is not JSON.</exception>
+    /// <remarks>
+    ///     ⚠ Parsed rather than pasted. A literal that is not JSON would make the emitted document
+    ///     unparseable, and a generator that produced a broken file would be found by whoever opened
+    ///     it rather than by the run that produced it.
+    /// </remarks>
+    static JsonNode? Literal(string literal) {
+        if (literal.Length == 0) {
+            return null;
+        }
+
+        try {
+            return JsonNode.Parse(literal);
+        } catch (JsonException malformed) {
+            throw new InvalidOperationException(
+                $"'{literal}' is declared as a JSON literal and does not parse: {malformed.Message}",
+                malformed
+            );
+        }
+    }
 
     // ── The platform envelope ──────────────────────────────────────────────────────────────────
 
@@ -802,52 +1113,93 @@ public static class OpenApiEmitter {
         };
 
     /// <summary>
-    ///     The error responses every operation can produce.
+    ///     The error responses every operation can produce, one per status any registered
+    ///     <see cref="ErrorCode" /> maps onto.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>The status codes are this emitter's, and that is a reported gap.</b>
-    ///     <see cref="ErrorCode" /> is a closed, checked-in registry of stable identifiers and it
-    ///     carries no HTTP status; docs/plan/07 § The enforcement seam fixes 404-versus-403 and
-    ///     docs/plan/10 § API versioning fixes the 400, but nothing in the tree maps the other
-    ///     twenty-odd codes onto a status. So this list is the plan's prose rendered once, here, and
-    ///     the gateway will have to agree with it by hand until the mapping moves into
-    ///     <see cref="ErrorCode" /> where the generator could read it.
+    ///     <para>
+    ///         ⚠ <b>Derived from <see cref="ErrorCode.HttpStatuses" />, and it used to be a list
+    ///         written here from the plan's prose.</b> That was a reported gap: the emitter and the
+    ///         gateway would each have carried a copy of the code-to-status mapping and would have had
+    ///         to agree by hand. <see cref="ErrorCode.HttpStatus" /> is now where it lives, so adding a
+    ///         code with a status nothing else uses adds the response to every operation in every
+    ///         document without anybody editing this method.
+    ///     </para>
+    ///     <para>
+    ///         <b>Each response names the codes that produce it</b>, in
+    ///         <c>x-cybercloud-error-codes</c>. A caller handling a <c>409</c> can see the five things
+    ///         that mean, which is the difference between a retry that helps and one that hammers.
+    ///     </para>
     /// </remarks>
-    static JsonObject Responses() =>
-        new() {
-            ["BadRequest"] = ErrorResponse(
-                "The request is malformed: an invalid body, an unknown property, a missing or "
-                + "unparseable api-version."
-            ),
-            ["Conflict"] = ErrorResponse(
-                "The write conflicts: the name is taken, an operation is already running, the scope is "
-                + "locked, or a precondition failed."
-            ),
-            ["Forbidden"] = ErrorResponse(
-                "The caller can read the resource but may not perform this action — "
-                + "docs/plan/07 § The enforcement seam."
-            ),
-            ["InternalServerError"] = ErrorResponse(
-                "An internal error. ⚠ Never carries exception detail: the correlation id is in the "
-                + "response header and the detail is in the trace — docs/plan/08 § Errors."
-            ),
-            ["NotFound"] = ErrorResponse(
-                "The resource does not exist, or the caller may not read it. ⚠ The two are "
-                + "deliberately indistinguishable — docs/plan/07 § The enforcement seam."
-            ),
-            ["TooManyRequests"] = ErrorResponse(
-                "The caller is being rate limited — docs/plan/10 § Rate limiting."
+    static JsonObject Responses() {
+        var responses = new JsonObject();
+
+        foreach (var status in ErrorCode.HttpStatuses) {
+            var codes = new JsonArray();
+
+            foreach (var code in ErrorCode.WithStatus(status)
+                         .Select(x => x.Value)
+                         .OrderBy(x => x, StringComparer.Ordinal)) {
+                codes.Add(code);
+            }
+
+            responses[ResponseNameOf(status)] = ErrorResponse(StatusDescription(status), codes);
+        }
+
+        return responses;
+    }
+
+    /// <summary>
+    ///     The component key one status's response is published under. ⚠ Stable: it is the target of a
+    ///     <c>$ref</c> in every operation, so renaming one is a breaking change to every path.
+    /// </summary>
+    internal static string ResponseNameOfPublic(int status) => ResponseNameOf(status);
+
+    static string ResponseNameOf(int status) =>
+        status switch {
+            400 => "BadRequest",
+            403 => "Forbidden",
+            404 => "NotFound",
+            409 => "Conflict",
+            412 => "PreconditionFailed",
+            429 => "TooManyRequests",
+            500 => "InternalServerError",
+            _ => throw new InvalidOperationException(
+                $"An ErrorCode maps onto HTTP {status.ToString(CultureInfo.InvariantCulture)} and this "
+                + "emitter has no component name for it. A new status needs a name here, because the "
+                + "name is the $ref target every operation in every published document points at."
             )
         };
 
-    static JsonObject ErrorResponse(string description) =>
+    /// <summary>What a status means on this platform, beyond what HTTP already says.</summary>
+    static string StatusDescription(int status) =>
+        status switch {
+            400 => "The request is malformed: an invalid body, an unknown property, a missing or "
+                   + "unparseable api-version.",
+            403 => "The caller can read the resource but may not perform this action — "
+                   + "docs/plan/07 § The enforcement seam.",
+            404 => "The resource does not exist, or the caller may not read it. ⚠ The two are "
+                   + "deliberately indistinguishable — docs/plan/07 § The enforcement seam.",
+            409 => "The write conflicts: the name is taken, an operation is already running, or the "
+                   + "scope is locked.",
+            412 => "An If-Match etag did not match — docs/plan/06 § Tags, locks. A conditional retry "
+                   + "keys on this rather than on the 409.",
+            429 => "The caller is being rate limited, or a quota meter would be exceeded — "
+                   + "docs/plan/10 § Rate limiting and docs/plan/06 § Quota.",
+            500 => "An internal error. ⚠ Never carries exception detail: the correlation id is in the "
+                   + "response header and the detail is in the trace — docs/plan/08 § Errors.",
+            _ => "An error."
+        };
+
+    static JsonObject ErrorResponse(string description, JsonArray codes) =>
         new() {
             ["description"] = description,
             ["content"] = new JsonObject {
                 ["application/json"] = new JsonObject {
                     ["schema"] = Ref("schemas", ErrorResponseSchema)
                 }
-            }
+            },
+            ["x-cybercloud-error-codes"] = codes
         };
 
     /// <summary>
@@ -867,6 +1219,16 @@ public static class OpenApiEmitter {
             states.Add(state);
         }
 
+        // ⚠ Code → status, published. Before ErrorCode carried a status this mapping existed only as
+        // prose in two plan documents and as a literal list inside this emitter, so a gateway and a
+        // generated client had to agree with it by hand. It is an x- extension because a client that
+        // switches on the code needs it and the compatibility diff treats a hint as prose — a code's
+        // status moving is caught by the response list changing, which is contract.
+        var statuses = new JsonObject();
+        foreach (var code in ErrorCode.All.OrderBy(x => x.Value, StringComparer.Ordinal)) {
+            statuses[code.Value] = code.HttpStatus;
+        }
+
         return new JsonObject {
             [ErrorCodeSchema] = new JsonObject {
                 ["type"] = "string",
@@ -874,7 +1236,8 @@ public static class OpenApiEmitter {
                     "A stable, documented, greppable identifier. ⚠ It is part of the API contract and "
                     + "changing one is a breaking change — docs/plan/08 § Errors. The closed set is "
                     + "CyberCloud.Core.ErrorCode.All.",
-                ["enum"] = codes
+                ["enum"] = codes,
+                ["x-cybercloud-http-status"] = statuses
             },
             [ErrorSchema] = new JsonObject {
                 ["type"] = "object",
@@ -1019,22 +1382,28 @@ public static class OpenApiEmitter {
 /// <summary>Small extensions that keep the emitter's literals readable.</summary>
 static class OpenApiEmitterExtensions {
     /// <summary>
-    ///     Adds the six error responses to a <c>responses</c> object, plus a <c>default</c>.
+    ///     Adds one error response per status any <see cref="ErrorCode" /> maps onto, plus a
+    ///     <c>default</c>.
     /// </summary>
     /// <remarks>
-    ///     <c>default</c> as well as the six because docs/plan/08 § Errors makes the body's shape
-    ///     universal but the code-to-status mapping is not written down anywhere — so a generated SDK
-    ///     gets typed errors for the statuses we are sure of and a correctly-shaped fallback for the
-    ///     rest, rather than an untyped stream for one that surprised it.
+    ///     ⚠ <b>Read off <see cref="ErrorCode.HttpStatuses" />, not written out.</b> The list used to
+    ///     be six literals here, and the mapping they encoded lived nowhere a gateway or a generator
+    ///     could read — the emitter's own remarks reported it as a gap. Now a code and its status are
+    ///     declared together and every surface reads the same declaration.
+    ///     <para>
+    ///         <c>default</c> as well, because a status a future release adds should reach an existing
+    ///         generated client as a correctly-shaped error rather than as an untyped stream.
+    ///     </para>
     /// </remarks>
     public static JsonObject WithErrors(this JsonObject responses) {
-        responses["400"] = Reference("BadRequest");
-        responses["403"] = Reference("Forbidden");
-        responses["404"] = Reference("NotFound");
-        responses["409"] = Reference("Conflict");
-        responses["429"] = Reference("TooManyRequests");
-        responses["500"] = Reference("InternalServerError");
-        responses["default"] = Reference("InternalServerError");
+        ArgumentNullException.ThrowIfNull(responses);
+
+        foreach (var status in ErrorCode.HttpStatuses) {
+            responses[status.ToString(CultureInfo.InvariantCulture)] =
+                Reference(OpenApiEmitter.ResponseNameOfPublic(status));
+        }
+
+        responses["default"] = Reference(OpenApiEmitter.ResponseNameOfPublic(500));
         return responses;
     }
 
