@@ -52,6 +52,10 @@
     <Project Path="src/CyberCloud.Authorization.Contracts.Tests/CyberCloud.Authorization.Contracts.Tests.csproj" />
     <Project Path="src/CyberCloud.Authorization/CyberCloud.Authorization.csproj" />
     <Project Path="src/CyberCloud.Authorization.Tests/CyberCloud.Authorization.Tests.csproj" />
+    <Project Path="src/CyberCloud.Kubernetes.Contracts/CyberCloud.Kubernetes.Contracts.csproj" />
+    <Project Path="src/CyberCloud.Kubernetes.Contracts.Tests/CyberCloud.Kubernetes.Contracts.Tests.csproj" />
+    <Project Path="src/CyberCloud.Kubernetes/CyberCloud.Kubernetes.csproj" />
+    <Project Path="src/CyberCloud.Kubernetes.Tests/CyberCloud.Kubernetes.Tests.csproj" />
   </Folder>
   <Folder Name="/src/Providers/" />
 
