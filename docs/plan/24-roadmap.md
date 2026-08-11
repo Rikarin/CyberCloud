@@ -154,7 +154,7 @@ Written now, so that under pressure the decision is a lookup rather than an argu
 | 4 | CDN / http-cache | Honest anyway — we have no PoPs | 1.0 |
 | 5 | MariaDB, OpenSearch, Qdrant | Catalogue breadth | 2.4 |
 | 6 | Terraform provider | Enterprise adoption friction. ⚠ Cutting this hurts more than it looks | 1.5 |
-| 7 | **The whole Mail module** | A differentiator, and an abuse-desk commitment ([17](17-communication-and-email.md)) we may not want | 3.5 |
+| 7 | ~~**The whole Mail module**~~ | ⚠ **Removed from the cut list 2026-08-11.** The reason it was cuttable was "an abuse-desk commitment we may not want"; the desk is now staffed, so the commitment is made and the module is in. Cutting Mail *after* staffing an abuse desk would be paying the operational cost and keeping none of the differentiation | ~~3.5~~ |
 | 8 | Security posture | A nice-to-have score | 1.5 |
 | 9 | Region migration | One region until someone pays for two | 1.0 |
 | 10 | Kafka | Strimzi is the heaviest to operate; NATS covers most needs | 1.2 |
@@ -167,10 +167,52 @@ that makes something look like a good cut under deadline pressure and be the wro
 ## The three decisions that must be made before phase 2 starts
 
 Each is a business decision with an engineering consequence, and each blocks work if it is left open.
+**Two are now answered. Answered 2026-08-11.**
 
-1. **Do we run public authoritative DNS ourselves, or front a wholesale provider?**
-   ([14](14-networking.md)) — decides whether anycast nameservers are in the infrastructure plan.
-2. **Are we prepared to staff an abuse desk?** ([17](17-communication-and-email.md)) — decides whether
-   the Mail module is built at all. Building it without staffing it is the worst outcome.
-3. **LINBIT support contract for LINSTOR/DRBD?** (ADR-011) — decides whether customer data goes onto
-   DRBD in M1 or whether M1 uses a simpler storage class.
+1. ✅ **Public authoritative DNS: we run it.** ([14](14-networking.md)) Anycast nameservers are in the
+   infrastructure plan. The provider is 1.5 EM; ⚠ the *operations* are the cost, and that half is now
+   a standing commitment — DDoS absorption, and being the reason a customer's whole business is
+   offline when it breaks.
+2. ✅ **The abuse desk is staffed, so `CyberCloud.Mail` is built.** ([17](17-communication-and-email.md))
+   3.5 EM stays in M2 and comes off the cut list's seventh row. ⚠ The commitment that comes with it is
+   operational and starts before the first domain sends: `abuse@` monitored by a human **with the
+   authority to suspend a tenant within the hour**, feedback loops registered per outbound IP, RBL
+   monitoring alerting to on-call, and a ~4-week warm-up on every new address. Skipping the warm-up
+   gets the IP blocked in a day. And the cheap thing that is easy to forget:
+   **the platform's own transactional sending IPs are separate from tenant sending IPs**, so a
+   tenant's reputation problem cannot take down our OTPs.
+3. ⏳ **LINBIT support contract for LINSTOR/DRBD?** (ADR-011) — still open, and **not urgent**.
+   It decides whether customer data goes onto DRBD in M1 or whether M1 uses a simpler storage class.
+   ⚠ The licences are not the question — GPL-2/GPL-3 restrict distribution, not use, so *running*
+   LINSTOR and DRBD as a service is fine either way. The question is **support on a synchronous
+   block-replication layer sitting underneath customer data**, where a bad failover is a data-loss
+   event rather than a slow page. See [§ The LINBIT decision, deferred](#the-linbit-decision-deferred).
+
+### The LINBIT decision, deferred
+
+**Taking this document's own default: M1 uses a simpler storage class, and the contract question is
+revisited before the first *paying* customer's data lands on replicated block storage.**
+
+Why deferring is safe rather than lazy:
+
+- M1 tenants are **design partners on manual contracts** ([22 § Effort](22-billing-metering-and-quota.md)),
+  so the blast radius of a storage incident is a conversation, not a claim.
+- Nothing in M1's exit story ([§ Phase 2](#phase-2--m1-a-tenant-can-log-in-and-run-something)) needs
+  *replicated* block storage. It needs storage that works.
+- Buying support now means buying it against a guessed node count. The quote is per-node and the
+  number is unknown until the fabric is real.
+
+⚠ **What the deferral actually costs, so it is a decision and not an omission.** LINSTOR is what
+[15 § Block storage](15-storage-blob-file.md) and [13 § Virtual Machines](13-compute-vm-containers.md)
+name for KubeVirt disks, and `kubevirt-csi` in [09](09-kubernetes-fabric.md) is specified against it.
+A simpler class for M1 means either accepting **no replication** — a node loss loses that node's
+volumes — or standing up an alternative, and [15 § Object storage](15-storage-blob-file.md) already
+warns that the obvious alternative, Ceph, "is an order of magnitude more operational work — a Ceph
+cluster is a full-time role". So the M1 choice is realistically local-path with no replication and
+VMs that do not survive a node loss, which is acceptable for design partners and is **not** acceptable
+at GA.
+
+**The trigger to decide, written down so it is not missed:** before any customer who is *paying*
+has data on replicated block storage. At that point the inputs exist — real node count, real workload,
+a real quote — and the answer is likely yes, because LINBIT's support is how DRBD is funded and the
+failure mode it covers is the one nobody debugs from documentation.
