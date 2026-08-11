@@ -43,8 +43,10 @@ public sealed class ReferenceCase : IProviderCaseSource {
 public sealed class ReferenceProviderConformance(ProviderTestCluster<ReferenceCase> cluster)
     : ProviderConformanceTests<ReferenceCase>(cluster), IClassFixture<ProviderTestCluster<ReferenceCase>>;
 
-/// <summary>The container-backed half, skipped loudly, against the reference provider.</summary>
-public sealed class ReferenceProviderClusterConformance()
+/// <summary>
+///     The signpost to the container-backed half, which runs in <c>CyberCloud.Cluster.Conformance</c>.
+/// </summary>
+public sealed class ReferenceProviderClusterSignpost()
     : ClusterBackedConformanceTests(ReferenceCase.ProviderCase);
 
 /// <summary>

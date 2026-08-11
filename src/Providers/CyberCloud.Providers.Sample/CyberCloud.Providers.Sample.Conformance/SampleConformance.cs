@@ -64,5 +64,8 @@ public sealed class SampleCase : IProviderCaseSource {
 public sealed class SampleWidgetConformance(ProviderTestCluster<SampleCase> cluster)
     : ProviderConformanceTests<SampleCase>(cluster), IClassFixture<ProviderTestCluster<SampleCase>>;
 
-/// <summary>The container-backed half, skipped loudly, against the sample provider.</summary>
-public sealed class SampleWidgetClusterConformance() : ClusterBackedConformanceTests(SampleCase.ProviderCase);
+/// <summary>
+///     The signpost to the container-backed half, which runs in
+///     <c>CyberCloud.Providers.Sample.Cluster.Conformance</c>.
+/// </summary>
+public sealed class SampleWidgetClusterSignpost() : ClusterBackedConformanceTests(SampleCase.ProviderCase);

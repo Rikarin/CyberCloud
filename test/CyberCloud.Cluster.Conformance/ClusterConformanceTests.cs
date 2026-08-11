@@ -1,0 +1,761 @@
+using CyberCloud.Cluster.Conformance.Infrastructure;
+using CyberCloud.Conformance.Harness;
+using CyberCloud.ResourceManager;
+using CyberCloud.ResourceManager.Drift;
+using CyberCloud.ResourceManager.Reconcile;
+using CyberCloud.ServiceDefaults.Storage;
+using k8s.Models;
+using System.Collections.Immutable;
+using System.Globalization;
+using System.Text.Json;
+using System.Text.Json.Nodes;
+
+namespace CyberCloud.Cluster.Conformance;
+
+/// <summary>
+///     The four cluster-backed criteria of docs/plan/03 § Providers, run against a <b>real</b> API
+///     server and a <b>real</b> durable tier.
+/// </summary>
+/// <remarks>
+///     <para>
+///         ⚠ <b>These four replace four <c>Assert.Skip</c>s, and the replacement has to be worth
+///         more than the skip.</b> <c>ClusterBackedConformanceTests</c> named two dishonest options
+///         and refused both: deleting the test leaves a suite that is green because it asked less,
+///         and re-pointing it at the in-memory harness leaves a suite that is green because it
+///         asserted something weaker under the same name. So each test below asserts exactly what
+///         its skip message said it would, and every assertion is read <b>around</b> our own code —
+///         with the raw <c>KubernetesClient</c> against the API server, and with plain SQL against
+///         PostgreSQL.
+///     </para>
+///     <para>
+///         ⚠ <b>To add a provider, do not touch this file.</b> Write a <c>ProviderConformanceCase</c>
+///         — the same one the Docker-free suite already takes — declare an <c>IProviderCaseSource</c>
+///         for it, and derive one class from this one in that provider's own
+///         <c>.Cluster.Conformance</c> project.
+///     </para>
+/// </remarks>
+/// <typeparam name="TSource">The provider under test.</typeparam>
+/// <param name="fixture">The harness.</param>
+public abstract class ClusterConformanceTests<TSource>(ClusterConformanceFixture<TSource> fixture)
+    where TSource : IProviderCaseSource {
+    const int MaxDrives = 12;
+
+    /// <summary>The provider under test.</summary>
+    protected static ProviderConformanceCase Case => TSource.ProviderCase;
+
+    /// <summary>The harness, when the infrastructure came up.</summary>
+    protected ClusterConformanceFixture<TSource> Fixture { get; } = fixture;
+
+    // ── The vacuity guard ───────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void TheCaseOwnsClusterObjectsOrThisWholeSuiteWouldBeVacuous() {
+        // ⚠ A suite that discovered nothing to look at and reported success is the failure this
+        // repository has already been bitten by — provider discovery once matched at a fixed nesting
+        // depth, found zero providers, and went green. A clusterless provider (a DNS zone, a mail
+        // domain, a role assignment) owns no Kubernetes objects, so every assertion below would pass
+        // over an empty loop. That must be a SKIP that says so, never a pass.
+        var address = ClusterConformanceHarness<TSource>.Address("vacuity");
+        var objects = Case.Objects(address.WithId(Guid.NewGuid()), ClusterConformanceHarness<TSource>.Namespace);
+
+        if (objects.IsDefaultOrEmpty) {
+            Assert.Skip(
+                $"SKIPPED — {Case.DisplayName} owns no cluster objects, so the cluster-backed half of "
+                + "the conformance suite has nothing to assert against and would otherwise pass by "
+                + "iterating an empty collection. A clusterless provider is legitimate "
+                + "(docs/plan/08 § What the resource manager deliberately does not do), and this is "
+                + "the suite saying so out loud rather than reporting a green it did not earn."
+            );
+        }
+
+        objects.Length.ShouldBeGreaterThan(0);
+    }
+
+    // ── 1. The lifecycle, against a real API server ────────────────────────────────────────────
+
+    [Fact]
+    public async Task TheLifecycleRunsAgainstARealApiServer() {
+        var harness = Fixture.Require(
+            "that the rendered manifest is one the API server accepts, that server-side apply under "
+            + "our field manager behaves as ADR-013 assumes, that the seven labels survive admission, "
+            + "and that the plural in the GroupVersionKind addresses a real REST path."
+        );
+
+        var token = TestContext.Current.CancellationToken;
+        const string name = "real-lifecycle";
+
+        var accepted = (await WriteAsync(harness, name)).GetValueOrThrow();
+        var status = await ConvergeAsync(harness, accepted.OperationId);
+
+        status.State.ShouldBe(
+            OperationState.Succeeded,
+            $"the operation ended {status.State} against a real API server: {status.Error?.Message}"
+        );
+
+        var objects = ObjectsOf(accepted.Resource.Id, name);
+        objects.ShouldNotBeEmpty();
+
+        foreach (var target in objects) {
+            // ⚠ READ AROUND EVERY LINE OF OUR OWN CODE. This is the raw KubernetesClient asking the
+            // API server for the object by GROUP, VERSION, NAMESPACE, PLURAL and NAME. A 404 here is
+            // the plural not addressing a real REST path — which is precisely the failure a
+            // dictionary keyed by the same strings cannot have.
+            var json = await ReadFromClusterAsync(harness, target, token);
+
+            json.ShouldNotBeNull(
+                $"'{target}' is not in the real cluster. The API server either refused the manifest "
+                + "at admission or the plural does not address a REST path."
+            );
+
+            var root = JsonNode.Parse(json)!.AsObject();
+            var metadata = root["metadata"]!.AsObject();
+            var labels = metadata["labels"]?.AsObject();
+            var annotations = metadata["annotations"]?.AsObject();
+
+            labels.ShouldNotBeNull($"'{target}' came back from the API server with no labels at all.");
+
+            // ⚠ THE SEVEN LABELS, SURVIVING ADMISSION. The Docker-free suite asserts them on the
+            // COMMAND we rendered; this asserts them on the OBJECT the API server stored. Between
+            // those two is admission, validation, and the label-key syntax rules — a prefix with an
+            // upper-case letter, a value over 63 characters or a `/` in a value is rejected there and
+            // nowhere else. docs/plan/23 § The architecture gates, the Labels row.
+            foreach (var label in KubeLabels.Mandatory) {
+                labels[label].ShouldNotBeNull(
+                    $"the object the API SERVER is holding for '{target}' is missing '{label}'. It was "
+                    + "in the command we sent, so it did not survive admission."
+                );
+
+                labels[label]!.GetValue<string>().ShouldNotBeNullOrEmpty();
+            }
+
+            labels[KubeLabels.ManagedBy]!.GetValue<string>().ShouldBe(KubeLabels.ManagedByValue);
+            labels[KubeLabels.TenantId]!.GetValue<string>()
+                .ShouldBe(KubeLabels.GuidValue(ConformanceIds.Tenant));
+            labels[KubeLabels.ResourceId]!.GetValue<string>()
+                .ShouldBe(KubeLabels.GuidValue(accepted.Resource.Id));
+            labels[KubeLabels.ApiVersion]!.GetValue<string>().ShouldBe(Case.ApiVersion);
+
+            annotations.ShouldNotBeNull();
+            foreach (var annotation in KubeLabels.MandatoryAnnotations) {
+                annotations[annotation].ShouldNotBeNull(
+                    $"the stored object for '{target}' is missing '{annotation}'."
+                );
+            }
+
+            // ⚠ SERVER-SIDE APPLY UNDER OUR FIELD MANAGER, AS ADR-013 ASSUMES. managedFields is
+            // written by the API server's field-management machinery and by nothing we control. Its
+            // absence would mean the apply reached the server as something other than an apply patch,
+            // which is the assumption every conflict assertion downstream rests on.
+            var managed = metadata["managedFields"]?.AsArray();
+            managed.ShouldNotBeNull($"'{target}' carries no managedFields, so it was not server-side applied.");
+
+            var ours = managed!
+                .Select(x => x!.AsObject())
+                .Where(x => x["manager"]?.GetValue<string>() == FieldManagerOf(harness))
+                .ToList();
+
+            ours.ShouldNotBeEmpty(
+                $"the API server recorded no field-manager entry for '{FieldManagerOf(harness)}' on "
+                + $"'{target}'. managedFields holds: "
+                + string.Join(", ", managed.Select(x => x!["manager"]?.GetValue<string>()))
+            );
+
+            ours.ShouldContain(
+                x => x["operation"]!.GetValue<string>() == "Apply",
+                "the API server recorded our writes as something other than Apply, so nothing "
+                + "downstream would ever conflict."
+            );
+
+            // And the object carries what the desired body asked for — the case's own ground truth,
+            // read from the API server rather than from our cache of it.
+            Case.ObjectMatchesDesired(json!, Body()).ShouldBeTrue(
+                $"'{target}' is in the cluster but does not carry the desired shape: {json}"
+            );
+        }
+
+        // ── delete → gone, against the same real server ────────────────────────────────────────
+        var deleted = await harness.Manager.DeleteAsync(
+            new() {
+                Path = ClusterConformanceHarness<TSource>.Address(name).Path,
+                ApiVersion = Case.ApiVersion,
+                Caller = ClusterConformanceHarness<TSource>.Caller()
+            },
+            token
+        );
+
+        deleted.IsSuccess.ShouldBeTrue(deleted.Error?.Message);
+
+        var teardown = await ConvergeAsync(harness, deleted.GetValueOrThrow().OperationId);
+        teardown.State.ShouldBe(
+            OperationState.Succeeded,
+            $"the teardown ended {teardown.State}: {teardown.Error?.Message}"
+        );
+
+        foreach (var target in objects) {
+            (await ReadFromClusterAsync(harness, target, token)).ShouldBeNull(
+                $"'{target}' is still in the real cluster after a converged teardown."
+            );
+        }
+    }
+
+    // ── 2. A field conflict with another manager becomes a named DriftEvent ────────────────────
+
+    [Fact]
+    public async Task AFieldConflictWithAnotherManagerBecomesADriftEventWithAName() {
+        var harness = Fixture.Require(
+            "ADR-013's 'if a tenant hand-edits a field we own, the next apply reports a conflict "
+            + "rather than silently reverting, and THAT becomes a drift event with a name' — "
+            + "specifically that the API server's 409 body parses into the field paths and owner "
+            + "names ConflictParser expects."
+        );
+
+        var token = TestContext.Current.CancellationToken;
+        const string name = "real-conflict";
+        const string rival = "tenant-kubectl";
+
+        var accepted = (await WriteAsync(harness, name)).GetValueOrThrow();
+        await ConvergeAsync(harness, accepted.OperationId);
+
+        var target = ObjectsOf(accepted.Resource.Id, name)[0];
+
+        // ⚠ THE TENANT'S HAND EDIT, AS A DIFFERENT FIELD MANAGER, TAKING A FIELD WE OWN.
+        //
+        // The field is `cybercloud.io/tenant-id`, and it is chosen rather than picked at random for
+        // two reasons. It is a field EVERY provider's rendered object carries — it is one of the
+        // seven, so this test does not need the case to nominate a contested field, and cannot be
+        // written to contest one the provider happens not to own. And it is the case ADR-013's
+        // admission policy is the belt to these braces: a tenant who owns the tenant-id label owns
+        // billing attribution. `force: true` here is the rival TAKING ownership, which is what
+        // `kubectl apply --force-conflicts` does; our side's Force is pinned false and the builder
+        // has no method to change it.
+        await RivalApplyAsync(
+            harness,
+            target,
+            rival,
+            new JsonObject {
+                ["apiVersion"] = ApiVersionOf(target.Kind),
+                ["kind"] = target.Kind.Kind,
+                ["metadata"] = new JsonObject {
+                    ["name"] = target.Name,
+                    ["namespace"] = target.Namespace,
+                    ["labels"] = new JsonObject {
+                        [KubeLabels.TenantId] = "00000000-0000-0000-0000-0000000000ff"
+                    }
+                }
+            }.ToJsonString(),
+            token
+        );
+
+        (await LabelAsync(harness, target, KubeLabels.TenantId, token))
+            .ShouldBe("00000000-0000-0000-0000-0000000000ff", "the rival's apply did not land.");
+
+        // Now re-drive the provider's OWN reconciler through the real connection. Nothing about the
+        // desired state changed; the conflict is entirely the API server's doing.
+        harness.Connection.Reset();
+        var outcome = await ReconcileOnceAsync(harness, accepted.Resource.Id, name);
+
+        // (a) The reconciler did not report a failure. A tenant editing their own cluster is drift,
+        //     not a provisioning failure — IKubeClusterConnection's own remarks make that the rule.
+        outcome.Kind.ShouldNotBe(
+            ReconcileOutcomeKind.Failed,
+            $"a field conflict became a failed reconcile: {outcome.Error?.Message}"
+        );
+
+        // (b) It is a DRIFT EVENT WITH A NAME, produced by parsing the API server's own 409 body.
+        harness.Connection.Drift.ShouldNotBeEmpty(
+            "the apply did not conflict at all. Either force is no longer pinned false, or the rival "
+            + "did not take a field we own. What the API server answered: "
+            + string.Join(
+                ", ",
+                harness.Connection.Outcomes.Select(x => x.Result.ToString() + " " + x.Message)
+            )
+        );
+
+        var drift = harness.Connection.Drift[0];
+
+        drift.ClusterId.ShouldBe(ClusterConformanceHarness<TSource>.ClusterId);
+        drift.ResourceId.ShouldBe(accepted.Resource.Id);
+        drift.FieldManager.ShouldBe(FieldManagerOf(harness));
+
+        drift.Conflicts.ShouldNotBeEmpty(
+            "the 409 must be parsed into named fields, not reported as 'conflict'. ConflictParser got: "
+            + drift.Describe()
+        );
+
+        drift.Conflicts.ShouldContain(
+            x => x.Field.Contains("tenant-id", StringComparison.Ordinal),
+            "the conflict does not name the contested field: " + drift.Describe()
+        );
+
+        drift.Conflicts.ShouldContain(
+            x => x.OwnedBy == rival,
+            "the rival manager's name is only in the PROSE of the 409's causes[].message — there is "
+            + "no structured field for it — so this is the assertion that ConflictParser reads a real "
+            + "API server's wording rather than one this repository invented. It got: "
+            + drift.Describe()
+        );
+
+        // (c) ⚠ NOT A SILENT REVERT. The tenant's value is still there.
+        (await LabelAsync(harness, target, KubeLabels.TenantId, token)).ShouldBe(
+            "00000000-0000-0000-0000-0000000000ff",
+            "force is pinned false, so a conflicting apply must leave the rival's value alone. This "
+            + "is the half that distinguishes a conflict from the silent revert ADR-013 exists to "
+            + "replace."
+        );
+    }
+
+    // ── 3. Drift corrected after a real kubectl delete ─────────────────────────────────────────
+
+    [Fact]
+    public async Task DriftIsCorrectedAfterARealKubectlDelete() {
+        var harness = Fixture.Require(
+            "the hourly per-cluster scan of docs/plan/08 § The reconcile loop, including the orphan "
+            + "and stray cases, which are the two things nothing else would find."
+        );
+
+        var token = TestContext.Current.CancellationToken;
+        const string name = "real-drift";
+
+        var accepted = (await WriteAsync(harness, name)).GetValueOrThrow();
+        await ConvergeAsync(harness, accepted.OperationId);
+
+        var target = ObjectsOf(accepted.Resource.Id, name)[0];
+        var desiredHash = harness.Connection.Applied.Last().ReconcileHash;
+
+        // ⚠ A REAL `kubectl delete`, THROUGH THE RAW CLIENT, BEHIND THE RECONCILER'S BACK. Not
+        // IKubeClusterConnection.DeleteAsync — the point of breaking the world is that it happens by
+        // a path the platform cannot observe or record.
+        await DeleteFromClusterAsync(harness, target, token);
+        (await ReadFromClusterAsync(harness, target, token)).ShouldBeNull("the delete did not land.");
+
+        // ── An orphan: a labelled object whose resource grain does not exist. Applied by somebody
+        //    else entirely, carrying our managed-by label and a resource-id nothing owns. ─────────
+        var orphanId = Guid.Parse("0a0a0a0a-0000-4000-8000-00000000000a");
+        var orphanTarget = target with { Name = "real-drift-orphan" };
+
+        await RivalApplyAsync(
+            harness,
+            orphanTarget,
+            "someone-elses-controller",
+            new JsonObject {
+                ["apiVersion"] = ApiVersionOf(target.Kind),
+                ["kind"] = target.Kind.Kind,
+                ["metadata"] = new JsonObject {
+                    ["name"] = orphanTarget.Name,
+                    ["namespace"] = orphanTarget.Namespace,
+                    ["labels"] = new JsonObject {
+                        [KubeLabels.ManagedBy] = KubeLabels.ManagedByValue,
+                        [KubeLabels.ResourceId] = KubeLabels.GuidValue(orphanId)
+                    },
+                    ["annotations"] = new JsonObject {
+                        [KubeLabels.ResourcePathAnnotation] = "/orphaned/by/nobody"
+                    }
+                }
+            }.ToJsonString(),
+            token
+        );
+
+        // ── THE SCAN. A real LIST against the real API server, filtered by the selector
+        //    docs/plan/09 § Observing specifies, joined on the resource-id label ADR-013 puts there
+        //    precisely so that this is a hash join rather than a scan. ────────────────────────────
+        var inventory = new ListBackedClusterObjectInventory(
+            harness.Api,
+            [.. ObjectsOf(accepted.Resource.Id, name).Select(x => x.Kind).Distinct()],
+            ClusterConformanceHarness<TSource>.Namespace
+        );
+
+        var objects = await inventory.ListManagedAsync(ClusterConformanceHarness<TSource>.ClusterId, token);
+        objects.IsSuccess.ShouldBeTrue(objects.Error?.Message);
+
+        var report = new DriftScanner(harness.Clock).Scan(
+            ClusterConformanceHarness<TSource>.ClusterId,
+            objects.GetValueOrThrow(),
+            [
+                new ExpectedResource(
+                    accepted.Resource.Id,
+                    ClusterConformanceHarness<TSource>.Address(name).Path,
+                    desiredHash,
+                    ProvisioningState.Succeeded
+                )
+            ]
+        );
+
+        // ⚠ THE STRAY. Somebody kubectl-deleted production, and this is the platform NOTICING ON ITS
+        // OWN rather than finding out because a reconciler happened to be re-driven.
+        report.Strays.ShouldContain(
+            x => x.ResourceId == accepted.Resource.Id,
+            "the scan did not notice that a Succeeded resource has no labelled object on the cluster. "
+            + report.ToString()
+        );
+
+        // ⚠ THE ORPHAN. Labelled objects nobody owns: running, and nothing is metering them.
+        report.Orphans.ShouldContain(
+            x => x.ResourceId == orphanId,
+            "the scan did not notice a labelled object with no owning resource grain. " + report.ToString()
+        );
+
+        report.ObjectsSeen.ShouldBeGreaterThan(
+            0,
+            "an inventory that saw nothing would report every resource as a stray, which is the "
+            + "failure UnavailableClusterObjectInventory refuses rather than risks."
+        );
+
+        // ── AND THE DRIFT IS CORRECTED. The scan reports; docs/plan/08 § The reconcile loop's
+        //    "pokes only what diverged" is the re-drive, and this is it. ─────────────────────────
+        var repaired = await ReconcileOnceAsync(harness, accepted.Resource.Id, name);
+
+        repaired.Kind.ShouldBe(
+            ReconcileOutcomeKind.Converged,
+            $"the re-drive did not converge: {repaired.Reason} {repaired.Error?.Message}"
+        );
+
+        var restored = await ReadFromClusterAsync(harness, target, token);
+
+        restored.ShouldNotBeNull(
+            $"'{target}' was not put back by the re-drive, so the drift was noticed and not corrected."
+        );
+
+        Case.ObjectMatchesDesired(restored!, Body()).ShouldBeTrue(
+            "the object came back without the desired shape."
+        );
+
+        // And the scan agrees, which is the only way to know the repair closed the finding rather
+        // than merely creating an object.
+        var after = new DriftScanner(harness.Clock).Scan(
+            ClusterConformanceHarness<TSource>.ClusterId,
+            (await inventory.ListManagedAsync(ClusterConformanceHarness<TSource>.ClusterId, token))
+            .GetValueOrThrow(),
+            [
+                new ExpectedResource(
+                    accepted.Resource.Id,
+                    ClusterConformanceHarness<TSource>.Address(name).Path,
+                    harness.Connection.Applied.Last().ReconcileHash,
+                    ProvisioningState.Succeeded
+                )
+            ]
+        );
+
+        after.Strays.ShouldNotContain(
+            x => x.ResourceId == accepted.Resource.Id,
+            "the object is back but the scan still calls it a stray. " + after.ToString()
+        );
+    }
+
+    // ── 4. Desired state survives a real serialization round trip ──────────────────────────────
+
+    [Fact]
+    public async Task DesiredStateSurvivesARealSerializationRoundTrip() {
+        var harness = Fixture.Require(
+            "that ResourceState and OperationGrainState round-trip — in-memory storage keeps the "
+            + "object graph, so the 'System.Text.Json does not populate a get-only collection' trap "
+            + "cannot fire there."
+        );
+
+        var token = TestContext.Current.CancellationToken;
+        const string name = "real-roundtrip";
+
+        harness.Registry.TryGetType(Case.Type, out var registration).ShouldBeTrue();
+
+        var body = registration.SupportsTags
+            ? WithTags(Body(), ("env", "prod"), ("owner", "platform"))
+            : Body();
+
+        var accepted = (await WriteAsync(harness, name, body)).GetValueOrThrow();
+        var status = await ConvergeAsync(harness, accepted.OperationId);
+
+        status.State.ShouldBe(OperationState.Succeeded, status.Error?.Message);
+        status.Progress.ShouldNotBeEmpty("the operation recorded no progress, so there is nothing to lose.");
+
+        // ── The bytes. Read with plain SQL, around Orleans, because asking Orleans again would be
+        //    answered out of the activation's memory. ────────────────────────────────────────────
+        var operationRows = await DurableRows.ReadAsync(
+            harness.DurableConnectionString,
+            accepted.OperationId.ToString("N", CultureInfo.InvariantCulture),
+            token
+        );
+
+        operationRows.ShouldNotBeEmpty(
+            "no row in PostgreSQL's OrleansStorage carries this operation. The durable tier is not "
+            + "durable, or the grain never wrote."
+        );
+
+        var operationPayload = operationRows.Select(x => x.Payload).First(x => x.Length > 0);
+
+        // ⚠ THE ROUND TRIP, THROUGH THE SHIPPED SERIALIZER. Deserializing the stored bytes with
+        // SystemTextJsonGrainStorageSerializer — the same instance type DurableTierConfigurator
+        // installs — is what makes this an assertion about SERIALIZATION rather than about storage.
+        var serializer = new SystemTextJsonGrainStorageSerializer();
+        var operationState = serializer.Deserialize<OperationGrainState>(
+            BinaryData.FromString(operationPayload)
+        );
+
+        operationState.Spec.ShouldNotBeNull(
+            "OperationGrainState.Spec did not come back. docs/plan/08 § Long-running operations claims "
+            + "the state 'includes everything needed to re-drive'; without the spec there is nothing "
+            + "to re-drive."
+        );
+
+        operationState.Spec!.ResourceId.ShouldBe(accepted.Resource.Id);
+        operationState.Spec.Desired.Length.ShouldBeGreaterThan(0);
+
+        // ⚠ THE TRAP, NAMED. `Progress` is a collection on a durable state object; if it were
+        // get-only System.Text.Json would hand back an empty one and every operation would lose its
+        // history the first time it round-tripped. CyberCloud.ResourceManager.Tests' .csproj records
+        // this exact debt against these exact two types.
+        operationState.Progress.ShouldNotBeEmpty(
+            $"the operation reported {status.Progress.Length} progress entries and PostgreSQL gave "
+            + "back none. That is the get-only-collection trap firing."
+        );
+
+        operationState.Progress.Count.ShouldBe(status.Progress.Length);
+        operationState.Attempts.ShouldBe(status.Attempts);
+        operationState.Status.ShouldBe(OperationState.Succeeded);
+
+        // ── And the resource's own state. ──────────────────────────────────────────────────────
+        var resourceRows = await DurableRows.ReadAsync(
+            harness.DurableConnectionString,
+            accepted.Resource.Id.ToString("N", CultureInfo.InvariantCulture),
+            token
+        );
+
+        resourceRows.ShouldNotBeEmpty("no row in PostgreSQL carries the resource grain's state.");
+
+        var resourceState = serializer.Deserialize<ResourceState>(
+            BinaryData.FromString(resourceRows.Select(x => x.Payload).First(x => x.Length > 0))
+        );
+
+        resourceState.Path.ShouldBe(ClusterConformanceHarness<TSource>.Address(name).Path);
+        resourceState.ApiVersion.ShouldBe(Case.ApiVersion);
+        resourceState.ProvisioningState.ShouldBe(ProvisioningState.Succeeded);
+        resourceState.Superset.Length.ShouldBeGreaterThan(2, "the desired body did not survive.");
+
+        if (registration.SupportsTags) {
+            // The other collection on the other durable type, for the same reason.
+            resourceState.Tags.ShouldContainKeyAndValue("env", "prod");
+            resourceState.Tags.ShouldContainKeyAndValue("owner", "platform");
+        }
+
+        // ── And the grain agrees with the bytes after it has been made to read them again. ─────
+        await harness.Operation(ConformanceIds.Tenant, accepted.OperationId).DeactivateAsync();
+
+        var reread = await harness.Operation(ConformanceIds.Tenant, accepted.OperationId).GetAsync();
+        var afterReload = reread.GetValueOrThrow();
+
+        afterReload.Progress.Length.ShouldBe(
+            status.Progress.Length,
+            "the grain re-activated over PostgreSQL and came back with a different history."
+        );
+
+        afterReload.Attempts.ShouldBe(status.Attempts);
+        afterReload.State.ShouldBe(OperationState.Succeeded);
+    }
+
+    // ── Helpers ─────────────────────────────────────────────────────────────────────────────────
+
+    /// <summary>A valid body for the harness's cluster.</summary>
+    protected static string Body() => Case.Body(ClusterConformanceHarness<TSource>.ClusterId);
+
+    /// <summary>The objects a converged resource should own.</summary>
+    /// <param name="resourceId">The resource's GUID.</param>
+    /// <param name="name">Its name.</param>
+    protected static ImmutableArray<ObjectRef> ObjectsOf(Guid resourceId, string name) {
+        var address = ClusterConformanceHarness<TSource>.Address(name).WithId(resourceId);
+        return Case.Objects(address, ReconcileDriver.NamespaceFor(address));
+    }
+
+    /// <summary>Writes a resource and asserts the request was accepted.</summary>
+    /// <param name="harness">The harness.</param>
+    /// <param name="name">The resource name.</param>
+    /// <param name="body">The body, defaulting to the case's.</param>
+    protected static async Task<Result<WriteAccepted>> WriteAsync(
+        ClusterConformanceHarness<TSource> harness,
+        string name,
+        string? body = null
+    ) {
+        var accepted = await harness.Manager.WriteAsync(
+            new() {
+                Path = ClusterConformanceHarness<TSource>.Address(name).Path,
+                ApiVersion = Case.ApiVersion,
+                Verb = WriteVerb.Put,
+                Body = body ?? Body(),
+                Caller = ClusterConformanceHarness<TSource>.Caller()
+            },
+            TestContext.Current.CancellationToken
+        );
+
+        accepted.IsSuccess.ShouldBeTrue(accepted.Error?.Message);
+        return accepted;
+    }
+
+    /// <summary>Drives an operation the way its reminder would, until it is terminal.</summary>
+    /// <param name="harness">The harness.</param>
+    /// <param name="operationId">The operation.</param>
+    protected static async Task<OperationStatus> ConvergeAsync(
+        ClusterConformanceHarness<TSource> harness,
+        Guid operationId
+    ) {
+        var operation = harness.Operation(ConformanceIds.Tenant, operationId);
+        OperationStatus? last = null;
+
+        for (var i = 0; i < MaxDrives; i++) {
+            last = (await operation.DriveAsync()).GetValueOrThrow();
+
+            if (last.IsTerminal) {
+                return last;
+            }
+        }
+
+        last.ShouldNotBeNull();
+        return last;
+    }
+
+    /// <summary>Runs one reconcile pass directly, the way the per-cluster drift scan pokes a resource.</summary>
+    /// <param name="harness">The harness.</param>
+    /// <param name="resourceId">The resource's GUID.</param>
+    /// <param name="name">Its name.</param>
+    protected static async Task<ReconcileOutcome> ReconcileOnceAsync(
+        ClusterConformanceHarness<TSource> harness,
+        Guid resourceId,
+        string name
+    ) {
+        var address = ClusterConformanceHarness<TSource>.Address(name).WithId(resourceId);
+        using var desired = JsonDocument.Parse(Body());
+
+        return await Case.CreateReconciler(harness.Clock)
+            .ReconcileAsync(
+                new(
+                    address,
+                    Case.ApiVersion,
+                    desired.RootElement,
+                    null,
+                    ReconcileDriver.NamespaceFor(address),
+                    harness.Connection,
+                    new UnavailableSecretResolver(),
+                    new RecordingLog()
+                ),
+                TestContext.Current.CancellationToken
+            );
+    }
+
+    /// <summary>The field manager the commands this run rendered carried.</summary>
+    /// <param name="harness">The harness.</param>
+    protected static string FieldManagerOf(ClusterConformanceHarness<TSource> harness) =>
+        harness.Connection.Applied.TryPeek(out var first) ? first.FieldManager : string.Empty;
+
+    /// <summary><c>apiVersion</c> as the wire spells it — the core group has no group segment.</summary>
+    /// <param name="kind">The kind.</param>
+    protected static string ApiVersionOf(GroupVersionKind kind) {
+        ArgumentNullException.ThrowIfNull(kind);
+        return string.IsNullOrEmpty(kind.Group) ? kind.Version : kind.Group + "/" + kind.Version;
+    }
+
+    /// <summary>Reads an object straight from the API server, or <see langword="null" /> when absent.</summary>
+    /// <param name="harness">The harness.</param>
+    /// <param name="target">Which object.</param>
+    /// <param name="cancellationToken">The test's token.</param>
+    protected static async Task<string?> ReadFromClusterAsync(
+        ClusterConformanceHarness<TSource> harness,
+        ObjectRef target,
+        CancellationToken cancellationToken
+    ) {
+        ArgumentNullException.ThrowIfNull(target);
+
+        try {
+            using var response = await harness.Raw.CustomObjects
+                .GetNamespacedCustomObjectWithHttpMessagesAsync(
+                    target.Kind.Group,
+                    target.Kind.Version,
+                    target.Namespace,
+                    target.Kind.Plural,
+                    target.Name,
+                    cancellationToken: cancellationToken
+                );
+
+            return ((JsonElement)response.Body!).GetRawText();
+        } catch (k8s.Autorest.HttpOperationException ex)
+            when (ex.Response?.StatusCode == System.Net.HttpStatusCode.NotFound) {
+            return null;
+        }
+    }
+
+    /// <summary>One label's value, read straight from the API server.</summary>
+    /// <param name="harness">The harness.</param>
+    /// <param name="target">Which object.</param>
+    /// <param name="key">The label key. ⚠ Read as a map key, never by splitting a dotted path.</param>
+    /// <param name="cancellationToken">The test's token.</param>
+    protected static async Task<string?> LabelAsync(
+        ClusterConformanceHarness<TSource> harness,
+        ObjectRef target,
+        string key,
+        CancellationToken cancellationToken
+    ) {
+        var json = await ReadFromClusterAsync(harness, target, cancellationToken);
+
+        return json is null
+            ? null
+            : JsonNode.Parse(json)?["metadata"]?["labels"]?[key]?.GetValue<string>();
+    }
+
+    /// <summary>Applies a document as a <b>different</b> field manager, taking ownership.</summary>
+    /// <param name="harness">The harness.</param>
+    /// <param name="target">Which object.</param>
+    /// <param name="manager">The rival manager's name.</param>
+    /// <param name="json">A minimal apply document naming only the fields the rival claims.</param>
+    /// <param name="cancellationToken">The test's token.</param>
+    protected static async Task RivalApplyAsync(
+        ClusterConformanceHarness<TSource> harness,
+        ObjectRef target,
+        string manager,
+        string json,
+        CancellationToken cancellationToken
+    ) {
+        ArgumentNullException.ThrowIfNull(target);
+
+        using var response = await harness.Raw.CustomObjects
+            .PatchNamespacedCustomObjectWithHttpMessagesAsync(
+                new V1Patch(JsonSerializer.Deserialize<JsonElement>(json), V1Patch.PatchType.ApplyPatch),
+                target.Kind.Group,
+                target.Kind.Version,
+                target.Namespace,
+                target.Kind.Plural,
+                target.Name,
+                fieldManager: manager,
+                force: true,
+                cancellationToken: cancellationToken
+            );
+    }
+
+    /// <summary>Deletes an object behind the platform's back — the drift case's <c>kubectl delete</c>.</summary>
+    /// <param name="harness">The harness.</param>
+    /// <param name="target">Which object.</param>
+    /// <param name="cancellationToken">The test's token.</param>
+    protected static async Task DeleteFromClusterAsync(
+        ClusterConformanceHarness<TSource> harness,
+        ObjectRef target,
+        CancellationToken cancellationToken
+    ) {
+        ArgumentNullException.ThrowIfNull(target);
+
+        using var response = await harness.Raw.CustomObjects
+            .DeleteNamespacedCustomObjectWithHttpMessagesAsync(
+                target.Kind.Group,
+                target.Kind.Version,
+                target.Namespace,
+                target.Kind.Plural,
+                target.Name,
+                cancellationToken: cancellationToken
+            );
+    }
+
+    static string WithTags(string body, params (string Key, string Value)[] tags) {
+        var node = JsonNode.Parse(body)!.AsObject();
+        var map = new JsonObject();
+
+        foreach (var (key, value) in tags) {
+            map[key] = value;
+        }
+
+        node["tags"] = map;
+        return node.ToJsonString();
+    }
+}

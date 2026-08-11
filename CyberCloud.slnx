@@ -127,6 +127,12 @@
         <Project Path="src/Providers/CyberCloud.Providers.Sample/CyberCloud.Providers.Sample.Application/CyberCloud.Providers.Sample.Application.csproj"/>
         <Project Path="src/Providers/CyberCloud.Providers.Sample/CyberCloud.Providers.Sample.Tests/CyberCloud.Providers.Sample.Tests.csproj"/>
         <Project Path="src/Providers/CyberCloud.Providers.Sample/CyberCloud.Providers.Sample.Conformance/CyberCloud.Providers.Sample.Conformance.csproj"/>
+        <!--
+          The cluster-backed half of the same suite — two class declarations over the same
+          ProviderConformanceCase, in a project that may depend on a Docker daemon because the one
+          above must not. See its .csproj.
+        -->
+        <Project Path="src/Providers/CyberCloud.Providers.Sample/CyberCloud.Providers.Sample.Cluster.Conformance/CyberCloud.Providers.Sample.Cluster.Conformance.csproj"/>
     </Folder>
     <Folder Name="/src/Hosts/">
         <Project Path="src/Hosts/CyberCloud.Gateway.Host/CyberCloud.Gateway.Host.csproj"/>
@@ -149,6 +155,20 @@
     -->
     <Folder Name="/test/">
         <Project Path="test/CyberCloud.Conformance/CyberCloud.Conformance.csproj"/>
+        <!--
+          ⚠ The half of the conformance suite that needs Docker, and the reason it is a project of its
+          own rather than a package added above: Testcontainers in CyberCloud.Conformance.csproj would
+          make the WHOLE shared suite refuse to run without a daemon, and that suite is the per-PR gate
+          for every provider change.
+
+          ⚠ NOT named CyberCloud.Conformance.Cluster, which is the name its predecessor's skip messages
+          gave. Directory.Build.props § Project role detection and build/Build.Test.cs § SuiteOwning both
+          classify a project by the SUFFIX of its name; `.Cluster` is claimed by neither, so that name
+          would have built as a library and then failed AssertEveryTestProjectIsOwned. Dual-role like
+          CyberCloud.Conformance: it runs against the reference provider AND is referenced by each
+          provider's own `.Cluster.Conformance` project.
+        -->
+        <Project Path="test/CyberCloud.Cluster.Conformance/CyberCloud.Cluster.Conformance.csproj"/>
         <Project Path="test/CyberCloud.Isolation/CyberCloud.Isolation.csproj"/>
     </Folder>
 </Solution>

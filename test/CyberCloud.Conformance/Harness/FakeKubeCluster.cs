@@ -13,7 +13,10 @@ namespace CyberCloud.Conformance.Harness;
 ///         field-level server-side-apply ownership, does not garbage-collect an
 ///         <c>ownerReference</c>, and its <see cref="ApplyResult.Conflict" /> is a switch a test
 ///         flips rather than a field another manager took. Everything that needs a real API server
-///         lives in <c>ClusterBackedConformanceTests</c> and is skipped loudly.
+///         lives in <c>CyberCloud.Cluster.Conformance</c>, which runs the same
+///         <c>ProviderConformanceCase</c> against a k3s container — including the conflict, which is
+///         there produced by a second field manager and the API server's own 409 rather than by
+///         <see cref="ConflictOn" />.
 ///     </para>
 ///     <para>
 ///         What it <i>does</i> prove is the half that is about <b>us</b>: that a reconciler applies
