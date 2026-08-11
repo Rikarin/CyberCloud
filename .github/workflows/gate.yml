@@ -166,17 +166,12 @@ jobs:
       - name: ./build.sh Charts
         run: ./build.sh Charts 2>&1 | tee "$RUNNER_TEMP/charts.log"
 
-      - name: Upload packaged charts
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: charts
-          path: artifacts/charts/
-          if-no-files-found: error
-          retention-days: 14
-
       # Build.Charts.cs prints "inspected 0 chart(s) … ○, not ✔" and passes. Right answer for a
       # build on a tree with no charts; wrong answer for a gate in a repository that has them,
       # where zero means the glob stopped matching.
+      #
+      # ⚠ Before the upload, not after. `if-no-files-found: error` below would also catch an empty
+      # charts/ — with a message about a missing artifact, which sends the reader to the wrong file.
       - name: Charts were actually linted
         run: |
           if grep -q 'inspected 0 chart' "$RUNNER_TEMP/charts.log"; then
@@ -184,6 +179,14 @@ jobs:
             exit 1
           fi
           grep -E 'Charts: [0-9]+ chart' "$RUNNER_TEMP/charts.log" | tail -2
+
+      - name: Upload packaged charts
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: charts
+          path: artifacts/charts/
+          if-no-files-found: error
+          retention-days: 14
 
   # ── docs/plan/23 § Test layers, row Portal ───────────────────────────────────────────────────────
   #
