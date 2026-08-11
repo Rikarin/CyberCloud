@@ -1,0 +1,51 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      docs/plan/03 § src — the .Contracts split for identity (docs/plan/11), ADR-015.
+
+      What lives here is everything a caller outside the identity module has to name: the six grain
+      interfaces of docs/plan/11 § The object model, the wire types they exchange, the claim vocabulary
+      the gateway validates a token against, and the two seams (managed identity / token exchange, and
+      OTP delivery) that docs/plan/11 specifies but this milestone does not build.
+
+      ⚠ IT REFERENCES NO CREDENTIAL LIBRARY, AND THAT IS THE POINT OF THE SPLIT.
+      Neither Fido2.AspNet nor the Argon2 package is nameable from here. IPasskeyService is declared
+      in this assembly in OUR types — docs/plan/02 § Data, transport, Kubernetes asks for the library
+      to be "wrapped behind IPasskeyService so replacing it is one file", and a wrapper whose
+      interface leaks the library's types is not a wrapper. The one file is
+      CyberCloud.Identity.Host/Credentials/Fido2PasskeyService.cs.
+
+      ⚠ IT REFERENCES CyberCloud.Authorization.Contracts, AND THAT IS LOAD-BEARING RATHER THAN
+      CONVENIENT. docs/plan/11 § The object model puts group membership in ReBAC tuples instead of in
+      grain state, so IGroupGrain's membership surface is expressed in SubjectRef and nothing else. A
+      version of this assembly that could not name SubjectRef would have to re-declare the subject
+      shape, and a second spelling of a subject is how a membership write and a membership check stop
+      agreeing.
+    -->
+
+    <PropertyGroup>
+        <IsContractsProject>true</IsContractsProject>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Microsoft.Orleans.Sdk"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../CyberCloud.Core/CyberCloud.Core.csproj"/>
+        <ProjectReference Include="../CyberCloud.Core.Contracts/CyberCloud.Core.Contracts.csproj"/>
+        <ProjectReference Include="../CyberCloud.Authorization.Contracts/CyberCloud.Authorization.Contracts.csproj"/>
+    </ItemGroup>
+
+    <ItemGroup Label="CyberCloud.Analyzers — see CyberCloud.Core.csproj for why this is not a reference">
+        <!--
+          CC1005 matters more in this assembly than anywhere else in the tree: identity is the module
+          whose wire types are most tempted to carry a password, a TOTP secret or a refresh token.
+          They carry SecretRef handles and hashes instead — see IdentityWireTypes.cs § SecretRef.
+        -->
+        <ProjectReference Include="../CyberCloud.Analyzers/CyberCloud.Analyzers.csproj"
+                          OutputItemType="Analyzer"
+                          ReferenceOutputAssembly="false"/>
+    </ItemGroup>
+
+</Project>

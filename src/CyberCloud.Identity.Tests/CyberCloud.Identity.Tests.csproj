@@ -1,0 +1,61 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      The identity module's behaviour, against a real in-process Orleans cluster.
+
+      The suite is organised around docs/plan/11's failure classes rather than around its types,
+      because those are the things that are easy to get subtly wrong and impossible to notice:
+
+        EnumerationAndTimingTests   — the same response AND the same time, both measured
+        LockoutIsGrainFreeTests     — the failure path touches no grain, asserted against a
+                                      recording grain factory rather than argued
+        RefreshReuseTests           — a replayed refresh kills the CHAIN, not the request
+        EmailUniquenessTests        — per tenant, not global, in both directions
+        PiiNeverReachesALogMessageTests — a real sign-in with a distinctive address, and a capturing
+                                      logger
+        CredentialTests             — Argon2id round-trip and PHC parsing, RFC 6238 test vectors,
+                                      recovery codes
+        GroupMembershipTests        — membership is tuples: nesting works, and the grain holds no list
+
+      ⚠ NO Testcontainers AND NO Aspire.Hosting, AND THAT IS A DEVIATION FROM ADR-018 THAT IS OWED
+      BACK — the same one CyberCloud.ResourceManager.Tests records. ADR-018 wants grain behaviour
+      tested "against a real in-process TestCluster … with real storage providers backed by
+      Testcontainers"; this uses AddMemoryGrainStorage because the environment this was built in
+      could not start a container.
+
+      What that costs here specifically, stated so it can be paid rather than forgotten:
+
+        - Nothing here proves UserGrainState or SessionGrainState SERIALIZE. In-memory storage keeps
+          the object graph; a real provider round-trips it, which is where the "STJ does not populate
+          a get-only collection" trap bites. Every collection on both is `{ get; set; }` for that
+          reason, and CyberCloud.Identity.Contracts.Tests round-trips the WIRE types through a real
+          Orleans serializer — but the two STATE types are owed a storage-backed assertion.
+        - The lockout counter under test is InMemoryLockoutCounter, not RedisLockoutCounter. What is
+          proven is the property that matters — the failure path takes no grain reference — and the
+          ladder's arithmetic. What is not proven is that the Redis INCR/EXPIRE pair behaves as
+          described on a real cluster, which needs a Redis.
+        - The timing tests run Argon2id at REDUCED parameters (see EnumerationAndTimingTests). That
+          is deliberate and does not weaken the assertion: lowering the cost lowers BOTH branches
+          identically, and the property under test is that the two are equal.
+    -->
+
+    <ItemGroup>
+        <PackageReference Include="xunit.v3"/>
+        <PackageReference Include="Shouldly"/>
+        <PackageReference Include="Microsoft.Orleans.TestingHost"/>
+        <PackageReference Include="Orleans.Multitenant"/>
+    </ItemGroup>
+
+    <ItemGroup Label="Global usings">
+        <Using Include="Xunit"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../CyberCloud.Identity/CyberCloud.Identity.csproj"/>
+        <!-- The REAL email index grain — per-tenant uniqueness is tested against it, not against a fake. -->
+        <ProjectReference Include="../CyberCloud.Tenancy/CyberCloud.Tenancy.csproj"/>
+        <!-- The REAL tuple store and check grain — group membership is tested through the engine. -->
+        <ProjectReference Include="../CyberCloud.Authorization/CyberCloud.Authorization.csproj"/>
+    </ItemGroup>
+
+</Project>

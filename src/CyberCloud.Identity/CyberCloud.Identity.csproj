@@ -1,0 +1,76 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      docs/plan/03 § src — the identity module (docs/plan/11), ADR-015.
+
+      The grains, the credential implementations, the sign-in path with its enumeration and timing
+      hardening, and the refresh chain with reuse detection. The OAuth/OIDC protocol itself is not
+      here: that is OpenIddict, in CyberCloud.Identity.Host, which is what ADR-015 means by "it
+      handles the protocol, we own the stores, and the stores are grains".
+
+      ⚠ NO ASP.NET, AND THAT IS WHAT KEEPS THE TWO-HOST SPLIT HONEST.
+      docs/plan/11 § Hosts makes cookies-here-bearer-there a security boundary. This assembly has no
+      opinion about either, because it cannot name a cookie or a bearer scheme — the authentication
+      surface lives entirely in the host. An assembly that could reach HttpContext would eventually
+      grow a helper that reads one, and the boundary would become a convention again.
+
+      ⚠ IT REFERENCES CyberCloud.Authorization, NOT ONLY ITS .Contracts, AND THAT IS DELIBERATE.
+      docs/plan/11 § The object model puts group membership in ReBAC tuples rather than in grain
+      state, so IGroupGrain writes `group:X#member@user:Y`. Spelling `group`, `member` and `user` as
+      string literals here would be a second copy of the schema's vocabulary, and the failure mode of
+      a second copy is a membership write that no membership check can see. ObjectTypes and Relations
+      live in the implementation assembly, so that is what is referenced. This does NOT make identity
+      an authorization enforcement point — docs/plan/07 § The enforcement seam keeps that in the
+      resource manager; what happens here is tuple WRITES, which is the same thing a role assignment
+      is.
+
+      ⚠ IT REFERENCES CyberCloud.Tenancy.Contracts FOR IEmailIndexGrain AND NOTHING ELSE.
+      docs/plan/06 § Grain keys already owns per-tenant email uniqueness and docs/plan/11 § Sign-up
+      names that grain by name. Re-implementing the claim here would be a second uniqueness mechanism
+      over the same digest, which is the one place a duplicate is a correctness bug.
+    -->
+
+    <ItemGroup>
+        <!-- Grain implementations and [PersistentState]. -->
+        <PackageReference Include="Microsoft.Orleans.Server"/>
+        <!-- IGrainFactory.ForTenant — every grain reference in this assembly goes through it. -->
+        <PackageReference Include="Orleans.Multitenant"/>
+        <!--
+          ⚠ NOT IN docs/plan/02's DEPENDENCY REGISTER. See the block in Directory.Packages.props for
+          what was surveyed and why this one won; the short version is that .NET ships no Argon2,
+          NSec cannot express p=4, and docs/plan/11 § Credentials specifies p=4. That document's own
+          rule makes this an ADR request rather than a build fix.
+        -->
+        <PackageReference Include="Konscious.Security.Cryptography.Argon2"/>
+        <!--
+          The lockout counter is a Redis INCR, not a grain — docs/plan/11 § Credentials. This is the
+          client for it. ⚠ It is the ONLY direct hot-tier access in the module: everything else goes
+          through Orleans grain storage, and the reason this one does not is the whole point of the
+          row — a grain call on the failure path of an unauthenticated endpoint is the amplifier that
+          paragraph exists to forbid.
+        -->
+        <PackageReference Include="StackExchange.Redis"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../CyberCloud.Core/CyberCloud.Core.csproj"/>
+        <ProjectReference Include="../CyberCloud.Core.Contracts/CyberCloud.Core.Contracts.csproj"/>
+        <ProjectReference Include="../CyberCloud.Identity.Contracts/CyberCloud.Identity.Contracts.csproj"/>
+        <ProjectReference Include="../CyberCloud.Tenancy.Contracts/CyberCloud.Tenancy.Contracts.csproj"/>
+        <ProjectReference Include="../CyberCloud.Authorization.Contracts/CyberCloud.Authorization.Contracts.csproj"/>
+        <ProjectReference Include="../CyberCloud.Authorization/CyberCloud.Authorization.csproj"/>
+    </ItemGroup>
+
+    <ItemGroup Label="CyberCloud.Analyzers — see CyberCloud.Core.csproj for why this is not a reference">
+        <!--
+          CC1005 is the rule that earns its keep here: this is the module most likely to trip it, and
+          tripping it is the point. Credentials are SecretRef handles and one-way hashes; the two
+          members that end in a banned suffix and are genuinely not secrets carry a per-member
+          [SuppressMessage] with the argument, never a NoWarn on the assembly.
+        -->
+        <ProjectReference Include="../CyberCloud.Analyzers/CyberCloud.Analyzers.csproj"
+                          OutputItemType="Analyzer"
+                          ReferenceOutputAssembly="false"/>
+    </ItemGroup>
+
+</Project>

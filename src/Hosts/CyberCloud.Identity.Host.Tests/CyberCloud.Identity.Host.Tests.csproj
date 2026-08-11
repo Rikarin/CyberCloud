@@ -1,0 +1,43 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      The identity host's two security boundaries, asserted against the host's REAL registrations:
+
+        IdentityHostAuthenticationTests — a session cookie is a credential here and a bearer token is
+                                          not, which is docs/plan/11 § Hosts' whole reason for two
+                                          hosts on two origins
+        NoRolesInTokenTests             — the principal an access token is built from carries no role
+                                          or permission claim
+
+      ⚠ NO TestServer AND NO WebApplicationFactory, AND THAT IS A DELIBERATE CHOICE RATHER THAN A
+      MISSING PACKAGE. Both would need Microsoft.AspNetCore.Mvc.Testing, which docs/plan/02's
+      dependency register does not list. More to the point, the property under test is not "what does
+      this endpoint return" — it is "which authentication schemes does this host have", and that is a
+      question about the service collection, which can be asked directly and answered exactly.
+
+      What that costs, stated so it can be paid rather than forgotten: nothing here drives an actual
+      HTTP request, so the assertion is that no bearer handler is REGISTERED rather than that a bearer
+      token is REJECTED over the wire. The two differ only if ASP.NET authenticates with a scheme it
+      was never told about, which it does not. The end-to-end version belongs in CyberCloud.E2E, where
+      both hosts exist at once and a cookie can actually be presented to the gateway — which is the
+      test that would catch the two hosts drifting, and is owed.
+    -->
+
+    <ItemGroup>
+        <PackageReference Include="xunit.v3"/>
+        <PackageReference Include="Shouldly"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <FrameworkReference Include="Microsoft.AspNetCore.App"/>
+    </ItemGroup>
+
+    <ItemGroup Label="Global usings">
+        <Using Include="Xunit"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../CyberCloud.Identity.Host/CyberCloud.Identity.Host.csproj"/>
+    </ItemGroup>
+
+</Project>
