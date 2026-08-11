@@ -1,3 +1,5 @@
+using CyberCloud.Providers.Sample.Contracts;
+
 namespace CyberCloud.ResourceManager.Generator.Tests;
 
 /// <summary>
@@ -126,7 +128,7 @@ public sealed class CommandLineTests {
         );
 
         run.ExitCode.ShouldBe(Failed);
-        run.Error.ShouldContain(Providers.Sample.Contracts.SampleWidgets.ProviderNamespace);
+        run.Error.ShouldContain(SampleWidgets.ProviderNamespace);
     }
 
     [Fact]
