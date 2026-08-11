@@ -1,5 +1,6 @@
 using CyberCloud.Authorization.Contracts;
 using CyberCloud.Core;
+using CyberCloud.Core.Contracts;
 
 namespace CyberCloud.Identity.Contracts;
 
@@ -22,7 +23,7 @@ namespace CyberCloud.Identity.Contracts;
 ///     <para>
 ///         ⚠ <b>This grain holds credential material and the wire types do not.</b> Password hash,
 ///         recovery-code hashes and passkey public keys live in its state; the TOTP secret does not,
-///         only a <see cref="VaultSecretRef" /> to it. Nothing on this interface returns a hash — the
+///         only a <see cref="SecretRef" /> to it. Nothing on this interface returns a hash — the
 ///         verify methods take a candidate and answer a Boolean, which keeps the comparison
 ///         (constant-time, with the pepper) on the one side that knows how to do it.
 ///     </para>
@@ -360,7 +361,7 @@ public interface IServicePrincipalGrain : IGrainWithStringKey {
     ///     crash between them leaves an unused secret in the vault rather than a principal pointing
     ///     at nothing.
     /// </remarks>
-    Task<Result<ServicePrincipalDescriptor>> RotateCredentialAsync(VaultSecretRef credentialSecretRef);
+    Task<Result<ServicePrincipalDescriptor>> RotateCredentialAsync(SecretRef credentialSecretRef);
 
     /// <summary>Deletes the principal.</summary>
     Task<Result> DeleteAsync();

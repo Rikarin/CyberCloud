@@ -1,6 +1,8 @@
+using CyberCloud.Core.Contracts;
 using CyberCloud.Core.Contracts.Serialization;
 using Microsoft.Extensions.DependencyInjection;
 using Orleans.Serialization;
+using System.CodeDom.Compiler;
 using System.Reflection;
 
 namespace CyberCloud.Identity.Contracts.Tests;
@@ -142,9 +144,28 @@ public sealed class IdentitySerializationTests : IDisposable {
         back.AllowedScopes.ShouldBe(["openid", "profile", "cyc.api"]);
     }
 
+    /// <summary>
+    ///     The handle identity uses is an address, and there is nowhere in it to put a value.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         docs/plan/00 § Non-negotiables: <i>"secrets are <c>SecretRef</c> handles resolved at
+    ///         the data plane"</i>. ⚠ <b>The absence is what makes the rule structural rather than a
+    ///         convention</b>: a nullable <c>Value</c> "for convenience" would be populated by the
+    ///         first caller who found resolving inconvenient, and from then on every backup of the
+    ///         durable tier would contain it.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Asserted from this assembly even though the type belongs to another one.</b>
+    ///         <c>CyberCloud.ResourceManager.Contracts.Tests</c> makes the same assertion, and the
+    ///         duplication is deliberate: identity gave up its own <c>VaultSecretRef</c> on the
+    ///         strength of this property holding, so identity is entitled to a test that fails if it
+    ///         stops holding — rather than to a comment saying somebody else checks.
+    ///     </para>
+    /// </remarks>
     [Fact]
-    public void AVaultSecretRefRoundTripsAndCarriesNoValue() {
-        var value = new VaultSecretRef {
+    public void TheSharedSecretRefIsAnAddressAndHasNowhereToPutAValue() {
+        var value = new SecretRef {
             Path = "tenants/x/users/y/totp",
             Field = "secret",
             Version = "3"
@@ -152,12 +173,160 @@ public sealed class IdentitySerializationTests : IDisposable {
 
         RoundTrip(value).ShouldBe(value);
 
-        // docs/plan/00 § Non-negotiables: "secrets are SecretRef handles resolved at the data plane".
-        // ⚠ There is no member a value could ride in, and that is what makes the rule structural.
-        typeof(VaultSecretRef)
+        typeof(SecretRef)
             .GetProperties(BindingFlags.Public | BindingFlags.Instance)
             .Select(x => x.Name)
             .ShouldBe(["Path", "Field", "Version", "IsEmpty"], ignoreOrder: true);
+    }
+
+    /// <summary>
+    ///     ⚠ The three properties hold the <i>shared</i> record, and re-declaring a local one would
+    ///     be the regression this test exists to catch.
+    /// </summary>
+    /// <remarks>
+    ///     Identity carried its own <c>VaultSecretRef</c> — same three fields, its own
+    ///     <c>[Alias]</c> — until 2026-08-11. A platform-wide rule with two incompatible spellings of
+    ///     its own vocabulary is the rule eroding, and the second spelling reappears by somebody
+    ///     wanting one extra field on it rather than by anybody deciding to fork it.
+    /// </remarks>
+    [Fact]
+    public void TheSecretHandlePropertiesHoldTheSharedRecordAndNotALocalCopy() {
+        typeof(ApplicationRegistration).GetProperty(nameof(ApplicationRegistration.ClientSecretRef))!
+            .PropertyType.ShouldBe(typeof(SecretRef));
+
+        typeof(ServicePrincipalDescriptor)
+            .GetProperty(nameof(ServicePrincipalDescriptor.CredentialSecretRef))!
+            .PropertyType.ShouldBe(typeof(SecretRef));
+
+        typeof(TotpEnrollment).GetProperty(nameof(TotpEnrollment.SecretRef))!
+            .PropertyType.ShouldBe(typeof(SecretRef));
+
+        // And it really is the one in CyberCloud.Core.Contracts, published under the alias it has
+        // carried since it lived in the resource manager — docs/plan/04 § Failure and upgrade.
+        typeof(SecretRef).Assembly.GetName().Name.ShouldBe("CyberCloud.Core.Contracts");
+        typeof(SecretRef).GetCustomAttribute<AliasAttribute>()!.Alias
+            .ShouldBe("CyberCloud.ResourceManager.SecretRef");
+    }
+
+    /// <summary>
+    ///     The <c>[Id(n)]</c> baseline for the three wire types that carry a secret handle.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>This list is append-only, and it is the reason the handle type could be swapped
+    ///         at all.</b> Orleans serialization is positional: the number is the contract and the
+    ///         member's <i>type</i> is looked up from it. Replacing
+    ///         <c>CyberCloud.Identity.VaultSecretRef</c> with
+    ///         <see cref="CyberCloud.Core.Contracts.SecretRef" /> was safe on the wire only because
+    ///         the two records had identical numbered members — <c>0 Path</c>, <c>1 Field</c>,
+    ///         <c>2 Version</c> — and because not one of the numbers below moved. A renumber here is
+    ///         indistinguishable on the wire from a rewrite.
+    ///     </para>
+    ///     <para>
+    ///         The assembly-wide equivalent for <c>CyberCloud.Core.Contracts</c> is
+    ///         <c>CyberCloud.Core.Contracts.Tests.WireContractTests</c>. It does not reach this
+    ///         assembly — it reflects over the assembly that holds <c>ResultSurrogate</c> — so these
+    ///         three types had no manifest at all until this test.
+    ///     </para>
+    /// </remarks>
+    static readonly (string Type, int Id, string Member)[] SecretBearingBaseline = [
+        ("ApplicationRegistration", 0, "ApplicationId"),
+        ("ApplicationRegistration", 1, "TenantId"),
+        ("ApplicationRegistration", 2, "ClientId"),
+        ("ApplicationRegistration", 3, "DisplayName"),
+        ("ApplicationRegistration", 4, "RedirectUris"),
+        ("ApplicationRegistration", 5, "PostLogoutRedirectUris"),
+        ("ApplicationRegistration", 6, "AllowedGrants"),
+        ("ApplicationRegistration", 7, "AllowedScopes"),
+        ("ApplicationRegistration", 8, "IsPublicClient"),
+        ("ApplicationRegistration", 9, "ClientSecretRef"),
+        ("ApplicationRegistration", 10, "CreatedAt"),
+
+        ("ServicePrincipalDescriptor", 0, "ServicePrincipalId"),
+        ("ServicePrincipalDescriptor", 1, "TenantId"),
+        ("ServicePrincipalDescriptor", 2, "ApplicationId"),
+        ("ServicePrincipalDescriptor", 3, "DisplayName"),
+        ("ServicePrincipalDescriptor", 4, "Enabled"),
+        ("ServicePrincipalDescriptor", 5, "CredentialSecretRef"),
+        ("ServicePrincipalDescriptor", 6, "CertificateThumbprints"),
+        ("ServicePrincipalDescriptor", 7, "CreatedAt"),
+
+        ("TotpEnrollment", 0, "SecretRef"),
+        ("TotpEnrollment", 1, "Digits"),
+        ("TotpEnrollment", 2, "PeriodSeconds"),
+        ("TotpEnrollment", 3, "ConfirmedAt")
+    ];
+
+    [Fact]
+    public void TheSecretBearingWireTypesKeepTheIdNumbersTheyPublished() {
+        var types = SecretBearingBaseline.Select(x => x.Type).ToHashSet(StringComparer.Ordinal);
+
+        var actual = typeof(UserProfile).Assembly
+            .GetTypes()
+            .Where(t => types.Contains(t.Name))
+            .SelectMany(type => type
+                .GetMembers(BindingFlags.Public | BindingFlags.Instance)
+                .Select(member => (member, id: member.GetCustomAttribute<IdAttribute>()))
+                .Where(x => x.id is not null)
+                .Select(x => (Type: type.Name, Id: (int)x.id!.Id, Member: x.member.Name))
+            )
+            .OrderBy(x => x.Type, StringComparer.Ordinal)
+            .ThenBy(x => x.Id)
+            .ToList();
+
+        actual.ShouldBe(
+            SecretBearingBaseline.OrderBy(x => x.Type, StringComparer.Ordinal).ThenBy(x => x.Id).ToList(),
+            "docs/plan/05 § Serialization and schema evolution: [Id(n)] numbers are never reused and "
+            + "never reordered. If this fails because a member was added, append it with the next "
+            + "unused number. If it fails for any other reason, the wire contract just broke."
+        );
+    }
+
+    /// <summary>
+    ///     A populated secret handle through the bytes, inside each of the three types that carry one.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Populated, because <c>new()</c> proves nothing.</b> The pre-existing coverage passed
+    ///     an empty handle, which round-trips identically whether or not the nested type has a codec
+    ///     at all — every member is already its default. The three fields below are distinct
+    ///     non-defaults, so a handle that does not survive comes back visibly empty.
+    /// </remarks>
+    [Fact]
+    public void ASecretHandleSurvivesInsideEveryWireTypeThatCarriesOne() {
+        var application = RoundTrip(
+            new ApplicationRegistration {
+                ClientId = "portal",
+                IsPublicClient = false,
+                ClientSecretRef = new() { Path = "tenants/x/apps/portal", Field = "clientSecret", Version = "7" }
+            }
+        );
+
+        application.ClientSecretRef.Path.ShouldBe("tenants/x/apps/portal");
+        application.ClientSecretRef.Field.ShouldBe("clientSecret");
+        application.ClientSecretRef.Version.ShouldBe("7");
+        application.ClientSecretRef.IsEmpty.ShouldBeFalse();
+
+        var principal = RoundTrip(
+            new ServicePrincipalDescriptor {
+                DisplayName = "CI",
+                CredentialSecretRef = new() { Path = "tenants/x/sp/ci", Field = "secret", Version = "2" }
+            }
+        );
+
+        principal.CredentialSecretRef.Path.ShouldBe("tenants/x/sp/ci");
+        principal.CredentialSecretRef.Field.ShouldBe("secret");
+        principal.CredentialSecretRef.Version.ShouldBe("2");
+
+        var enrollment = RoundTrip(
+            new TotpEnrollment {
+                SecretRef = new() { Path = "tenants/x/users/y/totp", Field = "secret", Version = "3" }
+            }
+        );
+
+        enrollment.SecretRef.Path.ShouldBe("tenants/x/users/y/totp");
+        enrollment.SecretRef.Field.ShouldBe("secret");
+        enrollment.SecretRef.Version.ShouldBe("3");
+        enrollment.SecretRef.ToString().ShouldBe("tenants/x/users/y/totp#secret@3");
     }
 
     [Fact]
@@ -183,6 +352,96 @@ public sealed class IdentitySerializationTests : IDisposable {
         RoundTrip(new PasskeyAssertionChallenge { OptionsJson = "{}" }).OptionsJson.ShouldBe("{}");
         RoundTrip(new PasskeyRegistrationRequest { Email = "c@example.com", Existing = [] }).Email
             .ShouldBe("c@example.com");
+    }
+
+    /// <summary>
+    ///     Every alias string this assembly publishes, recorded. Changing one is a wire break.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>The strings, not the shape.</b> Until this list existed, the only thing asserted
+    ///         about these aliases was that each starts with <c>CyberCloud.Identity.</c> — so
+    ///         re-spelling <c>CyberCloud.Identity.VaultSecretRef</c> to
+    ///         <c>CyberCloud.Identity.VaultSecretReference</c> passed every test in the repository,
+    ///         and would have silently failed to deserialize every payload written before it.
+    ///         <c>CyberCloud.Core.Contracts.Tests.WireContractTests</c> has had the equivalent list
+    ///         since that assembly existed; this one did not, and the gap was found by making
+    ///         exactly that edit and watching nothing go red.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Grain interfaces are in the list too, and they are not decoration.</b> An
+    ///         <c>[Alias]</c> on a grain interface is how a caller's request is routed to an
+    ///         implementation — docs/plan/04 § Failure and upgrade — so renaming
+    ///         <c>IUserGrain</c>'s alias breaks calls rather than payloads. Both failure modes are
+    ///         invisible at compile time, which is why one list covers both.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Adding a line is a wire-contract decision.</b> Removing one retires an alias:
+    ///         safe only while <c>git tag</c> is empty and nothing has ever been deserialized under
+    ///         it, which is the argument recorded at the top of <c>IdentityWireTypes.cs</c> for the
+    ///         one line that has been removed. After the first release tag the correct move is a
+    ///         burned entry with a comment, never a deletion.
+    ///     </para>
+    /// </remarks>
+    static readonly string[] PublishedAliases = [
+        "CyberCloud.Identity.ApplicationRegistration",
+        "CyberCloud.Identity.AuthenticationMethod",
+        "CyberCloud.Identity.ClusterOidcIssuer",
+        "CyberCloud.Identity.CredentialKind",
+        "CyberCloud.Identity.ExchangedSubject",
+        "CyberCloud.Identity.GrantType",
+        "CyberCloud.Identity.GroupDescriptor",
+        "CyberCloud.Identity.IApplicationGrain",
+        "CyberCloud.Identity.IGroupGrain",
+        "CyberCloud.Identity.IManagedIdentityGrain",
+        "CyberCloud.Identity.IServicePrincipalGrain",
+        "CyberCloud.Identity.ISessionGrain",
+        "CyberCloud.Identity.IUserGrain",
+        "CyberCloud.Identity.Invitation",
+        "CyberCloud.Identity.ManagedIdentityDescriptor",
+        "CyberCloud.Identity.PasskeyAssertionChallenge",
+        "CyberCloud.Identity.PasskeyCredential",
+        "CyberCloud.Identity.PasskeyRegistrationChallenge",
+        "CyberCloud.Identity.PasskeyRegistrationRequest",
+        "CyberCloud.Identity.RecoveryCodeBatch",
+        "CyberCloud.Identity.RefreshRotation",
+        "CyberCloud.Identity.RevocationReason",
+        "CyberCloud.Identity.ServicePrincipalDescriptor",
+        "CyberCloud.Identity.SessionDescriptor",
+        "CyberCloud.Identity.SignInOutcome",
+        "CyberCloud.Identity.TotpEnrollment",
+        "CyberCloud.Identity.UserProfile",
+        "CyberCloud.Identity.UserStatus",
+        "CyberCloud.Identity.WorkloadBinding"
+
+        // ⚠ "CyberCloud.Identity.VaultSecretRef" was REMOVED, not burned, and that is the one
+        // exception this list's own rule allows. The append-only rule protects aliases a deployed
+        // peer might send; `git tag` is empty, nothing has ever run, and the type it named is now
+        // CyberCloud.Core.Contracts.SecretRef under the alias that type was published with. If any
+        // silo had ever run, this would instead be a burned entry with a comment. The full argument,
+        // including when it stops being available, is at the top of IdentityWireTypes.cs.
+    ];
+
+    [Fact]
+    public void TheAliasesAreTheOnesRecordedHere() {
+        // ⚠ Hand-written types only. Orleans' generator emits a proxy per grain interface and gives
+        // every one of them [Alias("GrainRef")] — six identical strings that are not this assembly's
+        // contract to keep, are not unique, and would drown the list they were recorded in.
+        var actual = typeof(UserProfile).Assembly
+            .GetTypes()
+            .Where(x => x.GetCustomAttribute<GeneratedCodeAttribute>() is null)
+            .Select(x => x.GetCustomAttribute<AliasAttribute>()?.Alias)
+            .Where(x => x is not null)
+            .Select(x => x!)
+            .OrderBy(x => x, StringComparer.Ordinal)
+            .ToList();
+
+        actual.ShouldBe(
+            PublishedAliases.OrderBy(x => x, StringComparer.Ordinal).ToList(),
+            "an alias string changed, or an [Alias] type was added or removed without recording it. "
+            + "All three are wire-contract changes — docs/plan/04 § Failure and upgrade makes the "
+            + "alias, not the CLR name, what the far side looks up."
+        );
     }
 
     [Fact]

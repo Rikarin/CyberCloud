@@ -15,7 +15,7 @@ namespace CyberCloud.Identity;
 ///     </para>
 ///     <para>
 ///         ⚠ <b>What is deliberately absent:</b> the TOTP shared secret (a
-///         <see cref="VaultSecretRef" /> instead — docs/plan/11 § Credentials), the recovery codes in
+///         <see cref="CyberCloud.Core.Contracts.SecretRef" /> instead — docs/plan/11 § Credentials), the recovery codes in
 ///         plaintext (hashes), the pepper (resolved at the data plane), and any group membership
 ///         (ReBAC tuples — docs/plan/11 § The object model).
 ///     </para>
@@ -143,7 +143,7 @@ public sealed class ServicePrincipalGrainState {
 ///         secrets" and justifies 1.2 EM with "no secret is ever stored, on either side … it removes
 ///         an entire incident class". Compare the three states above it: <c>UserGrainState</c> holds
 ///         hashes and a vault handle, <c>ApplicationGrainState</c> and
-///         <c>ServicePrincipalGrainState</c> hold a <see cref="VaultSecretRef" />. This holds a
+///         <c>ServicePrincipalGrainState</c> hold a <see cref="CyberCloud.Core.Contracts.SecretRef" />. This holds a
 ///         binding — <i>who</i> may present a token — and a public key set. A stolen backup of this
 ///         row lets an attacker learn which namespace a workload runs in, and nothing else.
 ///     </para>
