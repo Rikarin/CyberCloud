@@ -211,21 +211,18 @@
       about the compiler, and a test that asserted a runtime exception instead would be asserting a
       different — weaker — property. CompileFailureTests in CyberCloud.Kubernetes.Contracts.Tests
       compiles real source against the real contracts assembly and asserts the diagnostic id.
-      ⚠ PINNED AT 5.0.0, NOT THE NEWEST (5.6.0), AND THE CONSTRAINT IS NOT NEGOTIABLE HERE.
-      Something already in the graph brings Microsoft.CodeAnalysis.Workspaces.Common 5.0.0, which
-      has an EXACT dependency on Microsoft.CodeAnalysis.Common (= 5.0.0). With
-      CentralPackageTransitivePinningEnabled (Directory.Build.props § Restore), asking for
-      Microsoft.CodeAnalysis.CSharp 5.6.0 pins Common to 5.6.0 and restore fails with
+      ⚠ The version lives in the Roslyn group below, NOT here. Two parallel branches each added a
+      `Microsoft.CodeAnalysis.CSharp` pin — 5.0.0 for this compile-failure test, 5.6.0 for
+      CyberCloud.Analyzers — and the merge produced `error NU1506: Duplicate 'PackageVersion' items`.
+      Neither branch could have seen the other; this is exactly the cross-branch drift a per-branch
+      gate cannot catch.
 
-        error NU1608: Detected package version outside of dependency constraint:
-        Microsoft.CodeAnalysis.Workspaces.Common 5.0.0 requires Microsoft.CodeAnalysis.Common
-        (= 5.0.0) but version Microsoft.CodeAnalysis.Common 5.6.0 was resolved.
-
-      — an error rather than a warning because docs/plan/00 § Non-negotiables makes warnings errors.
-      5.0.0 compiles the language this repository writes (SDK 10.0.100, LangVersion latest), which
-      is all the compile-failure test needs.
+      Resolved to the single 5.6.0 pin below, for the analyzers' reason (it is a ceiling set by the
+      compiler that loads the analyzer, not a preference). The 5.0.0 argument was an NU1608 against
+      `Microsoft.CodeAnalysis.Workspaces.Common 5.0.0`'s exact constraint on `…Common`; that no
+      longer binds, because the Roslyn group pins `Microsoft.CodeAnalysis.CSharp.Workspaces` at
+      5.6.0 and transitive pinning lifts the whole family together. Verified by restore.
     -->
-    <PackageVersion Include="Microsoft.CodeAnalysis.CSharp" Version="5.0.0" />
   </ItemGroup>
 
   <ItemGroup Label="Build">
@@ -275,6 +272,22 @@
       lifts it to 5.6.0 because this line exists.
     -->
     <PackageVersion Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="5.6.0" />
+
+    <!--
+      ⚠ ALSO A TRANSITIVE PIN, and pinning the line above is not sufficient — this is a DIFFERENT
+      package id. `Microsoft.CodeAnalysis.CSharp.Workspaces` and
+      `Microsoft.CodeAnalysis.Workspaces.Common` are separate packages, and only the latter carries
+      an EXACT constraint on `Microsoft.CodeAnalysis.Common`. Left unpinned it resolves to 5.0.0,
+      whose `(= 5.0.0)` then collides with the 5.6.0 the rest of this group pins:
+
+        error NU1608: Microsoft.CodeAnalysis.Workspaces.Common 5.0.0 requires
+        Microsoft.CodeAnalysis.Common (= 5.0.0) but version 5.6.0 was resolved
+
+      — fatal rather than a warning because docs/plan/00 § Non-negotiables makes warnings errors.
+      Found by merging two parallel branches that had each pinned Microsoft.CodeAnalysis.CSharp
+      differently; neither branch's own gate could see it. Pin the whole family or none of it.
+    -->
+    <PackageVersion Include="Microsoft.CodeAnalysis.Workspaces.Common" Version="5.6.0" />
   </ItemGroup>
 
   <!-- ══════════════ Aspire — ADR-014, LOCAL DEVELOPMENT ONLY ══════════════ -->
