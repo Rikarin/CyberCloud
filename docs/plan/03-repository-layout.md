@@ -30,6 +30,9 @@ CyberCloud/
 ├── portal/                       # ── Angular 22 + xUI ──
 ├── cli/                          # ── `cyc` — .NET, but kept out of src/ because it ships separately ──
 ├── deploy/                       # ── how Cyber Cloud itself is installed ──
+├── openapi/                      # ── generated, checked in, diffed (ADR-012, 21 § OpenAPI) ──
+│   ├── index.json                # the api-version index; always written, even when empty
+│   └── {yyyy-MM-dd}.json         # one document per api-version
 ├── test/                         # ── cross-cutting: e2e, conformance, chaos, load ──
 ├── docs/
 │   ├── plan/                     # this directory — the design record
@@ -57,6 +60,12 @@ gone missing here.
 `references/` is excluded from every glob and never restored. It exists so "how did Cozystack wire
 CloudNativePG" is a `grep` away rather than a browser tab away.
 
+`openapi/` is the one directory of generated files that is **tracked**. It is not under `artifacts/`
+precisely because [21 § OpenAPI](21-cli-and-sdks.md) makes the document *"a build artifact that is
+**diffed**"* — and `artifacts/` is gitignored, so a file git cannot see is a file no diff can fail
+on. `./build.sh Generate` writes it; the **Generated surfaces** and **OpenAPI compatibility** gates
+in [23](23-build-ci-and-testing.md) read it.
+
 ## `src/` — the .NET tree
 
 Naming: **folder name == assembly name == root namespace**, `CyberCloud.` prefix on everything. Tests
@@ -76,6 +85,7 @@ src/
 ├── CyberCloud.Kubernetes.Charts/        # helm rendering + HelmRelease-free direct apply
 ├── CyberCloud.ResourceManager/          # provider registry, LRO, reconcile scheduler, locks, tags (08)
 ├── CyberCloud.ResourceManager.Contracts/
+├── CyberCloud.ResourceManager.Generator/ # ⚠ Exe, never deployed — ADR-012's generation step
 ├── CyberCloud.Metering/                 # usage events, aggregation, quota enforcement (22)
 ├── CyberCloud.Billing/                  # rating, ledger, invoices (22)
 ├── CyberCloud.Telemetry/                # our own OTel wiring + the ingest path for tenants (16)
@@ -98,6 +108,14 @@ their output directory or their assembly metadata — which is why
 referencing it. **Adding that four-line `ItemGroup` is what puts a new assembly under the rules**;
 there is no automatic wiring, deliberately, because a repository-wide analyzer injection in
 `Directory.Build.targets` would also try to make the analyzer analyse itself.
+
+⚠ **`CyberCloud.ResourceManager.Generator` is the one project under `src/` that is not part of the
+product.** It is an `Exe` that `./build.sh Generate` runs: it loads the provider assemblies, runs each
+`Describe`, and emits `openapi/`. It lives under `src/` rather than under `build/` because it has to
+reference `CyberCloud.ResourceManager` for real — [08 § The provider registry](08-resource-manager.md)
+requires the emitters to read *the same object* the write path validates against, which means running
+a provider's code, which the Nuke build host deliberately never does (`build/ArchitectureFacts.cs`
+reads metadata rather than loading assemblies, for exactly that reason). It ships nowhere.
 
 `CyberCloud.ServiceDefaults` is the direct descendant of Survival's — `OrleansApplication.CreateServer`
 / `CreateClient`, health checks, Serilog, OTel. It is copied in shape, not in code, because the

@@ -77,6 +77,12 @@
         <Project Path="src/CyberCloud.ResourceManager.Contracts.Tests/CyberCloud.ResourceManager.Contracts.Tests.csproj"/>
         <Project Path="src/CyberCloud.ResourceManager/CyberCloud.ResourceManager.csproj"/>
         <Project Path="src/CyberCloud.ResourceManager.Tests/CyberCloud.ResourceManager.Tests.csproj"/>
+        <!--
+          ADR-012's generation step. An Exe, run by `./build.sh Generate` and by the Generated
+          surfaces gate — never deployed. See its .csproj for why it is a separate process from the
+          Nuke build rather than code inside it.
+        -->
+        <Project Path="src/CyberCloud.ResourceManager.Generator/CyberCloud.ResourceManager.Generator.csproj"/>
     </Folder>
     <Folder Name="/src/Providers/"/>
     <Folder Name="/src/Hosts/">
