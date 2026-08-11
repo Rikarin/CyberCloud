@@ -92,7 +92,7 @@ labels:
   cybercloud.io/subscription-id: 77de4a10-…
   cybercloud.io/resource-group:  prod
   cybercloud.io/resource-id:     3a8f0c22-…
-  cybercloud.io/resource-type:   cyberCloud.dbforpostgresql_servers
+  cybercloud.io/resource-type:   cybercloud.dbforpostgresql_servers    # ⚠ fully lower case — see below
   cybercloud.io/api-version:     2026-08-01
   cybercloud.io/managed-by:      cybercloud
 annotations:
@@ -104,6 +104,16 @@ annotations:
 36 characters and legal. The *path* is not — hence path as an annotation, id as a label. Resource type
 is lowercased and `/` replaced by `_` for the same reason. This is exactly the kind of detail that
 becomes a two-day bug six months in, so it is decided here.
+
+⚠ **CORRECTED: the example above used to print `cyberCloud.dbforpostgresql_servers`, with a capital
+C** — contradicting the sentence immediately before this one, which has always said the resource type
+is lowercased. The document disagreed with itself and the example was the wrong half. It matters
+because `resource-type` is a **selector**, not a display string: label matching is exact and
+case-sensitive, so a mixed-case value makes
+`kubectl get -l cybercloud.io/resource-type=cybercloud.dbforpostgresql_servers` — and every
+label-filtered list the platform issues — return nothing at all, *successfully*. A selector that
+matches zero objects is not an error anywhere in Kubernetes. Found by writing `KubeLabelTests`, which
+now pins the fully lower-cased form, leading `c` included.
 
 **Why not `HelmRelease` and Flux**, which is what Cozystack does: because then desired state lives in
 the target cluster's etcd (contradicting ADR-001), the reconcile loop is Flux's rather than ours (so
@@ -191,6 +201,26 @@ function, not caution.
 | **2 — dogfood** | The existing cluster | The second cluster runs *real tenant workloads* | Managed services work |
 | **3 — migration** | The managed cluster | Itself + others | ⚠ The interesting one |
 
+⚠ **CORRECTED: phase 0's "the charts install" cannot happen until the Orleans membership CRDs exist,
+and this table never mentioned them.** The omission is easy to make because the natural assumption —
+that the clustering provider creates its own definitions — is false. Verified by reading the shipped
+assembly of `Orleans.Clustering.Kubernetes` 10.0.1: it makes exactly five Kubernetes calls
+(`Create`, `Get`, `List`, `Replace` and `Delete` `NamespacedCustomObjectAsync`) and **zero
+`apiextensions.k8s.io` calls anywhere**. A silo started against a cluster without the definitions
+neither creates them nor degrades — it fails, and the failure names a missing *custom resource* rather
+than a missing CRD, which is the version of this bug that costs an afternoon.
+
+The package does *ship* them, at `lib/Definitions/SiloEntryCRD.yaml` and
+`lib/Definitions/ClusterVersionCRD.yaml`. They are copied verbatim into
+`deploy/bootstrap/10-orleans-crds.yaml`, and re-copied and diffed whenever the pinned package version
+moves — the `orleans.dot.net/v1` schema is the package's, not ours. They are deliberately not in
+`charts/platform` either: Helm installs `crds/` once and never upgrades or deletes it, so a chart-owned
+CRD is a CRD nobody can change.
+
+**So phase 0's first step is applying two cluster-scoped objects**, which needs rights the platform's
+own identity does not have and never will — see [02 § ADR-004](02-technology-decisions.md), where the
+cost sentence that omitted this is corrected.
+
 **Phase 3 has a circular dependency and it needs a written answer, not a shrug.** If the platform runs
 on cluster B and cluster B is managed by the platform, then a platform outage means cluster B cannot
 be repaired through the platform. The answer, in three parts:
@@ -198,8 +228,17 @@ be repaired through the platform. The answer, in three parts:
 1. **The platform's own resources are marked `self-managed`** and are excluded from tenant-facing
    reconciliation. The platform does not provision itself.
 2. **`deploy/bootstrap/` remains supported and tested forever** — it is what an operator runs to repair
-   or reinstall the platform with no platform running. It is exercised by every e2e run, so it cannot
-   rot.
+   or reinstall the platform with no platform running. ~~It is exercised by every e2e run, so it cannot
+   rot.~~
+
+   ⚠ **CORRECTED, as of 2026-08-11: nothing exercises it.** Checked rather than assumed — `build/` was
+   grepped for `bootstrap` and the only hit is `_build.csproj` describing where Nuke writes its *own*
+   bootstrapping scripts. `Build.E2E` is a stub that reports itself unimplemented and names
+   `test/CyberCloud.E2E`, a project that does not exist yet; `deploy/bootstrap/bootstrap.sh` is run by
+   hand and by nothing else. Read the sentence as the intention it is: **wiring `E2E` to stand its
+   environment up from `deploy/bootstrap/` is what would make it true**, and it is the cheapest way to
+   buy the guarantee. Until that edge exists the directory rots at exactly the rate of anything nobody
+   runs. Same claim, same correction, in [03 § deploy/](03-repository-layout.md).
 3. **Cluster B's control plane is not Kamaji-hosted by us.** It is a standalone cluster (Talos or
    whatever the operator runs), because a hosted control plane whose host is the thing that broke is
    not recoverable. In-house *tenant* clusters are Kamaji-hosted; the platform's cluster is not.

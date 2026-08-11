@@ -93,6 +93,25 @@ Restating ADR-003 with the operational detail.
   credentials, service principals, ReBAC tuples, operations, cluster connections, quota grants,
   billing ledger, audit cursors.
 
+⚠ **CORRECTED: "16 to start" counts only the tenant-carrying shards, and there is a 17th.** Every
+null-tenant grain in [04 § Grain taxonomy](04-orleans-topology.md) — the tenant directory, the shard
+map, the cluster-connection grains — is durable and belongs to no tenant, so it needs a home, and this
+list gave it none. Found by wiring the tier rather than by reading: `DurableTierOptions.NullTenantShard`
+is the setting that names that home, the Aspire AppHost already provisions `platform00` alongside
+`durable00` and `durable01`, and `deploy/README.md` § The rest of the contract requires it to be set
+explicitly. **So the table is 16 + 1.** The platform shard is deliberately *not* in the tenant
+placement rotation — no tenant is ever assigned to it — which is why it does not change the tenant
+arithmetic above.
+
+⚠ **Left unset, `NullTenantShard` is silently wrong rather than loudly wrong, and that is the reason
+it is worth a paragraph.** It is a nullable string with no default. When it is null, null-tenant grains
+hash like any other tenant, using `Orleans.Multitenant`'s sentinel tenant id — the literal string
+`Null` — as the hash input. The platform's own state therefore lands on *some* tenant shard:
+deterministic, arbitrary, and indistinguishable from working, right up until a shard is added and the
+tenant directory moves to a different server. Nothing throws, nothing logs, and the first symptom is an
+empty directory. Set it explicitly in the global cluster; the wiring validates that the name is in the
+shard table, but it cannot validate a name nobody supplied.
+
 ### Choosing a tier
 
 ```csharp

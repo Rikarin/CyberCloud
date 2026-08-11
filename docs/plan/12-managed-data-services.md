@@ -15,9 +15,38 @@ the platform is missing something and the platform gets fixed, not the service.
 | 3 | A `ResourceType` registration with meters, permissions and actions | The provider's `Describe` |
 | 4 | An `IResourceReconciler` — render, apply, observe | ~150 lines |
 | 5 | Credential provisioning into the tenant's Vault, exposed by a `listKeys` action | `ISecretResolver` |
-| 6 | A `ServiceMonitor`/`VMPodScrape` + a Grafana dashboard | The chart |
-| 7 | A backup policy binding (Velero + volume snapshots) | `charts/managed/{svc}/backup.yaml` |
+| 6 | A `ServiceMonitor`/`VMPodScrape` + a Grafana dashboard | ~~The chart~~ ⚠ the operator, where there is one — corrected below |
+| 7 | A backup policy binding (Velero + volume snapshots) | `charts/managed/{svc}/backup.yaml` — ⚠ under-specified, see below |
 | 8 | A conformance manifest | `charts/managed/{svc}/conformance.yaml` |
+
+⚠ **CORRECTED, piece 6: "The chart" is the wrong place for an operator-managed service.** The outcome
+is right and stays — every managed service is scraped and has a dashboard — but the location is wrong,
+and it is wrong in a way that only shows up on the second upgrade. A chart-authored `ServiceMonitor` or
+`VMPodScrape` has to hard-code the operator's pod labels, its metrics port and its container name; the
+operator changes one of them in a minor release and the scrape goes quiet without failing. Found
+building `charts/managed/postgres`: CloudNativePG emits the `PodMonitor` itself, and the switch is
+**`spec.monitoring.enablePodMonitor` on the `Cluster` CR** — one annotated boolean in `values.yaml`,
+rendered into the CR, with the operator owning the selector it is uniquely qualified to own.
+
+So piece 6 reads: **ask the operator for the scrape object wherever the operator accepts the request,
+and hand-write one into the chart only when there is no operator to ask.** The Grafana dashboard stays
+chart-side either way; that one is ours.
+
+⚠ **Piece 7 is under-specified, and the first service did not use it.** Two things are wrong with it
+as written. First, `backup.yaml` sits *outside* `templates/`, so Helm never renders it — which is
+defensible, since a backup policy is chart data like `conformance.yaml` rather than a manifest — but
+**nothing in this plan says which component reads it**, and `Build.Charts` requires `SOURCE` and
+`conformance.yaml` while requiring nothing of this file. An unread data file drifts by definition.
+Second, `charts/managed/postgres` took the same route piece 6 turned out to want: backup is an
+annotated `backup` block in `values.yaml` rendering into the `Cluster` CR's barman-cloud `backup:`
+stanza, not Velero and volume snapshots. See [03 § charts/](03-repository-layout.md) for the same
+finding reached from the repository tree.
+
+**The decision piece 7 needs**, written here so it is taken once rather than per service: whether the
+piece means *a policy file some platform backup service reads*, or *the service is backed up, by
+whatever mechanism its operator already provides* — with `backup.yaml` as the fallback for services
+whose operator has none. The evidence so far points at the second, because the first service that had
+an operator answer preferred it.
 
 The **2 engineer-weeks per service** target from [00](00-vision-and-principles.md) is a claim about
 this list. It is measured: the roadmap tracks actual elapsed time per service and treats a miss as a

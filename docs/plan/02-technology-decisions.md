@@ -291,7 +291,32 @@ server is already a dependency of every pod, already HA, and already the thing t
 us anyway. It also means a silo that Kubernetes has evicted is a silo Orleans knows is gone.
 
 **Cost.** The silo needs RBAC to read/write its membership CRs, and `UseKubernetesHosting()` so
-Orleans learns its pod identity. Both are three lines. Also: our own silos must run *somewhere*, and
+Orleans learns its pod identity. ~~Both are three lines.~~
+
+⚠ **CORRECTED: "three lines" is wrong, and the half it leaves out is the half that constrains the
+install.** Measured while writing `deploy/bootstrap/20-rbac.yaml` and `deploy/bootstrap/10-orleans-crds.yaml`,
+with every verb read off the shipped assemblies rather than copied from a sample:
+
+| | Objects | Scope | Who can apply it |
+|---|---|---|---|
+| The grant | 2 `Role`s, 3 `ServiceAccount`s, 2 `RoleBinding`s | Namespaced | The platform's own namespace |
+| **The schema** | `silos.orleans.dot.net`, `clusterversions.orleans.dot.net` | **Cluster** | ⚠ Only an identity with `apiextensions.k8s.io` rights — which no Cyber Cloud ServiceAccount has |
+
+**The count is not the finding; the scope split is.** `20-rbac.yaml` grants the silo nothing on
+`apiextensions.k8s.io`, on purpose, so a compromised silo cannot rewrite the schema of its own
+membership store. The consequence is that the CRD half can never be self-service: it is an operator
+step that runs before any Cyber Cloud identity exists, and it is why `deploy/bootstrap/` is a directory
+you run by hand rather than a chart the platform installs. The definitions are also not in
+`charts/platform` — Helm's `crds/` directory is installed once and never upgraded or deleted, so a
+chart-owned CRD is a CRD nobody can change. See [09 § The platform's own cluster](09-kubernetes-fabric.md),
+where phase 0 now says so.
+
+Three ServiceAccounts rather than one because the three identities want different things: the silo
+writes membership, the gateway only reads it, and the durable-schema job talks to PostgreSQL and to
+nothing else — so it is granted nothing and its token is not even mounted. One shared account would
+hand the job the silo's membership rights for no reason.
+
+Also: our own silos must run *somewhere*, and
 that somewhere is a cluster — see § [09 § Bootstrap](09-kubernetes-fabric.md) for the chicken-and-egg,
 which is resolved by deploying to an existing cluster first, as the brief already decided.
 

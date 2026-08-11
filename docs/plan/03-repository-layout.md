@@ -60,6 +60,26 @@ gone missing here.
 `references/` is excluded from every glob and never restored. It exists so "how did Cozystack wire
 CloudNativePG" is a `grep` away rather than a browser tab away.
 
+⚠ **CORRECTED: this tree places the .NET SDK nowhere, and the rule it states for `cli/` does not
+reach it.** `cli/` is kept out of `src/` "because it ships separately" — and the SDK ships separately
+too, so as written the stated reason would have put the SDK beside it. It does not live there. It is
+at **`src/CyberCloud.Sdk/`**, listed in § `src/` below, and the placement is a decision rather than an
+oversight:
+
+- **The SDK is library code the generator writes into.** Most of it is regenerated per release from
+  the provider registry ([21 § Generation](21-cli-and-sdks.md)), exactly like `portal/libs/api`, and
+  every other .NET output of that generator is under `src/`. Moving it out would split one generated
+  surface across two trees.
+- **`cyc` is an application, and that is the difference.** It is single-file AOT-published per RID,
+  with its own release cadence and its own RID matrix. None of that is true of a NuGet package.
+
+So the rule is **what a thing is, not how it ships**: `src/` is the .NET library and service tree and
+`cli/` is the one shipped binary. Found while wiring packing, which is where the distinction stops
+being philosophical: `Directory.Build.props` sets `IsPackable=false` for the whole repository, and
+`src/CyberCloud.Sdk/CyberCloud.Sdk.csproj` is the single project under `src/` that opts back in — the
+one place "ships separately" is a fact the build can see. As of 2026-08-11 `cli/` holds a README and
+nothing else.
+
 `openapi/` is the one directory of generated files that is **tracked**. It is not under `artifacts/`
 precisely because [21 § OpenAPI](21-cli-and-sdks.md) makes the document *"a build artifact that is
 **diffed**"* — and `artifacts/` is gitignored, so a file git cannot see is a file no diff can fail
@@ -90,6 +110,7 @@ src/
 ├── CyberCloud.Billing/                  # rating, ledger, invoices (22)
 ├── CyberCloud.Telemetry/                # our own OTel wiring + the ingest path for tenants (16)
 ├── CyberCloud.ServiceDefaults/          # AddServiceDefaults, health checks, Orleans host builders
+├── CyberCloud.Sdk/                      # ⚠ the .NET SDK — the one IsPackable project under src/ (21)
 └── CyberCloud.Analyzers/                # ⚠ netstandard2.0 — CC1001..CC1007, the compile-time half of 00
 ```
 
@@ -208,7 +229,8 @@ charts/
 │   │   ├── values.yaml           # annotated (ADR-010) — the schema source
 │   │   ├── values.schema.json    # GENERATED — checked in, diffed in CI
 │   │   ├── templates/
-│   │   ├── SOURCE                # upstream repo + commit, if forked
+│   │   ├── SOURCE                # upstream repo + commit, if forked   ⚠ required always — see below
+│   │   ├── backup.yaml           # ⚠ the backup policy binding — 12 § The pattern, once, piece 7
 │   │   └── conformance.yaml      # what the conformance suite asserts for this type
 │   ├── valkey/ … clickhouse/ … kafka/ … harbor/ … seaweedfs/ …
 └── tenant-cluster/         # Cluster API + Kamaji + KubeVirt templates for an in-house cluster (09)
@@ -218,6 +240,33 @@ The annotated `values.yaml` is the **single description of a managed service's c
 `Build.Charts` generates `values.schema.json` from it; `Build.Generate` turns that into the resource
 type's OpenAPI body, the CLI flags, the SDK model and the portal form. A chart whose generated schema
 differs from the checked-in one fails CI.
+
+⚠ **CORRECTED: `SOURCE` is required for every managed chart, not only "if forked".** "If forked" makes
+ADR-010's provenance rule unenforceable, because it makes *no `SOURCE` file* a legal state — and a
+legal absence is indistinguishable from "somebody forked a chart and forgot", which is the one case the
+rule exists to catch. Found while building the gate rather than while reading the rule: `Build.Charts`
+requires the file on every chart under `charts/managed/`, requires it to declare both `vendored:` and
+`upstream:`, and accepts **`vendored: none`** for a chart we wrote ourselves. `none` is an answer to
+"where did this come from"; a missing file is not an answer, it is a silence.
+
+⚠ **CORRECTED: `backup.yaml` was missing from this tree**, though
+[12 § The pattern, once](12-managed-data-services.md) piece 7 makes a backup policy binding one of the
+eight things every managed service has, and puts it at exactly this path. It is listed above now — but
+adding the line does not finish the job, and the remaining gap is worth writing down rather than
+papering over:
+
+- **It sits outside `templates/`, so Helm never renders it.** That is not a bug to fix by moving it: a
+  backup policy is chart *data*, like `conformance.yaml`, not a manifest to apply into a tenant's
+  cluster. The defect is that **nothing says which component reads it**, and an unread data file drifts
+  by definition. `Build.Charts` requires `SOURCE` and `conformance.yaml` and does not require this one,
+  so today the answer is "nobody".
+- **The first chart built does not have one.** `charts/managed/postgres` expresses backup as an
+  annotated `backup` block in `values.yaml` that renders into the CloudNativePG `Cluster` CR's
+  `backup:` stanza — barman-cloud, WAL archiving, a retention policy — which is the operator's own
+  mechanism rather than Velero and volume snapshots.
+
+The decision piece 7 still needs is in [12 § The pattern, once](12-managed-data-services.md), stated
+there.
 
 ## `portal/`
 
@@ -246,7 +295,13 @@ deploy/
 The bootstrap directory is the answer to "the platform manages clusters, but who manages the
 platform's cluster" — and the brief already settled it: the platform is installed on an existing
 cluster by hand, manages a second one, and moves onto it once that is boring. `deploy/bootstrap/`
-is that hand-installation, kept honest by being the same thing CI uses to stand up e2e.
+is that hand-installation, ~~kept honest by being the same thing CI uses to stand up e2e~~.
+
+⚠ **CORRECTED, as of 2026-08-11: CI does not use it, so nothing keeps it honest yet.** `build/` was
+grepped for `bootstrap` and the only hit describes Nuke's own bootstrapping scripts; `Build.E2E`
+reports itself unimplemented. The same claim, and the same correction with the evidence, is in
+[09 § The platform's own cluster](09-kubernetes-fabric.md) — it is one sentence stated in two
+documents, so it is corrected in both.
 
 ## `test/`
 
