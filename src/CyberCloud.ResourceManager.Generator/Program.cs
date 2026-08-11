@@ -6,8 +6,9 @@ using System.Text.Json.Nodes;
 namespace CyberCloud.ResourceManager.Generator;
 
 /// <summary>
-///     ADR-012's generation step: provider registry → the four surfaces. OpenAPI is written; the
-///     other three are not, and <see cref="Main" /> says so rather than implying it did everything.
+///     ADR-012's generation step: provider registry → the five surfaces. Which of them ran depends on
+///     which output directory was given, and <see cref="Main" /> says which rather than implying it
+///     did everything.
 /// </summary>
 static class Program {
     const int Ok = 0;
@@ -25,6 +26,7 @@ static class Program {
     static int Main(string[] arguments) {
         string? output = null;
         string? derived = null;
+        string? charts = null;
         string? report = null;
         var write = true;
         var providerAssemblies = new List<string>();
@@ -37,6 +39,12 @@ static class Program {
 
                 case "--derived-output" when i + 1 < arguments.Length:
                     derived = arguments[++i];
+                    break;
+
+                // ⚠ Separate from --derived-output because the fifth surface is not written under
+                // generated/: it is an edit to a file the chart author also owns. See ChartSurfaces.
+                case "--charts" when i + 1 < arguments.Length:
+                    charts = arguments[++i];
                     break;
 
                 case "--report" when i + 1 < arguments.Length:
@@ -54,7 +62,7 @@ static class Program {
                 default:
                     Console.Error.WriteLine(
                         $"Unrecognised argument '{arguments[i]}'. Usage: --output <dir> "
-                        + "[--derived-output <dir>] [--report <file>] [--check] "
+                        + "[--derived-output <dir>] [--charts <dir>] [--report <file>] [--check] "
                         + "[--provider-assembly <path>]..."
                     );
 
@@ -87,17 +95,36 @@ static class Program {
                 Console.WriteLine(line);
             }
 
-            // ⚠ Said on every run, including the clean ones. docs/plan/02 § ADR-012 names four
+            // ⚠ The fifth surface reads the registry rather than the documents above, and the reason
+            // is on ChartAnnotationEmitter: the chart a type renders is a registry fact the OpenAPI
+            // document does not carry, so there is no pairing to read back out of one.
+            var annotations = charts is { Length: > 0 }
+                ? ChartSurfaces.Generate(registry, charts, write)
+                : new ChartAnnotationReport([], [], 0, 0);
+
+            foreach (var line in ChartSurfaces.Describe(annotations)) {
+                Console.WriteLine(line);
+            }
+
+            // ⚠ Said on every run, including the clean ones. docs/plan/02 § ADR-012 names five
             // surfaces; a log that did not say which of them ran reads like the pipeline is finished
             // whatever it did.
             Console.WriteLine(
                 derived is { Length: > 0 }
-                    ? "All four of ADR-012's surfaces: the OpenAPI document, the cyc verb tree, the "
+                    ? "Four of ADR-012's five surfaces: the OpenAPI document, the cyc verb tree, the "
                       + ".NET SDK and the portal forms. The last three are generated from the first — "
                       + "docs/plan/21 § Generation. ⚠ The TypeScript, Python and Go SDKs and the "
                       + "Terraform provider are docs/plan/21 § Other SDKs and are not written."
                     : "OpenAPI only: no --derived-output was given, so the cyc verb tree, the .NET SDK "
                       + "and the portal forms were not written."
+            );
+
+            Console.WriteLine(
+                charts is { Length: > 0 }
+                    ? "The fifth surface, a managed chart's @param block, ran — ADR-010 § Which end "
+                      + "authors the schema."
+                    : "No --charts was given, so no chart's @param block was compared against the "
+                      + "registry."
             );
 
             if (report is { Length: > 0 }) {
@@ -109,7 +136,9 @@ static class Program {
 
                 File.WriteAllBytes(
                     report,
-                    DeterministicJson.ToBytes(Render(generated, surfaces, providerAssemblies.Count))
+                    DeterministicJson.ToBytes(
+                        Render(generated, surfaces, annotations, providerAssemblies.Count)
+                    )
                 );
             }
 
@@ -130,7 +159,12 @@ static class Program {
     /// <summary>
     ///     The report <c>build/Build.Generate.cs</c> and <c>build/Build.Architecture.cs</c> read.
     /// </summary>
-    static JsonObject Render(GenerationReport generated, DerivedReport surfaces, int assembliesScanned) {
+    static JsonObject Render(
+        GenerationReport generated,
+        DerivedReport surfaces,
+        ChartAnnotationReport annotations,
+        int assembliesScanned
+    ) {
         var documents = new JsonArray();
 
         foreach (var document in generated.Documents) {
@@ -157,10 +191,31 @@ static class Program {
             });
         }
 
+        var chartAnnotations = new JsonArray();
+
+        foreach (var annotation in annotations.Documents) {
+            chartAnnotations.Add(new JsonObject {
+                ["apiVersion"] = annotation.ApiVersion,
+                ["chart"] = annotation.Chart,
+                ["drifted"] = annotation.Drifted,
+                ["file"] = annotation.File,
+                ["problems"] = Lines(annotation.Problems),
+                ["published"] = annotation.Published,
+                ["resourceType"] = annotation.ResourceType
+            });
+        }
+
         return new JsonObject {
             ["apiVersions"] = generated.ApiVersions,
             ["assembliesScanned"] = assembliesScanned,
-            ["clean"] = generated.IsClean && surfaces.IsClean,
+            // ⚠ A third array rather than a third kind of entry in `derived`: this one is gated by
+            // build/Build.Charts.cs and the other by build/Build.Generate.cs, and a shared array would
+            // make each target read past rows that are not its verdict to form.
+            ["chartAnnotations"] = chartAnnotations,
+            ["chartManagedCharts"] = annotations.ManagedCharts,
+            ["chartTypesNamingAChart"] = annotations.TypesNamingAChart,
+            ["chartUnpaired"] = Lines(annotations.Unpaired),
+            ["clean"] = generated.IsClean && surfaces.IsClean && annotations.IsClean,
             // ⚠ A separate array rather than merged into `documents`: the two are gated differently.
             // A published OpenAPI document is diffed for compatibility; a derived surface is not,
             // because docs/plan/21 § Generation makes it a function of the document that already was.

@@ -3,7 +3,7 @@ using System.Text.Json.Nodes;
 namespace CyberCloud.ResourceManager.Contracts.Generation;
 
 /// <summary>
-///     ADR-012's fourth surface: the JSON the Angular schema-renderer consumes.
+///     ADR-012's fourth surface of five: the JSON the Angular schema-renderer consumes.
 /// </summary>
 /// <remarks>
 ///     <para>

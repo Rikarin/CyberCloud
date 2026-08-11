@@ -11,8 +11,14 @@ namespace CyberCloud.ResourceManager.Contracts.Tests.Generation;
 ///     ⚠ <b>Each is generated from the OpenAPI document rather than from the registry</b> —
 ///     docs/plan/21 § Generation's one hop — so every assertion here starts from
 ///     <see cref="OpenApiEmitter.Emit" />'s output. That is also what these tests are for: the claim
-///     is that a fact the registry gained reaches all four surfaces, and a fact that stopped at the
-///     document would be a gap closed on paper.
+///     is that a fact the registry gained reaches all four of these surfaces, and a fact that stopped
+///     at the document would be a gap closed on paper.
+///     <para>
+///         ⚠ ADR-012's <b>fifth</b> surface — a managed chart's <c>@param</c> block — is not here and
+///         is not generated from the document either. It reads the registry, for the reason on
+///         <see cref="ChartAnnotationEmitter" />, and its own suite is
+///         <c>ChartAnnotationTests</c>.
+///     </para>
 /// </remarks>
 public sealed class DerivedSurfaceTests {
     static JsonObject Document =>

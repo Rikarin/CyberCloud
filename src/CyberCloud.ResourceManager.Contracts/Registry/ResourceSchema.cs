@@ -456,7 +456,7 @@ public readonly record struct SchemaProperty(
 ///         <b>This object validates and generates, and that identity is the point.</b>
 ///         docs/plan/08 § The provider registry:
 ///         <i>
-///             "This object is the source for the four generated surfaces (ADR-012) <b>and</b> for
+///             "This object is the source for the five generated surfaces (ADR-012) <b>and</b> for
 ///             the runtime write path — the same registry that generates the CLI is the one that
 ///             validates the request body. That identity is what makes drift impossible rather than
 ///             merely detectable."
@@ -466,14 +466,26 @@ public readonly record struct SchemaProperty(
 ///         is exactly where drift comes back.
 ///     </para>
 ///     <para>
-///         ⚠ <b>All four of ADR-012's surfaces read this type, and every member on
-///         <see cref="SchemaProperty" /> reaches all four.</b> A property's pointer, kind,
+///         ⚠ <b>All five of ADR-012's surfaces read this type, and every member on
+///         <see cref="SchemaProperty" /> reaches the first four.</b> A property's pointer, kind,
 ///         requiredness, closed set, element kind, nullability, format, bounds, widget hint, default
 ///         and example become an OpenAPI schema
 ///         (<c>CyberCloud.ResourceManager.Contracts.Generation.OpenApiEmitter</c>), a <c>cyc</c> flag
 ///         (<c>CliEmitter</c>), an SDK member (<c>SdkEmitter</c>) and a portal control
 ///         (<c>FormsEmitter</c>). Adding a member here without teaching those to read it is the
 ///         failure to watch for: a registry field nothing reads is not a closed gap, it is a field.
+///     </para>
+///     <para>
+///         ⚠ <b>The fifth surface reaches <i>most</i> of them, and refuses the rest out loud.</b>
+///         <c>ChartAnnotationEmitter</c> writes a managed chart's <c>@param</c> block, and the chart
+///         annotation vocabulary has no syntax for <see cref="SchemaProperty.Format" />,
+///         <see cref="SchemaProperty.Pattern" />, <see cref="SchemaProperty.MinLength" />,
+///         <see cref="SchemaProperty.MaxLength" />, <see cref="SchemaProperty.ExampleJson" />,
+///         <see cref="SchemaProperty.Nullable" /> or a non-text
+///         <see cref="SchemaProperty.ElementKind" /> — docs/plan/02 § ADR-010 names those as the gap
+///         that runs registry-to-chart. Each is a generation failure naming the property rather than a
+///         silent drop, which is the one outcome that would put the failure this paragraph warns about
+///         back in play.
 ///     </para>
 ///     <para>
 ///         ⚠ <b><see cref="Project" /> is the other half of the immutable-date rule.</b> The grain's

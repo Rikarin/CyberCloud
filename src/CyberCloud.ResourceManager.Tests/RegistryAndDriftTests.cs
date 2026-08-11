@@ -9,7 +9,7 @@ namespace CyberCloud.ResourceManager.Tests;
 
 /// <summary>
 ///     The provider registry: one object that both validates the request body and is shaped so the
-///     four surfaces can be generated from it. docs/plan/08 § The provider registry.
+///     five surfaces can be generated from it. docs/plan/08 § The provider registry.
 /// </summary>
 public sealed class ProviderRegistryTests {
     static ProviderRegistry Built => ProviderRegistry.Build([new TestingProvider()]);
@@ -20,7 +20,10 @@ public sealed class ProviderRegistryTests {
         // registry that generates the CLI is the one that validates the request body." This asserts
         // that everything an emitter needs is on the same object the write path resolves — the
         // versions, the schemas with their pointers, kinds and requiredness, the permissions, the
-        // actions and the meters — and all four of ADR-012's emitters now read exactly this object.
+        // actions and the meters — and all five of ADR-012's emitters now read exactly this object.
+        // ⚠ The fifth needs one more member than the other four: ResourceTypeRegistration.Chart is
+        // what pairs a type with the values.yaml whose @param block is generated from its schema, and
+        // it is the one pairing fact no emitted OpenAPI document carries.
         var resolved = Built.Resolve(ConformingReconciler.TypeName, TestingProvider.V2026);
 
         resolved.IsSuccess.ShouldBeTrue(resolved.Error?.Message);
