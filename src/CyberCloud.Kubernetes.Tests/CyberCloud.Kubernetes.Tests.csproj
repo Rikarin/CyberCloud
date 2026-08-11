@@ -1,0 +1,41 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The cluster-backed half of the Kubernetes fabric's tests.
+
+    docs/plan/09 § Testing the fabric: "k3s in Testcontainers for reconciler unit tests. Fast, real
+    API server, real SSA semantics." ADR-018 again: nothing here mocks the API server, because the
+    property under test — that a second field manager's edit produces a 409 with a field list rather
+    than a silent revert — is a property of the API server's server-side-apply implementation and of
+    nothing we wrote. A fake would assert our belief about SSA, which is exactly the belief that is
+    worth checking.
+
+    FrameworkReference Microsoft.AspNetCore.App because the silo the tenancy tests run against is a
+    real WebApplication built by OrleansApplication.CreateSilo.
+  -->
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="xunit.v3" />
+    <PackageReference Include="Shouldly" />
+    <!-- A real k3s API server — docs/plan/09 § Testing the fabric. -->
+    <PackageReference Include="Testcontainers.K3s" />
+    <!-- CreateSilo calls UseAutofac(), which demands an IModuleContainer at Build() time. -->
+    <PackageReference Include="Volo.Abp.Autofac" />
+    <PackageReference Include="Orleans.Multitenant" />
+    <PackageReference Include="Microsoft.Orleans.TestingHost" />
+  </ItemGroup>
+
+  <ItemGroup Label="Global usings">
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../CyberCloud.Kubernetes/CyberCloud.Kubernetes.csproj" />
+    <ProjectReference Include="../CyberCloud.ServiceDefaults/CyberCloud.ServiceDefaults.csproj" />
+  </ItemGroup>
+
+</Project>
