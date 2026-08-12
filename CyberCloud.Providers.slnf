@@ -21,7 +21,14 @@
       "src/Providers/CyberCloud.Providers.DBforPostgreSQL/CyberCloud.Providers.DBforPostgreSQL.Application/CyberCloud.Providers.DBforPostgreSQL.Application.csproj",
       "src/Providers/CyberCloud.Providers.DBforPostgreSQL/CyberCloud.Providers.DBforPostgreSQL.Tests/CyberCloud.Providers.DBforPostgreSQL.Tests.csproj",
       "src/Providers/CyberCloud.Providers.DBforPostgreSQL/CyberCloud.Providers.DBforPostgreSQL.Conformance/CyberCloud.Providers.DBforPostgreSQL.Conformance.csproj",
-      "test/CyberCloud.Conformance/CyberCloud.Conformance.csproj"
+      "src/Providers/CyberCloud.Providers.Cache/CyberCloud.Providers.Cache.Contracts/CyberCloud.Providers.Cache.Contracts.csproj",
+      "src/Providers/CyberCloud.Providers.Cache/CyberCloud.Providers.Cache/CyberCloud.Providers.Cache.csproj",
+      "src/Providers/CyberCloud.Providers.Cache/CyberCloud.Providers.Cache.Application/CyberCloud.Providers.Cache.Application.csproj",
+      "src/Providers/CyberCloud.Providers.Cache/CyberCloud.Providers.Cache.Tests/CyberCloud.Providers.Cache.Tests.csproj",
+      "src/Providers/CyberCloud.Providers.Cache/CyberCloud.Providers.Cache.Conformance/CyberCloud.Providers.Cache.Conformance.csproj",
+      "src/Providers/CyberCloud.Providers.Cache/CyberCloud.Providers.Cache.Cluster.Conformance/CyberCloud.Providers.Cache.Cluster.Conformance.csproj",
+      "test/CyberCloud.Conformance/CyberCloud.Conformance.csproj",
+      "test/CyberCloud.Cluster.Conformance/CyberCloud.Cluster.Conformance.csproj"
     ]
   }
 }

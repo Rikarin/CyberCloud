@@ -169,6 +169,23 @@
         <Project Path="src/Providers/CyberCloud.Providers.DBforPostgreSQL/CyberCloud.Providers.DBforPostgreSQL.Application/CyberCloud.Providers.DBforPostgreSQL.Application.csproj"/>
         <Project Path="src/Providers/CyberCloud.Providers.DBforPostgreSQL/CyberCloud.Providers.DBforPostgreSQL.Tests/CyberCloud.Providers.DBforPostgreSQL.Tests.csproj"/>
         <Project Path="src/Providers/CyberCloud.Providers.DBforPostgreSQL/CyberCloud.Providers.DBforPostgreSQL.Conformance/CyberCloud.Providers.DBforPostgreSQL.Conformance.csproj"/>
+
+        <!--
+          The third provider family — CyberCloud.Cache/redis, docs/plan/12's second M1 row. Valkey
+          rather than Redis (ADR-011), on spotahome/redis-operator (ADR-010 clause 1).
+
+          ⚠ It is the first provider to arrive with all SIX projects, including the
+          *.Cluster.Conformance the row above records as owed. That is not a courtesy: the shared
+          cluster-backed suite is the only thing in this repository that applies a provider's rendered
+          object to a real API server, and this is the first provider whose object is a CUSTOM
+          RESOURCE whose CRD nothing installs. What that turned up is on the .csproj.
+        -->
+        <Project Path="src/Providers/CyberCloud.Providers.Cache/CyberCloud.Providers.Cache.Contracts/CyberCloud.Providers.Cache.Contracts.csproj"/>
+        <Project Path="src/Providers/CyberCloud.Providers.Cache/CyberCloud.Providers.Cache/CyberCloud.Providers.Cache.csproj"/>
+        <Project Path="src/Providers/CyberCloud.Providers.Cache/CyberCloud.Providers.Cache.Application/CyberCloud.Providers.Cache.Application.csproj"/>
+        <Project Path="src/Providers/CyberCloud.Providers.Cache/CyberCloud.Providers.Cache.Tests/CyberCloud.Providers.Cache.Tests.csproj"/>
+        <Project Path="src/Providers/CyberCloud.Providers.Cache/CyberCloud.Providers.Cache.Conformance/CyberCloud.Providers.Cache.Conformance.csproj"/>
+        <Project Path="src/Providers/CyberCloud.Providers.Cache/CyberCloud.Providers.Cache.Cluster.Conformance/CyberCloud.Providers.Cache.Cluster.Conformance.csproj"/>
     </Folder>
     <Folder Name="/src/Hosts/">
         <Project Path="src/Hosts/CyberCloud.Gateway.Host/CyberCloud.Gateway.Host.csproj"/>

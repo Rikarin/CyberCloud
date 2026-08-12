@@ -1,0 +1,44 @@
+# Managed Valkey — docs/plan/12 § The catalogue, "Valkey — CyberCloud.Cache/redis".
+#
+# The operator is spotahome/redis-operator, taken from Cozystack's survey per docs/plan/02 § ADR-010
+# clause 1. No Cozystack code is vendored; see SOURCE next to this file.
+#
+# ⚠ The chart is called `valkey` and the resource type is `CyberCloud.Cache/redis`. ADR-011 rejects
+# Redis >= 7.4 as RSALv2 / SSPL and the product is Valkey (BSD-3), so every name a human reads says
+# Valkey; the resource PATH is the Azure-parity one (Microsoft.Cache/redis) because a path is what a
+# tenant's existing tooling addresses by string. See the remarks on ValkeyCaches for the decision.
+apiVersion: v2
+name: valkey
+description: Managed Valkey on spotahome/redis-operator — Sentinel failover, AOF or RDB persistence, a metrics exporter.
+type: application
+
+# The chart's own version. Bumped on every change to this directory.
+version: 0.1.0
+
+# The default major Valkey version, matching values.yaml `version`.
+appVersion: "8"
+
+kubeVersion: ">=1.31.0-0"
+
+keywords:
+  - valkey
+  - redis
+  - cache
+  - spotahome
+
+home: https://valkey.io
+sources:
+  - https://github.com/valkey-io/valkey
+  - https://github.com/spotahome/redis-operator
+
+maintainers:
+  - name: Cyber Cloud Platform
+
+# ⚠ These three are read by `Build.Charts` and written into `values.schema.json` as
+# `x-cybercloud-*`. They are what makes the generated schema addressable as a resource type's
+# body rather than as an anonymous blob of Helm values — docs/plan/12 § The pattern, once, piece 2.
+# A chart under charts/managed/ without them fails the build.
+annotations:
+  cybercloud.io/resource-type: CyberCloud.Cache/redis
+  cybercloud.io/api-version: "2026-08-01"
+  cybercloud.io/operator: redis-operator

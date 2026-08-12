@@ -175,10 +175,24 @@
     }
   },
   "x-cybercloud-providers": [
+    "CyberCloud.Cache",
     "CyberCloud.DBforPostgreSQL",
     "CyberCloud.Sample"
   ],
   "x-cybercloud-resource-types": [
+    {
+      "type": "CyberCloud.Cache/redis",
+      "apiVersions": [
+        "2026-08-01"
+      ],
+      "display": {
+        "name": "Valkey cache",
+        "plural": "Valkey caches",
+        "alias": "valkey",
+        "summary": "A managed Valkey cache with Sentinel failover, on spotahome/redis-operator. Valkey rather than Redis, per ADR-011; every Redis client works against it.",
+        "declared": true
+      }
+    },
     {
       "type": "CyberCloud.DBforPostgreSQL/servers",
       "apiVersions": [

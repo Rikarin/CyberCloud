@@ -1,0 +1,44 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      docs/plan/03 § Providers — the fourth project: "TestCluster + k3s".
+
+      ⚠ NEITHER, HERE. The TestCluster half is test/CyberCloud.Conformance's, because a provider's
+      lifecycle is the SHARED suite's assertion, and the k3s half is this provider's
+      *.Cluster.Conformance project. What is left is what only THIS provider can be wrong about: its
+      schema against the chart, its RedisFailover projection, its quantity arithmetic, and its
+      reconciler's behaviour against a connection it does not control.
+
+      ⚠ IT EMBEDS ONE FILE FROM charts/managed/valkey/ AND NOT TWO, WHICH IS ONE FEWER THAN THE FIRST
+      PROVIDER NEEDED. That provider embedded values.schema.json and templates/_helpers.tpl because
+      ADR-012's fifth surface was believed not to exist; it does, and `./build.sh Charts` generates
+      the chart's @param block from the registry and byte-diffs it. So the row-by-row comparison is
+      the build's, not a test's. What generation still does not reach is templates/, which
+      ChartSurfaces filters out on purpose — no emitter has ever read a Helm template — so the preset
+      table stays here, and so does the one assertion about the SHIPPED values.schema.json that
+      neither half of the round trip can make on its own: that every emitted `pattern` is anchored.
+    -->
+
+    <ItemGroup>
+        <PackageReference Include="xunit.v3"/>
+        <PackageReference Include="Shouldly"/>
+    </ItemGroup>
+
+    <ItemGroup Label="Global usings">
+        <Using Include="Xunit"/>
+    </ItemGroup>
+
+    <ItemGroup Label="The other half of the pair — see the header">
+        <EmbeddedResource Include="../../../../charts/managed/valkey/values.schema.json"
+                          LogicalName="valkey.values.schema.json"/>
+        <EmbeddedResource Include="../../../../charts/managed/valkey/templates/_helpers.tpl"
+                          LogicalName="valkey.helpers.tpl"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../CyberCloud.Providers.Cache/CyberCloud.Providers.Cache.csproj"/>
+        <!-- ProviderRegistry.Build, so the declaration is checked the way a silo checks it at start. -->
+        <ProjectReference Include="../../../CyberCloud.ResourceManager/CyberCloud.ResourceManager.csproj"/>
+    </ItemGroup>
+
+</Project>
