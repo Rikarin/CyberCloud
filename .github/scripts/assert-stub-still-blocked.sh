@@ -19,9 +19,14 @@
 # the green tick becomes a lie, and the moment nobody would otherwise notice.
 #
 # ⚠ The evidence paths are therefore not "some file that suggests progress". Each one is the thing
-# the stub itself names as its blocker. Build.Portal.cs says it "depends on the pnpm workspace
-# existing"; the evidence path is that workspace's lockfile. If the stub's wording changes, the
-# evidence path has to change with it, and that is a feature: the two are one claim.
+# the stub itself names as its blocker. If the stub's wording changes, the evidence path has to
+# change with it, and that is a feature: the two are one claim.
+#
+# `Portal` is the worked example and the one that has been round the loop. Build.Portal.cs used to
+# say it "depends on the pnpm workspace existing", so the evidence path was that workspace's
+# lockfile; the workspace landed, this fired, and the target was written. The gate job still calls
+# this, and it now exits 0 on the first branch below — the target is implemented, so there is no
+# stub to guard. That is the end state this is for, not a reason to remove the call.
 
 set -euo pipefail
 
