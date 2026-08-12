@@ -1,5 +1,4 @@
 using System.Collections.Immutable;
-using System.Globalization;
 using System.Reflection;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
@@ -7,117 +6,65 @@ using System.Text.RegularExpressions;
 namespace CyberCloud.Providers.DBforPostgreSQL.Tests;
 
 /// <summary>
-///     The chart and the registry, compared row by row.
+///     What the chart and the registry still have to be told about each other.
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>This is a stand-in for a build gate that does not exist, and the difference matters
-///         to anyone reading a green run.</b> ADR-012 lists five generated surfaces and marks the
-///         fifth — the chart's <c>@param</c> block — <i>"Not built. The first four have emitters and
-///         a drift gate; this one has a decision and neither."</i> ADR-010 § Which end authors the
-///         schema then says the overlap <i>"becomes 26 rows wide the moment the Postgres provider
-///         lands"</i>. It has landed. What has not appeared with it is any comparison inside
-///         <c>./build.sh</c>: <c>Build.Charts.cs</c> never opens a provider registry — the only two
-///         occurrences of <c>ResourceSchema</c> in that file are comments — so
-///         <c>./build.sh Charts</c> reports "36 annotated value(s), 25 in the API surface" and has
-///         no opinion about whether any C# declares them.
+///         ⚠ <b>CUT DOWN 2026-08-12, from six tests to three, and the four that went are the point of
+///         this note.</b> This class was written as "a stand-in for a build gate that does not exist",
+///         on the premise that <c>Build.Charts.cs</c> "never opens a provider registry — the only two
+///         occurrences of <c>ResourceSchema</c> in that file are comments". <b>The premise was a grep
+///         and the conclusion was wrong.</b> <c>build/Build.Charts.cs</c> calls
+///         <c>RunGenerator(write: true, charts: true)</c>, which drives <c>ChartSurfaces.Generate</c>
+///         and <c>ChartAnnotationEmitter</c>: the target owns the verdict and delegates the emission,
+///         exactly as <c>Build.Generate</c> does, so the registry is reached without the word ever
+///         appearing in that file. The gate existed the whole time.
 ///     </para>
 ///     <para>
-///         So the rows are compared here instead. It is strictly weaker than generation: two
-///         hand-maintained files that agree can both be wrong together, whereas a derived file cannot
-///         disagree with its source. It fails on exactly the diffs the emitter would fail on, which
-///         is what makes it worth having until the emitter exists — and the emitter should delete it.
+///         So the row-by-row comparisons are gone. They compared two hand-maintained files, which can
+///         agree and both be wrong; generation makes one file a function of the other, which cannot
+///         disagree with its source. Three of them had in fact become <i>false</i> by the time they
+///         were deleted — they pinned <c>/properties/clusterId</c> as a body-only property with no
+///         chart row, and the emitter gives it one, because it is under <c>/properties</c>, is not
+///         <c>ReadOnly</c>, and is therefore something the chart's caller sets.
 ///     </para>
 ///     <para>
-///         ⚠ <b>What is deliberately <i>not</i> compared, because the chart cannot say it.</b>
-///         <c>Pattern</c>, <c>MinLength</c> and <c>MaxLength</c> are three of the seven
-///         <c>SchemaProperty</c> facts ADR-010 lists as having no annotation syntax, and this type
-///         uses all three — see the constraint block in <c>PostgresServers</c> for the decision and
-///         its cost. A comparison that included them would fail on every run and be switched off
-///         within a week.
+///         ⚠ <b>What is left is what generation does not reach.</b> The preset table lives in
+///         <c>templates/_helpers.tpl</c>, and <c>ChartSurfaces</c> filters <c>templates/</c> out on
+///         purpose — no emitter has ever read a Helm template. And the <i>anchoring</i> of a
+///         <c>@pattern</c> is a property of the shipped <c>values.schema.json</c> that neither half of
+///         the round trip can assert on its own.
 ///     </para>
 /// </remarks>
 public sealed partial class ChartRegistryPairTests {
     [Fact]
-    public void EveryApiFacingChartRowIsDeclaredAtTheSamePointerAndNothingElseIs() {
-        // ⚠ ORDINAL, AND THAT IS THE WHOLE TEST. A `resourcegroup`/`resourceGroup` mismatch of exactly
-        // one character was once failing every create in the platform and surfaced as a 404 whose
-        // reason was in a log line. A pointer is a JSON Pointer into a request body, so a case
-        // difference is a different property that silently never arrives — and both files spell these
-        // names by hand today.
-        var chart = ChartPointers();
-        var registry = ApiPointers();
+    public void EveryPatternInTheGeneratedSchemaIsAWholeValueMatch() {
+        // ⚠ THE ONE WAY A CONSTRAINT CAN REACH THE CHART AND MEAN SOMETHING ELSE THERE, which is the
+        // same failure as losing it and is harder to see. SchemaProperty.Pattern is a whole-value
+        // match — ResourceSchema tests it as ^(?:…)$ — and JSON Schema's `pattern` keyword is a
+        // SEARCH. A bare `\d+(\.\d+)?(m|k|M|G|…)?` in values.schema.json accepts `xxx20Gixxx`, which
+        // the API refuses. The chart would be strictly more permissive than the surface it is
+        // generated from, and `helm lint` would pass values that come back 400.
+        //
+        // The annotation in values.yaml carries the pattern BARE, so that line and the C# `Pattern`
+        // are the same string and drift between them is visible; build/Build.Charts.cs anchors on the
+        // way into the schema. This asserts the end of that pipeline rather than either half.
+        var patterns = Patterns(ChartSchema()).ToList();
 
-        registry.Except(chart, StringComparer.Ordinal).ShouldBeEmpty(
-            "these pointers are declared in PostgresServers.Schema2026 and have no @param row at the "
-            + "same pointer in charts/managed/postgres/values.yaml. A body property with no chart row "
-            + "is a property the reconciler renders from nothing."
+        patterns.ShouldNotBeEmpty(
+            "no `pattern` reached charts/managed/postgres/values.schema.json at all. "
+            + "CyberCloud.DBforPostgreSQL/servers declares seven, so either the @pattern directive "
+            + "stopped being emitted or this reader stopped finding them — and a check that inspects "
+            + "nothing passes."
         );
 
-        chart.Except(registry, StringComparer.Ordinal).ShouldBeEmpty(
-            "these @param rows are in the chart's API surface and are not declared in "
-            + "PostgresServers.Schema2026. An API-facing chart row nothing declares is configuration "
-            + "the tenant cannot reach — ADR-010 § Which end authors the schema makes the C# the "
-            + "authored side, so either declare the property or mark the row @internal with a reason."
-        );
-    }
-
-    [Fact]
-    public void TheBodyOnlyPropertiesAreExactlyTheTwoThatCanHaveNoChartRow() {
-        // ⚠ ADR-010 splits the chart into 26 API rows and 10 @internal rendering inputs and concludes
-        // the two files "overlap on 26 rows". They diverge the other way too, and that third category
-        // is not written down anywhere: a cluster id and a region are body properties with no Helm
-        // value behind them. Pinned here so the set cannot grow quietly — a generator rewriting
-        // values.yaml from this schema has to skip exactly these.
-        var bodyOnly = PostgresServers.Schema2026.Properties
-            .Where(x => x.Kind is not SchemaKind.Nested)
-            .Select(x => x.JsonPointer)
-            .Except(ChartPointers(), StringComparer.Ordinal)
-            .Order(StringComparer.Ordinal)
-            .ToImmutableArray();
-
-        bodyOnly.ShouldBe(new[] { "/location", PostgresServers.ClusterIdPointer });
-    }
-
-    [Fact]
-    public void TheChartAndTheRegistryAgreeOnTypeRequirednessEnumRangeDefaultAndWidget() {
-        var chart = ChartRows();
-        var disagreements = new List<string>();
-
-        foreach (var property in PostgresServers.Schema2026.Properties) {
-            if (!chart.TryGetValue(property.JsonPointer, out var row)) {
-                continue;
-            }
-
-            Compare(disagreements, property.JsonPointer, "type", TypeName(property.Kind), row.Type);
-            Compare(disagreements, property.JsonPointer, "description", property.Description, row.Description);
-            Compare(disagreements, property.JsonPointer, "required", property.Required, row.Required);
-            Compare(disagreements, property.JsonPointer, "enum", string.Join("|", property.AllowedValues), string.Join("|", row.Enum));
-            Compare(disagreements, property.JsonPointer, "minimum", property.Minimum, row.Minimum);
-            Compare(disagreements, property.JsonPointer, "maximum", property.Maximum, row.Maximum);
-            Compare(disagreements, property.JsonPointer, "default", property.DefaultJson, row.DefaultJson);
-            Compare(disagreements, property.JsonPointer, "widget", SchemaVocabulary.Of(property.Widget), row.Widget);
-            Compare(disagreements, property.JsonPointer, "immutable", property.Immutable, row.Immutable);
+        foreach (var (pointer, pattern) in patterns) {
+            // ⚠ The non-capturing group is not decoration. Anchoring `a|b` as `^a|b$` means "starts
+            // with a" OR "ends with b", which is a wider language than either — and the quantity
+            // pattern this chart uses is thirteen alternations deep.
+            pattern.ShouldStartWith("^(?:", Case.Sensitive, pointer);
+            pattern.ShouldEndWith(")$", Case.Sensitive, pointer);
         }
-
-        disagreements.ShouldBeEmpty(
-            "the C# schema is the authored side (ADR-010 § Which end authors the schema) and "
-            + "charts/managed/postgres/values.yaml disagrees with it:"
-            + Environment.NewLine
-            + string.Join(Environment.NewLine, disagreements)
-        );
-    }
-
-    [Fact]
-    public void TheChartsResourceTypeAndApiVersionAreTheOnesTheProviderDeclares() {
-        // ⚠ The chart names its resource type in three files — Chart.yaml's annotation,
-        // conformance.yaml, and the generated schema's x-cybercloud-resource-type. Build.Charts
-        // compares the first two to each other and never to a registry, so this is the only place the
-        // spelling in src/ and the spelling in charts/ meet.
-        var document = ChartSchema();
-
-        document["x-cybercloud-resource-type"]?.GetValue<string>().ShouldBe(PostgresServers.Type.ToString());
-        document["x-cybercloud-api-version"]?.GetValue<string>().ShouldBe(PostgresServers.V2026);
     }
 
     [Fact]
@@ -126,6 +73,9 @@ public sealed partial class ChartRegistryPairTests {
         // dictionary, and it exists only because CyberCloud.Kubernetes.Charts does not. Two copies of
         // a lookup table drift silently — a tenant asking for s1.large would get one CPU count from
         // the reconciler and another from anyone rendering the chart by hand — so they are diffed.
+        //
+        // ⚠ Not subsumed by ADR-012's fifth surface, and never will be: ChartSurfaces filters
+        // `templates/` out of the chart tree on purpose, so no emitter reads this file.
         var chart = HelperPresets();
 
         chart.Count.ShouldBe(
@@ -156,88 +106,26 @@ public sealed partial class ChartRegistryPairTests {
 
     // ── Reading the chart ─────────────────────────────────────────────────────────────────────
 
-    /// <summary>One <c>@param</c> row, as the generated schema carries it.</summary>
-    sealed record ChartRow(
-        string Type,
-        string Description,
-        bool Required,
-        ImmutableArray<string> Enum,
-        double? Minimum,
-        double? Maximum,
-        string DefaultJson,
-        string Widget,
-        bool Immutable
-    );
-
-    /// <summary>The API-facing rows of <c>values.schema.json</c>, keyed by pointer.</summary>
-    /// <remarks>
-    ///     ⚠ <c>x-cybercloud-api: false</c> is emitted on every descendant of an <c>@internal</c> key,
-    ///     not only on the key that declared it — charts/README.md § The annotation format, point 6 —
-    ///     so a flat filter is correct and does not have to walk back up the pointer.
-    /// </remarks>
-    static ImmutableDictionary<string, ChartRow> ChartRows() {
-        var rows = ImmutableDictionary.CreateBuilder<string, ChartRow>(StringComparer.Ordinal);
-        Walk(ChartSchema(), rows);
-        return rows.ToImmutable();
-    }
-
-    static void Walk(JsonObject node, ImmutableDictionary<string, ChartRow>.Builder rows) {
+    /// <summary>Every <c>pattern</c> keyword in the generated schema, with the pointer carrying it.</summary>
+    static IEnumerable<(string Pointer, string Pattern)> Patterns(JsonObject node) {
         if (node["properties"] is not JsonObject members) {
-            return;
+            yield break;
         }
 
-        ImmutableHashSet<string> required = node["required"] is JsonArray names
-            ? [.. names.Select(x => x!.GetValue<string>())]
-            : [];
-
-        foreach (var (name, value) in members) {
+        foreach (var (_, value) in members) {
             if (value is not JsonObject member) {
                 continue;
             }
 
-            if (member["x-cybercloud-api"]?.GetValue<bool>() is false) {
-                continue;
+            if (member["pattern"]?.GetValue<string>() is { } pattern) {
+                yield return (member["x-cybercloud-pointer"]!.GetValue<string>(), pattern);
             }
 
-            var pointer = member["x-cybercloud-pointer"]!.GetValue<string>();
-
-            rows[pointer] = new(
-                member["type"]!.GetValue<string>(),
-                member["description"]?.GetValue<string>() ?? string.Empty,
-                required.Contains(name),
-                Choices(member),
-                member["minimum"]?.GetValue<double>(),
-                member["maximum"]?.GetValue<double>(),
-                member["default"]?.ToJsonString() ?? string.Empty,
-                member["x-cybercloud-widget"]?.GetValue<string>() ?? string.Empty,
-                member["x-cybercloud-immutable"]?.GetValue<bool>() ?? false
-            );
-
-            Walk(member, rows);
+            foreach (var nested in Patterns(member)) {
+                yield return nested;
+            }
         }
     }
-
-    /// <summary>The allowed values of a row, from its own <c>enum</c> or its array's <c>items</c>.</summary>
-    static ImmutableArray<string> Choices(JsonObject member) {
-        var declared = member["enum"] as JsonArray ?? (member["items"] as JsonObject)?["enum"] as JsonArray;
-
-        return declared is null ? [] : [.. declared.Select(x => x!.GetValue<string>())];
-    }
-
-    /// <summary>Every API-facing pointer the chart declares.</summary>
-    static ImmutableHashSet<string> ChartPointers() => [.. ChartRows().Keys];
-
-    /// <summary>Every pointer the registry declares that a chart row could correspond to.</summary>
-    /// <remarks>
-    ///     The two body-only properties are excluded here and pinned by their own test, so a failure
-    ///     of the set comparison names a real disagreement rather than the known asymmetry.
-    /// </remarks>
-    static ImmutableHashSet<string> ApiPointers() =>
-        [
-            .. PostgresServers.Schema2026.Properties
-                .Select(x => x.JsonPointer)
-                .Where(x => x != "/location" && x != "/properties" && x != PostgresServers.ClusterIdPointer)
-        ];
 
     static JsonObject ChartSchema() => JsonNode.Parse(Embedded("postgres.values.schema.json"))!.AsObject();
 
@@ -284,27 +172,5 @@ public sealed partial class ChartRegistryPairTests {
 
         using var reader = new StreamReader(stream);
         return reader.ReadToEnd();
-    }
-
-    static string TypeName(SchemaKind kind) =>
-        kind switch {
-            SchemaKind.Text => "string",
-            SchemaKind.Number => "number",
-            SchemaKind.WholeNumber => "integer",
-            SchemaKind.Boolean => "boolean",
-            SchemaKind.Nested => "object",
-            SchemaKind.Array => "array",
-            _ => kind.ToString()
-        };
-
-    static void Compare<T>(List<string> disagreements, string pointer, string what, T mine, T theirs) {
-        if (!EqualityComparer<T>.Default.Equals(mine, theirs)) {
-            disagreements.Add(
-                string.Create(
-                    CultureInfo.InvariantCulture,
-                    $"  {pointer} {what}: registry '{mine}', chart '{theirs}'"
-                )
-            );
-        }
     }
 }

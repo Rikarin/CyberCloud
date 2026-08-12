@@ -725,7 +725,8 @@ public static class ChartAnnotationEmitter {
         $"'{jsonPointer}' declares {fact}, and the chart annotation vocabulary has no syntax for it. "
         + $"It is refused rather than dropped: a constraint that reached the API and not the chart is a "
         + $"cluster rendered from values the API would have refused. Closing it means a `{directive}` "
-        + "directive — see the remarks on ChartAnnotationEmitter for the four edits that takes.";
+        + "directive, which is nine sites in four files — charts/README.md § What a chart cannot say "
+        + "lists them, and warns that this directive is the harder half of the original seven.";
 
     static string Bound(double? value) =>
         value is null ? string.Empty : value.Value.ToString("R", CultureInfo.InvariantCulture);

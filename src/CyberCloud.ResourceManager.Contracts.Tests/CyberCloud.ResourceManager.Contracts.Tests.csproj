@@ -20,6 +20,19 @@
         <Using Include="Xunit"/>
     </ItemGroup>
 
+    <ItemGroup Label="The other end of the chart-annotation round trip — see ChartAnnotationTests">
+        <!--
+          ⚠ THE READER, AS TEXT, AND THAT IS THE ONLY WAY TO REACH IT. build/_build.csproj is
+          deliberately outside the solution and references nothing in src/, so no test assembly can
+          call the annotated-values reader. But the reader's directive table and the emitter's are two
+          hand-maintained copies of one list, and a directive in one and not the other is a fact that
+          reaches an API and not a chart — silently, because both halves still compile. Embedding the
+          source lets ChartAnnotationTests read the tables out of it and fail when they diverge. It is
+          the same trick CyberCloud.Providers.DBforPostgreSQL.Tests uses to reach values.schema.json.
+        -->
+        <EmbeddedResource Include="../../build/Build.Charts.cs" LogicalName="build.Build.Charts.cs"/>
+    </ItemGroup>
+
     <ItemGroup>
         <ProjectReference Include="../CyberCloud.ResourceManager.Contracts/CyberCloud.ResourceManager.Contracts.csproj"/>
     </ItemGroup>

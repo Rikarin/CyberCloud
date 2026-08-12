@@ -505,16 +505,28 @@ registry. Its own header comment describes the parse result as "the shape a `Res
 built from": the seam was seen and left open. It becomes 26 rows wide the moment the Postgres provider
 lands.
 
-> ⚠ **UPDATED 2026-08-12. The provider has landed and `Build.Charts` still never opens a registry.**
-> The overlap is 25 rows wide and nothing in `./build.sh` compares them — the prediction above was
-> about the *tree*, not about the *gate*, and only the first half happened. `./build.sh Charts` now
-> reports "36 annotated value(s), 25 in the API surface, 11 marked `@internal`" and has no opinion
-> about whether any C# declares them; grep `build/Build.Charts.cs` for `ResourceSchema` and the only
-> two hits are comments. Until the emitter of ADR-012's fifth surface exists, the comparison lives in
-> `CyberCloud.Providers.DBforPostgreSQL.Tests.ChartRegistryPairTests`, which embeds
-> `values.schema.json` and diffs the rows ordinally. That is strictly weaker than generation — two
-> hand-maintained files that agree can both be wrong together — and it is a provider's test rather
-> than a platform gate, so the next nine services will each need their own copy of it or the gate.
+> ⚠ **UPDATED 2026-08-12. The provider has landed and the prediction above came true in full.**
+> `./build.sh Charts` reports "1 pair(s) compared" and "37 annotated value(s), 26 in the API surface,
+> 11 marked `@internal`". The chart's `@param` block is generated from `PostgresServers.Schema2026`
+> and byte-diffed.
+>
+> ⚠ **This paragraph previously read "`Build.Charts` still never opens a registry … grep
+> `build/Build.Charts.cs` for `ResourceSchema` and the only two hits are comments", and directed
+> readers to `ChartRegistryPairTests` as the substitute. The grep was accurate and the conclusion was
+> false.** `Build.Charts.cs` calls `RunGenerator(write: true, charts: true)`, which drives
+> `ChartSurfaces.Generate` and `ChartAnnotationEmitter` — the target owns the verdict and delegates
+> the emission, exactly as `Build.Generate` does, so it reaches the registry without ever naming a
+> `ResourceSchema`. Acting on that false conclusion, the provider freely declared `Pattern`,
+> `MinLength`/`MaxLength`, `ExampleJson` and `Format`, and the gate went red with **thirteen
+> refusals** — which is the design working: the vocabulary grew rather than the constraints being
+> dropped. The substitute tests have been deleted, keeping only the two the emitter does not
+> subsume (the `templates/_helpers.tpl` preset table) and one it cannot (that every emitted `pattern`
+> is anchored).
+>
+> ⚠ Note the row count moved from 25 to 26: `/properties/clusterId` **does** get a chart row. It sits
+> under `/properties`, is not `ReadOnly`, and is therefore something the chart's caller sets — so the
+> "2 body-only properties" above is really one, `/location`. The bullet listing clusterId as
+> body-only was written before anything generated the file.
 
 ### ADR-011 — The licence audit, done once, written down
 

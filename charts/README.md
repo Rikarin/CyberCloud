@@ -21,9 +21,11 @@ charts/managed/postgres/
 ```
 
 **The annotated `values.yaml` is the description of a managed service's configuration surface, and
-26 of its 36 rows are themselves generated.** `Build.Charts` rewrites the non-`@internal` `@param`
+26 of its 37 rows are themselves generated.** `Build.Charts` rewrites the non-`@internal` `@param`
 block from the provider registry and then generates `values.schema.json` from the whole file. A chart
-whose block or whose schema differs from the checked-in one fails CI.
+whose block or whose schema differs from the checked-in one fails CI. The other 11 rows are
+`@internal` and are carried through as bytes — **at every depth**, which is a correction: see
+§ What a chart cannot say.
 
 > ⚠ **CORRECTED 2026-08-12.** This paragraph read: "`Build.Generate` turns that into the resource
 > type's OpenAPI body, the CLI flags, the SDK model and the portal form" — the chart authoring the
@@ -48,6 +50,10 @@ takes the *pipeline*, not the code). Ours is:
 ## @internal <reason>
 ## @enum <a> | <b> | <c>
 ## @range <min>..<max>
+## @length <min>..<max>
+## @pattern <regex>
+## @format <name>
+## @example <json>
 ## @widget <name>
 <name>: <default>
 ```
@@ -65,7 +71,42 @@ them fails the build, so that moving a key moves its annotation with it.
 | `@internal <reason>` | any; inherited by members | `x-cybercloud-api: false`, `x-cybercloud-internal-reason` |
 | `@enum a \| b \| c` | `string`, `integer`, `number`, `array` | `enum`, or `items.enum` on an array |
 | `@range <min>..<max>` | `integer`, `number` | `minimum`, `maximum` |
+| `@length <min>..<max>` | `string` | `minLength`, `maxLength` |
+| `@pattern <regex>` | `string` | `pattern`, **anchored** — see below |
+| `@format <name>` | `string` | `format` |
+| `@example <json>` | any | `examples` |
 | `@widget <name>` | scalars | `x-cybercloud-widget` — ADR-012's picker hint |
+
+The last four landed 2026-08-12, when `CyberCloud.DBforPostgreSQL/servers` became the vocabulary's
+first real user and `./build.sh Charts` went red with thirteen refusals. Four things about them:
+
+**`@pattern` is written bare and emitted anchored.** `SchemaProperty.Pattern` is a whole-value match —
+`ResourceSchema` tests it as `^(?:…)$` — and JSON Schema's `pattern` keyword is a *search*. A bare
+`\d+Gi` in a `values.schema.json` accepts `xxx20Gixxx`, which the API refuses, so the chart would be
+strictly more permissive than the surface it was generated from. `PropertyNode` wraps it, in the same
+three characters and for the same reason as `OpenApiEmitter`. The annotation stays bare so the line in
+`values.yaml` and the `Pattern` in C# are the same string.
+
+**A `@pattern` may contain anything printable, and may not contain edge whitespace.** `|`, `#`, `:`,
+quotes and braces are all legal — the line is a comment, and `@pattern` is the one directive that takes
+the rest of the line verbatim, so nothing splits on them. But the reader trims the line, the directive
+body and the argument, so a pattern with a leading or trailing space would come back as a *different*
+pattern; the emitter refuses to write one, and refuses control characters, rather than let it mangle.
+
+**`@length` takes an open end and `@range` does not.** `1..`, `..63` and `1..63` are all legal
+`@length` arguments, because "at least one character" is the ordinary shape of a string constraint.
+`@range` still requires both ends — that is the older published pattern, and widening it is a change
+to a surface that already has authors. Both are inclusive; both refuse two open ends.
+
+**`@example` is JSON, on one line.** The emitter re-serialises `ExampleJson` compactly, so the value
+rather than its spelling determines the bytes, and every control character is escaped by construction.
+It becomes `examples` (plural, an array) because this document is JSON Schema 2020-12;
+`OpenApiEmitter` writes `example` because OpenAPI 3.0 is a different specification.
+
+The six `@format` names are `uuid`, `date-time`, `uri`, `email`, `cybercloud-region` and
+`cybercloud-resource-id` — one per `SchemaFormat` member that is not `None`. The list is closed, like
+`{type}`. `@format` and `@secret` on one key is a build failure: `@secret` already means
+`format: password`, so the two would write the same keyword and one would be lost.
 
 The six types are `string`, `integer`, `number`, `boolean`, `object`, `array` — one per `SchemaKind`
 member in `src/CyberCloud.ResourceManager.Contracts`. There is no seventh, and a seventh word fails
@@ -167,11 +208,13 @@ Two vacuous states, each a warning rather than a silent pass — the `Vacuous` c
 
 * **no chart at all** — "inspected 0 chart(s)";
 * **no registry-to-chart pair** — "N managed chart(s), M registry type(s) naming a chart, 0 pair(s)
-  compared", with every unclaimed chart and every type naming a missing chart listed by name. This is
-  the state the tree is in today: `charts/managed/postgres` declares
-  `CyberCloud.DBforPostgreSQL/servers`, no C# provider declares that type, and the one provider in
-  the tree renders no chart. A target that inspected nothing is green because it found nothing, not
-  because the tree is clean.
+  compared", with every unclaimed chart and every type naming a missing chart listed by name. A target
+  that inspected nothing is green because it found nothing, not because the tree is clean.
+
+  > ⚠ **CORRECTED 2026-08-12.** This bullet read "This is the state the tree is in today:
+  > `charts/managed/postgres` declares `CyberCloud.DBforPostgreSQL/servers`, no C# provider declares
+  > that type". The provider landed, so the tree reports **one pair compared** and the vacuous branch
+  > is now the warning it was written to be rather than a description of the present.
 
 The generated file is deterministic: keys sorted ordinally, `InvariantCulture` throughout, LF
 newlines, no timestamps, no paths, no machine names. Declaration order is not lost to the sort — it
@@ -193,7 +236,6 @@ The generated schema is shaped like a `ResourceSchema` — every property carrie
 `SchemaProperty`. Since 2026-08-12 the two are wired together: a chart's root key `version` is the
 registry's `/properties/version`, and `ChartAnnotationEmitter` writes the block from the schema.
 
-<<<<<<< HEAD
 > ⚠ **CORRECTED 2026-08-12.** This section claimed "`ResourceSchema` cannot carry `enum`,
 > `minimum`/`maximum`, `default`, `items`, or any `x-cybercloud-*` hint" and that `SchemaProperty` is
 > "`(pointer, kind, required, readOnly, secret, description)`". **All of that is refuted by the
@@ -208,13 +250,28 @@ The gap runs the other way, and it is where a fact can be lost:
   caller sets, whereas `SchemaProperty.ReadOnly` describes server-owned state that never appears in a
   values file at all. The emitter drops those properties, exactly as the generated CLI drops
   `--provisioning-state`.
-* **Seven members have no annotation syntax, and generation *fails* rather than dropping them.**
-  `Format`, `Pattern`, `MinLength`, `MaxLength`, `ExampleJson`, `Nullable` and a non-text
-  `ElementKind`. A schema declaring one produces a build failure naming the property and the
-  directive that would close it — `@format`, `@pattern`, `@length`, `@example`, `@nullable`,
-  `@element`. Closing one means four edits: the `Directives` table in `build/Build.Charts.cs`, its
-  emission in `PropertyNode`, a row in the table above, and a case in `ChartAnnotationEmitter`.
-  They were deliberately not added ahead of a chart that uses them.
+* **Two members have no annotation syntax, and generation *fails* rather than dropping them.**
+  `Nullable` and a non-text `ElementKind`. A schema declaring one produces a build failure naming the
+  property and the directive that would close it — `@nullable`, `@element`. Neither has a user, and
+  both are harder than the five that closed: a nullable values key collides head-on with § The values
+  subset's "no null values" rule, so `@nullable` is a question about the subset before it is a
+  directive; and `@element` has to decide what a non-text element means for the hard-coded
+  `items: {type: string}` that `@enum` already emits. **Leaving them open is a decision, not an
+  oversight** — the refusal names the fact and the build is red, so nothing is lost silently.
+
+  > ⚠ **CORRECTED 2026-08-12. This list said seven, and said closing one takes "four edits: the
+  > `Directives` table in `build/Build.Charts.cs`, its emission in `PropertyNode`, a row in the table
+  > above, and a case in `ChartAnnotationEmitter`". Both numbers were wrong.** Five closed at once
+  > when the Postgres provider made them a red gate, and closing them took **nine sites in four
+  > files**. The prediction missed the three that carry the risk: the **parse case in
+  > `TakeAnnotation`** and its field on `ValueAnnotation` — the `Directives` table only decides that a
+  > verb is *spelled* right, so a directive listed there with no case is read and thrown away, and the
+  > build stays green while the constraint never reaches `values.schema.json`; the **cross-check in
+  > `Validate`** — a `@pattern` on a `{boolean}` validates nothing, and a default outside its own
+  > constraint is something `helm lint` rejects two steps later; and a case in **`CheckUnspellable`**
+  > for arguments the directive's transport cannot carry. The `Subset` checker in
+  > `ChartAnnotationTests` is a fourth copy of the table. It was a guess written before any directive
+  > had been added, which is what made it worth writing down and worth checking.
 * **A text element kind is the one array shape the vocabulary reaches**, because `@enum` on an array
   becomes `items: {type: string, enum: […]}` and that `string` is hard-coded.
 * **A number or a boolean with no `DefaultJson` is refused.** Every values key carries a value — a
@@ -230,12 +287,19 @@ The gap runs the other way, and it is where a fact can be lost:
   not enforce either — `Incoherences` permits a `WidgetHint` on an array — so the emitter refuses
   what the chart reader would.
 
-**The first managed service already needs three of those seven.** `CyberCloud.DBforPostgreSQL/servers`
-declares `Pattern` on five rows (three Kubernetes quantities, a Postgres identifier pair and an
-`s3://` destination) and `MinLength`/`MaxLength` on two. They are declared in C#, where they are
-enforced; the chart does not carry them. So the loss is real, it is on exactly one surface, and
-`@pattern` and `@length` are no longer hypothetical directives waiting for a first user — they have
-one.
+* **A nested `@internal` row is preserved too, and until 2026-08-12 it was not.** `Rewrite` walked
+  root keys only, so `bootstrap.password` — `@internal`, inside the *generated* `bootstrap:` object —
+  was deleted on every run while the build printed "The `@internal` rows were not touched". The merge
+  is recursive now, and the drift message reports the line count it actually carried rather than
+  asserting one. Every `@internal` key must still sit after every generated one **at its own level**,
+  so that each level's generated keys are one contiguous run.
+
+**What the first managed service needed.** `CyberCloud.DBforPostgreSQL/servers` declares `Pattern` on
+seven rows (three Kubernetes quantities, a Postgres identifier pair, a WAL volume and an `s3://`
+destination), `MinLength`/`MaxLength` on two, `ExampleJson` on three and `SchemaFormat.Uuid` on one —
+thirteen refusals, and the only red gate in the tree. They are declared in C#, where they are
+enforced, and since 2026-08-12 the chart carries them as well. The two that remain open have no user
+at all.
 
 ## Forking discipline
 

@@ -60,11 +60,22 @@ public sealed class ChartAnnotationTests {
                 AllowedValues = ["s1.nano", "s1.micro", "s1.small", "s1.medium"],
                 DefaultJson = "\"s1.small\""
             },
-            new("/properties/sizing/cpu", SchemaKind.Text, Description: "Explicit vCPU quantity."),
-            new("/properties/sizing/memory", SchemaKind.Text, Description: "Explicit memory quantity."),
+            // ⚠ The quantity pattern is here in full, pipes and all, because a pattern carrying `|` is
+            // the case `@pattern` exists to survive: `@enum` splits on that character and `@pattern`
+            // must not. CyberCloud.DBforPostgreSQL/servers declares this exact shape.
+            new("/properties/sizing/cpu", SchemaKind.Text, Description: "Explicit vCPU quantity.") {
+                Pattern = @"(\d+(\.\d+)?(m|k|M|G|Ki|Mi|Gi)?)?",
+                DefaultJson = "\"\""
+            },
+            new("/properties/sizing/memory", SchemaKind.Text, Description: "Explicit memory quantity.") {
+                Pattern = @"(\d+(\.\d+)?(m|k|M|G|Ki|Mi|Gi)?)?",
+                DefaultJson = "\"\""
+            },
             new("/properties/storage", SchemaKind.Nested, Description: "The data volume."),
             new("/properties/storage/size", SchemaKind.Text, Required: true, Description: "Data volume size.") {
-                DefaultJson = "\"20Gi\""
+                Pattern = @"\d+(\.\d+)?(m|k|M|G|Ki|Mi|Gi)?",
+                DefaultJson = "\"20Gi\"",
+                ExampleJson = "\"20Gi\""
             },
             new("/properties/storage/class", SchemaKind.Text, Description: "StorageClass name.") {
                 Widget = WidgetHint.StorageClass,
@@ -98,12 +109,26 @@ public sealed class ChartAnnotationTests {
                 Maximum = 365,
                 DefaultJson = "14"
             },
-            new("/properties/backup/destinationPath", SchemaKind.Text, Description: "Object-store URL for backups."),
+            new("/properties/backup/destinationPath", SchemaKind.Text, Description: "Object-store URL for backups.") {
+                DefaultJson = "\"\"",
+                ExampleJson = "\"s3://tenant-bucket/postgres\""
+            },
+            new("/properties/clusterId", SchemaKind.Text, Description: "The cluster's namespace.") {
+                Format = SchemaFormat.Uuid,
+                Widget = WidgetHint.Cluster
+            },
             new("/properties/bootstrap", SchemaKind.Nested, Description: "What exists on first start."),
             new("/properties/bootstrap/database", SchemaKind.Text, Description: "The application database.") {
+                Pattern = "[a-z_][a-z0-9_]*",
+                MinLength = 1,
+                MaxLength = 63,
                 DefaultJson = "\"app\""
             },
+            // ⚠ A one-sided length, which `@length` spells and `@range` cannot. Kept in the fixture so
+            // the open end is emitted and subset-checked on every run rather than only in the test that
+            // names it.
             new("/properties/bootstrap/owner", SchemaKind.Text, Description: "Role that owns the database.") {
+                MinLength = 1,
                 DefaultJson = "\"app\""
             },
             new("/properties/bootstrap/password", SchemaKind.Text, Secret: true, Description: "Password for the owning role."),
@@ -410,9 +435,9 @@ public sealed class ChartAnnotationTests {
             .Select(x => x.Groups["key"].Value)
             .ToList();
 
-        // The 26 rows under /properties. `/properties` itself is the values file's root and is not a
+        // The 27 rows under /properties. `/properties` itself is the values file's root and is not a
         // key in it — see the remarks on ChartAnnotationEmitter.RootPointer.
-        names.Count.ShouldBe(26);
+        names.Count.ShouldBe(27);
         keys.ShouldBe(names);
     }
 
@@ -469,6 +494,51 @@ public sealed class ChartAnnotationTests {
     }
 
     [Fact]
+    public void AnInternalRowNESTEDInsideAGeneratedObjectSurvivesToo() {
+        // ⚠ THE BUG THE FIRST REAL PAIR FOUND, ON 2026-08-12. Rewrite walked ROOT keys only. The one
+        // managed chart has `bootstrap.password` — `@internal`, `@secret` — sitting INSIDE
+        // `bootstrap:`, which is a generated key. So the whole `bootstrap` region was replaced and the
+        // password row was deleted on every run, while build/Build.Charts.cs printed "The @internal
+        // rows were not touched". A generator that eats a hand-written row is bad; one that eats it
+        // and reports otherwise is the failure this file's own header calls a diff nobody reads.
+        //
+        // ⚠ The row must survive AS BYTES, comments and all — it carries the written reason it is not
+        // an API property, which is the whole `@internal` discipline.
+        const string password =
+            "  ## @param password {string} Password for the owning role.\n"
+            + "  ## @secret\n"
+            + "  ## @internal The reconciler supplies it; a body property would persist plaintext.\n"
+            + "  password: \"\"\n";
+
+        var original = Header
+            + "## @param bootstrap {object} What exists on first start.\n"
+            + "bootstrap:\n"
+            + "  ## @param database {string} The application database.\n"
+            + "  database: app\n"
+            + password
+            + "\n"
+            + InternalTail;
+
+        var rewritten = ChartAnnotationEmitter.Rewrite(original, Block);
+
+        rewritten.Problems.ShouldBeEmpty();
+        rewritten.Text.ShouldContain(password);
+
+        // …and it is still a member of `bootstrap`, not reparented onto whatever came before it. The
+        // first version of the recursive merge dropped each nested slice's own `key:` line, which
+        // `helm lint` reported as a nil pointer three templates away from the cause.
+        var lines = rewritten.Text.Split('\n');
+        var key = Array.FindIndex(lines, x => x == "  password: \"\"");
+
+        key.ShouldBeGreaterThan(0);
+        lines.Take(key).Last(x => x.Length > 0 && x[0] != ' ' && x[0] != '#').ShouldBe("bootstrap:");
+
+        // The root-level @internal rows are still there as well — the fix did not trade one for the
+        // other.
+        rewritten.Text.ShouldEndWith(InternalTail);
+    }
+
+    [Fact]
     public void TheInternalRegionIsCopiedRatherThanReRendered() {
         // Byte-for-byte, including the quoting style and the wording of every comment. Re-rendering is
         // how `managedBy: cybercloud` quietly becomes `managedBy: "cybercloud"` and a diff appears in a
@@ -518,17 +588,20 @@ public sealed class ChartAnnotationTests {
     // ── (f) A fact the registry gained that the chart block silently drops ─────────────────────
 
     [Theory]
-    [InlineData("format")]
-    [InlineData("pattern")]
-    [InlineData("length")]
-    [InlineData("example")]
     [InlineData("nullable")]
     [InlineData("element")]
     public void AFactWithNoAnnotationSyntaxIsRefusedRatherThanDropped(string directive) {
         // ⚠ THE FAILURE THIS IS MODELLED ON, and DerivedSurfaceTests exists for it on the other four
-        // surfaces. SchemaProperty carries seven facts the chart vocabulary cannot say. Dropping one
-        // silently would mean a chart rendering a cluster from values the API would have refused —
-        // and the drop would be invisible in the file that claims to be the configuration surface.
+        // surfaces. Dropping one silently would mean a chart rendering a cluster from values the API
+        // would have refused — and the drop would be invisible in the file that claims to be the
+        // configuration surface.
+        //
+        // ⚠ THIS THEORY HAD SIX CASES UNTIL 2026-08-12 and now has two. `@format`, `@pattern`,
+        // `@length` and `@example` moved from here to
+        // EveryFactTheGrownVocabularySpellsReachesTheBlock when CyberCloud.DBforPostgreSQL/servers
+        // became the vocabulary's first real user and made thirteen of these refusals the only red
+        // gate in the tree. Nullable and a non-text ElementKind stay refused: neither has a user, and
+        // both are harder than the four that closed — see the remarks on CheckInexpressible.
         var block = ChartAnnotationEmitter.Emit(WithGap(directive));
 
         block.Text.ShouldBeEmpty();
@@ -541,16 +614,6 @@ public sealed class ChartAnnotationTests {
         var root = new SchemaProperty("/properties", SchemaKind.Nested, Description: "The configuration.");
 
         SchemaProperty gap = directive switch {
-            "format" => new("/properties/gap", SchemaKind.Text, Description: "A gap.") {
-                Format = SchemaFormat.Uuid
-            },
-            "pattern" => new("/properties/gap", SchemaKind.Text, Description: "A gap.") {
-                Pattern = "[a-z]+"
-            },
-            "length" => new("/properties/gap", SchemaKind.Text, Description: "A gap.") { MinLength = 12 },
-            "example" => new("/properties/gap", SchemaKind.Text, Description: "A gap.") {
-                ExampleJson = "\"eu-central\""
-            },
             "nullable" => new("/properties/gap", SchemaKind.Text, Description: "A gap.") { Nullable = true },
             _ => new("/properties/gap", SchemaKind.Array, Description: "A gap.") {
                 ElementKind = SchemaKind.WholeNumber,
@@ -559,6 +622,202 @@ public sealed class ChartAnnotationTests {
         };
 
         return ResourceSchema.Of([root, gap]);
+    }
+
+    // ── (f2) The four directives that closed, and what they may not carry ──────────────────────
+
+    [Fact]
+    public void EveryFactTheGrownVocabularySpellsReachesTheBlock() {
+        // The other half of the gap theory, for the four that closed on 2026-08-12. Each was one of
+        // the thirteen refusals `./build.sh Charts` reported against
+        // CyberCloud.DBforPostgreSQL/servers.
+        Block.ShouldContain(@"## @pattern \d+(\.\d+)?(m|k|M|G|Ki|Mi|Gi)?");
+        Block.ShouldContain("## @length 1..63");
+        Block.ShouldContain("## @example \"20Gi\"");
+        Block.ShouldContain("## @format uuid");
+
+        // ⚠ An open end, which `@length` spells and `@range` refuses. The asymmetry is deliberate —
+        // "at least one character" is the ordinary shape of a string constraint, and a @length
+        // requiring both ends would refuse the commonest case.
+        Block.ShouldContain("## @length 1..\n");
+    }
+
+    [Fact]
+    public void APatternKeepsEveryCharacterThatMeansSomethingToSomethingElse() {
+        // ⚠ THE POINT OF `@pattern`, AND THE REASON IT IS NOT SPLIT, QUOTED OR ESCAPED. A regular
+        // expression is made of the characters other parts of this format reserve: `|` separates
+        // `@enum` members, `#` opens a YAML comment, `:` opens a mapping, `{` opens a `@param` type,
+        // and a quote opens a scalar. Every one of them is inert on a `## @pattern` line — the line is
+        // a comment, and this is the one directive that takes the rest of the line verbatim. A
+        // vocabulary that refused them could not spell the first pattern anybody wrote.
+        var pattern = @"^[a-z]#(one|two):\{3\}""x""$";
+
+        var block = ChartAnnotationEmitter.Emit(ResourceSchema.Of([
+            new("/properties", SchemaKind.Nested, Description: "The configuration."),
+            // ⚠ No DefaultJson: ResourceSchema.Of checks a default against its own anchored pattern,
+            // and the point here is the pattern's transport rather than its defaulting.
+            new("/properties/awkward", SchemaKind.Text, Description: "An awkward one.") {
+                Pattern = pattern
+            }
+        ]));
+
+        block.Problems.ShouldBeEmpty();
+        block.Text.ShouldContain("## @pattern " + pattern);
+
+        // …and the emitted line is still inside the values subset, so the real reader will take it.
+        Subset.Problems(block.Text).ShouldBeEmpty();
+    }
+
+    [Theory]
+    [InlineData(" [a-z]+", "whitespace")]
+    [InlineData("[a-z]+ ", "whitespace")]
+    [InlineData("[a-z]+\n[0-9]+", "control character")]
+    [InlineData("[a-z]+\t", "whitespace")]
+    public void APatternTheDirectiveCannotCarryIsRefusedRatherThanMangled(string pattern, string reason) {
+        // ⚠ THE OTHER HALF OF THE SAME DECISION, AND THE DANGEROUS HALF. build/Build.Charts.cs trims
+        // the line, then the directive body, then the argument — three separate trims — so a pattern
+        // with an edge space comes back as a DIFFERENT pattern and the chart then validates a set of
+        // strings the API does not. That is the "constraint that reached the API and not the chart"
+        // failure wearing a disguise: the constraint arrives, and means something else. A newline
+        // would end the annotation block above the key it describes; a tab is a subset violation.
+        var block = ChartAnnotationEmitter.Emit(new ResourceSchema {
+            Properties = [
+                new("/properties", SchemaKind.Nested, Description: "The configuration."),
+                new("/properties/gap", SchemaKind.Text, Description: "A gap.") { Pattern = pattern }
+            ]
+        });
+
+        block.Text.ShouldBeEmpty();
+        block.Problems.ShouldContain(x => x.Contains(reason, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void ASecretThatAlsoDeclaresAFormatIsRefusedBecauseBothWriteTheSameKeyword() {
+        // `@secret` already means `format: password` — the three keywords OpenApiEmitter puts on a
+        // secret — so a property carrying both would emit two `format`s into one schema node and the
+        // second would win without a word being said.
+        var block = ChartAnnotationEmitter.Emit(ResourceSchema.Of([
+            new("/properties", SchemaKind.Nested, Description: "The configuration."),
+            new("/properties/token", SchemaKind.Text, Secret: true, Description: "A token.") {
+                Format = SchemaFormat.Uuid
+            }
+        ]));
+
+        block.Text.ShouldBeEmpty();
+        block.Problems.ShouldContain(x => x.Contains("the same keyword", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void ANegativeLengthIsRefusedBecauseTheDirectiveSpellsDigits() {
+        var block = ChartAnnotationEmitter.Emit(new ResourceSchema {
+            Properties = [
+                new("/properties", SchemaKind.Nested, Description: "The configuration."),
+                new("/properties/gap", SchemaKind.Text, Description: "A gap.") { MaxLength = -1 }
+            ]
+        });
+
+        block.Text.ShouldBeEmpty();
+        block.Problems.ShouldContain(x => x.Contains("negative length", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void AnExampleIsRewrittenAsCompactJsonRatherThanCopied() {
+        // ⚠ What makes `@example` safe where `@pattern` needed a check. Nobody constrains the
+        // whitespace in a SchemaProperty.ExampleJson, and a pretty-printed one carries newlines that
+        // would end the annotation block above its key. Re-serialising makes it one line by
+        // construction, and makes the bytes a function of the value rather than of how it was spelled
+        // — which is what a byte-for-byte drift gate needs.
+        var block = ChartAnnotationEmitter.Emit(ResourceSchema.Of([
+            new("/properties", SchemaKind.Nested, Description: "The configuration."),
+            new("/properties/extensions", SchemaKind.Array, Description: "Extensions.") {
+                ElementKind = SchemaKind.Text,
+                DefaultJson = "[]",
+                ExampleJson = "[\n  \"pgvector\",\n  \"postgis\"\n]"
+            }
+        ]));
+
+        block.Problems.ShouldBeEmpty();
+        block.Text.ShouldContain("## @example [\"pgvector\",\"postgis\"]");
+        Subset.Problems(block.Text).ShouldBeEmpty();
+    }
+
+    // ── (a2) The reader and the emitter are two files that can disagree in silence ─────────────
+
+    [Fact]
+    public void TheReaderAndTheEmitterAgreeOnTheDirectiveTable() {
+        // ⚠ THE FAILURE CLASS THIS WHOLE TEST EXISTS FOR. The vocabulary lives in four places: the
+        // `Directives` allow-list in build/Build.Charts.cs, the emission in ChartAnnotationEmitter,
+        // the table in charts/README.md, and the Subset checker below. build/_build.csproj is outside
+        // the solution and references nothing in src/, so the two halves CANNOT be wired together —
+        // they can only be compared. A verb the reader accepts and the emitter never writes is dead
+        // vocabulary; a verb the emitter writes and the reader rejects fails the build on generated
+        // output. Both compile perfectly.
+        //
+        // ⚠ And the quiet one, which is why the allow-list alone is not enough: a verb listed in
+        // `Directives` with no case in `TakeAnnotation` parses, is read, and is thrown away. The build
+        // stays green and the constraint never reaches values.schema.json.
+        var reader = ReaderSource();
+
+        Table(reader, "Directives").ShouldBe(Subset.Directives, ignoreOrder: false);
+        Table(reader, "FormatNames").ShouldBe(Subset.Formats, ignoreOrder: false);
+
+        foreach (var directive in Subset.Directives) {
+            reader.ShouldContain(
+                $"case \"{directive}\"",
+                Case.Sensitive,
+                $"`@{directive}` is in build/Build.Charts.cs's Directives table with no case in "
+                + "TakeAnnotation, so the reader accepts the directive, reads its argument and drops "
+                + "it. The annotation parses, the build is green, and the fact never reaches "
+                + "values.schema.json."
+            );
+        }
+    }
+
+    [Fact]
+    public void TheDirectiveTableCheckWouldNoticeAMissingVerb() {
+        // ⚠ A comparison nobody has seen fail is a comparison that passes. Both halves of the test
+        // above are exercised here against text that is deliberately wrong.
+        Table("static readonly string[] Directives = [\n  \"enum\",\n];", "Directives")
+            .ShouldBe(["enum"]);
+
+        Should.Throw<Exception>(() =>
+            Table("static readonly string[] Directives = [\"enum\"];", "Directives")
+                .ShouldBe(Subset.Directives, ignoreOrder: false));
+    }
+
+    /// <summary>
+    ///     build/Build.Charts.cs, embedded at build time — see this project's <c>.csproj</c>.
+    /// </summary>
+    static string ReaderSource() {
+        using var stream = typeof(ChartAnnotationTests).Assembly
+            .GetManifestResourceStream("build.Build.Charts.cs")
+            .ShouldNotBeNull(
+                "build/Build.Charts.cs is not embedded in this test assembly, so the reader and the "
+                + "emitter are no longer compared and either may grow a directive the other has never "
+                + "heard of."
+            );
+
+        using var reader = new StreamReader(stream);
+
+        return reader.ReadToEnd();
+    }
+
+    /// <summary>The string-array initialiser called <paramref name="name" />, in declaration order.</summary>
+    static ImmutableArray<string> Table(string source, string name) {
+        var declaration = new Regex(
+            @"string\[\]\s+" + Regex.Escape(name) + @"\s*=\s*\[(?<body>[^\]]*)\]",
+            RegexOptions.Singleline
+        ).Match(source);
+
+        declaration.Success.ShouldBeTrue(
+            $"build/Build.Charts.cs no longer declares a `string[] {name}`, so the reader's "
+            + "vocabulary cannot be read and compared against the emitter's."
+        );
+
+        return [
+            .. Regex.Matches(declaration.Groups["body"].Value, "\"(?<member>[^\"]*)\"")
+                .Select(x => x.Groups["member"].Value)
+        ];
     }
 
     [Fact]
@@ -695,8 +954,35 @@ public sealed class ChartAnnotationTests {
     ///     constructs in a suite so that a subset violation does not have to wait for a build.
     /// </remarks>
     static class Subset {
-        static readonly ImmutableArray<string> Directives =
-            ["enum", "immutable", "internal", "param", "range", "required", "secret", "widget"];
+        /// <summary>
+        ///     ⚠ The fourth copy of this table. <c>build/Build.Charts.cs</c> has the real one,
+        ///     <c>ChartAnnotationEmitter</c> decides which of them it writes, charts/README.md documents
+        ///     them, and this restates them. <see cref="TheReaderAndTheEmitterAgreeOnTheDirectiveTable" />
+        ///     is what stops the copies drifting.
+        /// </summary>
+        public static readonly ImmutableArray<string> Directives = [
+            "enum",
+            "example",
+            "format",
+            "immutable",
+            "internal",
+            "length",
+            "param",
+            "pattern",
+            "range",
+            "required",
+            "secret",
+            "widget",
+        ];
+
+        public static readonly ImmutableArray<string> Formats = [
+            "cybercloud-region",
+            "cybercloud-resource-id",
+            "date-time",
+            "email",
+            "uri",
+            "uuid",
+        ];
 
         static readonly ImmutableArray<string> Types =
             ["array", "boolean", "integer", "number", "object", "string"];
@@ -709,6 +995,9 @@ public sealed class ChartAnnotationTests {
 
         /// <summary>⚠ Both bounds. `1..` is malformed, not an open range — build/Build.Charts.cs.</summary>
         static readonly Regex Range = new(@"^-?\d+(?:\.\d+)?\.\.-?\d+(?:\.\d+)?$");
+
+        /// <summary>⚠ Either end may be empty, unlike <see cref="Range" />. Digits only.</summary>
+        static readonly Regex Length = new(@"^\d*\.\.\d*$");
 
         static readonly Regex Widget = new("^[a-z][a-z0-9-]*$");
 
@@ -772,6 +1061,46 @@ public sealed class ChartAnnotationTests {
 
                         case "range" when !Range.IsMatch(argument):
                             problems.Add($"{line}: malformed `@range`. Got `{argument}`.");
+                            break;
+
+                        // ⚠ `@length` accepts an open end where `@range` does not — but not two of
+                        // them, which would be a directive constraining nothing.
+                        case "length" when !Length.IsMatch(argument) || argument == "..":
+                            problems.Add($"{line}: malformed `@length`. Got `{argument}`.");
+                            break;
+
+                        case "format" when !Formats.Contains(argument, StringComparer.Ordinal):
+                            problems.Add($"{line}: `@format {argument}` is not one of the six.");
+                            break;
+
+                        // ⚠ The argument is NOT parsed as anything but a run of printable text. A
+                        // pattern is full of `|`, `#`, `:` and braces and every one of them is legal
+                        // here; what it may not be is empty, or carry the whitespace three separate
+                        // trims in the real reader would eat.
+                        case "pattern" when argument.Length == 0:
+                            problems.Add($"{line}: `@pattern` needs a regular expression.");
+                            break;
+
+                        case "pattern" when body[(verb.Length + 1)..] != argument:
+                            problems.Add(
+                                $"{line}: `@pattern` has leading or trailing whitespace, which the "
+                                + "reader trims away. Got `{argument}`."
+                            );
+
+                            break;
+
+                        case "example":
+                            if (argument.Length == 0) {
+                                problems.Add($"{line}: `@example` needs a JSON value.");
+                                break;
+                            }
+
+                            try {
+                                _ = System.Text.Json.Nodes.JsonNode.Parse(argument);
+                            } catch (System.Text.Json.JsonException) {
+                                problems.Add($"{line}: `@example` is not JSON. Got `{argument}`.");
+                            }
+
                             break;
 
                         case "widget" when !Widget.IsMatch(argument):
