@@ -243,12 +243,18 @@ partial class Build
 
             if (annotation.Drifted && annotation.Published)
             {
+                // ⚠ The count of preserved rows is REPORTED, not asserted from memory. This message
+                // used to end "the other 26" and to claim the @internal rows were untouched while the
+                // rewrite was in fact eating bootstrap.password — a nested @internal key inside a
+                // generated object. A gate that misreports what it did is worse than one that says
+                // nothing, so the number comes from the rewrite that just ran.
                 failures.Add(
                     $"{ChartsDirectory.Name}/{annotation.File}'s @param block was not what "
                     + $"'{annotation.ResourceType}' generates at {annotation.ApiVersion}. It has been "
-                    + "rewritten in place — review the diff and commit it. The @internal rows were not "
-                    + "touched; ADR-010 § Which end authors the schema makes the C# ResourceSchema the "
-                    + "author of the other 26.");
+                    + "rewritten in place — review the diff and commit it. "
+                    + $"{annotation.PreservedInternalLines} line(s) of @internal region were carried "
+                    + "through untouched; ADR-010 § Which end authors the schema makes the C# "
+                    + "ResourceSchema the author of the rest.");
             }
         }
     }
@@ -775,6 +781,33 @@ partial class Build
             node["maximum"] = JsonNode.Parse(annotation.Maximum!);
         }
 
+        if (annotation.MinLength is not null)
+            node["minLength"] = JsonNode.Parse(annotation.MinLength);
+
+        if (annotation.MaxLength is not null)
+            node["maxLength"] = JsonNode.Parse(annotation.MaxLength);
+
+        // ⚠ ANCHORED HERE, and the annotation carries it bare. This is not tidying: JSON Schema's
+        // `pattern` is a SEARCH, and SchemaProperty.Pattern is a whole-value match that ResourceSchema
+        // tests as `^(?:…)$`. Emitting `\d+Gi` bare would give Helm a schema accepting `xxx20Gixxx`
+        // while the API refuses it — the chart strictly more permissive than the surface it was
+        // generated from, which is a cluster rendered from values the API would have rejected, arrived
+        // at from the opposite direction. The same three characters, for the same stated reason, as
+        // OpenApiEmitter. The non-capturing group matters: a bare `a|b` anchored as `^a|b$` is
+        // `^a` or `b$`.
+        if (annotation.Pattern is not null)
+            node["pattern"] = Anchored(annotation.Pattern);
+
+        // ⚠ `examples`, plural and an array — JSON Schema 2020-12's keyword, which is what this
+        // document declares as its $schema. OpenApiEmitter writes `example`, singular, because OpenAPI
+        // 3.0 is a different specification with a different keyword. Two spellings of one fact, each
+        // correct in its own document.
+        if (annotation.Example is not null)
+            node["examples"] = new JsonArray(annotation.Example.DeepClone());
+
+        if (annotation.Format is not null)
+            node["format"] = annotation.Format;
+
         if (annotation.Secret)
         {
             // The same three keywords OpenApiEmitter puts on a secret property, so the chart-side and
@@ -884,6 +917,11 @@ partial class Build
         List<ChartValue> Children);
 
     /// <summary>The parsed annotation block above one key.</summary>
+    /// <remarks>
+    ///     ⚠ Every member here is a directive's argument that <see cref="PropertyNode" /> writes into
+    ///     <c>values.schema.json</c>. A directive whose argument has no member is a directive the reader
+    ///     accepts and drops — see the remarks on <see cref="Directives" />.
+    /// </remarks>
     sealed record ValueAnnotation(
         string Name,
         string Type,
@@ -895,7 +933,12 @@ partial class Build
         IReadOnlyList<string> Choices,
         string? Minimum,
         string? Maximum,
-        string? Widget);
+        string? Widget,
+        string? Pattern,
+        string? MinLength,
+        string? MaxLength,
+        string? Format,
+        JsonNode? Example);
 
     /// <summary>
     ///     The six type names, one per <c>SchemaKind</c> member that is not <c>Unknown</c>.
@@ -907,9 +950,52 @@ partial class Build
     /// </remarks>
     static readonly string[] ValueTypes = ["array", "boolean", "integer", "number", "object", "string"];
 
-    /// <summary>The eight directives. Anything else fails with its line number.</summary>
-    static readonly string[] Directives =
-        ["enum", "immutable", "internal", "param", "range", "required", "secret", "widget"];
+    /// <summary>
+    ///     The twelve directives, ordinally sorted. Anything else fails with its line number.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>This table decides only that a verb is SPELLED correctly.</b> A directive listed here
+    ///     with no case in <see cref="TakeAnnotation" /> is accepted, read and thrown away — the
+    ///     annotation block parses, the build is green, and the fact never reaches
+    ///     <c>values.schema.json</c>. That is the "reader accepts what the emitter never writes"
+    ///     failure in its quietest form, and it is why <c>ChartAnnotationTests</c> asserts this array
+    ///     against the emitter's own list rather than trusting two hand-maintained copies to agree.
+    /// </remarks>
+    static readonly string[] Directives = [
+        "enum",
+        "example",
+        "format",
+        "immutable",
+        "internal",
+        "length",
+        "param",
+        "pattern",
+        "range",
+        "required",
+        "secret",
+        "widget",
+    ];
+
+    /// <summary>
+    ///     The six <c>@format</c> names, one per <see cref="SchemaFormat" /> member that is not
+    ///     <c>None</c> — <c>SchemaVocabulary.Of(SchemaFormat)</c> in
+    ///     <c>src/CyberCloud.ResourceManager.Contracts</c>.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ Closed, for the same reason <see cref="ValueTypes" /> is: the token becomes the
+    ///     <c>format</c> keyword the API validates on, so a seventh word is a typo that reaches a
+    ///     published schema rather than a documentation curiosity. ⚠ It is a second copy of a list that
+    ///     lives in <c>src/</c>, because this project deliberately references nothing there — see the
+    ///     header. <c>ChartAnnotationTests</c> reads this file as text and fails when the two diverge.
+    /// </remarks>
+    static readonly string[] FormatNames = [
+        "cybercloud-region",
+        "cybercloud-resource-id",
+        "date-time",
+        "email",
+        "uri",
+        "uuid",
+    ];
 
     static readonly Regex ParamDirective = new(
         @"^(?<name>[A-Za-z_][A-Za-z0-9_]*)[ ]+\{(?<type>[A-Za-z]+)\}[ ]+(?<description>\S.*)$",
@@ -920,6 +1006,23 @@ partial class Build
 
     static readonly Regex RangeDirective =
         new(@"^(?<min>-?\d+(?:\.\d+)?)\.\.(?<max>-?\d+(?:\.\d+)?)$", RegexOptions.Compiled);
+
+    /// <summary>
+    ///     <c>## @length &lt;min&gt;..&lt;max&gt;</c>, with either end optional.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>An open end is legal here and is NOT legal in <see cref="RangeDirective" /></b>, and the
+    ///     asymmetry is deliberate rather than an oversight. <c>SchemaProperty</c> lets a property
+    ///     declare a <c>MinLength</c> with no <c>MaxLength</c> — "at least one character" is the
+    ///     ordinary shape of a string constraint — so a <c>@length</c> requiring both ends would refuse
+    ///     the commonest case and buy nothing. <c>@range</c>'s pattern is older, is published in
+    ///     charts/README.md, and widening it is a change to a surface that already has authors; that
+    ///     gap stays named rather than quietly closed. ⚠ Digits only: a negative length is not a
+    ///     length, and <c>ChartAnnotationEmitter</c> refuses one rather than writing a directive this
+    ///     would then call malformed.
+    /// </remarks>
+    static readonly Regex LengthDirective =
+        new(@"^(?<min>\d*)\.\.(?<max>\d*)$", RegexOptions.Compiled);
 
     static readonly Regex WidgetName = new("^[a-z][a-z0-9-]*$", RegexOptions.Compiled);
 
@@ -1101,7 +1204,7 @@ partial class Build
         if (!Directives.Contains(verb, StringComparer.Ordinal))
         {
             problems.Add(
-                $"{line}: `@{verb}` is not a directive. The eight are "
+                $"{line}: `@{verb}` is not a directive. The {Directives.Length} are "
                 + $"{string.Join(", ", Directives.Select(x => "@" + x))} — charts/README.md § The "
                 + "annotation format.");
 
@@ -1215,6 +1318,11 @@ partial class Build
         string? maximum = null;
         string? widget = null;
         string? internalReason = null;
+        string? pattern = null;
+        string? minLength = null;
+        string? maxLength = null;
+        string? format = null;
+        JsonNode? example = null;
         var required = false;
         var secret = false;
         var immutable = false;
@@ -1301,6 +1409,101 @@ partial class Build
                     widget = argument;
                     break;
 
+                case "length":
+                    var lengths = LengthDirective.Match(argument);
+
+                    if (!lengths.Success
+                        || (lengths.Groups["min"].Value.Length == 0
+                            && lengths.Groups["max"].Value.Length == 0))
+                    {
+                        problems.Add(
+                            $"{line}: malformed `@length`. The form is `## @length <min>..<max>` and "
+                            + "either end may be empty — `1..63`, `1..`, `..63` — but not both. Got "
+                            + $"`{argument}`.");
+
+                        break;
+                    }
+
+                    minLength = Empty(lengths.Groups["min"].Value);
+                    maxLength = Empty(lengths.Groups["max"].Value);
+                    break;
+
+                case "pattern":
+                    // ⚠ The argument is taken WHOLE and is not split, unquoted or unescaped. A pattern
+                    // is full of characters that mean something to something — `|` to `@enum`, `#` to
+                    // YAML, `:` to a mapping — and every one of them is inert here: the line is a
+                    // comment, so no YAML parser reads it as structure, and this is the only directive
+                    // that consumes the rest of the line verbatim. What a pattern CANNOT carry is
+                    // leading or trailing whitespace, because ReadDirective has already trimmed it
+                    // twice by the time it arrives; ChartAnnotationEmitter refuses to write one rather
+                    // than let it come back as a different pattern.
+                    if (argument.Length == 0)
+                    {
+                        problems.Add(
+                            $"{line}: `@pattern` needs a regular expression. An empty one matches "
+                            + "everything, which is a constraint that says nothing — omit the directive "
+                            + "instead.");
+
+                        break;
+                    }
+
+                    try
+                    {
+                        _ = Regex.Match(string.Empty, argument, RegexOptions.None, PatternTimeout);
+                    }
+                    catch (ArgumentException malformed)
+                    {
+                        problems.Add(
+                            $"{line}: `@pattern` is not a regular expression that compiles: "
+                            + $"{malformed.Message}");
+
+                        break;
+                    }
+
+                    pattern = argument;
+                    break;
+
+                case "format":
+                    if (!FormatNames.Contains(argument, StringComparer.Ordinal))
+                    {
+                        problems.Add(
+                            $"{line}: `@format {argument}` is not a format. The "
+                            + $"{FormatNames.Length} are {string.Join(", ", FormatNames)} — one per "
+                            + "SchemaFormat member that is not None. The token becomes the `format` "
+                            + "keyword the API validates on, so it is closed rather than free text.");
+
+                        break;
+                    }
+
+                    format = argument;
+                    break;
+
+                case "example":
+                    // ⚠ JSON, not a YAML scalar, and that is what makes this directive safe. An
+                    // example is written by ChartAnnotationEmitter as compact JSON, so it is one line
+                    // by construction and every control character it could carry is already escaped.
+                    // Parsing it back with the same grammar is what makes the round trip an equality
+                    // rather than a resemblance.
+                    if (argument.Length == 0)
+                    {
+                        problems.Add($"{line}: `@example` needs a JSON value. Got nothing.");
+                        break;
+                    }
+
+                    try
+                    {
+                        example = JsonNode.Parse(argument);
+                    }
+                    catch (JsonException malformed)
+                    {
+                        problems.Add(
+                            $"{line}: `@example` takes one JSON value on one line — `\"20Gi\"`, `14`, "
+                            + $"`[\"pgvector\"]`. Got `{argument}`, which is not JSON: "
+                            + $"{malformed.Message}");
+                    }
+
+                    break;
+
                 default:
                     break;
             }
@@ -1324,8 +1527,21 @@ partial class Build
             choices,
             minimum,
             maximum,
-            widget);
+            widget,
+            pattern,
+            minLength,
+            maxLength,
+            format,
+            example);
     }
+
+    static string? Empty(string value) => value.Length == 0 ? null : value;
+
+    /// <summary>
+    ///     How long a <c>@pattern</c> may run against the empty string before it is a bug rather than a
+    ///     match — <c>SchemaProperty.PatternTimeout</c>'s value, restated here.
+    /// </summary>
+    static readonly TimeSpan PatternTimeout = TimeSpan.FromMilliseconds(100);
 
     // ── Literals ──────────────────────────────────────────────────────────────────────────────
 
@@ -1516,6 +1732,38 @@ partial class Build
             if (annotation.Secret && annotation.Type is not "string")
                 problems.Add($"{value.Line}: `@secret` on a `{{{annotation.Type}}}`. A secret is a string.");
 
+            // ⚠ The three string refinements. `pattern`, `minLength`/`maxLength` and `format` are
+            // JSON Schema keywords that apply to a string and are SILENTLY IGNORED on anything else —
+            // so a `@pattern` on an `{integer}` is not a stricter integer, it is a constraint the
+            // author believes is enforced and that validates nothing at all. Refused rather than
+            // emitted, exactly as `@secret` and `@range` are on the wrong type.
+            foreach (var (directive, present) in new[]
+                     {
+                         ("@pattern", annotation.Pattern is not null),
+                         ("@length", annotation.MinLength is not null || annotation.MaxLength is not null),
+                         ("@format", annotation.Format is not null),
+                     })
+            {
+                if (present && annotation.Type is not "string")
+                {
+                    problems.Add(
+                        $"{value.Line}: `{directive}` on a `{{{annotation.Type}}}`. It refines a string, "
+                        + "and JSON Schema ignores it on any other type — so it would read as a "
+                        + "constraint and validate nothing.");
+                }
+            }
+
+            if (annotation.Format is not null && annotation.Secret)
+            {
+                problems.Add(
+                    $"{value.Line}: '{value.Name}' carries both `@secret` and `@format "
+                    + $"{annotation.Format}`. `@secret` already emits `format: password`, so the two "
+                    + "write the same keyword and one of them would be lost without a word being said.");
+            }
+
+            CheckLength(value, annotation, problems);
+            CheckPattern(value, annotation, problems);
+
             if (annotation.Widget is not null && annotation.Type is "object" or "array")
                 problems.Add($"{value.Line}: `@widget` on a `{{{annotation.Type}}}`. A widget renders one scalar field.");
 
@@ -1578,6 +1826,102 @@ partial class Build
                 + "would reject the chart's own values against the schema this generates.");
         }
     }
+
+    /// <summary>
+    ///     <c>@length</c> against itself and against the value on the annotated line.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ The default is checked for the same reason <see cref="CheckRange" /> checks it: <c>helm
+    ///     lint --strict</c> validates <c>values.yaml</c> against the <c>values.schema.json</c> this
+    ///     file generates from it, so a default outside its own constraint fails the very next step of
+    ///     the same target — with Helm's message rather than one naming the line.
+    /// </remarks>
+    static void CheckLength(ChartValue value, ValueAnnotation annotation, List<string> problems)
+    {
+        if (annotation.MinLength is null && annotation.MaxLength is null)
+            return;
+
+        var shortest = annotation.MinLength is null
+            ? (int?)null
+            : int.Parse(annotation.MinLength, CultureInfo.InvariantCulture);
+
+        var longest = annotation.MaxLength is null
+            ? (int?)null
+            : int.Parse(annotation.MaxLength, CultureInfo.InvariantCulture);
+
+        if (shortest is { } floor && longest is { } ceiling && floor > ceiling)
+        {
+            problems.Add(
+                $"{value.Line}: `@length {annotation.MinLength}..{annotation.MaxLength}` is empty — no "
+                + "string satisfies it.");
+
+            return;
+        }
+
+        if (value.Default?.GetValueKind() is not JsonValueKind.String)
+            return;
+
+        var text = value.Default.GetValue<string>();
+
+        if (shortest is { } atLeast && text.Length < atLeast)
+        {
+            problems.Add(
+                $"{value.Line}: '{value.Name}' defaults to a string of {text.Length} character(s), "
+                + $"below its own `@length {annotation.MinLength}..{annotation.MaxLength}`. `helm lint` "
+                + "would reject the chart's own values against the schema this generates.");
+        }
+
+        if (longest is { } atMost && text.Length > atMost)
+        {
+            problems.Add(
+                $"{value.Line}: '{value.Name}' defaults to a string of {text.Length} character(s), "
+                + $"above its own `@length {annotation.MinLength}..{annotation.MaxLength}`.");
+        }
+    }
+
+    /// <summary>
+    ///     The value on the annotated line against its own <c>@pattern</c>.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Anchored, because the emitted keyword is anchored.</b> <see cref="PropertyNode" />
+    ///     writes <c>^(?:…)$</c> into <c>values.schema.json</c>, so checking the default with a bare
+    ///     <see cref="Regex.IsMatch(string, string)" /> — a search — would approve a default that
+    ///     <c>helm lint</c> then rejects two steps later against this file's own output. The anchoring
+    ///     is written once, in <see cref="Anchored" />, so the two cannot drift apart.
+    /// </remarks>
+    static void CheckPattern(ChartValue value, ValueAnnotation annotation, List<string> problems)
+    {
+        if (annotation.Pattern is null || value.Default?.GetValueKind() is not JsonValueKind.String)
+            return;
+
+        var text = value.Default.GetValue<string>();
+
+        try
+        {
+            if (Regex.IsMatch(text, Anchored(annotation.Pattern), RegexOptions.None, PatternTimeout))
+                return;
+        }
+        catch (RegexMatchTimeoutException)
+        {
+            problems.Add(
+                $"{value.Line}: '{value.Name}' has a `@pattern` that did not finish matching its own "
+                + "default within 100ms. A pattern that backtracks is a pattern an attacker can hold "
+                + "the API open with.");
+
+            return;
+        }
+
+        problems.Add(
+            $"{value.Line}: '{value.Name}' defaults to `{text}`, which its own `@pattern "
+            + $"{annotation.Pattern}` does not match as a whole value. `helm lint` would reject the "
+            + "chart's own values against the schema this generates.");
+    }
+
+    /// <summary>
+    ///     A <c>@pattern</c> as the whole-value match it is meant to be — the one place the anchoring
+    ///     is spelled, read by both <see cref="PropertyNode" /> and <see cref="CheckPattern" />.
+    /// </summary>
+    static string Anchored(string pattern) => "^(?:" + pattern + ")$";
 
     static void CheckChoices(ChartValue value, ValueAnnotation annotation, List<string> problems)
     {

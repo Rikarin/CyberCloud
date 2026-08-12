@@ -11,6 +11,10 @@
         "destinationPath": {
           "default": "",
           "description": "Object-store URL for base backups and WAL, for example s3://tenant-bucket/postgres. Empty means the platform fills it in from the tenant's default bucket.",
+          "examples": [
+            "s3://tenant-bucket/postgres"
+          ],
+          "pattern": "^(?:(s3://[a-z0-9][a-z0-9.\\-]*[a-z0-9](/[^\\s]*)?)?)$",
           "type": "string",
           "x-cybercloud-order": 2,
           "x-cybercloud-pointer": "/properties/backup/destinationPath"
@@ -33,7 +37,7 @@
         }
       },
       "type": "object",
-      "x-cybercloud-order": 7,
+      "x-cybercloud-order": 8,
       "x-cybercloud-pointer": "/properties/backup"
     },
     "bootstrap": {
@@ -43,6 +47,9 @@
         "database": {
           "default": "app",
           "description": "Name of the application database created on first start.",
+          "maxLength": 63,
+          "minLength": 1,
+          "pattern": "^(?:[a-z_][a-z0-9_]*)$",
           "type": "string",
           "x-cybercloud-order": 0,
           "x-cybercloud-pointer": "/properties/bootstrap/database"
@@ -50,6 +57,9 @@
         "owner": {
           "default": "app",
           "description": "Role that owns the application database.",
+          "maxLength": 63,
+          "minLength": 1,
+          "pattern": "^(?:[a-z_][a-z0-9_]*)$",
           "type": "string",
           "x-cybercloud-order": 1,
           "x-cybercloud-pointer": "/properties/bootstrap/owner"
@@ -68,12 +78,27 @@
         }
       },
       "type": "object",
-      "x-cybercloud-order": 8,
+      "x-cybercloud-order": 9,
       "x-cybercloud-pointer": "/properties/bootstrap"
+    },
+    "clusterId": {
+      "default": "",
+      "description": "The cluster whose namespace holds the CloudNativePG objects.",
+      "format": "uuid",
+      "type": "string",
+      "x-cybercloud-immutable": true,
+      "x-cybercloud-order": 0,
+      "x-cybercloud-pointer": "/properties/clusterId",
+      "x-cybercloud-widget": "cluster"
     },
     "extensions": {
       "default": [],
       "description": "Extensions to install, from the platform allow-list. An arbitrary-extension escape hatch is a code-execution surface and is not offered.",
+      "examples": [
+        [
+          "pgvector"
+        ]
+      ],
       "items": {
         "enum": [
           "pgvector",
@@ -84,7 +109,7 @@
         "type": "string"
       },
       "type": "array",
-      "x-cybercloud-order": 6,
+      "x-cybercloud-order": 7,
       "x-cybercloud-pointer": "/properties/extensions"
     },
     "imageName": {
@@ -93,7 +118,7 @@
       "type": "string",
       "x-cybercloud-api": false,
       "x-cybercloud-internal-reason": "A pinned image defeats automatic minor upgrades, so it is a platform escape hatch rather than a tenant setting.",
-      "x-cybercloud-order": 11,
+      "x-cybercloud-order": 12,
       "x-cybercloud-pointer": "/properties/imageName"
     },
     "monitoring": {
@@ -109,7 +134,7 @@
         }
       },
       "type": "object",
-      "x-cybercloud-order": 9,
+      "x-cybercloud-order": 10,
       "x-cybercloud-pointer": "/properties/monitoring"
     },
     "nameOverride": {
@@ -118,7 +143,7 @@
       "type": "string",
       "x-cybercloud-api": false,
       "x-cybercloud-internal-reason": "Helm plumbing. Nothing about it belongs in a resource body.",
-      "x-cybercloud-order": 12,
+      "x-cybercloud-order": 13,
       "x-cybercloud-pointer": "/properties/nameOverride"
     },
     "platform": {
@@ -192,7 +217,7 @@
       "type": "object",
       "x-cybercloud-api": false,
       "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
-      "x-cybercloud-order": 10,
+      "x-cybercloud-order": 11,
       "x-cybercloud-pointer": "/properties/platform"
     },
     "pooling": {
@@ -229,7 +254,7 @@
         }
       },
       "type": "object",
-      "x-cybercloud-order": 5,
+      "x-cybercloud-order": 6,
       "x-cybercloud-pointer": "/properties/pooling"
     },
     "replicas": {
@@ -238,7 +263,7 @@
       "maximum": 5,
       "minimum": 1,
       "type": "integer",
-      "x-cybercloud-order": 1,
+      "x-cybercloud-order": 2,
       "x-cybercloud-pointer": "/properties/replicas"
     },
     "sizing": {
@@ -248,6 +273,7 @@
         "cpu": {
           "default": "",
           "description": "Explicit vCPU quantity in Kubernetes form, for example 500m or 2. Empty means take it from the preset.",
+          "pattern": "^(?:(\\d+(\\.\\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)?)$",
           "type": "string",
           "x-cybercloud-order": 1,
           "x-cybercloud-pointer": "/properties/sizing/cpu"
@@ -255,6 +281,7 @@
         "memory": {
           "default": "",
           "description": "Explicit memory quantity in Kubernetes form, for example 4Gi. Empty means take it from the preset.",
+          "pattern": "^(?:(\\d+(\\.\\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)?)$",
           "type": "string",
           "x-cybercloud-order": 2,
           "x-cybercloud-pointer": "/properties/sizing/memory"
@@ -279,7 +306,7 @@
         }
       },
       "type": "object",
-      "x-cybercloud-order": 3,
+      "x-cybercloud-order": 4,
       "x-cybercloud-pointer": "/properties/sizing"
     },
     "storage": {
@@ -298,6 +325,10 @@
         "size": {
           "default": "20Gi",
           "description": "Data volume size in Kubernetes quantity form. Grows online; never shrinks.",
+          "examples": [
+            "20Gi"
+          ],
+          "pattern": "^(?:\\d+(\\.\\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)$",
           "type": "string",
           "x-cybercloud-order": 0,
           "x-cybercloud-pointer": "/properties/storage/size"
@@ -305,6 +336,7 @@
         "walSize": {
           "default": "",
           "description": "Size of the separate write-ahead-log volume. Empty means the WAL shares the data volume.",
+          "pattern": "^(?:(\\d+(\\.\\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)?)$",
           "type": "string",
           "x-cybercloud-order": 2,
           "x-cybercloud-pointer": "/properties/storage/walSize"
@@ -314,14 +346,14 @@
         "size"
       ],
       "type": "object",
-      "x-cybercloud-order": 4,
+      "x-cybercloud-order": 5,
       "x-cybercloud-pointer": "/properties/storage"
     },
     "synchronousReplication": {
       "default": false,
       "description": "Whether commits wait for a replica. Costs write latency and removes the window in which a failover loses transactions.",
       "type": "boolean",
-      "x-cybercloud-order": 2,
+      "x-cybercloud-order": 3,
       "x-cybercloud-pointer": "/properties/synchronousReplication"
     },
     "version": {
@@ -333,11 +365,12 @@
         "18"
       ],
       "type": "string",
-      "x-cybercloud-order": 0,
+      "x-cybercloud-order": 1,
       "x-cybercloud-pointer": "/properties/version"
     }
   },
   "required": [
+    "clusterId",
     "replicas",
     "version"
   ],

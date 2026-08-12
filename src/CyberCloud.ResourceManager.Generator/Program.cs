@@ -199,6 +199,7 @@ static class Program {
                 ["chart"] = annotation.Chart,
                 ["drifted"] = annotation.Drifted,
                 ["file"] = annotation.File,
+                ["preservedInternalLines"] = annotation.PreservedInternalLines,
                 ["problems"] = Lines(annotation.Problems),
                 ["published"] = annotation.Published,
                 ["resourceType"] = annotation.ResourceType

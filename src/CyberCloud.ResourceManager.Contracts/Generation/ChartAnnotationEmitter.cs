@@ -66,18 +66,42 @@ public sealed record ChartRewrite(string Text, ImmutableArray<string> Problems, 
 ///         CLI.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Seven <see cref="SchemaProperty" /> members have no annotation syntax, and this emitter
-///         REFUSES rather than dropping them.</b> <see cref="SchemaProperty.Format" />,
-///         <see cref="SchemaProperty.Pattern" />, <see cref="SchemaProperty.MinLength" />,
-///         <see cref="SchemaProperty.MaxLength" />, <see cref="SchemaProperty.ExampleJson" />,
-///         <see cref="SchemaProperty.Nullable" /> and a non-text
-///         <see cref="SchemaProperty.ElementKind" /> are named in
-///         docs/plan/02 § ADR-010 as the gap that runs registry-to-chart. Each becomes a problem
+///         ⚠ <b>Two <see cref="SchemaProperty" /> members still have no annotation syntax, and this
+///         emitter REFUSES rather than dropping them.</b> <see cref="SchemaProperty.Nullable" /> and a
+///         non-text <see cref="SchemaProperty.ElementKind" /> are what is left of the seven
+///         docs/plan/02 § ADR-010 named as the gap that runs registry-to-chart. Each becomes a problem
 ///         naming the property and the fact, because a constraint that reached the API and not the
-///         chart is a chart that renders a cluster the API would have refused. Closing one means a new
-///         directive in <c>build/Build.Charts.cs</c>'s <c>Directives</c> table, its emission in
-///         <c>PropertyNode</c>, a row in charts/README.md § The annotation format and a case here —
-///         four edits, deliberately not made speculatively for a vocabulary no chart yet uses.
+///         chart is a chart that renders a cluster the API would have refused.
+///     </para>
+///     <para>
+///         ⚠ <b>The other five closed on 2026-08-12, and closing them cost more edits than the note
+///         that stood here predicted.</b> That note said four — the <c>Directives</c> table in
+///         <c>build/Build.Charts.cs</c>, its emission in <c>PropertyNode</c>, a row in
+///         charts/README.md § The annotation format, and a case here. It was written before any
+///         directive had been added, so it was a guess, and it missed the three that carry the risk:
+///         the <b>parse case in <c>TakeAnnotation</c></b> and the field on <c>ValueAnnotation</c> (the
+///         allow-list only decides that a verb is <i>spelled</i> correctly; without a case the argument
+///         is read and thrown away, which is a directive the reader accepts and the emitter's fact
+///         never reaches), the <b>cross-check in <c>Validate</c></b> (a <c>@pattern</c> on a
+///         <c>{boolean}</c>, or the chart's own default failing its own constraint, which
+///         <c>helm lint</c> would then reject), and a case in
+///         <see cref="CheckUnspellable" /> for the arguments the directive's transport cannot carry.
+///         The <c>Subset</c> checker in <c>ChartAnnotationTests</c> holds a fourth copy of the
+///         directive table. Nine sites in four files, not four.
+///     </para>
+///     <para>
+///         ⚠ <b><c>@pattern</c> carries the pattern UNANCHORED and every consumer anchors it.</b>
+///         <see cref="SchemaProperty.Pattern" /> is a whole-value match — <c>ResourceSchema</c> tests it
+///         as <c>^(?:…)$</c> — whereas JSON Schema's <c>pattern</c> keyword and
+///         <see cref="Regex.IsMatch(string, string)" /> are both a <i>search</i>. So a bare
+///         <c>\d+Gi</c> in a <c>values.schema.json</c> would accept <c>xxx20Gixxx</c>, which the API
+///         refuses: the chart would be strictly more permissive than the surface it is generated from,
+///         which is the exact failure this emitter refuses constraints to prevent.
+///         <c>build/Build.Charts.cs</c>'s <c>PropertyNode</c> anchors on the way into the schema, in
+///         the same three characters and for the same stated reason as
+///         <see cref="OpenApiEmitter" />. The annotation itself stays bare so that the line in
+///         <c>values.yaml</c> and the <c>Pattern</c> in C# are the same string and drift between them
+///         is visible.
 ///     </para>
 /// </remarks>
 public static class ChartAnnotationEmitter {
@@ -118,76 +142,177 @@ public static class ChartAnnotationEmitter {
     /// <param name="block">What <see cref="Emit" /> produced.</param>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>The <c>@internal</c> keys are moved through, never regenerated.</b> Ten of the
+    ///         ⚠ <b>The <c>@internal</c> keys are moved through, never regenerated.</b> Eleven of the
     ///         thirty-six rows in charts/managed/postgres/values.yaml are <c>@internal</c>: Helm
-    ///         plumbing, seven rows of reconciler-injected identity and an operator escape hatch. None
-    ///         of them is in any <c>ResourceSchema</c> and none ever will be — a resource body has no
-    ///         place for them — so a generator that rewrote the whole file would eat them. They are
-    ///         copied as bytes, not parsed and re-rendered, because re-rendering is how a comment's
-    ///         wording or a quoting style quietly changes.
+    ///         plumbing, seven rows of reconciler-injected identity, an operator escape hatch and the
+    ///         owning role's password. None of them is in any <c>ResourceSchema</c> and none ever will
+    ///         be — a resource body has no place for them — so a generator that rewrote the whole file
+    ///         would eat them. They are copied as bytes, not parsed and re-rendered, because
+    ///         re-rendering is how a comment's wording or a quoting style quietly changes.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>Every <c>@internal</c> root key must sit after every generated one, and that is
-    ///         enforced rather than assumed.</b> An in-place rewrite needs the generated region to be
-    ///         one contiguous run; interleaving them would make "where does the new key go" a question
-    ///         with no deterministic answer, and a generated file whose ordering depends on the
-    ///         previous file's ordering cannot be regenerated from scratch. The one managed chart in
-    ///         the tree already satisfies it.
+    ///         ⚠ <b>AT EVERY DEPTH, and that is a correction rather than a description.</b> Until
+    ///         2026-08-12 this walked root keys only, and the first real pair proved what that costs:
+    ///         <c>bootstrap.password</c> is <c>@internal</c> and sits <i>inside</i> <c>bootstrap:</c>,
+    ///         which is a generated key — so the whole region was replaced and the row was deleted,
+    ///         while <c>build/Build.Charts.cs</c> printed "The <c>@internal</c> rows were not touched".
+    ///         A generator that eats a hand-written row is bad; one that eats it and reports otherwise
+    ///         is the failure this file's own header calls "a diff nobody reads". The merge below is
+    ///         therefore recursive: at each level the generated keys are written in the registry's
+    ///         order, then the <c>@internal</c> keys of that same level are appended from the original
+    ///         bytes.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Every <c>@internal</c> key must sit after every generated one AT ITS OWN LEVEL, and
+    ///         that is enforced rather than assumed.</b> An in-place rewrite needs each level's
+    ///         generated region to be one contiguous run; interleaving them would make "where does the
+    ///         new key go" a question with no deterministic answer, and a generated file whose ordering
+    ///         depends on the previous file's ordering cannot be regenerated from scratch. The one
+    ///         managed chart in the tree already satisfies it at both levels it uses.
     ///     </para>
     /// </remarks>
     public static ChartRewrite Rewrite(string values, string block) {
         ArgumentNullException.ThrowIfNull(values);
         ArgumentNullException.ThrowIfNull(block);
 
-        var lines = Lines(values);
-        var regions = RootRegions(lines);
+        var original = Lines(values);
         var problems = new List<string>();
+        var preserved = new Counter();
 
-        var lastGenerated = regions.FindLastIndex(x => !x.IsInternal);
-
-        foreach (var stranded in regions.Take(Math.Max(lastGenerated, 0)).Where(x => x.IsInternal)) {
-            problems.Add(
-                $"{stranded.Line}: '{stranded.Name}' is `@internal` and is followed by "
-                + $"'{regions[lastGenerated].Name}' on line {regions[lastGenerated].Line}, which is "
-                + "generated. Every `@internal` key sits after every generated one, so that the "
-                + "generated block is a single contiguous run this rewrite can replace — see the "
-                + "remarks on ChartAnnotationEmitter.Rewrite."
-            );
-        }
+        var merged = Merge(Lines(block), original, 0, problems, preserved);
 
         if (problems.Count > 0) {
             return new(string.Empty, [.. problems], 0);
         }
 
-        var header = regions.Count == 0 ? lines.Count : regions[0].Start;
+        var regions = Regions(original, 0);
+        var header = regions.Count == 0 ? original.Count : regions[0].Start;
         var text = new StringBuilder();
 
         for (var i = 0; i < header; i++) {
-            text.Append(lines[i]).Append('\n');
+            text.Append(original[i]).Append('\n');
         }
 
-        text.Append(block);
+        foreach (var line in merged) {
+            text.Append(line).Append('\n');
+        }
 
-        var preserved = 0;
-        var tail = regions.Where(x => x.IsInternal).ToList();
+        return new(Trimmed(text.ToString()), [], preserved.Value);
+    }
 
-        // ⚠ One blank line between the generated block and the hand-written tail, always. The blank
-        // that was there belonged to the last generated region and went with it; without this the two
-        // halves of the file would run together and every chart would drift on the run after the
-        // first, which is a drift gate that fires unconditionally and is therefore ignored.
-        if (tail.Count > 0) {
-            text.Append('\n');
+    /// <summary>How many original lines were carried through, across the whole recursion.</summary>
+    sealed class Counter {
+        public int Value { get; set; }
+    }
+
+    /// <summary>
+    ///     One level of the file: the generated keys in the registry's order, then that level's
+    ///     <c>@internal</c> keys from the original bytes.
+    /// </summary>
+    /// <param name="generated">The emitted lines for this level's subtree.</param>
+    /// <param name="original">The checked-in lines for the same subtree.</param>
+    /// <param name="indent">The column this level's keys sit at.</param>
+    /// <param name="problems">Appended to when the two cannot be merged.</param>
+    /// <param name="preserved">Counts the original lines carried through.</param>
+    static List<string> Merge(
+        List<string> generated,
+        List<string> original,
+        int indent,
+        List<string> problems,
+        Counter preserved
+    ) {
+        var generatedRegions = Regions(generated, indent);
+        var originalRegions = Regions(original, indent);
+        var output = new List<string>();
+
+        var lastGenerated = originalRegions.FindLastIndex(x => !x.IsInternal);
+
+        foreach (var stranded in originalRegions.Take(Math.Max(lastGenerated, 0)).Where(x => x.IsInternal)) {
+            problems.Add(
+                $"{stranded.Line}: '{stranded.Name}' is `@internal` and is followed by "
+                + $"'{originalRegions[lastGenerated].Name}' on line {originalRegions[lastGenerated].Line}, "
+                + "which is generated. Every `@internal` key sits after every generated one at its own "
+                + "level, so that the generated keys are a single contiguous run this rewrite can "
+                + "replace — see the remarks on ChartAnnotationEmitter.Rewrite."
+            );
+        }
+
+        if (problems.Count > 0) {
+            return output;
+        }
+
+        var byName = new Dictionary<string, Region>(StringComparer.Ordinal);
+
+        foreach (var region in originalRegions) {
+            byName[region.Name] = region;
+        }
+
+        // ⚠ Everything above this level's first key, verbatim. One level down that is the parent's own
+        // `## @param` block and its `key:` line — the lines that make the members below it members of
+        // anything. Dropping them is not a formatting slip: it reparents every child onto whatever key
+        // preceded it, which `helm lint` reports as a nil pointer three templates away from the cause.
+        var header = generatedRegions.Count == 0 ? generated.Count : generatedRegions[0].Start;
+
+        for (var i = 0; i < header; i++) {
+            output.Add(generated[i]);
+        }
+
+        foreach (var region in generatedRegions) {
+            var lines = Slice(generated, region.Start, region.End);
+
+            // Only descend where there is something to carry. A generated object with no `@internal`
+            // member below it is emitted exactly as the registry wrote it, and re-splicing an
+            // untouched subtree would be a chance to change bytes for no reason.
+            if (byName.TryGetValue(region.Name, out var match) && HasInternalBelow(original, match, indent)) {
+                lines = Merge(
+                    lines,
+                    Slice(original, match.Start, match.End),
+                    indent + 2,
+                    problems,
+                    preserved
+                );
+            }
+
+            output.AddRange(lines);
+        }
+
+        var tail = originalRegions.Where(x => x.IsInternal).ToList();
+
+        // ⚠ One blank line between the generated keys and the hand-written tail, at the top level
+        // only, because that is the shape the file already has: root keys are separated by a blank
+        // line and members of an object are not. Without it the two halves would run together and the
+        // chart would drift on the run after the first, which is a gate that fires unconditionally and
+        // is therefore ignored.
+        if (tail.Count > 0 && indent == 0 && output.Count > 0) {
+            output.Add(string.Empty);
         }
 
         foreach (var region in tail) {
             for (var i = region.Start; i < region.End; i++) {
-                text.Append(lines[i]).Append('\n');
-                preserved++;
+                output.Add(original[i]);
+                preserved.Value++;
             }
         }
 
-        return new(Trimmed(text.ToString()), [], preserved);
+        return output;
     }
+
+    /// <summary>Whether a region holds an <c>@internal</c> annotation below its own level.</summary>
+    static bool HasInternalBelow(List<string> lines, Region region, int indent) {
+        for (var i = region.Start; i < region.End; i++) {
+            var line = lines[i];
+            var depth = line.Length - line.TrimStart(' ').Length;
+
+            if (depth > indent && line.TrimStart(' ').StartsWith("## @internal", StringComparison.Ordinal)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    static List<string> Slice(List<string> lines, int start, int end) =>
+        lines.GetRange(start, end - start);
 
     // ── The tree ──────────────────────────────────────────────────────────────────────────────
 
@@ -304,6 +429,15 @@ public static class ChartAnnotationEmitter {
             return;
         }
 
+        // ⚠ A blank line between root keys, and none between an object's members — the shape the one
+        // managed chart was hand-written in, kept rather than flattened. It is not decoration: a
+        // values.yaml is read by people choosing what to set, and thirty-six annotated rows with no
+        // separation is a wall of text. The reader allows it because a blank line only fails BETWEEN a
+        // block and its key, never before the block.
+        if (depth == 0 && text.Length > 0) {
+            text.Append('\n');
+        }
+
         text.Append(pad).Append("## @param ").Append(node.Name).Append(" {").Append(type).Append("} ")
             .Append(description).Append('\n');
 
@@ -327,6 +461,26 @@ public static class ChartAnnotationEmitter {
         if (property.Minimum is not null || property.Maximum is not null) {
             text.Append(pad).Append("## @range ").Append(Bound(property.Minimum))
                 .Append("..").Append(Bound(property.Maximum)).Append('\n');
+        }
+
+        if (property.MinLength is not null || property.MaxLength is not null) {
+            text.Append(pad).Append("## @length ").Append(Length(property.MinLength))
+                .Append("..").Append(Length(property.MaxLength)).Append('\n');
+        }
+
+        // ⚠ Bare, not anchored. See the remarks on this class: the annotation is the same string as
+        // SchemaProperty.Pattern so that drift between them is visible, and build/Build.Charts.cs
+        // anchors it into `^(?:…)$` on the way into values.schema.json, where the keyword is a search.
+        if (property.Pattern.Length > 0) {
+            text.Append(pad).Append("## @pattern ").Append(property.Pattern).Append('\n');
+        }
+
+        if (SchemaVocabulary.Of(property.Format) is { Length: > 0 } format) {
+            text.Append(pad).Append("## @format ").Append(format).Append('\n');
+        }
+
+        if (property.ExampleJson.Length > 0) {
+            text.Append(pad).Append("## @example ").Append(Compact(property.ExampleJson)).Append('\n');
         }
 
         if (SchemaVocabulary.Of(property.Widget) is { Length: > 0 } widget) {
@@ -418,26 +572,139 @@ public static class ChartAnnotationEmitter {
                 + "build/Build.Charts.cs refuses it on an object or an array."
             );
         }
+
+        CheckPatternIsSpellable(property, problems);
+
+        // ⚠ `@length` accepts an open end where `@range` does not — `1..` and `..63` are legal
+        // arguments — so a one-sided MinLength or MaxLength needs no refusal here. The asymmetry is
+        // deliberate and is written down in charts/README.md § The annotation format: `@range` is the
+        // older directive with a published pattern, and widening it is a change to a surface that
+        // already has authors. What no spelling reaches is a NEGATIVE bound: the argument is a run of
+        // digits on each side, so a `-1` would come back as a malformed directive against a file this
+        // emitter had just written.
+        if (property.MinLength is { } shortest && shortest < 0) {
+            problems.Add(NegativeLength(pointer, nameof(SchemaProperty.MinLength), shortest));
+        }
+
+        if (property.MaxLength is { } longest && longest < 0) {
+            problems.Add(NegativeLength(pointer, nameof(SchemaProperty.MaxLength), longest));
+        }
+
+        // A SchemaFormat member that SchemaVocabulary has no word for. It cannot happen today — every
+        // member has one — and it is exactly what a new member added without touching the vocabulary
+        // would look like, at which point `## @format ` is a directive with an empty argument.
+        if (property.Format is not SchemaFormat.None
+            && SchemaVocabulary.Of(property.Format) is { Length: 0 }) {
+            problems.Add(
+                $"'{pointer}' declares SchemaFormat.{property.Format}, which SchemaVocabulary has no "
+                + "name for, so `@format` has nothing to write. Give the member a name in "
+                + "SchemaVocabulary.Of(SchemaFormat) and add it to build/Build.Charts.cs's FormatNames."
+            );
+        }
+
+        // `format: password` is what `@secret` already puts on a property — OpenApiEmitter uses the
+        // same three keywords — so a property that is both would emit two `format` keywords into one
+        // values.schema.json node and the second would win silently.
+        if (property.Secret && property.Format is not SchemaFormat.None) {
+            problems.Add(
+                $"'{pointer}' is Secret and declares SchemaFormat.{property.Format}. `@secret` already "
+                + "means `format: password`, so the two directives write the same keyword and one of "
+                + "them would be lost. build/Build.Charts.cs refuses the pair for the same reason."
+            );
+        }
+
+        if (property.ExampleJson.Length > 0 && Compact(property.ExampleJson) is { Length: 0 }) {
+            problems.Add(
+                $"'{pointer}' declares the ExampleJson '{property.ExampleJson}', which is not JSON, so "
+                + "`@example` has nothing to write. SchemaProperty.Incoherences already refuses this at "
+                + "construction, so reaching it means a schema that was never built through "
+                + "ResourceSchema.Of."
+            );
+        }
     }
 
+    static string NegativeLength(string pointer, string member, int value) =>
+        $"'{pointer}' declares {member} {value.ToString(CultureInfo.InvariantCulture)}, and `@length` "
+        + "spells each end as digits. A negative length is not a length, and emitting one would produce "
+        + "a malformed directive in a file this emitter had just written.";
+
+    /// <summary>
+    ///     Whether a <see cref="SchemaProperty.Pattern" /> survives the trip through a <c>## @</c> line.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>This is the check the whole <c>@pattern</c> directive stands on, and it is about the
+    ///         transport rather than the regular expression.</b> The argument reaches
+    ///         <c>build/Build.Charts.cs</c> through a hand-written reader that does <c>TrimEnd</c> on the
+    ///         line, <c>Trim</c> on the directive body and <c>Trim</c> again on the argument — three
+    ///         separate trims — so <b>a pattern with leading or trailing whitespace comes back as a
+    ///         different pattern</b>, silently, and the chart would then validate a set of strings the
+    ///         API does not. That is precisely the "constraint that reached the API and not the chart"
+    ///         failure, wearing a disguise: the constraint reaches the chart, and means something else
+    ///         when it gets there.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>What is deliberately NOT refused is the interesting half.</b> A <c>#</c>, a
+    ///         <c>|</c>, a <c>:</c>, a quote, a <c>{</c> or a <c>}</c> are all safe and all appear in
+    ///         real patterns — <c>CyberCloud.DBforPostgreSQL/servers</c>'s own quantity pattern carries
+    ///         thirteen pipes. The line is a comment, so YAML never reads it as structure; the reader
+    ///         takes the whole rest of the line verbatim; and only <c>@enum</c> splits on <c>|</c>.
+    ///         Refusing them would be a vocabulary that cannot spell the first pattern anybody wrote.
+    ///     </para>
+    /// </remarks>
+    static void CheckPatternIsSpellable(SchemaProperty property, List<string> problems) {
+        if (property.Pattern.Length == 0) {
+            return;
+        }
+
+        var pattern = property.Pattern;
+
+        if (pattern.Trim().Length != pattern.Length) {
+            problems.Add(
+                $"'{property.JsonPointer}' declares a Pattern with leading or trailing whitespace, and "
+                + "`@pattern` cannot spell one: build/Build.Charts.cs trims the line, the directive body "
+                + "and the argument, so the pattern would come back without it and the chart would "
+                + "accept a different set of strings from the API. Anchor the whitespace with `\\s` or "
+                + "drop it."
+            );
+        }
+
+        foreach (var character in pattern) {
+            if (!char.IsControl(character)) {
+                continue;
+            }
+
+            problems.Add(
+                $"'{property.JsonPointer}' declares a Pattern containing the control character "
+                + $"U+{(int)character:X4}. An annotation is one line: a newline would end the block "
+                + "above the key it describes, and a tab is a build failure in the values subset. Write "
+                + "it as an escape — `\\n`, `\\t` — so the pattern is one line of printable text."
+            );
+
+            return;
+        }
+    }
+
+    /// <summary>
+    ///     The members the vocabulary has no word for at all.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b><see cref="SchemaProperty.Nullable" /> and a non-text
+    ///     <see cref="SchemaProperty.ElementKind" /> were deliberately left open on 2026-08-12 when the
+    ///     other five closed.</b> Neither has a user: no property of any type in the tree declares
+    ///     either, so a <c>@nullable</c> or an <c>@element</c> would be a directive written from a
+    ///     guess about what it should mean, tested only against a schema invented to test it, and
+    ///     wired through four files' worth of tables to serve nobody. Both are harder than the five
+    ///     that closed, and in a way that shows why guessing is the wrong move: a nullable values key
+    ///     collides head-on with charts/README.md § The values subset's "no null values" rule and with
+    ///     the reader's own refusal of <c>null</c>, so <c>@nullable</c> is a question about the subset
+    ///     before it is a directive; and an <c>@element</c> has to decide what a non-text array
+    ///     element means for the hard-coded <c>items: {type: string}</c> that <c>@enum</c> already
+    ///     emits. The refusal is the honest state: the fact is named, the build is red, and nothing is
+    ///     dropped.
+    /// </remarks>
     static void CheckInexpressible(SchemaProperty property, List<string> problems) {
         var pointer = property.JsonPointer;
-
-        if (property.Format is not SchemaFormat.None) {
-            problems.Add(Missing(pointer, $"Format = SchemaFormat.{property.Format}", "@format"));
-        }
-
-        if (property.Pattern.Length > 0) {
-            problems.Add(Missing(pointer, "a Pattern", "@pattern"));
-        }
-
-        if (property.MinLength is not null || property.MaxLength is not null) {
-            problems.Add(Missing(pointer, "a MinLength or MaxLength", "@length"));
-        }
-
-        if (property.ExampleJson.Length > 0) {
-            problems.Add(Missing(pointer, "an ExampleJson", "@example"));
-        }
 
         if (property.Nullable) {
             problems.Add(Missing(pointer, "Nullable = true", "@nullable"));
@@ -462,6 +729,45 @@ public static class ChartAnnotationEmitter {
 
     static string Bound(double? value) =>
         value is null ? string.Empty : value.Value.ToString("R", CultureInfo.InvariantCulture);
+
+    static string Length(int? value) =>
+        value is null ? string.Empty : value.Value.ToString(CultureInfo.InvariantCulture);
+
+    /// <summary>
+    ///     A JSON literal on one line, in one spelling.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Re-serialised rather than copied, and that is what makes <c>@example</c> safe where
+    ///     <c>@pattern</c> needed a check.</b> <see cref="SchemaProperty.ExampleJson" /> is a string of
+    ///     JSON whose whitespace nobody constrains — a pretty-printed one carries newlines, which would
+    ///     end the annotation block above the key it describes. Parsing and re-writing it compactly
+    ///     makes the emitted form single-line by construction, and JSON escapes every control character
+    ///     it could otherwise carry. It also makes the bytes a function of the <i>value</i> rather than
+    ///     of how somebody spelled it, which is what the byte-for-byte drift gate needs.
+    ///     <para>
+    ///         The encoder is the relaxed one, matching <c>build/Build.Charts.cs</c>'s <c>Render</c>: an
+    ///         em dash in an example stays an em dash rather than becoming <c>—</c> in a file
+    ///         people read. Safe for the reason the name warns about — a values file is never
+    ///         interpolated into HTML.
+    ///     </para>
+    /// </remarks>
+    static string Compact(string json) {
+        try {
+            using var document = JsonDocument.Parse(json);
+
+            return JsonSerializer.Serialize(
+                document.RootElement,
+                CompactJson
+            );
+        } catch (JsonException) {
+            return string.Empty;
+        }
+    }
+
+    static readonly JsonSerializerOptions CompactJson = new() {
+        WriteIndented = false,
+        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+    };
 
     // ── Literals ──────────────────────────────────────────────────────────────────────────────
 
@@ -632,47 +938,62 @@ public static class ChartAnnotationEmitter {
     sealed record Region(string Name, int Line, int Start, int End, bool IsInternal);
 
     /// <summary>
-    ///     Splits a <c>values.yaml</c> into its root-level regions.
+    ///     Splits a run of values lines into the regions of one indentation level.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>This is not the annotated-values reader and must never become one.</b>
-    ///     <c>build/Build.Charts.cs</c> owns that, with the line numbers and the whole cross-check
-    ///     table, and a second parser would be a second opinion about what a chart says. All this needs
-    ///     to know is where each root key's block begins and whether that block carries
-    ///     <c>@internal</c> — enough to move bytes, not enough to interpret them. Everything it gets
-    ///     wrong is caught immediately afterwards, because the file it produces is fed straight back
-    ///     through the real reader.
+    ///     <para>
+    ///         ⚠ <b>This is not the annotated-values reader and must never become one.</b>
+    ///         <c>build/Build.Charts.cs</c> owns that, with the line numbers and the whole cross-check
+    ///         table, and a second parser would be a second opinion about what a chart says. All this
+    ///         needs to know is where each key's block begins and whether that block carries
+    ///         <c>@internal</c> — enough to move bytes, not enough to interpret them. Everything it
+    ///         gets wrong is caught immediately afterwards, because the file it produces is fed
+    ///         straight back through the real reader.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ Keys deeper than <paramref name="indent" /> belong to the region above them and are
+    ///         never regions here; a region runs to the start of the next one at the same indent, blank
+    ///         lines included, because a blank an author put between two keys is part of the
+    ///         hand-written region this rewrite promises to carry through untouched.
+    ///     </para>
     /// </remarks>
-    static List<Region> RootRegions(List<string> lines) {
+    static List<Region> Regions(List<string> lines, int indent) {
         var starts = new List<(string Name, int Line, int Start, bool IsInternal)>();
         var blockStart = -1;
         var blockIsInternal = false;
 
         for (var i = 0; i < lines.Count; i++) {
             var line = lines[i];
+            var depth = line.Length - line.TrimStart(' ').Length;
+            var trimmed = line.TrimStart(' ');
 
-            if (line.StartsWith("## @", StringComparison.Ordinal)) {
+            if (trimmed.StartsWith("## @", StringComparison.Ordinal)) {
+                if (depth != indent) {
+                    continue;
+                }
+
                 if (blockStart < 0) {
                     blockStart = i;
                     blockIsInternal = false;
                 }
 
-                blockIsInternal |= line.StartsWith("## @internal", StringComparison.Ordinal);
+                blockIsInternal |= trimmed.StartsWith("## @internal", StringComparison.Ordinal);
                 continue;
             }
 
-            if (line.Length == 0 || line[0] == '#' || line[0] == ' ') {
-                // A blank line, an ordinary comment or an indented line ends nothing: an indented key
-                // belongs to the root above it, and a blank between a block and its key is a failure
-                // build/Build.Charts.cs reports with the line number.
-                if (line.Length > 0 && line[0] != ' ') {
+            if (trimmed.Length == 0 || trimmed[0] == '#' || depth != indent) {
+                // A blank line, a deeper line or a deeper comment ends nothing: a deeper key belongs to
+                // the region above it, and a blank between a block and its key is a failure
+                // build/Build.Charts.cs reports with the line number. An ordinary comment at this
+                // level does break a pending block.
+                if (trimmed.Length > 0 && trimmed[0] == '#' && depth == indent) {
                     blockStart = -1;
                 }
 
                 continue;
             }
 
-            var key = RootKey.Match(line);
+            var key = RootKey.Match(trimmed);
 
             if (!key.Success) {
                 blockStart = -1;
