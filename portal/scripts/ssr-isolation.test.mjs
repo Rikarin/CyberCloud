@@ -34,10 +34,11 @@
  */
 
 import assert from 'node:assert/strict';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { pathToFileURL } from 'node:url';
+import { missingClassRules, missingClassRulesMessage } from './rendered-class-coverage.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const serverBundle = join(here, '..', 'dist', 'portal', 'server', 'server.mjs');
@@ -48,9 +49,32 @@ if (!existsSync(serverBundle)) {
 }
 
 const results = [];
+
+/**
+ * ⚠ **`fn` must be synchronous, and the guard below is why.**
+ *
+ * This helper used to take whatever it was given and call it inside a `try`. An `async fn` returns
+ * a promise instead of throwing, so `results.push({ ok: true })` ran before any assertion inside it
+ * had been evaluated and a failure surfaced as an unhandled rejection *after* the summary printed —
+ * a check that reported ✓ no matter what it asserted. One of the checks in this file was written
+ * that way, which means it had never been capable of failing.
+ *
+ * Rejecting an async `fn` outright rather than awaiting it is deliberate: awaiting would make the
+ * mistake invisible again by making it work, and every assertion here is against bytes already in
+ * memory or already on disk. If one genuinely needs to await something, do the awaiting outside and
+ * assert on the result inside.
+ */
 const check = (name, fn) => {
   try {
-    fn();
+    const returned = fn();
+
+    if (returned instanceof Promise) {
+      throw new Error(
+        'check() was given an async function. Its assertions would be evaluated after this ' +
+          'helper had already recorded a pass. Await outside, assert inside.',
+      );
+    }
+
     results.push({ name, ok: true });
   } catch (error) {
     results.push({ name, ok: false, error });
@@ -163,11 +187,10 @@ check('hydration is on, so the client takes over rather than re-rendering', () =
   assert.match(acme.body, /ngh=/, 'no hydration annotations in the rendered output');
 });
 
-check('no access token is written to web storage by the shipped bundles', async () => {
+check('no access token is written to web storage by the shipped bundles', () => {
   // docs/plan/10 § Authentication inputs: "Access token never in `localStorage`". Asserted against
   // the built browser bundles rather than the sources, because the sources are what lint checks and
   // a dependency could bring its own storage write.
-  const { readdirSync, readFileSync } = await import('node:fs');
   const browserDir = join(here, '..', 'dist', 'portal', 'browser');
   const offenders = [];
 
@@ -177,6 +200,24 @@ check('no access token is written to web storage by the shipped bundles', async 
   }
 
   assert.deepEqual(offenders, [], `web-storage writes found in: ${offenders.join(', ')}`);
+});
+
+/**
+ * ⚠ **The layout gate.** `scripts/rendered-class-coverage.mjs` carries the reasoning: what the
+ * defect was, why the byte-identical comparison directly above could not see it, why this asserts
+ * the cause rather than measuring the geometry, and what it therefore does not catch.
+ *
+ * The short version is that the check directly above compares a render to another render, and two
+ * equally collapsed layouts are byte-identical. This one compares the render to the stylesheet that
+ * is supposed to serve it.
+ */
+check('every class the rendered page uses has a rule behind it', () => {
+  const missing = missingClassRules({
+    browserDir: join(here, '..', 'dist', 'portal', 'browser'),
+    html: acme.body,
+  });
+
+  assert.deepEqual(missing, [], missingClassRulesMessage(missing, 'apps/portal/src/styles.css'));
 });
 
 server.close();

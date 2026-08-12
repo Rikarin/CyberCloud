@@ -27,6 +27,7 @@ import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { missingClassRules, missingClassRulesMessage } from './rendered-class-coverage.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const serverBundle = join(here, '..', 'dist', 'identity', 'server', 'server.mjs');
@@ -39,9 +40,25 @@ if (!existsSync(serverBundle)) {
 }
 
 const results = [];
+
+/**
+ * ⚠ **`fn` must be synchronous.** An `async fn` returns a promise instead of throwing, so the pass
+ * would be recorded before any assertion inside it had run and a failure would surface as an
+ * unhandled rejection after the summary printed — a check that reports ✓ whatever it asserts. That
+ * had actually happened in `ssr-isolation.test.mjs`; the guard is here too so it cannot happen in
+ * this file either. Await outside, assert inside.
+ */
 const check = (name, fn) => {
   try {
-    fn();
+    const returned = fn();
+
+    if (returned instanceof Promise) {
+      throw new Error(
+        'check() was given an async function. Its assertions would be evaluated after this ' +
+          'helper had already recorded a pass. Await outside, assert inside.',
+      );
+    }
+
     results.push({ name, ok: true });
   } catch (error) {
     results.push({ name, ok: false, error });
@@ -216,6 +233,26 @@ check('an absolute off-origin returnUrl is refused server-side too', () => {
     !hostile.body.includes('evil.example'),
     'an off-origin returnUrl reached the rendered HTML — the pre-hydration document offers a link that leaves this origin',
   );
+});
+
+/**
+ * ⚠ **The layout gate**, the same one the portal has — see `scripts/rendered-class-coverage.mjs`
+ * for what it is and why it is shaped this way.
+ *
+ * ⚠ This app is where the defect it guards against would have been noticed last. The portal has a
+ * dock manager, which collapses conspicuously; this is a form on a page, and a form missing its
+ * spacing and control heights still looks like a form. It is also the app where looking wrong is
+ * most expensive: `apps/identity/src/styles.css` shares the portal's token layer specifically so
+ * that the sign-in origin cannot drift into looking like a different product, "the oldest phishing
+ * tell there is". Sharing the tokens does not help if half the utilities never compile.
+ */
+check('every class the rendered page uses has a rule behind it', () => {
+  const missing = missingClassRules({
+    browserDir: join(here, '..', 'dist', 'identity', 'browser'),
+    html: signIn.body,
+  });
+
+  assert.deepEqual(missing, [], missingClassRulesMessage(missing, 'apps/identity/src/styles.css'));
 });
 
 server.close();

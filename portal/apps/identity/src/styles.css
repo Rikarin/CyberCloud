@@ -24,6 +24,20 @@
 /* Tailwind 4 scans sources rather than reading a config. This app's markup is all under src/app. */
 @source './app';
 
+/*
+  ⚠ The same glob the portal needs, for the same reason and with the same failure mode — see
+  `apps/portal/src/styles.css` for the long version. Tailwind's automatic source detection skips
+  `node_modules`, so without this line the classes inside `@xui/button`, `@xui/input` and the rest
+  are never compiled and the sign-in card renders with its layout utilities missing.
+
+  This app is the one where that matters most and would be noticed least. It has no dock manager to
+  collapse conspicuously; it is a form on a page, and a form with its spacing and control heights
+  missing still looks like a form. The comment in this file's `body` rule about not locking the
+  document scroll exists so a user on a short viewport can reach the submit button — which assumes
+  the button is the size the design says it is.
+*/
+@source '../../../node_modules/@xui';
+
 html {
   -webkit-text-size-adjust: 100%;
 }
