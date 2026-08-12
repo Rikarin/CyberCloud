@@ -1398,9 +1398,16 @@ partial class Build
                 + "than an error anything reports");
         }
 
-        // "Never reused", in the one form that needs no baseline at all: within a single type. A
-        // number declared twice is the same slot written twice, and the far side reads whichever the
-        // codec emitted last.
+        // "Never reused", in the one form that needs no baseline at all: within a single type.
+        //
+        // ⚠ THIS CHECK IS A BACKSTOP AND NOT A GATE, AND SAYING SO IS THE POINT OF WRITING IT DOWN.
+        // Sabotaged by declaring [Id(0)] on two members of one type: the build never reaches this row,
+        // because Orleans' own generator raises ORLEANS0012 "Change duplicated [Id]" and Compile
+        // fails first. Architecture depends on Compile, so every assembly this reads came from a
+        // compilation that already ran that rule — there is no source change that makes this fire.
+        // It is kept because it costs a loop over data already in memory and because it reads the
+        // artefact rather than trusting the toolchain that produced it, which is this gate's whole
+        // posture. It is NOT one of the reasons this row is green.
         foreach (var type in current)
         {
             foreach (var duplicate in type.Members
@@ -1857,11 +1864,21 @@ partial class Build
     ///     The analyzer's rule ids, read from its release-tracking tables.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>Those files rather than a list here, and rather than the <c>const</c>s in
-    ///     <c>Rules.cs</c>.</b> Roslyn's own <c>RS2008</c> fails the analyzer's compilation if a
-    ///     diagnostic it reports is missing from them, so they are the one place in this tree that
-    ///     cannot silently fall behind the analyzers. A list maintained here would be a fourth copy
-    ///     and the first to rot.
+    ///     <para>
+    ///         ⚠ <b>Those files rather than a list here, and rather than the <c>const</c>s in
+    ///         <c>Rules.cs</c>.</b> Roslyn's own <c>RS2000</c> — "Rule 'CC1005' is not part of any
+    ///         analyzer release" — fails the analyzer's own compilation if a diagnostic it reports is
+    ///         missing from them, so they are the one place in this tree that cannot silently fall
+    ///         behind the analyzers. Verified by emptying both tables and watching <c>Compile</c> fail
+    ///         before this row ran. A list maintained here would be a fourth copy and the first to rot.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ That same verification means the assertion below is a belt for a case source cannot
+    ///         reach, not a live check — it would fire only against a tree whose analyzer did not
+    ///         compile. It is kept because what it is guarding is the difference between this row
+    ///         checking seven rules and this row checking none, and that difference is invisible in a
+    ///         tick.
+    ///     </para>
     /// </remarks>
     List<string> AnalyzerRuleIds()
     {
