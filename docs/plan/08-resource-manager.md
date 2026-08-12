@@ -158,6 +158,51 @@ dispute waiting to happen, so cancellation *completes* rather than abandoning.
 **Nested operations.** Deleting a resource group is one operation with N child operations, ordered by
 the dependency graph. The parent's progress is the children's. Deployments ([01](01-azure-parity-catalogue.md) § A, M2) use the same machinery.
 
+### Deleting a parent resource that has children
+
+The same question one level down, and it needed answering the moment step 1 started refusing a create
+whose parent does not exist. Before that check a dangling child was one of several ways a child could
+be wrong; now it is the *only* one, because it is the only one the create path cannot see coming.
+
+**Decided: a delete is refused while the resource still has children — `409`, not a cascade, and not
+a silent orphan.** The refusal names how many children there are and their type, so the caller can go
+and delete them. It belongs one step before the lock check, and reuses the shape `ScopeLocked` already
+has — "you cannot delete this yet, here is what is holding it" — rather than inventing a second one.
+
+Why refuse, when the resource *group* cascades:
+
+- **A resource group is a declared lifecycle boundary and a parent resource is not.**
+  [06](06-tenancy-and-resource-model.md) § The hierarchy makes the group the thing you delete in order
+  to delete what is inside it; that is what a group is *for*, and deleting one says so. Nobody
+  deleting a Postgres server has said anything about the databases on it.
+- **The blast radius is unbounded and invisible at the call site.** `DELETE …/servers/pg-main` is a
+  single-resource URL. Cascading would tear down an unknown number of resources the caller never
+  named, with the data in them, and the `202` would look identical either way.
+- **Quota and billing would move for resources nobody mentioned.** Each child returns its committed
+  quota, so a cascade silently rewrites a subscription's usage — and the operation record would
+  attribute it to a delete of something else.
+- **The refusal is recoverable and the cascade is not.** A caller told "this server has 3 databases"
+  can delete them and retry. A caller who cascaded by accident has nothing to retry.
+
+⚠ **Refusing is not the safe default merely because it does less.** It creates a real failure mode: a
+child whose own delete is stuck holds its parent undeletable. That is why the answer is a `409` *with
+a count* rather than a bare refusal — the caller has to be able to see what is holding it.
+
+**Not implemented, because the platform cannot enumerate children.** `IResourceIndexGrain` is
+path→GUID and one-way ([06](06-tenancy-and-resource-model.md) § Grain keys), so "what are this
+resource's children" is answerable only from the resource-graph projection, which is *eventually
+consistent* — and a delete gate reading a stale index either orphans a child it did not see or refuses
+over a child that is already gone. The two honest options are a per-parent child counter maintained
+transactionally where the index claim and release already happen, or a strongly-consistent child index
+grain keyed on the parent's address. The counter is the smaller and is where this should start.
+
+⚠ **Until it exists, deleting a parent leaves its children addressable and pointing at nothing** — and
+their ReBAC `parent` edge pointing at a resource that is gone. That is the residual defect, recorded
+here rather than left to be rediscovered from an orphaned database. What the platform must *not* do
+instead is re-check the parent on every write to a child: that turns a deleted parent into a frozen
+child which answers `404` to a `GET` for a resource that plainly exists, which is worse than the
+orphan. `ParentExistenceTests.AnUpdateOfAnExistingChildDoesNotRecheckTheParent` pins that.
+
 ## The provider registry
 
 ```csharp
