@@ -1,0 +1,47 @@
+# Managed RabbitMQ — docs/plan/12 § The catalogue, "RabbitMQ — CyberCloud.Messaging/rabbitmqClusters
+# · M2 · 0.8 EM", on the RabbitMQ Cluster Operator (ADR-010 clause 1's operator survey).
+#
+# ⚠ ONE TEMPLATE, AND THAT IS THE POINT OF THE ROW. Everything a running RabbitMQ cluster is — the
+# StatefulSet, the client and headless Services, the conf.d ConfigMap, the generated-credential
+# Secret, the ServiceAccount and its RBAC — is the operator's. Compare charts/managed/nats, which
+# renders five objects by hand because nats-operator was archived on 2025-04-10 and there is nobody
+# to ask. docs/plan/12 costs both rows at 0.8 EM.
+apiVersion: v2
+name: rabbitmq
+description: Managed RabbitMQ with quorum queues as the default queue type — clustered nodes on the official RabbitMQ Cluster Operator.
+type: application
+
+# The chart's own version. Bumped on every change to this directory.
+version: 0.1.0
+
+# The default RabbitMQ version, matching values.yaml `version`.
+#
+# ⚠ 4.x AND NOTHING OLDER, WHICH IS WHAT MAKES THE ROW'S HEADLINE SENTENCE TRUE. Classic queue
+# mirroring was removed in RabbitMQ 4.0 — deprecated in 3.9, deleted in 4.0 — so on every version
+# this chart offers there is no mirrored queue to fall back to and the replicated queue type is the
+# quorum queue.
+appVersion: "4.1"
+
+kubeVersion: ">=1.31.0-0"
+
+keywords:
+  - rabbitmq
+  - amqp
+  - messaging
+  - quorum-queues
+
+home: https://www.rabbitmq.com
+sources:
+  - https://github.com/rabbitmq/cluster-operator
+
+maintainers:
+  - name: Cyber Cloud Platform
+
+# ⚠ These three are read by `Build.Charts` and written into `values.schema.json` as
+# `x-cybercloud-*`. They are what makes the generated schema addressable as a resource type's body
+# rather than as an anonymous blob of Helm values — docs/plan/12 § The pattern, once, piece 2. A
+# chart under charts/managed/ without them fails the build.
+annotations:
+  cybercloud.io/resource-type: CyberCloud.Messaging/rabbitmqClusters
+  cybercloud.io/api-version: "2026-08-01"
+  cybercloud.io/operator: rabbitmq-cluster-operator
