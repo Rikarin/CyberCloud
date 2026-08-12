@@ -1,3 +1,8 @@
+// ⚠ For `Result<decimal>`, which the quota derivations below return. `CyberCloud.Core.Resources` is
+// global here and `CyberCloud.Core` itself is not; the `ErrorCode` alias in GlobalUsings still wins
+// over the `Orleans.ErrorCode` this import would otherwise put back in play.
+using CyberCloud.Core;
+
 namespace CyberCloud.Providers.DBforPostgreSQL;
 
 /// <summary>
@@ -54,23 +59,30 @@ public sealed class PostgresProvider : IResourceProvider {
             .ResourceType(PostgresServers.TypePath)
             .ApiVersion(PostgresServers.V2026, PostgresServers.Schema2026)
             .Reconciler<PostgresServerReconciler>()
-            // ⚠ ONE UNIT OF `resources`, AND THE THREE METERS THIS TYPE OBVIOUSLY DRAWS ARE NOT
-            // DECLARED, WHICH IS A REGISTRY GAP RATHER THAN AN OVERSIGHT.
+            // ⚠ THE THREE METERS A CUSTOMER ACTUALLY BUYS, AND THEY WERE UNDECLARABLE UNTIL THE
+            // REGISTRY GREW A DERIVED-AMOUNT SEAM.
             //
-            // docs/plan/06 § Quota's families are vcpu, memoryGb, storageGb, publicIps, clusters and
-            // resources, and `Meter(meter, amountPointer, fallback)` reserves the NUMBER it finds at
-            // a JSON Pointer. A PostgreSQL server draws all three of vcpu, memoryGb and storageGb —
-            // and none of them is a number in this body: `storage.size` is "20Gi", `sizing.cpu` is
-            // "500m", and the usual case supplies neither because `sizing.preset` names them
-            // indirectly. So the amounts exist and are not addressable, and declaring
-            // `Meter(StorageGb, "/properties/storage/size")` would reserve against a pointer holding
-            // a string, which the manager cannot read as a quantity.
+            // What was here before was `.Meters(QuotaMeter.Resources)` alone — a count of one — with a
+            // note explaining that `Meter(meter, amountPointer, fallback)` reserves the NUMBER at a
+            // JSON Pointer and that none of vcpu, memoryGb or storageGb is a number in this body:
+            // `storage.size` is "20Gi", `sizing.cpu` is "500m", and the ordinary body supplies neither
+            // because `sizing.preset` names them indirectly. That note offered two repairs, a unit on
+            // the pointer or a derived-amount seam. THE FIRST WOULD NOT HAVE WORKED HERE, and finding
+            // out why is what settled it: `PostgresServers.Body` — the body the tests, the fixtures
+            // and the conformance case all use — writes no `sizing` block at all, so a quantity read
+            // at `/properties/sizing/cpu` resolves to nothing; and the amount is per-instance ×
+            // instances, which is two pointers rather than one. `MeterDerivation` is the seam that
+            // landed, and it carries an Expression and a read set so the generated document still says
+            // what each meter draws — the objection a pointer was chosen over a delegate for.
             //
-            // Closing it needs one of: a unit on MeterRegistration so a pointer can be read as a
-            // Kubernetes quantity; or a derived-amount seam the registry can still generate from.
-            // Both are changes to CyberCloud.ResourceManager and neither belongs in a provider —
-            // docs/plan/25 § R1's "commits to CyberCloud.ResourceManager made by a provider PR" is
-            // the number this note exists to keep at zero while still recording the finding.
+            // ⚠ EACH DERIVATION IS A PURE FUNCTION OF THE BODY AND MUST STAY ONE. The delete path
+            // re-derives committed amounts from the resource's stored body through the same step the
+            // create reserved with, so a derivation that read a clock or configuration would make a
+            // delete return a different number than the create committed — quota drifting upward on
+            // every create/delete cycle. See ResourceManagerService.CommittedBy.
+            .Meter(QuotaMeter.Vcpu, VcpuDrawn)
+            .Meter(QuotaMeter.MemoryGb, MemoryDrawn)
+            .Meter(QuotaMeter.StorageGb, StorageDrawn)
             .Meters(QuotaMeter.Resources)
             .Permissions("read", "write", "delete")
             .Action(
@@ -94,4 +106,82 @@ public sealed class PostgresProvider : IResourceProvider {
             .SupportsTags()
             .RequiresCluster(PostgresServers.ClusterIdPointer);
     }
+
+    // ── What a server draws ────────────────────────────────────────────────────────────────────
+    //
+    // ⚠ ALL THREE MULTIPLY BY `replicas`, AND THAT IS THE PART A POINTER COULD NEVER HAVE SAID.
+    // CloudNativePG runs `spec.instances` pods; each carries the whole `spec.resources` block and each
+    // gets its own data PVC. PostgresServers.ClusterJson writes both figures once because the CR is
+    // per-cluster, not because the cost is. The default body is two instances, so a per-instance
+    // reservation would have been exactly half of the truth on the commonest shape there is.
+    //
+    // ⚠ THE POOLER IS DELIBERATELY NOT COUNTED. PostgresServers.PoolerJson renders no `resources`
+    // block, so PgBouncer's pods request nothing from the scheduler and there is no declared figure to
+    // reserve. Inventing one here would be quota charging for a number that appears nowhere in the
+    // data plane. It is a real under-count, it is bounded by `pooling.instances`, and the honest place
+    // to close it is the chart growing a pooler `resources` block — at which point this file gains a
+    // second term rather than a guess.
+
+    /// <summary>vCPU: every instance's CPU request, from the explicit override or the preset.</summary>
+    /// <remarks>
+    ///     ⚠ Refuses rather than reserving zero when the quantity does not parse. That happens only if
+    ///     <c>sizing.preset</c> names a preset <c>PostgresServers.Presets</c> does not carry — which the
+    ///     schema's <c>AllowedValues</c> makes unreachable from a validated body, and which is exactly
+    ///     the drift worth failing on when somebody adds a preset to the enum and forgets the table.
+    /// </remarks>
+    static MeterDerivation VcpuDrawn { get; } =
+        MeterDerivation.Of(
+            "replicas × sizing.cpu, in cores, taking sizing.preset when the override is empty",
+            ["/properties/replicas", "/properties/sizing/preset", "/properties/sizing/cpu"],
+            body => KubeQuantity.TryParse(PostgresServers.Resources(body).Cpu, out var cores)
+                ? Result<decimal>.Success(PostgresServers.Replicas(body) * cores)
+                : Unresolvable("cpu", "sizing.cpu or the sizing.preset behind it")
+        );
+
+    /// <summary>Memory: every instance's memory request, in gibibytes.</summary>
+    static MeterDerivation MemoryDrawn { get; } =
+        MeterDerivation.Of(
+            "replicas × sizing.memory, in GiB, taking sizing.preset when the override is empty",
+            ["/properties/replicas", "/properties/sizing/preset", "/properties/sizing/memory"],
+            body => KubeQuantity.TryGibibytes(PostgresServers.Resources(body).Memory, out var gibibytes)
+                ? Result<decimal>.Success(PostgresServers.Replicas(body) * gibibytes)
+                : Unresolvable("memory", "sizing.memory or the sizing.preset behind it")
+        );
+
+    /// <summary>Storage: every instance's data volume, plus its WAL volume when it has a separate one.</summary>
+    /// <remarks>
+    ///     ⚠ An empty <c>storage.walSize</c> is <b>one volume, not zero storage</b> — the WAL shares the
+    ///     data volume, whose size is already counted. Parsing <c>""</c> as zero and adding it would be
+    ///     right by accident here and wrong the moment the same helper is reused, so the two cases are
+    ///     separated on purpose.
+    /// </remarks>
+    static MeterDerivation StorageDrawn { get; } =
+        MeterDerivation.Of(
+            "replicas × (storage.size + storage.walSize), in GiB; walSize empty means one volume",
+            ["/properties/replicas", "/properties/storage/size", "/properties/storage/walSize"],
+            body => {
+                if (!KubeQuantity.TryGibibytes(PostgresServers.StorageSize(body), out var data)) {
+                    return Unresolvable("storage", "storage.size");
+                }
+
+                var wal = PostgresServers.WalSize(body);
+                if (wal.Length > 0) {
+                    if (!KubeQuantity.TryGibibytes(wal, out var separate)) {
+                        return Unresolvable("storage", "storage.walSize");
+                    }
+
+                    data += separate;
+                }
+
+                return Result<decimal>.Success(PostgresServers.Replicas(body) * data);
+            }
+        );
+
+    static Result<decimal> Unresolvable(string what, string where) =>
+        Result<decimal>.Failure(
+            ErrorCode.InternalError,
+            $"The {what} a server draws could not be read from {where}: the value is not a Kubernetes "
+            + "quantity. The write is refused rather than reserved at zero, because a resource that "
+            + "provisions against no quota is one nobody is charged for — docs/plan/06 § Quota."
+        );
 }

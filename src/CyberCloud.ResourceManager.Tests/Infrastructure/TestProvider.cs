@@ -322,8 +322,48 @@ public sealed class TestingProvider : IResourceProvider {
             )
             .Display("Testing widget", "Testing widgets", shortName: "twidget")
             .SupportsSoftDelete(7)
-            .SupportsTags();
+            .SupportsTags()
+            // ── The second type, and it exists for one reason ───────────────────────────────────
+            //
+            // ⚠ EVERY AMOUNT HERE IS A KUBERNETES QUANTITY STRING, WHICH IS WHAT A REAL MANAGED
+            // SERVICE'S IS. `widgets` above meters `/properties/size`, a JSON number, and a number in
+            // the body is the one shape no provider in the catalogue actually has: a Postgres server
+            // spells its CPU "500m" and its disk "20Gi". Testing the quota path only against `widgets`
+            // tested the case that does not occur.
+            //
+            // ⚠ NO RECONCILER, ON PURPOSE. ReconcileDriver converges a reconciler-less type on the
+            // write, so a create here reaches commit and a delete reaches the quota return without any
+            // FakeWorld choreography — which keeps these tests about the AMOUNTS and nothing else.
+            .ResourceType(SizedType)
+            .ApiVersion(V2026, SizedSchema)
+            .Meter(QuotaMeter.Vcpu, VcpuDrawn)
+            // ⚠ The cheap shape — one quantity at one pointer, no lambda — so both halves of the seam
+            // are exercised by something.
+            .Meter(QuotaMeter.StorageGb, MeterDerivation.Quantity(DiskPointer, QuantityUnit.Gibibytes))
+            .Meters(QuotaMeter.Resources)
+            .Permissions("read", "write", "delete")
+            .Display("Sized widget", "Sized widgets", shortName: "swidget");
     }
+
+    /// <summary>The pointer <see cref="SizedSchema" /> puts the disk quantity at.</summary>
+    public const string DiskPointer = "/properties/disk";
+
+    /// <summary>
+    ///     vCPU for <see cref="SizedType" />: instances × the CPU quantity each one requests.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ A product of two pointers, which is the thing a single-pointer meter cannot express and
+    ///     the reason the seam is a function rather than a unit on a pointer.
+    /// </remarks>
+    public static MeterDerivation VcpuDrawn { get; } =
+        MeterDerivation.Of(
+            "replicas × cpu, in cores",
+            ["/properties/replicas", "/properties/cpu"],
+            body => MeterDerivation.TryQuantityAt(body, "/properties/cpu", QuantityUnit.Base, out var cores)
+                && MeterDerivation.Resolve(body, "/properties/replicas") is { ValueKind: JsonValueKind.Number } count
+                    ? Result<decimal>.Success(count.GetInt32() * cores)
+                    : Result<decimal>.Failure(ErrorCode.InternalError, "cpu or replicas is not readable")
+        );
 
     /// <summary>The shape a <c>POST …/resize</c> must satisfy.</summary>
     public static ResourceSchema ResizeRequest { get; } =
@@ -352,4 +392,65 @@ public sealed class TestingProvider : IResourceProvider {
     /// <summary>The declared pointers of <see cref="Schema2026" />.</summary>
     public static ImmutableArray<string> Pointers2026 =>
         [.. Schema2026.Properties.Select(x => x.JsonPointer)];
+
+    // ── The second type: quantities, not numbers ───────────────────────────────────────────────
+
+    /// <summary>The type path of the quantity-metered type.</summary>
+    public const string SizedType = "sizedwidgets";
+
+    /// <summary>The quantity-metered type's name.</summary>
+    public static ResourceTypeName SizedTypeName { get; } = new("CyberCloud.Testing", SizedType);
+
+    /// <summary>
+    ///     The quantity-metered type's shape: instances, a CPU quantity, and an optional disk one.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b><c>/properties/disk</c> is OPTIONAL and that is the whole point of it.</b> A body may
+    ///     legally leave it out, and the meter declared against it supplies no fallback — so a body that
+    ///     validates can still be one whose storage draw is unknown. That is the shape of a meter that
+    ///     silently stops metering: a pointer that stops resolving because a property was renamed, an
+    ///     api-version moved, or the caller simply omitted it. Reserving zero, or one, would let the
+    ///     resource provision unmetered; the write is refused instead, and
+    ///     <c>MeteredAmountTests</c> is what holds that.
+    /// </remarks>
+    public static ResourceSchema SizedSchema { get; } =
+        ResourceSchema.Of(
+            [
+                new("/location", SchemaKind.Text, Required: true),
+                new("/properties", SchemaKind.Nested),
+                new("/properties/replicas", SchemaKind.WholeNumber, Required: true) { Minimum = 1, Maximum = 9 },
+                new("/properties/cpu", SchemaKind.Text, Required: true) { Pattern = QuantityPattern },
+                new(DiskPointer, SchemaKind.Text) { Pattern = QuantityPattern }
+            ]
+        );
+
+    /// <summary>
+    ///     The Kubernetes quantity form, the same one <c>PostgresServers.QuantityPattern</c> declares.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ Copied rather than referenced: a test fixture may not take a dependency on a provider, and
+    ///     rule 2 of docs/plan/03 § Assembly graph rules forbids the edge in any case. If the two ever
+    ///     disagree the platform has two quantity grammars, which is the defect
+    ///     <c>KubeQuantity</c>'s remarks are about.
+    /// </remarks>
+    public const string QuantityPattern = @"\d+(\.\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?";
+
+    /// <summary>A body that satisfies <see cref="SizedSchema" />.</summary>
+    /// <param name="replicas">How many instances.</param>
+    /// <param name="cpu">Each instance's CPU quantity.</param>
+    /// <param name="disk">
+    ///     Each resource's disk quantity, or <see langword="null" /> to omit the property entirely —
+    ///     which is the case the storage meter refuses.
+    /// </param>
+    public static string SizedBody(int replicas = 2, string cpu = "500m", string? disk = "20Gi") {
+        var properties = new JsonObject { ["replicas"] = replicas, ["cpu"] = cpu };
+
+        if (disk is not null) {
+            properties["disk"] = disk;
+        }
+
+        return JsonSerializer.Serialize(
+            new JsonObject { ["location"] = "eu-central", ["properties"] = properties }
+        );
+    }
 }

@@ -98,14 +98,14 @@ sealed class ProviderBuilder(string providerNamespace) : IResourceTypeBuilder {
         ArgumentNullException.ThrowIfNull(meters);
 
         foreach (var meter in meters) {
-            AddMeter(meter, string.Empty, 1m);
+            AddMeter(meter, string.Empty, 1m, null);
         }
 
         return this;
     }
 
     /// <inheritdoc />
-    public IResourceTypeBuilder Meter(QuotaMeter meter, string amountPointer, decimal fallback = 1m) {
+    public IResourceTypeBuilder Meter(QuotaMeter meter, string amountPointer, decimal? fallback = null) {
         ArgumentException.ThrowIfNullOrEmpty(amountPointer);
 
         if (amountPointer[0] != '/') {
@@ -117,7 +117,14 @@ sealed class ProviderBuilder(string providerNamespace) : IResourceTypeBuilder {
             );
         }
 
-        return AddMeter(meter, amountPointer, fallback);
+        return AddMeter(meter, amountPointer, fallback, null);
+    }
+
+    /// <inheritdoc />
+    public IResourceTypeBuilder Meter(QuotaMeter meter, MeterDerivation derivation) {
+        ArgumentNullException.ThrowIfNull(derivation);
+
+        return AddMeter(meter, string.Empty, null, derivation);
     }
 
     /// <inheritdoc />
@@ -337,7 +344,7 @@ sealed class ProviderBuilder(string providerNamespace) : IResourceTypeBuilder {
         }
     }
 
-    ProviderBuilder AddMeter(QuotaMeter meter, string pointer, decimal fallback) {
+    ProviderBuilder AddMeter(QuotaMeter meter, string pointer, decimal? fallback, MeterDerivation? derivation) {
         if (meter == QuotaMeter.Unknown) {
             throw new ArgumentException(
                 "QuotaMeter.Unknown is not a meter — it is the zero value a default-constructed wire "
@@ -347,7 +354,19 @@ sealed class ProviderBuilder(string providerNamespace) : IResourceTypeBuilder {
             );
         }
 
-        ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(fallback, 0m);
+        if (fallback is { } declared) {
+            ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(declared, 0m);
+        } else if (pointer.Length == 0 && derivation is null) {
+            // ⚠ A meter with no pointer, no derivation and no fallback would reserve nothing on every
+            // request — a declared meter that never moves. `Meters(meter)` is how a flat one unit is
+            // spelled and it passes 1m; there is no way to reach this from the public surface, so it
+            // is a guard against a future overload rather than against a caller.
+            throw new ArgumentException(
+                $"'{meter}' declares no pointer, no derivation and no fallback, so there is nothing "
+                + "for it to reserve. A flat one unit is `Meters(meter)` — docs/plan/06 § Quota.",
+                nameof(fallback)
+            );
+        }
 
         var draft = Open(nameof(Meter));
 
@@ -362,7 +381,7 @@ sealed class ProviderBuilder(string providerNamespace) : IResourceTypeBuilder {
             }
         }
 
-        draft.Meters.Add(new(meter, pointer, fallback));
+        draft.Meters.Add(new(meter, pointer, fallback) { Derivation = derivation });
         return this;
     }
 
