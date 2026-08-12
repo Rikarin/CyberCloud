@@ -66,6 +66,29 @@ public sealed record ChartRewrite(string Text, ImmutableArray<string> Problems, 
 ///         CLI.
 ///     </para>
 ///     <para>
+///         ⚠ <b>So is the property <c>RequiresCluster</c> names, and that is a second exclusion
+///         rather than a special case for one provider.</b> A chart is rendered <i>into</i> a cluster
+///         and has no opinion about which one: a cluster id picks the API server the apply runs
+///         against, which is settled before Helm is handed anything, and
+///         <c>charts/managed/postgres/templates/</c> never reads <c>.Values.clusterId</c>. It is
+///         <i>placement</i> rather than configuration — and which property carries it is a fact only
+///         the registry holds (<see cref="ResourceTypeRegistration.ClusterIdPointer" />, recorded by
+///         <see cref="IResourceTypeBuilder.RequiresCluster" />), so <see cref="Emit" /> is <b>told</b>
+///         the pointer rather than guessing from a member name or a <see cref="SchemaFormat" />.
+///     </para>
+///     <para>
+///         ⚠ <b>Excluding it is what keeps this emitter from having to invent a value, and that is why
+///         the repair is here rather than in <see cref="Literal" />.</b> Every values key carries a
+///         literal, and a cluster id has no <see cref="SchemaProperty.DefaultJson" /> because there is
+///         no cluster a tenant gets without choosing one. Emitted, it became <c>clusterId: ""</c>
+///         under <c>## @format uuid</c> — a chart whose own generated <c>values.schema.json</c>
+///         declared a default that its own <c>format</c> rejects, surviving <c>helm lint --strict</c>
+///         only because JSON Schema 2020-12 treats <c>format</c> as an annotation rather than an
+///         assertion. The nil uuid would have been worse: a real-looking id nobody chose, which is
+///         exactly what <see cref="Undefaulted" /> refuses to invent for a number. The row was never
+///         configuration, so neither spelling of "unset" was the answer.
+///     </para>
+///     <para>
 ///         ⚠ <b>Two <see cref="SchemaProperty" /> members still have no annotation syntax, and this
 ///         emitter REFUSES rather than dropping them.</b> <see cref="SchemaProperty.Nullable" /> and a
 ///         non-text <see cref="SchemaProperty.ElementKind" /> are what is left of the seven
@@ -115,12 +138,26 @@ public static class ChartAnnotationEmitter {
     ///     The annotated block for one api-version's schema.
     /// </summary>
     /// <param name="schema">The authored schema — docs/plan/08 § The provider registry's <c>schema:</c>.</param>
+    /// <param name="clusterIdPointer">
+    ///     <see cref="ResourceTypeRegistration.ClusterIdPointer" /> — where this type says which cluster
+    ///     it is placed into — or <c>""</c> for a type that declares no
+    ///     <see cref="IResourceTypeBuilder.RequiresCluster" />. That property is excluded from the
+    ///     chart: see this class's remarks.
+    ///     <para>
+    ///         ⚠ <b>It has no default, and a caller that has no registration in hand must pass
+    ///         <c>""</c> deliberately.</b> A schema alone cannot say which of its properties is
+    ///         placement — nothing about a required uuid called <c>clusterId</c> distinguishes it from
+    ///         a tenant-chosen one — so an optional parameter would be an emitter that quietly assumes
+    ///         "no placement" for the one caller that knows better.
+    ///     </para>
+    /// </param>
     /// <returns>The block, or the reasons it could not be written.</returns>
-    public static ChartAnnotationBlock Emit(ResourceSchema schema) {
+    public static ChartAnnotationBlock Emit(ResourceSchema schema, string clusterIdPointer) {
         ArgumentNullException.ThrowIfNull(schema);
+        ArgumentNullException.ThrowIfNull(clusterIdPointer);
 
         var problems = new List<string>();
-        var roots = Tree(schema, problems);
+        var roots = Tree(schema, clusterIdPointer, problems);
         var text = new StringBuilder();
 
         foreach (var node in roots) {
@@ -328,7 +365,7 @@ public static class ChartAnnotationEmitter {
     ///     a values file with an undeclared object in it is a file <c>helm lint</c> refuses against the
     ///     schema the same registry produced.
     /// </remarks>
-    static List<Node> Tree(ResourceSchema schema, List<string> problems) {
+    static List<Node> Tree(ResourceSchema schema, string clusterIdPointer, List<string> problems) {
         var roots = new List<Node>();
         var byPointer = new Dictionary<string, Node>(StringComparer.Ordinal);
 
@@ -340,6 +377,17 @@ public static class ChartAnnotationEmitter {
             // Server-owned state is not a chart value. Excluding the subtree as well as the key: a
             // read-only object's members are read-only whatever they declare.
             if (property.ReadOnly || HasReadOnlyAncestor(property.JsonPointer, schema)) {
+                continue;
+            }
+
+            // Placement is not configuration — see this class's remarks. ⚠ The exact pointer and not
+            // its subtree, which is the opposite of the ReadOnly rule above and is deliberate:
+            // ProviderBuilder refuses a type whose api-version does not declare this pointer as a
+            // REQUIRED STRING, so a cluster id has no members. A schema that reached here another way
+            // and hung members off one gets the "sits under a pointer this schema does not declare"
+            // refusal below rather than a silently reparented key.
+            if (clusterIdPointer.Length > 0
+                && string.Equals(property.JsonPointer, clusterIdPointer, StringComparison.Ordinal)) {
                 continue;
             }
 

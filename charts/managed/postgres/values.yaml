@@ -7,13 +7,6 @@
 # `## @param`; a key without one fails the build with its line number, because a schema that
 # silently omits half the configuration surface is worse than no schema.
 
-## @param clusterId {string} The cluster whose namespace holds the CloudNativePG objects.
-## @required
-## @immutable
-## @format uuid
-## @widget cluster
-clusterId: ""
-
 ## @param version {string} Major PostgreSQL version. Minor upgrades are applied automatically in the maintenance window.
 ## @required
 ## @enum 16 | 17 | 18

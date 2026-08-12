@@ -507,8 +507,9 @@ lands.
 
 > ⚠ **UPDATED 2026-08-12. The provider has landed and the prediction above came true in full.**
 > `./build.sh Charts` reports "1 pair(s) compared" and "37 annotated value(s), 26 in the API surface,
-> 11 marked `@internal`". The chart's `@param` block is generated from `PostgresServers.Schema2026`
-> and byte-diffed.
+> 11 marked `@internal`" — *as it then was; the 26th row was `clusterId` and the reversal at the foot
+> of this note takes it back out, so the target says 36 and 25 today.* The chart's `@param` block is
+> generated from `PostgresServers.Schema2026` and byte-diffed.
 >
 > ⚠ **This paragraph previously read "`Build.Charts` still never opens a registry … grep
 > `build/Build.Charts.cs` for `ResourceSchema` and the only two hits are comments", and directed
@@ -527,6 +528,37 @@ lands.
 > under `/properties`, is not `ReadOnly`, and is therefore something the chart's caller sets — so the
 > "2 body-only properties" above is really one, `/location`. The bullet listing clusterId as
 > body-only was written before anything generated the file.
+>
+> ⚠ **REVERSED the same day. It is 25 and 11, and the bullet was right.** The paragraph above inferred
+> a decision from a generator's behaviour: the emitter's rule was "under `/properties` and not
+> `ReadOnly`", `clusterId` passes it, so `clusterId` was declared to be configuration. What the row
+> actually looked like once written is the argument against it —
+>
+> ```yaml
+> ## @param clusterId {string} The cluster whose namespace holds the CloudNativePG objects.
+> ## @required
+> ## @format uuid
+> clusterId: ""
+> ```
+>
+> — a **required uuid whose default is not a uuid**, in a chart whose own generated
+> `values.schema.json` carries `"format": "uuid"` and `"default": ""`. `helm lint --strict` passed it
+> only because JSON Schema 2020-12 treats `format` as an annotation rather than an assertion; under a
+> validator with an assertive format vocabulary the chart's default fails the chart's own schema. And
+> no template ever read `.Values.clusterId`: a cluster id picks the API server the apply runs against,
+> which is settled before Helm is handed anything.
+>
+> **Neither available value was choosable.** `""` is the only "unset" a string has, and the nil uuid
+> is a real-looking cluster nobody selected — which is exactly what the emitter already refuses to
+> invent for a number (*"an invented default is a value a tenant gets without anybody having chosen
+> it"*). Weakening that refusal to accommodate a row that was never configuration would have been the
+> wrong end. So `ChartAnnotationEmitter.Emit` now takes
+> `ResourceTypeRegistration.ClusterIdPointer` — the pointer `RequiresCluster` already records, which
+> is the only place the placement-versus-configuration distinction exists — and excludes it, as it
+> already excluded `ReadOnly`. **The split is 25 shared rows, 11 chart-only `@internal` rows, and 2
+> body-only properties, exactly as the bullet said.** charts/README.md § What a chart cannot say
+> carries the decision and the reasoning; `ChartAnnotationTests` has the pair of tests that make the
+> registration the only difference between a chart with the row and one without.
 
 ### ADR-011 — The licence audit, done once, written down
 

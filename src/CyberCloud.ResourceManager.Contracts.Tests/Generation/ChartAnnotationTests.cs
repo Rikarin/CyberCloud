@@ -141,10 +141,26 @@ public sealed class ChartAnnotationTests {
     static string Block => Emitted(Postgres());
 
     static string Emitted(ResourceSchema schema) {
-        var block = ChartAnnotationEmitter.Emit(schema);
+        var block = Emit(schema);
         block.Problems.ShouldBeEmpty();
         return block.Text;
     }
+
+    /// <summary>
+    ///     A schema on its own, with no cluster placement declared.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>The empty <c>clusterIdPointer</c> is the point of this helper rather than a
+    ///     convenience.</b> <see cref="ChartAnnotationEmitter.Emit" /> takes the pointer with no
+    ///     default because a schema cannot say which of its properties is placement — the fixture
+    ///     below declares a required uuid called <c>clusterId</c> and nothing about it is
+    ///     distinguishable from a tenant-chosen one. These tests are about the schema-to-block
+    ///     mapping, so they say "no placement" once, here; the registry fact reaching the emitter is
+    ///     <see cref="TheClusterIdIsPlacementAndIsExcludedFromTheChartItPlacesInto" /> and
+    ///     <see cref="ThePlacementPointerReachesTheEmitterFromTheRegistrationRatherThanTheSchema" />.
+    /// </remarks>
+    static ChartAnnotationBlock Emit(ResourceSchema schema) =>
+        ChartAnnotationEmitter.Emit(schema, clusterIdPointer: string.Empty);
 
     /// <summary>
     ///     The hand-written region of charts/managed/postgres/values.yaml: the header comment and the
@@ -238,6 +254,35 @@ public sealed class ChartAnnotationTests {
     }
 
     [Fact]
+    public void ThePlacementPointerReachesTheEmitterFromTheRegistrationRatherThanTheSchema() {
+        // ⚠ THE FAILURE CLASS THIS FILE'S HEADER CALLS "a registry fact that reaches the other four
+        // surfaces and stops here". `RequiresCluster` is recorded on the registration, the OpenAPI
+        // document and the CLI both carry the property, and the chart is the one surface that must
+        // NOT — a chart is rendered into a cluster and has no opinion about which one. The emitter
+        // cannot work that out from the schema, so the only thing that can go wrong is the pointer
+        // not being handed over, and that is exactly what this asserts: the same fixture, the same
+        // chart, one flag apart.
+        using var tree = new ChartTree();
+        tree.Write("managed/postgres", "CyberCloud.DBforPostgreSQL/servers", "2026-08-01", ValuesFile(Block));
+
+        var report = ChartSurfaces.Generate(Placed("managed/postgres"), tree.Root, write: true);
+
+        report.Documents[0].Problems.ShouldBeEmpty();
+        report.Documents[0].Drifted.ShouldBeTrue();
+
+        var rewritten = tree.Read("managed/postgres");
+
+        rewritten.Contains("clusterId", StringComparison.Ordinal).ShouldBeFalse();
+
+        // ⚠ And the hand-written region is still there. An exclusion is a smaller generated block, so
+        // it exercises the merge's "the original has a key the registry no longer does" path — the
+        // one that ate bootstrap.password when it walked root keys only.
+        rewritten.ShouldEndWith(InternalTail);
+        rewritten.ShouldStartWith(Header);
+        rewritten.ShouldContain("version: \"17\"");
+    }
+
+    [Fact]
     public void AChartWhoseChartYamlNamesAnotherTypeIsRefusedRatherThanRewritten() {
         using var tree = new ChartTree();
         tree.Write("managed/postgres", "CyberCloud.Sample/widgets", "2026-08-01", ValuesFile(Block));
@@ -305,7 +350,7 @@ public sealed class ChartAnnotationTests {
         // `@range`'s pattern requires both. The obvious emission, `## @range 1..`, is a malformed
         // directive against a file this emitter had just written: the build would fail on its own
         // output, with a line number, pointing at a generated file.
-        var block = ChartAnnotationEmitter.Emit(ResourceSchema.Of([
+        var block = Emit(ResourceSchema.Of([
             new("/properties", SchemaKind.Nested, Description: "The configuration."),
             new("/properties/replicas", SchemaKind.WholeNumber, Description: "Instances.") {
                 Minimum = 1,
@@ -321,7 +366,7 @@ public sealed class ChartAnnotationTests {
     public void ADirectiveArgumentThatCannotBeSpelledIsRefused() {
         // `@enum` members are separated by `|` and trimmed, so a value carrying either would come back
         // as a different string — or as two.
-        var piped = ChartAnnotationEmitter.Emit(ResourceSchema.Of([
+        var piped = Emit(ResourceSchema.Of([
             new("/properties", SchemaKind.Nested, Description: "The configuration."),
             new("/properties/mode", SchemaKind.Text, Description: "A mode.") {
                 AllowedValues = ["a|b"],
@@ -333,7 +378,7 @@ public sealed class ChartAnnotationTests {
 
         // `@widget` renders one scalar field, and build/Build.Charts.cs refuses it on an array — which
         // SchemaProperty.Incoherences permits, so Fixtures' own /properties/allowedRanges is one.
-        var widget = ChartAnnotationEmitter.Emit(ResourceSchema.Of([
+        var widget = Emit(ResourceSchema.Of([
             new("/properties", SchemaKind.Nested, Description: "The configuration."),
             new("/properties/ranges", SchemaKind.Array, Description: "CIDR ranges.") {
                 ElementKind = SchemaKind.Text,
@@ -367,7 +412,7 @@ public sealed class ChartAnnotationTests {
     public void ADescriptionThatWouldEndItsOwnBlockIsRefused() {
         // A newline in a Description would close the annotation block above the key, and the reader
         // would report "an annotation block with no key under it" against a generated file.
-        var block = ChartAnnotationEmitter.Emit(ResourceSchema.Of([
+        var block = Emit(ResourceSchema.Of([
             new("/properties", SchemaKind.Nested),
             new("/properties/a", SchemaKind.Text, Description: "One.\nTwo.")
         ]));
@@ -443,7 +488,7 @@ public sealed class ChartAnnotationTests {
 
     [Fact]
     public void AMemberNameThatIsNotAValuesKeyIsRefusedRatherThanMangled() {
-        var block = ChartAnnotationEmitter.Emit(new ResourceSchema {
+        var block = Emit(new ResourceSchema {
             Properties = [
                 new("/properties", SchemaKind.Nested, Description: "The configuration."),
                 new("/properties/storage-class", SchemaKind.Text, Description: "A hyphenated name.")
@@ -555,7 +600,7 @@ public sealed class ChartAnnotationTests {
         // ⚠ Two independent emissions, not one compared with itself: a generator that captured a
         // dictionary's iteration order would still be self-consistent within one run. The Generated
         // surfaces gate compares byte-for-byte, so this is a correctness property.
-        ChartAnnotationEmitter.Emit(Postgres()).Text.ShouldBe(ChartAnnotationEmitter.Emit(Postgres()).Text);
+        Emit(Postgres()).Text.ShouldBe(Emit(Postgres()).Text);
 
     [Fact]
     public void RewritingAnAlreadyRewrittenFileChangesNothing() {
@@ -602,7 +647,7 @@ public sealed class ChartAnnotationTests {
         // became the vocabulary's first real user and made thirteen of these refusals the only red
         // gate in the tree. Nullable and a non-text ElementKind stay refused: neither has a user, and
         // both are harder than the four that closed — see the remarks on CheckInexpressible.
-        var block = ChartAnnotationEmitter.Emit(WithGap(directive));
+        var block = Emit(WithGap(directive));
 
         block.Text.ShouldBeEmpty();
         block.Problems.ShouldHaveSingleItem();
@@ -652,7 +697,7 @@ public sealed class ChartAnnotationTests {
         // vocabulary that refused them could not spell the first pattern anybody wrote.
         var pattern = @"^[a-z]#(one|two):\{3\}""x""$";
 
-        var block = ChartAnnotationEmitter.Emit(ResourceSchema.Of([
+        var block = Emit(ResourceSchema.Of([
             new("/properties", SchemaKind.Nested, Description: "The configuration."),
             // ⚠ No DefaultJson: ResourceSchema.Of checks a default against its own anchored pattern,
             // and the point here is the pattern's transport rather than its defaulting.
@@ -680,7 +725,7 @@ public sealed class ChartAnnotationTests {
         // strings the API does not. That is the "constraint that reached the API and not the chart"
         // failure wearing a disguise: the constraint arrives, and means something else. A newline
         // would end the annotation block above the key it describes; a tab is a subset violation.
-        var block = ChartAnnotationEmitter.Emit(new ResourceSchema {
+        var block = Emit(new ResourceSchema {
             Properties = [
                 new("/properties", SchemaKind.Nested, Description: "The configuration."),
                 new("/properties/gap", SchemaKind.Text, Description: "A gap.") { Pattern = pattern }
@@ -696,7 +741,7 @@ public sealed class ChartAnnotationTests {
         // `@secret` already means `format: password` — the three keywords OpenApiEmitter puts on a
         // secret — so a property carrying both would emit two `format`s into one schema node and the
         // second would win without a word being said.
-        var block = ChartAnnotationEmitter.Emit(ResourceSchema.Of([
+        var block = Emit(ResourceSchema.Of([
             new("/properties", SchemaKind.Nested, Description: "The configuration."),
             new("/properties/token", SchemaKind.Text, Secret: true, Description: "A token.") {
                 Format = SchemaFormat.Uuid
@@ -709,7 +754,7 @@ public sealed class ChartAnnotationTests {
 
     [Fact]
     public void ANegativeLengthIsRefusedBecauseTheDirectiveSpellsDigits() {
-        var block = ChartAnnotationEmitter.Emit(new ResourceSchema {
+        var block = Emit(new ResourceSchema {
             Properties = [
                 new("/properties", SchemaKind.Nested, Description: "The configuration."),
                 new("/properties/gap", SchemaKind.Text, Description: "A gap.") { MaxLength = -1 }
@@ -727,7 +772,7 @@ public sealed class ChartAnnotationTests {
         // would end the annotation block above its key. Re-serialising makes it one line by
         // construction, and makes the bytes a function of the value rather than of how it was spelled
         // — which is what a byte-for-byte drift gate needs.
-        var block = ChartAnnotationEmitter.Emit(ResourceSchema.Of([
+        var block = Emit(ResourceSchema.Of([
             new("/properties", SchemaKind.Nested, Description: "The configuration."),
             new("/properties/extensions", SchemaKind.Array, Description: "Extensions.") {
                 ElementKind = SchemaKind.Text,
@@ -831,7 +876,7 @@ public sealed class ChartAnnotationTests {
         // Not a gap: a values key is by construction something the chart's caller sets, and
         // server-owned state has no home in a values file at all. The generated CLI drops
         // --provisioning-state for the same reason.
-        var block = ChartAnnotationEmitter.Emit(ResourceSchema.Of([
+        var block = Emit(ResourceSchema.Of([
             new("/properties", SchemaKind.Nested, Description: "The configuration."),
             new("/properties/state", SchemaKind.Text, ReadOnly: true, Description: "Server-owned."),
             new("/properties/version", SchemaKind.Text, Description: "Tenant-owned.") {
@@ -845,11 +890,59 @@ public sealed class ChartAnnotationTests {
     }
 
     [Fact]
+    public void TheClusterIdIsPlacementAndIsExcludedFromTheChartItPlacesInto() {
+        // ⚠ THE SECOND EXCLUSION, AND THE ONE THAT COST A CHART A DEFAULT ITS OWN SCHEMA REJECTS.
+        // Until this rule existed the emitter's whole test was "under /properties and not ReadOnly",
+        // which /properties/clusterId passes — so the chart grew a required `## @format uuid` row and
+        // the only literal a string has for "unset", `""`. That is not a uuid. `helm lint --strict`
+        // took it because JSON Schema 2020-12 makes `format` an annotation rather than an assertion,
+        // so the chart's own default failed its own schema in every validator that asserts formats.
+        //
+        // The value could not be invented either way: a real uuid is a cluster a tenant would be
+        // placed into without anybody choosing it, which is what Undefaulted refuses for a number and
+        // for the same reason. The row was never configuration — templates/ never reads
+        // `.Values.clusterId`, because the cluster is which API server the apply runs against and is
+        // settled before Helm is handed anything.
+        var placed = ChartAnnotationEmitter.Emit(Postgres(), "/properties/clusterId");
+
+        placed.Problems.ShouldBeEmpty();
+
+        // Gone with its whole annotation block, not left as a key with no `@param` — which the reader
+        // fails with a line number — and not left as a block with no key under it either.
+        placed.Text.Contains("clusterId", StringComparison.Ordinal).ShouldBeFalse();
+        placed.Text.ShouldNotContain("## @format uuid");
+        placed.Text.ShouldNotContain("## @widget cluster");
+        Subset.Problems(placed.Text).ShouldBeEmpty();
+
+        // ⚠ And nothing else moved. An exclusion that also dropped a neighbour would be a chart
+        // silently missing a knob, which is the failure this whole surface exists to prevent.
+        var kept = Regex.Matches(Block, @"^\s*## @param (?<name>\S+) ", RegexOptions.Multiline)
+            .Select(x => x.Groups["name"].Value)
+            .Where(x => x != "clusterId")
+            .ToList();
+
+        Regex.Matches(placed.Text, @"^\s*## @param (?<name>\S+) ", RegexOptions.Multiline)
+            .Select(x => x.Groups["name"].Value)
+            .ToList()
+            .ShouldBe(kept);
+    }
+
+    [Fact]
+    public void APointerNoTypeDeclaresAsPlacementIsStillAnOrdinaryChartRow() {
+        // The other direction, and the reason the pointer is passed rather than pattern-matched: a
+        // property is placement because a registration says so, never because of what it is called or
+        // what format it carries. A type that declares no RequiresCluster has no placement pointer,
+        // and a `clusterId` in its body is a tenant-chosen value like any other.
+        Block.ShouldContain("clusterId:");
+        Block.ShouldContain("## @format uuid");
+    }
+
+    [Fact]
     public void ANumberWithNoDeclaredDefaultIsRefusedRatherThanGivenAnInventedZero() {
         // Every values key carries a value; a null is refused by the reader and by helm. There is no
         // empty spelling of a number, and an invented 0 is a value a tenant would get without anybody
         // having chosen it — and it may sit outside the property's own @range.
-        var block = ChartAnnotationEmitter.Emit(ResourceSchema.Of([
+        var block = Emit(ResourceSchema.Of([
             new("/properties", SchemaKind.Nested, Description: "The configuration."),
             new("/properties/replicas", SchemaKind.WholeNumber, Description: "Instances.") {
                 Minimum = 1,
@@ -865,7 +958,7 @@ public sealed class ChartAnnotationTests {
     public void ADefaultOutsideItsOwnConstraintsIsRefusedAgainstTheRegistryRatherThanTheChart() {
         // build/Build.Charts.cs would report this against values.yaml — which by then is a generated
         // file — and send the author to fix the wrong end.
-        var block = ChartAnnotationEmitter.Emit(new ResourceSchema {
+        var block = Emit(new ResourceSchema {
             Properties = [
                 new("/properties", SchemaKind.Nested, Description: "The configuration."),
                 new("/properties/replicas", SchemaKind.WholeNumber, Description: "Instances.") {
@@ -906,6 +999,29 @@ public sealed class ChartAnnotationTests {
                     Type = new("CyberCloud.DBforPostgreSQL", "servers"),
                     ApiVersions = [new(ApiVersion.Parse("2026-08-01"), Postgres())],
                     Chart = chart
+                }
+            ]
+        };
+
+    /// <summary>
+    ///     The same type, declaring that it is placed into a cluster — the real
+    ///     <c>CyberCloud.DBforPostgreSQL/servers</c> shape.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ Kept apart from <see cref="Registry" /> rather than folded into it, because the pair of
+    ///     them <i>is</i> the assertion: the pointer is the only difference between a chart with a
+    ///     <c>clusterId</c> row and a chart without one.
+    /// </remarks>
+    static FakeRegistry Placed(string chart) =>
+        new FakeRegistry {
+            Namespaces = ["CyberCloud.DBforPostgreSQL"],
+            Types = [
+                new ResourceTypeRegistration {
+                    Type = new("CyberCloud.DBforPostgreSQL", "servers"),
+                    ApiVersions = [new(ApiVersion.Parse("2026-08-01"), Postgres())],
+                    Chart = chart,
+                    RequiresCluster = true,
+                    ClusterIdPointer = ClusterPlacement.DefaultPointer
                 }
             ]
         };

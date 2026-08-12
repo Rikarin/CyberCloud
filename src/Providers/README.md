@@ -49,6 +49,15 @@ Two things it found that the sample could not:
   ADR-010 says the overlap "becomes 26 rows wide the moment the Postgres provider lands". It has;
   `Build.Charts` still never opens a registry. `ChartRegistryPairTests` compares the rows as a
   provider test instead, and should be deleted by whoever builds the emitter.
+
+  > ⚠ **CORRECTED 2026-08-12, on both counts.** The gate exists: `Build.Charts` calls
+  > `RunGenerator(write: true, charts: true)`, which drives `ChartSurfaces.Generate` and
+  > `ChartAnnotationEmitter`, so it reaches the registry without the word `ResourceSchema` appearing
+  > in `build/Build.Charts.cs` — the grep behind "still never opens a registry" was accurate and the
+  > conclusion was not. The row-by-row comparisons in `ChartRegistryPairTests` have been deleted,
+  > keeping only what generation does not reach. And the overlap is **25** rows, not 26:
+  > `/properties/clusterId` is placement rather than configuration and is excluded — see
+  > charts/README.md § What a chart cannot say.
 - **Rule 2 of § Assembly graph rules has a `const` blind spot.** It reads binding references, and a
   cross-provider dependency using only `const` members emits none. See that provider's
   `.Contracts.csproj` for the experiment.

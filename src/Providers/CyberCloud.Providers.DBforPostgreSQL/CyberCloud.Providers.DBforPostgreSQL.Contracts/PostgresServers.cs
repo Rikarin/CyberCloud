@@ -38,6 +38,21 @@ namespace CyberCloud.Providers.DBforPostgreSQL.Contracts;
 ///         nothing written down so far says so.
 ///     </para>
 ///     <para>
+///         ⚠ <b>Something does now, and for a day it did the opposite.</b> The generator landed on
+///         2026-08-12 with the rule "everything under <c>/properties</c> that is not
+///         <see cref="SchemaProperty.ReadOnly" />", which <see cref="ClusterIdPointer" /> passes — so
+///         the chart grew a <c>clusterId: ""</c> row under <c>## @required</c> and
+///         <c>## @format uuid</c>, and the paragraph above was read as a prediction that had been
+///         overtaken rather than a rule nobody had implemented. <c>""</c> is not a uuid;
+///         <c>helm lint --strict</c> took it only because JSON Schema 2020-12 treats <c>format</c> as
+///         an annotation rather than an assertion. <c>ChartAnnotationEmitter</c> is now told the
+///         placement pointer — <see cref="ResourceTypeRegistration.ClusterIdPointer" />, which
+///         <c>PostgresProvider</c>'s <c>RequiresCluster</c> call already records — and skips
+///         it. The chart is 25 API rows and 11 <c>@internal</c> ones; <c>/location</c> is skipped by
+///         being root-level, as it always was. charts/README.md § What a chart cannot say carries
+///         the decision.
+///     </para>
+///     <para>
 ///         ⚠ <b><c>/properties/bootstrap/password</c> is absent on purpose and the chart row moved to
 ///         <c>@internal</c> to match.</b> Its own chart description already said the reconciler
 ///         supplies it — <i>"Provisioned into the tenant's Vault and read back by ISecretResolver at
