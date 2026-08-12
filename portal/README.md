@@ -33,26 +33,65 @@ portal/
 
 docs/plan/02 § Platform baseline left this open — the plan said 22 LTS, the dev host runs 26.5.0,
 and no `@xui/*` peer range constrains it, so it is the portal's call and it needed settling "before
-portal work starts, or local and CI will silently differ". Four inputs decided it:
+portal work starts, or local and CI will silently differ". Four inputs decided it on 2026-08-11,
+and they were re-checked on 2026-08-12 after `@xui/*` released 2.2.1 through 2.2.4:
 
 | Input | Value | Effect |
 |---|---|---|
 | Angular 22's own `engines.node` | `^22.22.3 \|\| ^24.15.0 \|\| >=26.0.0` | 22, 24 and 26 are all permitted — Angular does not decide it either |
 | Node release state, 2026-08 | 22 is **Maintenance**, 24 is **Active LTS**, 26 is **Current** | 24 is the only one that is both supported and LTS today |
-| xUI's own pin | `engines.node: 24.x`, `.node-version: 24` | The portal is xUI's largest consumer; matching keeps the two workspaces one codebase |
-| The dev host | 26.5.0 | Needs to keep working, so the pin cannot be a wall |
+| ~~xUI's own pin~~ | ~~`engines.node: 24.x`~~ — see below | ⚠ **Withdrawn 2026-08-12.** It is not a constraint on this workspace |
+| The dev host | 26.5.0, and it is the only Node installed | Needs to keep working, so the pin cannot be a wall |
 
-So: **24**, which corrects docs/plan/02's "Node 22 LTS" (now maintenance-only) and matches xUI
-rather than diverging from it. Node 26 was rejected on one ground: it does not become LTS until
-2026-10-20, and a platform's portal should not build on a Current release.
+⚠ **The input this decision called strongest does not exist.** It was recorded as "xUI itself pins
+`engines.node: 24.x`, which is the strongest signal". Re-checked against **npm** on 2026-08-12,
+across `2.2.0` (current when the decision was made) through `2.2.4` (current now), and against the
+unpacked `@xui/core@2.2.4` tarball rather than only the registry metadata: **no published `@xui/*`
+package carries an `engines` field at all.** The `24.x` is in the root `package.json` of xUI's
+development monorepo — the checkout this repository's own standing rule says not to read versions
+from, for exactly this class of reason. It binds xUI's contributors, not xUI's consumers.
 
-⚠ **How the pin is enforced, and why the two halves differ.** `scripts/check-node.mjs` warns
-locally and fails in CI (`pnpm node:gate`, which `pnpm gates` runs first). `engine-strict` is
-deliberately off in `.npmrc`. The reasoning is that a wall in the developer's path and a wall in
-CI's path have opposite costs: a blocked local install stops work over a version that will build
-fine, while a drifted CI image silently produces artefacts nobody can reproduce. So the warning is
-the nudge and the CI gate is the wall. **The CI image must be Node 24** — that is the half of this
-decision that lives outside this repo.
+That is a real correction, and it does **not** move the pin. Re-evaluated, the surviving form of
+the input still points at 24: every `@xui/*` package at 2.2.4 was published from Node 24.18.0
+(`_nodeVersion` in the registry metadata), so 24 remains the runtime the library is built and
+tested on. It is now a *weak* input where the decision claimed a strong one — it is corroboration,
+not a constraint — and with it demoted, the pin rests on the Node release calendar alone.
+
+So: **24**, unchanged, because none of the four inputs reversed. Node 26 is still rejected on the
+one ground it was rejected on: it does not become LTS until 2026-10-20, and a platform's portal
+should not build on a Current release.
+
+⚠ **This pin has a dated expiry, and it is close.** On **2026-10-20** Node 24 goes Maintenance and
+26 becomes Active LTS — the exact condition that made the previous "Node 22 LTS" wrong starts
+applying to 24, on a known date. The pin was already stale once because nothing was watching for
+that. Revisit on or before that date; the move is then `.nvmrc`, `.node-version` and
+`package.json` `engines`, and nothing else, because CI reads the file rather than restating the
+number.
+
+⚠ **How the pin is enforced, and why the halves differ.** `scripts/check-node.mjs` warns locally
+and fails in CI (`pnpm node:gate`, which `pnpm gates` runs first). `engine-strict` is deliberately
+off in `.npmrc`. The reasoning is that a wall in the developer's path and a wall in CI's path have
+opposite costs: a blocked local install stops work over a version that will build fine, while a
+drifted CI image silently produces artefacts nobody can reproduce. So the warning is the nudge and
+the CI gate is the wall.
+
+⚠ **That reasoning was tested, and the nudge half failed.** A session of portal work — a layout
+fix, a class-coverage gate, two SSR suites, 73 jest tests — was measured on the host's Node 26 and
+reported as if it were the pinned runtime. The warning had fired. It fired once, before the work,
+minutes and thousands of lines of build output before the figures it applied to. The wall half
+still holds and is not negotiable here: the dev host has **only** Node 26, so `engine-strict=true`
+would mean the portal could not be installed at all.
+
+The fix is a third mode rather than a fourth wall. `pnpm node:recap`
+(`scripts/check-node.mjs --recap`) runs **last** in `pnpm test` and `pnpm build`, prints the
+runtime next to the numbers it qualifies, and exits 0 either way. Off-pin it says so in a banner:
+the failure to prevent was never "built on the wrong Node" — that is allowed on purpose — it was
+"recorded a figure without knowing which runtime produced it".
+
+**The CI image must be Node 24**, and both paths that reach the portal now say so from this file:
+`.github/workflows/gate.yml` § portal and `.github/workflows/release.yml` § publish, each via
+`node-version-file: portal/.node-version`. The release path is the less obvious one — `Publish`
+`.DependsOn(… Portal …)` in `build/Build.cs`, so a release runs the portal gate.
 
 ## The Angular pin
 
