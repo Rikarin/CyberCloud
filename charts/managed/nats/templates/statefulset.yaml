@@ -1,0 +1,135 @@
+{{/*
+The servers.
+
+⚠ `podManagementPolicy: Parallel`, AND THE DEFAULT WOULD DEADLOCK THE FIRST START. The default is
+OrderedReady: pod 1 is not created until pod 0 is ready. Pod 0's readiness probe asks JetStream
+whether it is healthy; a clustered JetStream is not healthy until it has a Raft quorum; a quorum
+needs pod 1. Parallel is what makes a three-server cluster reach quorum at all — and it is exactly
+the kind of default an operator would have supplied, on a service that has no operator.
+
+⚠ TWO PROBES ASKING DIFFERENT QUESTIONS. /healthz?js-enabled-only=true on READINESS reports a stream
+that is catching up as not-ready, which takes one pod out of the client Service; the bare endpoint
+would take EVERY pod out at once during a rolling update of a cluster that was working.
+/healthz?js-server-only=true on LIVENESS asks only whether the process is serving, because a liveness
+probe that fails on a slow catch-up restarts the pod that most needed to be left alone.
+
+⚠ 60 SECONDS OF TERMINATION GRACE, NOT THE DEFAULT 30. A NATS server given SIGTERM performs a lame
+duck shutdown: it stops accepting connections, lets clients migrate, and only then exits. Killing it
+at 30 turns a rolling update into dropped connections, which is the failure a managed broker exists
+not to have.
+
+⚠ NO CONFIG-DIGEST ANNOTATION, WHICH IS THE USUAL HELM IDIOM AND IS DELIBERATELY ABSENT. It would
+make every render depend on a digest of a file this chart also writes, which is two spellings of one
+fact and would make the reconciler's applies non-idempotent. Reloading on SIGHUP is written down as
+owed in conformance.yaml rather than half-built.
+*/}}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "nats.name" . }}
+  labels:
+    {{- include "nats.platformLabels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.servers }}
+  serviceName: {{ include "nats.headless" . }}
+  podManagementPolicy: Parallel
+  selector:
+    matchLabels:
+      {{- include "nats.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "nats.selectorLabels" . | nindent 8 }}
+    spec:
+      terminationGracePeriodSeconds: 60
+      containers:
+        - name: nats
+          image: {{ .Values.image | default (printf "nats:%s-alpine" .Values.version) | quote }}
+          args:
+            - --config
+            - /etc/nats/nats.conf
+          ports:
+            - name: client
+              containerPort: 4222
+              protocol: TCP
+            - name: cluster
+              containerPort: 6222
+              protocol: TCP
+            - name: monitor
+              containerPort: 8222
+              protocol: TCP
+            {{- if .Values.leafNodes.enabled }}
+            - name: leafnodes
+              containerPort: 7422
+              protocol: TCP
+            {{- end }}
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+          volumeMounts:
+            - name: config
+              mountPath: /etc/nats
+            - name: store
+              mountPath: /data
+          readinessProbe:
+            httpGet:
+              path: /healthz?js-enabled-only=true
+              port: monitor
+            periodSeconds: 5
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /healthz?js-server-only=true
+              port: monitor
+            periodSeconds: 10
+            failureThreshold: 5
+          {{- with include "nats.resources" . }}
+          resources:
+            {{- . | nindent 12 }}
+          {{- end }}
+        {{- if .Values.monitoring.enabled }}
+        {{/*
+          ⚠ A SIDECAR, BECAUSE nats-server SERVES NO PROMETHEUS ENDPOINT. Its monitoring port answers
+          /varz, /connz, /routez, /subsz, /leafz, /jsz, /raftz and /healthz — all JSON. Checked in
+          server/monitor.go rather than assumed, because a PodMonitor pointed at 8222/metrics applies
+          cleanly, selects the right pods, and scrapes a 404 forever: the object exists, the dashboard
+          is empty, and nothing anywhere is red.
+
+          ⚠ A SIDECAR RATHER THAN ONE EXPORTER FOR THE CLUSTER, because it scrapes localhost:8222 —
+          a per-server endpoint. A single exporter behind the client Service would report whichever
+          server it was routed to, which is a metric that changes meaning between scrapes.
+        */}}
+        - name: metrics
+          image: natsio/prometheus-nats-exporter:latest
+          args:
+            - -connz
+            - -routez
+            - -subz
+            - -varz
+            - -jsz=all
+            - -port
+            - "7777"
+            - http://localhost:8222
+          ports:
+            - name: metrics
+              containerPort: 7777
+              protocol: TCP
+        {{- end }}
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "nats.name" . }}-config
+  volumeClaimTemplates:
+    - metadata:
+        name: store
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: {{ .Values.storage.size | quote }}
+        {{- with .Values.storage.class }}
+        storageClassName: {{ . | quote }}
+        {{- end }}

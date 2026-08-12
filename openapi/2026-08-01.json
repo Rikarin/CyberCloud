@@ -1077,6 +1077,365 @@
       "x-cybercloud-resource-type": "CyberCloud.Messaging/kafkaClusters",
       "x-cybercloud-action": "listKeys"
     },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Messaging/natsClusters/{resourceName}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "get": {
+        "operationId": "CyberCloud_Messaging_natsClusters_Get",
+        "summary": "Read a CyberCloud.Messaging/natsClusters.",
+        "description": "The body is this api-version's projection of the resource: docs/plan/08 § The provider registry keeps grain state as a superset and a read at an older version drops what that version did not declare.",
+        "responses": {
+          "200": {
+            "description": "The resource.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Messaging.natsClusters"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "read"
+      },
+      "put": {
+        "operationId": "CyberCloud_Messaging_natsClusters_CreateOrUpdate",
+        "summary": "Create or replace a CyberCloud.Messaging/natsClusters.",
+        "description": "A full replacement. Every property the schema marks required must be present; a read-only property is refused rather than ignored — docs/plan/08 § The write path, end to end.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CyberCloud.Messaging.natsClusters"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "headers": {
+              "Azure-AsyncOperation": {
+                "description": "The absolute URL of the operation to poll.",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "Retry-After": {
+                "description": "Seconds to wait before the first poll.",
+                "required": true,
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "write"
+      },
+      "patch": {
+        "operationId": "CyberCloud_Messaging_natsClusters_Update",
+        "summary": "Merge-patch a CyberCloud.Messaging/natsClusters.",
+        "description": "A merge patch. The patch itself may omit required properties; the merged result is what is validated — see ResourceSchema.Validate.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CyberCloud.Messaging.natsClusters"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "headers": {
+              "Azure-AsyncOperation": {
+                "description": "The absolute URL of the operation to poll.",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "Retry-After": {
+                "description": "Seconds to wait before the first poll.",
+                "required": true,
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "write"
+      },
+      "delete": {
+        "operationId": "CyberCloud_Messaging_natsClusters_Delete",
+        "summary": "Delete a CyberCloud.Messaging/natsClusters.",
+        "description": "The delete is permanent: this type declares no soft-delete window.",
+        "responses": {
+          "202": {
+            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "headers": {
+              "Azure-AsyncOperation": {
+                "description": "The absolute URL of the operation to poll.",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "Retry-After": {
+                "description": "Seconds to wait before the first poll.",
+                "required": true,
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "delete",
+        "x-cybercloud-soft-delete-days": 0
+      },
+      "x-cybercloud-resource-type": "CyberCloud.Messaging/natsClusters",
+      "x-cybercloud-display": {
+        "name": "NATS cluster",
+        "plural": "NATS clusters",
+        "alias": "nats",
+        "summary": "A managed NATS cluster with JetStream on file storage, optional leaf-node connectivity and an optional firewalled external listener.",
+        "declared": true
+      },
+      "x-cybercloud-supports-tags": true,
+      "x-cybercloud-requires-cluster": true,
+      "x-cybercloud-cluster-id-pointer": "/properties/clusterId",
+      "x-cybercloud-soft-delete-days": 0,
+      "x-cybercloud-meters": [
+        {
+          "meter": "MemoryGb",
+          "amountPointer": "",
+          "fallback": null,
+          "expression": "servers × sizing.memory, in GiB, taking sizing.preset when the override is empty",
+          "reads": [
+            "/properties/servers",
+            "/properties/sizing/preset",
+            "/properties/sizing/memory"
+          ]
+        },
+        {
+          "meter": "Resources",
+          "amountPointer": "",
+          "fallback": 1,
+          "expression": "1",
+          "reads": []
+        },
+        {
+          "meter": "StorageGb",
+          "amountPointer": "",
+          "fallback": null,
+          "expression": "servers × storage.size, in GiB",
+          "reads": [
+            "/properties/servers",
+            "/properties/storage/size"
+          ]
+        },
+        {
+          "meter": "Vcpu",
+          "amountPointer": "",
+          "fallback": null,
+          "expression": "servers × sizing.cpu, in cores, taking sizing.preset when the override is empty",
+          "reads": [
+            "/properties/servers",
+            "/properties/sizing/preset",
+            "/properties/sizing/cpu"
+          ]
+        }
+      ]
+    },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Messaging/natsClusters/{resourceName}/listKeys": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "post": {
+        "operationId": "CyberCloud_Messaging_natsClusters_ListKeys",
+        "summary": "listKeys a CyberCloud.Messaging/natsClusters.",
+        "description": "An action never creates: a POST to a name that does not exist is a 404 — docs/plan/08 § The write path, end to end. ⚠ The response carries secret material. It is always audited and is never cached — docs/plan/08 § The provider registry.",
+        "responses": {
+          "200": {
+            "description": "The action's result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Messaging.natsClusters.ListKeysResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "listKeys",
+        "x-cybercloud-secret": true,
+        "x-cybercloud-long-running": false
+      },
+      "x-cybercloud-resource-type": "CyberCloud.Messaging/natsClusters",
+      "x-cybercloud-action": "listKeys"
+    },
     "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Sample/widgets/{resourceName}": {
       "parameters": [
         {
@@ -2358,6 +2717,243 @@
         "title": "CyberCloud.Messaging.kafkaClusters.ListKeysResponse",
         "type": "object"
       },
+      "CyberCloud.Messaging.natsClusters": {
+        "additionalProperties": false,
+        "description": "The body of a CyberCloud.Messaging/natsClusters. Generated from the provider registry's schema, which is the same object the write path validates against — docs/plan/08 § The provider registry.",
+        "properties": {
+          "location": {
+            "description": "The region the cluster is billed in.",
+            "example": "eu-central",
+            "format": "cybercloud-region",
+            "type": "string",
+            "x-cybercloud-immutable": true,
+            "x-cybercloud-widget": "region"
+          },
+          "properties": {
+            "additionalProperties": false,
+            "description": "The cluster's own settings.",
+            "properties": {
+              "clusterId": {
+                "description": "The cluster whose namespace holds the NATS servers.",
+                "format": "uuid",
+                "type": "string",
+                "x-cybercloud-immutable": true,
+                "x-cybercloud-widget": "cluster"
+              },
+              "external": {
+                "additionalProperties": false,
+                "description": "Exposure outside the cluster, via a load balancer and a firewall allow-list.",
+                "properties": {
+                  "allowedCidrs": {
+                    "default": [],
+                    "description": "Source ranges permitted to reach the external listener. Required in substance rather than in schema: an empty list with external exposure on renders a load balancer that accepts nothing, which is the safe reading of an unfinished configuration.",
+                    "example": [
+                      "203.0.113.0/24"
+                    ],
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "enabled": {
+                    "default": false,
+                    "description": "Whether the cluster is reachable from outside the Kubernetes cluster. Off by default — docs/plan/12 § Cross-cutting decisions makes external exposure never the default, because a managed broker on a public IP with a weak password is the most common cloud breach there is.",
+                    "type": "boolean"
+                  }
+                },
+                "type": "object"
+              },
+              "jetstream": {
+                "additionalProperties": false,
+                "description": "JetStream — the persistence layer streams and consumers live in. docs/plan/12 has it on unconditionally, so there is no switch to turn it off.",
+                "properties": {
+                  "maxMemoryStore": {
+                    "default": "",
+                    "description": "Ceiling for memory-backed streams, in Kubernetes quantity form. Empty means no memory store at all, so every stream is file-backed — which is what docs/plan/12 asks for and what the volume above is sized for. A value here must leave room for the server itself inside the container's memory limit.",
+                    "example": "256Mi",
+                    "pattern": "^(?:(\\d+(\\.\\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)?)$",
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              },
+              "leafNodes": {
+                "additionalProperties": false,
+                "description": "Leaf-node connectivity — docs/plan/12: \"so a tenant's edge can attach\".",
+                "properties": {
+                  "enabled": {
+                    "default": false,
+                    "description": "Whether the servers accept leaf-node connections. Off by default: a leaf node joins the cluster's subject space, so it is a topology change rather than a client.",
+                    "type": "boolean"
+                  }
+                },
+                "type": "object"
+              },
+              "limits": {
+                "additionalProperties": false,
+                "description": "Server limits a client can run into.",
+                "properties": {
+                  "maxConnections": {
+                    "default": 65536,
+                    "description": "Largest number of client connections one server accepts.",
+                    "maximum": 65536,
+                    "minimum": 16,
+                    "type": "integer"
+                  },
+                  "maxPayload": {
+                    "default": 1048576,
+                    "description": "Largest message a client may publish, in bytes. Raising it costs memory on every server, because a server buffers a whole message before routing it.",
+                    "maximum": 67108864,
+                    "minimum": 1024,
+                    "type": "integer"
+                  }
+                },
+                "type": "object"
+              },
+              "monitoring": {
+                "additionalProperties": false,
+                "description": "What the platform scrapes.",
+                "properties": {
+                  "enabled": {
+                    "default": true,
+                    "description": "Whether a PodMonitor selects these servers' monitoring endpoint. On by default — docs/plan/12: \"a managed service the tenant cannot see the health of is a black box they will not trust with production\". The endpoint itself is always served; this decides whether anything scrapes it.",
+                    "type": "boolean"
+                  }
+                },
+                "type": "object"
+              },
+              "servers": {
+                "default": 3,
+                "description": "Number of NATS servers. docs/plan/12 says three or five: JetStream replicates through a Raft group, so an even count buys no extra fault tolerance over the odd count below it. One is offered for development only and has no quorum at all.",
+                "maximum": 5,
+                "minimum": 1,
+                "type": "integer"
+              },
+              "sizing": {
+                "additionalProperties": false,
+                "description": "CPU and memory per server, either by preset or explicitly.",
+                "properties": {
+                  "cpu": {
+                    "default": "",
+                    "description": "Explicit vCPU quantity in Kubernetes form, for example 500m or 2. Empty means take it from the preset.",
+                    "pattern": "^(?:(\\d+(\\.\\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)?)$",
+                    "type": "string"
+                  },
+                  "memory": {
+                    "default": "",
+                    "description": "Explicit memory quantity in Kubernetes form, for example 4Gi. Empty means take it from the preset.",
+                    "pattern": "^(?:(\\d+(\\.\\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)?)$",
+                    "type": "string"
+                  },
+                  "preset": {
+                    "default": "c1.small",
+                    "description": "A sizing preset from docs/plan/12. Brokers use the c1 family, which is 1 vCPU to 2 GiB and guaranteed rather than burstable.",
+                    "enum": [
+                      "c1.2xlarge",
+                      "c1.4xlarge",
+                      "c1.large",
+                      "c1.medium",
+                      "c1.micro",
+                      "c1.nano",
+                      "c1.small",
+                      "c1.xlarge"
+                    ],
+                    "type": "string",
+                    "x-cybercloud-widget": "cozy-preset"
+                  }
+                },
+                "type": "object"
+              },
+              "storage": {
+                "additionalProperties": false,
+                "description": "The JetStream file store, per server.",
+                "properties": {
+                  "class": {
+                    "default": "",
+                    "description": "StorageClass name. Empty means the cluster default.",
+                    "type": "string",
+                    "x-cybercloud-immutable": true,
+                    "x-cybercloud-widget": "storageclass"
+                  },
+                  "size": {
+                    "default": "10Gi",
+                    "description": "JetStream file-store volume size per server, in Kubernetes quantity form. Grows online; never shrinks.",
+                    "example": "10Gi",
+                    "pattern": "^(?:\\d+(\\.\\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)$",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "size"
+                ],
+                "type": "object"
+              },
+              "version": {
+                "default": "2.11",
+                "description": "NATS server version. Minor upgrades are applied automatically in the maintenance window; a major upgrade is an explicit update to this field.",
+                "enum": [
+                  "2.10",
+                  "2.11"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "clusterId",
+              "servers",
+              "version"
+            ],
+            "type": "object"
+          },
+          "tags": {
+            "type": "object",
+            "description": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "maxProperties": 50,
+            "x-cybercloud-widget": "tag-input"
+          }
+        },
+        "required": [
+          "location"
+        ],
+        "title": "CyberCloud.Messaging/natsClusters",
+        "type": "object"
+      },
+      "CyberCloud.Messaging.natsClusters.ListKeysResponse": {
+        "additionalProperties": false,
+        "description": "What CyberCloud.Messaging/natsClusters/listKeys returns. ⚠ Secret material. docs/plan/08 § The provider registry makes a secret action the only path a secret value leaves by; this schema is therefore the complete list of what does.",
+        "properties": {
+          "monitoringUrl": {
+            "description": "The in-cluster HTTP monitoring endpoint, http://host:port — /varz and /jsz. Not secret, and returned here because a caller holding the client URL is the caller who needs it.",
+            "type": "string"
+          },
+          "password": {
+            "description": "The client user's password, read from the tenant's Vault for this call only.",
+            "format": "password",
+            "type": "string",
+            "writeOnly": true,
+            "x-cybercloud-secret": true
+          },
+          "url": {
+            "description": "The in-cluster client URL, nats://host:port. ⚠ The external listener's address is not returned here — an address a client cannot reach from where it is running is worse than an absent one.",
+            "type": "string"
+          },
+          "user": {
+            "description": "The client user.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "monitoringUrl",
+          "password",
+          "url",
+          "user"
+        ],
+        "title": "CyberCloud.Messaging.natsClusters.ListKeysResponse",
+        "type": "object"
+      },
       "CyberCloud.Sample.widgets": {
         "additionalProperties": false,
         "description": "The body of a CyberCloud.Sample/widgets. Generated from the provider registry's schema, which is the same object the write path validates against — docs/plan/08 § The provider registry.",
@@ -2656,5 +3252,5 @@
       }
     }
   },
-  "x-cybercloud-resource-type-count": 4
+  "x-cybercloud-resource-type-count": 5
 }

@@ -1,0 +1,36 @@
+{{/*
+The headless Service — stable per-pod DNS, and nothing else.
+
+⚠ `publishNotReadyAddresses: true` IS WHAT MAKES A CLUSTER FORM AT ALL. Without it a pod's DNS record
+does not exist until its readiness probe passes; the readiness probe asks JetStream whether it is
+healthy; JetStream is not healthy until it has a Raft quorum; a quorum needs the peers whose records
+do not exist. Every server comes up standalone and the failure looks like three healthy clusters of
+one.
+
+⚠ NOTHING A TENANT SETS CHANGES THIS OBJECT. It carries no exposure setting and no port a body can
+move, which is why NatsClusters.HeadlessServiceJson takes no desired body.
+*/}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "nats.headless" . }}
+  labels:
+    {{- include "nats.platformLabels" . | nindent 4 }}
+spec:
+  clusterIP: None
+  publishNotReadyAddresses: true
+  selector:
+    {{- include "nats.selectorLabels" . | nindent 4 }}
+  ports:
+    - name: client
+      port: 4222
+      targetPort: client
+      protocol: TCP
+    - name: cluster
+      port: 6222
+      targetPort: cluster
+      protocol: TCP
+    - name: monitor
+      port: 8222
+      targetPort: monitor
+      protocol: TCP

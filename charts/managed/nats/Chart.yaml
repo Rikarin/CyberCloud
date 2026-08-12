@@ -1,0 +1,46 @@
+# Managed NATS — docs/plan/12 § The catalogue, "NATS — CyberCloud.Messaging/natsClusters · M1".
+#
+# ⚠ THERE IS NO OPERATOR, AND THAT IS THE ONE FACT ABOUT THIS CHART WORTH READING FIRST. Every other
+# chart under charts/managed/ renders one custom resource and a controller expands it. nats-operator
+# — the only project that ever offered a NatsCluster CRD — was archived on 2025-04-10 and its own
+# README says the Helm charts are the recommended way and that it "is not recommended to be used for
+# new deployments". See SOURCE next to this file.
+apiVersion: v2
+name: nats
+description: Managed NATS with JetStream on file storage — clustered servers, optional leaf nodes, firewalled external listener.
+type: application
+
+# The chart's own version. Bumped on every change to this directory.
+version: 0.1.0
+
+# The default NATS server version, matching values.yaml `version`.
+appVersion: "2.11"
+
+kubeVersion: ">=1.31.0-0"
+
+keywords:
+  - nats
+  - jetstream
+  - messaging
+  - pubsub
+
+home: https://nats.io
+sources:
+  - https://github.com/nats-io/k8s
+
+maintainers:
+  - name: Cyber Cloud Platform
+
+# ⚠ These three are read by `Build.Charts` and written into `values.schema.json` as
+# `x-cybercloud-*`. They are what makes the generated schema addressable as a resource type's
+# body rather than as an anonymous blob of Helm values — docs/plan/12 § The pattern, once, piece 2.
+# A chart under charts/managed/ without them fails the build.
+#
+# ⚠ `operator: none` IS AN ANSWER AND A MISSING KEY IS NOT — the same argument SOURCE's
+# `vendored: none` makes. "This service has no operator" and "somebody forgot to write which one"
+# are indistinguishable when the row is absent, and the first is a fact that changes what the
+# reconciler has to do.
+annotations:
+  cybercloud.io/resource-type: CyberCloud.Messaging/natsClusters
+  cybercloud.io/api-version: "2026-08-01"
+  cybercloud.io/operator: none

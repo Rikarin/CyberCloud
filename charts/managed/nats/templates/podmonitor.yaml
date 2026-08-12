@@ -1,0 +1,37 @@
+{{/*
+The scrape object — docs/plan/12 § The pattern, once, piece 6.
+
+⚠ THIS IS THE FIRST CHART IN THE CATALOGUE TO DISCHARGE PIECE 6's SECOND BRANCH RATHER THAN OWE IT.
+The correction that document records reads: "ask the operator for the scrape object wherever the
+operator accepts the request, and hand-write one into the chart only when there is no operator to
+ask." CloudNativePG answered the first branch with spec.monitoring.enablePodMonitor.
+charts/managed/kafka reached the second and left the object owed, and its reason was good: a
+hand-written scrape has to hard-code somebody else's pod labels, and that document warns the operator
+changes one in a minor release and the scrape goes quiet WITHOUT FAILING.
+
+⚠ THAT HAZARD DOES NOT EXIST HERE, AND THAT IS THE FINDING RATHER THAN THE OBJECT. The labels this
+selector matches are `nats.selectorLabels` — written by this chart, onto pods created by a
+StatefulSet written by this chart. There is no upstream release that can move them. So "hand-write
+it" is safe exactly when there is no operator, which is the same condition that forces the branch.
+The two halves of the correction agree, and until this service nothing had a case to check it on.
+
+⚠ `monitoring.coreos.com/v1` IS A BUNDLE CRD, NOT A KUBERNETES ONE. A cluster without the platform
+bundle answers the apply with a 404 — reported as a real refusal naming the API server's message
+since 2026-08-12, rather than as a CodecNotFoundException. That is the honest failure: the tenant's
+cluster is missing something the platform installs.
+*/}}
+{{- if .Values.monitoring.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: {{ include "nats.name" . }}
+  labels:
+    {{- include "nats.platformLabels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "nats.selectorLabels" . | nindent 6 }}
+  podMetricsEndpoints:
+    - port: metrics
+      path: /metrics
+{{- end }}

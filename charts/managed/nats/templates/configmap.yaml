@@ -1,0 +1,63 @@
+{{/*
+nats.conf, shared by every server.
+
+⚠ `server_name: $POD_NAME` RATHER THAN A LITERAL. Every server in a cluster needs a distinct name —
+NATS refuses a route from a server whose name it already knows — and one ConfigMap is mounted by
+every pod. NATS expands `$VAR` from the process environment while it reads its configuration, and
+statefulset.yaml sets POD_NAME from a fieldRef. The alternative is one ConfigMap per replica, which
+turns a replica-count change into an object-set change.
+
+⚠ THE ROUTES ARE WRITTEN OUT ONE PER ORDINAL rather than as the headless Service's own name. A single
+`nats://x-headless:6222` resolves to every READY pod, which is exactly the problem: at first start no
+pod is ready, so the list is empty and no cluster forms. An ordinal record exists as soon as the
+StatefulSet does, and service-headless.yaml sets publishNotReadyAddresses so it stays addressable
+while the server behind it is starting.
+
+⚠ `max_memory_store: 0` IS WRITTEN RATHER THAN OMITTED. NATS' own default is a fraction of SYSTEM
+memory, which is not the container's limit — so omitting the key gives a memory-backed stream a
+budget nobody chose, on a server that cannot see the cgroup it is in. Zero is "file storage only",
+which is what docs/plan/12 asks this service for.
+
+⚠ THE TWO SIZE VALUES ARE PASSED THROUGH VERBATIM HERE AND ARE CONVERTED TO BYTES IN C#, AND THE
+DIFFERENCE IS DELIBERATE. `conf/parse.go` accepts `k kb ki kib m mb mi mib g gb gi gib t p e` and
+their `…b`/`…ib` forms, LOWER-CASED BEFORE COMPARISON, with `ki` = 1024 and `gi` = 2^30 — so a
+Kubernetes quantity means the same number to NATS for thirteen of the fourteen suffixes this
+platform's grammar accepts. THE FOURTEENTH IS `m`: Kubernetes reads it as a MILLI and NATS reads it
+as a MEGA, so `500m` is half a byte to one and five hundred million to the other, and neither
+complains. NatsClusters.Bytes converts through KubeQuantity — the platform's single parser — for
+exactly that reason. This template does not, because the alternative is a second implementation of
+the quantity grammar written in Helm, which is the duplication KubeQuantity's own remarks record the
+cost of. The chart is not what renders in production; C# is.
+*/}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "nats.name" . }}-config
+  labels:
+    {{- include "nats.platformLabels" . | nindent 4 }}
+data:
+  nats.conf: |
+    server_name: $POD_NAME
+    listen: 0.0.0.0:4222
+    http: 0.0.0.0:8222
+    max_payload: {{ .Values.limits.maxPayload }}
+    max_connections: {{ .Values.limits.maxConnections }}
+    jetstream {
+      store_dir: /data
+      max_file_store: {{ .Values.storage.size }}
+      max_memory_store: {{ .Values.jetstream.maxMemoryStore | default "0" }}
+    }
+    cluster {
+      name: {{ include "nats.name" . }}
+      listen: 0.0.0.0:6222
+      routes = [
+      {{- range $ordinal := until (int .Values.servers) }}
+        nats://{{ include "nats.name" $ }}-{{ $ordinal }}.{{ include "nats.headless" $ }}:6222
+      {{- end }}
+      ]
+    }
+    {{- if .Values.leafNodes.enabled }}
+    leafnodes {
+      listen: 0.0.0.0:7422
+    }
+    {{- end }}

@@ -1823,6 +1823,538 @@
             }
           },
           "alias": "kafka"
+        },
+        "nats-clusters": {
+          "name": "nats-clusters",
+          "resourceType": "CyberCloud.Messaging/natsClusters",
+          "title": "NATS cluster",
+          "plural": "NATS clusters",
+          "summary": "A managed NATS cluster with JetStream on file storage, optional leaf-node connectivity and an optional firewalled external listener.",
+          "verbs": {
+            "create": {
+              "name": "create",
+              "summary": "Create or replace a NATS cluster.",
+              "method": "PUT",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Messaging/natsClusters/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": true,
+              "flags": [
+                {
+                  "name": "--allowed-cidrs",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Source ranges permitted to reach the external listener. Required in substance rather than in schema: an empty list with external exposure on renders a load balancer that accepts nothing, which is the safe reading of an unfinished configuration.",
+                  "jsonPointer": "/properties/external/allowedCidrs",
+                  "repeated": true,
+                  "default": [],
+                  "example": [
+                    "203.0.113.0/24"
+                  ]
+                },
+                {
+                  "name": "--class",
+                  "type": "string",
+                  "required": false,
+                  "summary": "StorageClass name. Empty means the cluster default.",
+                  "jsonPointer": "/properties/storage/class",
+                  "immutable": true,
+                  "widget": "storageclass",
+                  "default": ""
+                },
+                {
+                  "name": "--cluster-id",
+                  "type": "string",
+                  "required": true,
+                  "alias": "--cluster",
+                  "summary": "The cluster whose namespace holds the NATS servers.",
+                  "jsonPointer": "/properties/clusterId",
+                  "immutable": true,
+                  "widget": "cluster"
+                },
+                {
+                  "name": "--cpu",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Explicit vCPU quantity in Kubernetes form, for example 500m or 2. Empty means take it from the preset.",
+                  "jsonPointer": "/properties/sizing/cpu",
+                  "default": ""
+                },
+                {
+                  "name": "--external-enabled",
+                  "type": "switch",
+                  "required": false,
+                  "summary": "Whether the cluster is reachable from outside the Kubernetes cluster. Off by default — docs/plan/12 § Cross-cutting decisions makes external exposure never the default, because a managed broker on a public IP with a weak password is the most common cloud breach there is.",
+                  "jsonPointer": "/properties/external/enabled",
+                  "default": false
+                },
+                {
+                  "name": "--leaf-nodes-enabled",
+                  "type": "switch",
+                  "required": false,
+                  "summary": "Whether the servers accept leaf-node connections. Off by default: a leaf node joins the cluster's subject space, so it is a topology change rather than a client.",
+                  "jsonPointer": "/properties/leafNodes/enabled",
+                  "default": false
+                },
+                {
+                  "name": "--location",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The region the cluster is billed in.",
+                  "jsonPointer": "/location",
+                  "immutable": true,
+                  "widget": "region",
+                  "example": "eu-central"
+                },
+                {
+                  "name": "--max-connections",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "Largest number of client connections one server accepts.",
+                  "jsonPointer": "/properties/limits/maxConnections",
+                  "default": 65536
+                },
+                {
+                  "name": "--max-memory-store",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Ceiling for memory-backed streams, in Kubernetes quantity form. Empty means no memory store at all, so every stream is file-backed — which is what docs/plan/12 asks for and what the volume above is sized for. A value here must leave room for the server itself inside the container's memory limit.",
+                  "jsonPointer": "/properties/jetstream/maxMemoryStore",
+                  "default": "",
+                  "example": "256Mi"
+                },
+                {
+                  "name": "--max-payload",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "Largest message a client may publish, in bytes. Raising it costs memory on every server, because a server buffers a whole message before routing it.",
+                  "jsonPointer": "/properties/limits/maxPayload",
+                  "default": 1048576
+                },
+                {
+                  "name": "--memory",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Explicit memory quantity in Kubernetes form, for example 4Gi. Empty means take it from the preset.",
+                  "jsonPointer": "/properties/sizing/memory",
+                  "default": ""
+                },
+                {
+                  "name": "--monitoring-enabled",
+                  "type": "switch",
+                  "required": false,
+                  "summary": "Whether a PodMonitor selects these servers' monitoring endpoint. On by default — docs/plan/12: \"a managed service the tenant cannot see the health of is a black box they will not trust with production\". The endpoint itself is always served; this decides whether anything scrapes it.",
+                  "jsonPointer": "/properties/monitoring/enabled",
+                  "default": true
+                },
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group."
+                },
+                {
+                  "name": "--preset",
+                  "type": "string",
+                  "required": false,
+                  "summary": "A sizing preset from docs/plan/12. Brokers use the c1 family, which is 1 vCPU to 2 GiB and guaranteed rather than burstable.",
+                  "jsonPointer": "/properties/sizing/preset",
+                  "choices": [
+                    "c1.2xlarge",
+                    "c1.4xlarge",
+                    "c1.large",
+                    "c1.medium",
+                    "c1.micro",
+                    "c1.nano",
+                    "c1.small",
+                    "c1.xlarge"
+                  ],
+                  "widget": "cozy-preset",
+                  "default": "c1.small"
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy."
+                },
+                {
+                  "name": "--servers",
+                  "type": "integer",
+                  "required": true,
+                  "summary": "Number of NATS servers. docs/plan/12 says three or five: JetStream replicates through a Raft group, so an even count buys no extra fault tolerance over the odd count below it. One is offered for development only and has no quorum at all.",
+                  "jsonPointer": "/properties/servers",
+                  "default": 3
+                },
+                {
+                  "name": "--size",
+                  "type": "string",
+                  "required": true,
+                  "summary": "JetStream file-store volume size per server, in Kubernetes quantity form. Grows online; never shrinks.",
+                  "jsonPointer": "/properties/storage/size",
+                  "default": "10Gi",
+                  "example": "10Gi"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tags",
+                  "type": "keyValue",
+                  "required": false,
+                  "summary": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+                  "jsonPointer": "/tags",
+                  "widget": "tag-input"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--version",
+                  "type": "string",
+                  "required": true,
+                  "summary": "NATS server version. Minor upgrades are applied automatically in the maintenance window; a major upgrade is an explicit update to this field.",
+                  "jsonPointer": "/properties/version",
+                  "choices": [
+                    "2.10",
+                    "2.11"
+                  ],
+                  "default": "2.11"
+                }
+              ],
+              "waitFlags": [
+                "--wait",
+                "--no-wait"
+              ]
+            },
+            "delete": {
+              "name": "delete",
+              "summary": "Delete a NATS cluster. Permanent.",
+              "method": "DELETE",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Messaging/natsClusters/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": true,
+              "flags": [
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group."
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy."
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "env": "CYC_TENANT"
+                }
+              ],
+              "waitFlags": [
+                "--wait",
+                "--no-wait"
+              ]
+            },
+            "list-keys": {
+              "name": "list-keys",
+              "summary": "listKeys a NATS cluster. ⚠ The response carries secret material — it is always audited and must not be written to a log or a shell history.",
+              "method": "POST",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Messaging/natsClusters/{resourceName}/listKeys",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group."
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy."
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "env": "CYC_TENANT"
+                }
+              ],
+              "action": "listKeys",
+              "permission": "listKeys",
+              "secret": true,
+              "rawBody": true
+            },
+            "show": {
+              "name": "show",
+              "summary": "Read a NATS cluster.",
+              "method": "GET",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Messaging/natsClusters/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group."
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy."
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "env": "CYC_TENANT"
+                }
+              ]
+            },
+            "update": {
+              "name": "update",
+              "summary": "Amend a NATS cluster. Only the flags given are changed.",
+              "method": "PATCH",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Messaging/natsClusters/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": true,
+              "flags": [
+                {
+                  "name": "--allowed-cidrs",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Source ranges permitted to reach the external listener. Required in substance rather than in schema: an empty list with external exposure on renders a load balancer that accepts nothing, which is the safe reading of an unfinished configuration.",
+                  "jsonPointer": "/properties/external/allowedCidrs",
+                  "repeated": true,
+                  "default": [],
+                  "example": [
+                    "203.0.113.0/24"
+                  ]
+                },
+                {
+                  "name": "--class",
+                  "type": "string",
+                  "required": false,
+                  "summary": "StorageClass name. Empty means the cluster default.",
+                  "jsonPointer": "/properties/storage/class",
+                  "immutable": true,
+                  "widget": "storageclass",
+                  "default": ""
+                },
+                {
+                  "name": "--cluster-id",
+                  "type": "string",
+                  "required": false,
+                  "alias": "--cluster",
+                  "summary": "The cluster whose namespace holds the NATS servers.",
+                  "jsonPointer": "/properties/clusterId",
+                  "immutable": true,
+                  "widget": "cluster"
+                },
+                {
+                  "name": "--cpu",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Explicit vCPU quantity in Kubernetes form, for example 500m or 2. Empty means take it from the preset.",
+                  "jsonPointer": "/properties/sizing/cpu",
+                  "default": ""
+                },
+                {
+                  "name": "--external-enabled",
+                  "type": "switch",
+                  "required": false,
+                  "summary": "Whether the cluster is reachable from outside the Kubernetes cluster. Off by default — docs/plan/12 § Cross-cutting decisions makes external exposure never the default, because a managed broker on a public IP with a weak password is the most common cloud breach there is.",
+                  "jsonPointer": "/properties/external/enabled",
+                  "default": false
+                },
+                {
+                  "name": "--leaf-nodes-enabled",
+                  "type": "switch",
+                  "required": false,
+                  "summary": "Whether the servers accept leaf-node connections. Off by default: a leaf node joins the cluster's subject space, so it is a topology change rather than a client.",
+                  "jsonPointer": "/properties/leafNodes/enabled",
+                  "default": false
+                },
+                {
+                  "name": "--location",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The region the cluster is billed in.",
+                  "jsonPointer": "/location",
+                  "immutable": true,
+                  "widget": "region",
+                  "example": "eu-central"
+                },
+                {
+                  "name": "--max-connections",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "Largest number of client connections one server accepts.",
+                  "jsonPointer": "/properties/limits/maxConnections",
+                  "default": 65536
+                },
+                {
+                  "name": "--max-memory-store",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Ceiling for memory-backed streams, in Kubernetes quantity form. Empty means no memory store at all, so every stream is file-backed — which is what docs/plan/12 asks for and what the volume above is sized for. A value here must leave room for the server itself inside the container's memory limit.",
+                  "jsonPointer": "/properties/jetstream/maxMemoryStore",
+                  "default": "",
+                  "example": "256Mi"
+                },
+                {
+                  "name": "--max-payload",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "Largest message a client may publish, in bytes. Raising it costs memory on every server, because a server buffers a whole message before routing it.",
+                  "jsonPointer": "/properties/limits/maxPayload",
+                  "default": 1048576
+                },
+                {
+                  "name": "--memory",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Explicit memory quantity in Kubernetes form, for example 4Gi. Empty means take it from the preset.",
+                  "jsonPointer": "/properties/sizing/memory",
+                  "default": ""
+                },
+                {
+                  "name": "--monitoring-enabled",
+                  "type": "switch",
+                  "required": false,
+                  "summary": "Whether a PodMonitor selects these servers' monitoring endpoint. On by default — docs/plan/12: \"a managed service the tenant cannot see the health of is a black box they will not trust with production\". The endpoint itself is always served; this decides whether anything scrapes it.",
+                  "jsonPointer": "/properties/monitoring/enabled",
+                  "default": true
+                },
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group."
+                },
+                {
+                  "name": "--preset",
+                  "type": "string",
+                  "required": false,
+                  "summary": "A sizing preset from docs/plan/12. Brokers use the c1 family, which is 1 vCPU to 2 GiB and guaranteed rather than burstable.",
+                  "jsonPointer": "/properties/sizing/preset",
+                  "choices": [
+                    "c1.2xlarge",
+                    "c1.4xlarge",
+                    "c1.large",
+                    "c1.medium",
+                    "c1.micro",
+                    "c1.nano",
+                    "c1.small",
+                    "c1.xlarge"
+                  ],
+                  "widget": "cozy-preset",
+                  "default": "c1.small"
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy."
+                },
+                {
+                  "name": "--servers",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "Number of NATS servers. docs/plan/12 says three or five: JetStream replicates through a Raft group, so an even count buys no extra fault tolerance over the odd count below it. One is offered for development only and has no quorum at all.",
+                  "jsonPointer": "/properties/servers",
+                  "default": 3
+                },
+                {
+                  "name": "--size",
+                  "type": "string",
+                  "required": false,
+                  "summary": "JetStream file-store volume size per server, in Kubernetes quantity form. Grows online; never shrinks.",
+                  "jsonPointer": "/properties/storage/size",
+                  "default": "10Gi",
+                  "example": "10Gi"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tags",
+                  "type": "keyValue",
+                  "required": false,
+                  "summary": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+                  "jsonPointer": "/tags",
+                  "widget": "tag-input"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--version",
+                  "type": "string",
+                  "required": false,
+                  "summary": "NATS server version. Minor upgrades are applied automatically in the maintenance window; a major upgrade is an explicit update to this field.",
+                  "jsonPointer": "/properties/version",
+                  "choices": [
+                    "2.10",
+                    "2.11"
+                  ],
+                  "default": "2.11"
+                }
+              ],
+              "waitFlags": [
+                "--wait",
+                "--no-wait"
+              ]
+            }
+          },
+          "alias": "nats"
         }
       }
     },

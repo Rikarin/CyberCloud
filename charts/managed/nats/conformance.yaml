@@ -1,0 +1,208 @@
+# Conformance manifest — docs/plan/12 § The pattern, once, piece 8.
+#
+# What the conformance suite asserts about CyberCloud.Messaging/natsClusters. This file is data:
+# `Build.Charts` checks that it is present, non-empty, and names the same resource type as
+# Chart.yaml. The suite that reads the rest of it lives in test/ and does not exist yet, and the
+# target says so in its own log rather than implying otherwise.
+
+resourceType: CyberCloud.Messaging/natsClusters
+apiVersion: "2026-08-01"
+chart: nats
+
+# Objects the reconciler must have applied once the resource reports Succeeded.
+#
+# ⚠ FIVE, WHERE EVERY EARLIER SERVICE HAS ONE OR TWO — because this is the first service in the
+# catalogue with no operator. nats-operator was archived on 2025-04-10 and upstream's answer is a
+# Helm chart, so what gets applied is the workload rather than a custom resource a controller
+# expands. See SOURCE.
+#
+# ⚠ FOUR OF THE FIVE ARE KINDS A BARE CLUSTER ALREADY SERVES, which is the reverse of what
+# charts/managed/kafka found. The PodMonitor is the exception and it is the only one the
+# cluster-backed harness has to install a definition for.
+renders:
+  - group: ""
+    version: v1
+    kind: ConfigMap
+    count: 1
+  - group: ""
+    version: v1
+    kind: Service
+    # ⚠ TWO, AND THEY ARE NOT INTERCHANGEABLE. The headless one gives the route list its per-ordinal
+    # DNS and carries publishNotReadyAddresses; the client one is what listKeys hands out and is the
+    # only one exposure can move to a LoadBalancer.
+    count: 2
+  - group: apps
+    version: v1
+    kind: StatefulSet
+    count: 1
+  - group: monitoring.coreos.com
+    version: v1
+    kind: PodMonitor
+    when: monitoring.enabled
+    count: 1
+
+# ⚠ THERE IS NO `requiredCrds:` BLOCK HERE, AND ITS ABSENCE IS CORRECT WHERE THE KAFKA MANIFEST'S
+# PRESENCE IS STALE. `ProviderConformanceCase` has no `RequiredCrds` member and never had one — the
+# harness DERIVES the definitions from the case's own `Objects`, which already carries group,
+# version, kind and plural. That decision is recorded at ProviderConformanceCase.cs's long comment,
+# and charts/managed/kafka/conformance.yaml still says "Read by ProviderConformanceCase.RequiredCrds"
+# about a member that does not exist.
+
+# ADR-013 — every rendered object carries all seven labels. Asserted against real rendered output,
+# which is what the Labels architecture gate in docs/plan/23 § The architecture gates requires.
+labels:
+  required:
+    - cybercloud.io/tenant-id
+    - cybercloud.io/subscription-id
+    - cybercloud.io/resource-group
+    - cybercloud.io/resource-id
+    - cybercloud.io/resource-type
+    - cybercloud.io/api-version
+    - cybercloud.io/managed-by
+  # ⚠ Not the resource type verbatim. A `/` is not a legal label value character, so the value is
+  # lower-cased with `/` replaced by `_` — KubeLabels.ResourceTypeValue.
+  values:
+    cybercloud.io/resource-type: cybercloud.messaging_natsclusters
+    cybercloud.io/managed-by: cybercloud
+  # ⚠ NOT one of the seven, and on a different axis from the Kafka manifest's `strimzi.io/cluster`.
+  # That one binds an object to another object. These bind a Service and a PodMonitor to the PODS,
+  # and they sit in spec.selector — which on a StatefulSet is IMMUTABLE after create, so a resource
+  # whose selector moved could never be updated again.
+  additional:
+    StatefulSet:
+      app.kubernetes.io/name: nats
+      app.kubernetes.io/instance: "{resourceName}"
+      app.kubernetes.io/component: server
+      app.kubernetes.io/managed-by: cybercloud
+
+# Behaviour a tenant is entitled to. Each is a statement the suite can fail on, not a feature list.
+assertions:
+  - id: publish-and-consume
+    says: A client resolves the URL from listKeys, publishes to a subject and receives what it published.
+  - id: jetstream-survives-one-server
+    says: Deleting one server pod of a three-server cluster leaves a replicated stream writable throughout, and every acknowledged message is still readable afterwards.
+  - id: cluster-actually-forms
+    says: >
+      The three servers form ONE cluster rather than three standalone servers. /routez on any server
+      reports two peers. This is the assertion that catches a headless Service without
+      publishNotReadyAddresses, a route list naming the wrong DNS name, and OrderedReady pod
+      management — three separate mistakes whose shared symptom is a cluster that looks healthy and
+      replicates nothing.
+  - id: external-is-off-unless-asked
+    says: With external.enabled false no LoadBalancer Service exists for this cluster. Turning it on with an empty allowedCidrs list creates one that accepts no source range, never one that accepts every source range.
+  - id: route-port-is-never-public
+    says: The cluster route port 6222 appears on no Service that has an external address, at any setting of external.enabled. An unauthenticated route reachable from outside is a second server joining the cluster.
+  - id: file-store-fits-the-volume
+    says: JetStream's max_file_store equals the volume the claim template asks for, in bytes, for every quantity suffix the schema accepts — including the one NATS and Kubernetes disagree about.
+  - id: storage-grows-never-shrinks
+    says: Increasing storage.size resizes online; decreasing it is refused at the API.
+  - id: secrets-never-round-trip
+    says: A GET of the resource never returns client credentials in any form. The only path out is the listKeys action.
+
+# Meters the type must emit — docs/plan/12 § The pattern, once, piece 3.
+meters:
+  - nats.server.hours
+  - nats.storage.gib.hours
+  - nats.egress.gib
+
+# ── owed ──────────────────────────────────────────────────────────────────────────────────────
+#
+# Named here rather than left to be discovered, because an absent capability that nobody wrote down
+# is indistinguishable from one nobody thought of.
+owed:
+  - id: child-types
+    says: >
+      docs/plan/12 names accounts and users as this service's sub-resources, and a `streams` child is
+      the more natural first one. NONE IS DECLARED, AND THE REASON IS NO LONGER THE ONE
+      charts/managed/kafka/conformance.yaml GIVES. That file says the resource-id grammar cannot
+      carry a parent instance; docs/plan/12 § Child resources landed on 2026-08-12 and it can —
+      ResourceId.Parent is a pure function of the address, the parent is checked at create, the ReBAC
+      parent edge names the parent resource, the gateway parses any depth and OpenApiEmitter.PathOf
+      emits the interleaved template. Three OTHER things block it, and only the first is fatal:
+      (1) ProviderConformanceCase is single-type and both harnesses build the address with no
+      ParentNames, so ResourceId's constructor THROWS on a depth-2 Type and every test in the suite
+      fails before it runs — src/Providers/README.md's rule is that a provider is not registered
+      until it passes conformance, so a child type cannot be shipped through that door at all;
+      (2) CliEmitter.Address emits a hard-coded four-flag list, so `cyc` has no way to say which
+      parent, and ResourceVerb.ResolvePath throws CycUsageException on the unfilled placeholder;
+      (3) SdkEmitter.AppendCollection emits no ancestor parameters, so the generated client has a
+      PathTemplate it cannot fill. None of the three is a provider's to fix.
+  - id: accounts-are-not-a-crd
+    says: >
+      Even with the three above closed, "accounts and users as sub-resources" is not one type per
+      CRD the way Kafka's topics and users are. nats-io/nack ships an `Account` under
+      jetstream.nats.io/v1beta2 whose spec is (name, creds, nkey, servers, tls, token, user,
+      tlsFirst) — it tells NACK HOW TO CONNECT to an account that already exists; it does not create
+      one. A real NATS account is an NKey and a signed JWT, issued by nsc against an operator key and
+      served by an account resolver, which is a credential-issuance flow rather than an object to
+      apply. `natsClusters/streams` over NACK's Stream CRD is the honest first child; accounts wait
+      for the same OpenBao integration piece 5 does.
+  - id: listkeys-has-no-handler
+    says: >
+      docs/plan/12 § The pattern, once, piece 5 — credential provisioning into the tenant's Vault —
+      needs an OpenBao integration that does not exist, so listKeys has a declared response shape and
+      nothing that serves it. ⚠ AND THE GAP COSTS MORE HERE THAN IT DID ON KAFKA. Strimzi's entity
+      operator generates SCRAM users by itself, so a Kafka cluster is authenticated and the platform
+      merely cannot hand the password out. nats-server with no authorization block accepts every
+      connection in the namespace. This is the spotahome case docs/plan/12 § Valkey describes,
+      reached from the other side: there is nothing to render a reference TO yet, so the servers come
+      up open. Closing it is an `authorization` block in nats.conf reading a Secret the platform
+      wrote — one property, once there is a Vault to write it from.
+  - id: pod-labels
+    says: >
+      ADR-013's seven labels are injected by KubeCommand onto each OBJECT's metadata. The pods a
+      StatefulSet creates carry spec.template.metadata.labels instead, which is a field of the
+      StatefulSet's body and which no builder reaches — so a pod belonging to this resource cannot be
+      attributed to a tenant by label, which is the one thing the seven exist for. It is not fixable
+      by writing them into the template here: a StatefulSet's spec.selector is immutable and the pod
+      labels have to match it, so a resource whose api-version label changed could never be updated
+      again. Closing it is IKubeCommandBuilder learning to inject pod-template labels that are NOT
+      part of the selector.
+  - id: config-reload-on-change
+    says: >
+      Changing limits.maxPayload or leafNodes.enabled rewrites the ConfigMap and nothing restarts the
+      servers, so the running configuration is the one they started with until something else rolls
+      them. The usual Helm answer is a digest annotation on the pod template; it is deliberately not
+      written, because a digest of a file this provider also writes is two spellings of one fact and
+      would make every apply non-idempotent. The honest fix is a SIGHUP, which nats-server supports
+      and which needs a reloader sidecar watching the mounted file.
+  - id: cidr-shape-is-unenforced
+    says: >
+      /properties/external/allowedCidrs declares no Pattern, so "999.0.0.1/99" is accepted by the
+      API, reaches loadBalancerSourceRanges, and fails at the API server AFTER the caller was told
+      202. SECOND SIGHTING — charts/managed/kafka/conformance.yaml carries the same item with the
+      full argument. What this one adds is that the gap is not specific to one type: docs/plan/12
+      § Cross-cutting decisions gives every service in the catalogue the same firewall list, so all
+      ten will find it. Closing it is one case in ChartAnnotationEmitter and one in Build.Charts'
+      Validate.
+  - id: publicips-meter-is-undeclarable
+    says: >
+      A cluster with external.enabled true consumes one public IP and no meter says so. ⚠ THE REASON
+      charts/managed/kafka's registration GIVES FOR THIS IS WRONG — it says publicIps "is derived
+      from a flag, which no pointer can express", and MeterDerivation.Of expresses it in one line.
+      The real blocker is one layer down: QuotaGrain.TryReserveAsync refuses a non-positive amount
+      ("A reservation must be positive; 0 is not"), so a meter that is zero in the ordinary case
+      would refuse every create that did NOT ask for external exposure — which is the default.
+      Closing it is a "skip when zero" on MeterRegistration plus a decision about whether that is a
+      no-op lease or no lease, in CyberCloud.ResourceManager.
+  - id: odd-server-count-is-unenforced
+    says: >
+      docs/plan/12 says three or five servers, and /properties/servers can only say 1..5.
+      SchemaProperty.AllowedValues is Text-only by construction and Minimum/Maximum cannot say "odd",
+      so the constraint is in the property's description and in nothing that enforces it. SECOND
+      SIGHTING of charts/managed/kafka's `odd-node-count-is-unenforced`; two services asking for the
+      same unexpressible thing is what makes it a registry gap rather than a quirk of KRaft.
+  - id: grafana-dashboard
+    says: >
+      docs/plan/12's NATS row asks for a dashboard shipping with the chart and piece 6 keeps the
+      dashboard chart-side even where the scrape object is the operator's. The PodMonitor and its
+      exporter are here; the dashboard is not. It is the half of piece 6 no service in the catalogue
+      has yet delivered, so this item is the first sighting rather than the second.
+  - id: backup
+    says: >
+      Piece 7, declined with a reason — the shape docs/plan/12 § piece 7 settles on. A JetStream file
+      store is durable and a stream IS the data, so unlike CyberCloud.Cache/redis this service is not
+      declining because there is nothing to back up. It declines because there is no operator to ask:
+      the mechanism NATS offers is `nats stream backup`, a client-side operation against a running
+      server, which is neither a CR field nor a Velero policy. It is a real gap and it is a different
+      one from the cache's.

@@ -1,0 +1,106 @@
+# Managed NATS — the configuration surface, once.
+#
+# ⚠ EVERY NON-`@internal` BLOCK BELOW IS GENERATED from NatsClusters.Schema2026 by
+# `./build.sh Charts`, and so is values.schema.json. ADR-010 § Which end authors the schema: "The C#
+# ResourceSchema is authored. The chart's @param annotations are generated from it and diffed."
+# Editing a generated row here is undone on the next run and fails the build in between; add the
+# field in C# instead.
+#
+# The `@internal` rows at the end of each level are the ones that are NOT generated. They are
+# carried through as bytes and must sit after every generated key at their own level, so that each
+# level's generated keys are one contiguous run — charts/README.md § What a chart cannot say.
+
+## @param version {string} NATS server version. Minor upgrades are applied automatically in the maintenance window; a major upgrade is an explicit update to this field.
+## @required
+## @enum 2.10 | 2.11
+version: "2.11"
+
+## @param servers {integer} Number of NATS servers. docs/plan/12 says three or five: JetStream replicates through a Raft group, so an even count buys no extra fault tolerance over the odd count below it. One is offered for development only and has no quorum at all.
+## @required
+## @range 1..5
+servers: 3
+
+## @param sizing {object} CPU and memory per server, either by preset or explicitly.
+sizing:
+  ## @param preset {string} A sizing preset from docs/plan/12. Brokers use the c1 family, which is 1 vCPU to 2 GiB and guaranteed rather than burstable.
+  ## @enum c1.2xlarge | c1.4xlarge | c1.large | c1.medium | c1.micro | c1.nano | c1.small | c1.xlarge
+  ## @widget cozy-preset
+  preset: c1.small
+  ## @param cpu {string} Explicit vCPU quantity in Kubernetes form, for example 500m or 2. Empty means take it from the preset.
+  ## @pattern (\d+(\.\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)?
+  cpu: ""
+  ## @param memory {string} Explicit memory quantity in Kubernetes form, for example 4Gi. Empty means take it from the preset.
+  ## @pattern (\d+(\.\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)?
+  memory: ""
+
+## @param storage {object} The JetStream file store, per server.
+storage:
+  ## @param size {string} JetStream file-store volume size per server, in Kubernetes quantity form. Grows online; never shrinks.
+  ## @required
+  ## @pattern \d+(\.\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?
+  ## @example "10Gi"
+  size: "10Gi"
+  ## @param class {string} StorageClass name. Empty means the cluster default.
+  ## @immutable
+  ## @widget storageclass
+  class: ""
+
+## @param jetstream {object} JetStream — the persistence layer streams and consumers live in. docs/plan/12 has it on unconditionally, so there is no switch to turn it off.
+jetstream:
+  ## @param maxMemoryStore {string} Ceiling for memory-backed streams, in Kubernetes quantity form. Empty means no memory store at all, so every stream is file-backed — which is what docs/plan/12 asks for and what the volume above is sized for. A value here must leave room for the server itself inside the container's memory limit.
+  ## @pattern (\d+(\.\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)?
+  ## @example "256Mi"
+  maxMemoryStore: ""
+
+## @param limits {object} Server limits a client can run into.
+limits:
+  ## @param maxPayload {integer} Largest message a client may publish, in bytes. Raising it costs memory on every server, because a server buffers a whole message before routing it.
+  ## @range 1024..67108864
+  maxPayload: 1048576
+  ## @param maxConnections {integer} Largest number of client connections one server accepts.
+  ## @range 16..65536
+  maxConnections: 65536
+
+## @param leafNodes {object} Leaf-node connectivity — docs/plan/12: "so a tenant's edge can attach".
+leafNodes:
+  ## @param enabled {boolean} Whether the servers accept leaf-node connections. Off by default: a leaf node joins the cluster's subject space, so it is a topology change rather than a client.
+  enabled: false
+
+## @param external {object} Exposure outside the cluster, via a load balancer and a firewall allow-list.
+external:
+  ## @param enabled {boolean} Whether the cluster is reachable from outside the Kubernetes cluster. Off by default — docs/plan/12 § Cross-cutting decisions makes external exposure never the default, because a managed broker on a public IP with a weak password is the most common cloud breach there is.
+  enabled: false
+  ## @param allowedCidrs {array} Source ranges permitted to reach the external listener. Required in substance rather than in schema: an empty list with external exposure on renders a load balancer that accepts nothing, which is the safe reading of an unfinished configuration.
+  ## @example ["203.0.113.0/24"]
+  allowedCidrs: []
+
+## @param monitoring {object} What the platform scrapes.
+monitoring:
+  ## @param enabled {boolean} Whether a PodMonitor selects these servers' monitoring endpoint. On by default — docs/plan/12: "a managed service the tenant cannot see the health of is a black box they will not trust with production". The endpoint itself is always served; this decides whether anything scrapes it.
+  enabled: true
+
+## @param platform {object} Resource identity injected by the reconciler. Not a tenant-facing setting.
+## @internal Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.
+platform:
+  ## @param tenantId {string} Tenant GUID, rendered into the cybercloud.io/tenant-id label.
+  tenantId: ""
+  ## @param subscriptionId {string} Subscription GUID, rendered into the cybercloud.io/subscription-id label.
+  subscriptionId: ""
+  ## @param resourceGroup {string} Resource group name, rendered into the cybercloud.io/resource-group label.
+  resourceGroup: ""
+  ## @param resourceId {string} Resource GUID, rendered into the cybercloud.io/resource-id label.
+  resourceId: ""
+  ## @param resourceType {string} Fully qualified resource type, rendered into the cybercloud.io/resource-type label.
+  resourceType: CyberCloud.Messaging/natsClusters
+  ## @param apiVersion {string} The api-version the resource was last written at, rendered into the cybercloud.io/api-version label.
+  apiVersion: "2026-08-01"
+  ## @param managedBy {string} Value of the cybercloud.io/managed-by label. Constant, and the selector every informer filters on.
+  managedBy: cybercloud
+
+## @param image {string} Override the server image. Empty means nats:{version}-alpine, which is what keeps minor upgrades automatic.
+## @internal A pinned image defeats automatic minor upgrades, so it is a platform escape hatch rather than a tenant setting.
+image: ""
+
+## @param nameOverride {string} Replace the generated object-name stem. Empty means derive it from the release name.
+## @internal Helm plumbing. Nothing about it belongs in a resource body.
+nameOverride: ""

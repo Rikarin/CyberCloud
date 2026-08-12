@@ -425,12 +425,37 @@ public sealed class ClusterConformanceHarness<TSource> : IAsyncDisposable
         IKubernetes raw,
         CancellationToken cancellationToken
     ) {
-        var kinds = Case
+        var candidates = Case
             .Objects(Address("crd-discovery").WithId(Guid.NewGuid()), Namespace)
             .Select(x => x.Kind)
             // The core group has no CRD and needs none — its REST paths are built in.
             .Where(x => !string.IsNullOrEmpty(x.Group))
             .DistinctBy(x => x.Group + "/" + x.Plural, StringComparer.Ordinal);
+
+        // ⚠ AND NEITHER DOES ANY OTHER GROUP THE API SERVER ALREADY SERVES, WHICH THE FILTER ABOVE
+        // CANNOT SEE. "Not the core group" is not the same question as "not built in": `apps`,
+        // `batch`, `networking.k8s.io` and a dozen others are built-in groups with non-empty names,
+        // and a CustomResourceDefinition for one of them is not merely redundant — the API server
+        // REFUSES it, with `spec.group: Invalid value: "apps": should be a domain with at least one
+        // dot`, and the 422 aborts the whole harness before a single assertion runs.
+        //
+        // Measured by CyberCloud.Messaging/natsClusters, which is the first case in the tree whose
+        // objects include an `apps/v1 StatefulSet`. Every provider before it rendered either a
+        // core-group ConfigMap or a custom resource, so "core group" and "built in" had never
+        // needed to be different questions.
+        //
+        // ⚠ THE FIX IS A QUESTION TO THE API SERVER RATHER THAN A LIST OF BUILT-IN GROUPS. A list is
+        // the same class of thing as the `RequiredCrds` member this design rejected: somebody has to
+        // maintain it, it is wrong the day Kubernetes promotes a group, and being wrong costs the
+        // nameless failure again. Listing the plural is the same REST path the provider's own apply
+        // will use, so a group that answers here is a group the apply can reach — which is the only
+        // property this method exists to establish.
+        var kinds = new List<GroupVersionKind>();
+        foreach (var candidate in candidates) {
+            if (!await IsServedAsync(raw, candidate, cancellationToken).ConfigureAwait(false)) {
+                kinds.Add(candidate);
+            }
+        }
 
         foreach (var kind in kinds) {
             var definition = new V1CustomResourceDefinition {
@@ -484,6 +509,53 @@ public sealed class ClusterConformanceHarness<TSource> : IAsyncDisposable
         foreach (var kind in kinds) {
             await WaitUntilEstablishedAsync(raw, kind.Plural + "." + kind.Group, cancellationToken)
                 .ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>Whether the API server already serves a REST path for this kind.</summary>
+    /// <param name="raw">The raw client.</param>
+    /// <param name="kind">The kind, with the plural that addresses the path.</param>
+    /// <param name="cancellationToken">The harness's token.</param>
+    /// <returns>
+    ///     <c>true</c> when the group, version and plural resolve — a built-in group, or a definition
+    ///     another harness already installed.
+    /// </returns>
+    /// <remarks>
+    ///     ⚠ <b>A LIST rather than a discovery call, on purpose.</b> The custom-objects endpoint is
+    ///     <c>/apis/{group}/{version}/namespaces/{ns}/{plural}</c>, which is the <i>same</i> path a
+    ///     built-in group is served on and the same one <c>KubeApiClient</c> will apply to. So a
+    ///     kind that answers here is a kind the provider can reach, which is exactly the property
+    ///     being established; a discovery call would answer a related question about the API server's
+    ///     own index.
+    ///     <para>
+    ///         ⚠ Anything that is not a clean answer is treated as <b>not served</b>, which errs
+    ///         towards attempting the create. A create that then fails reports the API server's own
+    ///         message; a skip that was wrong reports the nameless failure this whole method exists
+    ///         to remove.
+    ///     </para>
+    /// </remarks>
+    static async Task<bool> IsServedAsync(
+        IKubernetes raw,
+        GroupVersionKind kind,
+        CancellationToken cancellationToken
+    ) {
+        try {
+            await raw.CustomObjects
+                .ListNamespacedCustomObjectAsync(
+                    kind.Group,
+                    kind.Version,
+                    Namespace,
+                    kind.Plural,
+                    limit: 1,
+                    cancellationToken: cancellationToken
+                )
+                .ConfigureAwait(false);
+
+            return true;
+        } catch (k8s.Autorest.HttpOperationException) {
+            return false;
+        } catch (HttpRequestException) {
+            return false;
         }
     }
 

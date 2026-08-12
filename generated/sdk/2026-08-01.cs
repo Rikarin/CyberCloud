@@ -847,6 +847,224 @@ public sealed partial class KafkaClusterCollection {
     public partial AsyncPageable<KafkaClusterResource> GetAllAsync(CancellationToken cancellationToken = default);
 }
 
+/// <summary>The values /properties/sizing/preset accepts. ⚠ Closed: the write path refuses anything else.</summary>
+public enum NATSClusterPreset {
+    /// <summary>Never assigned. Not a value the API accepts.</summary>
+    Unknown = 0,
+
+    /// <summary>c1.2xlarge</summary>
+    [JsonStringEnumMemberName("c1.2xlarge")]
+    C12xlarge = 1,
+
+    /// <summary>c1.4xlarge</summary>
+    [JsonStringEnumMemberName("c1.4xlarge")]
+    C14xlarge = 2,
+
+    /// <summary>c1.large</summary>
+    [JsonStringEnumMemberName("c1.large")]
+    C1Large = 3,
+
+    /// <summary>c1.medium</summary>
+    [JsonStringEnumMemberName("c1.medium")]
+    C1Medium = 4,
+
+    /// <summary>c1.micro</summary>
+    [JsonStringEnumMemberName("c1.micro")]
+    C1Micro = 5,
+
+    /// <summary>c1.nano</summary>
+    [JsonStringEnumMemberName("c1.nano")]
+    C1Nano = 6,
+
+    /// <summary>c1.small</summary>
+    [JsonStringEnumMemberName("c1.small")]
+    C1Small = 7,
+
+    /// <summary>c1.xlarge</summary>
+    [JsonStringEnumMemberName("c1.xlarge")]
+    C1Xlarge = 8
+}
+
+/// <summary>The values /properties/version accepts. ⚠ Closed: the write path refuses anything else.</summary>
+public enum NATSClusterVersion {
+    /// <summary>Never assigned. Not a value the API accepts.</summary>
+    Unknown = 0,
+
+    /// <summary>2.10</summary>
+    [JsonStringEnumMemberName("2.10")]
+    N210 = 1,
+
+    /// <summary>2.11</summary>
+    [JsonStringEnumMemberName("2.11")]
+    N211 = 2
+}
+
+/// <summary>The body of a CyberCloud.Messaging/natsClusters.</summary>
+/// <remarks>A managed NATS cluster with JetStream on file storage, optional leaf-node connectivity and an optional firewalled external listener.</remarks>
+public sealed partial class NATSClusterData {
+
+    /// <summary>The region the cluster is billed in.</summary>
+    /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+    [JsonPropertyName("location")]
+    public required string Location { get; set; }
+
+    /// <summary>The cluster whose namespace holds the NATS servers.</summary>
+    /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+    [JsonPropertyName("clusterId")]
+    public required Guid ClusterId { get; set; }
+
+    /// <summary>Source ranges permitted to reach the external listener. Required in substance rather than in schema: an empty list with external exposure on renders a load balancer that accepts nothing, which is the safe reading of an unfinished configuration.</summary>
+    /// <remarks>Defaults to [] when left unset.</remarks>
+    [JsonPropertyName("allowedCidrs")]
+    public IList<string> AllowedCidrs { get; set; } = new List<string>();
+
+    /// <summary>Whether the cluster is reachable from outside the Kubernetes cluster. Off by default — docs/plan/12 § Cross-cutting decisions makes external exposure never the default, because a managed broker on a public IP with a weak password is the most common cloud breach there is.</summary>
+    /// <remarks>Defaults to false when left unset.</remarks>
+    [JsonPropertyName("enabled")]
+    public bool? Enabled { get; set; }
+
+    /// <summary>Ceiling for memory-backed streams, in Kubernetes quantity form. Empty means no memory store at all, so every stream is file-backed — which is what docs/plan/12 asks for and what the volume above is sized for. A value here must leave room for the server itself inside the container's memory limit.</summary>
+    /// <remarks>Defaults to "" when left unset.</remarks>
+    [JsonPropertyName("maxMemoryStore")]
+    public string? MaxMemoryStore { get; set; }
+
+    /// <summary>Whether the servers accept leaf-node connections. Off by default: a leaf node joins the cluster's subject space, so it is a topology change rather than a client.</summary>
+    /// <remarks>Defaults to false when left unset.</remarks>
+    [JsonPropertyName("enabled")]
+    public bool? Enabled { get; set; }
+
+    /// <summary>Largest number of client connections one server accepts.</summary>
+    /// <remarks>Defaults to 65536 when left unset.</remarks>
+    [JsonPropertyName("maxConnections")]
+    public long? MaxConnections { get; set; }
+
+    /// <summary>Largest message a client may publish, in bytes. Raising it costs memory on every server, because a server buffers a whole message before routing it.</summary>
+    /// <remarks>Defaults to 1048576 when left unset.</remarks>
+    [JsonPropertyName("maxPayload")]
+    public long? MaxPayload { get; set; }
+
+    /// <summary>Whether a PodMonitor selects these servers' monitoring endpoint. On by default — docs/plan/12: "a managed service the tenant cannot see the health of is a black box they will not trust with production". The endpoint itself is always served; this decides whether anything scrapes it.</summary>
+    /// <remarks>Defaults to true when left unset.</remarks>
+    [JsonPropertyName("enabled")]
+    public bool? Enabled { get; set; }
+
+    /// <summary>Number of NATS servers. docs/plan/12 says three or five: JetStream replicates through a Raft group, so an even count buys no extra fault tolerance over the odd count below it. One is offered for development only and has no quorum at all.</summary>
+    /// <remarks>Required on a create. Defaults to 3 when left unset.</remarks>
+    [JsonPropertyName("servers")]
+    public required long Servers { get; set; }
+
+    /// <summary>Explicit vCPU quantity in Kubernetes form, for example 500m or 2. Empty means take it from the preset.</summary>
+    /// <remarks>Defaults to "" when left unset.</remarks>
+    [JsonPropertyName("cpu")]
+    public string? Cpu { get; set; }
+
+    /// <summary>Explicit memory quantity in Kubernetes form, for example 4Gi. Empty means take it from the preset.</summary>
+    /// <remarks>Defaults to "" when left unset.</remarks>
+    [JsonPropertyName("memory")]
+    public string? Memory { get; set; }
+
+    /// <summary>A sizing preset from docs/plan/12. Brokers use the c1 family, which is 1 vCPU to 2 GiB and guaranteed rather than burstable.</summary>
+    /// <remarks>Defaults to "c1.small" when left unset.</remarks>
+    [JsonPropertyName("preset")]
+    public NATSClusterPreset? Preset { get; set; }
+
+    /// <summary>StorageClass name. Empty means the cluster default.</summary>
+    /// <remarks>⚠ Cannot change after create. Defaults to "" when left unset.</remarks>
+    [JsonPropertyName("class")]
+    public string? Class { get; set; }
+
+    /// <summary>JetStream file-store volume size per server, in Kubernetes quantity form. Grows online; never shrinks.</summary>
+    /// <remarks>Required on a create. Defaults to "10Gi" when left unset.</remarks>
+    [JsonPropertyName("size")]
+    public required string Size { get; set; }
+
+    /// <summary>NATS server version. Minor upgrades are applied automatically in the maintenance window; a major upgrade is an explicit update to this field.</summary>
+    /// <remarks>Required on a create. Defaults to "2.11" when left unset.</remarks>
+    [JsonPropertyName("version")]
+    public required NATSClusterVersion Version { get; set; }
+
+    /// <summary>Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.</summary>
+    [JsonPropertyName("tags")]
+    public IDictionary<string, string> Tags { get; set; } = new Dictionary<string, string>(StringComparer.Ordinal);
+}
+
+/// <summary>One NATS cluster, and the operations on it.</summary>
+public sealed partial class NATSClusterResource {
+    /// <summary>The resource's fully qualified id.</summary>
+    public string Id { get; init; } = string.Empty;
+
+    /// <summary>The body, projected at this api-version.</summary>
+    public NATSClusterData Data { get; init; } = new();
+
+    /// <summary>Re-reads the resource.</summary>
+    public partial Task<Response<NATSClusterResource>> GetAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Amends the resource. A merge patch: what is not set is not changed.</summary>
+    public partial Task<Operation<NATSClusterResource>> UpdateAsync(
+        WaitUntil waitUntil,
+        NATSClusterData data,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Deletes the resource. ⚠ Permanent: this type declares no soft-delete window.</summary>
+    public partial Task<Operation> DeleteAsync(
+        WaitUntil waitUntil,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>What listKeys returns. ⚠ Secret material: never log or cache this.</summary>
+    public sealed partial class ListKeysResult {
+
+        /// <summary>The in-cluster HTTP monitoring endpoint, http://host:port — /varz and /jsz. Not secret, and returned here because a caller holding the client URL is the caller who needs it.</summary>
+        [JsonPropertyName("monitoringUrl")]
+        public required string MonitoringUrl { get; set; }
+
+        /// <summary>The client user's password, read from the tenant's Vault for this call only.</summary>
+        [JsonPropertyName("password")]
+        public required string Password { get; set; }
+
+        /// <summary>The in-cluster client URL, nats://host:port. ⚠ The external listener's address is not returned here — an address a client cannot reach from where it is running is worse than an absent one.</summary>
+        [JsonPropertyName("url")]
+        public required string Url { get; set; }
+
+        /// <summary>The client user.</summary>
+        [JsonPropertyName("user")]
+        public required string User { get; set; }
+    }
+
+    /// <summary>ListKeys. ⚠ An action never creates — a POST to a name that does not exist is a 404. ⚠ The response carries secret material and is always audited.</summary>
+    public partial Task<Response<ListKeysResult>> ListKeysAsync(
+        CancellationToken cancellationToken = default);
+}
+
+/// <summary>The NATS clusters in one resource group.</summary>
+/// <remarks>⚠ Every write is long-running: docs/plan/08 § The write path, end to end
+/// ends in a 202 for every verb, so there is no synchronous overload to offer.</remarks>
+public sealed partial class NATSClusterCollection {
+    /// <summary>The resource type these address.</summary>
+    public const string ResourceType = "CyberCloud.Messaging/natsClusters";
+
+    /// <summary>The URL template, with the api-version this file was generated at.</summary>
+    public const string PathTemplate = "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Messaging/natsClusters/{resourceName}";
+
+    /// <inheritdoc cref="GeneratedApiVersion.Value" />
+    public const string ApiVersion = "2026-08-01";
+
+    /// <summary>Creates or replaces one NATS cluster.</summary>
+    /// <remarks>⚠ Poll with GetProgressAsync() rather than only WaitForCompletionAsync():
+    /// docs/plan/21 § The .NET SDK — "Azure's LROs expose no progress; ours do and the
+    /// SDK should not hide it".</remarks>
+    public partial Task<Operation<NATSClusterResource>> CreateOrUpdateAsync(
+        WaitUntil waitUntil,
+        string name,
+        NATSClusterData data,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Reads one NATS cluster by name.</summary>
+    public partial Task<Response<NATSClusterResource>> GetAsync(string name, CancellationToken cancellationToken = default);
+
+    /// <summary>The NATS clusters in this group, paged.</summary>
+    public partial AsyncPageable<NATSClusterResource> GetAllAsync(CancellationToken cancellationToken = default);
+}
+
 /// <summary>The values /properties/tier accepts. ⚠ Closed: the write path refuses anything else.</summary>
 public enum WidgetTier {
     /// <summary>Never assigned. Not a value the API accepts.</summary>

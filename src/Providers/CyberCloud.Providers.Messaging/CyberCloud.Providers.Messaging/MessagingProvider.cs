@@ -1,15 +1,65 @@
+// ⚠ For `Result<decimal>`, which the quota derivations below return. `CyberCloud.Core.Resources` is
+// global here and `CyberCloud.Core` itself is not; the `ErrorCode` alias in GlobalUsings still wins
+// over the `Orleans.ErrorCode` this import would otherwise put back in play.
+using CyberCloud.Core;
+
 namespace CyberCloud.Providers.Messaging;
 
 /// <summary>
-///     Managed Apache Kafka — one resource type, one api-version, one reconciler.
+///     Managed message brokers — <b>two</b> resource types in one provider namespace, each with one
+///     api-version and one reconciler.
 /// </summary>
 /// <remarks>
 ///     <para>
 ///         docs/plan/12 § The catalogue: <i>"Kafka — <c>CyberCloud.Messaging/kafkaClusters</c>"</i>,
-///         on Strimzi in KRaft mode. ⚠ <b>That row is marked <c>M2</c>, not <c>M1</c></b> — the M1
-///         rows of that table are PostgreSQL, Valkey and NATS, and the M1 event-streaming service is
-///         <c>CyberCloud.Messaging/natsClusters</c>. This is built ahead of its milestone
-///         deliberately, and the milestone is recorded here rather than quietly changed in the plan.
+///         on Strimzi in KRaft mode, and <i>"NATS — <c>CyberCloud.Messaging/natsClusters</c> · M1 ·
+///         0.8 EM"</i>. ⚠ <b>The Kafka row is marked <c>M2</c>, not <c>M1</c></b> — the M1 rows of
+///         that table are PostgreSQL, Valkey and NATS. Kafka was built ahead of its milestone
+///         deliberately and the milestone was recorded rather than quietly changed; NATS closes the
+///         M1 gap that left.
+///     </para>
+///     <para>
+///         ⚠ <b>THIS IS THE PLATFORM'S FIRST PROVIDER NAMESPACE WITH TWO RESOURCE TYPES IN IT, AND
+///         THAT IS A SHAPE NOTHING HAD EXERCISED.</b> Three things turned out to be true and one
+///         turned out to be false, and the false one is the useful half:
+///     </para>
+///     <list type="bullet">
+///         <item>
+///             <b>The registry, the router and the OpenAPI document needed nothing.</b>
+///             <c>ProviderRegistry</c> keys on the full canonical name, so two types under one
+///             namespace are two <c>FrozenDictionary</c> entries; the gateway resolves through
+///             <c>ResourceId.ParsePath</c> rather than by counting; the emitted document gains one
+///             more path group.
+///         </item>
+///         <item>
+///             <b><c>SdkEmitter</c>'s collision ladder was the thing to check, and it holds.</b> Its
+///             first tier prefixes the provider namespace's last segment, which cannot separate two
+///             colliding types in the <i>same</i> namespace — the case this provider is the first to
+///             have. The second tier falls back to the type path and the third throws. Nothing
+///             collides here because <c>Kafka cluster</c> and <c>NATS cluster</c> are distinct
+///             display names, so the ladder is not even entered; <c>MessagingSdkTests</c> asserts
+///             both models are emitted and distinct, which is the claim that matters and is the one
+///             a future third type in this namespace can break.
+///         </item>
+///         <item>
+///             <b>One <c>.Application</c> module, one <c>.Conformance</c> project and one
+///             <c>.Cluster.Conformance</c> project serve both.</b> docs/plan/03's five-project shape
+///             is per <i>namespace</i>, not per type, and this is the first evidence for that rather
+///             than a restatement of it: a second type cost two case objects and four class
+///             declarations, and no new project.
+///         </item>
+///     </list>
+///     <para>
+///         ⚠ <b>What was false: the reason <c>KafkaClusters</c> gives for declaring no sub-resources
+///         no longer holds, and it is refuted here rather than left to rot.</b> That type's remarks
+///         say <i>"this platform's resource-id grammar does not carry a parent instance"</i> and cite
+///         <c>OpenApiEmitter</c> refusing Azure's interleaved shape. Both statements were true when
+///         they were written and neither is true now: docs/plan/12 § Child resources landed on
+///         2026-08-12, <see cref="ResourceId.Parent" /> is a pure function of the address, the parent
+///         is checked at create, and <c>OpenApiEmitter.PathOf</c> emits the interleaved template.
+///         <b>A child type is still not declared here, and the reasons are different ones</b> — see
+///         the note on <see cref="NatsClusters" /> and <c>charts/managed/nats/conformance.yaml</c>
+///         § owed, <c>child-types</c>.
 ///     </para>
 ///     <para>
 ///         ⚠ <b>The catalogue's sub-resources are not declared, and the reason is the platform's
@@ -101,6 +151,125 @@ public sealed class MessagingProvider : IResourceProvider {
             )
             .Chart(KafkaClusters.ChartName)
             .SupportsTags()
-            .RequiresCluster(KafkaClusters.ClusterIdPointer);
+            .RequiresCluster(KafkaClusters.ClusterIdPointer)
+
+            // ── The second type, chained off the first exactly as docs/plan/08's example does ───
+            .ResourceType(NatsClusters.TypePath)
+            .ApiVersion(NatsClusters.V2026, NatsClusters.Schema2026)
+            .Reconciler<NatsClusterReconciler>()
+            // ⚠ THREE DERIVED METERS AND THE COUNT, WHERE THE TYPE ABOVE DECLARES THE COUNT ALONE.
+            // The Kafka registration's note says the four meters it draws are undeclarable, and it
+            // was right on the day it was written: `Meter(meter, pointer, fallback)` reserves the
+            // NUMBER at a pointer, and every amount here is a Kubernetes quantity string, is usually
+            // absent because `sizing.preset` names it indirectly, and is a PRODUCT of the server
+            // count and a per-server quantity. `MeterDerivation` landed for
+            // CyberCloud.DBforPostgreSQL/servers and closes all three of those, so the honest
+            // under-declaration above is no longer the honest choice here.
+            //
+            // ⚠ EACH DERIVATION IS A PURE FUNCTION OF THE BODY AND MUST STAY ONE. The delete path
+            // re-derives committed amounts from the resource's stored body through the same step the
+            // create reserved with — ResourceManagerService.CommittedBy — so a derivation that read
+            // a clock or configuration would make a delete return a different number than the create
+            // committed, and quota would drift upward on every create/delete cycle.
+            .Meter(QuotaMeter.Vcpu, VcpuDrawn)
+            .Meter(QuotaMeter.MemoryGb, MemoryDrawn)
+            .Meter(QuotaMeter.StorageGb, StorageDrawn)
+            .Meters(QuotaMeter.Resources)
+            .Permissions("read", "write", "delete")
+            .Action(
+                NatsClusters.ListKeysAction,
+                ActionKind.Post,
+                NatsClusters.ListKeysPermission,
+                secret: true,
+                response: NatsClusters.ListKeysResponse
+            )
+            .Display(
+                "NATS cluster",
+                "NATS clusters",
+                shortName: "nats",
+                summary: "A managed NATS cluster with JetStream on file storage, optional leaf-node "
+                + "connectivity and an optional firewalled external listener."
+            )
+            .Chart(NatsClusters.ChartName)
+            .SupportsTags()
+            .RequiresCluster(NatsClusters.ClusterIdPointer);
     }
+
+    // ── What a NATS cluster draws ──────────────────────────────────────────────────────────────
+    //
+    // ⚠ ALL THREE MULTIPLY BY `servers`, AND THAT IS THE PART A POINTER COULD NEVER HAVE SAID. The
+    // StatefulSet runs `spec.replicas` pods; each carries the whole `resources` block and each gets
+    // its own JetStream volume from the claim template. NatsClusters.StatefulSetJson writes both
+    // figures once because a pod template is per-set, not because the cost is.
+    //
+    // ⚠ `publicIps` IS STILL NOT DECLARED, AND THE REASON THE KAFKA TYPE GIVES FOR THAT IS WRONG.
+    // That note says publicIps "is derived from a flag, which no pointer can express however it is
+    // read" — true of a pointer and false of the seam that exists now:
+    //
+    //     MeterDerivation.Of("external.enabled ? 1 : 0", ["/properties/external/enabled"], …)
+    //
+    // compiles, is pure, and declares its read set. It was written, and then not shipped, because of
+    // something one layer down: QuotaGrain.TryReserveAsync refuses a non-positive amount outright —
+    // "A reservation must be positive; 0 is not" — so a meter whose amount is zero in the ordinary
+    // case would refuse EVERY CREATE that did not ask for external exposure, which is the default
+    // and the overwhelming majority. A MeterRegistration has no "skip when the amount is zero", and
+    // adding one is a change to CyberCloud.ResourceManager plus a decision about whether a zero
+    // reservation should be a no-op lease or no lease at all — docs/plan/25 § R1 keeps commits to
+    // that assembly made by a provider PR at zero, so this is the finding rather than the fix.
+    //
+    // The correction matters beyond this type: EVERY service in docs/plan/12 § Cross-cutting
+    // decisions has an optional external listener, so all ten of them meet this, and the reason
+    // written down until now would send the next author looking at the wrong file.
+
+    /// <summary>vCPU: every server's CPU request, from the explicit override or the preset.</summary>
+    /// <remarks>
+    ///     ⚠ Refuses rather than reserving zero when the quantity does not parse. That happens only if
+    ///     <c>sizing.preset</c> names a preset <see cref="NatsClusters.Presets" /> does not carry —
+    ///     which the schema's <c>AllowedValues</c> makes unreachable from a validated body, and which
+    ///     is exactly the drift worth failing on when somebody adds a preset to the enum and forgets
+    ///     the table.
+    /// </remarks>
+    static MeterDerivation VcpuDrawn { get; } =
+        MeterDerivation.Of(
+            "servers × sizing.cpu, in cores, taking sizing.preset when the override is empty",
+            ["/properties/servers", "/properties/sizing/preset", "/properties/sizing/cpu"],
+            body => KubeQuantity.TryParse(NatsClusters.Resources(body).Cpu, out var cores)
+                ? Result<decimal>.Success(NatsClusters.Servers(body) * cores)
+                : Unresolvable("cpu", "sizing.cpu or the sizing.preset behind it")
+        );
+
+    /// <summary>Memory: every server's memory request, in gibibytes.</summary>
+    static MeterDerivation MemoryDrawn { get; } =
+        MeterDerivation.Of(
+            "servers × sizing.memory, in GiB, taking sizing.preset when the override is empty",
+            ["/properties/servers", "/properties/sizing/preset", "/properties/sizing/memory"],
+            body => KubeQuantity.TryGibibytes(NatsClusters.Resources(body).Memory, out var gibibytes)
+                ? Result<decimal>.Success(NatsClusters.Servers(body) * gibibytes)
+                : Unresolvable("memory", "sizing.memory or the sizing.preset behind it")
+        );
+
+    /// <summary>Storage: every server's JetStream file-store volume, in gibibytes.</summary>
+    /// <remarks>
+    ///     ⚠ <b><c>jetstream.maxMemoryStore</c> is deliberately not added in.</b> It is a ceiling on
+    ///     memory-backed streams and it is taken out of the container's memory limit, which
+    ///     <see cref="MemoryDrawn" /> has already reserved. Adding it here would charge the same
+    ///     gibibyte to two meters, and the one place a customer would notice is the bill.
+    /// </remarks>
+    static MeterDerivation StorageDrawn { get; } =
+        MeterDerivation.Of(
+            "servers × storage.size, in GiB",
+            ["/properties/servers", "/properties/storage/size"],
+            body => KubeQuantity.TryGibibytes(NatsClusters.StorageSize(body), out var gibibytes)
+                ? Result<decimal>.Success(NatsClusters.Servers(body) * gibibytes)
+                : Unresolvable("storage", "storage.size")
+        );
+
+    static Result<decimal> Unresolvable(string what, string where) =>
+        Result<decimal>.Failure(
+            ErrorCode.InternalError,
+            $"The {what} a NATS cluster draws could not be read from {where}: the value is not a "
+            + "Kubernetes quantity. The write is refused rather than reserved at zero, because a "
+            + "resource that provisions against no quota is one nobody is charged for — docs/plan/06 "
+            + "§ Quota."
+        );
 }

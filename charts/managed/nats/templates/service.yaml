@@ -1,0 +1,41 @@
+{{/*
+The client Service — the address `listKeys` hands out.
+
+⚠ THE ROUTE PORT (6222) IS NOT ON THIS SERVICE AT ANY EXPOSURE LEVEL. A LoadBalancer carrying it
+would put the servers' own gossip on a public address, where an unauthenticated route is a second
+server joining the cluster. Only the client port and — when asked for — the leaf-node port are ever
+reachable from outside.
+
+⚠ THE MONITORING PORT (8222) IS NOT ON IT EITHER. /varz answers with the server's configuration and
+/connz with its clients. podmonitor.yaml scrapes the pod directly, so nothing is lost by keeping the
+endpoint off a routable address.
+
+⚠ `loadBalancerSourceRanges` IS WRITTEN EVEN WHEN THE LIST IS EMPTY. An absent field means "from
+anywhere", so an unfinished allow-list would be the configuration that opens the cluster to the
+internet — the reading docs/plan/12 § Cross-cutting decisions forbids in as many words.
+*/}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "nats.name" . }}
+  labels:
+    {{- include "nats.platformLabels" . | nindent 4 }}
+spec:
+  type: {{ if .Values.external.enabled }}LoadBalancer{{ else }}ClusterIP{{ end }}
+  {{- if .Values.external.enabled }}
+  loadBalancerSourceRanges:
+    {{- toYaml .Values.external.allowedCidrs | nindent 4 }}
+  {{- end }}
+  selector:
+    {{- include "nats.selectorLabels" . | nindent 4 }}
+  ports:
+    - name: client
+      port: 4222
+      targetPort: client
+      protocol: TCP
+    {{- if .Values.leafNodes.enabled }}
+    - name: leafnodes
+      port: 7422
+      targetPort: leafnodes
+      protocol: TCP
+    {{- end }}

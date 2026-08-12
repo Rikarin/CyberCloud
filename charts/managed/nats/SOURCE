@@ -1,0 +1,51 @@
+# Provenance — charts/README.md § `SOURCE` is required, including when nothing was forked.
+#
+# ADR-010: "Their charts are a starting point, not a dependency. Where a chart is close, fork it into
+# charts/ with the upstream commit recorded in a SOURCE file." Nothing was forked here, and
+# `vendored: none` is an answer to "where did this come from" where a missing file is not.
+
+vendored: none
+upstream: https://github.com/nats-io/k8s
+
+# ⚠ THERE IS NO `upstream-api:` ROW, AND ITS ABSENCE IS THE PROVENANCE FACT RATHER THAN AN OMISSION.
+# The three managed charts before this one each name a CRD contract — kafka.strimzi.io/v1beta2,
+# postgresql.cnpg.io/v1, databases.spotahome.com/v1 — because a reconciler renders into somebody
+# else's schema and the version it renders against is a thing that can silently change underneath it.
+# This service renders no custom resource at all:
+#
+#   * `nats-io/nats-operator` — the only project that ever served a `NatsCluster`
+#     (`nats.io/v1alpha2`, plus `NatsServiceRole`) — was ARCHIVED ON 2025-04-10 and is read-only. Its
+#     README says "the recommended way of running NATS on Kubernetes is by using the Helm charts" and
+#     that the operator "is not recommended to be used for new deployments". Checked against the
+#     repository on 2026-08-12 rather than against a summary of it.
+#   * `nats-io/nack` DOES ship CRDs under `jetstream.nats.io/v1beta2` — `Stream`, `Consumer`,
+#     `Account`, `KeyValue`, `ObjectStore`, and a deprecated `StreamTemplate` — but every one of them
+#     describes an object INSIDE a running NATS system and connects to it over the wire through
+#     `spec.servers`. None of them creates or manages a server. So NACK is the operator a
+#     `natsClusters/streams` CHILD TYPE would render into, and it is not an operator for this row.
+#
+# So the objects are core (`ConfigMap`, `Service`) and `apps` (`StatefulSet`) kinds, plus one
+# `PodMonitor` from `monitoring.coreos.com/v1`, which the platform bundle installs.
+
+upstream-operator: none
+upstream-operator-checked: 2026-08-12
+
+# ⚠ TWO FACTS ABOUT UPSTREAM NATS ARE RELIED ON IN CODE AND WOULD BE SILENTLY WRONG AGAINST A SERVER
+# THAT DROPPED THEM. Both are stable across 2.10 and 2.11, which is the pair `values.yaml` offers.
+#
+#   * The configuration file expands `$VAR` from the process environment while it is read, which is
+#     what makes `server_name: $POD_NAME` work from one ConfigMap shared by every pod. Without it
+#     each replica would need its own ConfigMap and a replica-count change would become an
+#     object-set change.
+#   * `/healthz` takes `js-enabled-only` and `js-server-only` query parameters, which is what lets
+#     the readiness probe ask a different question from the liveness probe. A liveness probe on the
+#     strict endpoint restarts a server that is catching up, which is the pod that most needed to be
+#     left alone.
+
+# ⚠ NACK, recorded here because the child type is owed rather than absent — see conformance.yaml
+# § owed, `child-types`. Its CRDs declare a great many `default:` values (`retention: limits`,
+# `storage: memory`, `replicas: 1`, `maxBytes: -1`, …), which is the OPPOSITE of what
+# charts/managed/kafka/SOURCE records about Strimzi. A child type rendering a NACK Stream must
+# compare by containment for the ordinary reason, not merely for the reasons Strimzi left standing.
+nack-upstream: https://github.com/nats-io/nack
+nack-api: jetstream.nats.io/v1beta2

@@ -30,6 +30,17 @@
     <ItemGroup Label="The half generation does not reach — see the header">
         <EmbeddedResource Include="../../../../charts/managed/kafka/templates/_helpers.tpl"
                           LogicalName="kafka.helpers.tpl"/>
+        <!--
+          ⚠ The NATS chart's helpers carry TWO hand-maintained tables rather than one. The sizing
+          preset table is the same shape Kafka's is. `nats.selectorLabels` is the second and is the
+          more dangerous: a StatefulSet's spec.selector is IMMUTABLE after create and both Services
+          and the PodMonitor select on the same set, so a chart and a reconciler that disagreed would
+          render a workload whose Services select nothing — a cluster with no reachable address and
+          no error anywhere, because selecting zero pods is a legal Service. NatsSizingTests holds
+          both.
+        -->
+        <EmbeddedResource Include="../../../../charts/managed/nats/templates/_helpers.tpl"
+                          LogicalName="nats.helpers.tpl"/>
     </ItemGroup>
 
     <ItemGroup>

@@ -221,6 +221,19 @@
       }
     },
     {
+      "type": "CyberCloud.Messaging/natsClusters",
+      "apiVersions": [
+        "2026-08-01"
+      ],
+      "display": {
+        "name": "NATS cluster",
+        "plural": "NATS clusters",
+        "alias": "nats",
+        "summary": "A managed NATS cluster with JetStream on file storage, optional leaf-node connectivity and an optional firewalled external listener.",
+        "declared": true
+      }
+    },
+    {
       "type": "CyberCloud.Sample/widgets",
       "apiVersions": [
         "2026-08-01"

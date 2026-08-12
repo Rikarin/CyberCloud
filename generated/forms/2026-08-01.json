@@ -1307,6 +1307,391 @@
         }
       ]
     },
+    "CyberCloud.Messaging/natsClusters": {
+      "resourceType": "CyberCloud.Messaging/natsClusters",
+      "apiVersion": "2026-08-01",
+      "title": "NATS cluster",
+      "plural": "NATS clusters",
+      "summary": "A managed NATS cluster with JetStream on file storage, optional leaf-node connectivity and an optional firewalled external listener.",
+      "overrideKey": "CyberCloud.Messaging/natsClusters@2026-08-01",
+      "coveredPointers": [
+        "/location",
+        "/properties",
+        "/properties/clusterId",
+        "/properties/external",
+        "/properties/external/allowedCidrs",
+        "/properties/external/enabled",
+        "/properties/jetstream",
+        "/properties/jetstream/maxMemoryStore",
+        "/properties/leafNodes",
+        "/properties/leafNodes/enabled",
+        "/properties/limits",
+        "/properties/limits/maxConnections",
+        "/properties/limits/maxPayload",
+        "/properties/monitoring",
+        "/properties/monitoring/enabled",
+        "/properties/servers",
+        "/properties/sizing",
+        "/properties/sizing/cpu",
+        "/properties/sizing/memory",
+        "/properties/sizing/preset",
+        "/properties/storage",
+        "/properties/storage/class",
+        "/properties/storage/size",
+        "/properties/version",
+        "/tags"
+      ],
+      "supportsTags": true,
+      "requiresCluster": true,
+      "clusterIdPointer": "/properties/clusterId",
+      "softDeleteDays": 0,
+      "fields": [
+        {
+          "jsonPointer": "/location",
+          "name": "location",
+          "label": "Location",
+          "control": "xui-region",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "The region the cluster is billed in.",
+          "format": "cybercloud-region",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new NATS cluster to change it.",
+          "placeholder": "eu-central"
+        },
+        {
+          "jsonPointer": "/properties",
+          "name": "properties",
+          "label": "Properties",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "The cluster's own settings."
+        },
+        {
+          "jsonPointer": "/properties/clusterId",
+          "name": "clusterId",
+          "label": "Cluster id",
+          "control": "xui-cluster",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "The cluster whose namespace holds the NATS servers.",
+          "format": "uuid",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new NATS cluster to change it."
+        },
+        {
+          "jsonPointer": "/properties/external",
+          "name": "external",
+          "label": "External",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "Exposure outside the cluster, via a load balancer and a firewall allow-list."
+        },
+        {
+          "jsonPointer": "/properties/external/allowedCidrs",
+          "name": "allowedCidrs",
+          "label": "Allowed cidrs",
+          "control": "xui-chip-input",
+          "type": "array",
+          "required": false,
+          "section": "external",
+          "hint": "Source ranges permitted to reach the external listener. Required in substance rather than in schema: an empty list with external exposure on renders a load balancer that accepts nothing, which is the safe reading of an unfinished configuration.",
+          "default": [],
+          "placeholder": [
+            "203.0.113.0/24"
+          ]
+        },
+        {
+          "jsonPointer": "/properties/external/enabled",
+          "name": "enabled",
+          "label": "Enabled",
+          "control": "xui-switch",
+          "type": "boolean",
+          "required": false,
+          "section": "external",
+          "hint": "Whether the cluster is reachable from outside the Kubernetes cluster. Off by default — docs/plan/12 § Cross-cutting decisions makes external exposure never the default, because a managed broker on a public IP with a weak password is the most common cloud breach there is.",
+          "default": false
+        },
+        {
+          "jsonPointer": "/properties/jetstream",
+          "name": "jetstream",
+          "label": "Jetstream",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "JetStream — the persistence layer streams and consumers live in. docs/plan/12 has it on unconditionally, so there is no switch to turn it off."
+        },
+        {
+          "jsonPointer": "/properties/jetstream/maxMemoryStore",
+          "name": "maxMemoryStore",
+          "label": "Max memory store",
+          "control": "xui-input",
+          "type": "string",
+          "required": false,
+          "section": "jetstream",
+          "hint": "Ceiling for memory-backed streams, in Kubernetes quantity form. Empty means no memory store at all, so every stream is file-backed — which is what docs/plan/12 asks for and what the volume above is sized for. A value here must leave room for the server itself inside the container's memory limit.",
+          "pattern": "^(?:(\\d+(\\.\\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)?)$",
+          "default": "",
+          "placeholder": "256Mi"
+        },
+        {
+          "jsonPointer": "/properties/leafNodes",
+          "name": "leafNodes",
+          "label": "Leaf nodes",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "Leaf-node connectivity — docs/plan/12: \"so a tenant's edge can attach\"."
+        },
+        {
+          "jsonPointer": "/properties/leafNodes/enabled",
+          "name": "enabled",
+          "label": "Enabled",
+          "control": "xui-switch",
+          "type": "boolean",
+          "required": false,
+          "section": "leafNodes",
+          "hint": "Whether the servers accept leaf-node connections. Off by default: a leaf node joins the cluster's subject space, so it is a topology change rather than a client.",
+          "default": false
+        },
+        {
+          "jsonPointer": "/properties/limits",
+          "name": "limits",
+          "label": "Limits",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "Server limits a client can run into."
+        },
+        {
+          "jsonPointer": "/properties/limits/maxConnections",
+          "name": "maxConnections",
+          "label": "Max connections",
+          "control": "xui-slider",
+          "type": "integer",
+          "required": false,
+          "section": "limits",
+          "hint": "Largest number of client connections one server accepts.",
+          "minimum": 16,
+          "maximum": 65536,
+          "default": 65536
+        },
+        {
+          "jsonPointer": "/properties/limits/maxPayload",
+          "name": "maxPayload",
+          "label": "Max payload",
+          "control": "xui-slider",
+          "type": "integer",
+          "required": false,
+          "section": "limits",
+          "hint": "Largest message a client may publish, in bytes. Raising it costs memory on every server, because a server buffers a whole message before routing it.",
+          "minimum": 1024,
+          "maximum": 67108864,
+          "default": 1048576
+        },
+        {
+          "jsonPointer": "/properties/monitoring",
+          "name": "monitoring",
+          "label": "Monitoring",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "What the platform scrapes."
+        },
+        {
+          "jsonPointer": "/properties/monitoring/enabled",
+          "name": "enabled",
+          "label": "Enabled",
+          "control": "xui-switch",
+          "type": "boolean",
+          "required": false,
+          "section": "monitoring",
+          "hint": "Whether a PodMonitor selects these servers' monitoring endpoint. On by default — docs/plan/12: \"a managed service the tenant cannot see the health of is a black box they will not trust with production\". The endpoint itself is always served; this decides whether anything scrapes it.",
+          "default": true
+        },
+        {
+          "jsonPointer": "/properties/servers",
+          "name": "servers",
+          "label": "Servers",
+          "control": "xui-slider",
+          "type": "integer",
+          "required": true,
+          "section": "general",
+          "hint": "Number of NATS servers. docs/plan/12 says three or five: JetStream replicates through a Raft group, so an even count buys no extra fault tolerance over the odd count below it. One is offered for development only and has no quorum at all.",
+          "minimum": 1,
+          "maximum": 5,
+          "default": 3
+        },
+        {
+          "jsonPointer": "/properties/sizing",
+          "name": "sizing",
+          "label": "Sizing",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "CPU and memory per server, either by preset or explicitly."
+        },
+        {
+          "jsonPointer": "/properties/sizing/cpu",
+          "name": "cpu",
+          "label": "Cpu",
+          "control": "xui-input",
+          "type": "string",
+          "required": false,
+          "section": "sizing",
+          "hint": "Explicit vCPU quantity in Kubernetes form, for example 500m or 2. Empty means take it from the preset.",
+          "pattern": "^(?:(\\d+(\\.\\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)?)$",
+          "default": ""
+        },
+        {
+          "jsonPointer": "/properties/sizing/memory",
+          "name": "memory",
+          "label": "Memory",
+          "control": "xui-input",
+          "type": "string",
+          "required": false,
+          "section": "sizing",
+          "hint": "Explicit memory quantity in Kubernetes form, for example 4Gi. Empty means take it from the preset.",
+          "pattern": "^(?:(\\d+(\\.\\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)?)$",
+          "default": ""
+        },
+        {
+          "jsonPointer": "/properties/sizing/preset",
+          "name": "preset",
+          "label": "Preset",
+          "control": "xui-cozy-preset",
+          "type": "string",
+          "required": false,
+          "section": "sizing",
+          "hint": "A sizing preset from docs/plan/12. Brokers use the c1 family, which is 1 vCPU to 2 GiB and guaranteed rather than burstable.",
+          "choices": [
+            {
+              "value": "c1.2xlarge",
+              "label": "C1 2xlarge"
+            },
+            {
+              "value": "c1.4xlarge",
+              "label": "C1 4xlarge"
+            },
+            {
+              "value": "c1.large",
+              "label": "C1 large"
+            },
+            {
+              "value": "c1.medium",
+              "label": "C1 medium"
+            },
+            {
+              "value": "c1.micro",
+              "label": "C1 micro"
+            },
+            {
+              "value": "c1.nano",
+              "label": "C1 nano"
+            },
+            {
+              "value": "c1.small",
+              "label": "C1 small"
+            },
+            {
+              "value": "c1.xlarge",
+              "label": "C1 xlarge"
+            }
+          ],
+          "default": "c1.small"
+        },
+        {
+          "jsonPointer": "/properties/storage",
+          "name": "storage",
+          "label": "Storage",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "The JetStream file store, per server."
+        },
+        {
+          "jsonPointer": "/properties/storage/class",
+          "name": "class",
+          "label": "Class",
+          "control": "xui-storageclass",
+          "type": "string",
+          "required": false,
+          "section": "storage",
+          "hint": "StorageClass name. Empty means the cluster default.",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new NATS cluster to change it.",
+          "default": ""
+        },
+        {
+          "jsonPointer": "/properties/storage/size",
+          "name": "size",
+          "label": "Size",
+          "control": "xui-input",
+          "type": "string",
+          "required": true,
+          "section": "storage",
+          "hint": "JetStream file-store volume size per server, in Kubernetes quantity form. Grows online; never shrinks.",
+          "pattern": "^(?:\\d+(\\.\\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)$",
+          "default": "10Gi",
+          "placeholder": "10Gi"
+        },
+        {
+          "jsonPointer": "/properties/version",
+          "name": "version",
+          "label": "Version",
+          "control": "xui-select",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "NATS server version. Minor upgrades are applied automatically in the maintenance window; a major upgrade is an explicit update to this field.",
+          "choices": [
+            {
+              "value": "2.10",
+              "label": "2 10"
+            },
+            {
+              "value": "2.11",
+              "label": "2 11"
+            }
+          ],
+          "default": "2.11"
+        },
+        {
+          "jsonPointer": "/tags",
+          "name": "tags",
+          "label": "Tags",
+          "control": "xui-tag-input",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+          "maxProperties": 50
+        }
+      ],
+      "actions": [
+        {
+          "name": "listKeys",
+          "label": "List keys",
+          "permission": "listKeys",
+          "longRunning": false,
+          "secret": true,
+          "fields": [],
+          "confirmOnly": true
+        }
+      ]
+    },
     "CyberCloud.Sample/widgets": {
       "resourceType": "CyberCloud.Sample/widgets",
       "apiVersion": "2026-08-01",

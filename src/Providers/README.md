@@ -112,9 +112,31 @@ the sample's.
 
 ⚠ **That row is `M2` in docs/plan/12, not `M1`.** The M1 rows of that table are PostgreSQL, Valkey
 and NATS; the M1 event-streaming service is `CyberCloud.Messaging/natsClusters`. This landed ahead of
-its milestone, and the milestone is recorded rather than quietly changed.
+its milestone, and the milestone is recorded rather than quietly changed. **`natsClusters` has since
+landed in the same namespace and closed the gap — see § What the fourth provider measured.**
 
 ### What the third provider measured
+
+> ⚠ **CORRECTED 2026-08-12 by the fourth provider, on the bullet this section leads with.** The
+> three bullets below say a nested type is impossible here because *"this platform's id grammar has
+> no parent instance"*. **That was true when it was written and it is not true now.**
+> [12 § Child resources](../../docs/plan/12-managed-data-services.md) landed the same day: a child
+> interleaves, `ResourceId.ParentNames` carries the ancestors, `ResourceId.Parent` is a pure function
+> of the address, `ResourceManagerService.ResolveAsync` refuses a create whose parent is absent with
+> the same `404` an unauthorized read gets, `ReBacResourceRelationWriter` points the `parent` edge at
+> the parent resource, and `OpenApiEmitter.PathOf` emits the interleaved template — the refusal
+> quoted below was **deleted** from that file. The gateway never counted segments to begin with.
+>
+> The fourth provider still declares no child, and its reasons are different and smaller. The fatal
+> one is the **conformance harness**: `ProviderConformanceCase` is single-type, and both
+> `ProviderTestCluster.Address` and `ClusterConformanceHarness.Address` construct a `ResourceId` with
+> no `ParentNames` — so a depth-2 `Case.Type` **throws in the constructor** and every test in the
+> suite fails before it runs. This document's own hard rule is that *"a provider is not registered in
+> the platform bundle until it passes the conformance suite"*, so a child type cannot ship through
+> that door at all. Two smaller ones stand from the last bullet below and are unchanged:
+> `CliEmitter.Address` emits a hard-coded four-flag list, so `cyc` cannot say *which* parent; and
+> `SdkEmitter.AppendCollection` emits no ancestor parameters, so the generated client holds a
+> `PathTemplate` it cannot fill. See `charts/managed/nats/conformance.yaml § owed`, `child-types`.
 
 **The nested resource type, which is the thing docs/plan/12 asks this service for and the thing it
 did not get.** That document says Kafka is 1.2 EM rather than 2.5 because *"Strimzi's `KafkaTopic`
@@ -179,6 +201,61 @@ finding:
   `Objects`**, which already carry group, version, kind and plural, rather than declared as a member
   a provider author could get wrong by omission and have the omission reported by the worst error
   message in the suite.
+
+### What the fourth provider measured
+
+`CyberCloud.Messaging/natsClusters`, [12 § The catalogue](../../docs/plan/12-managed-data-services.md)'s
+third and last **M1** row — which closes that milestone's data-services gap. ⚠ It is **not a fourth
+provider namespace**: it is a second resource type inside `CyberCloud.Messaging`, which is a shape
+nothing had exercised.
+
+- **A second type in one namespace costs two case objects and four class declarations, and no new
+  project.** docs/plan/03's five-project shape turns out to be per *namespace* rather than per
+  *type*: one `.Application` module, one `.Conformance` and one `.Cluster.Conformance` serve both.
+  Three providers had said the shape was cheap; this is the first evidence about what the shape is
+  *of*.
+- **The disambiguation ladders hold, and none of them is entered.** `SdkEmitter`'s first tier
+  prefixes the provider namespace's last segment — which cannot separate two colliding types in the
+  *same* namespace, because the prefix is identical — and falls through to the type path, then
+  throws. `CliEmitter.CommandOf` kebabs the type path into a `JsonObject` whose indexer *replaces*.
+  Neither ladder runs, because `Kafka cluster`/`NATS cluster` and `kafka`/`nats` are distinct. What
+  `MessagingSdkTests` pins is the *outcome* — both types on both surfaces, under distinct names,
+  neither swallowing the other — because that is the claim `rabbitmqClusters` can break, and it
+  would break silently.
+- **⚠ It is the first service in the catalogue with no operator, and docs/plan/12's whole pattern
+  assumes one.** `nats-io/nats-operator` — the only project that ever served a `NatsCluster` CRD —
+  was **archived on 2025-04-10** and its README says the Helm charts are the recommended way and that
+  it *"is not recommended to be used for new deployments"*. `nats-io/nack` ships `Stream`,
+  `Consumer`, `Account`, `KeyValue` and `ObjectStore` under `jetstream.nats.io/v1beta2`, but every
+  one of them describes an object *inside* a running NATS system and connects to it over the wire.
+  So this reconciler applies the **workload** — a `ConfigMap`, two `Service`s, a `StatefulSet` and a
+  `PodMonitor` — where the three before it applied one or two custom resources. Two consequences the
+  next operator-less service inherits: every default a controller would have supplied is now a
+  decision (`podManagementPolicy: Parallel`, `publishNotReadyAddresses`, two probes asking different
+  questions, sixty seconds of termination grace), and the **cluster-backed suite needs one CRD stub
+  instead of two**, because four of the five kinds are core or `apps`. That is the exact reverse of
+  what the Kafka row measured, and it is the same measurement from the other side.
+- **⚠ [12 § The pattern, once](../../docs/plan/12-managed-data-services.md)'s piece 6 second branch
+  is discharged rather than owed, and the reason is a small proof rather than more effort.** That
+  branch — *"hand-write one into the chart only when there is no operator to ask"* — was reached by
+  Kafka and left owed, correctly: a hand-written scrape has to hard-code somebody else's pod labels,
+  and the operator moves one in a minor release and the scrape goes quiet **without failing**. That
+  hazard cannot arise here, because the labels the selector matches are written by this provider onto
+  pods created by this provider. **Hand-writing it is safe exactly when there is no operator, which
+  is the same condition that forces the branch** — the two halves of the correction agree, and
+  nothing had a case to check it on.
+- **⚠ Two notes on the Kafka registration turn out to be wrong, and both were checked rather than
+  assumed.** The first is the nested-type one, corrected above. The second is `publicIps`: that note
+  says it *"is derived from a flag, which no pointer can express however it is read"* — which is true
+  of a pointer and false of `MeterDerivation.Of`, in one line. The real blocker is one layer down and
+  nothing else in the tree states it: **`QuotaGrain.TryReserveAsync` refuses a non-positive amount**
+  (*"A reservation must be positive; 0 is not"*), so a meter that is zero in the ordinary case would
+  refuse every create that did *not* ask for external exposure — the default. A conditional meter is
+  undeclarable whatever the derivation seam can express. `NatsQuotaTests.NoMeterEverDerivesZero`
+  pins it; closing it is a *skip-when-zero* on `MeterRegistration`.
+- **The chart-annotation emitter's output is predictable by hand — a second sighting.** This chart's
+  `@param` block was written to match what `ChartAnnotationEmitter` would produce and came back
+  **unchanged on the first `./build.sh Charts` run**, exactly as `charts/managed/valkey`'s did.
 
 ## Planned namespaces
 
