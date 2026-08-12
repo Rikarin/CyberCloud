@@ -133,15 +133,22 @@ public sealed class CommandLineTests {
 
     [Fact]
     public void TheLogNamesWhichOfTheFourSurfacesActuallyRan() {
-        // docs/plan/02 § ADR-012 names four surfaces. Program.Main says which of them ran on every
+        // docs/plan/02 § ADR-012 names five surfaces. Program.Main says which of them ran on every
         // run including the clean ones, because a log that did not would read like the pipeline
         // finished whatever it did — and the two branches being the right way round is the whole of
         // that claim.
+        //
+        // ⚠ This asserted "All four" and had been red on the branch since ADR-012's fifth surface
+        // landed and rewrote the line to "Four of ADR-012's five surfaces". The assertion is on the
+        // count of surfaces the DERIVED branch covers, which is still four — the fifth is the chart
+        // block, it runs only under --charts, and this run gives no --charts.
         using var withDerived = new TemporaryTree();
         using var withoutDerived = new TemporaryTree();
 
-        Generator.Run(withDerived, check: false, Generator.SampleProviderAssembly)
-            .Output.ShouldContain("All four");
+        var derived = Generator.Run(withDerived, check: false, Generator.SampleProviderAssembly).Output;
+
+        derived.ShouldContain("Four of ADR-012's five surfaces");
+        derived.ShouldContain("no chart's @param block was compared");
 
         Generator.Invoke(
                 "--output", withoutDerived.OpenApiDirectory,

@@ -26,6 +26,15 @@ public sealed class GenerationReportTests {
     static readonly string[] RootKeys = [
         "apiVersions",
         "assembliesScanned",
+        // ⚠ The four chart keys arrived with ADR-012's fifth surface and this list was not grown with
+        // them, so this test had been red on the branch ever since. They are what
+        // build/Build.Charts.cs reads back out of the report — the pair counts and the per-chart
+        // annotation results — and Build.Generate.cs § Parse indexes every one of them by literal
+        // name.
+        "chartAnnotations",
+        "chartManagedCharts",
+        "chartTypesNamingAChart",
+        "chartUnpaired",
         // ⚠ `clean` is written and, as of this test, read by nothing in build/. It is asserted
         // because it is published, not because it is consumed — see CleanIsTheAndOfBothHalves.
         "clean",
@@ -36,6 +45,13 @@ public sealed class GenerationReportTests {
         "resourceTypes",
         "stale"
     ];
+
+    // ⚠ The MEMBERS of a chartAnnotations entry are deliberately not asserted here, and that is a
+    // gap rather than an omission. Build.Generate.cs indexes them by literal name and null-forgives
+    // the result, exactly as it does for DocumentKeys, so a rename is a NullReferenceException in a
+    // build rather than a compiler error. But CyberCloud.Providers.Sample declares no chart on
+    // purpose, so this run produces an empty array — and a loop over it would assert nothing while
+    // looking like it asserted something. Closing it needs a fixture provider that names a chart.
 
     static readonly string[] DocumentKeys = [
         "apiVersion",
