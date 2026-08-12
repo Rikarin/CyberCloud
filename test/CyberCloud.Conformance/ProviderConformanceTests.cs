@@ -675,9 +675,16 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
             null,
             ns,
             Cluster.World,
-            new UnavailableSecretResolver(),
+            // ⚠ THE HARNESS'S VAULT, NOT THE REFUSING DEFAULT, AND THE SAME INSTANCE ON BOTH MEMBERS.
+            // This context is built BY HAND rather than by ReconcileDriver, so nothing fills
+            // SecretWriter in for it — and a provider whose create mints a credential then fails every
+            // clause for a wiring reason. The refusal names the member to set, which is how this was
+            // found rather than guessed.
+            Cluster.Vault,
             log
-        );
+        ) {
+            SecretWriter = Cluster.Vault
+        };
 
         var world = new ConformanceWorld(
             BreakAsync: () => {
@@ -799,8 +806,79 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
             TestContext.Current.CancellationToken
         );
 
+        // ⚠ WHAT "ACCEPTED" MEANS DEPENDS ON WHAT THE PROVIDER DECLARED, AND THE OLD SHAPE OF THIS
+        // ASSERTION IS EXACTLY THE "GREEN BECAUSE IT ASKED LESS" PATTERN.
+        //
+        // It used to be `IsSuccess` plus `OperationId != Guid.Empty` — which every action in the
+        // catalogue satisfied, because no action could RUN. `IProviderBuilder.Action` took no handler,
+        // so a POST started an operation and OperationGrain drove the resource type's RECONCILER for
+        // it. The suite watched an operation appear and called that acceptance; what it was really
+        // watching was a reconcile pass with an action's name on it.
+        //
+        // So this now branches on the registration, and each branch is a real statement:
+        //
+        //   • a synchronous action WITH a handler answers 200 — its own body, no operation, and the
+        //     body validates against the response shape the provider published;
+        //   • an action with NO handler is REFUSED, by name. That is the honest answer for a
+        //     declaration that reaches the OpenAPI document, the SDK and the CLI and cannot execute,
+        //     and it is what most of the catalogue still is;
+        //   • a long-running action still answers 202 with something to poll.
+        //
+        // ProviderBuilder.Action refuses `longRunning` together with a handler, so the fourth cell of
+        // that table is unreachable and is not tested here.
+        Cluster.Registry.TryGetType(Case.Type, out var registration).ShouldBeTrue();
+        registration.TryGetAction(Case.ActionName, out var declared).ShouldBeTrue(
+            $"'{Case.ActionName}' is the case's action and the provider does not declare it"
+        );
+
+        if (declared.HandlerType is null) {
+            action.IsFailure.ShouldBeTrue(
+                "an action with no handler answered success. Before handlers existed that was a 202 "
+                + "for an operation that re-ran the reconciler; a refusal naming the action is worth "
+                + "more than work the caller did not ask for."
+            );
+
+            action.Error!.Message.ShouldContain(Case.ActionName);
+            action.Error.Message.ShouldContain("handler");
+
+            return;
+        }
+
         action.IsSuccess.ShouldBeTrue(action.Error?.Message);
-        action.GetValueOrThrow().OperationId.ShouldNotBe(Guid.Empty);
+        var accepted = action.GetValueOrThrow();
+
+        if (declared.LongRunning) {
+            accepted.Completed.ShouldBeFalse();
+            accepted.OperationId.ShouldNotBe(Guid.Empty);
+
+            return;
+        }
+
+        accepted.Completed.ShouldBeTrue(
+            "a synchronous action answers 200 with its own body; Completed is what the gateway keys "
+            + "its status code on"
+        );
+
+        // ⚠ No operation, and on a `secret: true` action that is a containment property rather than a
+        // tidiness one: OperationSpec and the LRO status are durable and are readable by anyone
+        // holding `read`, while a key export checks a permission that deliberately is not `read`.
+        accepted.OperationId.ShouldBe(Guid.Empty);
+        accepted.OperationUri.ShouldBeEmpty();
+
+        if (declared.Response is not { } shape) {
+            return;
+        }
+
+        using var body = JsonDocument.Parse(
+            accepted.ActionResponse.Length == 0 ? "{}" : accepted.ActionResponse
+        );
+
+        shape.Validate(body.RootElement)
+            .IsSuccess
+            .ShouldBeTrue(
+                "the handler's body does not match the response shape its provider published — which "
+                + "is what the OpenAPI document, the generated SDK and the portal form are built from"
+            );
     }
 
     [Fact]
@@ -992,9 +1070,15 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
                     null,
                     ReconcileDriver.NamespaceFor(address),
                     Cluster.World,
-                    new UnavailableSecretResolver(),
+                    // ⚠ The harness's vault on both members. A drift-repair pass is a full reconcile
+                    // pass — a provider that mints has to be able to mint on it, and the credential it
+                    // finds must be the SAME one the create wrote, which is what mint-once buys and
+                    // what a fresh store per call would hide.
+                    Cluster.Vault,
                     new RecordingLog()
-                ),
+                ) {
+                    SecretWriter = Cluster.Vault
+                },
                 TestContext.Current.CancellationToken
             );
     }
