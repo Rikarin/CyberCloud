@@ -1,3 +1,4 @@
+using CyberCloud.Authorization.Contracts;
 using CyberCloud.Core.Contracts;
 using CyberCloud.Core.Time;
 

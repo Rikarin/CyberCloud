@@ -197,13 +197,13 @@ public sealed class OracleTests(IsolationCluster cluster) {
         await cluster.WriteTupleAsync(
             IsolationCluster.Victim,
             Authorization.Contracts.ObjectRef.Of(
-                Authorization.ObjectTypes.ResourceGroup,
+                Authorization.Contracts.ObjectTypes.ResourceGroup,
                 IsolationCluster.VictimSubscription.ToString("N", CultureInfo.InvariantCulture)
                 + "-"
                 + IsolationCluster.Group
             ),
-            Authorization.Relations.Reader,
-            Authorization.Contracts.SubjectRef.Of(Authorization.ObjectTypes.User, reader)
+            Authorization.Contracts.Relations.Reader,
+            Authorization.Contracts.SubjectRef.Of(Authorization.Contracts.ObjectTypes.User, reader)
         );
 
         var address = IsolationCluster
@@ -234,28 +234,61 @@ public sealed class OracleTests(IsolationCluster cluster) {
         );
     }
 
-    [Fact]
-    public void TheResourceGroupObjectTypeTheSeamChecksIsOneTheSchemaDefines() {
-        // ⚠ THE DEFECT THIS SUITE WAS WRITTEN TO CATCH, KEPT AS A REGRESSION.
+    [Theory]
+    [MemberData(nameof(Targets))]
+    public void TheObjectACheckIsAskedOnIsTheGroupForACreateAndTheResourceOtherwise(IsolationTarget target) {
+        // ⚠ THE DEFECT THIS SUITE WAS WRITTEN TO CATCH, KEPT AS A REGRESSION — BUT NO LONGER AS A
+        // STRING COMPARISON, BECAUSE THERE ARE NO LONGER TWO STRINGS.
         //
-        // ReBacResourceAuthorizer checks a create against its parent resource group, naming the object
-        // type as a string; CyberCloudSchema defines the type, also as a string; and AuthorizationSchema
-        // looks types up with StringComparer.Ordinal. The seam said "resourcegroup" and the schema says
-        // "resourceGroup", so every check on a resource that did not exist yet answered SchemaInvalid,
-        // which the seam correctly renders as 404 — and EVERY CREATE FAILED, with the reason only in a
-        // log line.
+        // The original: ReBacResourceAuthorizer named the object types with its own literals, one of
+        // which read "resourcegroup" where CyberCloudSchema says "resourceGroup". AuthorizationSchema
+        // looks types up with StringComparer.Ordinal, so every check on a resource that did not exist
+        // yet answered SchemaInvalid, which the seam correctly renders as 404 — and EVERY CREATE
+        // FAILED, with the reason only in a log line. It survived because no test had ever driven a
+        // create through the real authorizer.
         //
-        // It survived because no test had ever driven a create through the real authorizer. The two
-        // constants still live in two assemblies that cannot share one, so this asserts the strings
-        // agree rather than trusting that they do.
-        ReBacResourceAuthorizer.ResourceGroupObjectType.ShouldBe(Authorization.ObjectTypes.ResourceGroup);
-        ReBacResourceAuthorizer.ResourceObjectType.ShouldBe(Authorization.ObjectTypes.Resource);
+        // What this used to assert was that the seam's two constants equalled ObjectTypes'. They ARE
+        // ObjectTypes' constants now — the vocabulary moved to CyberCloud.Authorization.Contracts,
+        // which CyberCloud.ResourceManager already referenced — so that assertion is `x.ShouldBe(x)`
+        // and a casing mismatch is CS0117 at the call site. The HasType half went for a second reason:
+        // PermissionNameTests.EveryObjectTypeConstantIsInTheSchema already asserts EVERY ObjectTypes
+        // constant is a type the schema defines, exhaustively rather than for these two, and the seam
+        // can no longer name a type from anywhere else.
+        //
+        // What is left unasserted is the part the compiler cannot see and the part the bug was really
+        // about: WHICH of the two types a given address gets. A create has no ReBAC object of its own
+        // and is checked one level up (docs/plan/08 § The write path, end to end); an existing resource
+        // is checked on itself. Collapsing those arms compiles, names only schema-defined types, and
+        // is still wrong in both directions — a create against a nonexistent object fails closed and
+        // makes every create impossible, and a resource checked on its group ignores its own
+        // #suspended.
+        var address = Victim(target, "type-branch");
 
-        Authorization.CyberCloudSchema.Instance.HasType(ReBacResourceAuthorizer.ResourceGroupObjectType)
-            .ShouldBeTrue();
+        var create = ReBacResourceAuthorizer.CheckedObject(address);
 
-        Authorization.CyberCloudSchema.Instance.HasType(ReBacResourceAuthorizer.ResourceObjectType)
-            .ShouldBeTrue();
+        create.Type.ShouldBe(
+            Authorization.Contracts.ObjectTypes.ResourceGroup,
+            "a resource that does not exist yet has no ReBAC object, so the check goes to its parent "
+            + "group; checking the absent resource would fail closed and no create could ever succeed"
+        );
+
+        create.Id.ShouldBe(
+            IsolationCluster.VictimSubscription.ToString("N", CultureInfo.InvariantCulture)
+            + "-"
+            + IsolationCluster.Group,
+            "the group's object id carries the subscription, or the 'prod' groups of every "
+            + "subscription are one authorization object"
+        );
+
+        var id = Guid.NewGuid();
+        var existing = ReBacResourceAuthorizer.CheckedObject(address.WithId(id));
+
+        existing.Type.ShouldBe(
+            Authorization.Contracts.ObjectTypes.Resource,
+            "a resource that exists is checked on itself, or its own #suspended is unreachable"
+        );
+
+        existing.Id.ShouldBe(id.ToString("N", CultureInfo.InvariantCulture));
     }
 
     /// <summary>The providers under attack.</summary>

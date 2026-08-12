@@ -1,4 +1,9 @@
 using CyberCloud.Authorization;
+// ⚠ ObjectTypes and Relations moved here from the implementation assembly — see
+// CyberCloud.Authorization.Contracts/AuthorizationVocabulary.cs. `using CyberCloud.Authorization`
+// above is still needed, for CyberCloudSchema. Safe to import unqualified in this one file because
+// nothing in it names ObjectRef, which GlobalUsings.cs pins to the Kubernetes spelling.
+using CyberCloud.Authorization.Contracts;
 using CyberCloud.ResourceManager;
 using System.Globalization;
 
@@ -105,15 +110,29 @@ public sealed class ParentEdgeTests(IsolationCluster cluster) {
 
     [Fact]
     public void TheRelationTheWriterNamesIsTheOneTheSchemaRewritesThrough() {
-        // ⚠ THE SAME GUARD THE resourcegroup/resourceGroup CASING BUG EARNED, ON THE OTHER STRING.
+        // ⚠ THE SAME GUARD THE resourcegroup/resourceGroup CASING BUG EARNED, ON THE OTHER STRING —
+        // AND THE HALF OF IT THAT SURVIVED THE VOCABULARY MOVE.
         //
-        // ReBacResourceRelationWriter names the relation "parent" as a literal because
-        // CyberCloud.Authorization.Relations lives in an assembly CyberCloud.ResourceManager does not
-        // reference. A mismatch would be SILENT in a way the casing bug was not: the tuple would be
-        // written successfully against a relation no rewrite follows, every create would report 202,
-        // and every resource would be invisible with no error in any log.
-        ReBacResourceRelationWriter.ParentRelation.ShouldBe(Relations.Parent);
-
+        // ReBacResourceRelationWriter used to name the relation "parent" as a literal, because
+        // Relations lived in CyberCloud.Authorization and CyberCloud.ResourceManager references only
+        // its .Contracts. ParentRelation IS Relations.Parent now, so asserting the two strings agree
+        // has become `x.ShouldBe(x)` and is gone; a misspelling is CS0117 at the call site.
+        //
+        // What is NOT a compile error is naming the wrong DEFINED relation, and that is what is left
+        // here. Note which side of this is load-bearing: the schema half is not. Dropping
+        // .Relation(Relations.Parent) from DefineType(ObjectTypes.Resource) fails 84 tests in
+        // CyberCloud.Authorization.Tests on its own, because SchemaBuilder.Build() throws rather than
+        // resolve the From(Relations.Parent, …) rewrites through an undeclared relation — so
+        // `Member(ObjectTypes.Resource, Relations.Parent)` spelled with the constant directly would be
+        // guarded elsewhere and would assert nothing new.
+        //
+        // The subject is ReBacResourceRelationWriter.ParentRelation: the relation THIS WRITER uses,
+        // which nothing in CyberCloud.Authorization.Tests can see. Repointing it at any other defined
+        // relation — Relations.Owner, say — compiles, names a relation the schema declares, and fails
+        // only here. That failure is the silent one the casing bug was not: an object type the schema
+        // does not define is REJECTED, but a tuple naming a relation the resource type does not
+        // declare is written SUCCESSFULLY against a relation no rewrite follows, so every create
+        // reports 202 and every resource is invisible with no error in any log.
         CyberCloudSchema.Instance
             .Member(ReBacResourceAuthorizer.ResourceObjectType, ReBacResourceRelationWriter.ParentRelation)
             .ShouldNotBeNull("the resource type has no 'parent' relation for the edge to be written on");

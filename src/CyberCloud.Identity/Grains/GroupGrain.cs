@@ -1,4 +1,8 @@
-using CyberCloud.Authorization;
+// ⚠ ONE `using`, AND IT USED TO BE TWO. `ObjectTypes` and `Relations` were in the authorization
+// IMPLEMENTATION assembly, so this file's second `using CyberCloud.Authorization;` was the whole
+// reason CyberCloud.Identity.csproj referenced it — the only module-to-implementation edge in the
+// tree outside providers. The vocabulary moved to .Contracts; see
+// CyberCloud.Authorization.Contracts/AuthorizationVocabulary.cs.
 using CyberCloud.Authorization.Contracts;
 using CyberCloud.Core.Contracts;
 using CyberCloud.Core.Time;

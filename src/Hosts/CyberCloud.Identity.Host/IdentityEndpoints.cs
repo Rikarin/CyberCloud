@@ -32,10 +32,13 @@ namespace CyberCloud.Identity.Host;
 ///     <para>
 ///         <b>What is still owed.</b> The consent page described at the foot of these remarks has no
 ///         endpoint here, and neither does password reset — <c>SignInService.RequestPasswordResetAsync</c>
-///         exists and answers uniformly, but nothing mails the link, because <c>IOtpDeliverySeam</c>
-///         is <c>UnavailableOtpDelivery</c> in every host in this repository. TOTP is mapped and will
-///         refuse every code until an <c>ITotpSecretSeam</c> is wired over a vault; recovery codes
-///         work today, which is the point of having both.
+///         exists and answers uniformly, but nothing mails the link. ⚠ That sentence used to end
+///         "because <c>IOtpDeliverySeam</c> is <c>UnavailableOtpDelivery</c> in every host in this
+///         repository", and the real position is emptier: nothing calls
+///         <c>IOtpDeliverySeam.DeliverAsync</c> anywhere, and no host registers an implementation of
+///         the seam at all — <c>SignInApi.Offered</c>'s remarks set out why for each host. TOTP is
+///         mapped and will refuse every code until an <c>ITotpSecretSeam</c> is wired over a vault;
+///         recovery codes work today, which is the point of having both.
 ///     </para>
 ///     <para>
 ///         <b>What the sign-in page needs, end to end:</b>

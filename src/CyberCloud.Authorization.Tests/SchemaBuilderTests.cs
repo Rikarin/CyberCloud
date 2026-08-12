@@ -1,3 +1,4 @@
+using CyberCloud.Authorization.Contracts;
 using Shouldly;
 using static CyberCloud.Authorization.Rewrite;
 

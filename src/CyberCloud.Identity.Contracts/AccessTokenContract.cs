@@ -1,3 +1,4 @@
+using CyberCloud.Authorization.Contracts;
 using CyberCloud.Core;
 using System.Collections.Frozen;
 
@@ -237,66 +238,18 @@ public static class AccessTokenClaims {
     }
 }
 
-/// <summary>
-///     The subject types a Cyber Cloud access token's <see cref="AccessTokenClaims.SubjectType" />
-///     may name. <b>The set is closed.</b> docs/plan/07 § The model, docs/plan/11 § The object model.
-/// </summary>
-/// <remarks>
-///     <para>
-///         ⚠ <b>These are ReBAC object types, and the spelling has to match the tuples exactly.</b> A
-///         token that said <c>serviceprincipal</c> where the tuple store says <c>servicePrincipal</c>
-///         would produce a <c>SubjectRef</c> that matches no tuple, so every check would deny — which
-///         looks like a permissions bug and is a spelling bug. They are declared here rather than
-///         referenced from <c>CyberCloud.Authorization</c>'s <c>ObjectTypes</c> because
-///         <c>CyberCloud.Identity.Contracts</c> must not depend on the authorization implementation
-///         assembly; ⚠ the duplication is owed a fix, which is to lift the subject types into
-///         <c>CyberCloud.Authorization.Contracts</c> where both sides already look.
-///         <c>SubjectTypesMatchTheReBacSpellings</c> pins them meanwhile.
-///     </para>
-///     <para>
-///         ⚠ <b><c>group</c> is deliberately absent.</b> A group is a ReBAC object and the
-///         <i>subject</i> of role assignments through its <c>member</c> userset, but nothing ever
-///         signs in as one — there is no credential a group holds. A token whose subject type were
-///         <c>group</c> would be a bearer credential for everyone in it.
-///     </para>
-/// </remarks>
-public static class SubjectTypes {
-    /// <summary>A human. docs/plan/11 § The object model.</summary>
-    public const string User = "user";
-
-    /// <summary>A machine identity with a client secret or a certificate.</summary>
-    public const string ServicePrincipal = "servicePrincipal";
-
-    /// <summary>
-    ///     A workload identity bound to <c>(cluster, namespace, serviceAccount)</c> — the third
-    ///     subject type, and the one that holds no credential at all. docs/plan/11 § Managed identity.
-    /// </summary>
-    public const string ManagedIdentity = "managedIdentity";
-
-    /// <summary>The closed set, in the order docs/plan/11 § The object model names them.</summary>
-    public static FrozenSet<string> All { get; } =
-        new[] { User, ServicePrincipal, ManagedIdentity }.ToFrozenSet(StringComparer.Ordinal);
-
-    /// <summary>
-    ///     Whether <paramref name="subjectType" /> is one of <see cref="All" />, and a failure that
-    ///     names the closed set when it is not.
-    /// </summary>
-    /// <param name="subjectType">The candidate.</param>
-    /// <remarks>
-    ///     ⚠ Ordinal and case-sensitive, because the value is a ReBAC object type and the tuple store
-    ///     is case-sensitive. Accepting <c>User</c> here would mint a token whose every check denies.
-    /// </remarks>
-    public static Result Ensure(string? subjectType) =>
-        subjectType is not null && All.Contains(subjectType)
-            ? Result.Success
-            : Result.Failure(
-                ErrorCode.InternalError,
-                $"'{subjectType}' is not a subject type. The set is closed and is "
-                + $"[{string.Join(", ", All.Order(StringComparer.Ordinal))}] — docs/plan/07 § The "
-                + "model. It is matched ordinally because it is a ReBAC object type, and a token "
-                + "carrying a differently-cased spelling would produce a subject no tuple names."
-            );
-}
+// ⚠ SubjectTypes IS NOT IN THIS FILE ANY MORE, AND THE FIX IT USED TO ASK FOR IS THE ONE THAT WAS
+// APPLIED. Its own remarks read: "they are declared here rather than referenced from
+// CyberCloud.Authorization's ObjectTypes because CyberCloud.Identity.Contracts must not depend on
+// the authorization implementation assembly; ⚠ the duplication is owed a fix, which is to lift the
+// subject types into CyberCloud.Authorization.Contracts where both sides already look." It now
+// lives in CyberCloud.Authorization.Contracts/AuthorizationVocabulary.cs beside ObjectTypes,
+// Relations and Permissions, and SubjectTypes.User is ObjectTypes.User rather than a second
+// "user" — so the agreement the old SubjectTypesMatchTheReBacSpellings asserted is now partly
+// structural. This assembly already referenced CyberCloud.Authorization.Contracts for SubjectRef,
+// so nothing was added to reach it; what was removed is CyberCloud.Identity's ProjectReference on
+// the authorization IMPLEMENTATION assembly, which existed for the other half of the same
+// vocabulary.
 
 /// <summary>
 ///     The properties of an issued access token that the gateway relies on, stated once so both

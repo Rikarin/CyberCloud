@@ -1,3 +1,4 @@
+using CyberCloud.Authorization.Contracts;
 using CyberCloud.Core.Contracts;
 using CyberCloud.Identity.Contracts;
 using CyberCloud.Identity.Tests.Infrastructure;
