@@ -99,14 +99,26 @@ check('neither rendered page carries the other request’s tenant', () => {
 });
 
 /**
- * Widget ids that xUI allocates from a per-process counter (`xui-select-trigger-1`,
- * `xui-select-trigger-7`, …). They carry no user data and legitimately differ between two renders
- * in one process, so they are normalised before the documents are compared.
+ * ⚠ **This used to rewrite `\b(xui-[a-z-]+?)-\d+\b` and no longer does, as of `@xui` 2.2.3.**
  *
- * ⚠ Normalised, not ignored. The substitution is exact — a counter suffix and nothing else — so it
- * cannot hide a tenant name, an id or a token. Anything this does not rewrite still has to match.
+ * xUI allocated widget ids from a per-process counter, so `xui-select-trigger-1` in one render was
+ * `xui-select-trigger-7` in the next and the two documents could not be compared without a waiver.
+ * `XIdSequence` is now `providedIn: 'root'` — one root injector is one application and one
+ * application is one render — so every generated id is a pure function of the page and the waiver is
+ * gone.
+ *
+ * It is worth saying why the waiver was worth removing rather than keeping as harmless. It was
+ * exact, and it still hid three ids that never matched it: `x-label-N`, `x-checkbox-N`, and
+ * `XuiCaption`'s **bare integer**, which landed in a table's `aria-labelledby` — a legal HTML id and
+ * an illegal CSS identifier, so `querySelector('#2')` threw. A pattern narrow enough to look safe
+ * was still the reason nobody looked at the ids beside it.
+ *
+ * Comparison is now byte-for-byte. If this assertion starts failing, the cause is a real one:
+ * something request-derived, clock-derived or counter-derived reached the render. `@xui/carousel`
+ * autoplays during SSR from an unguarded `setInterval` and would do exactly that — the portal does
+ * not depend on it, and adding that dependency is what would break this.
  */
-const normalise = (html) => html.replaceAll(/\b(xui-[a-z-]+?)-\d+\b/g, '$1-N');
+const normalise = (html) => html;
 
 check('no shared state: two concurrent renders produce identical shells', () => {
   // The strongest form of "no shared state" available at this layer. The SSR process holds no
