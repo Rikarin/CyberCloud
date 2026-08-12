@@ -13,7 +13,7 @@ namespace CyberCloud.Vault.Tests;
 ///         ⚠ <b>THE FAILURE CLASS IS A SEAM THAT BECAME PERMISSIVE FOR A HOST THAT DID NOT ASK.</b>
 ///         <see cref="UnavailableSecretResolver" /> refuses by design, and its argument is that an
 ///         empty password reaching a rendered manifest is a database with no password reported as a
-///         successful provision. <c>RegistryAndDriftTests.TheDefaultSecretResolverRefusesRatherThanReturningEmpty</c>
+///         successful provision. <c>StubbedSeamTests.TheDefaultSecretResolverRefusesRatherThanReturningEmpty</c>
 ///         pins what it says. What is asserted here is the half that type cannot assert about
 ///         itself: that it is still what a silo <i>gets</i>. That breaks when somebody wiring one
 ///         host reaches for a convenience which changes the default for all of them.

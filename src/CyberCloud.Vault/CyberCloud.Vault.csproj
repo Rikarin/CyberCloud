@@ -11,6 +11,17 @@
       plane, so a reconciler can put a password into a Kubernetes Secret it is applying without the
       password ever entering desired state. The two share a cluster and share nothing else.
 
+      ⚠ RECORDED HERE BECAUSE THE PROVIDER THAT WOULD CARRY IT DOES NOT EXIST YET: vaults/secrets is
+      the type in this platform with the strongest case for soft delete, and it will not be able to
+      declare SupportsSoftDelete either. docs/plan/18 § Soft delete asks for a 7-day recovery window
+      and purge protection "because a deleted signing key is a business-ending event", and Azure's
+      Key Vault does not make it optional — it is on by default and cannot be turned off once on. But
+      docs/plan/08 § Soft delete is a decision record and nothing more: the deletedResources type, the
+      new IndexEntryState, moving the quota return to purge, and the purge operation are all owed, and
+      nothing in the manager reads SoftDeleteDays. So the omission on the eventual provider is a
+      platform gap rather than a judgement about the type, and the five existing providers' paragraphs
+      say the same thing about weaker cases.
+
       ⚠ THE ASSEMBLY NAME IS LOAD-BEARING AND IS NOT A MATTER OF TASTE. CC1005 exempts exactly this
       assembly, by an exact-or-dotted-prefix match on Compilation.AssemblyName —
       CyberCloud.Analyzers/WellKnown.cs's VaultAssembly const, and SecretInGrainStateAnalyzer's
