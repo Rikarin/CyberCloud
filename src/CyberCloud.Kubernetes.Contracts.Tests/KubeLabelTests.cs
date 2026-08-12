@@ -336,7 +336,11 @@ public sealed class KubeLabelTests {
             "prod",
             new("CyberCloud.DBforPostgreSQL", "servers/databases"),
             "main",
-            Guid.Parse("3a8f0c22-5e6d-4a7b-8c9d-0e1f2a3b4c5d")
+            Guid.Parse("3a8f0c22-5e6d-4a7b-8c9d-0e1f2a3b4c5d"),
+            // ⚠ The server this database is in. A nested type carries one name per level above it —
+            // docs/plan/12 § Child resources — and the label values below are unaffected by it,
+            // because `resource-type` is built from the TYPE and never from the address.
+            "pg-main"
         );
 
     static IReadOnlyDictionary<string, string> EmittedLabels(ResourceId id, string apiVersion = "2026-08-01") {
