@@ -14,15 +14,22 @@
       surface lives entirely in the host. An assembly that could reach HttpContext would eventually
       grow a helper that reads one, and the boundary would become a convention again.
 
-      ⚠ IT REFERENCES CyberCloud.Authorization, NOT ONLY ITS .Contracts, AND THAT IS DELIBERATE.
+      ⚠ IT REFERENCES CyberCloud.Authorization.Contracts AND NOT THE IMPLEMENTATION ASSEMBLY, AND
+      THAT SENTENCE USED TO READ THE OTHER WAY ROUND.
       docs/plan/11 § The object model puts group membership in ReBAC tuples rather than in grain
       state, so IGroupGrain writes `group:X#member@user:Y`. Spelling `group`, `member` and `user` as
       string literals here would be a second copy of the schema's vocabulary, and the failure mode of
       a second copy is a membership write that no membership check can see. ObjectTypes and Relations
-      live in the implementation assembly, so that is what is referenced. This does NOT make identity
-      an authorization enforcement point — docs/plan/07 § The enforcement seam keeps that in the
-      resource manager; what happens here is tuple WRITES, which is the same thing a role assignment
-      is.
+      used to live in the implementation assembly, so this .csproj referenced it — the only
+      module-to-implementation edge in the tree outside providers. They were lifted into
+      CyberCloud.Authorization.Contracts (see AuthorizationVocabulary.cs, which says what did NOT
+      move and why), together with SubjectTypes from CyberCloud.Identity.Contracts, which was the
+      identical problem seen from the other end. The reference below is gone; the module edge
+      CyberCloud.Identity -> CyberCloud.Authorization is not, because .Contracts is the same module.
+
+      This does NOT make identity an authorization enforcement point — docs/plan/07 § The enforcement
+      seam keeps that in the resource manager; what happens here is tuple WRITES, which is the same
+      thing a role assignment is.
 
       ⚠ IT REFERENCES CyberCloud.Communication.Contracts, AND THE DIRECTION IS THE POINT.
       docs/plan/11 § Credentials routes email, SMS and WhatsApp one-time codes through
@@ -85,7 +92,6 @@
         <ProjectReference Include="../CyberCloud.Communication.Contracts/CyberCloud.Communication.Contracts.csproj"/>
         <ProjectReference Include="../CyberCloud.Tenancy.Contracts/CyberCloud.Tenancy.Contracts.csproj"/>
         <ProjectReference Include="../CyberCloud.Authorization.Contracts/CyberCloud.Authorization.Contracts.csproj"/>
-        <ProjectReference Include="../CyberCloud.Authorization/CyberCloud.Authorization.csproj"/>
     </ItemGroup>
 
     <ItemGroup Label="CyberCloud.Analyzers — see CyberCloud.Core.csproj for why this is not a reference">

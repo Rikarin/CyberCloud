@@ -21,6 +21,14 @@
       version of this assembly that could not name SubjectRef would have to re-declare the subject
       shape, and a second spelling of a subject is how a membership write and a membership check stop
       agreeing.
+
+      ⚠ IT IS ALSO WHERE SubjectTypes WENT, AND THAT IS THE SAME SENTENCE ARRIVING AT ITS CONCLUSION.
+      This assembly used to declare SubjectTypes — `user`, `servicePrincipal`, `managedIdentity` —
+      because it could not reach CyberCloud.Authorization's ObjectTypes without referencing the
+      implementation assembly. That was exactly the second spelling the paragraph above forbids, and
+      AccessTokenContract.cs said so in a ⚠ block naming the owed fix. ObjectTypes, Relations,
+      Permissions and SubjectTypes now all live in CyberCloud.Authorization.Contracts, and
+      SubjectTypes.User is ObjectTypes.User.
     -->
 
     <PropertyGroup>

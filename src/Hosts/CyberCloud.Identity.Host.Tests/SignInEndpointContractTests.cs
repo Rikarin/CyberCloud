@@ -152,10 +152,25 @@ public sealed class SignInEndpointContractTests {
     public void BeginOffersNoCredentialThatCannotWork() {
         var offered = SignInApi.Begin(new("someone@example.com")).Offered;
 
-        // ⚠ IOtpDeliverySeam is UnavailableOtpDelivery in every host in this repository, so an OTP
-        // kind offered here is a button that always fails. This row goes green the day a host calls
-        // AddCommunicationOtpDelivery and somebody widens SignInApi.Offered — which is the moment it
-        // should be reconsidered rather than the moment it should silently stay wrong.
+        // ⚠ NO HOST IN THIS REPOSITORY CAN DELIVER AN OTP, AND THE REASON IS WORSE THAN THIS COMMENT
+        // USED TO SAY. It read "IOtpDeliverySeam is UnavailableOtpDelivery in every host", which is
+        // not the state of the tree: no host registers an IOtpDeliverySeam AT ALL. AddIdentityHostApi
+        // does not (this host is an Orleans client and AddCyberCloudIdentity — which is what
+        // registers the refusing default — takes an ISiloBuilder), and CyberCloud.Silo.Host does not
+        // compose the identity module in the first place. Nothing calls the seam either:
+        // IOtpDeliverySeam.DeliverAsync has no production caller anywhere in the tree.
+        //
+        // So an OTP kind offered here is not "a button that fails with a good message"; it is a
+        // button with nothing behind it. THREE things have to land before this row should be
+        // revisited, and wiring alone is none of them:
+        //
+        //   1. something calls IOtpDeliverySeam — an OTP issuance path, which is a feature;
+        //   2. the process that calls it has one registered — and if that process is this host, then
+        //      AddCommunicationOtpDelivery's ISiloBuilder receiver is the wrong shape for it;
+        //   3. SignInApi.Offered is widened, deliberately, at that point and not before.
+        //
+        // Widening Offered on its own would ship a sign-in page offering a credential that cannot be
+        // sent, which is the failure this row exists to prevent.
         foreach (var kind in new[] { CredentialKind.EmailOtp, CredentialKind.SmsOtp, CredentialKind.WhatsAppOtp }) {
             offered.ShouldNotContain(
                 CredentialKindNames.Of(kind),

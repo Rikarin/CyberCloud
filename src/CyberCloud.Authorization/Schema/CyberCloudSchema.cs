@@ -1,80 +1,14 @@
+// ⚠ ObjectTypes, Relations and Permissions ARE NOT IN THIS FILE ANY MORE. They are the vocabulary
+// rather than the schema — the names a caller has to spell, as against the rewrite graph the
+// evaluator walks — and they now live in CyberCloud.Authorization.Contracts/
+// AuthorizationVocabulary.cs, beside SubjectTypes. That file's header says what the split buys and
+// why the schema below stayed here. The types below still reference them by their simple names,
+// because the `using` at the top of this file imports the contracts namespace.
+
+using CyberCloud.Authorization.Contracts;
 using static CyberCloud.Authorization.Rewrite;
 
 namespace CyberCloud.Authorization;
-
-/// <summary>The object types the built-in schema defines. Constants so a typo is <c>CS0117</c>.</summary>
-public static class ObjectTypes {
-    /// <summary>The tenant — docs/plan/06 § The hierarchy, the top of it.</summary>
-    public const string Tenant = "tenant";
-
-    /// <summary>A subscription.</summary>
-    public const string Subscription = "subscription";
-
-    /// <summary>A resource group.</summary>
-    public const string ResourceGroup = "resourceGroup";
-
-    /// <summary>A resource.</summary>
-    public const string Resource = "resource";
-
-    /// <summary>A group, whose <c>member</c> userset is the subject of most role assignments.</summary>
-    public const string Group = "group";
-
-    /// <summary>A user. A subject type — it has no relations of its own.</summary>
-    public const string User = "user";
-
-    /// <summary>The platform itself. <c>platform:root#operator</c> — docs/plan/06 § Platform administration.</summary>
-    public const string Platform = "platform";
-}
-
-/// <summary>The relation names the built-in schema defines.</summary>
-public static class Relations {
-    /// <summary>The scope one level up. The tupleset every inheritance rewrite follows.</summary>
-    public const string Parent = "parent";
-
-    /// <summary>Azure's <c>Owner</c>.</summary>
-    public const string Owner = "owner";
-
-    /// <summary>Azure's <c>Contributor</c>.</summary>
-    public const string Contributor = "contributor";
-
-    /// <summary>Azure's <c>Reader</c>.</summary>
-    public const string Reader = "reader";
-
-    /// <summary>
-    ///     Azure's deny assignment — docs/plan/07 § Azure RBAC, expressed in it, row 4. The only
-    ///     relation any permission negates, and therefore the only one that has to be direct.
-    /// </summary>
-    public const string Suspended = "suspended";
-
-    /// <summary>Group membership. The userset in <c>group:eng#member</c>.</summary>
-    public const string Member = "member";
-
-    /// <summary>A platform operator — the relation docs/plan/06 § Platform administration names.</summary>
-    public const string Operator = "operator";
-}
-
-/// <summary>The permission names the built-in schema defines.</summary>
-/// <remarks>
-///     ⚠ Using these at a <c>[RequiresPermission]</c> call site is what turns a typo into a
-///     compile error. Nothing forces a caller to; see
-///     <c>RequiresPermissionAttribute</c> for exactly how far enforcement actually goes.
-/// </remarks>
-public static class Permissions {
-    /// <summary>Read the object.</summary>
-    public const string Read = "read";
-
-    /// <summary>Change the object.</summary>
-    public const string Write = "write";
-
-    /// <summary>Delete the object.</summary>
-    public const string Delete = "delete";
-
-    /// <summary>Assign a role at this scope. The one permission with a negation in it.</summary>
-    public const string AssignRole = "assignRole";
-
-    /// <summary>Administer the platform.</summary>
-    public const string Administer = "administer";
-}
 
 /// <summary>
 ///     The built-in schema — docs/plan/07 § Azure RBAC, expressed in it, as C#.

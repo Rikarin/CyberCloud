@@ -101,14 +101,27 @@ public static class IdentitySiloBuilderExtensions {
     /// <remarks>
     ///     <para>
     ///         ⚠ <b><see cref="ServiceCollectionDescriptorExtensions.Replace" /> rather than
-    ///         <c>TryAdd</c> or <c>Add</c>, so this call is order-independent.</b>
+    ///         <c>TryAdd</c> or <c>Add</c> — but <b>not</b> for the reason this paragraph used to
+    ///         give, which was wrong.</b> It claimed a plain <c>Add</c> "would <i>win</i> or lose
+    ///         depending on which order a host happened to write two lines in". It would not:
     ///         <see cref="AddCyberCloudIdentity" /> registers <see cref="UnavailableOtpDelivery" />
-    ///         with <c>TryAdd</c>: called before it, a plain <c>Add</c> here would be silently
-    ///         overridden — no, worse, it would <i>win</i> or lose depending on which order a host
-    ///         happened to write two lines in, and the losing arrangement is the one where every OTP
-    ///         fails with a message about missing wiring that is <i>present</i>.
-    ///         <c>Replace</c> removes whatever is there and installs this, whichever way round the
-    ///         host writes it.
+    ///         with <c>TryAdd</c>, and <c>TryAdd</c> is a no-op once <i>any</i> descriptor for the
+    ///         service type exists, so <c>Add</c>-then-<c>TryAdd</c> leaves only this one; while
+    ///         <c>TryAdd</c>-then-<c>Add</c> leaves two and
+    ///         <see cref="ServiceProviderServiceExtensions.GetRequiredService{T}" /> returns the
+    ///         last, which is again this one. Both orders resolve correctly under <c>Add</c>. The
+    ///         error was found by swapping the two and watching
+    ///         <c>CyberCloud.Identity.Tests.OtpSeamWiringTests</c> stay green.
+    ///     </para>
+    ///     <para>
+    ///         <b>What <c>Replace</c> is actually for, then.</b> The descriptor <i>count</i>. Under
+    ///         <c>Add</c> the <c>TryAdd</c>-first order leaves the refusing seam sitting behind this
+    ///         one, where <c>GetServices</c> and any <c>IEnumerable&lt;IOtpDeliverySeam&gt;</c>
+    ///         injection would still find it — and a caller iterating that collection could take
+    ///         either. <c>Replace</c> removes whatever is there and installs this, so there is
+    ///         exactly one and no order in which a wired host still carries a refusal.
+    ///         <c>OtpSeamWiringTests.OptingInLeavesNoRefusingSeamBehindIt</c> is the row that goes
+    ///         red if this becomes <c>Add</c> again.
     ///     </para>
     ///     <para>
     ///         ⚠ <b>The host still owes <c>AddCyberCloudCommunication()</c>.</b> This registers the
