@@ -234,6 +234,30 @@
         <Project Path="src/Providers/CyberCloud.Providers.Storage/CyberCloud.Providers.Storage.Tests/CyberCloud.Providers.Storage.Tests.csproj"/>
         <Project Path="src/Providers/CyberCloud.Providers.Storage/CyberCloud.Providers.Storage.Conformance/CyberCloud.Providers.Storage.Conformance.csproj"/>
         <Project Path="src/Providers/CyberCloud.Providers.Storage/CyberCloud.Providers.Storage.Cluster.Conformance/CyberCloud.Providers.Storage.Cluster.Conformance.csproj"/>
+
+        <!--
+          The sixth provider family — CyberCloud.Analytics/clickhouseClusters on the Altinity operator,
+          docs/plan/12 § The catalogue.
+
+          ⚠ THE PLATFORM RUNS CLICKHOUSE AND THE PLATFORM'S CLICKHOUSE IS NOT THIS TYPE. docs/plan/16
+          § The stack and docs/plan/22 § The pipeline describe a per-region, database-per-tenant,
+          platform-schema store on the ingest write path; this is a single-tenant cluster in a tenant
+          namespace whose schema docs/plan/12 says the tenant owns, and whose §"the resource does not
+          manage tables" is the scope boundary the row was given. The engine is shared; the resource
+          type is not. The four-part argument is on ClickHouseClusters.
+
+          ⚠ IT RENDERS TWO CUSTOM RESOURCES IN TWO API GROUPS, which is a shape nothing had exercised.
+          docs/plan/12's "ZooKeeper/ClickHouse Keeper managed by the operator" turns out to mean the
+          operator serves a CRD for it, not that a ClickHouseInstallation brings its own — the
+          installation NAMES a Keeper's Service in spec.configuration.zookeeper.nodes, and nothing this
+          provider applies creates that Service.
+        -->
+        <Project Path="src/Providers/CyberCloud.Providers.Analytics/CyberCloud.Providers.Analytics.Contracts/CyberCloud.Providers.Analytics.Contracts.csproj"/>
+        <Project Path="src/Providers/CyberCloud.Providers.Analytics/CyberCloud.Providers.Analytics/CyberCloud.Providers.Analytics.csproj"/>
+        <Project Path="src/Providers/CyberCloud.Providers.Analytics/CyberCloud.Providers.Analytics.Application/CyberCloud.Providers.Analytics.Application.csproj"/>
+        <Project Path="src/Providers/CyberCloud.Providers.Analytics/CyberCloud.Providers.Analytics.Tests/CyberCloud.Providers.Analytics.Tests.csproj"/>
+        <Project Path="src/Providers/CyberCloud.Providers.Analytics/CyberCloud.Providers.Analytics.Conformance/CyberCloud.Providers.Analytics.Conformance.csproj"/>
+        <Project Path="src/Providers/CyberCloud.Providers.Analytics/CyberCloud.Providers.Analytics.Cluster.Conformance/CyberCloud.Providers.Analytics.Cluster.Conformance.csproj"/>
     </Folder>
     <Folder Name="/src/Hosts/">
         <Project Path="src/Hosts/CyberCloud.Gateway.Host/CyberCloud.Gateway.Host.csproj"/>

@@ -1,0 +1,64 @@
+{{/*
+Altinity `ClickHouseKeeperInstallation` — docs/plan/12's "ZooKeeper/ClickHouse Keeper managed by the
+operator", which turns out to mean "the operator serves a CRD for it", not "the installation brings
+its own".
+
+⚠ THIS FILE IS THE HALF OF THAT SENTENCE THAT IS EASY TO MISS. A ClickHouseInstallation does not
+create a Keeper; it NAMES one. See templates/clickhouse.yaml's zookeeper block and
+_helpers.tpl's `clickhouse.keeperService`.
+
+⚠ It renders a custom resource; it does not install the operator. The operator is charts/bundle/'s
+job, which is why this chart has no CRD directory and no operator Deployment.
+
+⚠ UNCONDITIONAL, EVEN AT ONE SHARD AND ONE REPLICA. A tenant who creates a ReplicatedMergeTree on a
+cluster with no coordination gets Coordination::Exception at DDL time, and the schema is theirs to
+create — docs/plan/12: "Schema is the tenant's problem". Making the Keeper appear when `replicas`
+crosses one would be worse: the tables that already exist would have been created without it.
+*/}}
+apiVersion: clickhouse-keeper.altinity.com/v1
+kind: ClickHouseKeeperInstallation
+metadata:
+  name: {{ include "clickhouse.name" . }}
+  labels:
+    {{- include "clickhouse.platformLabels" . | nindent 4 }}
+spec:
+  configuration:
+    clusters:
+      {{/*
+        ⚠ replicasCount and NO shardsCount. Raft replicates one log to every member; there is
+        nothing to split, and the CHK layout has no shard axis at all.
+      */}}
+      - name: {{ .Values.clusterName | quote }}
+        layout:
+          replicasCount: {{ .Values.keeperNodes }}
+
+  {{/*
+    ⚠ `defaults.templates` REFERENCES A TEMPLATE BY NAME, and a name that is not in `templates` below
+    is NOT an error. The operator runs the container it would have run anyway — no image, no
+    resources — so the two names are written once each and the pairing is the thing to check.
+  */}}
+  defaults:
+    templates:
+      podTemplate: cybercloud
+      dataVolumeClaimTemplate: data
+
+  templates:
+    podTemplates:
+      - name: cybercloud
+        spec:
+          containers:
+            - name: clickhouse-keeper
+              image: {{ include "clickhouse.keeperImage" . | quote }}
+              resources:
+                {{- include "clickhouse.keeperResources" . | nindent 16 }}
+    volumeClaimTemplates:
+      - name: data
+        spec:
+          accessModes:
+            - ReadWriteOnce
+          resources:
+            requests:
+              storage: 10Gi
+          {{- if .Values.storage.class }}
+          storageClassName: {{ .Values.storage.class | quote }}
+          {{- end }}

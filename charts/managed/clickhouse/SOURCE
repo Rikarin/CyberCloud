@@ -1,0 +1,93 @@
+# Provenance — charts/README.md § `SOURCE` is required, including when nothing was forked.
+#
+# ADR-010: "Their charts are a starting point, not a dependency. Where a chart is close, fork it into
+# charts/ with the upstream commit recorded in a SOURCE file." Nothing was forked here, and
+# `vendored: none` is an answer to "where did this come from" where a missing file is not.
+
+vendored: none
+upstream: https://github.com/Altinity/clickhouse-operator
+
+# The upstream APIs this chart's templates target. ⚠ TWO GROUPS, WHICH IS THE FIRST THING TO NOTICE
+# ABOUT THIS SERVICE. One operator binary serves both; they are not one CRD with two kinds, and a
+# cluster that installed only the first would refuse the Keeper with a 404 per pass.
+upstream-api: clickhouse.altinity.com/v1
+upstream-api-keeper: clickhouse-keeper.altinity.com/v1
+
+# The engine. ADR-011: ClickHouse is Apache-2.0 and is not one of the four rows that document
+# refuses — it is offerable as a managed service under its own name, unlike Redis, Vault, MongoDB and
+# Elasticsearch.
+engine: https://github.com/ClickHouse/ClickHouse
+
+# Reviewed against the upstream sources on this date — the two CRD schemas as published for
+# operatorhub 0.23.5, the worked examples under docs/chi-examples and docs/chk-examples, and the
+# operator's own hardening guide. A bare date rather than a SHA is a weaker claim and is labelled as
+# one.
+#
+# ⚠ WHAT THIS REVIEW ESTABLISHED, because four of the six change what this chart renders and two of
+# them contradict something written elsewhere in this repository:
+#
+#   * docs/chk-examples/01-chi-simple-with-keeper.yaml — THE FACT THAT DECIDES THE OBJECT COUNT.
+#     docs/plan/12 says "ZooKeeper/ClickHouse Keeper managed by the operator", which is half true. A
+#     ClickHouseInstallation does NOT create a Keeper for itself: that file is TWO documents, and the
+#     CHI names the Keeper by SERVICE — `host: keeper-simple-1`, with the comment "This is a service
+#     name of chk/simple-1". So this chart renders both objects and wires the first to the second, and
+#     the `keeper-` prefix is a string nothing in an apply, a read-back or an admission check would
+#     ever verify. What verifies it is a tenant's first ReplicatedMergeTree.
+#
+#   * clickhouseinstallations.clickhouse.altinity.com.crd.yaml and
+#     clickhousekeeperinstallations.clickhouse-keeper.altinity.com.crd.yaml — NEITHER DECLARES A
+#     SINGLE `default:`, and there is no admission webhook in this operator. So the structural-
+#     defaulting argument that makes NatsClusters.Matches and StorageAccounts.Matches containment is
+#     FALSE here, and this is the third sighting of the finding charts/managed/kafka records. Matches
+#     is still containment, for two different reasons: `spec.templating.policy: auto` lets a
+#     ClickHouseInstallationTemplate merge into this spec at the request of somebody who is not this
+#     platform (the CHI's own `status.usedTemplates` exists to record that it happened), and
+#     `configuration.settings` plus every `templates.*[].spec` is
+#     `x-kubernetes-preserve-unknown-fields: true`, which the API server does not prune.
+#
+#   * docs/security_hardening.md — THE CREDENTIAL FACT, AND IT IS THE OPPOSITE OF SeaweedFS'. "With
+#     the default settings, the ClickHouse operator deploys ClickHouse with two users protected by
+#     network restriction rules to block unauthorized access": `default` has an empty password behind
+#     a host_regexp AND an explicit pod-IP allow-list covering this cluster's own pods, and
+#     `clickhouse_operator` is behind the operator pod's IP. So a cluster rendered with no
+#     `configuration.users` — which is what piece 5's absence forces — comes up SECURE AND UNREACHABLE
+#     rather than open. charts/managed/seaweedfs found the same missing piece producing an anonymous
+#     administrator; this is the same gap with the better failure mode, and the two together are what
+#     make it a property of the ENGINE rather than of the platform.
+#
+#   * docs/chi-examples/17-monitoring-02-prometheus-local-endpoint.yaml — PIECE 6 REACHES AN ANSWER
+#     NEITHER OF ITS BRANCHES DESCRIBES. There IS an operator and it does not accept the request: the
+#     Altinity operator exports metrics for every installation it manages through ONE cluster-wide
+#     exporter on its own pod, and the CHI carries no per-installation ServiceMonitor switch at all.
+#     What it does accept is `configuration.settings` turning on ClickHouse's OWN Prometheus endpoint
+#     — the six `prometheus/*` keys this chart writes are that file's, verbatim — and that file pairs
+#     them with a HAND-WRITTEN PodMonitor selecting `clickhouse.altinity.com/app: chop`. That selector
+#     is the OPERATOR's pod label, which is precisely the hazard piece 6's correction names, so the
+#     scrape object is owed rather than guessed. conformance.yaml § owed, `scrape-object`.
+#
+#   * docs/chi-examples/03-persistent-volume-08-tiered-s3.yaml — WHAT THE S3 COLD TIER WOULD COST.
+#     docs/plan/12's third bullet for this row is "S3-backed disks for cold storage tiers". Upstream's
+#     shape is a `<storage_configuration>` XML document in `configuration.files` carrying an endpoint,
+#     an access key id and a secret access key. All three come from a CyberCloud.Storage/accounts
+#     resource, which rule 2 forbids reaching by assembly and which the sanctioned route — a resource
+#     id through CyberCloud.ResourceManager — has no reconciler-side reader for; the credential half
+#     is piece 5 again. conformance.yaml § owed, `s3-cold-tier`.
+#
+#   * docs/chi-examples/03-persistent-volume-01-default-volume.yaml — the storage shape. Volumes are
+#     `templates.volumeClaimTemplates[]` referenced by name from `defaults.templates
+#     .dataVolumeClaimTemplate`, and pod resources are `templates.podTemplates[].spec.containers[]`
+#     referenced from `defaults.templates.podTemplate`. A template named in `defaults` that is not in
+#     `templates` is not an error: the operator runs the container it would have run anyway, with no
+#     image and no resources. That is why the two template names are constants with a comment rather
+#     than strings written twice.
+
+reviewed: 2026-08-12
+
+# ⚠ NO MUTATING WEBHOOK, and it is recorded because two of the five services before this one have one
+# and the absence is what makes the containment argument above different from theirs.
+upstream-webhook: none
+
+# ⚠ Cozystack (docs/plan/02 § ADR-010) contributed the OPERATOR CHOICE — clause 1's survey names
+# Altinity for ClickHouse — and the annotated-values pipeline shape, and no code. It is deliberately
+# not listed as `upstream`, because `upstream` means "there is a tree we could diff against" and here
+# there is not.

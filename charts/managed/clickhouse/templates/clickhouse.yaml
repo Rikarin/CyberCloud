@@ -1,0 +1,123 @@
+{{/*
+Altinity `ClickHouseInstallation` — docs/plan/12 § The catalogue, "Shards × replicas declared".
+
+⚠ It renders a custom resource; it does not install the operator. The operator is charts/bundle/'s
+job, which is why this chart has no CRD directory and no operator Deployment.
+
+⚠ ONE cluster entry, and its NAME reaches the tenant's SQL — `ON CLUSTER` and `Distributed()` name
+it. That is why `clusterName` is @internal rather than absent: it is a constant with consequences
+rather than a setting, and changing it would break DDL this platform cannot see.
+
+⚠ NO `configuration.users`, and the consequence is the OPPOSITE of charts/managed/seaweedfs'. Piece 5
+does not exist, so nothing writes a credential — and a CHI with no users section is not open. The
+operator's own hardening guide: it deploys `default` with an empty password behind a host_regexp AND
+an explicit pod-IP allow-list covering this cluster's own pods, and `clickhouse_operator` behind the
+operator pod's IP. So the cluster comes up AUTHENTICATED AND UNREACHABLE rather than UNAUTHENTICATED
+AND ADMINISTRABLE. See conformance.yaml § owed, `listkeys-has-no-handler`.
+
+⚠ NO `schemaPolicy`, NO `files`, and no `settings` beyond the six Prometheus keys. docs/plan/12's
+scope boundary for this row is "the resource does not manage tables", and `schemaPolicy` is where the
+operator asks the platform how much of a tenant's schema to copy onto a new replica. Leaving it unset
+leaves that answer with the operator, where it is the operator's business rather than the platform's
+opinion about somebody else's tables.
+*/}}
+apiVersion: clickhouse.altinity.com/v1
+kind: ClickHouseInstallation
+metadata:
+  name: {{ include "clickhouse.name" . }}
+  labels:
+    {{- include "clickhouse.platformLabels" . | nindent 4 }}
+spec:
+  {{/* See templates/keeper.yaml on why a name that is not in `templates` is not an error. */}}
+  defaults:
+    templates:
+      podTemplate: cybercloud
+      dataVolumeClaimTemplate: data
+
+  configuration:
+    {{/*
+      ⚠ THE ONE FIELD THAT MAKES THIS SERVICE TWO OBJECTS. The host is a Service NEITHER object
+      creates — the operator does, off the ClickHouseKeeperInstallation in templates/keeper.yaml,
+      with a `keeper-` prefix. Nothing in an apply, a read-back or an admission check would notice
+      this string being wrong; a tenant's first ReplicatedMergeTree would.
+    */}}
+    zookeeper:
+      nodes:
+        - host: {{ include "clickhouse.keeperService" . | quote }}
+          port: 2181
+
+    {{- if .Values.monitoring.enabled }}
+    {{/*
+      ⚠ PIECE 6 REACHING AN ANSWER NEITHER OF ITS BRANCHES DESCRIBES. There IS an operator and it
+      does not accept the request: Altinity exports metrics for every installation it manages through
+      ONE cluster-wide exporter on its own pod, and the CHI carries no per-installation
+      ServiceMonitor switch. What it accepts is these six keys, which turn on CLICKHOUSE'S OWN
+      Prometheus endpoint — upstream's docs/chi-examples/17-monitoring-02-prometheus-local-endpoint.yaml,
+      verbatim. That file pairs them with a hand-written PodMonitor selecting
+      `clickhouse.altinity.com/app: chop`, which is the OPERATOR's pod label and is exactly the hazard
+      piece 6's correction names. So the metrics are made to exist here and the scrape is owed.
+
+      ⚠ FLAT, SLASH-SEPARATED KEYS. That is the operator's spelling of a nested XML path, not a JSON
+      pointer that happens to look like one. `configuration.settings` is
+      x-kubernetes-preserve-unknown-fields, so a nested object here would be accepted and would
+      produce a config.d fragment ClickHouse does not read — metrics absent, resource converged.
+    */}}
+    settings:
+      prometheus/endpoint: /metrics
+      prometheus/port: 9363
+      prometheus/metrics: true
+      prometheus/events: true
+      prometheus/asynchronous_metrics: true
+      prometheus/status_info: true
+    {{- end }}
+
+    clusters:
+      {{/*
+        ⚠ shardsCount × replicasCount IS A PRODUCT, and the operator creates one StatefulSet per
+        (shard, replica) pair. A four-shard three-replica cluster is twelve servers, not four and not
+        seven. AnalyticsProvider's meters multiply for the same reason.
+      */}}
+      - name: {{ .Values.clusterName | quote }}
+        layout:
+          shardsCount: {{ .Values.shards }}
+          replicasCount: {{ .Values.replicas }}
+
+  templates:
+    podTemplates:
+      - name: cybercloud
+        spec:
+          containers:
+            - name: clickhouse
+              image: {{ include "clickhouse.serverImage" . | quote }}
+              {{- $cpu := include "clickhouse.cpu" . }}
+              {{- $memory := include "clickhouse.memory" . }}
+              {{- if and $cpu $memory }}
+              resources:
+                requests:
+                  cpu: {{ $cpu | quote }}
+                  memory: {{ $memory | quote }}
+                limits:
+                  cpu: {{ $cpu | quote }}
+                  memory: {{ $memory | quote }}
+              {{- end }}
+              {{- if .Values.monitoring.enabled }}
+              {{/*
+                ⚠ A NAMED port, because a PodMonitor selects an endpoint BY PORT NAME. The scrape
+                object is owed rather than rendered; the port it will need is cheap now and awkward
+                later, because adding a port to a container rolls every server pod.
+              */}}
+              ports:
+                - name: metrics
+                  containerPort: 9363
+              {{- end }}
+    volumeClaimTemplates:
+      - name: data
+        spec:
+          accessModes:
+            - ReadWriteOnce
+          resources:
+            requests:
+              storage: {{ .Values.storage.size | quote }}
+          {{- if .Values.storage.class }}
+          storageClassName: {{ .Values.storage.class | quote }}
+          {{- end }}

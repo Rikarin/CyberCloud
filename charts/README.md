@@ -35,6 +35,7 @@ Five charts are paired today, and the split is worth reading as a ratio rather t
 | `managed/kafka` | 36 | 26 | 10 |
 | `managed/nats` | 31 | 21 | 10 |
 | `managed/seaweedfs` | 25 | 15 | 10 |
+| `managed/clickhouse` | 25 | 13 | 12 |
 
 ⚠ **The `@internal` count barely moves and the generated count varies by a factor of two**, which is
 the shape to expect for the rest: the hand-written tail is the platform's identity block (eight rows),
@@ -49,6 +50,15 @@ them — see § What a chart cannot say for why they are not in any `ResourceSch
 > [docs/plan/15 § The three kinds](../docs/plan/15-storage-blob-file.md)' object-storage row, and that
 > document contributes a `fileShares` chart as well. The `@internal` prediction held on the nose at
 > **ten** for the three charts that landed after it, which is the half worth keeping.
+
+> ⚠ **The `@internal` prediction is off by two for the first time, at `managed/clickhouse`, and the
+> reason is a shape rather than a slip.** Twelve, where five of the six before it are ten or eleven.
+> Two of the extra rows are the second image — this is the first service that renders **two** custom
+> resources, a `ClickHouseInstallation` and the `ClickHouseKeeperInstallation` it names, so there are
+> two image escape hatches where every earlier chart has one. The third is `clusterName`, which is
+> `@internal` because it reaches the **tenant's SQL** (`ON CLUSTER`, `Distributed()`) and so is a
+> constant with consequences rather than a setting. The prediction's shape holds: the hand-written
+> tail is still the identity block plus plumbing, and it grew by exactly the number of extra objects.
 
 > ⚠ **CORRECTED 2026-08-12.** This paragraph read: "`Build.Generate` turns that into the resource
 > type's OpenAPI body, the CLI flags, the SDK model and the portal form" — the chart authoring the

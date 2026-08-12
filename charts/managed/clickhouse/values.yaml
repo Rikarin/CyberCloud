@@ -1,0 +1,95 @@
+# Managed ClickHouse — the configuration surface, once.
+#
+# ⚠ EVERY NON-`@internal` BLOCK BELOW IS GENERATED from ClickHouseClusters.Schema2026 by
+# `./build.sh Charts`, and so is values.schema.json. ADR-010 § Which end authors the schema: "The C#
+# ResourceSchema is authored. The chart's @param annotations are generated from it and diffed."
+# Editing a generated row here is undone on the next run and fails the build in between; add the
+# field in C# instead.
+#
+# The `@internal` rows at the end of each level are the ones that are NOT generated. They are
+# carried through as bytes and must sit after every generated key at their own level, so that each
+# level's generated keys are one contiguous run — charts/README.md § What a chart cannot say.
+
+## @param version {string} ClickHouse version, which is also the ClickHouse Keeper version — the two share a release train and a wire protocol. Only long-term-support lines are offered; a new api-version is what adds a third.
+## @required
+## @enum 24.8 | 25.3
+version: "25.3"
+
+## @param shards {integer} Number of shards. This is the capacity and parallelism axis: a table's data is split across shards and a query fans out to all of them. ⚠ Resharding an existing table is not something the operator or this resource does, so growing this moves new data only.
+## @required
+## @range 1..10
+shards: 1
+
+## @param replicas {integer} Number of replicas per shard. This is the availability axis, and it only applies to tables the tenant creates as Replicated — the resource does not manage tables. Total server count is shards times replicas.
+## @required
+## @range 1..5
+replicas: 2
+
+## @param keeperNodes {integer} Number of ClickHouse Keeper nodes. Keeper is a Raft quorum, so three is the smallest count that survives losing one and an even count tolerates no more failures than the odd count below it. One is offered for development and has no quorum at all.
+## @required
+## @range 1..5
+keeperNodes: 3
+
+## @param sizing {object} CPU and memory per ClickHouse server, either by preset or explicitly. The Keeper nodes are sized by the platform and are not affected.
+sizing:
+  ## @param preset {string} A sizing preset from docs/plan/12. Analytics uses the m1 family, which is 1 vCPU to 8 GiB.
+  ## @enum m1.2xlarge | m1.4xlarge | m1.large | m1.medium | m1.micro | m1.nano | m1.small | m1.xlarge
+  ## @widget cozy-preset
+  preset: m1.small
+  ## @param cpu {string} Explicit vCPU quantity in Kubernetes form, for example 500m or 2. Empty means take it from the preset.
+  ## @pattern (\d+(\.\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)?
+  cpu: ""
+  ## @param memory {string} Explicit memory quantity in Kubernetes form, for example 8Gi. Empty means take it from the preset.
+  ## @pattern (\d+(\.\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)?
+  memory: ""
+
+## @param storage {object} The data volume, per ClickHouse server.
+storage:
+  ## @param size {string} Data volume size per ClickHouse server, in Kubernetes quantity form. Grows online; never shrinks.
+  ## @required
+  ## @pattern \d+(\.\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?
+  ## @example "100Gi"
+  size: "100Gi"
+  ## @param class {string} StorageClass name for the ClickHouse servers and the Keeper nodes. Empty means the cluster default.
+  ## @immutable
+  ## @widget storageclass
+  class: ""
+
+## @param monitoring {object} What the platform scrapes.
+monitoring:
+  ## @param enabled {boolean} Whether ClickHouse's own Prometheus endpoint is served on port 9363. On by default — docs/plan/12: "a managed service the tenant cannot see the health of is a black box they will not trust with production". ⚠ It makes the metrics exist; the object that scrapes them is not built — see conformance.yaml § owed.
+  enabled: true
+
+## @param platform {object} Resource identity injected by the reconciler. Not a tenant-facing setting.
+## @internal Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.
+platform:
+  ## @param tenantId {string} Tenant GUID, rendered into the cybercloud.io/tenant-id label.
+  tenantId: ""
+  ## @param subscriptionId {string} Subscription GUID, rendered into the cybercloud.io/subscription-id label.
+  subscriptionId: ""
+  ## @param resourceGroup {string} Resource group name, rendered into the cybercloud.io/resource-group label.
+  resourceGroup: ""
+  ## @param resourceId {string} Resource GUID, rendered into the cybercloud.io/resource-id label.
+  resourceId: ""
+  ## @param resourceType {string} Fully qualified resource type, rendered into the cybercloud.io/resource-type label.
+  resourceType: CyberCloud.Analytics/clickhouseClusters
+  ## @param apiVersion {string} The api-version the resource was last written at, rendered into the cybercloud.io/api-version label.
+  apiVersion: "2026-08-01"
+  ## @param managedBy {string} Value of the cybercloud.io/managed-by label. Constant, and the selector every informer filters on.
+  managedBy: cybercloud
+
+## @param clusterName {string} The name of the single ClickHouse cluster inside the installation.
+## @internal It reaches the tenant's SQL — ON CLUSTER and Distributed() name it — so it is a constant rather than a setting: changing it would break DDL the platform cannot see. It is here because the two templates both need it, not because anybody may set it.
+clusterName: default
+
+## @param imageName {string} Override the full ClickHouse server image reference, tag included. Empty means clickhouse/clickhouse-server:{version}.
+## @internal A pinned reference defeats the version property, so it is a platform escape hatch rather than a tenant setting.
+imageName: ""
+
+## @param keeperImageName {string} Override the full ClickHouse Keeper image reference, tag included. Empty means clickhouse/clickhouse-keeper:{version}.
+## @internal Keeper and server share a release train, so the version property tags both. Splitting them is a platform escape hatch for an upgrade window, not a tenant setting.
+keeperImageName: ""
+
+## @param nameOverride {string} Replace the generated object-name stem. Empty means derive it from the release name.
+## @internal Helm plumbing. Nothing about it belongs in a resource body.
+nameOverride: ""

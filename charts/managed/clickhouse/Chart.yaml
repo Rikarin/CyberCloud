@@ -1,0 +1,44 @@
+# Managed ClickHouse — docs/plan/12 § The catalogue, "ClickHouse — CyberCloud.Analytics/clickhouseClusters
+# · M2 · 1.2 EM. Altinity operator."
+#
+# ⚠ THE PLATFORM RUNS CLICKHOUSE AND THE PLATFORM'S CLICKHOUSE IS NOT THIS CHART. docs/plan/16
+# § The stack puts logs, traces and events in a per-region, database-per-tenant ClickHouse on the
+# ingest write path, and docs/plan/22 § The pipeline puts the metering rollups in the same one;
+# docs/plan/05 § Every store spells the shape in one row. This chart renders a SINGLE-TENANT cluster
+# into a TENANT's namespace whose schema docs/plan/12 says the tenant owns. The engine is shared; the
+# resource type is not. See src/Providers/.../ClickHouseClusters.cs for the four-part argument.
+apiVersion: v2
+name: clickhouse
+description: Managed ClickHouse on the Altinity operator — declared shards and replicas, a ClickHouse Keeper quorum, and a schema that belongs to the tenant.
+type: application
+
+# The chart's own version. Bumped on every change to this directory.
+version: 0.1.0
+
+# The default ClickHouse version, matching values.yaml `version`.
+appVersion: "25.3"
+
+kubeVersion: ">=1.31.0-0"
+
+keywords:
+  - clickhouse
+  - analytics
+  - olap
+  - keeper
+
+home: https://clickhouse.com
+sources:
+  - https://github.com/ClickHouse/ClickHouse
+  - https://github.com/Altinity/clickhouse-operator
+
+maintainers:
+  - name: Cyber Cloud Platform
+
+# ⚠ These three are read by `Build.Charts` and written into `values.schema.json` as
+# `x-cybercloud-*`. They are what makes the generated schema addressable as a resource type's
+# body rather than as an anonymous blob of Helm values — docs/plan/12 § The pattern, once, piece 2.
+# A chart under charts/managed/ without them fails the build.
+annotations:
+  cybercloud.io/resource-type: CyberCloud.Analytics/clickhouseClusters
+  cybercloud.io/api-version: "2026-08-01"
+  cybercloud.io/operator: altinity-clickhouse-operator
