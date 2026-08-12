@@ -21,12 +21,14 @@ namespace CyberCloud.Conformance;
 ///         </i>
 ///     </para>
 ///     <para>
-///         Four of those five run here. <b>The fifth — killing a silo mid-create — does not, and is
-///         not silently absent</b>: it is a named, loudly-skipped test in
-///         <see cref="ClusterBackedConformanceTests" />, because an in-process
-///         <c>TestCluster</c> over in-memory storage cannot tell "the silo died and the durable state
-///         brought it back" from "a grain deactivated and reactivated over the same dictionary". A
-///         suite that ran the second under the first's name would be worse than one that skipped.
+///         Four of those five run here. <b>The fifth — killing a silo mid-create — does not, and it
+///         is not absent either</b>: an in-process <c>TestCluster</c> over in-memory storage cannot
+///         tell "the silo died and the durable state brought it back" from "a grain deactivated and
+///         reactivated over the same dictionary", so running it here would assert something weaker
+///         under the right name. It runs against real PostgreSQL and a real Redis reminder table in
+///         <c>CyberCloud.Cluster.Conformance</c>, together with the cluster-backed halves of the
+///         other four; <see cref="ClusterBackedConformanceTests" /> is the signpost this suite keeps
+///         so that a Docker-free run still says where they are.
 ///     </para>
 ///     <para>
 ///         ⚠ <b>To add a provider, do not touch this file.</b> Write a

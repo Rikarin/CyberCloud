@@ -8,24 +8,35 @@ providers, or that need a deployed platform, live here.
 |---|---|
 | `CyberCloud.E2E` | drives the public REST API against a real deployment |
 | `CyberCloud.Conformance` | the shared provider suite, parameterised — referenced by every provider |
+| `CyberCloud.Cluster.Conformance` | the same suite's cluster-backed half: k3s, PostgreSQL, Redis — referenced by every provider's `.Cluster.Conformance` |
 | `CyberCloud.Chaos` | silo kills, Redis flush, cluster-connection loss, network partition |
 | `CyberCloud.Load` | the docs/plan/00 § quality-bar numbers, as a gate |
 | `CyberCloud.Isolation` | the cross-tenant suite: every provider, every verb, wrong tenant → 404 |
 
 ## What exists, and what is deferred
 
-`CyberCloud.Conformance` and `CyberCloud.Isolation` are built. `CyberCloud.E2E`, `CyberCloud.Chaos`
-and `CyberCloud.Load` are not.
+`CyberCloud.Conformance`, `CyberCloud.Cluster.Conformance` and `CyberCloud.Isolation` are built.
+`CyberCloud.E2E`, `CyberCloud.Chaos` and `CyberCloud.Load` are not.
 
-⚠ **The conformance suite is split by what it needs, and the deferred half is present by name.**
+⚠ **The conformance suite is split by what it needs, and both halves run.**
 `ProviderConformanceTests` runs against `Orleans.TestingHost` with in-memory storage and an in-memory
-API server; `ClusterBackedConformanceTests` holds the tests that need a k3s container, real
-PostgreSQL or a multi-silo cluster, and each one **skips loudly** with a message naming what it needs
-and what it would prove. Neither project references `Testcontainers`, deliberately — a package
-reference would make the whole suite refuse to run without a Docker daemon.
+API server, and needs no Docker daemon — it is the per-PR gate for every provider change.
+`CyberCloud.Cluster.Conformance` runs the five criteria that a dictionary cannot fail, against a
+`k3s` container, a PostgreSQL container and a Redis reminder table: the lifecycle against a real API
+server, drift corrected after a real `kubectl delete`, a field conflict with another manager becoming
+a named `DriftEvent`, desired state surviving a real serialization round trip, and killing the silo
+mid-create still converging.
 
-**Therefore [24 § Phase 1](../docs/plan/24-roadmap.md)'s exit criterion 3 — kill a silo mid-provision,
-the resource converges — is written and unrun, and must not be claimed.**
+⚠ `CyberCloud.Conformance` **must never** reference `Testcontainers` — that is the whole reason the
+two halves are two projects. It keeps one visible skip
+(`ClusterBackedConformanceTests`) naming where the other half lives, because it cannot reference that
+assembly and would otherwise have no way to mention it on a Docker-free machine. Every test in the
+cluster-backed half skips loudly, by name, when no daemon answers.
+
+**[24 § Phase 1](../docs/plan/24-roadmap.md)'s exit criterion 3 — kill a silo mid-provision, the
+resource converges — is met on a machine with Docker**, against real PostgreSQL grain storage and a
+real Redis reminder table, for the reference provider and for `CyberCloud.Sample/widgets`. It is
+**not** met by a run that skipped for want of a daemon, and the skip says so.
 
 `CyberCloud.Isolation` drives the **real** `ReBacResourceAuthorizer` over the real ReBAC schema, which
 no other suite in the repository does. That is where its value is: a double reproduces the rule its

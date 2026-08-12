@@ -10,14 +10,18 @@
       and so the suite can be shown to REJECT as well as accept; it is not a real provider and is
       registered nowhere.
 
-      ⚠ NO Testcontainers AND NO Aspire.Hosting, AND THE HALF THAT NEEDS THEM IS NOT SILENTLY MISSING.
-      docs/plan/03 § Providers lists five things every provider must pass, and two of them — "reconcile
-      after a manual cluster mutation → drift corrected" against a real API server, and "kill the silo
-      mid-create → resource still converges" — cannot be honestly claimed without a real cluster and
-      real storage. Those live in ClusterBackedConformanceTests, which SKIPS LOUDLY with a message
-      naming what it needs and what it would prove. A suite that is quietly empty is exactly the
-      failure the runner's minimum-expected-tests switch exists to prevent, and a suite that quietly
-      asserts a weaker thing under the same test name is worse.
+      ⚠ NO Testcontainers AND NO Aspire.Hosting, AND THE HALF THAT NEEDS THEM IS NOT MISSING — IT IS
+      IN ANOTHER PROJECT. docs/plan/03 § Providers lists five things every provider must pass, and two
+      of them — "reconcile after a manual cluster mutation → drift corrected" against a real API
+      server, and "kill the silo mid-create → resource still converges" — cannot be honestly claimed
+      without a real cluster and real storage. All five now run in test/CyberCloud.Cluster.Conformance
+      against a k3s container, a PostgreSQL container and a Redis container.
+
+      They are NOT here, and a package reference is exactly what must not be added to close the gap: a
+      Testcontainers reference in this .csproj would make THIS suite refuse to run without a Docker
+      daemon, and this suite is the per-PR gate for every provider change. ClusterBackedConformanceTests
+      is what is left behind — one visible skip naming where the other half lives, because this
+      assembly cannot reference that one and would otherwise have no way to mention it.
 
       What the Docker-free half DOES prove, against Orleans.TestingHost with in-memory storage and an
       in-memory API server: the twelve-step write path end to end for a real provider, the operation

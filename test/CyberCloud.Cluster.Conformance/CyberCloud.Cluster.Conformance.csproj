@@ -1,0 +1,89 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      The half of the conformance suite that needs real infrastructure, RUNNING.
+
+      docs/plan/03 § Providers lists five things every provider must pass; docs/plan/24 § Phase 1
+      turns three of them into exit criteria. Until this project existed, five of them were named,
+      loudly-skipped tests in test/CyberCloud.Conformance/ClusterBackedConformanceTests.cs, because
+      Orleans.TestingHost with in-memory storage and a dictionary for an API server cannot make them
+      true. This is the second project those skip messages prescribe.
+
+      ⚠ WHY THIS IS A SEPARATE PROJECT AND NOT A PACKAGE ADDED TO CyberCloud.Conformance.
+      Testcontainers.K3s and Testcontainers.PostgreSql in that .csproj would make the WHOLE shared
+      suite refuse to run without a Docker daemon, which is the opposite of the split it exists to
+      make: the Docker-free half gates every PR that touches a provider, and it must keep running on
+      a machine with no Docker. So the dependency lives here, and CyberCloud.Conformance stays clean.
+
+      ⚠ WHY IT IS NOT NAMED CyberCloud.Conformance.Cluster, WHICH IS THE NAME THE SKIP MESSAGES GIVE.
+      Two independent rules classify a project by the SUFFIX of its name and nothing else:
+      Directory.Build.props § Project role detection (`EndsWith('.Conformance')` → IsTestProject) and
+      build/Build.Test.cs § SuiteOwning (the same arm → TestSuite.PerPullRequest). A project called
+      `CyberCloud.Conformance.Cluster` ends in `.Cluster`, so it would build as a LIBRARY rather than
+      a test host, and `AssertEveryTestProjectIsOwned` would then fail the Test target for a project
+      under test/ that no target runs. The prescribed name would not have built. `.Cluster.Conformance`
+      is claimed by both rules with no edit to either file — which is the point: adding a suite must
+      not need the build to be taught about it.
+
+      ⚠ IT REFERENCES NO PROVIDER, FOR THE REASON CyberCloud.Conformance REFERENCES NONE. Everything
+      a provider has to say about itself arrives as a ProviderConformanceCase. A provider joins this
+      suite the way it joins the other one: a `.Cluster.Conformance` project of its own holding two
+      class declarations, and no edit here. The reference provider in CyberCloud.Conformance is what
+      this project runs against so that it is never vacuous.
+
+      ⚠ EVERY TEST HERE SKIPS LOUDLY WHEN DOCKER IS ABSENT, naming what it needs and what it would
+      prove — see ClusterInfrastructure. A test that silently vanished without a daemon would
+      recreate exactly the problem this project was built to remove.
+    -->
+
+    <PropertyGroup>
+        <!--
+          ⚠ Same suppression, same reason, as CyberCloud.Conformance: the harness is generic on the
+          provider case source so that per-provider state is bound to a TYPE instead of to a mutable
+          global. Every static it declares is per-provider by construction.
+        -->
+        <NoWarn>$(NoWarn);CA1000</NoWarn>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="xunit.v3"/>
+        <PackageReference Include="Shouldly"/>
+        <PackageReference Include="Microsoft.Orleans.TestingHost"/>
+        <PackageReference Include="Microsoft.Orleans.Reminders"/>
+        <!-- docs/plan/04 § Reminders. The silo-kill test needs a reminder table that outlives a silo. -->
+        <PackageReference Include="Microsoft.Orleans.Reminders.Redis"/>
+        <PackageReference Include="Microsoft.Orleans.Persistence.AdoNet"/>
+        <PackageReference Include="Orleans.Multitenant"/>
+        <!--
+          ⚠ Npgsql is a RUNTIME dependency of the ADO.NET storage provider, loaded by reflection —
+          Directory.Packages.props says so at length. Nothing here binds to a type from it at compile
+          time except the connection-string builder the tests use to read rows back with plain SQL.
+        -->
+        <PackageReference Include="Npgsql"/>
+        <PackageReference Include="StackExchange.Redis"/>
+        <!-- The raw client, for the half of every test that is deliberately NOT our code. -->
+        <PackageReference Include="KubernetesClient"/>
+        <PackageReference Include="Testcontainers.K3s"/>
+        <PackageReference Include="Testcontainers.PostgreSql"/>
+        <PackageReference Include="Testcontainers.Redis"/>
+    </ItemGroup>
+
+    <ItemGroup Label="Global usings">
+        <Using Include="Xunit"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <!-- The cases, the reference provider, and the doubles the Docker-free harness already owns. -->
+        <ProjectReference Include="../CyberCloud.Conformance/CyberCloud.Conformance.csproj"/>
+        <!-- KubeApiClient — the real server-side apply and the real ConflictParser. -->
+        <ProjectReference Include="../../src/CyberCloud.Kubernetes/CyberCloud.Kubernetes.csproj"/>
+        <!--
+          OrleansAdoNetSchema — the SHIPPED schema applier, not a test-local copy, so a defect in it
+          fails here rather than in a cluster. And SystemTextJsonGrainStorageSerializer, which is the
+          serializer the durable tier really uses and therefore the one the round-trip must be
+          asserted through.
+        -->
+        <ProjectReference Include="../../src/CyberCloud.ServiceDefaults/CyberCloud.ServiceDefaults.csproj"/>
+    </ItemGroup>
+
+</Project>

@@ -879,6 +879,15 @@ partial class Build
             .Where(x => x.Suite == TestSuite.PerPullRequest)
             .Select(x => x.Project)
             .Where(x => x.NameWithoutExtension.EndsWith(".Conformance", StringComparison.Ordinal))
+            // ⚠ The Docker-free half only, and this is a correctness rule rather than a preference.
+            // A provider's `.Cluster.Conformance` project asserts the same labels against a REAL API
+            // server — strictly stronger, because it reads them off the object after admission — but
+            // every test in it skips when no Docker daemon answers, and a filtered run whose only
+            // match is a skipped test reports "Zero tests ran", which --minimum-expected-tests 1
+            // treats as failure. Pointing this gate there would make an architecture gate pass or
+            // fail on whether a daemon happened to be running. The stronger assertion is still made;
+            // it is just not what this row reports on.
+            .Where(x => !x.NameWithoutExtension.EndsWith(".Cluster.Conformance", StringComparison.Ordinal))
             .Where(x => x.ToString().Contains($"{Path.DirectorySeparatorChar}Providers{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
             .OrderBy(x => x.NameWithoutExtension, StringComparer.Ordinal)
             .ToList();
