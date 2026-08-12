@@ -25,7 +25,7 @@ build with a message naming the offending type and the rule.
 
 | Gate | Checks |
 |---|---|
-| **Assembly graph** | The six rules in [03](03-repository-layout.md) |
+| **Assembly graph** | The seven rules in [03](03-repository-layout.md) |
 | **Storage tier** | Every `[PersistentState]` against `durable-grains.txt`; a Durable binding outside the list needs `[DurableStateRationale]` |
 | **Tenant keys** | No string literal containing `|` in a `GetGrain` argument; every tenant-scoped grain interface is `IGrainWithStringKey` |
 | **Serializer discipline** | Every `[GenerateSerializer]` type has a stable `[Alias]`; `[Id(n)]` numbers never reused (checked against a committed manifest) |

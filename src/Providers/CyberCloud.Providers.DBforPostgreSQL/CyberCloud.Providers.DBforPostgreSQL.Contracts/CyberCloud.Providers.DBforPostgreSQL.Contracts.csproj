@@ -18,20 +18,28 @@
       had three candidates in one family before this project existed and now has candidates in two,
       so a violation of it is constructible for the first time.
 
-      ⚠ RULE 2 HAS A BLIND SPOT AND THIS PROJECT IS WHERE IT BECAME FINDABLE. The gate reads
-      Assembly.ReferencedAssemblies — the BINDING references in the compiled IL — so it fires on
-      "binds types from". A cross-provider dependency that touches only `const` members emits NO
-      reference at all, because the C# compiler inlines a const into the consuming assembly. Verified
-      by adding a real ProjectReference to CyberCloud.Providers.Sample.Contracts here and reading one
-      member: with `SampleWidgets.TypePath` (a const string) rule 2 reported 6 candidates and ZERO
-      violations and the build was green; changing it to `SampleWidgets.Type` (a static property)
-      made the same edit fail with "binds types from CyberCloud.Providers.Sample.Contracts".
+      ⚠ RULE 2 HAD A BLIND SPOT AND THIS PROJECT IS WHERE IT BECAME FINDABLE. CLOSED 2026-08-12;
+      the experiment is kept because it is the evidence, and because the same reasoning constrains
+      every future rule phrased over metadata. The gate read Assembly.ReferencedAssemblies — the
+      BINDING references in the compiled IL — so it fired on "binds types from". A cross-provider
+      dependency that touches only `const` members emits NO reference at all, because the C#
+      compiler inlines a const into the consuming assembly. Verified by adding a real
+      ProjectReference to CyberCloud.Providers.Sample.Contracts here and reading one member: with
+      `SampleWidgets.TypePath` (a const string) rule 2 reported 6 candidates and ZERO violations and
+      the build was green; changing it to `SampleWidgets.Type` (a static property) made the same edit
+      fail with "binds types from CyberCloud.Providers.Sample.Contracts".
 
-      That is not this provider's bug to fix, and it is worth writing down where the next provider
-      author will read it: a Providers.* project may today take a ProjectReference on a sibling and
-      pass the gate, as long as everything it uses is a const or a literal. Closing it means either
-      reading the ProjectReference GRAPH as well as the binding references, or forbidding the
-      ProjectReference at .csproj level. Both are changes to Build.Architecture.cs.
+      Rules 2, 4, 5 and 7 now read the declared ProjectReference set as well as the binding
+      references — Build.Architecture.cs § InTreeEdges — so for an in-tree edge the reference itself
+      is the violation and the const variant of the experiment above fails too. Rule 3 deliberately
+      does NOT get the same treatment: docs/plan/02 § ADR-004 puts KubernetesClient in the restore
+      closure legitimately, so only the binding half of that rule is satisfiable.
+
+      ⚠ THE GENERAL LESSON OUTLIVES THE FIX. A rule that reads metadata sees only what survives to
+      metadata, and `const` is not the only thing that does not: `nameof`, a literal attribute
+      argument and a `typeof` that is only compared all vanish too. What closed this hole was not
+      finding every such construct, it was reading a second source that records intent rather than
+      use. Any new rule about our own assemblies should do the same.
     -->
 
     <ItemGroup>

@@ -335,6 +335,47 @@ Enforced by `Build.Architecture`, failing the build on violation:
 2. No `Providers.*` assembly references another `Providers.*` assembly — not even `.Contracts`.
    Cross-provider references go through `CyberCloud.ResourceManager` by resource id.
 3. No assembly above `CyberCloud.Kubernetes` references `k8s.Models`.
-4. Nothing references a `*.Application` assembly except its own host.
+4. Nothing references a `*.Application` assembly except its own host, which that assembly names with
+   `[assembly: OwningHost("CyberCloud.Silo.Host")]`.
 5. The gateway references no provider *implementation* assembly, only `.Contracts` and `.Application`.
 6. `portal/libs/api` has no hand-written files; the generator owns the directory.
+7. Every edge between two modules is declared in `module-layering.txt`, and the declaration is
+   acyclic. A module is an assembly name truncated to its first two dotted segments, so
+   `CyberCloud.Identity` and `CyberCloud.Identity.Contracts` are one; a provider's module is its
+   family. `src/Hosts` and `cli/` are out of scope — rules 4 and 5 are what constrain a host.
+
+⚠ **Rule 7 was added on 2026-08-12 and rules 2 and 4 changed with it. All three were holes found by
+constructing a violation and watching the gate stay green**, which is the only way any of them could
+have been found: each rule was passing over a tree that could not violate it.
+
+- **Rule 7 did not exist, and nothing else covered a sibling module.** Rule 2 is the only rule about
+  siblings and it is scoped to `Providers.*`, so `CyberCloud.Communication` could take a reference on
+  `CyberCloud.Identity.Contracts`, bind a type from it, compile, and pass — verified. Module
+  independence is stated all over this plan and in `CyberCloud.Communication.csproj`'s own header
+  ("an assembly reference in the other direction would make an OTP delivery able to take the
+  identity module down with it"); until rule 7 it was a convention with a comment.
+  A **cycle rule alone** was considered and is not enough: it would have caught that violation, and
+  it would not have caught `CyberCloud.Communication` reaching into `CyberCloud.Metering`, which is
+  acyclic and which the same header forbids in two paragraphs. `module-layering.txt` is a reviewed
+  file in the shape of `durable-grains.txt`; the acyclicity check is the half a reviewer cannot be
+  talked past.
+- **Rule 2 had a `const` blind spot.** The gate reads the `AssemblyRef` table — binding references —
+  and the C# compiler inlines a `const`, so a `Providers.*` project could take a `ProjectReference`
+  on a sibling provider and pass as long as it touched nothing else. Verified both ways on a real
+  reference: a `static` property fired, the `const` did not. Rules 2, 4, 5 and 7 now read the
+  declared `ProjectReference` set as well, and for an in-tree edge the reference itself is the
+  violation. **Rule 3 cannot do this and must not**: ADR-004 legitimately puts `KubernetesClient` in
+  the restore closure, so only the binding half is satisfiable there.
+- **Rule 4 was enforced as "nothing outside `src/Hosts`"**, which is strictly weaker than "its own
+  host" — a second host binding another host's application layer passed. Nothing in the tree said
+  which host owned which application layer, so `[OwningHost]` was added to say it, read the way
+  `[DurableStateRationale]` already is. An application assembly that names no host is not exempt, it
+  is sealed: nothing may reference it.
+
+⚠ **Rules 4 and 5 disagree with each other, and this document is the place that has to settle it.**
+Rule 4 permits an application assembly one owner and rule 5 explicitly lets the gateway reference a
+provider's `.Application`, which is not the silo host. `[OwningHost]` is therefore `AllowMultiple`:
+an application layer may name more than one host, each on its own line of one diff. That is a
+narrower answer than exempting the gateway, and it is the reason the attribute is not singular.
+Nothing in the tree exercises it yet — no host references any `.Application` assembly today, so rule
+4 reports two candidates and zero declared owners.

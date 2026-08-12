@@ -21,7 +21,7 @@
       reaches the emitted document with its name intact — which a hand-built registry cannot show.
       That reference is invisible to docs/plan/03 § Assembly graph rules: build/Build.Architecture.cs
       builds its assembly set from projects where SuiteOwning(project) is null, so no *.Tests project
-      is a candidate for any of the six rules.
+      is a candidate for any of the seven rules.
 
       ⚠ IT NEVER WRITES TO openapi/ OR generated/. Every run in this suite is handed a fresh
       temporary directory — see TemporaryTree. A suite that regenerated the checked-in surfaces would

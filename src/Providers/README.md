@@ -58,9 +58,15 @@ Two things it found that the sample could not:
   > keeping only what generation does not reach. And the overlap is **25** rows, not 26:
   > `/properties/clusterId` is placement rather than configuration and is excluded — see
   > charts/README.md § What a chart cannot say.
-- **Rule 2 of § Assembly graph rules has a `const` blind spot.** It reads binding references, and a
+- **Rule 2 of § Assembly graph rules had a `const` blind spot.** It read binding references, and a
   cross-provider dependency using only `const` members emits none. See that provider's
   `.Contracts.csproj` for the experiment.
+
+  > ⚠ **CLOSED 2026-08-12.** Rules 2, 4, 5 and 7 now read the declared `ProjectReference` set as
+  > well, so for an in-tree edge the reference is the violation whether or not a type crossed it.
+  > The const variant of the experiment fails now. Rule 3 is deliberately left on binding references
+  > alone — ADR-004 puts `KubernetesClient` in the restore closure, so a package-phrased rule there
+  > would be unsatisfiable.
 
 Each provider's `.Conformance` project is one `ProviderConformanceCase` and two class declarations.
 The second provider renders two objects rather than one and still needed no change to
@@ -77,6 +83,11 @@ The second provider renders two objects rather than one and still needed no chan
 
 **No `Providers.*` assembly references another `Providers.*` assembly — not even `.Contracts`.**
 Cross-provider references go through `CyberCloud.ResourceManager` by resource id, which is where
-authorization, quota and audit sit. `Build.Architecture` fails the build on a violation.
+authorization, quota and audit sit. `Build.Architecture` fails the build on a violation — on the
+`ProjectReference` as well as on the binding, so a `const`-only dependency does not slip through.
+
+What a provider *may* reference is `module-layering.txt`, which is rule 7: `CyberCloud.Core`,
+`CyberCloud.Kubernetes`, `CyberCloud.ResourceManager` and `CyberCloud.Tenancy`, and nothing else. A
+line between two providers cannot be added there — rule 2 refuses what rule 7 would grant.
 
 A provider is not registered in the platform bundle until it passes the conformance suite.

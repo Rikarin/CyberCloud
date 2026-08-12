@@ -32,12 +32,19 @@
       identity would make a carrier outage an identity outage, and would put a second module in the
       dependency path of every sign-in.
 
-      ⚠ NO ARCHITECTURE GATE ENFORCES THAT DIRECTION, and pretending otherwise would be worse than
-      the gap. docs/plan/03 § Assembly graph rules has six rules; rule 2 ("no Providers.* assembly
-      references another") is the only one about sibling modules and it is scoped to
+      ⚠ NO ARCHITECTURE GATE ENFORCED THAT DIRECTION, and pretending otherwise would have been worse
+      than the gap. docs/plan/03 § Assembly graph rules had six rules; rule 2 ("no Providers.*
+      assembly references another") was the only one about sibling modules and it is scoped to
       CyberCloud.Providers.* by name — Build.Architecture.cs's ProviderFamily() returns null for
-      anything else. So a future CyberCloud.Communication -> CyberCloud.Identity.Contracts reference
-      would compile and pass ./build.sh Architecture. The rule that would catch it does not exist yet.
+      anything else. So a CyberCloud.Communication -> CyberCloud.Identity.Contracts reference would
+      compile and pass ./build.sh Architecture.
+
+      ⚠ CORRECTED 2026-08-12: it does now, and the paragraph above is kept because it is what the
+      hole looked like from here. Rule 7 (module layering) was added after exactly that reference was
+      constructed — a real ProjectReference plus a bound type, so the AssemblyRef table had a row —
+      and the gate stayed green over it. module-layering.txt at the repository root is the reviewed
+      declaration; the reverse edge is not in it, and could not be added, because
+      CyberCloud.Identity -> CyberCloud.Communication is, and the declaration must be acyclic.
 
       It is .Contracts and never the implementation: IMessageSender and SendRequest are all this
       needs, and referencing the grains would put the sending module's activation graph in identity's
