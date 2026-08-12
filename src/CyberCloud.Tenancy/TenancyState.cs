@@ -94,6 +94,26 @@ public sealed class IndexState {
     /// <summary>The entry. <c>Free</c> until something claims it.</summary>
     [Id(0)]
     public IndexEntry Entry { get; set; } = new();
+
+    /// <summary>
+    ///     How many children of each type hang off this address, keyed by the canonical type name.
+    ///     Only <c>ResourceIndexGrain</c> writes it — docs/plan/08 § Deleting a parent resource that
+    ///     has children.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>On the shared state type, so the email index carries a member it never populates.</b>
+    ///     The alternative is a second state class and a second <c>[PersistentState]</c> binding for
+    ///     one dictionary; an empty dictionary on the email index costs nothing on the wire and the
+    ///     two grains stay one state machine over a different digest, which is the sentence this
+    ///     type's own summary opens with.
+    ///     <para>
+    ///         ⚠ Keyed by <c>ResourceTypeName.Canonical.ToString()</c> rather than by the type itself:
+    ///         a dictionary key has to hash the same way after a round trip, and the canonical form is
+    ///         the one <c>GrainKeys</c> already hashes paths with.
+    ///     </para>
+    /// </remarks>
+    [Id(1)]
+    public Dictionary<string, int> Children { get; set; } = new(StringComparer.Ordinal);
 }
 
 /// <summary>The tenant directory grain's durable record — the one global thing.</summary>

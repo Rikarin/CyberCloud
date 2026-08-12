@@ -38,6 +38,10 @@ public sealed class TenancyStateContractTests {
         ("ResourceGroupState", 2, "CreatingSince"),
 
         ("IndexState", 0, "Entry"),
+        // Added with the per-parent child counter — docs/plan/08 § Deleting a parent resource that
+        // has children. Only ResourceIndexGrain populates it; EmailIndexGrain shares the state type
+        // and leaves it empty.
+        ("IndexState", 1, "Children"),
 
         ("TenantDirectoryState", 0, "Entries"),
         ("TenantDirectoryState", 1, "BySlug"),
