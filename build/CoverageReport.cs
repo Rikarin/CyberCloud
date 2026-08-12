@@ -9,7 +9,11 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.IO;
 using System.Linq;
+using System.Reflection.Metadata;
+using System.Reflection.Metadata.Ecma335;
+using System.Reflection.PortableExecutable;
 using System.Xml.Linq;
 
 /// <summary>
@@ -37,6 +41,12 @@ sealed class CoverageReport
         ///     is nothing but records and interfaces emits almost no sequence points — and calling
         ///     that 0 % would fail a project for containing no executable code, which no amount of
         ///     testing could fix.
+        ///     <para>
+        ///         ⚠ That guard cannot fire from a report, though, and the reason is worth knowing:
+        ///         <see cref="Read" /> builds modules out of <c>&lt;line&gt;</c> elements, so an
+        ///         assembly with no coverable line never reaches this record at all — it is simply
+        ///         absent. <see cref="CoverableLines" /> is where the case is actually handled.
+        ///     </para>
         /// </remarks>
         public double Rate => Coverable == 0 ? 1 : (double)Covered / Coverable;
     }
@@ -121,6 +131,143 @@ sealed class CoverageReport
     }
 
     /// <summary>
+    ///     Counts the lines in a built assembly that a test could possibly cover, by reading the
+    ///     sequence points out of its portable PDB.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>This is the half that tells "fully covered, nothing to instrument" apart from
+    ///         "nothing tests this".</b> Both produce the same thing in a Cobertura report — no
+    ///         <c>&lt;package&gt;</c> element at all — and <see cref="Violations" /> has to call one
+    ///         of them a pass and the other a failure.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Sequence points, minus anything carrying
+    ///         <c>[ExcludeFromCodeCoverage]</c>.</b> That subtraction is not a nicety, it is the
+    ///         whole measurement. Measured on <c>CyberCloud.Providers.Sample.Application</c>, whose
+    ///         only source file is a body-less class declaration: the PDB holds two sequence points,
+    ///         both inside <c>Metadata_CyberCloudProvidersSampleApplication.ConfigureInner</c>, which
+    ///         Orleans' source generator emits carrying <c>[GeneratedCode]</c>,
+    ///         <c>[EditorBrowsable]</c> and <c>[ExcludeFromCodeCoverage]</c>. Count them and the
+    ///         assembly looks coverable; discount them and it has nothing to cover — which is the
+    ///         answer <c>dotnet-coverage</c> itself reaches, out loud, as
+    ///         <c>Module was not instrumented. Reason: optimized_or_instrumented</c>.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ Reads the PDB rather than shelling out to <c>dotnet-coverage instrument</c>, which
+    ///         would also answer the question. Two reasons: that command exits <b>0</b> whether it
+    ///         instrumented or refused, so the answer is a line of stdout either way; and its refusal
+    ///         reason is <c>optimized_or_instrumented</c>, which also fires for an assembly compiled
+    ///         with optimizations on. An excuse that widens whenever somebody passes
+    ///         <c>--configuration Release</c> is a floor that stops gating without saying so.
+    ///     </para>
+    /// </remarks>
+    /// <param name="assemblyPath">The built assembly. Its <c>.pdb</c> is expected beside it.</param>
+    /// <returns>
+    ///     The number of coverable lines, or <see langword="null" /> when the assembly or its PDB
+    ///     could not be read. ⚠ <see langword="null" /> means "not known", and callers must not read
+    ///     it as zero: "we could not tell" has to stay distinguishable from "there is nothing here".
+    /// </returns>
+    public static int? CoverableLines(string assemblyPath)
+    {
+        var pdbPath = Path.ChangeExtension(assemblyPath, ".pdb");
+
+        if (!File.Exists(assemblyPath) || !File.Exists(pdbPath))
+            return null;
+
+        try
+        {
+            using var assemblyStream = File.OpenRead(assemblyPath);
+            using var peReader = new PEReader(assemblyStream);
+            var metadata = peReader.GetMetadataReader();
+
+            using var pdbStream = File.OpenRead(pdbPath);
+            using var pdbProvider = MetadataReaderProvider.FromPortablePdbStream(pdbStream);
+            var pdb = pdbProvider.GetMetadataReader();
+
+            var coverable = 0;
+
+            foreach (var handle in pdb.MethodDebugInformation)
+            {
+                var debugInformation = pdb.GetMethodDebugInformation(handle);
+
+                if (debugInformation.SequencePointsBlob.IsNil)
+                    continue;
+
+                // Hidden sequence points (line 0xfeefee) mark compiler-emitted IL that maps to no
+                // source line, so no report ever counts them either.
+                var points = debugInformation.GetSequencePoints().Count(x => !x.IsHidden);
+
+                if (points == 0)
+                    continue;
+
+                // MethodDebugInformation is a parallel table: row N describes MethodDef row N.
+                var method = metadata.GetMethodDefinition(
+                    (MethodDefinitionHandle)MetadataTokens.Handle(
+                        TableIndex.MethodDef,
+                        MetadataTokens.GetRowNumber(handle)));
+
+                if (IsExcludedFromCoverage(metadata, method.GetCustomAttributes())
+                    || IsExcludedFromCoverage(
+                        metadata,
+                        metadata.GetTypeDefinition(method.GetDeclaringType()).GetCustomAttributes()))
+                {
+                    continue;
+                }
+
+                coverable += points;
+            }
+
+            return coverable;
+        }
+        catch (BadImageFormatException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>Whether any of these attributes is <c>[ExcludeFromCodeCoverage]</c>.</summary>
+    /// <remarks>
+    ///     Matches on the unqualified type name from the <c>TypeRef</c> table. The namespace is not
+    ///     checked because there is one attribute with this name in the framework and a same-named
+    ///     one somebody wrote deliberately means the same thing.
+    /// </remarks>
+    static bool IsExcludedFromCoverage(MetadataReader metadata, CustomAttributeHandleCollection attributes)
+    {
+        foreach (var handle in attributes)
+        {
+            var attribute = metadata.GetCustomAttribute(handle);
+
+            // A MemberReference constructor means the attribute type lives in another assembly,
+            // which is true of every framework attribute. An attribute declared in this assembly
+            // arrives as a MethodDefinition instead, and none of those is this one.
+            if (attribute.Constructor.Kind != HandleKind.MemberReference)
+                continue;
+
+            var parent = metadata.GetMemberReference((MemberReferenceHandle)attribute.Constructor).Parent;
+
+            if (parent.Kind != HandleKind.TypeReference)
+                continue;
+
+            if (metadata.GetString(metadata.GetTypeReference((TypeReferenceHandle)parent).Name)
+                is "ExcludeFromCodeCoverageAttribute")
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>Every assembly name the report mentions.</summary>
+    /// <remarks>
+    ///     ⚠ Empty means the profiler never loaded, <b>not</b> that nothing is covered — see
+    ///     Build.Test.cs § EnforceCoverageFloor, which refuses to enforce a floor against it.
+    /// </remarks>
+    public IReadOnlySet<string> MentionedAssemblies =>
+        modules.Keys.ToHashSet(StringComparer.Ordinal);
+
+    /// <summary>
     ///     One line per project below the floor, plus one per project the report never mentions.
     /// </summary>
     /// <param name="projects">
@@ -130,7 +277,17 @@ sealed class CoverageReport
     ///     mentions would give it a pass.
     /// </param>
     /// <param name="floor">The fraction from docs/plan/23 § Test layers — 0.70.</param>
-    public IReadOnlyList<string> Violations(IEnumerable<string> projects, double floor)
+    /// <param name="nothingToCover">
+    ///     The projects whose assemblies hold no coverable line at all, from
+    ///     <see cref="CoverableLines" />. ⚠ These are the <em>only</em> projects allowed to be
+    ///     missing from the report — every other absence is a project no test loaded. Pass an empty
+    ///     set to make every absence a violation; never pass a project here on the strength of a
+    ///     name or a folder, because this set is the one place the floor can be switched off.
+    /// </param>
+    public IReadOnlyList<string> Violations(
+        IEnumerable<string> projects,
+        double floor,
+        IReadOnlySet<string> nothingToCover)
     {
         var violations = new List<string>();
 
@@ -138,6 +295,12 @@ sealed class CoverageReport
         {
             if (!modules.TryGetValue(project, out var module))
             {
+                // Fully covered by definition: there is no line here for a test to reach. Counting
+                // it as 0 % would fail a project for containing no executable code, which the same
+                // reasoning as Module.Rate above says no amount of testing could fix.
+                if (nothingToCover.Contains(project))
+                    continue;
+
                 violations.Add(
                     $"{project} does not appear in the coverage report at all — no test loaded it, so "
                     + "its coverage is 0 %. docs/plan/23 § Test layers puts the floor at "
