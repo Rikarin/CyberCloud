@@ -49,6 +49,26 @@ public sealed class KafkaOpenApiCasingTests {
         }
     }
 
+    /// <summary>
+    ///     The spelling, written out. ⚠ <b>A literal, and it has to be.</b>
+    /// </summary>
+    /// <remarks>
+    ///     The first version of the test below built the expected path from
+    ///     <c>KafkaClusters.ProviderNamespace</c> and <c>KafkaClusters.TypePath</c> — the same two
+    ///     constants the emitter reads. Changing <c>TypePath</c> to <c>kafkaclusters</c> and running
+    ///     the suite left it <b>green</b>, along with every other test in this assembly: two things
+    ///     derived from one constant agree however that constant is spelled. A casing test whose
+    ///     expectation moves with the thing it is testing cannot fail, which is worse than no test
+    ///     because it reads as coverage.
+    ///     <para>
+    ///         docs/plan/12 § The catalogue, <c>charts/managed/kafka/Chart.yaml</c>'s
+    ///         <c>cybercloud.io/resource-type</c> annotation, and this line are the three places the
+    ///         string is written independently. <c>./build.sh Charts</c> compares the middle one to
+    ///         the registry; this is the one that fails in a second rather than in a build.
+    ///     </para>
+    /// </remarks>
+    const string QualifiedType = "CyberCloud.Messaging/kafkaClusters";
+
     [Fact]
     public void TheCamelCasedTypePathSurvivesIntoThePathsExactly() {
         // ⚠ The path is what the gateway routes on, and `ResourceId.TryParsePath` compares the type
@@ -56,21 +76,24 @@ public sealed class KafkaOpenApiCasingTests {
         // still route, and this test is not about routing: it is about what a generated client, a
         // portal breadcrumb and docs/plan/12's prose all copy. Three surfaces are generated FROM this
         // document, so a `kafkaclusters` here is `kafkaclusters` in the CLI, the SDK and the form.
+        KafkaClusters.Type.ToString().ShouldBe(
+            QualifiedType,
+            "the declared type is spelled differently from docs/plan/12 § The catalogue and from "
+            + "charts/managed/kafka/Chart.yaml's cybercloud.io/resource-type annotation."
+        );
+
         var paths = Paths();
 
         paths.ShouldContain(
-            x => x.Contains(
-                "/providers/" + KafkaClusters.ProviderNamespace + "/" + KafkaClusters.TypePath + "/",
-                StringComparison.Ordinal
-            ),
-            "no path carries the provider namespace and type as declared"
+            x => x.Contains("/providers/" + QualifiedType + "/", StringComparison.Ordinal),
+            "no path carries the provider namespace and type as the catalogue spells them"
         );
 
         foreach (var path in paths.Where(
                      x => x.Contains("kafkaclusters", StringComparison.OrdinalIgnoreCase)
                  )) {
-            path.Contains(KafkaClusters.TypePath, StringComparison.Ordinal).ShouldBeTrue(
-                $"'{path}' spells the type path in a casing other than '{KafkaClusters.TypePath}'."
+            path.Contains(QualifiedType, StringComparison.Ordinal).ShouldBeTrue(
+                $"'{path}' spells the type in a casing other than '{QualifiedType}'."
             );
         }
     }
