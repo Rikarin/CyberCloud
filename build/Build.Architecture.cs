@@ -1371,15 +1371,33 @@ partial class Build
                 continue;
             }
 
+            // ⚠ A manifest that parses to nothing is the failure this whole gate exists to remove,
+            // one turn of the screw further in. Every check below it is a loop over the released
+            // types, so an emptied or truncated file produces zero violations and the row would then
+            // report "1 of 3 released baseline(s) (v0.1.0)" — a comparison it did not make, named
+            // after a release it did not read. Found by emptying the file and watching the row stay
+            // green. No release this repository will ever cut publishes zero wire types.
+            if (released.Count == 0)
+            {
+                violations.Add(
+                    $"{RootDirectory.GetRelativePathTo(manifest)} parses to 0 wire types, so comparing "
+                    + $"against it proves nothing about {tag}. Regenerate it with ./build.sh Architecture "
+                    + "--wire-record");
+
+                continue;
+            }
+
             violations.AddRange(WireContract.Compare(tag, released, current, burned));
-            compared.Add(tag);
+            compared.Add($"{tag}: {released.Count}");
         }
 
         var detail =
             $"{current.Count} aliased wire type(s) over {current.Sum(x => x.Members.Count)} [Id(n)] "
             + $"member(s) and {current.Sum(x => x.Values.Count)} enum constant(s), against "
             + $"{compared.Count} of {ReleasesCompared} released baseline(s)"
-            + (compared.Count > 0 ? $" ({string.Join(", ", compared)})" : string.Empty);
+            // ⚠ The released type count per tag, not just the tag name. A row that names what it read
+            // without saying how much of it read the same as one that read an empty file.
+            + (compared.Count > 0 ? $" ({string.Join("; ", compared)} types)" : string.Empty);
 
         // ⚠ Enforced needs all three, and the shortfall is reported as ○ rather than ✔ on purpose.
         // One release is a real comparison over real types and it is not the property the row claims:
