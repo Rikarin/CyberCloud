@@ -131,6 +131,87 @@ public sealed class SuspendedReconcileTests(KubeTestCluster cluster) {
         }
     }
 
+    [Fact]
+    public async Task ARefusedApplyFailsTheOperationAndLeavesTheClusterHealthy() {
+        // ⚠ THE MIRROR IMAGE OF THIS WHOLE SUITE, and the failure class the 4xx mapping created the
+        // moment it started returning failed Results.
+        //
+        // "Suspended, not failed" is right for an unreachable cluster and catastrophic for a refused
+        // write: the grain folded every failed apply into the health window, so one admission
+        // rejection would push a perfectly healthy cluster to Degraded, turn every later apply into
+        // a SUCCESSFUL Suspended, and leave the operation rescheduling forever against an API server
+        // that will refuse it every time. A hot loop that also tells the tenant "cannot reach your
+        // cluster" about a cluster answering in milliseconds.
+        //
+        // ClusterConnectionGrain.Answered is the fix, and this is the assertion that it holds.
+        var clusterId = NewClusterId();
+        var reacher = cluster.Reacher(Tenant);
+
+        await reacher.ReachAttachAsync(Descriptor(clusterId));
+        (await reacher.ReachPingAsync(clusterId)).ShouldBe(nameof(ClusterHealthState.Healthy));
+
+        FakeApiClientFactory.Client.NextApply = Result<ApplyOutcome>.Failure(
+            ErrorCode.PolicyViolation,
+            "the cluster's admission control refused it"
+        );
+
+        try {
+            // ⚠ The window is measured from the last SUCCESS, so the discriminator is whether the
+            // refusal renewed it. Two thirds of the window, a refusal, then another two thirds: past
+            // the limit from the ping, well inside it from the refusal.
+            var twoThirds = ClusterHealthTracker.StalenessWindow * 2 / 3;
+
+            SharedTestClock.Instance.Advance(twoThirds);
+
+            (await reacher.ReachApplyAsync(clusterId, Command()))
+                .ShouldBe($"<{ErrorCode.PolicyViolation}>", "a refusal is a failed Result.");
+
+            SharedTestClock.Instance.Advance(twoThirds);
+
+            (await reacher.ReachHealthAsync(clusterId)).ShouldBe(
+                nameof(ClusterHealthState.Healthy),
+                "a cluster that answers 'no' is answering. Letting a refusal age the health window "
+                + "would degrade it, suspend the reconcile, and reschedule the refused write forever."
+            );
+        } finally {
+            FakeApiClientFactory.Client.NextApply = null;
+        }
+    }
+
+    [Fact]
+    public async Task AnUnreachableApplyStillDegradesTheCluster() {
+        // The control for the test above: the SAME path with the SAME shape of failure, differing
+        // only in the code, has to keep the old behaviour. Without this, Answered() could return
+        // true for everything and the test above would pass for the wrong reason.
+        var clusterId = NewClusterId();
+        var reacher = cluster.Reacher(Tenant);
+
+        await reacher.ReachAttachAsync(Descriptor(clusterId));
+        await reacher.ReachPingAsync(clusterId);
+
+        FakeApiClientFactory.Client.NextApply = Result<ApplyOutcome>.Failure(
+            ErrorCode.InternalError,
+            $"Cluster {clusterId:D} did not answer: HttpRequestException: connection refused"
+        );
+
+        try {
+            var twoThirds = ClusterHealthTracker.StalenessWindow * 2 / 3;
+
+            SharedTestClock.Instance.Advance(twoThirds);
+
+            (await reacher.ReachApplyAsync(clusterId, Command())).ShouldBe($"<{ErrorCode.InternalError}>");
+
+            SharedTestClock.Instance.Advance(twoThirds);
+
+            (await reacher.ReachHealthAsync(clusterId)).ShouldBe(
+                nameof(ClusterHealthState.Degraded),
+                "an apply that could not reach the cluster is not evidence the cluster is up."
+            );
+        } finally {
+            FakeApiClientFactory.Client.NextApply = null;
+        }
+    }
+
     static Guid NewClusterId() =>
         Guid.Parse(FormattableString.Invariant($"dddddddd-0000-0000-0000-{Interlocked.Increment(ref next):D12}"));
 

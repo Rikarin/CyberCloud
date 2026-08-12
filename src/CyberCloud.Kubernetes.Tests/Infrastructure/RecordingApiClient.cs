@@ -46,9 +46,26 @@ public sealed class RecordingApiClient : IKubeApiClient {
     public Task<Result<KubeObject>> GetAsync(ObjectRef target, CancellationToken cancellationToken = default) =>
         Task.FromResult(Result<KubeObject>.Failure(ErrorCode.ResourceNotFound, "not scripted"));
 
+    /// <summary>
+    ///     What <see cref="ApplyAsync" /> answers, or <see langword="null" /> for a plain
+    ///     <see cref="ApplyResult.Created" />.
+    /// </summary>
+    /// <remarks>
+    ///     Set by tests that need the connection grain to see a <i>refused</i> apply — the case where
+    ///     the cluster answered and said no, which must not be folded into the health window. See
+    ///     <c>ClusterConnectionGrain.Answered</c>.
+    /// </remarks>
+    public Result<ApplyOutcome>? NextApply { get; set; }
+
     /// <inheritdoc />
-    public Task<Result<ApplyOutcome>> ApplyAsync(KubeCommand command, CancellationToken cancellationToken = default) =>
-        Task.FromResult(Result<ApplyOutcome>.Success(new() { Result = ApplyResult.Created, Target = command.Target }));
+    public Task<Result<ApplyOutcome>> ApplyAsync(KubeCommand command, CancellationToken cancellationToken = default) {
+        ArgumentNullException.ThrowIfNull(command);
+
+        return Task.FromResult(
+            NextApply
+            ?? Result<ApplyOutcome>.Success(new() { Result = ApplyResult.Created, Target = command.Target })
+        );
+    }
 
     /// <inheritdoc />
     public Task<Result> DeleteAsync(

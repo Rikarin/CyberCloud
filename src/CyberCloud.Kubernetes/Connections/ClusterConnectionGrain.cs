@@ -282,7 +282,7 @@ public sealed class ClusterConnectionGrain : Grain, IClusterConnectionGrain {
         var outcome = await client.GetValueOrThrow()
             .ApplyAsync(command, CancellationToken.None);
 
-        await RecordReachabilityAsync(outcome.IsSuccess);
+        await RecordReachabilityAsync(Answered(outcome.Error));
 
         if (outcome.IsSuccess && outcome.GetValueOrThrow() is { Result: ApplyResult.Conflict } conflicted) {
             logger.LogWarning(
@@ -332,7 +332,7 @@ public sealed class ClusterConnectionGrain : Grain, IClusterConnectionGrain {
         var outcome = await client.GetValueOrThrow()
             .DeleteAsync(command.Target, policy, CancellationToken.None);
 
-        await RecordReachabilityAsync(outcome.IsSuccess);
+        await RecordReachabilityAsync(Answered(outcome.Error));
         return outcome;
     }
 
@@ -353,9 +353,7 @@ public sealed class ClusterConnectionGrain : Grain, IClusterConnectionGrain {
         var outcome = await client.GetValueOrThrow()
             .GetAsync(target, CancellationToken.None);
 
-        // A 404 is the cluster answering, so it counts as reachable. Only a transport failure does
-        // not — see KubeApiClient.IsTransport.
-        await RecordReachabilityAsync(outcome.IsSuccess || outcome.Error!.Code == ErrorCode.ResourceNotFound);
+        await RecordReachabilityAsync(Answered(outcome.Error));
 
         return outcome;
     }
@@ -567,6 +565,30 @@ public sealed class ClusterConnectionGrain : Grain, IClusterConnectionGrain {
         Result<T>.Failure(refusal.Error!);
 
     // ── Internals ──────────────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    ///     Whether a call's outcome is evidence the cluster is up.
+    /// </summary>
+    /// <param name="error">The failure, or <see langword="null" /> when the call succeeded.</param>
+    /// <remarks>
+    ///     ⚠ <b>A refusal is the cluster answering, and folding one into the health window is how a
+    ///     rejected write becomes an infinite loop.</b> Health drives
+    ///     <see cref="ClusterHealthState.Degraded" />, a <c>Degraded</c> cluster's applies come back
+    ///     <see cref="ApplyResult.Suspended" /> rather than failed (docs/plan/09 § Cluster
+    ///     connections), and a suspended reconcile is rescheduled forever. So a cluster whose
+    ///     admission control refuses one object would go <c>Degraded</c>, tell the tenant "cannot
+    ///     reach your cluster" about a cluster that is answering in milliseconds, and keep
+    ///     re-attempting a write it will never accept.
+    ///     <para>
+    ///         This used to be spelled <c>outcome.IsSuccess</c> here and in <see cref="DeleteAsync" />,
+    ///         with <see cref="GetAsync" /> carrying a hand-written exception for
+    ///         <see cref="ErrorCode.ResourceNotFound" />. That exception was the general rule seen
+    ///         through the one case that existed at the time;
+    ///         <see cref="KubeFailures.MeansTheClusterAnswered" /> is the general rule.
+    ///     </para>
+    /// </remarks>
+    static bool Answered(Error? error) =>
+        error is null || KubeFailures.MeansTheClusterAnswered(error.Code);
 
     static string InformerKey(GroupVersionKind kind) =>
         string.Create(CultureInfo.InvariantCulture, $"{kind.Group}/{kind.Version}/{kind.Plural}");
