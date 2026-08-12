@@ -49,6 +49,10 @@ public class ResourceIdTests {
             parsed.ResourceGroup.ShouldBe(id.ResourceGroup);
             parsed.Type.ShouldBe(id.Type);
             parsed.Name.ShouldBe(id.Name);
+
+            // ⚠ The corpus cycles depth 1, 2 and 3, so this asserts the interleave round-trips at
+            // every depth the grammar allows rather than only at the one the samples above use.
+            parsed.ParentNames.ShouldBe(id.ParentNames);
             parsed.Id.ShouldBe(Guid.Empty);
 
             // …and the path itself is a fixed point, which is the property that actually matters
@@ -71,31 +75,142 @@ public class ResourceIdTests {
 
     // ── Nested resource types ──────────────────────────────────────────────────────────────────
 
+    /// <summary>
+    ///     ⚠ A child interleaves with its parent's name, exactly as Azure spells it. docs/plan/12
+    ///     § Child resources records the decision; this is the assertion that holds it.
+    /// </summary>
     [Fact]
-    public void ANestedTypeFormatsAndParses() {
-        var nested = Sample with { Type = new("CyberCloud.DBforPostgreSQL", "servers/databases"), Name = "orders" };
+    public void ANestedTypeInterleavesItsParentsNameAndParsesBack() {
+        var nested = (Sample with { Name = "orders" })
+            .WithType(new("CyberCloud.DBforPostgreSQL", "servers/databases"), "pg-main");
 
-        nested.Path.ShouldEndWith("/providers/CyberCloud.DBforPostgreSQL/servers/databases/orders");
+        nested.Path.ShouldEndWith(
+            "/providers/CyberCloud.DBforPostgreSQL/servers/pg-main/databases/orders"
+        );
 
         ResourceId.TryParsePath(nested.Path, out var parsed).ShouldBeTrue();
         parsed.Type.Type.ShouldBe("servers/databases");
         parsed.Type.Depth.ShouldBe(2);
+        parsed.ParentNames.ShouldBe("pg-main");
         parsed.Name.ShouldBe("orders");
+        parsed.Path.ShouldBe(nested.Path);
     }
 
     [Fact]
-    public void ATypePathDeeperThanTheCapIsRejectedRatherThanTruncated() {
-        // Four type segments. Without the cap the parser would happily read three of them as the
-        // type and the fourth as the name, producing a valid-looking id for a type that does not
-        // exist.
+    public void ADepthThreeTypeInterleavesTwiceAndRoundTrips() {
+        var deep = (Sample with { Name = "primary" })
+            .WithType(new("CyberCloud.Network", "dnsZones/recordSets/a"), "example/www");
+
+        deep.Path.ShouldEndWith("/providers/CyberCloud.Network/dnsZones/example/recordSets/www/a/primary");
+
+        ResourceId.TryParsePath(deep.Path, out var parsed).ShouldBeTrue();
+        parsed.ShouldBe(deep with { Id = Guid.Empty });
+        parsed.Path.ShouldBe(deep.Path);
+    }
+
+    /// <summary>
+    ///     ⚠ The property the interleaved grammar exists for: the parent is derivable from the
+    ///     address alone, which is all <c>IResourceRelationWriter.LinkToParentAsync</c> is given.
+    /// </summary>
+    [Fact]
+    public void AChildsParentIsAPureFunctionOfItsAddress() {
+        var database = (Sample with { Name = "orders" })
+            .WithType(new("CyberCloud.DBforPostgreSQL", "servers/databases"), "pg-main");
+
+        var server = database.Parent.ShouldNotBeNull();
+
+        server.Type.Type.ShouldBe("servers");
+        server.Name.ShouldBe("pg-main");
+        server.ParentNames.ShouldBeEmpty();
+        server.Path.ShouldEndWith("/providers/CyberCloud.DBforPostgreSQL/servers/pg-main");
+
+        // …and it walks all the way up, one level at a time.
+        server.Parent.ShouldBeNull();
+    }
+
+    [Fact]
+    public void ATopLevelResourcesParentIsTheResourceGroupAndSoIsNull() =>
+        Sample.Parent.ShouldBeNull();
+
+    [Fact]
+    public void ADepthThreeParentWalkPeelsOneLevelAtATime() {
+        var record = (Sample with { Name = "primary" })
+            .WithType(new("CyberCloud.Network", "dnsZones/recordSets/a"), "example/www");
+
+        var recordSet = record.Parent.ShouldNotBeNull();
+        recordSet.Type.Type.ShouldBe("dnsZones/recordSets");
+        recordSet.Name.ShouldBe("www");
+        recordSet.ParentNames.ShouldBe("example");
+
+        var zone = recordSet.Parent.ShouldNotBeNull();
+        zone.Type.Type.ShouldBe("dnsZones");
+        zone.Name.ShouldBe("example");
+        zone.Parent.ShouldBeNull();
+    }
+
+    /// <summary>
+    ///     ⚠ The ambiguity the old grammar had and this one does not. Under a flattened
+    ///     <c>…/servers/databases/{name}</c> shape this path was a legal depth-2 id; here it is an
+    ///     odd tail and is refused rather than read at the wrong depth.
+    /// </summary>
+    [Fact]
+    public void AnOddTailIsRefusedRatherThanReadAtTheWrongDepth() {
         const string path =
             "/tenants/2b4a1c66-2e70-4a9d-9d0a-1f7ec1f1a4b3"
             + "/subscriptions/7f2d4e88-1a3b-4c5d-8e9f-0a1b2c3d4e5f"
             + "/resourceGroups/prod"
-            + "/providers/CyberCloud.DBforPostgreSQL/a/b/c/d/name";
+            + "/providers/CyberCloud.DBforPostgreSQL/servers/databases/orders";
+
+        ResourceId.TryParsePath(path, out _).ShouldBeFalse();
+
+        var error = ResourceId.ParsePath(path).Error.ShouldNotBeNull();
+        error.Code.ShouldBe(ErrorCode.InvalidResourceId);
+        error.Message.ShouldContain("odd number");
+    }
+
+    [Fact]
+    public void ATypePathDeeperThanTheCapIsRejectedRatherThanTruncated() {
+        // Four type segments, each with a name — a well-formed alternation that is simply too deep.
+        // Without the cap this would parse as a type nobody registered.
+        const string path =
+            "/tenants/2b4a1c66-2e70-4a9d-9d0a-1f7ec1f1a4b3"
+            + "/subscriptions/7f2d4e88-1a3b-4c5d-8e9f-0a1b2c3d4e5f"
+            + "/resourceGroups/prod"
+            + "/providers/CyberCloud.DBforPostgreSQL/a/w/b/x/c/y/d/z";
 
         ResourceId.TryParsePath(path, out _).ShouldBeFalse();
         ResourceId.ParsePath(path).Error!.Code.ShouldBe(ErrorCode.InvalidResourceType);
+    }
+
+    /// <summary>
+    ///     ⚠ The invariant is enforced on <c>with</c> as well as on construction — see the remarks on
+    ///     <c>ResourceId.Type</c> for why the two paths need separate guards.
+    /// </summary>
+    [Fact]
+    public void ATypeAndItsParentNamesCannotDisagree() {
+        // A depth-2 type with no parent name would render a path with a segment missing.
+        Should.Throw<ArgumentException>(
+            () => Sample with { Type = new("CyberCloud.DBforPostgreSQL", "servers/databases") }
+        );
+
+        // …and a top-level type with one is the same mistake upside down.
+        Should.Throw<ArgumentException>(() => Sample with { ParentNames = "pg-main" });
+
+        // An ancestor's name is validated exactly as the resource's own is.
+        Should.Throw<ArgumentException>(
+            () => Sample.WithType(new("CyberCloud.DBforPostgreSQL", "servers/databases"), "PG-Main")
+        );
+    }
+
+    [Fact]
+    public void AnAncestorNameIsValidatedWhenParsedToo() {
+        const string path =
+            "/tenants/2b4a1c66-2e70-4a9d-9d0a-1f7ec1f1a4b3"
+            + "/subscriptions/7f2d4e88-1a3b-4c5d-8e9f-0a1b2c3d4e5f"
+            + "/resourceGroups/prod"
+            + "/providers/CyberCloud.DBforPostgreSQL/servers/PG-MAIN/databases/orders";
+
+        ResourceId.TryParsePath(path, out _).ShouldBeFalse();
     }
 
     [Fact]
@@ -407,36 +522,45 @@ public class ResourceIdTests {
 
     [Fact]
     public void WhyTheConstructorMustValidateToo() {
-        // This is the forgery the naming rule prevents, demonstrated on a raw string so the shape
-        // of the attack is on the record.
+        // ⚠ THIS TEST USED TO ASSERT THE OPPOSITE, and the change is the point of the interleaved
+        // grammar rather than a weakening of this defence.
         //
-        // The path grammar nests resource types, so `servers` + name `databases/orders` and
-        // `servers/databases` + name `orders` produce THE SAME string. Both parse. They are
-        // different resources. If a name could contain '/', a caller who is allowed to create
-        // `.../servers/{name}` could address `.../servers/databases/{name}` — a different type,
-        // with different permissions and a different reconciler.
+        // Under the flattened shape — the type path whole in the middle, one name at the end —
+        // `servers` + name `databases/orders` and `servers/databases` + name `orders` rendered THE
+        // SAME string. Both were legal ids for different resources, with different permissions and
+        // different reconcilers, and only ResourceNaming's ban on '/' in a name kept the second
+        // reading out. docs/plan/06 § Identifiers calls that rule "load-bearing for identifier
+        // integrity" for exactly this reason.
+        //
+        // Interleaving removes the collision at the grammar level: a depth-2 id spells the server's
+        // name between the two type segments, so there is no string a depth-1 id and a depth-2 id
+        // can both produce. The forged path below is now not a path at all — an odd tail.
         const string forged =
             "/tenants/2b4a1c66-2e70-4a9d-9d0a-1f7ec1f1a4b3"
             + "/subscriptions/7f2d4e88-1a3b-4c5d-8e9f-0a1b2c3d4e5f"
             + "/resourceGroups/prod"
             + "/providers/CyberCloud.DBforPostgreSQL/servers/databases/orders";
 
-        ResourceId.TryParsePath(forged, out var parsed).ShouldBeTrue();
+        ResourceId.TryParsePath(forged, out _).ShouldBeFalse();
 
-        // It parses as the NESTED type — not as a `servers` named "databases/orders".
-        parsed.Type.Type.ShouldBe("servers/databases");
-        parsed.Name.ShouldBe("orders");
-
-        // And the id that would have produced it the other way cannot be built at all:
+        // The naming rule is still load-bearing and still enforced — it is now the second of two
+        // independent defences rather than the only one. A name with a '/' would still shift the
+        // alternation, so it is still unconstructible:
         Should.Throw<ArgumentException>(() => new ResourceId(
-                parsed.TenantId,
-                parsed.SubscriptionId,
+                Guid.Parse("2b4a1c66-2e70-4a9d-9d0a-1f7ec1f1a4b3"),
+                Guid.Parse("7f2d4e88-1a3b-4c5d-8e9f-0a1b2c3d4e5f"),
                 "prod",
                 Postgres,
                 "databases/orders",
                 Guid.Empty
             )
         );
+
+        // …and the id that path was trying to forge has a different, unambiguous spelling.
+        var real = (Sample with { Name = "orders" })
+            .WithType(new("CyberCloud.DBforPostgreSQL", "servers/databases"), "pg-main");
+
+        real.Path.ShouldEndWith("/servers/pg-main/databases/orders");
     }
 
     [Fact]

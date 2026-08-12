@@ -179,7 +179,7 @@ public sealed class EmittedExpressivenessTests {
         // three different names — and `declared: false` is greppable in the published document.
         var databases = Document["paths"]![
             "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}"
-            + "/providers/CyberCloud.DBforPostgreSQL/servers/databases/{resourceName}"
+            + "/providers/CyberCloud.DBforPostgreSQL/servers/{serversName}/databases/{resourceName}"
         ]!["x-cybercloud-display"]!;
 
         databases["name"]!.GetValue<string>().ShouldBe("databases");

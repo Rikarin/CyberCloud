@@ -64,7 +64,28 @@ public static class CliEmitter {
                 groups[groupName] = group;
             }
 
-            ((JsonObject)group["commands"]!)[CommandOf(type)] = Command(type, version);
+            var commands = (JsonObject)group["commands"]!;
+            var name = CommandOf(type);
+
+            // ⚠ ADD, NEVER ASSIGN. `commands[name] = …` is an indexer that REPLACES, so two resource
+            // types whose kebab-cased command names collide would leave one command in the tree and
+            // the other nowhere — a resource type silently absent from the CLI, with nothing in the
+            // build saying so. `kafkaClustersTopics` and `kafkaClusters/topics` are exactly that
+            // pair: both kebab to `kafka-clusters-topics`. Throwing here makes the collision a build
+            // failure at the moment it is created; DerivedSurfaces.CliProblems reports it against a
+            // checked-in tree as well, because a generator self-check and a pipeline check catch it
+            // at different times and this failure class is one this repository keeps re-finding.
+            if (commands.ContainsKey(name)) {
+                throw new InvalidOperationException(
+                    $"'{groupName} {name}' is the command name of two resource types — "
+                    + $"'{type.ResourceType}' is the second. One would silently replace the other in "
+                    + "the verb tree and that type would vanish from the CLI. Give one of them a "
+                    + "distinct type path, or an IResourceTypeBuilder.Display that kebabs "
+                    + "differently — docs/plan/21 § Grammar."
+                );
+            }
+
+            commands.Add(name, Command(type, version));
         }
 
         return new JsonObject {

@@ -119,7 +119,7 @@ public sealed class OpenApiEmitterTests {
         paths.ShouldContainKey(ServerPath + "/restart");
         paths.ShouldContainKey(
             "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}"
-            + "/providers/CyberCloud.DBforPostgreSQL/servers/databases/{resourceName}"
+            + "/providers/CyberCloud.DBforPostgreSQL/servers/{serversName}/databases/{resourceName}"
         );
     }
 
@@ -171,8 +171,10 @@ public sealed class OpenApiEmitterTests {
         var paths = Emit(Fixtures.Postgres())["paths"]!.AsObject();
 
         foreach (var path in paths) {
+            // ⚠ Not every entry is a $ref: a nested type's ancestors are declared inline, because
+            // their names come from the type path — see OpenApiEmitter.ResourceParameters.
             var parameters = path.Value!["parameters"]!.AsArray()
-                .Select(x => x!["$ref"]!.GetValue<string>())
+                .Select(x => x!["$ref"]?.GetValue<string>())
                 .ToList();
 
             parameters.Contains("#/components/parameters/ApiVersion", StringComparer.Ordinal)

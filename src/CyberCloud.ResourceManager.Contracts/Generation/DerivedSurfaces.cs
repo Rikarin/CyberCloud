@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Globalization;
 using System.Text;
 using System.Text.Json.Nodes;
 
@@ -100,7 +101,7 @@ public static class DerivedSurfaces {
                 CliEmitter.FileNameOf(version),
                 version,
                 DeterministicJson.ToBytes(cli),
-                CliProblems(cli),
+                CliProblems(cli, document),
                 directory,
                 write,
                 expected
@@ -218,13 +219,40 @@ public static class DerivedSurfaces {
     // checked in. They check what these emitters can actually get wrong.
 
     /// <summary>
-    ///     A verb tree whose flags collide is a CLI where one of two flags silently wins.
+    ///     A verb tree whose flags collide is a CLI where one of two flags silently wins — and one
+    ///     that has fewer commands than the document has resource types is a CLI missing a type.
     /// </summary>
-    static ImmutableArray<string> CliProblems(JsonObject tree) {
+    /// <remarks>
+    ///     ⚠ <b>The count check is here because the collision it catches is invisible in the tree
+    ///     alone.</b> A JSON object cannot hold one key twice, so by the time two resource types have
+    ///     kebab-cased to the same command name, one of them is simply not in the file and nothing in
+    ///     it records that it ever should have been. The only way to see the loss is to compare
+    ///     against the source document — which is why this takes one. <see cref="CliEmitter" /> also
+    ///     throws on the collision as it builds; the two catch it at different times, and the checked-in
+    ///     tree is the artifact this one is about.
+    /// </remarks>
+    static ImmutableArray<string> CliProblems(JsonObject tree, JsonObject document) {
         var problems = new List<string>();
 
         if (tree["groups"] is not JsonObject groups) {
             return [];
+        }
+
+        var commandCount = groups.Sum(
+            group => group.Value?["commands"] is JsonObject c ? c.Count : 0
+        );
+
+        var typeCount = DocumentReader.TypesOf(document).Length;
+
+        if (commandCount != typeCount) {
+            problems.Add(
+                $"the verb tree has {commandCount.ToString(CultureInfo.InvariantCulture)} command(s) "
+                + $"and the document declares {typeCount.ToString(CultureInfo.InvariantCulture)} "
+                + "resource type(s). Every type gets exactly one command, so a type has been lost — "
+                + "most likely two whose type paths kebab to the same command name, which the "
+                + "indexer that used to build this tree resolved by silently replacing one with the "
+                + "other."
+            );
         }
 
         foreach (var group in groups) {

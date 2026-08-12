@@ -128,6 +128,17 @@ public static class SdkEmitter {
     ///         <c>DBforMySQL/servers</c>; prefixing every type would give the other eighteen providers
     ///         names nobody wants to type, and prefixing none would give two types one class.
     ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The provider prefix cannot separate two colliding types in the <i>same</i>
+    ///         namespace, so the result is checked rather than assumed.</b> A
+    ///         <c>Streaming/kafkaClusters/topics</c> and a <c>Streaming/kafkaTopics</c> that both
+    ///         declare the display name <c>Topic</c> both resolve to <c>StreamingTopic</c> — the
+    ///         prefix is the same because the namespace is. That produced two C# classes with one
+    ///         name in a generated file, which is a compiler error in whatever consumes the SDK
+    ///         rather than in this build, arriving with no hint of where it came from. The second
+    ///         pass falls back to the type path, which is unique by construction — the registry keys
+    ///         on it — and throwing is the last resort for the case where even that collides.
+    ///     </para>
     /// </remarks>
     static ImmutableDictionary<string, string> ModelNames(ImmutableArray<DocumentType> types) {
         var bare = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -140,12 +151,34 @@ public static class SdkEmitter {
         }
 
         var resolved = ImmutableDictionary.CreateBuilder<string, string>(StringComparer.Ordinal);
+        var taken = new Dictionary<string, string>(StringComparer.Ordinal);
 
         foreach (var type in types) {
             var name = bare[type.ResourceType];
             var segments = type.ProviderNamespace.Split('.');
 
-            resolved[type.ResourceType] = counts[name] > 1 ? Pascal(segments[^1]) + name : name;
+            if (counts[name] > 1) {
+                name = Pascal(segments[^1]) + name;
+            }
+
+            // The prefix separates namespaces and nothing else. Two types in one namespace that
+            // still agree fall back to the type path, whose uniqueness the registry already
+            // guarantees — `kafkaClusters/topics` gives `KafkaClustersTopics`.
+            if (taken.ContainsKey(name)) {
+                name = Pascal(segments[^1]) + Pascal(type.TypePath);
+            }
+
+            if (taken.TryGetValue(name, out var owner)) {
+                throw new InvalidOperationException(
+                    $"'{type.ResourceType}' and '{owner}' both generate the SDK model name "
+                    + $"'{name}'. Two classes with one name do not compile, and the error would "
+                    + "surface in whatever consumes the SDK rather than here. Give one of them a "
+                    + "distinct IResourceTypeBuilder.Display."
+                );
+            }
+
+            taken[name] = type.ResourceType;
+            resolved[type.ResourceType] = name;
         }
 
         return resolved.ToImmutable();
