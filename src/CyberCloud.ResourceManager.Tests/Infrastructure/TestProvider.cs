@@ -261,14 +261,24 @@ public sealed class TestingProvider : IResourceProvider {
     /// <inheritdoc />
     public string ProviderNamespace => "CyberCloud.Testing";
 
-    /// <summary>The 2026 schema — location, size, and a nested version.</summary>
+    /// <summary>The 2026 schema — location, size, a label, and one secret.</summary>
+    /// <remarks>
+    ///     ⚠ <b><c>/properties/adminPassword</c> is the only <c>Secret</c> body property in the
+    ///     codebase, and it is here because something has to prove the read path drops one.</b> Real
+    ///     providers must not declare one — the write path stores the value in plaintext, which is why
+    ///     <c>PostgresSecretTests</c> asserts <c>CyberCloud.DBforPostgreSQL/servers</c> has none. See
+    ///     the remarks on <c>SchemaProperty</c>. A fixture is the one place the hazard is worth taking,
+    ///     because <c>WritePathTests.ASecretPropertyIsNeverProjectedBackToTheCaller</c> is what would
+    ///     notice if the drop stopped happening.
+    /// </remarks>
     public static ResourceSchema Schema2026 { get; } =
         ResourceSchema.Of(
             [
                 new("/location", SchemaKind.Text, Required: true),
                 new("/properties", SchemaKind.Nested),
                 new("/properties/size", SchemaKind.WholeNumber, Required: true),
-                new("/properties/label", SchemaKind.Text)
+                new("/properties/label", SchemaKind.Text),
+                new("/properties/adminPassword", SchemaKind.Text, Secret: true)
             ]
         );
 
@@ -280,6 +290,7 @@ public sealed class TestingProvider : IResourceProvider {
                 new("/properties", SchemaKind.Nested),
                 new("/properties/size", SchemaKind.WholeNumber, Required: true),
                 new("/properties/label", SchemaKind.Text),
+                new("/properties/adminPassword", SchemaKind.Text, Secret: true),
                 new("/properties/tier", SchemaKind.Text)
             ]
         );

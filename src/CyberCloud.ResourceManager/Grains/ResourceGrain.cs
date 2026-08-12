@@ -95,6 +95,12 @@ public sealed class ResourceGrain(
         var superset = Parse(state.State.Superset).GetValueOrThrow();
         var declared = submission.DeclaredPointers;
 
+        // ⚠ The write applies `declared` and the response projects `readable`, and the two differ by
+        // exactly the Secret properties. Replacing the slice needs every pointer or a PUT would drop
+        // what it did not list; the response needs the filtered one or a secret the caller just sent
+        // comes straight back out. Empty means "not supplied", which falls back to declared.
+        var readable = submission.ReadablePointers.IsDefaultOrEmpty ? declared : submission.ReadablePointers;
+
         // ⚠ The verb's whole meaning is these two branches.
         //
         // PUT is a full replacement OF THIS VERSION'S SLICE — every pointer the version declares is
@@ -125,7 +131,7 @@ public sealed class ResourceGrain(
             && state.State.ProvisioningState is ProvisioningState.Succeeded
             && string.Equals(state.State.Superset, nextJson, StringComparison.Ordinal)
             && tagsUnchanged) {
-            return Result<ResourceSnapshot>.Success(Snapshot(submission.ApiVersion, declared));
+            return Result<ResourceSnapshot>.Success(Snapshot(submission.ApiVersion, readable));
         }
 
         var now = clock.UtcNow;
@@ -154,7 +160,7 @@ public sealed class ResourceGrain(
         }
 
         await state.WriteStateAsync();
-        return Result<ResourceSnapshot>.Success(Snapshot(submission.ApiVersion, declared));
+        return Result<ResourceSnapshot>.Success(Snapshot(submission.ApiVersion, readable));
     }
 
     /// <inheritdoc />

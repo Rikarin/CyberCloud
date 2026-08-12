@@ -291,8 +291,9 @@ public sealed class OpenApiEmitterTests {
         // The server owns it, so it never appears in a request.
         properties["provisioningState"]!["readOnly"]!.GetValue<bool>().ShouldBeTrue();
 
-        // ResourceSchema.Project drops every secret on a read, so writeOnly is a statement about what
-        // the code does rather than a wish. format=password is what a portal form masks on.
+        // ⚠ writeOnly is what a Secret property is meant to be, not what the platform enforces — no
+        // runtime read strips one, see SchemaProperty's remarks. This asserts the emitter, not the
+        // guarantee. format=password is what a portal form masks on.
         properties["adminPassword"]!["writeOnly"]!.GetValue<bool>().ShouldBeTrue();
         properties["adminPassword"]!["format"]!.GetValue<string>().ShouldBe("password");
         properties["adminPassword"]!["x-cybercloud-secret"]!.GetValue<bool>().ShouldBeTrue();

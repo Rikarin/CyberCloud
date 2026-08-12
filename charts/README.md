@@ -141,9 +141,11 @@ appear untyped, and it does not silently vanish**: a schema that omits half the 
 is worse than no schema, because the omission is invisible in the file that claims to be complete.
 
 **5. Four directives Cozystack has no equivalent for**, each because a surface downstream needs it:
-`@secret` (the write path replaces the value with a `SecretRef`, so a generated form must mask it and
-a read must drop it), `@immutable`, `@range`, and `@widget` — which ADR-012 names directly, "with
-`x-cybercloud-*` hints for widgets (a `storageclass` picker, a region picker)".
+`@secret` (a generated form must mask the value and a read must drop it — ⚠ *must*, not *does*: the
+write path does not yet substitute a `SecretRef`, see `SchemaProperty`'s remarks and
+[docs/plan/02 § ADR-010](../docs/plan/02-technology-decisions.md)), `@immutable`, `@range`, and
+`@widget` — which ADR-012 names directly, "with `x-cybercloud-*` hints for widgets (a `storageclass`
+picker, a region picker)".
 
 **6. `@internal` is inherited, may be written once, and is emitted on every descendant.** The two
 rules point opposite ways on purpose. In `values.yaml` a repeated `@internal` is a second place to

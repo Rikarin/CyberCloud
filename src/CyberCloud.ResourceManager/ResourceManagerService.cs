@@ -169,7 +169,7 @@ public sealed class ResourceManagerService(
             return NotFound<ResourceSnapshot>(request.Path);
         }
 
-        return await Resource(target).GetAsync(target.ApiVersion.Value, Pointers(target.Schema));
+        return await Resource(target).GetAsync(target.ApiVersion.Value, ReadablePointers(target.Schema));
     }
 
     /// <inheritdoc />
@@ -420,7 +420,7 @@ public sealed class ResourceManagerService(
 
         trace.Enter(WriteStep.Accepted);
 
-        var snapshot = await Resource(target).GetAsync(target.ApiVersion.Value, Pointers(target.Schema));
+        var snapshot = await Resource(target).GetAsync(target.ApiVersion.Value, ReadablePointers(target.Schema));
 
         return Result<WriteAccepted>.Success(
             new() {
@@ -650,7 +650,8 @@ public sealed class ResourceManagerService(
                     Tags = TagsFrom(body, resolvedTarget.Registration),
                     Location = LocationFrom(body),
                     ClusterId = ClusterFrom(body, resolvedTarget.Registration),
-                    DeclaredPointers = Pointers(resolvedTarget.Schema)
+                    DeclaredPointers = Pointers(resolvedTarget.Schema),
+                    ReadablePointers = ReadablePointers(resolvedTarget.Schema)
                 }
             );
 
@@ -1145,7 +1146,29 @@ public sealed class ResourceManagerService(
 
     // ── Small shared pieces ────────────────────────────────────────────────────────────────────
 
+    // ⚠ TWO LISTS, AND THE DIFFERENCE IS THE WHOLE OF THE SECRET DROP.
+    //
+    // Pointers is the WRITE slice and carries every declared property. ResourceGrain.ReplaceSlice
+    // writes only the pointers it is handed, so dropping one here would make a PUT swallow that
+    // property in silence — which is the failure docs/plan/08 § The provider registry cares about
+    // most: the caller is told the write took and it did not.
+    //
+    // ReadablePointers is what a caller is allowed to see back, and it omits every
+    // SchemaProperty.Secret. It has to reach every snapshot that leaves this class, and there are two
+    // routes: ReadAsync and the accepted-write re-read pass it to GetAsync, while the no-op and 202
+    // branches answer from the snapshot SubmitDesiredAsync returns — which is why the submission
+    // carries it too. Miss either route and the secret comes back on that one.
+    //
+    // ⚠ It is a projection filter and NOT confidentiality. The value is still stored in the grain's
+    // superset in plaintext, and OperationSpec.Desired holds another copy, because nothing replaces a
+    // secret with a SecretRef on the way in — docs/plan/02 § ADR-010, and the remarks on
+    // SchemaProperty. This stops a secret round-tripping through the API; it does not keep one out of
+    // Postgres or out of a backup.
+
     static ImmutableArray<string> Pointers(ResourceSchema schema) => [.. schema.Properties.Select(x => x.JsonPointer)];
+
+    static ImmutableArray<string> ReadablePointers(ResourceSchema schema) =>
+        [.. schema.Properties.Where(x => !x.Secret).Select(x => x.JsonPointer)];
 
     static ImmutableDictionary<string, string> TagsFrom(JsonElement body, ResourceTypeRegistration registration) {
         if (!registration.SupportsTags
