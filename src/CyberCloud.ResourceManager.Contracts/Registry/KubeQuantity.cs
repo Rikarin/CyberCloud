@@ -74,10 +74,12 @@ public static class KubeQuantity {
     ///         never what a tenant meant.
     ///     </para>
     ///     <para>
-    ///         ⚠ <c>PostgresServers</c>, <c>KafkaClusters</c> and <c>TestProvider</c> still declare
-    ///         their own byte-identical copies. Those are three assemblies this change does not own;
-    ///         pointing them here is the remaining half of the consolidation, and
-    ///         <c>QuantityParserTests</c> is what notices if one of them drifts into a parser instead.
+    ///         ⚠ <c>ValkeyCaches</c>, <c>PostgresServers</c>, <c>KafkaClusters</c> and the resource
+    ///         manager's <c>TestProvider</c> now alias this constant rather than restating it, so this
+    ///         is the only place the grammar is written down. Every provider <c>.Contracts</c> project
+    ///         imports this namespace in its <c>GlobalUsings.cs</c>, so a new resource type spells it
+    ///         <c>KubeQuantity.Pattern</c> and adds no reference to reach it.
+    ///         <c>QuantityParserTests</c> is what notices if a fifth copy appears anyway.
     ///     </para>
     /// </remarks>
     public const string Pattern = @"\d+(\.\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?";
