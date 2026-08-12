@@ -69,7 +69,9 @@ public interface IKubeApiClient : IDisposable {
     /// <returns>
     ///     A failure carrying <see cref="ErrorCode.ResourceNotFound" /> when the object is absent —
     ///     which the apply path uses to tell <see cref="ApplyResult.Created" /> from
-    ///     <see cref="ApplyResult.Updated" />.
+    ///     <see cref="ApplyResult.Updated" />. On success the body includes
+    ///     <c>metadata.managedFields</c>, which is how the apply path then tells
+    ///     <see cref="ApplyResult.Updated" /> from <see cref="ApplyResult.Unchanged" />.
     /// </returns>
     Task<Result<KubeObject>> GetAsync(ObjectRef target, CancellationToken cancellationToken = default);
 
