@@ -186,13 +186,22 @@ public enum QuotaMeter {
 }
 
 /// <summary>
-///     What an index entry currently is: a lease that can expire, or a permanent binding.
+///     What an index entry currently is: a lease that can expire, a permanent binding, or a binding
+///     held open for a soft-deleted resource.
 /// </summary>
 /// <remarks>
-///     The two-phase create of docs/plan/06 § Two-phase create <i>is</i> this enum. A
-///     <see cref="Claimed" /> entry is step 1's five-minute lease; <see cref="Confirmed" /> is step
-///     3. A silo dying between them leaves a <see cref="Claimed" /> entry that expires on its own,
-///     which is what frees the name.
+///     <para>
+///         The two-phase create of docs/plan/06 § Two-phase create <i>is</i> this enum. A
+///         <see cref="Claimed" /> entry is step 1's five-minute lease; <see cref="Confirmed" /> is step
+///         3. A silo dying between them leaves a <see cref="Claimed" /> entry that expires on its own,
+///         which is what frees the name.
+///     </para>
+///     <para>
+///         ⚠ <b><see cref="SoftDeleted" /> is one state and not a second mechanism</b>, which is what
+///         docs/plan/08 § Soft delete asks for: <i>"IResourceIndexGrain is where this lands and it
+///         needs one new IndexEntryState, not a new mechanism"</i>. Everything soft delete needs from
+///         the index falls out of the two refusals that state carries — see its own remarks.
+///     </para>
 /// </remarks>
 [Alias("CyberCloud.Tenancy.IndexEntryState")]
 public enum IndexEntryState {
@@ -203,5 +212,43 @@ public enum IndexEntryState {
     Claimed = 1,
 
     /// <summary>A permanent binding. Released only by an explicit release.</summary>
-    Confirmed = 2
+    Confirmed = 2,
+
+    /// <summary>
+    ///     The resource was soft-deleted and the name is held for the whole recovery window.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>Two refusals, and between them they are the whole of docs/plan/08 § Soft delete's
+    ///         second decision.</b>
+    ///     </para>
+    ///     <list type="bullet">
+    ///         <item>
+    ///             <b><c>ResolveAsync</c> refuses it</b>, so the resource is not addressable and the
+    ///             <c>404</c> on its old address is <i>free</i>: the write path's step 1 reads
+    ///             <c>Exists = false</c> and every later step answers the same canonical absence a
+    ///             name that was never taken gets. Nothing gains an "unless deleted" clause, which is
+    ///             the failure the document weighs this against — <i>"the feature is then only as good
+    ///             as the least-remembered of them"</i>. § Deleting a parent resource that has children
+    ///             reads it correctly with no change for the same reason.
+    ///         </item>
+    ///         <item>
+    ///             <b><c>TryClaimAsync</c> refuses it</b>, because the name is taken. Azure holds it —
+    ///             <i>"You can't reuse the name of a key vault that was soft-deleted, until the
+    ///             retention period expires"</i> — and releasing it breaks restore: a name taken by
+    ///             somebody else leaves a restore with nowhere to go, so it would have to fail or
+    ///             overwrite and both are worse than making the tenant wait.
+    ///         </item>
+    ///     </list>
+    ///     <para>
+    ///         ⚠ <b>It does not expire on read the way <see cref="Claimed" /> does.</b> A lease
+    ///         collapses to <see cref="Free" /> once <see cref="IndexEntry.LeaseExpiresAt" /> passes,
+    ///         because a create whose silo died must not burn the name. A recovery window is the
+    ///         opposite promise: past <see cref="IndexEntry.RecoverableUntil" /> a restore is refused,
+    ///         but the name stays held until something explicitly purges it. Collapsing it on read
+    ///         would hand the name away at the instant the resource became unrecoverable and leave the
+    ///         resource's data plane running under a name somebody else now owns.
+    ///     </para>
+    /// </remarks>
+    SoftDeleted = 3
 }
