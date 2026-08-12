@@ -34,7 +34,7 @@
  */
 
 import assert from 'node:assert/strict';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { pathToFileURL } from 'node:url';
@@ -48,9 +48,32 @@ if (!existsSync(serverBundle)) {
 }
 
 const results = [];
+
+/**
+ * ⚠ **`fn` must be synchronous, and the guard below is why.**
+ *
+ * This helper used to take whatever it was given and call it inside a `try`. An `async fn` returns
+ * a promise instead of throwing, so `results.push({ ok: true })` ran before any assertion inside it
+ * had been evaluated and a failure surfaced as an unhandled rejection *after* the summary printed —
+ * a check that reported ✓ no matter what it asserted. One of the checks in this file was written
+ * that way, which means it had never been capable of failing.
+ *
+ * Rejecting an async `fn` outright rather than awaiting it is deliberate: awaiting would make the
+ * mistake invisible again by making it work, and every assertion here is against bytes already in
+ * memory or already on disk. If one genuinely needs to await something, do the awaiting outside and
+ * assert on the result inside.
+ */
 const check = (name, fn) => {
   try {
-    fn();
+    const returned = fn();
+
+    if (returned instanceof Promise) {
+      throw new Error(
+        'check() was given an async function. Its assertions would be evaluated after this ' +
+          'helper had already recorded a pass. Await outside, assert inside.',
+      );
+    }
+
     results.push({ name, ok: true });
   } catch (error) {
     results.push({ name, ok: false, error });
@@ -163,11 +186,10 @@ check('hydration is on, so the client takes over rather than re-rendering', () =
   assert.match(acme.body, /ngh=/, 'no hydration annotations in the rendered output');
 });
 
-check('no access token is written to web storage by the shipped bundles', async () => {
+check('no access token is written to web storage by the shipped bundles', () => {
   // docs/plan/10 § Authentication inputs: "Access token never in `localStorage`". Asserted against
   // the built browser bundles rather than the sources, because the sources are what lint checks and
   // a dependency could bring its own storage write.
-  const { readdirSync, readFileSync } = await import('node:fs');
   const browserDir = join(here, '..', 'dist', 'portal', 'browser');
   const offenders = [];
 
@@ -177,6 +199,139 @@ check('no access token is written to web storage by the shipped bundles', async 
   }
 
   assert.deepEqual(offenders, [], `web-storage writes found in: ${offenders.join(', ')}`);
+});
+
+/**
+ * ⚠ **The layout gate: every class the rendered page uses must have a rule behind it.**
+ *
+ * This is here because of a defect that every gate in this repository passed. The portal's
+ * stylesheet was missing `@source '../../../node_modules/@xui'`, and Tailwind's automatic source
+ * detection skips `node_modules`. So the utilities the portal's own templates ask for were
+ * compiled, and the utilities only xUI's published templates ask for were not — 66 of the 115
+ * classes on the rendered page had no rule. `flex-1` and `min-w-0` were among them, which is what
+ * the dock manager's panes fill their host with, so the workspace collapsed to two content-sized
+ * boxes in the top-left corner of an empty 1280×720 page.
+ *
+ * ⚠ **Why the existing checks could not see it.** The one directly above compares two concurrent
+ * renders byte-for-byte, which is a real and worth-keeping property — but two equally collapsed
+ * layouts are byte-identical. Nothing in a suite that compares a render to another render can
+ * notice that both are wrong in the same way. This check compares the render to something else
+ * entirely: the stylesheet that is supposed to serve it.
+ *
+ * ⚠ **Why this shape rather than a geometry assertion.** The obvious gate is "the main surface
+ * fills a plausible fraction of the viewport", and it is the right instinct — but measuring it
+ * needs a layout engine. jsdom has none (`clientWidth` is always 0 there), so the Jest suite cannot
+ * express it, and a real one means adding a headless browser: a browser binary in the CI image, a
+ * download step, and a class of flake that gets gates disabled rather than fixed. A screenshot diff
+ * costs more again — a baseline image per viewport, per theme, regenerated and re-reviewed by a
+ * human on every intentional design change, which is a standing tax on exactly the kind of change
+ * this codebase makes most often.
+ *
+ * So this asserts the *cause* rather than the symptom, and gets something the geometry check would
+ * not have given: it has no magic numbers at all. There is no pinned pixel count to go stale, no
+ * fraction to re-tune when the layout changes, and no baseline to regenerate. The expected set is
+ * derived from the render itself on every run, so it tracks the markup automatically — a component
+ * added tomorrow is covered the day it is added, with nothing to update here.
+ *
+ * ⚠ **What it does not catch, stated plainly.** It proves every class *resolves*, not that the
+ * result *fills the screen*. A genuine flex/min-height mistake written by hand in portal markup
+ * would compile to real CSS and pass this check while still collapsing. This closes the "markup
+ * references CSS that was never emitted" hole, which is the one that actually happened and the one
+ * that is invisible by construction — a missing class is not an error in HTML, in CSS, in Angular
+ * or in Tailwind. It is not a general layout gate and should not be mistaken for one.
+ */
+check('every class the rendered page uses has a rule behind it', () => {
+  const browserDir = join(here, '..', 'dist', 'portal', 'browser');
+  const stylesheets = readdirSync(browserDir).filter((f) => f.endsWith('.css'));
+
+  assert.ok(stylesheets.length > 0, 'the build emitted no stylesheet at all');
+
+  /**
+   * Every class selector the emitted stylesheets define.
+   *
+   * ⚠ Read off the files on disk, not out of the rendered document. The production build inlines
+   * *critical* CSS into a `<style>` element and defers the rest, so the document contains a subset
+   * by design; checking the page against itself would call the deferred half missing.
+   *
+   * Tailwind escapes the characters that are illegal in a CSS identifier — `.w-0\.5`,
+   * `.focus-visible\:outline-2`, `.\[\&_svg\]\:size-3` — so the escapes come back out to recover
+   * the class as it is written in the markup.
+   */
+  const defined = new Set();
+
+  for (const sheet of stylesheets) {
+    const css = readFileSync(join(browserDir, sheet), 'utf8');
+    for (const m of css.matchAll(/\.((?:\\.|[A-Za-z0-9_-])+)/g)) {
+      defined.add(m[1].replace(/\\(.)/g, '$1'));
+    }
+  }
+
+  /**
+   * Every class the rendered document actually puts on an element.
+   *
+   * `<script>` and `<style>` blocks come out first: the hydration state is JSON that can contain
+   * anything, and the inlined critical CSS is full of selectors that are not markup.
+   */
+  const markup = acme.body
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '')
+    .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, '');
+
+  const entities = { amp: '&', lt: '<', gt: '>', quot: '"', '#39': "'" };
+  const used = new Set();
+
+  for (const attr of markup.matchAll(/\sclass="([^"]*)"/g)) {
+    const value = attr[1].replace(/&(amp|lt|gt|quot|#39);/g, (_, e) => entities[e]);
+    for (const token of value.split(/\s+/)) if (token) used.add(token);
+  }
+
+  assert.ok(used.size > 0, 'the rendered document carries no classes at all — is this the shell?');
+
+  /**
+   * Classes that correctly have no rule of their own.
+   *
+   * ⚠ Kept to markers and runtime plumbing on purpose. Every entry here is a hole in the check, so
+   * the bar for adding one is that the class *cannot* have a rule — not that it happens not to.
+   * Anything added because "that one is fine" would have been the line that let this defect back
+   * in.
+   */
+  const isBracketFragment = (cls) => {
+    const opens = (cls.match(/\[/g) ?? []).length;
+    const closes = (cls.match(/\]/g) ?? []).length;
+
+    return opens !== closes || cls.endsWith(',');
+  };
+
+  const ruleless = (cls) =>
+    // Tailwind's variant markers. `group` and `peer` exist to be referenced by `group-*:` and
+    // `peer-*:` selectors on other elements; they emit nothing themselves, by design.
+    cls === 'group' ||
+    cls === 'peer' ||
+    /^(group|peer)\/[A-Za-z0-9_-]+$/.test(cls) ||
+    // Angular's runtime classes, written by the framework rather than by anyone's template.
+    /^ng-/.test(cls) ||
+    // ⚠ Not a class at all, but a fragment of one. Arbitrary values may contain commas —
+    // `transition-[color,background-color,outline]` — and xUI writes some of them with a space
+    // after the comma. Tailwind reads the whole bracket as a single utility and emits a single
+    // rule; splitting the attribute on whitespace, as this check and a browser both do, chops that
+    // utility into pieces that were never classes.
+    //
+    // ⚠ Only the *pieces* are excused, never a whole bracket utility. A fragment gives itself away
+    // by unbalanced brackets or a trailing comma, so `transition-[color,`, `background-color,` and
+    // `outline]` are skipped while `[&_svg]:size-3` — balanced, complete, and a real utility that
+    // needs a real rule — is still checked. Excusing every token containing a bracket would have
+    // left arbitrary-value utilities unguarded, which is most of what xUI's icon sizing uses.
+    isBracketFragment(cls);
+
+  const missing = [...used].filter((cls) => !defined.has(cls) && !ruleless(cls)).sort();
+
+  assert.deepEqual(
+    missing,
+    [],
+    `${missing.length} class(es) on the rendered page have no rule in the emitted stylesheet, so ` +
+      `the browser drops them silently:\n    ${missing.join('\n    ')}\n\n  ` +
+      `The usual cause is a Tailwind @source glob that does not cover the markup using them — ` +
+      `see apps/portal/src/styles.css.`,
+  );
 });
 
 server.close();

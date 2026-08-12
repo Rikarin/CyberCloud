@@ -32,6 +32,32 @@
 @source './app';
 @source './pages';
 
+/*
+  ⚠ **Tailwind cannot see `node_modules`, and half this application's markup lives there.**
+
+  Automatic source detection deliberately skips `node_modules`, so without this line Tailwind
+  compiles utilities for the portal's own templates and for nothing inside `@xui/*`. Every xUI
+  component ships its classes as string literals in its published template — `frameClass()` in
+  `@xui/dock-manager` returns `'... flex min-h-0 min-w-0 flex-1 flex-col ...'` — and a class with no
+  rule behind it is not an error anywhere. The markup renders, the attribute is on the element, and
+  the browser drops it silently.
+
+  xUI's own install docs (`ng add @xui/core` writes this line; the READMEs repeat it) call getting
+  this wrong "the usual reason a component renders unstyled".
+
+  ⚠ The failure mode is worth naming, because it is not "unstyled" in the way that word suggests.
+  The utilities the portal happens to use itself — `min-h-0`, `h-full`, `flex`, `flex-col` — get
+  emitted, because a portal template asks for them. The ones only xUI asks for do not. So the shell
+  looked broadly right while `flex-1` and `min-w-0` were missing everywhere, and the dock manager's
+  panes, which fill their host purely through `flex-1`, collapsed to their content: two boxes at the
+  top-left of an otherwise empty page. Nothing was unstyled enough to look obviously wrong.
+
+  `scripts/ssr-isolation.test.mjs` § "every class the rendered page uses has a rule behind it" is
+  the gate. It compares the classes in the SSR document against the selectors in the emitted
+  stylesheet, so deleting this line fails the build rather than quietly shrinking the page.
+*/
+@source '../../../node_modules/@xui';
+
 html {
   -webkit-text-size-adjust: 100%;
 }
