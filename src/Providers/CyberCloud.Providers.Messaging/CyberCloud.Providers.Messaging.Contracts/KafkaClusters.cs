@@ -545,7 +545,8 @@ public static class KafkaClusters {
     ///     ⚠ <b>A second copy of <c>charts/managed/kafka/templates/_helpers.tpl</c>'s
     ///     <c>kafka.resources</c>, and the duplication is the cost of having no chart renderer</b> —
     ///     <c>CyberCloud.Kubernetes.Charts</c> does not exist (docs/plan/03 § src), so the objects are
-    ///     built here. <c>KafkaSizingTests</c> asserts the two agree value for value.
+    ///     built here. <c>KafkaDeclarationTests.TheSizingTableAgreesWithTheChartsValueForValue</c>
+    ///     asserts the two agree value for value.
     ///     <para>
     ///         The ratio is exactly 1:2 at every rung, which is what <c>c1</c> means. A table that
     ///         drifted off the ratio would make the family name a lie on one row and nowhere else.

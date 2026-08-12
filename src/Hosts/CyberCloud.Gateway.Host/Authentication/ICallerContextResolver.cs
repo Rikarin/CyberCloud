@@ -7,8 +7,8 @@ namespace CyberCloud.Gateway.Host.Authentication;
 ///     ⚠ <b>Every field here is <i>output</i> of validation, never input to it.</b> A resolver that
 ///     read <see cref="TenantId" /> off an unverified token and handed it back would defeat the whole
 ///     of stage 3: the tenant would once again be caller-controlled, just through a different
-///     surface. <c>ForgedTokenTests</c> is the assertion that a token this platform did not issue
-///     produces no claims at all.
+///     surface. <c>TenantFromTokenTests.AForgedTokenIs401AndCarriesNoTenantAtAll</c> is the assertion
+///     that a token this platform did not issue produces no claims at all.
 /// </remarks>
 /// <param name="TenantId">The token's <c>tid</c>. The one and only source of a request's tenant.</param>
 /// <param name="SubjectType">
@@ -98,8 +98,12 @@ readonly record struct TokenClaims(
 ///                 <c>CallerContext.ImpersonatedBy</c> already is; at the edge the value comes from
 ///                 the token or it does not exist. <see cref="ResolveAsync" /> reads the
 ///                 <c>Authorization</c> header and nothing else, which is what makes that structural
-///                 rather than a rule — and <c>ImpersonationIsMintedNotInjectedTests</c> is the
-///                 assertion.
+///                 rather than a rule — and
+///                 <c>ImpersonationAndSubjectTypeTests.TheImpersonationHeaderCannotInjectAnOperator</c>
+///                 is the assertion, with
+///                 <c>ImpersonationAndSubjectTypeTests.NoSpellingOfTheHeaderIsRead</c> and
+///                 <c>ImpersonationAndSubjectTypeTests.AnImpersonationHeaderCannotOverrideAMintedOne</c>
+///                 closing the two ways round it.
 ///             </para>
 ///         </item>
 ///         <item>

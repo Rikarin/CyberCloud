@@ -34,7 +34,7 @@ namespace CyberCloud.Core.Resources;
 ///         when a resource is renamed, and the GUID does not. A parsed <see cref="ResourceId" /> is
 ///         therefore an <i>address</i> awaiting resolution; call <see cref="WithId" /> once the
 ///         index has answered. The round-trip property is exact for every other component — see
-///         <c>ResourceIdTests.PathRoundTrips</c>.
+///         <c>ResourceIdTests.PathRoundTripsForEveryGeneratedId</c>.
 ///     </para>
 ///     <para>
 ///         <b>Construction validates.</b> <see cref="ResourceGroup" /> and <see cref="Name" /> must

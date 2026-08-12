@@ -22,7 +22,7 @@ namespace CyberCloud.Identity.Contracts;
 ///             the second call cannot begin until the first has cleared the challenge and its write
 ///             has returned. In the identity host the same sequence is a lock across N replicas, and
 ///             a lock across N replicas is a distributed lock nobody has built here.
-///             <c>OtpIssuanceTests.ACorrectCodePresentedTwiceSucceedsOnce</c> is the assertion.
+///             <c>OtpIssuanceTests.ACorrectCodeSucceedsExactlyOnce</c> is the assertion.
 ///         </item>
 ///         <item>
 ///             <b>A code must survive a host restart between issue and verify.</b> There are ten
@@ -32,7 +32,7 @@ namespace CyberCloud.Identity.Contracts;
 ///             the verify, would lose it. <see cref="IUserGrain" /> is durable and on
 ///             <c>durable-grains.txt</c>; the challenge is written before the message is handed to
 ///             <c>CyberCloud.Communication</c>, so the ordering also survives a crash <i>during</i>
-///             issuance. <c>OtpIssuanceTests.ACodeSurvivesAGrainDeactivation</c> covers the cold
+///             issuance. <c>OtpIssuanceTests.ACorrectCodeStillSucceedsOnlyOnceAcrossADeactivation</c> covers the cold
 ///             case, which is the same thing an in-memory cache would fail.
 ///         </item>
 ///         <item>

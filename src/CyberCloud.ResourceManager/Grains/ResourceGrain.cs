@@ -385,8 +385,9 @@ public sealed class ResourceGrain(
     ///     deliberate escape hatch for the paths that have no registry to consult — the delete path,
     ///     which reports a snapshot of a resource whose api-version may already be retired, and the
     ///     reconcile driver, which needs the state as stored. Every path that <i>does</i> have a
-    ///     registry passes the real list, and <c>ApiVersionProjectionTests</c> asserts an old version
-    ///     never sees a newer one's field.
+    ///     registry passes the real list, and
+    ///     <c>WritePathTests.AReadAtAnOldVersionKeepsGettingTheShapeItWasWrittenAgainst</c> asserts an
+    ///     old version never sees a newer one's field.
     /// </remarks>
     static JsonObject Project(JsonObject superset, ImmutableArray<string> declaredPointers) {
         if (declaredPointers.IsDefaultOrEmpty) {

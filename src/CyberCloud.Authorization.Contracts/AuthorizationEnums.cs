@@ -25,7 +25,8 @@ namespace CyberCloud.Authorization.Contracts;
 ///         <b>Resolved towards § Consistency</b>, because that is the section with the argument in
 ///         it. The relation version is <i>stamped on</i> a cached entry rather than being part of
 ///         the lookup key, and the mode decides which stamps are acceptable. The bug class is
-///         therefore real, reproducible and tested (<c>RevokeThenStaleReadTests</c>), which is the
+///         therefore real, reproducible and tested
+///         (<c>ConsistencyTests.TheThreeModesDisagreeAboutARevokeAndThatIsTheWholePoint</c>), which is the
 ///         only honest state for a mode called "minimize latency" to be in.
 ///     </para>
 /// </remarks>

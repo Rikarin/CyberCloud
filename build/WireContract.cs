@@ -105,6 +105,7 @@ static class WireContract
     // over-matches. Nothing else in this tree declares a type by either name.
     const string AliasAttribute = "AliasAttribute";
     const string IdAttribute = "IdAttribute";
+    const string GenerateSerializerAttribute = "GenerateSerializerAttribute";
 
     /// <summary>
     ///     Where the deliberately-retired aliases are declared, for the failure messages here.
@@ -126,6 +127,66 @@ static class WireContract
             .SelectMany(ReadOne)
             .OrderBy(x => x.Alias, StringComparer.Ordinal)
             .ToList();
+
+    /// <summary>
+    ///     Every <c>[GenerateSerializer]</c> type in the given assemblies, and whether it carries an
+    ///     <c>[Alias]</c>.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>This is the complement of <see cref="Read" />, not a variation on it, and the two
+    ///         subjects are different sets rather than one set read twice.</b> <see cref="Read" />
+    ///         takes <c>[Alias]</c> as its subject, which is wider in one direction — an aliased enum
+    ///         carries no <c>[GenerateSerializer]</c> — and narrower in the other, because a
+    ///         <c>[GenerateSerializer]</c> type with no alias is invisible to it. That second gap is
+    ///         exactly what <c>CC1003</c> exists to close, so it is exactly what a gate reporting
+    ///         "CC1003 enforces this" has to be able to see for itself.
+    ///     </para>
+    ///     <para>
+    ///         Nested types are included. A <c>[GenerateSerializer]</c> nested in a grain's state
+    ///         class serialises like any other and is renamed like any other.
+    ///     </para>
+    /// </remarks>
+    public static List<(string Assembly, string ClrName, bool Aliased)> Serializable(IEnumerable<AbsolutePath> assemblies)
+        => assemblies
+            .SelectMany(SerializableIn)
+            .OrderBy(x => x.ClrName, StringComparer.Ordinal)
+            .ToList();
+
+    static List<(string Assembly, string ClrName, bool Aliased)> SerializableIn(AbsolutePath dll)
+    {
+        using var stream = File.OpenRead(dll);
+        using var pe = new PEReader(stream);
+        var metadata = pe.GetMetadataReader();
+        var assembly = metadata.GetString(metadata.GetAssemblyDefinition().Name);
+        var found = new List<(string, string, bool)>();
+
+        foreach (var handle in metadata.TypeDefinitions)
+        {
+            var type = metadata.GetTypeDefinition(handle);
+
+            if (!HasAttribute(metadata, type.GetCustomAttributes(), GenerateSerializerAttribute))
+                continue;
+
+            found.Add((
+                assembly,
+                FullName(metadata, handle),
+                StringArgument(metadata, type.GetCustomAttributes(), AliasAttribute) is not null));
+        }
+
+        return found;
+    }
+
+    static bool HasAttribute(MetadataReader metadata, CustomAttributeHandleCollection attributes, string name)
+    {
+        foreach (var handle in attributes)
+        {
+            if (string.Equals(AttributeTypeName(metadata, metadata.GetCustomAttribute(handle)), name, StringComparison.Ordinal))
+                return true;
+        }
+
+        return false;
+    }
 
     static List<WireType> ReadOne(AbsolutePath dll)
     {
@@ -478,7 +539,7 @@ static class WireContract
         IReadOnlyList<WireType> current,
         IReadOnlySet<string> burned)
     {
-        var tree = current.ToDictionary(x => x.Alias, StringComparer.Ordinal);
+        var tree = ByAlias(current);
         var violations = new List<string>();
 
         foreach (var was in released.OrderBy(x => x.Alias, StringComparer.Ordinal))
@@ -538,7 +599,7 @@ static class WireContract
     /// </remarks>
     public static List<string> Revived(IReadOnlyList<WireType> current, IReadOnlySet<string> burned)
     {
-        var tree = current.ToDictionary(x => x.Alias, StringComparer.Ordinal);
+        var tree = ByAlias(current);
 
         return burned
             .Order(StringComparer.Ordinal)
@@ -626,6 +687,28 @@ static class WireContract
                     + "means a different case");
             }
         }
+    }
+
+    /// <summary>
+    ///     The tree's wire types by alias, first declaration winning a tie.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Tolerant of a duplicate alias on purpose, and the tolerance is not a shrug.</b> Two
+    ///     types claiming one alias is a real and serious violation — it is a coin flip at
+    ///     deserialization — but it is <see cref="Build.SerializerDisciplineGate" />'s violation to
+    ///     report, over the whole tree, once. A plain <c>ToDictionary</c> here would instead throw an
+    ///     <see cref="ArgumentException" /> out of the middle of the wire gate, which aborts the run
+    ///     before <c>Report</c> prints anything at all: the roster would vanish and the message would
+    ///     name a key rather than a rule.
+    /// </remarks>
+    static Dictionary<string, WireType> ByAlias(IReadOnlyList<WireType> types)
+    {
+        var byAlias = new Dictionary<string, WireType>(StringComparer.Ordinal);
+
+        foreach (var type in types)
+            byAlias.TryAdd(type.Alias, type);
+
+        return byAlias;
     }
 
     static string Invariant(FormattableString text) => FormattableString.Invariant(text);

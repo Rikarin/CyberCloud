@@ -99,26 +99,28 @@ partial class Build
     ///     plus one this build adds. Named here so the target's log output is the checklist, and so
     ///     adding a gate is a visible diff against the doc rather than a silent omission.
     ///     <para>
-    ///         ⚠ <b>Four of the ten are enforced by the compiler instead, and this target must not
-    ///         re-implement them.</b> <c>src/CyberCloud.Analyzers</c> ships CC1001–CC1007:
+    ///         ⚠ <b>Three of the ten are enforced by the compiler instead, and this target must not
+    ///         re-implement them.</b> <c>src/CyberCloud.Analyzers</c> ships CC1001–CC1007. It was four
+    ///         until <b>Serializer discipline</b> stopped being a sentence and became a gate:
     ///     </para>
     ///     <list type="bullet">
     ///         <item><b>Tenant keys</b> — the "no string literal containing '|' in a GetGrain argument" half is CC1004. The "every tenant-scoped grain interface is IGrainWithStringKey" half is cross-assembly and is enforced here.</item>
-    ///         <item><b>Serializer discipline</b> — the "[Alias] on every [GenerateSerializer]" half is CC1003. The "[Id(n)] numbers never reused, checked against a committed manifest" half is a reflection test, <c>CyberCloud.Core.Contracts.Tests.WireContractTests</c>.</item>
+    ///         <item><b>Serializer discipline</b> — ⚠ <b>this row is no longer one of the four, and the sentence that used to sit here is why.</b> It read "the [Alias] on every [GenerateSerializer] half is CC1003; the [Id(n)] half is a reflection test, <c>CyberCloud.Core.Contracts.Tests.WireContractTests</c>" — a string constant that named a test covering <b>6 of the tree's 212</b> aliased wire types and checked neither that the test existed nor that it passed. <see cref="SerializerDisciplineGate" /> evaluates the row instead.</item>
     ///         <item><b>Secrets</b> — CC1005, in full.</item>
     ///         <item><b>No blocking</b> — CC1001 and CC1002. ⚠ Wider than the doc's wording: the doc says "in grain assemblies", the analyzers apply everywhere they are referenced, because a gateway that blocks is a stalled request even though it is not a stalled activation.</item>
     ///     </list>
     ///     <para>
-    ///         A compile-time rule beats a build-target sweep for all four: it names the line, it runs
+    ///         A compile-time rule beats a build-target sweep for all three: it names the line, it runs
     ///         in the IDE, and it cannot be outrun by a file the sweep's glob missed. What it cannot
-    ///         do is see across assemblies, which is why the other six stay here.
+    ///         do is see across assemblies, which is why the rest stay here.
     ///     </para>
     ///     <para>
     ///         ⚠ <b>The analyzer's reach is a project-file opt-in, and it is not universal.</b> A
     ///         project polices itself only if its <c>.csproj</c> carries the
-    ///         <c>OutputItemType="Analyzer"</c> reference. <see cref="AnalyzerCoverageGate" /> is the
-    ///         gate that keeps the four rows above honest — without it, "compiler-enforced" is a
-    ///         claim about six projects wearing the clothes of a claim about the tree.
+    ///         <c>OutputItemType="Analyzer"</c> reference — and an opted-in project still runs nothing
+    ///         if the rule's severity has been turned down. <see cref="AnalyzerCoverageGate" /> is the
+    ///         gate that keeps the rows above honest on both counts; without it, "compiler-enforced" is
+    ///         a claim about six projects wearing the clothes of a claim about the tree.
     ///     </para>
     /// </summary>
     static readonly (string Gate, string Checks)[] ArchitectureGates =
@@ -135,6 +137,7 @@ partial class Build
         ("Labels", "every reconciler's rendered output carries the seven cybercloud.io/* labels, asserted against real output"),
         ("Analyzer coverage", "every project under src/ references CyberCloud.Analyzers — not in docs/plan/23"),
         ("Plan citations", "no docs/plan/NN:LINE citation in a tracked file — docs/code-documentation-style.md § Citing the plan"),
+        ("Code citations", "every <c>…Tests</c> and <c>…Tests.Method</c> in a tracked file names something this repository compiles — not in docs/plan/23"),
     ];
 
     // ── The assemblies the gates read ─────────────────────────────────────────────────────────
@@ -156,7 +159,9 @@ partial class Build
     ///         exemption — which is the argument for not writing a gate that asserts one.
     ///     </para>
     /// </summary>
-    IReadOnlyList<(AbsolutePath Project, AbsolutePath Assembly)> ShippingAssemblyPaths =>
+    // List rather than IReadOnlyList: CA1859 is an error here and this is a private helper — the same
+    // reason ShippingProjectFiles below returns a Dictionary.
+    List<(AbsolutePath Project, AbsolutePath Assembly)> ShippingAssemblyPaths =>
         Solution.AllProjects
             .Select(x => (AbsolutePath)x.Path)
             .Where(project => SuiteOwning(project) is null)
@@ -216,7 +221,7 @@ partial class Build
         // as it goes, and those lines are unreadable above the header that says what they belong to.
         Log.Information(
             "Architecture: {Count} gates — the ten in docs/plan/23 § The architecture gates, plus "
-            + "Analyzer coverage and Plan citations, which that table does not list",
+            + "Analyzer coverage, Plan citations and Code citations, which that table does not list",
             ArchitectureGates.Length);
 
         var outcomes = new List<GateOutcome>
@@ -224,9 +229,7 @@ partial class Build
             AssemblyGraphGate(),
             StorageTierGate(),
             TenantKeyGate(),
-            GateOutcome.Analyzer(
-                "Serializer discipline",
-                "CC1003 for [Alias]; the [Id(n)] manifest is CyberCloud.Core.Contracts.Tests.WireContractTests"),
+            SerializerDisciplineGate(),
             WireCompatibilityGate(),
             GateOutcome.Analyzer("Secrets", "CC1005, in full"),
             GateOutcome.Analyzer("No blocking", "CC1001 and CC1002, wider than the doc's 'grain assemblies'"),
@@ -235,6 +238,7 @@ partial class Build
             LabelsGate(),
             AnalyzerCoverageGate(),
             PlanCitationGate(),
+            CodeCitationGate(),
         };
 
         Report(outcomes);
@@ -1280,6 +1284,203 @@ partial class Build
 
     AbsolutePath WireManifest(string tag) => WireDirectory / (tag + ".txt");
 
+    List<WireType>? currentWireTypes;
+
+    /// <summary>
+    ///     Every aliased wire type in the tree, read once and shared by the two rows that are about
+    ///     the wire. Reading the assemblies twice would double the only expensive thing either row
+    ///     does and could — if a build wrote between the two reads — let them disagree.
+    /// </summary>
+    IReadOnlyList<WireType> CurrentWireTypes =>
+        currentWireTypes ??= WireContract.Read(ShippingAssemblyPaths.Select(x => x.Assembly));
+
+    // ── Gate: serializer discipline — docs/plan/23 § The architecture gates ───────────────────
+
+    /// <summary>
+    ///     docs/plan/23 § The architecture gates, row <b>Serializer discipline</b>: "every
+    ///     <c>[GenerateSerializer]</c> type has a stable <c>[Alias]</c>; <c>[Id(n)]</c> numbers never
+    ///     reused, checked against a committed manifest."
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>This row was a string constant, and it is the third instance of the defect this
+    ///         file has now removed twice before.</b> It read <c>GateOutcome.Analyzer("Serializer
+    ///         discipline", "CC1003 for [Alias]; the [Id(n)] manifest is
+    ///         CyberCloud.Core.Contracts.Tests.WireContractTests")</c>. Nothing checked that the named
+    ///         test existed, that it passed, or that CC1003 was still switched on — and the named test
+    ///         reflects over <c>typeof(ResultSurrogate).Assembly</c>, which is
+    ///         <c>CyberCloud.Core.Contracts</c> and <b>6 of the tree's 212 aliased wire types</b>. A
+    ///         singular claim over a plural subject, printed with a tick.
+    ///         <see cref="LabelsGate" />'s remarks make the general argument: a status line that
+    ///         asserts a condition it does not evaluate is worse than no status line.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>What this closes that <see cref="WireCompatibilityGate" /> does not, stated
+    ///         narrowly, because the overlap is larger than it looks.</b> That gate compares the tree
+    ///         against <i>released</i> manifests, and <c>build/wire/v0.1.0.txt</c> happens to contain
+    ///         every wire type in the tree today — so "numbers never reused, never reordered" is in
+    ///         fact enforced for all 212 right now, by a committed manifest, exactly as the doc's row
+    ///         words it. The per-assembly baselines in the test suites are <b>not</b> what makes that
+    ///         true, and a report claiming otherwise would be wrong in the tree's favour.
+    ///     </para>
+    ///     <para>
+    ///         The gap is the <b>window between a type being written and a release being cut</b>. A
+    ///         type added after the newest tag appears in no released manifest, so its numbers may be
+    ///         renumbered freely until somebody tags — and the renumber then lands in the first
+    ///         baseline as if it had always been that way. That count is what this row reports, and it
+    ///         is <see cref="GateStatus.Vacuous" /> whenever it is not zero: an unpinned type is a
+    ///         subject the row cannot see, which is ○ with the number rather than ✔.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The half that is not about baselines at all is the half nothing else could do.</b>
+    ///         CC1003 sees one compilation. It cannot see two assemblies claiming one alias, which is
+    ///         a coin flip at deserialization; it cannot see whether it is still error-severity in
+    ///         some project; and it does not run over an assembly at all unless that project opted in
+    ///         (<see cref="AnalyzerCoverageGate" />). Reading the metadata that shipped answers all
+    ///         three from the artefact rather than from the configuration that produced it.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The cost is deliberately near zero, and that is a design constraint rather than a
+    ///         happy result.</b> <c>Architecture</c> is about thirteen seconds and people run it
+    ///         constantly. <see cref="LabelsGate" /> is the shape this row would otherwise copy — run
+    ///         the suite, believe only the result — but there are five per-assembly baseline suites
+    ///         and each <c>dotnet run</c> costs about 1.2s, which would be roughly a 50% increase for
+    ///         a property the metadata already answers more completely. So this row reads the
+    ///         assemblies <see cref="CurrentWireTypes" /> has already opened and the manifests
+    ///         <see cref="WireCompatibilityGate" /> already parses, and claims nothing about any test.
+    ///         <c>Test</c> runs those suites; this row does not pretend to.
+    ///     </para>
+    /// </remarks>
+    GateOutcome SerializerDisciplineGate()
+    {
+        var current = CurrentWireTypes;
+        var serializable = WireContract.Serializable(ShippingAssemblyPaths.Select(x => x.Assembly));
+        var violations = new List<string>();
+
+        // ⚠ THE EMPTY-INPUT VIOLATION, which is failure class (b) from the wire gate's own sabotage:
+        // every check below is a loop over what was read, so a read that returned nothing produces no
+        // violations and the row would print a confident count of zero. This tree cannot have zero
+        // wire types — CyberCloud.Core.Contracts alone publishes six — so an empty read means the
+        // assemblies were not the ones this gate thinks it opened.
+        if (current.Count == 0 || serializable.Count == 0)
+        {
+            violations.Add(
+                $"reading {ShippingAssemblyPaths.Count} shipping assembl(y/ies) found {current.Count} "
+                + $"aliased type(s) and {serializable.Count} [GenerateSerializer] type(s). Neither can be "
+                + "zero in this tree, so the metadata this row inspected is not the wire surface it "
+                + "believes it read — every check in this gate loops over that set and would otherwise "
+                + "report a clean sweep of nothing");
+        }
+
+        // The CC1003 property, evaluated against what shipped rather than asserted about the compiler.
+        foreach (var (assembly, clrName, _) in serializable.Where(x => !x.Aliased))
+        {
+            violations.Add(
+                $"{clrName} ({assembly}) carries [GenerateSerializer] and no [Alias]. CC1003 is supposed "
+                + "to make this uncompilable, so if it is in the tree the analyzer did not run here — "
+                + "check the project's OutputItemType=\"Analyzer\" reference and CC1003's severity. "
+                + "docs/plan/04 § Failure and upgrade: the alias is what a peer looks the type up by");
+        }
+
+        // ⚠ Cross-assembly, which is the one thing no analyzer in this tree can be. CC1003 sees a
+        // single compilation; two assemblies each declaring [Alias("CyberCloud.Core.Result")] compile
+        // cleanly and separately, and Orleans then hands a peer's payload to whichever won the
+        // registration race.
+        foreach (var clash in current
+            .GroupBy(x => x.Alias, StringComparer.Ordinal)
+            .Where(x => x.Count() > 1)
+            .OrderBy(x => x.Key, StringComparer.Ordinal))
+        {
+            violations.Add(
+                $"the alias \"{clash.Key}\" is declared by {clash.Count()} types — "
+                + $"{string.Join(", ", clash.Select(x => $"{x.ClrName} ({x.Assembly})"))}. An alias is the "
+                + "primary key of the wire, so two claimants is a coin flip at deserialization rather "
+                + "than an error anything reports");
+        }
+
+        // "Never reused", in the one form that needs no baseline at all: within a single type.
+        //
+        // ⚠ THIS CHECK IS A BACKSTOP AND NOT A GATE, AND SAYING SO IS THE POINT OF WRITING IT DOWN.
+        // Sabotaged by declaring [Id(0)] on two members of one type: the build never reaches this row,
+        // because Orleans' own generator raises ORLEANS0012 "Change duplicated [Id]" and Compile
+        // fails first. Architecture depends on Compile, so every assembly this reads came from a
+        // compilation that already ran that rule — there is no source change that makes this fire.
+        // It is kept because it costs a loop over data already in memory and because it reads the
+        // artefact rather than trusting the toolchain that produced it, which is this gate's whole
+        // posture. It is NOT one of the reasons this row is green.
+        foreach (var type in current)
+        {
+            foreach (var duplicate in type.Members
+                .GroupBy(x => x.Id)
+                .Where(x => x.Count() > 1)
+                .OrderBy(x => x.Key))
+            {
+                violations.Add(
+                    $"\"{type.Alias}\" ({type.ClrName}) declares [Id({duplicate.Key})] on "
+                    + $"{string.Join(" and ", duplicate.Select(x => x.Name))}. docs/plan/05 § Serialization "
+                    + "and schema evolution: numbers are never reused, and two members in one slot is the "
+                    + "shortest way to break that");
+            }
+        }
+
+        // ── Coverage: which of these types has a committed manifest pinning its numbers ──────────
+        var pinned = PinnedAliases();
+
+        var unpinned = current
+            .Select(x => x.Alias)
+            .Where(alias => !pinned.Contains(alias))
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)
+            .ToList();
+
+        var detail =
+            $"{serializable.Count} [GenerateSerializer] type(s), all checked for an [Alias]; "
+            + $"{current.Count} aliased wire type(s), checked for a unique alias and for no [Id(n)] "
+            + $"declared twice; {current.Count - unpinned.Count} of {current.Count} have their numbers "
+            + $"pinned by a committed manifest under build/{WireContract.ManifestDirectoryName}";
+
+        if (unpinned.Count > 0)
+        {
+            detail += $". {unpinned.Count} do not and can be renumbered until the next release tag "
+                + $"records them — {string.Join(", ", unpinned.Take(5))}"
+                + (unpinned.Count > 5 ? $" and {unpinned.Count - 5} more" : string.Empty);
+        }
+
+        return new GateOutcome(
+            "Serializer discipline",
+            violations.Count > 0 ? GateStatus.Failed
+            : unpinned.Count > 0 ? GateStatus.Vacuous
+            : GateStatus.Enforced,
+            detail,
+            violations);
+    }
+
+    /// <summary>
+    ///     Every alias any committed manifest under <c>build/wire/</c> records.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ Every manifest, not only the three <see cref="ReleaseTags" /> returns. A number pinned by
+    ///     a manifest that has since fallen out of the comparison window is still a number somebody
+    ///     wrote down and reviewed, and this row is counting what is <i>pinned</i> rather than what is
+    ///     <i>compared</i>. <see cref="WireCompatibilityGate" /> is the row about the window.
+    /// </remarks>
+    HashSet<string> PinnedAliases()
+    {
+        var pinned = new HashSet<string>(StringComparer.Ordinal);
+
+        if (!WireDirectory.DirectoryExists())
+            return pinned;
+
+        foreach (var manifest in WireDirectory.GlobFiles("*.txt").Where(x => x != BurnedAliasesFile))
+        {
+            var (_, _, released) = WireContract.Parse(manifest.Name, manifest.ReadAllLines());
+
+            pinned.UnionWith(released.Select(x => x.Alias));
+        }
+
+        return pinned;
+    }
+
     /// <summary>
     ///     docs/plan/23 § The architecture gates, row <b>Wire compatibility</b>: "round-trip every
     ///     wire type through the last three released contract assemblies."
@@ -1317,7 +1518,7 @@ partial class Build
     /// </remarks>
     GateOutcome WireCompatibilityGate()
     {
-        var current = WireContract.Read(ShippingAssemblyPaths.Select(x => x.Assembly));
+        var current = CurrentWireTypes;
         var burned = BurnedAliases();
         var tags = ReleaseTags();
         var violations = WireContract.Revived(current, burned);
@@ -1619,6 +1820,16 @@ partial class Build
     ///         Test projects are out of scope, matching <see cref="ShippingAssemblies" />. The
     ///         analyzer itself and its own test project are out of scope for the obvious reason.
     ///     </para>
+    ///     <para>
+    ///         ⚠ <b>A reference is half the property, and the half that was missing was the one that
+    ///         can be turned off without touching a project file.</b> This gate proved every project
+    ///         carried the <c>OutputItemType="Analyzer"</c> reference and proved nothing about whether
+    ///         <c>CC1001</c>–<c>CC1007</c> were still error-severity. None is suppressed today, so the
+    ///         rows that lean on them were true — but nothing in the build would have noticed the line
+    ///         in <c>.editorconfig</c> that changed one to <c>none</c>, which is a one-word diff that
+    ///         silently retires a non-negotiable. <see cref="AnalyzerSeverityViolations" /> is that
+    ///         half.
+    ///     </para>
     /// </summary>
     GateOutcome AnalyzerCoverageGate()
     {
@@ -1633,11 +1844,159 @@ partial class Build
                 $"{x.Key} does not reference CyberCloud.Analyzers. Add "
                 + "<ProjectReference Include=\"…/CyberCloud.Analyzers/CyberCloud.Analyzers.csproj\" "
                 + "OutputItemType=\"Analyzer\" ReferenceOutputAssembly=\"false\" /> — without it CC1001–CC1007 "
-                + "do not run on this project, and docs/plan/23 § The architecture gates' four "
+                + "do not run on this project, and docs/plan/23 § The architecture gates' "
                 + "\"analyzer-enforced\" rows are not true of it")
             .ToList();
 
-        return GateOutcome.From("Analyzer coverage", candidates.Count, "shipping project(s)", violations);
+        var rules = AnalyzerRuleIds();
+
+        violations.AddRange(AnalyzerSeverityViolations(rules));
+
+        return GateOutcome.From(
+            "Analyzer coverage",
+            candidates.Count,
+            $"shipping project(s) referencing CyberCloud.Analyzers, and {rules.Count} rule(s) "
+            + "checked for error severity and for suppression",
+            violations);
+    }
+
+    /// <summary>
+    ///     The analyzer's rule ids, read from its release-tracking tables.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>Those files rather than a list here, and rather than the <c>const</c>s in
+    ///         <c>Rules.cs</c>.</b> Roslyn's own <c>RS2000</c> — "Rule 'CC1005' is not part of any
+    ///         analyzer release" — fails the analyzer's own compilation if a diagnostic it reports is
+    ///         missing from them, so they are the one place in this tree that cannot silently fall
+    ///         behind the analyzers. Verified by emptying both tables and watching <c>Compile</c> fail
+    ///         before this row ran. A list maintained here would be a fourth copy and the first to rot.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ That same verification means the assertion below is a belt for a case source cannot
+    ///         reach, not a live check — it would fire only against a tree whose analyzer did not
+    ///         compile. It is kept because what it is guarding is the difference between this row
+    ///         checking seven rules and this row checking none, and that difference is invisible in a
+    ///         tick.
+    ///     </para>
+    /// </remarks>
+    List<string> AnalyzerRuleIds()
+    {
+        var directory = RootDirectory / "src" / "CyberCloud.Analyzers";
+
+        var ids = directory
+            .GlobFiles("AnalyzerReleases.*.md")
+            .SelectMany(file => file.ReadAllLines())
+            .Select(line => AnalyzerRuleRow.Match(line))
+            .Where(match => match.Success)
+            .Select(match => match.Groups[1].Value)
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)
+            .ToList();
+
+        // ⚠ The empty-input violation, as an assertion rather than a finding: every check below is a
+        // loop over these ids, so an empty list makes the whole severity half pass over nothing while
+        // the row goes on counting projects and printing a tick.
+        Assert.NotEmpty(
+            ids,
+            $"no CC rule id was found in {RootDirectory.GetRelativePathTo(directory)}/AnalyzerReleases.*.md. "
+            + "Those tables are what this gate reads to know which rules to check, so an empty read "
+            + "would silently reduce this row to the project-reference half it used to be.");
+
+        return ids;
+    }
+
+    /// <summary>Whether a file is one MSBuild evaluates, and so one whose XML means something.</summary>
+    static bool IsMsBuildFile(AbsolutePath file)
+        => file.Extension is ".csproj" or ".props" or ".targets" or ".slnx" or ".slnf" or ".proj";
+
+    /// <summary>A rule row in a release-tracking table: the id in the first column.</summary>
+    static readonly Regex AnalyzerRuleRow = new(@"^(CC\d{4})\s*\|", RegexOptions.Compiled);
+
+    /// <summary>Anything that turns a CC rule down, anywhere in the tree.</summary>
+    static readonly Regex AnalyzerSeverity = new(
+        @"dotnet_diagnostic\.(CC\d{4})\.severity\s*=\s*([A-Za-z]+)",
+        RegexOptions.Compiled);
+
+    /// <summary>
+    ///     Every CC rule is declared <c>error</c> at the root, and nothing anywhere turns one down.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>Both directions, and the second is the one that matters.</b> The root
+    ///         <c>.editorconfig</c> saying <c>error</c> is necessary and not sufficient: EditorConfig
+    ///         resolves nearest-file-first, so a <c>.editorconfig</c> beside any source directory
+    ///         could set <c>none</c> and win, and the root file would still read exactly as it does
+    ///         now. So this checks every tracked file, not the root one.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b><c>[SuppressMessage]</c> is deliberately not checked, and the omission is a
+    ///         boundary rather than a gap.</b> <c>SecretInGrainStateAnalyzer</c>'s remarks document a
+    ///         per-site suppression with a <c>Justification</c> as the designed answer to a false
+    ///         positive on <c>CC1005</c>. A gate that refused it would be overruling the analyzer's
+    ///         own documented escape hatch. What this refuses is the two mechanisms that are not
+    ///         per-site and carry no argument: a severity turned down, and a blanket
+    ///         <c>&lt;NoWarn&gt;</c>. A bare <c>#pragma warning disable</c> is already CC1007's job.
+    ///     </para>
+    /// </remarks>
+    IEnumerable<string> AnalyzerSeverityViolations(List<string> rules)
+    {
+        var declared = new Dictionary<string, string>(StringComparer.Ordinal);
+
+        foreach (var (file, lines) in TrackedText)
+        {
+            for (var i = 0; i < lines.Length; i++)
+            {
+                var line = lines[i];
+
+                foreach (var match in AnalyzerSeverity.Matches(line).Cast<Match>())
+                {
+                    var id = match.Groups[1].Value;
+                    var severity = match.Groups[2].Value;
+
+                    if (!string.Equals(severity, "error", StringComparison.Ordinal))
+                    {
+                        yield return
+                            $"{RootDirectory.GetRelativePathTo(file)}:{i + 1} sets {id} to \"{severity}\". "
+                            + "The rows docs/plan/23 § The architecture gates calls analyzer-enforced are "
+                            + "true only while these are errors — a severity turned down retires a "
+                            + "non-negotiable in one word";
+
+                        continue;
+                    }
+
+                    if (file == RootDirectory / ".editorconfig")
+                        declared[id] = severity;
+                }
+
+                // ⚠ MSBuild files only. docs/plan/00 § Non-negotiables' own row for CC1007 ends
+                // "<NoWarn> in a project file is MSBuild and is still review-enforced" — and that
+                // sentence, in a Markdown table, is what this check flagged the first time it ran
+                // over every tracked file. A gate that fires on the documentation of the rule it
+                // enforces is the false-positive class that gets gates switched off.
+                if (!IsMsBuildFile(file) || !line.Contains("<NoWarn", StringComparison.Ordinal))
+                    continue;
+
+                foreach (var rule in rules.Where(rule => line.Contains(rule, StringComparison.Ordinal)))
+                {
+                    yield return
+                        $"{RootDirectory.GetRelativePathTo(file)}:{i + 1} puts {rule} in <NoWarn>, which "
+                        + "switches it off for the whole project. A false positive is answered with a "
+                        + "[SuppressMessage] carrying a Justification at the site, never with a blanket "
+                        + "exemption a reviewer cannot see the reason for";
+                }
+            }
+        }
+
+        foreach (var rule in rules.Where(rule => !declared.ContainsKey(rule)))
+        {
+            yield return
+                $"{rule} is a rule CyberCloud.Analyzers ships (its AnalyzerReleases table says so) and "
+                + ".editorconfig does not declare dotnet_diagnostic." + rule + ".severity = error. Its "
+                + "declared default is Warning, so it is currently an error only because "
+                + "Directory.Build.props sets TreatWarningsAsErrors — which is a property of the build, "
+                + "not of the rule, and is the wrong thing for a non-negotiable to depend on";
+        }
     }
 
     static bool ReferencesAnalyzer(AbsolutePath project)
@@ -1647,6 +2006,21 @@ partial class Build
             .Any(x => (x.Attribute("Include")?.Value ?? string.Empty)
                     .EndsWith("CyberCloud.Analyzers.csproj", StringComparison.Ordinal)
                 && string.Equals(x.Attribute("OutputItemType")?.Value, "Analyzer", StringComparison.Ordinal));
+
+    // ── Gates: citations — docs/code-documentation-style.md § Citing the plan, § Citing a test ─
+
+    /// <summary>
+    ///     The one file both citation gates exempt, and it has to exist: the file that defines the
+    ///     rules is the one file that must show the anti-patterns, and it does — marked ✗, in fenced
+    ///     examples, next to the ✓.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>This was not reasoned about, it was demanded by the build.</b> Writing § Citing a test
+    ///     with its two ✗ examples turned <see cref="CodeCitationGate" /> red on its own
+    ///     documentation, in a Markdown file, which is the cheapest sabotage-test either gate will
+    ///     ever get: the rule fires on real prose, in a non-<c>.cs</c> file, and names the line.
+    /// </remarks>
+    AbsolutePath CitationRuleFile => RootDirectory / "docs" / "code-documentation-style.md";
 
     // ── Gate: plan citations — docs/code-documentation-style.md § Citing the plan ─────────────
 
@@ -1669,21 +2043,11 @@ partial class Build
     /// </summary>
     GateOutcome PlanCitationGate()
     {
-        // ⚠ One exemption, and it has to exist: the file that defines the rule is the one file that
-        // must show the anti-pattern, and it does — marked ✗, in a fenced example, next to the ✓.
-        var exempt = RootDirectory / "docs" / "code-documentation-style.md";
-
-        var files = TrackedFiles
-            .Where(file => file.FileExists() && file != exempt && !LooksBinary(file))
-            .OrderBy(x => x.ToString(), StringComparer.Ordinal)
-            .ToList();
-
+        var files = TrackedText.Where(x => x.File != CitationRuleFile).ToList();
         var violations = new List<string>();
 
-        foreach (var file in files)
+        foreach (var (file, lines) in files)
         {
-            var lines = file.ReadAllLines();
-
             for (var i = 0; i < lines.Length; i++)
             {
                 var match = LineNumberCitation.Match(lines[i]);
@@ -1708,15 +2072,190 @@ partial class Build
     /// </summary>
     static readonly Regex LineNumberCitation = new(@"docs/plan/\d+[A-Za-z0-9._-]*:\d+", RegexOptions.Compiled);
 
+    // ── Gate: code citations — the other half of docs/code-documentation-style.md § Citing ───────
+
+    /// <summary>
+    ///     A citation of a <b>test</b>, inside <c>&lt;c&gt;</c> markup: a name ending in
+    ///     <c>Tests</c>, optionally followed by one member segment.
+    /// </summary>
+    static readonly Regex TestCitation = new(
+        @"<c>([A-Z][A-Za-z0-9_]*Tests)(?:\.([A-Za-z0-9_]+))?</c>",
+        RegexOptions.Compiled);
+
+    /// <summary>
+    ///     Every <c>&lt;c&gt;SomethingTests&lt;/c&gt;</c> and
+    ///     <c>&lt;c&gt;SomethingTests.Method&lt;/c&gt;</c> in a tracked file names a test class, and a
+    ///     member of it, that this repository actually compiles.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b><see cref="PlanCitationGate" /> walks 1070 files to keep plan citations honest,
+    ///         and a citation of a type or a test had no gate at all.</b> The decay is the same and it
+    ///         is worse: a plan citation at least points at a file that exists, whereas a test
+    ///         citation naming a class that never existed sends a reader looking for the assertion
+    ///         that is supposed to be paying for the paragraph above it. Sixteen were found in this
+    ///         tree when the gate was written, including three that named test classes copied from a
+    ///         sibling provider's naming pattern rather than read off the tree.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Why the subject is tests and not every code citation, which is the whole design
+    ///         and was decided by measurement rather than by taste.</b> The obvious rule — every
+    ///         <c>&lt;c&gt;Identifier&lt;/c&gt;</c> must resolve — is unusable here: 8805
+    ///         <c>&lt;c&gt;</c> spans in this tree, 3707 of them shaped like a dotted identifier, and
+    ///         <b>1522</b> naming something this repository does not declare and never will —
+    ///         <c>Orleans.Multitenant</c>, <c>PUT</c>, <c>ConfigMap</c>, <c>StatefulSet</c>,
+    ///         <c>KubernetesClient</c>, assembly names, resource states. A rule with fifteen hundred
+    ///         false positives is a rule somebody switches off in a week.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>And why not the middle ground either.</b> The next narrowest rule — every
+    ///         <c>&lt;c&gt;KnownType.Member&lt;/c&gt;</c> resolves — was measured too: 445
+    ///         occurrences, and the residue after a metadata resolver is dominated by idioms that are
+    ///         correct English and not code at all. A file cited without its extension
+    ///         (<c>Build.Charts</c>, meaning <c>build/Build.Charts.cs</c>), a file cited with one
+    ///         (<c>Program.cs</c>), and a foreign API's JSON field (<c>Status.reason</c> on a
+    ///         Kubernetes status) all look exactly like a broken member citation and none of them is
+    ///         one. That rule would need three exemptions to survive, and a rule with three exemptions
+    ///         is a rule whose next false positive gets a fourth.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>What that costs, said plainly rather than left to be discovered.</b> This gate
+    ///         would <i>not</i> have caught <c>ProviderConformanceCase.RequiredCrds</c> — the citation
+    ///         in <c>charts/managed/kafka/conformance.yaml</c> that named a member which lost a design
+    ///         argument and never existed. That one was found by a person reading, and this gate does
+    ///         not replace them. What it does is fence off the one shape where the convention is
+    ///         unambiguous, the naming rule is exceptionless, and the measured false-positive count is
+    ///         zero — which is a gate worth keeping precisely because nobody will ever want to
+    ///         suppress it.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ Every tracked text file, not only <c>.cs</c>. Two of the sixteen were in YAML.
+    ///     </para>
+    /// </remarks>
+    GateOutcome CodeCitationGate()
+    {
+        var assemblies = AllAssemblyPaths;
+        var surface = CodeSurface.Read(assemblies);
+        var violations = new List<string>();
+
+        // ⚠ THE EMPTY-INPUT VIOLATION — the shape of failure the wire gate's own sabotage found, and
+        // the one this gate is most exposed to. Every check below asks "is this name in `surface`",
+        // so a surface read from nothing turns every citation into a violation rather than none —
+        // loud, not silent. The dangerous direction is the other one: zero CITATIONS found, which
+        // reports a confident tick over a regex that stopped matching. GateOutcome.From counts
+        // citations, so that case is ○ with the number rather than ✔. What is left is a surface that
+        // read no assemblies at all, which would make the loud failure look like a real one.
+        Assert.NotEmpty(
+            surface.Keys.ToList(),
+            $"reading {assemblies.Count} assembl(y/ies) found no type at all. Architecture depends on "
+            + "Compile, so this means the artifacts directory was cleaned between the two — every "
+            + "citation below would be reported as unresolvable and every one of those reports would "
+            + $"be wrong. Run ./build.sh Compile first, in the same configuration ({Configuration}).");
+
+        var files = TrackedText.Where(x => x.File != CitationRuleFile).ToList();
+        var citations = 0;
+
+        foreach (var (file, lines) in files)
+        {
+            for (var i = 0; i < lines.Length; i++)
+            {
+                foreach (var match in TestCitation.Matches(lines[i]).Cast<Match>())
+                {
+                    var type = match.Groups[1].Value;
+                    var member = match.Groups[2].Success ? match.Groups[2].Value : null;
+
+                    citations++;
+
+                    if (!surface.TryGetValue(type, out var members))
+                    {
+                        violations.Add(
+                            $"{RootDirectory.GetRelativePathTo(file)}:{i + 1} cites {type} and no "
+                            + "assembly this repository compiles declares a type of that name. The "
+                            + "paragraph above it is claiming a test pays for it — "
+                            + "docs/code-documentation-style.md § Citing a test");
+
+                        continue;
+                    }
+
+                    // ⚠ A file extension is not a member. `<c>KafkaReconcilerTests.cs</c>` cites the
+                    // FILE the shared harness lives in, which is a correct thing to write and which
+                    // this tree writes about `Directory.Build.props` and `Program.cs` too. The carve-
+                    // out is narrow on purpose: an extension is lowercase and known, so nothing is
+                    // hidden behind it that a member citation could be mistaken for.
+                    if (member is null || IsFileExtension(member) || members.Contains(member))
+                        continue;
+
+                    violations.Add(
+                        $"{RootDirectory.GetRelativePathTo(file)}:{i + 1} cites {type}.{member} and "
+                        + $"{type} declares no member of that name. A truncated method name is the "
+                        + "usual cause — the numbers are the contract, and so are these — "
+                        + "docs/code-documentation-style.md § Citing a test");
+                }
+            }
+        }
+
+        return GateOutcome.From(
+            "Code citations",
+            citations,
+            $"<c>…Tests</c> citation(s) across {files.Count} tracked text file(s), resolved against "
+            + $"{surface.Count} type(s) in {assemblies.Count} compiled assembl(y/ies)",
+            violations);
+    }
+
+    /// <summary>The tails that make a citation a file reference rather than a member reference.</summary>
+    static bool IsFileExtension(string segment)
+        => segment is "cs" or "csproj" or "slnx" or "props" or "targets" or "json" or "yaml" or "yml"
+            or "md" or "txt" or "tpl" or "sh" or "ps1" or "tsx" or "ts" or "razor" or "http";
+
+    /// <summary>
+    ///     Every project's built assembly, test projects included.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ The one place in this file that deliberately does <b>not</b> filter through
+    ///     <see cref="SuiteOwning" />. Every other gate here is about the shipped graph, and this one
+    ///     is about what a doc comment may name — which is overwhelmingly a test.
+    /// </remarks>
+    List<AbsolutePath> AllAssemblyPaths =>
+        Solution.AllProjects
+            .Select(x => (AbsolutePath)x.Path)
+            .Select(project => ArtifactsDirectory
+                / "bin"
+                / project.NameWithoutExtension
+                / Configuration.ToLowerInvariant()
+                / (project.NameWithoutExtension + ".dll"))
+            .Where(x => x.FileExists())
+            .OrderBy(x => x.NameWithoutExtension, StringComparer.Ordinal)
+            .ToList();
+
     /// <summary>
     ///     Every file git tracks. <c>git ls-files</c> rather than a glob because the alternative
     ///     walks <c>artifacts/</c> and follows <c>references/survival</c>, which is a symlink into
     ///     another repository entirely (docs/plan/03 § Top level).
     /// </summary>
-    IReadOnlyList<AbsolutePath> TrackedFiles =>
+    List<AbsolutePath> TrackedFiles =>
         GitTasks.Git("ls-files", RootDirectory, logOutput: false, logInvocation: false)
             .Where(x => x.Type == OutputType.Std && !string.IsNullOrWhiteSpace(x.Text))
             .Select(x => RootDirectory / x.Text.Trim())
+            .ToList();
+
+    List<(AbsolutePath File, string[] Lines)>? trackedText;
+
+    /// <summary>
+    ///     Every tracked text file with its lines, read once.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Shared because two gates walk the same 1070 files, and a target people run constantly
+    ///     cannot pay for that twice.</b> <see cref="PlanCitationGate" /> and
+    ///     <see cref="CodeCitationGate" /> ask different questions of identical input — and reading it
+    ///     twice would also let them disagree about the file set, which is a worse failure than the
+    ///     seconds: two rows reporting different counts of "tracked text file(s)" is a report nobody
+    ///     can act on. <c>git ls-files</c> also runs once rather than twice.
+    /// </remarks>
+    IReadOnlyList<(AbsolutePath File, string[] Lines)> TrackedText =>
+        trackedText ??= TrackedFiles
+            .Where(file => file.FileExists() && !LooksBinary(file))
+            .OrderBy(x => x.ToString(), StringComparer.Ordinal)
+            .Select(file => (File: file, Lines: file.ReadAllLines()))
             .ToList();
 
     /// <summary>A NUL byte in the first 8 KB — the same heuristic git itself uses.</summary>

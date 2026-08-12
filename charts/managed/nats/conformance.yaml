@@ -41,12 +41,12 @@ renders:
     when: monitoring.enabled
     count: 1
 
-# ⚠ THERE IS NO `requiredCrds:` BLOCK HERE, AND ITS ABSENCE IS CORRECT WHERE THE KAFKA MANIFEST'S
-# PRESENCE IS STALE. `ProviderConformanceCase` has no `RequiredCrds` member and never had one — the
-# harness DERIVES the definitions from the case's own `Objects`, which already carries group,
-# version, kind and plural. That decision is recorded at ProviderConformanceCase.cs's long comment,
-# and charts/managed/kafka/conformance.yaml still says "Read by ProviderConformanceCase.RequiredCrds"
-# about a member that does not exist.
+# ⚠ THERE IS NO `requiredCrds:` BLOCK HERE, AND ITS ABSENCE IS CORRECT.
+# `ProviderConformanceCase` has no `RequiredCrds` member and never had one — the harness DERIVES the
+# definitions from the case's own `Objects`, which already carries group, version, kind and plural.
+# That decision is recorded at ProviderConformanceCase.cs's long comment. The kafka manifest carried
+# a `requiredCrds:` block citing that member until it was removed; charts/managed/kafka/conformance.yaml
+# now records why, in the block's place.
 
 # ADR-013 — every rendered object carries all seven labels. Asserted against real rendered output,
 # which is what the Labels architecture gate in docs/plan/23 § The architecture gates requires.

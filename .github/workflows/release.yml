@@ -83,6 +83,34 @@ jobs:
 
       - uses: ./.github/actions/dotnet
 
+      # ── ⚠ THE PORTAL IS ON THE RELEASE PATH, AND UNTIL NOW ITS NODE WAS NOT PINNED HERE ─────────
+      #
+      # `Publish` is `.DependsOn(Test, Generate, Architecture, Portal, Licence)` — build/Build.cs
+      # § Publish — so `./build.sh Publish` below runs the Portal target, which is `pnpm install
+      # --frozen-lockfile` plus `pnpm gates` over portal/. gate.yml's portal job sets Node up from
+      # `node-version-file: portal/.node-version`; this job did not, and inherited whatever Node
+      # the ubuntu-24.04 image happens to ship.
+      #
+      # portal/README.md § Node ends on "the CI image must be Node 24 — that is the half of this
+      # decision that lives outside this repo", and this was the half of *that* half nobody had
+      # checked. It would not have drifted silently — `pnpm node:gate` runs strict on a server
+      # build and would have failed the release — but a release that fails on a runner-image bump
+      # is not a pin, it is a tripwire over a hole. Same file, same reason, same one number.
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: portal/.node-version
+
+      # And the same corepack step, for the same reason gate.yml gives: `packageManager` in
+      # portal/package.json is the single pnpm pin, and Build.Portal.cs § ResolvePnpm needs `pnpm`
+      # on PATH or it fails the target outright.
+      - name: Enable pnpm from portal/package.json's packageManager pin
+        env:
+          COREPACK_ENABLE_DOWNLOAD_PROMPT: 0
+        run: |
+          corepack enable pnpm
+          echo "node: $(node --version)"
+          echo "pnpm: $(cd portal && pnpm --version)"
+
       - name: Preconditions
         run: |
           .github/scripts/require-secrets.sh publish \

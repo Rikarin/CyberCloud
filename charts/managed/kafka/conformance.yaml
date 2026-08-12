@@ -24,22 +24,17 @@ renders:
     kind: KafkaNodePool
     count: 1
 
-# The CRDs a cluster must serve before any of this can be asserted. Read by
-# ProviderConformanceCase.RequiredCrds, which the cluster-backed suite installs before the harness
-# starts.
+# ⚠ THE `requiredCrds:` BLOCK THAT USED TO BE HERE HAS BEEN REMOVED, AND ITS REMOVAL IS THE FIX
+# RATHER THAN A LOSS. It carried the sentence "Read by ProviderConformanceCase.RequiredCrds", and
+# that member has never existed on master: it is the design ProviderConformanceCase.cs's long
+# comment records losing, because a declared list can be under-declared and the failure when it is
+# names nothing. The harness DERIVES the definitions from the case's own `Objects`, which already
+# carries group, version, kind and plural — and `renders:` above is the same two kinds, so nothing
+# was said here that the derivation does not already know.
 #
-# ⚠ THIS LIST IS A CLAIM, NOT A CONVENIENCE. A bare k3s serves no REST path for a custom resource,
-# so every cluster-backed assertion about a Strimzi object fails without it — and it fails as an
-# HttpOperationException with no status code, which names nothing.
-requiredCrds:
-  - group: kafka.strimzi.io
-    version: v1beta2
-    kind: Kafka
-    plural: kafkas
-  - group: kafka.strimzi.io
-    version: v1beta2
-    kind: KafkaNodePool
-    plural: kafkanodepools
+# The claim the block was making is still true and is still worth stating: a bare k3s serves no REST
+# path for a custom resource, so every cluster-backed assertion about a Strimzi object fails without
+# one, as an HttpOperationException with no status code. It is the harness that now guarantees it.
 
 # ADR-013 — every rendered object carries all seven labels. Asserted against real rendered output,
 # which is what the Labels architecture gate in docs/plan/23 § The architecture gates requires.
