@@ -191,7 +191,7 @@ public interface IProviderCaseSource {
     ///         depth-1 case has no ancestors to describe, and a depth-2 case that leaves this empty
     ///         does not run a smaller suite — it runs no suite at all.
     ///         <c>ProviderTestCluster.AncestorsOf</c> refuses the mismatch by name before a single
-    ///         test does anything, and <c>SuiteRejectionTests.ADepthTwoSourceWithNoAncestorsIsRefused</c>
+    ///         test does anything, and <c>SuiteRejectionTests.ADepthTwoSourceWithNoAncestorsIsRefusedByNameRatherThanFailingEveryTestAtOnce</c>
     ///         is the calibration that says so. The count is checked against
     ///         <c>ResourceTypeName.Depth</c>, which is derived from the type path and cannot be
     ///         under-declared any more than <see cref="ProviderConformanceCase.Objects" /> can.

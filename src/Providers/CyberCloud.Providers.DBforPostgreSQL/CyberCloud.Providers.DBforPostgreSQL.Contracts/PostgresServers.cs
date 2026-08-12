@@ -515,7 +515,12 @@ public static class PostgresServers {
     ///     <c>CyberCloud.Kubernetes.Charts</c> does not exist (docs/plan/03 § src), so the objects are
     ///     built here; the moment it does, this table and the reconciler's use of it should go and the
     ///     chart's should stay, because the chart is the file a support engineer reads. Until then both
-    ///     exist and <c>PostgresSizingTests</c> asserts they agree value for value.
+    ///     exist and <c>ChartRegistryPairTests.TheSizingTableIsTheChartsSizingTable</c> asserts they
+    ///     agree value for value. ⚠ Named unlike its four siblings, which all spell the same assertion
+    ///     <c>TheSizingTableAgreesWithTheChartsValueForValue</c>. This citation used to name a
+    ///     "PostgresSizingTests", following those siblings' file naming — a class that has never
+    ///     existed here, which is what a name guessed from the pattern rather than read off the tree
+    ///     looks like. The Code citations gate in build/Build.Architecture.cs now refuses that.
     /// </remarks>
     public static FrozenDictionary<string, (string Cpu, string Memory)> Presets { get; } =
         new Dictionary<string, (string Cpu, string Memory)>(StringComparer.Ordinal) {

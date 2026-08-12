@@ -189,6 +189,37 @@ is what the codebase already does.
 anywhere else. The word-choice rules below apply to prose you wrote. Editing a quotation to remove a
 banned word makes it a misquotation, which is a worse defect than the word.
 
+## Citing a test
+
+When a paragraph claims a test pays for it, **name the test exactly** — the class, and the method if
+you are pointing at one assertion rather than a set:
+
+```csharp
+// ✓ <c>WritePathTests.EveryTraceIsAStrictlyIncreasingPrefixOfTheCanonicalOrder</c>
+// ✗ <c>WritePathStepOrderTests</c>          — a class that has never existed
+// ✗ <c>ResourceIdTests.PathRoundTrips</c>   — the method is PathRoundTripsForEveryGeneratedId
+```
+
+**This is gated.** The `Code citations` row of `./build.sh Architecture` resolves every
+`<c>…Tests</c>` and `<c>…Tests.Method</c>` in every tracked file against the types this repository
+actually compiles. It found **sixteen** broken citations when it was written: ten naming classes that
+never existed and six truncating a real method's name. Both failure modes send a reader looking for
+an assertion that is not there, and both survived because nothing checked.
+
+⚠ **Do not widen the rule to every `<c>Identifier</c>`.** It was measured and it does not work: of
+this tree's 8805 `<c>` spans, 1522 name something the repository does not declare and never will —
+`Orleans.Multitenant`, `PUT`, `ConfigMap`, `StatefulSet`, assembly names, resource states. The
+narrower `<c>KnownType.Member</c>` rule fails too, on idioms that are correct English and not code: a
+file cited without its extension (`Build.Charts`), one cited with it (`Program.cs`), and a foreign
+API's JSON field (`Status.reason`). The `Tests` suffix is fenced off because this tree's test-class
+naming has no exceptions, so the rule has none either — and a rule with no exemptions is a rule
+nobody learns to work around.
+
+⚠ **The gate is not a substitute for reading.** It cannot see a citation like
+`ProviderConformanceCase.RequiredCrds` — a member that lost a design argument and never existed —
+because that shape is the one the measurement above rules out. Three such citations were found by a
+person, in the same pass that built the gate.
+
 ## What not to document
 
 - **Restating the code.** `// increment i` earns nothing.

@@ -29,8 +29,8 @@ namespace CyberCloud.Cli.Commands;
 ///     <para>
 ///         ⚠ <b>Nothing is written to <c>~/.cyc</c> by signing in.</b> The refresh token goes to the
 ///         OS keychain through <c>CyberCloudCredentialOptions.TokenCache</c>, whose default is
-///         <c>TokenCache.CreatePersistent</c>. <c>NoCredentialOnDiskTests</c> signs in against a
-///         scripted identity server and asserts the state directory is untouched.
+///         <c>TokenCache.CreatePersistent</c>. <c>NoCredentialLeakTests.NoTokenCacheIsWrittenByTheCli</c>
+///         signs in against a scripted identity server and asserts the state directory is untouched.
 ///     </para>
 /// </remarks>
 static class LoginCommand {

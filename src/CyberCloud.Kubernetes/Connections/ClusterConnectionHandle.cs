@@ -22,7 +22,7 @@ namespace CyberCloud.Kubernetes.Connections;
 ///         A cluster connection is null-tenant
 ///         (docs/plan/06 § Grain keys), so calling <c>ForTenant(...)</c> here would silently create a
 ///         second activation per tenant of a grain there is supposed to be exactly one of — which is
-///         precisely the failure <c>NullTenantGrainTests.TenantQualifyingAPlatformGrainIsRefused</c>
+///         precisely the failure <c>NullTenantGrainTests.TenantQualifyingAPlatformGrainIsRefusedRatherThanSilentlyForked</c>
 ///         exists to make loud for the other two platform grains.
 ///     </para>
 /// </remarks>

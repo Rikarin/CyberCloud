@@ -137,6 +137,7 @@ partial class Build
         ("Labels", "every reconciler's rendered output carries the seven cybercloud.io/* labels, asserted against real output"),
         ("Analyzer coverage", "every project under src/ references CyberCloud.Analyzers — not in docs/plan/23"),
         ("Plan citations", "no docs/plan/NN:LINE citation in a tracked file — docs/code-documentation-style.md § Citing the plan"),
+        ("Code citations", "every <c>…Tests</c> and <c>…Tests.Method</c> in a tracked file names something this repository compiles — not in docs/plan/23"),
     ];
 
     // ── The assemblies the gates read ─────────────────────────────────────────────────────────
@@ -220,7 +221,7 @@ partial class Build
         // as it goes, and those lines are unreadable above the header that says what they belong to.
         Log.Information(
             "Architecture: {Count} gates — the ten in docs/plan/23 § The architecture gates, plus "
-            + "Analyzer coverage and Plan citations, which that table does not list",
+            + "Analyzer coverage, Plan citations and Code citations, which that table does not list",
             ArchitectureGates.Length);
 
         var outcomes = new List<GateOutcome>
@@ -237,6 +238,7 @@ partial class Build
             LabelsGate(),
             AnalyzerCoverageGate(),
             PlanCitationGate(),
+            CodeCitationGate(),
         };
 
         Report(outcomes);
@@ -1840,6 +1842,21 @@ partial class Build
                     .EndsWith("CyberCloud.Analyzers.csproj", StringComparison.Ordinal)
                 && string.Equals(x.Attribute("OutputItemType")?.Value, "Analyzer", StringComparison.Ordinal));
 
+    // ── Gates: citations — docs/code-documentation-style.md § Citing the plan, § Citing a test ─
+
+    /// <summary>
+    ///     The one file both citation gates exempt, and it has to exist: the file that defines the
+    ///     rules is the one file that must show the anti-patterns, and it does — marked ✗, in fenced
+    ///     examples, next to the ✓.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>This was not reasoned about, it was demanded by the build.</b> Writing § Citing a test
+    ///     with its two ✗ examples turned <see cref="CodeCitationGate" /> red on its own
+    ///     documentation, in a Markdown file, which is the cheapest sabotage-test either gate will
+    ///     ever get: the rule fires on real prose, in a non-<c>.cs</c> file, and names the line.
+    /// </remarks>
+    AbsolutePath CitationRuleFile => RootDirectory / "docs" / "code-documentation-style.md";
+
     // ── Gate: plan citations — docs/code-documentation-style.md § Citing the plan ─────────────
 
     /// <summary>
@@ -1861,21 +1878,11 @@ partial class Build
     /// </summary>
     GateOutcome PlanCitationGate()
     {
-        // ⚠ One exemption, and it has to exist: the file that defines the rule is the one file that
-        // must show the anti-pattern, and it does — marked ✗, in a fenced example, next to the ✓.
-        var exempt = RootDirectory / "docs" / "code-documentation-style.md";
-
-        var files = TrackedFiles
-            .Where(file => file.FileExists() && file != exempt && !LooksBinary(file))
-            .OrderBy(x => x.ToString(), StringComparer.Ordinal)
-            .ToList();
-
+        var files = TrackedText.Where(x => x.File != CitationRuleFile).ToList();
         var violations = new List<string>();
 
-        foreach (var file in files)
+        foreach (var (file, lines) in files)
         {
-            var lines = file.ReadAllLines();
-
             for (var i = 0; i < lines.Length; i++)
             {
                 var match = LineNumberCitation.Match(lines[i]);
@@ -1900,15 +1907,190 @@ partial class Build
     /// </summary>
     static readonly Regex LineNumberCitation = new(@"docs/plan/\d+[A-Za-z0-9._-]*:\d+", RegexOptions.Compiled);
 
+    // ── Gate: code citations — the other half of docs/code-documentation-style.md § Citing ───────
+
+    /// <summary>
+    ///     A citation of a <b>test</b>, inside <c>&lt;c&gt;</c> markup: a name ending in
+    ///     <c>Tests</c>, optionally followed by one member segment.
+    /// </summary>
+    static readonly Regex TestCitation = new(
+        @"<c>([A-Z][A-Za-z0-9_]*Tests)(?:\.([A-Za-z0-9_]+))?</c>",
+        RegexOptions.Compiled);
+
+    /// <summary>
+    ///     Every <c>&lt;c&gt;SomethingTests&lt;/c&gt;</c> and
+    ///     <c>&lt;c&gt;SomethingTests.Method&lt;/c&gt;</c> in a tracked file names a test class, and a
+    ///     member of it, that this repository actually compiles.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b><see cref="PlanCitationGate" /> walks 1070 files to keep plan citations honest,
+    ///         and a citation of a type or a test had no gate at all.</b> The decay is the same and it
+    ///         is worse: a plan citation at least points at a file that exists, whereas a test
+    ///         citation naming a class that never existed sends a reader looking for the assertion
+    ///         that is supposed to be paying for the paragraph above it. Sixteen were found in this
+    ///         tree when the gate was written, including three that named test classes copied from a
+    ///         sibling provider's naming pattern rather than read off the tree.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Why the subject is tests and not every code citation, which is the whole design
+    ///         and was decided by measurement rather than by taste.</b> The obvious rule — every
+    ///         <c>&lt;c&gt;Identifier&lt;/c&gt;</c> must resolve — is unusable here: 8805
+    ///         <c>&lt;c&gt;</c> spans in this tree, 3707 of them shaped like a dotted identifier, and
+    ///         <b>1522</b> naming something this repository does not declare and never will —
+    ///         <c>Orleans.Multitenant</c>, <c>PUT</c>, <c>ConfigMap</c>, <c>StatefulSet</c>,
+    ///         <c>KubernetesClient</c>, assembly names, resource states. A rule with fifteen hundred
+    ///         false positives is a rule somebody switches off in a week.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>And why not the middle ground either.</b> The next narrowest rule — every
+    ///         <c>&lt;c&gt;KnownType.Member&lt;/c&gt;</c> resolves — was measured too: 445
+    ///         occurrences, and the residue after a metadata resolver is dominated by idioms that are
+    ///         correct English and not code at all. A file cited without its extension
+    ///         (<c>Build.Charts</c>, meaning <c>build/Build.Charts.cs</c>), a file cited with one
+    ///         (<c>Program.cs</c>), and a foreign API's JSON field (<c>Status.reason</c> on a
+    ///         Kubernetes status) all look exactly like a broken member citation and none of them is
+    ///         one. That rule would need three exemptions to survive, and a rule with three exemptions
+    ///         is a rule whose next false positive gets a fourth.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>What that costs, said plainly rather than left to be discovered.</b> This gate
+    ///         would <i>not</i> have caught <c>ProviderConformanceCase.RequiredCrds</c> — the citation
+    ///         in <c>charts/managed/kafka/conformance.yaml</c> that named a member which lost a design
+    ///         argument and never existed. That one was found by a person reading, and this gate does
+    ///         not replace them. What it does is fence off the one shape where the convention is
+    ///         unambiguous, the naming rule is exceptionless, and the measured false-positive count is
+    ///         zero — which is a gate worth keeping precisely because nobody will ever want to
+    ///         suppress it.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ Every tracked text file, not only <c>.cs</c>. Two of the sixteen were in YAML.
+    ///     </para>
+    /// </remarks>
+    GateOutcome CodeCitationGate()
+    {
+        var assemblies = AllAssemblyPaths;
+        var surface = CodeSurface.Read(assemblies);
+        var violations = new List<string>();
+
+        // ⚠ THE EMPTY-INPUT VIOLATION — the shape of failure the wire gate's own sabotage found, and
+        // the one this gate is most exposed to. Every check below asks "is this name in `surface`",
+        // so a surface read from nothing turns every citation into a violation rather than none —
+        // loud, not silent. The dangerous direction is the other one: zero CITATIONS found, which
+        // reports a confident tick over a regex that stopped matching. GateOutcome.From counts
+        // citations, so that case is ○ with the number rather than ✔. What is left is a surface that
+        // read no assemblies at all, which would make the loud failure look like a real one.
+        Assert.NotEmpty(
+            surface.Keys.ToList(),
+            $"reading {assemblies.Count} assembl(y/ies) found no type at all. Architecture depends on "
+            + "Compile, so this means the artifacts directory was cleaned between the two — every "
+            + "citation below would be reported as unresolvable and every one of those reports would "
+            + $"be wrong. Run ./build.sh Compile first, in the same configuration ({Configuration}).");
+
+        var files = TrackedText.Where(x => x.File != CitationRuleFile).ToList();
+        var citations = 0;
+
+        foreach (var (file, lines) in files)
+        {
+            for (var i = 0; i < lines.Length; i++)
+            {
+                foreach (var match in TestCitation.Matches(lines[i]).Cast<Match>())
+                {
+                    var type = match.Groups[1].Value;
+                    var member = match.Groups[2].Success ? match.Groups[2].Value : null;
+
+                    citations++;
+
+                    if (!surface.TryGetValue(type, out var members))
+                    {
+                        violations.Add(
+                            $"{RootDirectory.GetRelativePathTo(file)}:{i + 1} cites {type} and no "
+                            + "assembly this repository compiles declares a type of that name. The "
+                            + "paragraph above it is claiming a test pays for it — "
+                            + "docs/code-documentation-style.md § Citing a test");
+
+                        continue;
+                    }
+
+                    // ⚠ A file extension is not a member. `<c>KafkaReconcilerTests.cs</c>` cites the
+                    // FILE the shared harness lives in, which is a correct thing to write and which
+                    // this tree writes about `Directory.Build.props` and `Program.cs` too. The carve-
+                    // out is narrow on purpose: an extension is lowercase and known, so nothing is
+                    // hidden behind it that a member citation could be mistaken for.
+                    if (member is null || IsFileExtension(member) || members.Contains(member))
+                        continue;
+
+                    violations.Add(
+                        $"{RootDirectory.GetRelativePathTo(file)}:{i + 1} cites {type}.{member} and "
+                        + $"{type} declares no member of that name. A truncated method name is the "
+                        + "usual cause — the numbers are the contract, and so are these — "
+                        + "docs/code-documentation-style.md § Citing a test");
+                }
+            }
+        }
+
+        return GateOutcome.From(
+            "Code citations",
+            citations,
+            $"<c>…Tests</c> citation(s) across {files.Count} tracked text file(s), resolved against "
+            + $"{surface.Count} type(s) in {assemblies.Count} compiled assembl(y/ies)",
+            violations);
+    }
+
+    /// <summary>The tails that make a citation a file reference rather than a member reference.</summary>
+    static bool IsFileExtension(string segment)
+        => segment is "cs" or "csproj" or "slnx" or "props" or "targets" or "json" or "yaml" or "yml"
+            or "md" or "txt" or "tpl" or "sh" or "ps1" or "tsx" or "ts" or "razor" or "http";
+
+    /// <summary>
+    ///     Every project's built assembly, test projects included.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ The one place in this file that deliberately does <b>not</b> filter through
+    ///     <see cref="SuiteOwning" />. Every other gate here is about the shipped graph, and this one
+    ///     is about what a doc comment may name — which is overwhelmingly a test.
+    /// </remarks>
+    List<AbsolutePath> AllAssemblyPaths =>
+        Solution.AllProjects
+            .Select(x => (AbsolutePath)x.Path)
+            .Select(project => ArtifactsDirectory
+                / "bin"
+                / project.NameWithoutExtension
+                / Configuration.ToLowerInvariant()
+                / (project.NameWithoutExtension + ".dll"))
+            .Where(x => x.FileExists())
+            .OrderBy(x => x.NameWithoutExtension, StringComparer.Ordinal)
+            .ToList();
+
     /// <summary>
     ///     Every file git tracks. <c>git ls-files</c> rather than a glob because the alternative
     ///     walks <c>artifacts/</c> and follows <c>references/survival</c>, which is a symlink into
     ///     another repository entirely (docs/plan/03 § Top level).
     /// </summary>
-    IReadOnlyList<AbsolutePath> TrackedFiles =>
+    List<AbsolutePath> TrackedFiles =>
         GitTasks.Git("ls-files", RootDirectory, logOutput: false, logInvocation: false)
             .Where(x => x.Type == OutputType.Std && !string.IsNullOrWhiteSpace(x.Text))
             .Select(x => RootDirectory / x.Text.Trim())
+            .ToList();
+
+    List<(AbsolutePath File, string[] Lines)>? trackedText;
+
+    /// <summary>
+    ///     Every tracked text file with its lines, read once.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Shared because two gates walk the same 1070 files, and a target people run constantly
+    ///     cannot pay for that twice.</b> <see cref="PlanCitationGate" /> and
+    ///     <see cref="CodeCitationGate" /> ask different questions of identical input — and reading it
+    ///     twice would also let them disagree about the file set, which is a worse failure than the
+    ///     seconds: two rows reporting different counts of "tracked text file(s)" is a report nobody
+    ///     can act on. <c>git ls-files</c> also runs once rather than twice.
+    /// </remarks>
+    IReadOnlyList<(AbsolutePath File, string[] Lines)> TrackedText =>
+        trackedText ??= TrackedFiles
+            .Where(file => file.FileExists() && !LooksBinary(file))
+            .OrderBy(x => x.ToString(), StringComparer.Ordinal)
+            .Select(file => (File: file, Lines: file.ReadAllLines()))
             .ToList();
 
     /// <summary>A NUL byte in the first 8 KB — the same heuristic git itself uses.</summary>

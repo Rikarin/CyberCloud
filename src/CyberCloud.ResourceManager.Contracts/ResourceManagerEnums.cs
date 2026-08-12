@@ -14,7 +14,8 @@ namespace CyberCloud.ResourceManager.Contracts;
 ///             will."
 ///         </i>
 ///         The write path records each step it enters into a <see cref="WriteTrace" />, and
-///         <c>WritePathStepOrderTests</c> asserts that the recorded sequence is strictly increasing
+///         <c>WritePathTests.EveryTraceIsAStrictlyIncreasingPrefixOfTheCanonicalOrder</c> asserts
+///         that the recorded sequence is strictly increasing
 ///         and is a prefix of the canonical order. Moving any step earlier or later fails that test
 ///         without anyone having to notice the move.
 ///     </para>

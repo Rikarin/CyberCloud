@@ -243,7 +243,7 @@ public static partial class IdentityLog {
     ///     address, which docs/plan/11 § Auditing bans from a log <i>message</i> outright. The four
     ///     placeholders here are two GUIDs and two enums, which is the invariant
     ///     <c>PiiNeverReachesALogMessageTests</c> holds this file to — and
-    ///     <c>OtpIssuanceTests.TheCodeNeverReachesALogMessage</c> holds the code to separately,
+    ///     <c>OtpIssuanceTests.TheCodeReachesNoLogMessage</c> holds the code to separately,
     ///     because a code is not PII and would slip past that suite.
     /// </remarks>
     [LoggerMessage(

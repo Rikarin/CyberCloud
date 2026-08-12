@@ -25,8 +25,8 @@ readonly record struct WindowCount(long Count, TimeSpan RetryAfter);
 ///         grain, serialises every request in the flood through its single-threaded turn, and holds
 ///         a silo's scheduler while doing it. The rate limiter would become the amplifier: the
 ///         cheapest possible request for the attacker, the most expensive possible for the platform.
-///         <c>RateLimitingCostsNoGrainCallTests</c> floods past the limit against a grain factory
-///         that fails the test if it is touched at all.
+///         <c>RateLimitingTests.AFloodPastTheLimitCostsNoGrainCall</c> floods past the limit against
+///         a grain factory that fails the test if it is touched at all.
 ///     </para>
 ///     <para>
 ///         The Redis implementation is a sorted set per key and one Lua script per request:

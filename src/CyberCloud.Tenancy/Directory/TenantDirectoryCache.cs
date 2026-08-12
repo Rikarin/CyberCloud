@@ -13,13 +13,15 @@ namespace CyberCloud.Tenancy.Directory;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         The three claims this type has to pay for, each of which is a test in
-///         <c>TenantDirectoryCacheTests</c>:
+///         The three claims this type has to pay for, each of which is a test — the first two in
+///         <c>TenantDirectoryTests</c>, the third in <c>TenantDirectoryBlackholeTests</c>, which is
+///         deliberately one <c>[Fact]</c> and says in its own remarks why it is not split:
 ///     </para>
 ///     <list type="number">
 ///         <item>
 ///             <b>"Reads never leave the process."</b> <see cref="TryLookup" /> is a dictionary read
 ///             against an immutable snapshot and cannot do I/O at all — it is not even async.
+///             <c>TenantDirectoryTests.ReadsNeverLeaveTheProcessOnceTheTenantIsResident</c>.
 ///         </item>
 ///         <item>
 ///             <b>
@@ -28,6 +30,7 @@ namespace CyberCloud.Tenancy.Directory;
 ///             </b>
 ///             <see cref="LookupAsync" /> is the fallback and
 ///             <see cref="Misses" /> is the measurement.
+///             <c>TenantDirectoryTests.ACacheMissFallsBackToAGrainCallAndIsCounted</c>.
 ///         </item>
 ///         <item>
 ///             <b>
@@ -40,6 +43,7 @@ namespace CyberCloud.Tenancy.Directory;
 ///             starts failing reads after N minutes. A cached entry serves until something replaces
 ///             it. A TTL here would be a timer that takes the platform down during an outage of the
 ///             one component whose outage the design promises to survive.
+///             <c>TenantDirectoryBlackholeTests.SeedThenBlackholeThenAssertAsync</c>.
 ///         </item>
 ///     </list>
 /// </remarks>

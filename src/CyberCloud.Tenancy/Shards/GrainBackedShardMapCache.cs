@@ -26,8 +26,11 @@ namespace CyberCloud.Tenancy.Shards;
 ///         <item>
 ///             <b>"Adding a shard here re-places existing tenants."</b> It does not here: a tenant
 ///             with a recorded assignment reads that assignment, and the map never rewrites one.
-///             <c>ShardAssignmentIsPermanentTests</c> adds a third shard to a two-shard map and
-///             asserts every previously assigned tenant keeps its shard.
+///             <c>ShardMapTests.TheCacheNeverRePlacesARecordedTenantWhenTheShardListGrows</c> aims
+///             that at this class — a bare cache, given an assignment and then a longer shard list,
+///             still answers with the recorded shard — and
+///             <c>ShardMapTests.AddingAShardDoesNotMoveASingleAlreadyAssignedTenant</c> aims it at
+///             the grain, over forty already-assigned tenants.
 ///         </item>
 ///         <item>
 ///             <b>"<c>Version</c> is always 0."</b> It is the version of the snapshot that is
