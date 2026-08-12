@@ -1,0 +1,45 @@
+# Managed search — docs/plan/12 § The catalogue, "OpenSearch — CyberCloud.Search/services · M3 ·
+# 1.0 EM. OpenSearch operator (Apache-2.0, ADR-011 — Elasticsearch is not available to us).
+# Data/master/coordinating node roles, ISM policies, snapshot repository into the tenant's bucket."
+#
+# ⚠ THAT ROW NAMES FOUR THINGS AND THIS CHART DELIVERS ONE. The node-role split is built; ISM policies
+# and the snapshot repository are in conformance.yaml § owed with what each actually needs, and
+# neither is blocked on effort — both need piece 5.
+#
+# ⚠ IT IS THE FIRST M3 ROW TO SHIP. Nothing about the shape changed: one chart, one SOURCE, one
+# conformance.yaml, the same seven @internal identity rows every managed chart has.
+apiVersion: v2
+name: opensearch
+description: Managed OpenSearch on the OpenSearch operator — dedicated cluster-manager, data and optional coordinating node pools, with operator-generated transport and HTTP TLS.
+type: application
+
+# The chart's own version. Bumped on every change to this directory.
+version: 0.1.0
+
+# The default OpenSearch version, matching values.yaml `version`.
+appVersion: "3.1.0"
+
+kubeVersion: ">=1.31.0-0"
+
+keywords:
+  - opensearch
+  - search
+  - lucene
+  - full-text
+
+home: https://opensearch.org
+sources:
+  - https://github.com/opensearch-project/OpenSearch
+  - https://github.com/opensearch-project/opensearch-k8s-operator
+
+maintainers:
+  - name: Cyber Cloud Platform
+
+# ⚠ These three are read by `Build.Charts` and written into `values.schema.json` as
+# `x-cybercloud-*`. They are what makes the generated schema addressable as a resource type's
+# body rather than as an anonymous blob of Helm values — docs/plan/12 § The pattern, once, piece 2.
+# A chart under charts/managed/ without them fails the build.
+annotations:
+  cybercloud.io/resource-type: CyberCloud.Search/services
+  cybercloud.io/api-version: "2026-08-01"
+  cybercloud.io/operator: opensearch-k8s-operator

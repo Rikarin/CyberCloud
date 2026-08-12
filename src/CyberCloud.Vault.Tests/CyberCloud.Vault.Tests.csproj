@@ -1,0 +1,62 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      The vault client's behaviour, against a real OpenBao in a container.
+
+      The suite is organised around the ways a secret goes wrong rather than around the types,
+      because every one of them is silent when it breaks:
+
+        VaultSeamWiringTests      — the refusing default is still what an unwired silo gets, asserted
+                                    on the real registrations in both composition orders
+        SecretContainmentTests    — nothing here can persist or serialize a value, asserted by
+                                    reflection because CC1005 is switched OFF in CyberCloud.Vault
+        RefusalHygieneTests       — a tenant message names no address, path, field, role or token
+        ResolveFailureTests       — unreachable, absent, denied and field-missing are four answers
+                                    and none of them is ""
+        SecretNeverLeaksTests     — a real value, a capturing logger and an ActivityListener
+
+      ⚠ WHAT A CONTAINER CANNOT COVER HERE, STATED SO IT IS NOT MISTAKEN FOR COVERED. OpenBao's
+      Kubernetes auth method calls the cluster's TokenReview API on EVERY login — its pathLogin runs
+      serviceAccount.lookup unconditionally, and configuring pem_keys changes only whether the JWT's
+      signature is checked locally. So KubernetesVaultTokenSource's success path cannot be exercised
+      without a Kubernetes API server, and it is not exercised here: its request shape and its whole
+      failure taxonomy are driven against a stubbed HttpMessageHandler, and its refusal against a
+      real OpenBao whose kubernetes mount has no cluster behind it. What is NOT proven is that a
+      real projected token from a real kubelet is accepted by a real OpenBao — that needs the k3s
+      container this repository already has a builder for, plus OpenBao configured against it, and
+      it is owed.
+
+      Everything else runs against the real thing: the kv-v2 read, all four failure answers, the
+      403-then-relogin retry (driven with a genuinely revoked OpenBao token), and the leak assertions.
+    -->
+
+    <ItemGroup>
+        <PackageReference Include="xunit.v3"/>
+        <PackageReference Include="Shouldly"/>
+    </ItemGroup>
+
+    <ItemGroup Label="A real OpenBao — ADR-018, docs/plan/23 § Test layers">
+        <!--
+          ⚠ The generic ContainerBuilder rather than a Testcontainers module, because there is no
+          Testcontainers.OpenBao. The two Redis suites in CyberCloud.ServiceDefaults.Tests use the
+          same generic builder for a different reason (a command line the module does not expose),
+          so the pattern is not new here.
+        -->
+        <PackageReference Include="Testcontainers"/>
+    </ItemGroup>
+
+    <ItemGroup Label="Global usings">
+        <Using Include="Xunit"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../CyberCloud.Vault/CyberCloud.Vault.csproj"/>
+        <!--
+          The REAL UnavailableSecretResolver and the real AddCyberCloudResourceManager, not a
+          stand-in. VaultSeamWiringTests asks which ISecretResolver a silo ends up with, and the
+          only honest way to ask is of the registrations a host actually calls.
+        -->
+        <ProjectReference Include="../CyberCloud.ResourceManager/CyberCloud.ResourceManager.csproj"/>
+    </ItemGroup>
+
+</Project>

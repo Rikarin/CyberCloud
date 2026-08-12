@@ -1,0 +1,97 @@
+# Provenance — charts/README.md § `SOURCE` is required, including when nothing was forked.
+#
+# ADR-010: "Their charts are a starting point, not a dependency. Where a chart is close, fork it into
+# charts/ with the upstream commit recorded in a SOURCE file." Nothing was forked here, and
+# `vendored: none` is an answer to "where did this come from" where a missing file is not.
+
+vendored: none
+upstream: https://github.com/opensearch-project/opensearch-k8s-operator
+
+# The upstream API this chart's templates target. ⚠ An API group/version, not a commit: nothing is
+# vendored, so there is no upstream tree to pin.
+#
+# ⚠ AND THIS GROUP IS DEPRECATED UPSTREAM, WHICH IS THE FIRST THING TO KNOW ABOUT THIS CHART.
+# opensearch-operator/api/v1/groupversion_info.go registers
+# `GroupVersion = schema.GroupVersion{Group: "opensearch.opster.io", Version: "v1"}` under a package
+# comment reading "The opensearch.opster.io API group is deprecated and will be removed in a future
+# release. Please migrate to opensearch.org/v1 API group." Both exist in the tree today —
+# opensearch-operator/api/opensearch.org/v1/groupversion_info.go registers `Group: "opensearch.org"`.
+#
+# The deprecated one is rendered DELIBERATELY: it is the group a released operator in charts/bundle/
+# serves, and a chart rendering into a group the installed operator does not watch produces an object
+# that is applied, accepted by the API server, and reconciled by nothing — the one failure mode with
+# no error anywhere in it. Moving is a new api-version plus a bundle bump, in that order. See
+# conformance.yaml § owed, `api-group-is-deprecated`.
+upstream-api: opensearch.opster.io/v1
+
+# The engine. ⚠ ADR-011 rather than ADR-010 is what picks it: "Elasticsearch | SSPL/Elastic | ✗ —
+# OpenSearch (Apache-2.0)". This is the only row in docs/plan/12's catalogue whose OPERATOR comes from
+# ADR-010 clause 1's survey and whose ENGINE comes from the licence audit.
+engine: https://github.com/opensearch-project/OpenSearch
+
+# Reviewed against the upstream sources on this date — the operator's Go types, its TLS and
+# securityconfig reconcilers, its cluster builder, and its own user guide. A bare date rather than a
+# SHA is a weaker claim and is labelled as one.
+#
+# ⚠ WHAT THIS REVIEW ESTABLISHED, because two of the six changed what this chart renders and one of
+# them refuted the thing it was written to check:
+#
+#   * `api/v1/opensearch_types.go` — `ClusterSpec` is {general, confMgmt, bootstrap, dashboards,
+#     security, nodePools, initHelper} and `NodePools []NodePool` has NO `omitempty`: the node-role
+#     split docs/plan/12 asks for is an ARRAY inside one object rather than three objects.
+#     `NodePool` is {component, replicas, diskSize, resources, jvm, roles, …, persistence}, with
+#     `component`, `replicas` and `roles` all lacking `omitempty`.
+#
+#   * `api/v1/opensearch_types.go` — THE DEFAULTS THAT FORCE A CONTAINMENT COMPARISON, read off the
+#     kubebuilder markers rather than off a README. `+kubebuilder:default=9200` on
+#     GeneralConfig.HttpPort; `+kubebuilder:default=true` on GeneralConfig.SetVMMaxMapCount; and —
+#     the one that decides it — `+kubebuilder:default=true` TOGETHER WITH
+#     `+kubebuilder:validation:Required` on ConfMgmt.SmartScaler. The API server therefore writes
+#     `spec.confMgmt.smartScaler: true` into every object on every apply, whatever was sent, so an
+#     equality comparison in OpenSearchServices.Matches would never converge — on the first create,
+#     not intermittently. Also `+kubebuilder:default=1` on DashboardsConfig.Replicas, which this
+#     chart does not reach because it renders no `spec.dashboards`.
+#
+#   * `pkg/reconcilers/tls.go` — THE FACT THAT DECIDES WHAT THIS CHART RENDERS FOR TLS. Reconcile()
+#     begins `if r.instance.Spec.Security == nil || r.instance.Spec.Security.Tls == nil { r.logger.
+#     Info("No security specified. Not doing anything"); return ctrl.Result{}, nil }` — no
+#     certificates generated, no secrets created, no volume mounts configured. OpenSearch's security
+#     plugin requires transport TLS to form a cluster, so `spec.security.tls.transport.generate` and
+#     `…http.generate` are written UNCONDITIONALLY and are not values keys. `perNode: true` on the
+#     transport listener is the more expensive of the two legal answers and is what makes the peer
+#     check identify the node rather than the cluster.
+#
+#   * `pkg/helpers/helpers.go` — `EnsureAdminCredentialsSecret` REFUTED THE HAZARD THIS REVIEW WAS
+#     LOOKING FOR. OpenSearch ships the security plugin on by default and the worry was
+#     charts/managed/seaweedfs' — an engine that reads "no credentials configured" as "authenticate
+#     nobody". It does not: the function returns the tenant's secret when
+#     `cr.Spec.Security.Config.AdminCredentialsSecret.Name != ""` and otherwise does
+#     `randomPassword := GenerateSecurePassword()` into a generated Secret with `username: admin`.
+#     So this service degrades the way charts/managed/postgres does — up, authenticated, with a
+#     credential the platform cannot hand out — rather than open. `spec.security.config` is
+#     therefore NOT rendered: a reference to a Secret nothing writes would be right on SeaweedFS and
+#     would stop a cluster here that would otherwise be fine.
+#
+#   * `docs/userguide/main.md` — AND THE DOCUMENTATION SAYS THE OPPOSITE OF THE CODE, WHICH IS
+#     RECORDED RATHER THAN RESOLVED. It says "By default the operator will use the included demo
+#     securityconfig with default users" and names `admin / admin`. Both can be true at once — the
+#     demo securityconfig supplies roles and role-mappings while the admin password is generated —
+#     and which one a given release does is the difference between a cluster nobody can log into and
+#     a cluster everybody can. See conformance.yaml § owed, `demo-securityconfig`. It is the one item
+#     in this chart that should be checked against a running operator before the row is called done.
+#
+#   * `pkg/builders/cluster.go` — WHY A COORDINATING POOL IS SPELLED `ingest` AND NOT `[]`. The
+#     builder filters node.Roles against its own `availableRoles` (which carries BOTH "master" and
+#     "cluster_manager", resolved per version by helpers.ResolveClusterManagerRole) and then does
+#     `nodeRolesValue := strings.Join(selectedRoles, ",")` with
+#     `if len(selectedRoles) == 0 { nodeRolesValue = "[]" }` — it renders the two-character STRING
+#     `[]` into an environment variable. A node whose roles OpenSearch fails to parse joins as a
+#     DEFAULT node — data and cluster-manager both — which is the exact opposite of "coordinating"
+#     and reports itself healthy. See conformance.yaml § owed, `coordinating-is-ingest-only`.
+
+reviewed: 2026-08-12
+
+# ⚠ Cozystack (docs/plan/02 § ADR-010) contributed the OPERATOR CHOICE — clause 1's survey names
+# "OpenSearch operator" — and the annotated-values pipeline shape, and no code. It is deliberately not
+# listed as `upstream`, because `upstream` means "there is a tree we could diff against" and here
+# there is not.

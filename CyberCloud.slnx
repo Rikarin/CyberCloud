@@ -118,6 +118,17 @@
         -->
         <Project Path="src/CyberCloud.Sdk/CyberCloud.Sdk.csproj"/>
         <Project Path="src/CyberCloud.Sdk.Tests/CyberCloud.Sdk.Tests.csproj"/>
+
+        <!--
+          docs/plan/18 § CyberCloud.KeyVault/vaults — the platform's OpenBao client and the one
+          ISecretResolver that returns a value. ⚠ No .Contracts pair, and the absence is the design:
+          it implements an interface that already exists in CyberCloud.ResourceManager.Contracts, so
+          a contracts assembly of its own would only be a second place to declare a seam. ⚠ The
+          assembly name is fixed by CC1005 — CyberCloud.Analyzers/WellKnown.cs's VaultAssembly is the
+          exemption, matched exactly or by dotted prefix.
+        -->
+        <Project Path="src/CyberCloud.Vault/CyberCloud.Vault.csproj"/>
+        <Project Path="src/CyberCloud.Vault.Tests/CyberCloud.Vault.Tests.csproj"/>
     </Folder>
     <!--
       docs/plan/03 § Providers — the five projects every provider has. CyberCloud.Sample is the first
@@ -202,12 +213,15 @@
         <Project Path="src/Providers/CyberCloud.Providers.Cache/CyberCloud.Providers.Cache.Cluster.Conformance/CyberCloud.Providers.Cache.Cluster.Conformance.csproj"/>
 
         <!--
-          The fourth provider family — CyberCloud.Messaging/kafkaClusters on Strimzi and
-          CyberCloud.Messaging/natsClusters, docs/plan/12 § The catalogue.
+          The fourth provider family — CyberCloud.Messaging/kafkaClusters on Strimzi,
+          CyberCloud.Messaging/natsClusters, and CyberCloud.Messaging/rabbitmqClusters on the RabbitMQ
+          Cluster Operator, docs/plan/12 § The catalogue.
 
-          ⚠ IT IS THE FIRST NAMESPACE WITH TWO RESOURCE TYPES IN IT, and the second type cost two case
-          objects and four class declarations and no new project — which is what established that
-          docs/plan/03's five-project shape is per NAMESPACE rather than per TYPE.
+          ⚠ IT IS THE ONLY NAMESPACE WITH MORE THAN ONE RESOURCE TYPE IN IT, and the second type cost
+          two case objects and four class declarations and no new project — which is what established
+          that docs/plan/03's five-project shape is per NAMESPACE rather than per TYPE. ⚠ THE THIRD
+          COST THE SAME AGAIN AND ADDED NO ROW BELOW, which is what makes that cost flat rather than
+          merely small once: this comment is the only line in this file the third type changed.
         -->
         <Project Path="src/Providers/CyberCloud.Providers.Messaging/CyberCloud.Providers.Messaging.Contracts/CyberCloud.Providers.Messaging.Contracts.csproj"/>
         <Project Path="src/Providers/CyberCloud.Providers.Messaging/CyberCloud.Providers.Messaging/CyberCloud.Providers.Messaging.csproj"/>
@@ -236,7 +250,51 @@
         <Project Path="src/Providers/CyberCloud.Providers.Storage/CyberCloud.Providers.Storage.Cluster.Conformance/CyberCloud.Providers.Storage.Cluster.Conformance.csproj"/>
 
         <!--
-          The sixth provider family — CyberCloud.DBforMySQL/servers on mariadb-operator,
+          The sixth provider family — CyberCloud.Search/services on the OpenSearch operator.
+
+          docs/plan/12 § The catalogue: "OpenSearch — CyberCloud.Search/services · M3 · 1.0 EM.
+          OpenSearch operator (Apache-2.0, ADR-011 — Elasticsearch is not available to us).
+          Data/master/coordinating node roles, ISM policies, snapshot repository into the tenant's
+          bucket."
+
+          ⚠ IT IS THE FIRST M3 ROW IN THE TREE, and structurally that changes nothing: four module
+          edges, six projects, one ProviderConformanceCase. The milestone is a scheduling fact.
+
+          ⚠ ADR-011 rather than ADR-010 is what picks the ENGINE here — Elasticsearch is SSPL — while
+          ADR-010 clause 1's survey picks the operator. It is the only row in the catalogue whose two
+          halves come from two different decision records.
+        -->
+        <Project Path="src/Providers/CyberCloud.Providers.Search/CyberCloud.Providers.Search.Contracts/CyberCloud.Providers.Search.Contracts.csproj"/>
+        <Project Path="src/Providers/CyberCloud.Providers.Search/CyberCloud.Providers.Search/CyberCloud.Providers.Search.csproj"/>
+        <Project Path="src/Providers/CyberCloud.Providers.Search/CyberCloud.Providers.Search.Application/CyberCloud.Providers.Search.Application.csproj"/>
+        <Project Path="src/Providers/CyberCloud.Providers.Search/CyberCloud.Providers.Search.Tests/CyberCloud.Providers.Search.Tests.csproj"/>
+        <Project Path="src/Providers/CyberCloud.Providers.Search/CyberCloud.Providers.Search.Conformance/CyberCloud.Providers.Search.Conformance.csproj"/>
+        <Project Path="src/Providers/CyberCloud.Providers.Search/CyberCloud.Providers.Search.Cluster.Conformance/CyberCloud.Providers.Search.Cluster.Conformance.csproj"/>
+
+        <!--
+          The seventh provider family — CyberCloud.DocumentDB/accounts, FerretDB over CloudNativePG.
+          docs/plan/12 § The catalogue, "MongoDB-compatible · M2 · 1.2 EM"; ADR-011 is why it is
+          FerretDB rather than MongoDB.
+
+          ⚠ IT IS THE FIRST PROVIDER THAT IS TWO WORKLOADS. The PostgreSQL half is an operator's
+          custom resource and the FerretDB half has no operator at all — checked against the GitHub
+          API rather than a README, see charts/managed/ferretdb/SOURCE — so the same resource takes
+          both branches of docs/plan/12 § The pattern, once, piece 6.
+
+          ⚠ It renders the SAME CloudNativePG CRD as the second family, independently, because
+          src/Providers/README.md § Hard rule forbids the reference. Writing the second rendering
+          found a defect in the first — charts/managed/ferretdb/conformance.yaml § owed,
+          `shared-preload-libraries-is-not-a-parameter`.
+        -->
+        <Project Path="src/Providers/CyberCloud.Providers.DocumentDB/CyberCloud.Providers.DocumentDB.Contracts/CyberCloud.Providers.DocumentDB.Contracts.csproj"/>
+        <Project Path="src/Providers/CyberCloud.Providers.DocumentDB/CyberCloud.Providers.DocumentDB/CyberCloud.Providers.DocumentDB.csproj"/>
+        <Project Path="src/Providers/CyberCloud.Providers.DocumentDB/CyberCloud.Providers.DocumentDB.Application/CyberCloud.Providers.DocumentDB.Application.csproj"/>
+        <Project Path="src/Providers/CyberCloud.Providers.DocumentDB/CyberCloud.Providers.DocumentDB.Tests/CyberCloud.Providers.DocumentDB.Tests.csproj"/>
+        <Project Path="src/Providers/CyberCloud.Providers.DocumentDB/CyberCloud.Providers.DocumentDB.Conformance/CyberCloud.Providers.DocumentDB.Conformance.csproj"/>
+        <Project Path="src/Providers/CyberCloud.Providers.DocumentDB/CyberCloud.Providers.DocumentDB.Cluster.Conformance/CyberCloud.Providers.DocumentDB.Cluster.Conformance.csproj"/>
+
+        <!--
+          The eighth provider family — CyberCloud.DBforMySQL/servers on mariadb-operator,
           docs/plan/12 § The catalogue, "MariaDB · M3 · 0.8 EM".
 
           ⚠ ITS OBLIGATION IS A SENTENCE RATHER THAN A FEATURE. docs/plan/12 line 310 positions the row
@@ -246,10 +304,11 @@
           MariaDbServers.SupportedSubset — as data, so a test can walk it and an edit cannot quietly
           drop it.
 
-          ⚠ It is the SECOND family whose namespace spells an engine it does not run. CyberCloud.Cache
-          runs Valkey at the path `redis` (ADR-011); this one runs MariaDB at `DBforMySQL`. That is now
-          a pattern rather than an exception, and the pattern is: the path keeps parity, the prose tells
-          the truth.
+          ⚠ It is the THIRD family whose namespace spells an engine it does not run. CyberCloud.Cache
+          runs Valkey at the path `redis` and CyberCloud.DocumentDB runs FerretDB at `accounts`, both
+          for ADR-011's reason; this one runs MariaDB at `DBforMySQL` for docs/plan/12 line 310's. That
+          is a pattern rather than an exception, and the pattern is: the path keeps parity, the prose
+          tells the truth, and the supported-subset table is where the difference is written down.
         -->
         <Project Path="src/Providers/CyberCloud.Providers.DBforMySQL/CyberCloud.Providers.DBforMySQL.Contracts/CyberCloud.Providers.DBforMySQL.Contracts.csproj"/>
         <Project Path="src/Providers/CyberCloud.Providers.DBforMySQL/CyberCloud.Providers.DBforMySQL/CyberCloud.Providers.DBforMySQL.csproj"/>

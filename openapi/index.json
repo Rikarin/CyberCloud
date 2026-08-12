@@ -181,6 +181,7 @@
     "CyberCloud.DBforPostgreSQL",
     "CyberCloud.Messaging",
     "CyberCloud.Sample",
+    "CyberCloud.Search",
     "CyberCloud.Storage"
   ],
   "x-cybercloud-resource-types": [
@@ -246,6 +247,19 @@
         "plural": "Widgets",
         "alias": "widget",
         "summary": "A ConfigMap with two fields in it.",
+        "declared": true
+      }
+    },
+    {
+      "type": "CyberCloud.Search/services",
+      "apiVersions": [
+        "2026-08-01"
+      ],
+      "display": {
+        "name": "OpenSearch service",
+        "plural": "OpenSearch services",
+        "alias": "opensearch",
+        "summary": "A managed OpenSearch cluster on the OpenSearch operator, with dedicated cluster-manager, data and optional coordinating node pools and operator-generated transport and HTTP TLS.",
         "declared": true
       }
     },

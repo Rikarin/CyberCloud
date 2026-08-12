@@ -1,0 +1,59 @@
+{{/*
+The RabbitMQ cluster — docs/plan/12 § The catalogue: "RabbitMQ Cluster Operator (official). Quorum
+queues by default."
+
+⚠ ONE OBJECT, AND EVERYTHING ELSE A RUNNING CLUSTER IS BELONGS TO THE OPERATOR — the StatefulSet,
+the client and headless Services, the conf.d ConfigMap, the generated-credential Secret, the
+ServiceAccount and its RBAC. Compare charts/managed/nats/templates/, which hand-writes five objects
+because nats-operator was archived and there is nobody to ask.
+
+⚠ `spec.image` IS WRITTEN, WHICH LOOKS REDUNDANT AND IS NOT. This operator ships a MUTATING
+ADMISSION WEBHOOK (on unless ENABLE_WEBHOOKS=false) that fills spec.image from the operator's own
+build-time default when the field is unset. So leaving it out is not "the tenant's version wins" —
+it is whatever RabbitMQ the operator was compiled against, which is a version `version` above claims
+to control and would not. See SOURCE.
+
+⚠ THE `-management` TAG RATHER THAN THE BARE ONE. rabbitmq_management is in the operator's
+requiredPlugins and is enabled on every cluster; the plain rabbitmq:{version} image ships the plugin
+but not enabled, so using it would make the first boot enable a plugin on every node instead of
+starting.
+
+⚠ `spec.persistence.storage` IS QUOTED. The CRD marks it x-kubernetes-int-or-string, so `20` and
+`"20Gi"` are both accepted and mean wildly different things — and a bare number does not round-trip
+as the string RabbitmqClusters.Matches compares.
+
+⚠ NO `spec.service`, NO `spec.override` AND NO `spec.tls`. The CRD defaults spec.service to
+{type: ClusterIP}, which is the value this chart wants and would have written; declaring it anyway
+would put this field manager in permanent ownership of a field under server-side apply. The one
+thing a tenant might want there is a LoadBalancer, and this row declines to offer one — the
+operator's client Service carries AMQP 5672, management 15672 and Prometheus 15692 together and
+spec.service.type is one enum over all three, so external exposure would put a management UI on a
+public IP as a side effect of asking for AMQP. See conformance.yaml § owed.
+*/}}
+apiVersion: rabbitmq.com/v1beta1
+kind: RabbitmqCluster
+metadata:
+  name: {{ include "rabbitmq.name" . }}
+  labels:
+    {{- include "rabbitmq.platformLabels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.nodes }}
+  image: {{ default (printf "rabbitmq:%s-management" .Values.version) .Values.imageName | quote }}
+  persistence:
+    storage: {{ .Values.storage.size | quote }}
+    {{- with .Values.storage.class }}
+    storageClassName: {{ . | quote }}
+    {{- end }}
+  rabbitmq:
+    additionalConfig: |
+      {{- include "rabbitmq.additionalConfig" . | nindent 6 }}
+    {{- with .Values.plugins.additional }}
+    additionalPlugins:
+      {{- range . }}
+      - {{ . | quote }}
+      {{- end }}
+    {{- end }}
+  {{- with include "rabbitmq.resources" . }}
+  resources:
+    {{- . | nindent 4 }}
+  {{- end }}

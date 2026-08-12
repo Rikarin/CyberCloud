@@ -1,0 +1,81 @@
+# Provenance — docs/plan/02 § ADR-010, "Their charts are a starting point, not a dependency.
+# Where a chart is close, fork it into charts/ with the upstream commit recorded in a SOURCE file.
+# A drifting vendored chart with no provenance is how a platform ends up unable to upgrade Postgres."
+#
+# `Build.Charts` requires this file for every chart under charts/managed/ and requires the three
+# keys below. "We wrote it" is an answer to "where did this come from"; "there is no SOURCE file"
+# is indistinguishable from "somebody forgot", which is the state ADR-010 exists to prevent.
+
+# Where the templates came from. `none` means the templates in this directory were written here.
+#
+# ⚠ AND THERE WAS NOTHING TO FORK, WHICH IS THIS ROW'S FIRST FINDING. ADR-010 clause 1's survey lists
+# "FerretDB" among "the operator selection per managed service". Checked on 2026-08-12 against the
+# GitHub API rather than against a README or a badge —
+#
+#     GET https://api.github.com/orgs/FerretDB/repos?per_page=100
+#
+# — the organisation contains `FerretDB`, `documentdb`, `dance`, `deps`, language examples and
+# marketplace forks. There is no operator, no CRD and no Helm chart. Upstream's documented Kubernetes
+# install is a Deployment and a Service applied with kubectl.
+#
+# ⚠ SECOND SIGHTING. charts/managed/nats/SOURCE records the same discovery about that row —
+# nats-operator archived 2025-04-10 — so ADR-010 clause 1 is a survey of SOFTWARE CHOICES that is
+# only sometimes a survey of OPERATORS. Two of the six rows built from it have now found this, which
+# makes it a property of the clause rather than of either service.
+vendored: none
+
+# The upstream projects whose contracts these templates render against. Not dependencies: the
+# CloudNativePG operator is installed by charts/bundle/, and this chart renders its custom resource
+# plus the plain workload objects FerretDB needs.
+upstream: https://github.com/cloudnative-pg/cloudnative-pg
+
+# ⚠ A SECOND upstream, because this chart renders two upstreams' contracts and one line cannot say
+# so. The FerretDB half is images and environment variables rather than an API, and its shape is
+# documented at cmd/ferretdb/main.go (the flags) and build/ferretdb/production.Dockerfile (the
+# ENVs the image sets, which are NOT the binary's own defaults — see templates/deployment.yaml).
+upstream-ferretdb: https://github.com/FerretDB/FerretDB
+
+# The upstream API this chart's templates target. ⚠ This is an API group/version, not a commit:
+# nothing is vendored, so there is no upstream tree to pin. If a template is ever copied from
+# upstream, replace this with `upstream-commit:` and the full 40-character SHA of the tree it was
+# copied from, and say which files.
+upstream-api: postgresql.cnpg.io/v1
+
+# Reviewed against the upstream sources on this date. A bare date rather than a SHA is a weaker claim
+# and is labelled as one — see upstream-api above. What was read, so that a re-review knows where to
+# look:
+#
+#   cloudnative-pg  api/v1/cluster_types.go
+#                     — PostgresConfiguration.AdditionalLibraries is `shared_preload_libraries`, a
+#                       []string SIBLING of `parameters`, "to add to the default ones"
+#                     — DefaultPostgresUID/GID = 26, which the DocumentDB image needs overridden
+#                     — PostInitSQL runs "as a superuser in the `postgres` database"
+#                     — EnableSuperuserAccess: the operator DELETES the secret when it is turned off
+#                   pkg/postgres/configuration.go
+#                     — FixedConfigurationParameters contains "shared_preload_libraries"
+#                   internal/webhook/v1/cluster_webhook.go
+#                     — walks spec.postgresql.parameters and answers a fixed key with
+#                       "Can't set fixed configuration parameter"
+#                   pkg/specs/secrets.go + internal/controller/cluster_create.go
+#                     — the generated secrets' keys, and the superuser secret's dbname of "*"
+#                     — password.Generate(64, 10, 0, false, true): 0 symbols, so alphanumeric
+#
+#   FerretDB        cmd/ferretdb/main.go
+#                     — kong.DefaultEnvars("FERRETDB"); --postgresql-url; --listen-addr default
+#                       127.0.0.1:27017; --debug-addr default 127.0.0.1:8088; --auth default true
+#                   build/ferretdb/production.Dockerfile
+#                     — ENV FERRETDB_LISTEN_ADDR=:27017, ENV FERRETDB_DEBUG_ADDR=:8088
+#                   internal/util/debug/debug.go
+#                     — /debug/metrics, /debug/livez, /debug/readyz, /debug/archive on one listener
+#                   website/docs/security/authentication.md
+#                     — "FerretDB does not store authentication information … it relies entirely on
+#                       PostgreSQL's authentication mechanisms"
+#                   website/docs/migration/compatibility.md
+#                     — the unsupported-command list DocumentDbAccounts.UnsupportedCommands carries
+reviewed: 2026-08-12
+
+# Licences — ADR-011, which is the reason this row is FerretDB rather than MongoDB. Both checked at
+# the LICENSE file rather than at a badge:
+#   FerretDB/FerretDB      Apache-2.0
+#   microsoft/documentdb   MIT
+#   cloudnative-pg         Apache-2.0 (already in ADR-011's ✓ row)

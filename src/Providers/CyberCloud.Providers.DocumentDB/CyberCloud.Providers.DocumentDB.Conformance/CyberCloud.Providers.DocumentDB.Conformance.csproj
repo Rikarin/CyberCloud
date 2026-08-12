@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      docs/plan/03 § Providers — the fifth project: "the shared provider conformance suite,
+      parameterised".
+
+      ⚠ IT CONTAINS NO ASSERTIONS, AND IT IS THE FIFTH NAMESPACE TO TEST THAT CLAIM. The sample's
+      demonstrated it once; CyberCloud.Providers.DBforPostgreSQL's against a type rendering two
+      objects; CyberCloud.Providers.Messaging's against one rendering five across three API groups;
+      CyberCloud.Providers.Storage's against one object that expands into four workloads. This one is
+      the shape none of them was — FOUR objects across FOUR API groups, ONE of which is expanded by an
+      operator and three of which are not — and test/CyberCloud.Conformance still needed no change.
+
+      ⚠ THIS PROJECT IS THE SIXTH SUITE THE Labels ARCHITECTURE GATE COUNTS. Build.Architecture
+      § LabelsGate runs EveryAppliedObjectCarriesTheSevenMandatoryLabelsAndBothAnnotations in every
+      *.Conformance project under src/Providers.
+
+      ⚠ IT REFERENCES A PROJECT UNDER test/, which docs/plan/03 § test/ intends: CyberCloud.Conformance
+      is "the shared provider suite (parameterised, REFERENCED BY PROVIDERS)". docs/plan/03 § Assembly
+      graph rules is about the shipped graph and excludes test projects by construction.
+    -->
+
+    <ItemGroup>
+        <PackageReference Include="xunit.v3"/>
+        <PackageReference Include="Shouldly"/>
+    </ItemGroup>
+
+    <ItemGroup Label="Global usings">
+        <Using Include="Xunit"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../CyberCloud.Providers.DocumentDB/CyberCloud.Providers.DocumentDB.csproj"/>
+        <ProjectReference Include="../../../../test/CyberCloud.Conformance/CyberCloud.Conformance.csproj"/>
+    </ItemGroup>
+
+</Project>

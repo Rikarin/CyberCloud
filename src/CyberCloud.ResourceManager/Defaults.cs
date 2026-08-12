@@ -147,7 +147,22 @@ public sealed class ResourceScopeLockResolver(IGrainFactory grains) : ILockResol
 ///     ⚠ <b>Refuses rather than returning an empty string.</b> An empty password reaching a rendered
 ///     manifest is a database with no password, applied to a real cluster, reported as a successful
 ///     provision. docs/plan/08 § What the resource manager deliberately does not do routes the real
-///     implementation to OpenBao via <c>CyberCloud.Vault</c>, which does not exist yet.
+///     implementation to OpenBao via <c>CyberCloud.Vault</c>.
+///     <para>
+///         ⚠ <b>THIS IS NOW A <i>WIRING</i> FAILURE RATHER THAN A MISSING FEATURE, AND THE MESSAGE
+///         SAYS SO.</b> <c>CyberCloud.Vault</c> exists and <c>OpenBaoSecretResolver</c> reads a real
+///         value; reaching this type means the host did not call <c>AddOpenBaoSecretResolver</c>. The
+///         remarks here used to end "which does not exist yet", and that sentence outliving the
+///         assembly is the failure mode this paragraph replaces.
+///     </para>
+///     <para>
+///         ⚠ <b>And this stays the <c>TryAdd</c> default, which is a layering fact rather than a
+///         preference.</b> Registering the OpenBao resolver here would need
+///         <c>CyberCloud.ResourceManager → CyberCloud.Vault</c>, and <c>CyberCloud.Vault</c> reaches
+///         this assembly for <see cref="ISecretResolver" /> itself — module-layering.txt's third
+///         direction refuses the cycle. So a silo with a vault opts in and every other silo keeps
+///         this. <c>VaultSeamWiringTests</c> asserts both halves.
+///     </para>
 /// </remarks>
 public sealed class UnavailableSecretResolver : ISecretResolver {
     /// <inheritdoc />
@@ -157,11 +172,13 @@ public sealed class UnavailableSecretResolver : ISecretResolver {
         return Task.FromResult(
             Result<string>.Failure(
                 ErrorCode.InternalError,
-                $"No secret resolver is wired, so '{reference}' cannot be read. The platform's vault "
-                + "(CyberCloud.Vault, over OpenBao) is not built yet — docs/plan/08 § What the "
-                + "resource manager deliberately does not do. This refuses rather than returning an "
-                + "empty value, because an empty password in a rendered manifest is a database with "
-                + "no password reported as a successful provision."
+                $"No secret resolver is wired, so '{reference}' cannot be read. docs/plan/08 § What "
+                + "the resource manager deliberately does not do routes secrets to OpenBao, and "
+                + "CyberCloud.Vault is the client — but this host registered neither. Call "
+                + "ISiloBuilder.AddOpenBaoSecretResolver() beside AddCyberCloudResourceManager(), "
+                + "with CyberCloud:Vault:Address and CyberCloud:Vault:Role configured. This refuses "
+                + "rather than returning an empty value, because an empty password in a rendered "
+                + "manifest is a database with no password reported as a successful provision."
             )
         );
     }

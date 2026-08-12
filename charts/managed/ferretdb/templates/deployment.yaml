@@ -1,0 +1,107 @@
+{{/*
+The FerretDB gateway — the half of this service that has no operator.
+
+⚠ A Deployment and not a StatefulSet: FerretDB holds no data. It translates the MongoDB wire
+protocol into calls on the DocumentDB extension and every byte lives in the Cluster next door.
+*/}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "ferretdb.name" . }}
+  labels:
+    {{- include "ferretdb.platformLabels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.gateway.replicas }}
+  selector:
+    matchLabels:
+      {{- include "ferretdb.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{/*
+          ⚠ NOT ADR-013's seven, and they cannot be. spec.selector is immutable after create and the
+          pod labels have to match it, so a resource whose cybercloud.io/api-version label moved
+          could never be updated again. See _helpers.tpl — charts/managed/nats' `pod-labels`,
+          second sighting.
+        */}}
+        {{- include "ferretdb.selectorLabels" . | nindent 8 }}
+    spec:
+      containers:
+        - name: ferretdb
+          image: {{ include "ferretdb.gatewayImage" . | quote }}
+          ports:
+            - name: mongodb
+              containerPort: 27017
+              protocol: TCP
+            - name: debug
+              containerPort: 8088
+              protocol: TCP
+          env:
+            {{/*
+              ⚠ THE DSN IS ASSEMBLED FROM TWO KEYS RATHER THAN PROJECTED FROM THE SECRET'S OWN `uri`,
+              AND THAT COSTS A NON-STARTING POD TO LEARN. pkg/specs/secrets.go builds every generated
+              secret's `uri` from a dbname, and internal/controller/cluster_create.go passes "*" for
+              the SUPERUSER one — so {name}-pg-superuser's uri names a database called `*`. The
+              application secret's uri is fine; this one's is not.
+
+              ⚠ String interpolation is safe here for a checkable reason rather than a hopeful one:
+              cluster_create.go generates the password with password.Generate(64, 10, 0, false,
+              true), whose third argument is the SYMBOL count and is 0. An alphanumeric password
+              carries nothing a URL would have to escape.
+
+              ⚠ $(VAR) expansion reads earlier entries in this same env list. Reordering these three
+              breaks it silently — the literal "$(FERRETDB_PGUSER)" reaches PostgreSQL as a username.
+            */}}
+            - name: FERRETDB_PGUSER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ printf "%s-superuser" (include "ferretdb.clusterName" .) }}
+                  key: username
+            - name: FERRETDB_PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ printf "%s-superuser" (include "ferretdb.clusterName" .) }}
+                  key: password
+            - name: FERRETDB_POSTGRESQL_URL
+              value: {{ printf "postgres://$(FERRETDB_PGUSER):$(FERRETDB_PGPASSWORD)@%s-rw:5432/postgres" (include "ferretdb.clusterName" .) | quote }}
+            {{/*
+              ⚠ WRITTEN OUT EVEN THOUGH THE IMAGE ALREADY SETS BOTH, AND THAT IS THE POINT. The
+              binary's own defaults are 127.0.0.1:27017 and 127.0.0.1:8088 — cmd/ferretdb/main.go's
+              kong tags — and only build/ferretdb/production.Dockerfile's ENV lines make the process
+              reachable from outside its own pod. Two independently defaulted values in two files: if
+              the image ever stops setting them the pod binds to loopback, the Service resolves to a
+              port nothing answers, the kubelet's probes fail against the pod IP, and the PodMonitor
+              scrapes nothing. Same coupling charts/managed/seaweedfs records about WORKDIR /data and
+              PersistenceSpec.MountPath; worse consequence, because that one was about durability and
+              this one is about the service being reachable at all.
+            */}}
+            - name: FERRETDB_LISTEN_ADDR
+              value: ":27017"
+            - name: FERRETDB_DEBUG_ADDR
+              value: ":8088"
+            {{/*
+              ⚠ Telemetry is a call home and a managed service does not make one on a tenant's
+              behalf. Left `undecided`, FerretDB sends a beacon an hour after start.
+            */}}
+            - name: FERRETDB_TELEMETRY
+              value: "disable"
+          {{/*
+            ⚠ TWO DIFFERENT QUESTIONS. /debug/readyz reports that PostgreSQL is reachable AND the
+            DocumentDB extension is installed; /debug/livez reports only that the process accepts
+            connections. Using readyz for liveness would restart every gateway pod whenever
+            CloudNativePG failed over — the moment they are least useful to restart.
+          */}}
+          readinessProbe:
+            httpGet:
+              path: /debug/readyz
+              port: debug
+            periodSeconds: 5
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /debug/livez
+              port: debug
+            periodSeconds: 10
+            failureThreshold: 5
+          resources:
+            {{- include "ferretdb.gatewayResources" . | nindent 12 }}
