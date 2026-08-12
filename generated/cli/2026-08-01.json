@@ -38,6 +38,490 @@
     "timeout": 5
   },
   "groups": {
+    "analytics": {
+      "name": "analytics",
+      "summary": "Commands for the CyberCloud.Analytics provider.",
+      "commands": {
+        "clickhouse-clusters": {
+          "name": "clickhouse-clusters",
+          "resourceType": "CyberCloud.Analytics/clickhouseClusters",
+          "title": "ClickHouse cluster",
+          "plural": "ClickHouse clusters",
+          "summary": "A managed ClickHouse cluster on the Altinity operator, with declared shards and replicas and a ClickHouse Keeper quorum. The schema is the tenant's.",
+          "verbs": {
+            "create": {
+              "name": "create",
+              "summary": "Create or replace a ClickHouse cluster.",
+              "method": "PUT",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Analytics/clickhouseClusters/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": true,
+              "flags": [
+                {
+                  "name": "--class",
+                  "type": "string",
+                  "required": false,
+                  "summary": "StorageClass name for the ClickHouse servers and the Keeper nodes. Empty means the cluster default.",
+                  "jsonPointer": "/properties/storage/class",
+                  "immutable": true,
+                  "widget": "storageclass",
+                  "default": ""
+                },
+                {
+                  "name": "--cluster-id",
+                  "type": "string",
+                  "required": true,
+                  "alias": "--cluster",
+                  "summary": "The cluster whose namespace holds the ClickHouse cluster.",
+                  "jsonPointer": "/properties/clusterId",
+                  "immutable": true,
+                  "widget": "cluster"
+                },
+                {
+                  "name": "--cpu",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Explicit vCPU quantity in Kubernetes form, for example 500m or 2. Empty means take it from the preset.",
+                  "jsonPointer": "/properties/sizing/cpu",
+                  "default": ""
+                },
+                {
+                  "name": "--enabled",
+                  "type": "switch",
+                  "required": false,
+                  "summary": "Whether ClickHouse's own Prometheus endpoint is served on port 9363. On by default — docs/plan/12: \"a managed service the tenant cannot see the health of is a black box they will not trust with production\". ⚠ It makes the metrics exist; the object that scrapes them is not built — see conformance.yaml § owed.",
+                  "jsonPointer": "/properties/monitoring/enabled",
+                  "default": true
+                },
+                {
+                  "name": "--keeper-nodes",
+                  "type": "integer",
+                  "required": true,
+                  "summary": "Number of ClickHouse Keeper nodes. Keeper is a Raft quorum, so three is the smallest count that survives losing one and an even count tolerates no more failures than the odd count below it. One is offered for development and has no quorum at all.",
+                  "jsonPointer": "/properties/keeperNodes",
+                  "default": 3
+                },
+                {
+                  "name": "--location",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The region the cluster is billed in.",
+                  "jsonPointer": "/location",
+                  "immutable": true,
+                  "widget": "region",
+                  "example": "eu-central"
+                },
+                {
+                  "name": "--memory",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Explicit memory quantity in Kubernetes form, for example 8Gi. Empty means take it from the preset.",
+                  "jsonPointer": "/properties/sizing/memory",
+                  "default": ""
+                },
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--preset",
+                  "type": "string",
+                  "required": false,
+                  "summary": "A sizing preset from docs/plan/12. Analytics uses the m1 family, which is 1 vCPU to 8 GiB.",
+                  "jsonPointer": "/properties/sizing/preset",
+                  "choices": [
+                    "m1.2xlarge",
+                    "m1.4xlarge",
+                    "m1.large",
+                    "m1.medium",
+                    "m1.micro",
+                    "m1.nano",
+                    "m1.small",
+                    "m1.xlarge"
+                  ],
+                  "widget": "cozy-preset",
+                  "default": "m1.small"
+                },
+                {
+                  "name": "--replicas",
+                  "type": "integer",
+                  "required": true,
+                  "summary": "Number of replicas per shard. This is the availability axis, and it only applies to tables the tenant creates as Replicated — the resource does not manage tables. Total server count is shards times replicas.",
+                  "jsonPointer": "/properties/replicas",
+                  "default": 2
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--shards",
+                  "type": "integer",
+                  "required": true,
+                  "summary": "Number of shards. This is the capacity and parallelism axis: a table's data is split across shards and a query fans out to all of them. ⚠ Resharding an existing table is not something the operator or this resource does, so growing this moves new data only.",
+                  "jsonPointer": "/properties/shards",
+                  "default": 1
+                },
+                {
+                  "name": "--size",
+                  "type": "string",
+                  "required": true,
+                  "summary": "Data volume size per ClickHouse server, in Kubernetes quantity form. Grows online; never shrinks.",
+                  "jsonPointer": "/properties/storage/size",
+                  "default": "100Gi",
+                  "example": "100Gi"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tags",
+                  "type": "keyValue",
+                  "required": false,
+                  "summary": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+                  "jsonPointer": "/tags",
+                  "widget": "tag-input"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--version",
+                  "type": "string",
+                  "required": true,
+                  "summary": "ClickHouse version, which is also the ClickHouse Keeper version — the two share a release train and a wire protocol. Only long-term-support lines are offered; a new api-version is what adds a third.",
+                  "jsonPointer": "/properties/version",
+                  "choices": [
+                    "24.8",
+                    "25.3"
+                  ],
+                  "default": "25.3"
+                }
+              ],
+              "waitFlags": [
+                "--wait",
+                "--no-wait"
+              ]
+            },
+            "delete": {
+              "name": "delete",
+              "summary": "Delete a ClickHouse cluster. Permanent.",
+              "method": "DELETE",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Analytics/clickhouseClusters/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": true,
+              "flags": [
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                }
+              ],
+              "waitFlags": [
+                "--wait",
+                "--no-wait"
+              ]
+            },
+            "list-keys": {
+              "name": "list-keys",
+              "summary": "listKeys a ClickHouse cluster. ⚠ The response carries secret material — it is always audited and must not be written to a log or a shell history.",
+              "method": "POST",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Analytics/clickhouseClusters/{resourceName}/listKeys",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                }
+              ],
+              "action": "listKeys",
+              "permission": "listKeys",
+              "secret": true,
+              "rawBody": true
+            },
+            "show": {
+              "name": "show",
+              "summary": "Read a ClickHouse cluster.",
+              "method": "GET",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Analytics/clickhouseClusters/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                }
+              ]
+            },
+            "update": {
+              "name": "update",
+              "summary": "Amend a ClickHouse cluster. Only the flags given are changed.",
+              "method": "PATCH",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Analytics/clickhouseClusters/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": true,
+              "flags": [
+                {
+                  "name": "--class",
+                  "type": "string",
+                  "required": false,
+                  "summary": "StorageClass name for the ClickHouse servers and the Keeper nodes. Empty means the cluster default.",
+                  "jsonPointer": "/properties/storage/class",
+                  "immutable": true,
+                  "widget": "storageclass",
+                  "default": ""
+                },
+                {
+                  "name": "--cluster-id",
+                  "type": "string",
+                  "required": false,
+                  "alias": "--cluster",
+                  "summary": "The cluster whose namespace holds the ClickHouse cluster.",
+                  "jsonPointer": "/properties/clusterId",
+                  "immutable": true,
+                  "widget": "cluster"
+                },
+                {
+                  "name": "--cpu",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Explicit vCPU quantity in Kubernetes form, for example 500m or 2. Empty means take it from the preset.",
+                  "jsonPointer": "/properties/sizing/cpu",
+                  "default": ""
+                },
+                {
+                  "name": "--enabled",
+                  "type": "switch",
+                  "required": false,
+                  "summary": "Whether ClickHouse's own Prometheus endpoint is served on port 9363. On by default — docs/plan/12: \"a managed service the tenant cannot see the health of is a black box they will not trust with production\". ⚠ It makes the metrics exist; the object that scrapes them is not built — see conformance.yaml § owed.",
+                  "jsonPointer": "/properties/monitoring/enabled",
+                  "default": true
+                },
+                {
+                  "name": "--keeper-nodes",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "Number of ClickHouse Keeper nodes. Keeper is a Raft quorum, so three is the smallest count that survives losing one and an even count tolerates no more failures than the odd count below it. One is offered for development and has no quorum at all.",
+                  "jsonPointer": "/properties/keeperNodes",
+                  "default": 3
+                },
+                {
+                  "name": "--location",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The region the cluster is billed in.",
+                  "jsonPointer": "/location",
+                  "immutable": true,
+                  "widget": "region",
+                  "example": "eu-central"
+                },
+                {
+                  "name": "--memory",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Explicit memory quantity in Kubernetes form, for example 8Gi. Empty means take it from the preset.",
+                  "jsonPointer": "/properties/sizing/memory",
+                  "default": ""
+                },
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--preset",
+                  "type": "string",
+                  "required": false,
+                  "summary": "A sizing preset from docs/plan/12. Analytics uses the m1 family, which is 1 vCPU to 8 GiB.",
+                  "jsonPointer": "/properties/sizing/preset",
+                  "choices": [
+                    "m1.2xlarge",
+                    "m1.4xlarge",
+                    "m1.large",
+                    "m1.medium",
+                    "m1.micro",
+                    "m1.nano",
+                    "m1.small",
+                    "m1.xlarge"
+                  ],
+                  "widget": "cozy-preset",
+                  "default": "m1.small"
+                },
+                {
+                  "name": "--replicas",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "Number of replicas per shard. This is the availability axis, and it only applies to tables the tenant creates as Replicated — the resource does not manage tables. Total server count is shards times replicas.",
+                  "jsonPointer": "/properties/replicas",
+                  "default": 2
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--shards",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "Number of shards. This is the capacity and parallelism axis: a table's data is split across shards and a query fans out to all of them. ⚠ Resharding an existing table is not something the operator or this resource does, so growing this moves new data only.",
+                  "jsonPointer": "/properties/shards",
+                  "default": 1
+                },
+                {
+                  "name": "--size",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Data volume size per ClickHouse server, in Kubernetes quantity form. Grows online; never shrinks.",
+                  "jsonPointer": "/properties/storage/size",
+                  "default": "100Gi",
+                  "example": "100Gi"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tags",
+                  "type": "keyValue",
+                  "required": false,
+                  "summary": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+                  "jsonPointer": "/tags",
+                  "widget": "tag-input"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--version",
+                  "type": "string",
+                  "required": false,
+                  "summary": "ClickHouse version, which is also the ClickHouse Keeper version — the two share a release train and a wire protocol. Only long-term-support lines are offered; a new api-version is what adds a third.",
+                  "jsonPointer": "/properties/version",
+                  "choices": [
+                    "24.8",
+                    "25.3"
+                  ],
+                  "default": "25.3"
+                }
+              ],
+              "waitFlags": [
+                "--wait",
+                "--no-wait"
+              ]
+            }
+          },
+          "alias": "clickhouse"
+        }
+      }
+    },
     "cache": {
       "name": "cache",
       "summary": "Commands for the CyberCloud.Cache provider.",
@@ -1264,6 +1748,524 @@
         }
       }
     },
+    "documentdb": {
+      "name": "documentdb",
+      "summary": "Commands for the CyberCloud.DocumentDB provider.",
+      "commands": {
+        "accounts": {
+          "name": "accounts",
+          "resourceType": "CyberCloud.DocumentDB/accounts",
+          "title": "Document database account",
+          "plural": "Document database accounts",
+          "summary": "MongoDB-compatible, not MongoDB: FerretDB over PostgreSQL, covering CRUD, indexes and the wire protocol. Multi-document transactions are not supported. Runs on a CloudNativePG cluster, so failover, backup and point-in-time recovery are the operator's.",
+          "verbs": {
+            "create": {
+              "name": "create",
+              "summary": "Create or replace a Document database account.",
+              "method": "PUT",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.DocumentDB/accounts/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": true,
+              "flags": [
+                {
+                  "name": "--backup-enabled",
+                  "type": "switch",
+                  "required": false,
+                  "summary": "Whether continuous backup and WAL archiving run. ⚠ Off by default, and only because there is no destination to default to: turning it on without a destinationPath below renders no backup configuration at all rather than an empty one, so the two properties have to be set together.",
+                  "jsonPointer": "/properties/backup/enabled",
+                  "default": false
+                },
+                {
+                  "name": "--class",
+                  "type": "string",
+                  "required": false,
+                  "summary": "StorageClass name for the PostgreSQL volumes. Empty means the cluster default.",
+                  "jsonPointer": "/properties/storage/class",
+                  "immutable": true,
+                  "widget": "storageclass",
+                  "default": ""
+                },
+                {
+                  "name": "--cluster-id",
+                  "type": "string",
+                  "required": true,
+                  "alias": "--cluster",
+                  "summary": "The cluster whose namespace holds the PostgreSQL cluster and the FerretDB gateway.",
+                  "jsonPointer": "/properties/clusterId",
+                  "immutable": true,
+                  "widget": "cluster"
+                },
+                {
+                  "name": "--cpu",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Explicit vCPU quantity in Kubernetes form, for example 500m or 2. Empty means take it from the preset.",
+                  "jsonPointer": "/properties/sizing/cpu",
+                  "default": ""
+                },
+                {
+                  "name": "--destination-path",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Object-store URL for base backups and WAL, for example s3://tenant-bucket/documentdb. Empty means no backup configuration is rendered, whatever enabled says.",
+                  "jsonPointer": "/properties/backup/destinationPath",
+                  "default": "",
+                  "example": "s3://tenant-bucket/documentdb"
+                },
+                {
+                  "name": "--instances",
+                  "type": "integer",
+                  "required": true,
+                  "summary": "Number of PostgreSQL instances, including the primary. One is a single point of failure and is offered for development only. Failover, replication and point-in-time recovery are CloudNativePG's, which is why this row costs 1.2 engineer-months rather than a rebuild of them.",
+                  "jsonPointer": "/properties/postgres/instances",
+                  "default": 2
+                },
+                {
+                  "name": "--location",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The region the account is billed in.",
+                  "jsonPointer": "/location",
+                  "immutable": true,
+                  "widget": "region",
+                  "example": "eu-central"
+                },
+                {
+                  "name": "--memory",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Explicit memory quantity in Kubernetes form, for example 4Gi. Empty means take it from the preset.",
+                  "jsonPointer": "/properties/sizing/memory",
+                  "default": ""
+                },
+                {
+                  "name": "--monitoring-enabled",
+                  "type": "switch",
+                  "required": false,
+                  "summary": "Whether both halves of this service are scraped: CloudNativePG is asked for a PodMonitor over the PostgreSQL pods, and the platform writes one over the FerretDB pods because FerretDB has no operator to ask. On by default — docs/plan/12: \"a managed service the tenant cannot see the health of is a black box they will not trust with production\".",
+                  "jsonPointer": "/properties/monitoring/enabled",
+                  "default": true
+                },
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--preset",
+                  "type": "string",
+                  "required": false,
+                  "summary": "A sizing preset from docs/plan/12. Databases use the s1 family, which is 1 vCPU to 4 GiB.",
+                  "jsonPointer": "/properties/sizing/preset",
+                  "choices": [
+                    "s1.2xlarge",
+                    "s1.4xlarge",
+                    "s1.large",
+                    "s1.medium",
+                    "s1.micro",
+                    "s1.nano",
+                    "s1.small",
+                    "s1.xlarge"
+                  ],
+                  "widget": "cozy-preset",
+                  "default": "s1.small"
+                },
+                {
+                  "name": "--replicas",
+                  "type": "integer",
+                  "required": true,
+                  "summary": "Number of FerretDB pods. The gateway is stateless — it translates and forwards, and every byte is in PostgreSQL — so this is a throughput and availability setting rather than a topology one.",
+                  "jsonPointer": "/properties/gateway/replicas",
+                  "default": 2
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--retention-days",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "How long base backups and WAL are kept. The point-in-time-recovery window is this number of days.",
+                  "jsonPointer": "/properties/backup/retentionDays",
+                  "default": 14
+                },
+                {
+                  "name": "--size",
+                  "type": "string",
+                  "required": true,
+                  "summary": "Data volume size per PostgreSQL instance, in Kubernetes quantity form. Every instance carries a full copy, so raw consumption is this times the instance count. Grows online; never shrinks.",
+                  "jsonPointer": "/properties/storage/size",
+                  "default": "20Gi",
+                  "example": "20Gi"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tags",
+                  "type": "keyValue",
+                  "required": false,
+                  "summary": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+                  "jsonPointer": "/tags",
+                  "widget": "tag-input"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--version",
+                  "type": "string",
+                  "required": true,
+                  "summary": "FerretDB minor version. ⚠ One property moves two images: the DocumentDB PostgreSQL extension and the FerretDB gateway are released as a matched pair and a mismatched pair is a proxy talking to an extension it does not know. FerretDB maintains no long-term branch, so the two values here are the two most recent releases and a third is a new api-version.",
+                  "jsonPointer": "/properties/version",
+                  "choices": [
+                    "2.5",
+                    "2.7"
+                  ],
+                  "default": "2.7"
+                }
+              ],
+              "waitFlags": [
+                "--wait",
+                "--no-wait"
+              ]
+            },
+            "delete": {
+              "name": "delete",
+              "summary": "Delete a Document database account. Permanent.",
+              "method": "DELETE",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.DocumentDB/accounts/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": true,
+              "flags": [
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                }
+              ],
+              "waitFlags": [
+                "--wait",
+                "--no-wait"
+              ]
+            },
+            "list-keys": {
+              "name": "list-keys",
+              "summary": "listKeys a Document database account. ⚠ The response carries secret material — it is always audited and must not be written to a log or a shell history.",
+              "method": "POST",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.DocumentDB/accounts/{resourceName}/listKeys",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                }
+              ],
+              "action": "listKeys",
+              "permission": "listKeys",
+              "secret": true,
+              "rawBody": true
+            },
+            "show": {
+              "name": "show",
+              "summary": "Read a Document database account.",
+              "method": "GET",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.DocumentDB/accounts/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                }
+              ]
+            },
+            "update": {
+              "name": "update",
+              "summary": "Amend a Document database account. Only the flags given are changed.",
+              "method": "PATCH",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.DocumentDB/accounts/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": true,
+              "flags": [
+                {
+                  "name": "--backup-enabled",
+                  "type": "switch",
+                  "required": false,
+                  "summary": "Whether continuous backup and WAL archiving run. ⚠ Off by default, and only because there is no destination to default to: turning it on without a destinationPath below renders no backup configuration at all rather than an empty one, so the two properties have to be set together.",
+                  "jsonPointer": "/properties/backup/enabled",
+                  "default": false
+                },
+                {
+                  "name": "--class",
+                  "type": "string",
+                  "required": false,
+                  "summary": "StorageClass name for the PostgreSQL volumes. Empty means the cluster default.",
+                  "jsonPointer": "/properties/storage/class",
+                  "immutable": true,
+                  "widget": "storageclass",
+                  "default": ""
+                },
+                {
+                  "name": "--cluster-id",
+                  "type": "string",
+                  "required": false,
+                  "alias": "--cluster",
+                  "summary": "The cluster whose namespace holds the PostgreSQL cluster and the FerretDB gateway.",
+                  "jsonPointer": "/properties/clusterId",
+                  "immutable": true,
+                  "widget": "cluster"
+                },
+                {
+                  "name": "--cpu",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Explicit vCPU quantity in Kubernetes form, for example 500m or 2. Empty means take it from the preset.",
+                  "jsonPointer": "/properties/sizing/cpu",
+                  "default": ""
+                },
+                {
+                  "name": "--destination-path",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Object-store URL for base backups and WAL, for example s3://tenant-bucket/documentdb. Empty means no backup configuration is rendered, whatever enabled says.",
+                  "jsonPointer": "/properties/backup/destinationPath",
+                  "default": "",
+                  "example": "s3://tenant-bucket/documentdb"
+                },
+                {
+                  "name": "--instances",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "Number of PostgreSQL instances, including the primary. One is a single point of failure and is offered for development only. Failover, replication and point-in-time recovery are CloudNativePG's, which is why this row costs 1.2 engineer-months rather than a rebuild of them.",
+                  "jsonPointer": "/properties/postgres/instances",
+                  "default": 2
+                },
+                {
+                  "name": "--location",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The region the account is billed in.",
+                  "jsonPointer": "/location",
+                  "immutable": true,
+                  "widget": "region",
+                  "example": "eu-central"
+                },
+                {
+                  "name": "--memory",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Explicit memory quantity in Kubernetes form, for example 4Gi. Empty means take it from the preset.",
+                  "jsonPointer": "/properties/sizing/memory",
+                  "default": ""
+                },
+                {
+                  "name": "--monitoring-enabled",
+                  "type": "switch",
+                  "required": false,
+                  "summary": "Whether both halves of this service are scraped: CloudNativePG is asked for a PodMonitor over the PostgreSQL pods, and the platform writes one over the FerretDB pods because FerretDB has no operator to ask. On by default — docs/plan/12: \"a managed service the tenant cannot see the health of is a black box they will not trust with production\".",
+                  "jsonPointer": "/properties/monitoring/enabled",
+                  "default": true
+                },
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--preset",
+                  "type": "string",
+                  "required": false,
+                  "summary": "A sizing preset from docs/plan/12. Databases use the s1 family, which is 1 vCPU to 4 GiB.",
+                  "jsonPointer": "/properties/sizing/preset",
+                  "choices": [
+                    "s1.2xlarge",
+                    "s1.4xlarge",
+                    "s1.large",
+                    "s1.medium",
+                    "s1.micro",
+                    "s1.nano",
+                    "s1.small",
+                    "s1.xlarge"
+                  ],
+                  "widget": "cozy-preset",
+                  "default": "s1.small"
+                },
+                {
+                  "name": "--replicas",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "Number of FerretDB pods. The gateway is stateless — it translates and forwards, and every byte is in PostgreSQL — so this is a throughput and availability setting rather than a topology one.",
+                  "jsonPointer": "/properties/gateway/replicas",
+                  "default": 2
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--retention-days",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "How long base backups and WAL are kept. The point-in-time-recovery window is this number of days.",
+                  "jsonPointer": "/properties/backup/retentionDays",
+                  "default": 14
+                },
+                {
+                  "name": "--size",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Data volume size per PostgreSQL instance, in Kubernetes quantity form. Every instance carries a full copy, so raw consumption is this times the instance count. Grows online; never shrinks.",
+                  "jsonPointer": "/properties/storage/size",
+                  "default": "20Gi",
+                  "example": "20Gi"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tags",
+                  "type": "keyValue",
+                  "required": false,
+                  "summary": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+                  "jsonPointer": "/tags",
+                  "widget": "tag-input"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--version",
+                  "type": "string",
+                  "required": false,
+                  "summary": "FerretDB minor version. ⚠ One property moves two images: the DocumentDB PostgreSQL extension and the FerretDB gateway are released as a matched pair and a mismatched pair is a proxy talking to an extension it does not know. FerretDB maintains no long-term branch, so the two values here are the two most recent releases and a third is a new api-version.",
+                  "jsonPointer": "/properties/version",
+                  "choices": [
+                    "2.5",
+                    "2.7"
+                  ],
+                  "default": "2.7"
+                }
+              ],
+              "waitFlags": [
+                "--wait",
+                "--no-wait"
+              ]
+            }
+          },
+          "alias": "docdb"
+        }
+      }
+    },
     "messaging": {
       "name": "messaging",
       "summary": "Commands for the CyberCloud.Messaging provider.",
@@ -2435,6 +3437,520 @@
             }
           },
           "alias": "nats"
+        },
+        "rabbitmq-clusters": {
+          "name": "rabbitmq-clusters",
+          "resourceType": "CyberCloud.Messaging/rabbitmqClusters",
+          "title": "RabbitMQ cluster",
+          "plural": "RabbitMQ clusters",
+          "summary": "A managed RabbitMQ cluster on the RabbitMQ Cluster Operator, with quorum queues as the default queue type and the management UI reachable only in-cluster.",
+          "verbs": {
+            "create": {
+              "name": "create",
+              "summary": "Create or replace a RabbitMQ cluster.",
+              "method": "PUT",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Messaging/rabbitmqClusters/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": true,
+              "flags": [
+                {
+                  "name": "--additional",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Plugins to enable on top of the three the operator always enables — peer discovery, the management UI and the Prometheus endpoint. Each recognised plugin adds its own port to the cluster's in-cluster Service.",
+                  "jsonPointer": "/properties/plugins/additional",
+                  "repeated": true,
+                  "choices": [
+                    "rabbitmq_federation",
+                    "rabbitmq_mqtt",
+                    "rabbitmq_shovel",
+                    "rabbitmq_stomp",
+                    "rabbitmq_stream",
+                    "rabbitmq_web_mqtt",
+                    "rabbitmq_web_stomp"
+                  ],
+                  "default": [],
+                  "example": [
+                    "rabbitmq_stream"
+                  ]
+                },
+                {
+                  "name": "--class",
+                  "type": "string",
+                  "required": false,
+                  "summary": "StorageClass name. Empty means the cluster default.",
+                  "jsonPointer": "/properties/storage/class",
+                  "immutable": true,
+                  "widget": "storageclass",
+                  "default": ""
+                },
+                {
+                  "name": "--cluster-id",
+                  "type": "string",
+                  "required": true,
+                  "alias": "--cluster",
+                  "summary": "The cluster whose namespace holds the RabbitmqCluster.",
+                  "jsonPointer": "/properties/clusterId",
+                  "immutable": true,
+                  "widget": "cluster"
+                },
+                {
+                  "name": "--cpu",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Explicit vCPU quantity in Kubernetes form, for example 500m or 2. Empty means take it from the preset.",
+                  "jsonPointer": "/properties/sizing/cpu",
+                  "default": ""
+                },
+                {
+                  "name": "--default-type",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The queue type a client gets when it declares a queue without asking for one. Quorum by default — docs/plan/12: a quorum queue is replicated through Raft across the nodes above, and on 4.x a classic queue is not replicated at all, so leaving this unset would put a single-node queue on a cluster the tenant paid three nodes for. This is a node-wide fallback: a vhost created with its own default queue type overrides it.",
+                  "jsonPointer": "/properties/queues/defaultType",
+                  "choices": [
+                    "classic",
+                    "quorum",
+                    "stream"
+                  ],
+                  "default": "quorum"
+                },
+                {
+                  "name": "--location",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The region the cluster is billed in.",
+                  "jsonPointer": "/location",
+                  "immutable": true,
+                  "widget": "region",
+                  "example": "eu-central"
+                },
+                {
+                  "name": "--max-message-size",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "Largest message a client may publish, in bytes. Raising it costs memory on every node that holds a copy, which for a quorum queue is all of them.",
+                  "jsonPointer": "/properties/limits/maxMessageSize",
+                  "default": 134217728
+                },
+                {
+                  "name": "--memory",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Explicit memory quantity in Kubernetes form, for example 4Gi. Empty means take it from the preset.",
+                  "jsonPointer": "/properties/sizing/memory",
+                  "default": ""
+                },
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--nodes",
+                  "type": "integer",
+                  "required": true,
+                  "summary": "Number of RabbitMQ nodes. Use an odd number of at least three: a quorum queue is a Raft group, so a group of two tolerates no failures and an even count buys nothing over the odd count below it. One is offered for development only and replicates nothing.",
+                  "jsonPointer": "/properties/nodes",
+                  "default": 3
+                },
+                {
+                  "name": "--preset",
+                  "type": "string",
+                  "required": false,
+                  "summary": "A sizing preset from docs/plan/12. Brokers use the c1 family, which is 1 vCPU to 2 GiB and guaranteed rather than burstable.",
+                  "jsonPointer": "/properties/sizing/preset",
+                  "choices": [
+                    "c1.2xlarge",
+                    "c1.4xlarge",
+                    "c1.large",
+                    "c1.medium",
+                    "c1.micro",
+                    "c1.nano",
+                    "c1.small",
+                    "c1.xlarge"
+                  ],
+                  "widget": "cozy-preset",
+                  "default": "c1.small"
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--size",
+                  "type": "string",
+                  "required": true,
+                  "summary": "Message-store volume size per node, in Kubernetes quantity form. Grows online; never shrinks. A quorum queue keeps its whole Raft log on every member, so this is the same figure on every node rather than a share of one.",
+                  "jsonPointer": "/properties/storage/size",
+                  "default": "20Gi",
+                  "example": "20Gi"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tags",
+                  "type": "keyValue",
+                  "required": false,
+                  "summary": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+                  "jsonPointer": "/tags",
+                  "widget": "tag-input"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--version",
+                  "type": "string",
+                  "required": true,
+                  "summary": "RabbitMQ version. Minor upgrades are applied automatically in the maintenance window; a major upgrade is an explicit update to this field. Only 4.x is offered: classic queue mirroring was removed in 4.0, so on every version here the replicated queue type is the quorum queue.",
+                  "jsonPointer": "/properties/version",
+                  "choices": [
+                    "4.0",
+                    "4.1"
+                  ],
+                  "default": "4.1"
+                }
+              ],
+              "waitFlags": [
+                "--wait",
+                "--no-wait"
+              ]
+            },
+            "delete": {
+              "name": "delete",
+              "summary": "Delete a RabbitMQ cluster. Permanent.",
+              "method": "DELETE",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Messaging/rabbitmqClusters/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": true,
+              "flags": [
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                }
+              ],
+              "waitFlags": [
+                "--wait",
+                "--no-wait"
+              ]
+            },
+            "list-keys": {
+              "name": "list-keys",
+              "summary": "listKeys a RabbitMQ cluster. ⚠ The response carries secret material — it is always audited and must not be written to a log or a shell history.",
+              "method": "POST",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Messaging/rabbitmqClusters/{resourceName}/listKeys",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                }
+              ],
+              "action": "listKeys",
+              "permission": "listKeys",
+              "secret": true,
+              "rawBody": true
+            },
+            "show": {
+              "name": "show",
+              "summary": "Read a RabbitMQ cluster.",
+              "method": "GET",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Messaging/rabbitmqClusters/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                }
+              ]
+            },
+            "update": {
+              "name": "update",
+              "summary": "Amend a RabbitMQ cluster. Only the flags given are changed.",
+              "method": "PATCH",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Messaging/rabbitmqClusters/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": true,
+              "flags": [
+                {
+                  "name": "--additional",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Plugins to enable on top of the three the operator always enables — peer discovery, the management UI and the Prometheus endpoint. Each recognised plugin adds its own port to the cluster's in-cluster Service.",
+                  "jsonPointer": "/properties/plugins/additional",
+                  "repeated": true,
+                  "choices": [
+                    "rabbitmq_federation",
+                    "rabbitmq_mqtt",
+                    "rabbitmq_shovel",
+                    "rabbitmq_stomp",
+                    "rabbitmq_stream",
+                    "rabbitmq_web_mqtt",
+                    "rabbitmq_web_stomp"
+                  ],
+                  "default": [],
+                  "example": [
+                    "rabbitmq_stream"
+                  ]
+                },
+                {
+                  "name": "--class",
+                  "type": "string",
+                  "required": false,
+                  "summary": "StorageClass name. Empty means the cluster default.",
+                  "jsonPointer": "/properties/storage/class",
+                  "immutable": true,
+                  "widget": "storageclass",
+                  "default": ""
+                },
+                {
+                  "name": "--cluster-id",
+                  "type": "string",
+                  "required": false,
+                  "alias": "--cluster",
+                  "summary": "The cluster whose namespace holds the RabbitmqCluster.",
+                  "jsonPointer": "/properties/clusterId",
+                  "immutable": true,
+                  "widget": "cluster"
+                },
+                {
+                  "name": "--cpu",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Explicit vCPU quantity in Kubernetes form, for example 500m or 2. Empty means take it from the preset.",
+                  "jsonPointer": "/properties/sizing/cpu",
+                  "default": ""
+                },
+                {
+                  "name": "--default-type",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The queue type a client gets when it declares a queue without asking for one. Quorum by default — docs/plan/12: a quorum queue is replicated through Raft across the nodes above, and on 4.x a classic queue is not replicated at all, so leaving this unset would put a single-node queue on a cluster the tenant paid three nodes for. This is a node-wide fallback: a vhost created with its own default queue type overrides it.",
+                  "jsonPointer": "/properties/queues/defaultType",
+                  "choices": [
+                    "classic",
+                    "quorum",
+                    "stream"
+                  ],
+                  "default": "quorum"
+                },
+                {
+                  "name": "--location",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The region the cluster is billed in.",
+                  "jsonPointer": "/location",
+                  "immutable": true,
+                  "widget": "region",
+                  "example": "eu-central"
+                },
+                {
+                  "name": "--max-message-size",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "Largest message a client may publish, in bytes. Raising it costs memory on every node that holds a copy, which for a quorum queue is all of them.",
+                  "jsonPointer": "/properties/limits/maxMessageSize",
+                  "default": 134217728
+                },
+                {
+                  "name": "--memory",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Explicit memory quantity in Kubernetes form, for example 4Gi. Empty means take it from the preset.",
+                  "jsonPointer": "/properties/sizing/memory",
+                  "default": ""
+                },
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--nodes",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "Number of RabbitMQ nodes. Use an odd number of at least three: a quorum queue is a Raft group, so a group of two tolerates no failures and an even count buys nothing over the odd count below it. One is offered for development only and replicates nothing.",
+                  "jsonPointer": "/properties/nodes",
+                  "default": 3
+                },
+                {
+                  "name": "--preset",
+                  "type": "string",
+                  "required": false,
+                  "summary": "A sizing preset from docs/plan/12. Brokers use the c1 family, which is 1 vCPU to 2 GiB and guaranteed rather than burstable.",
+                  "jsonPointer": "/properties/sizing/preset",
+                  "choices": [
+                    "c1.2xlarge",
+                    "c1.4xlarge",
+                    "c1.large",
+                    "c1.medium",
+                    "c1.micro",
+                    "c1.nano",
+                    "c1.small",
+                    "c1.xlarge"
+                  ],
+                  "widget": "cozy-preset",
+                  "default": "c1.small"
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--size",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Message-store volume size per node, in Kubernetes quantity form. Grows online; never shrinks. A quorum queue keeps its whole Raft log on every member, so this is the same figure on every node rather than a share of one.",
+                  "jsonPointer": "/properties/storage/size",
+                  "default": "20Gi",
+                  "example": "20Gi"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tags",
+                  "type": "keyValue",
+                  "required": false,
+                  "summary": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+                  "jsonPointer": "/tags",
+                  "widget": "tag-input"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--version",
+                  "type": "string",
+                  "required": false,
+                  "summary": "RabbitMQ version. Minor upgrades are applied automatically in the maintenance window; a major upgrade is an explicit update to this field. Only 4.x is offered: classic queue mirroring was removed in 4.0, so on every version here the replicated queue type is the quorum queue.",
+                  "jsonPointer": "/properties/version",
+                  "choices": [
+                    "4.0",
+                    "4.1"
+                  ],
+                  "default": "4.1"
+                }
+              ],
+              "waitFlags": [
+                "--wait",
+                "--no-wait"
+              ]
+            }
+          },
+          "alias": "rabbitmq"
         }
       }
     },

@@ -177,14 +177,29 @@
     }
   },
   "x-cybercloud-providers": [
+    "CyberCloud.Analytics",
     "CyberCloud.Cache",
     "CyberCloud.DBforPostgreSQL",
+    "CyberCloud.DocumentDB",
     "CyberCloud.Messaging",
     "CyberCloud.Sample",
     "CyberCloud.Search",
     "CyberCloud.Storage"
   ],
   "x-cybercloud-resource-types": [
+    {
+      "type": "CyberCloud.Analytics/clickhouseClusters",
+      "apiVersions": [
+        "2026-08-01"
+      ],
+      "display": {
+        "name": "ClickHouse cluster",
+        "plural": "ClickHouse clusters",
+        "alias": "clickhouse",
+        "summary": "A managed ClickHouse cluster on the Altinity operator, with declared shards and replicas and a ClickHouse Keeper quorum. The schema is the tenant's.",
+        "declared": true
+      }
+    },
     {
       "type": "CyberCloud.Cache/redis",
       "apiVersions": [
@@ -212,6 +227,19 @@
       }
     },
     {
+      "type": "CyberCloud.DocumentDB/accounts",
+      "apiVersions": [
+        "2026-08-01"
+      ],
+      "display": {
+        "name": "Document database account",
+        "plural": "Document database accounts",
+        "alias": "docdb",
+        "summary": "MongoDB-compatible, not MongoDB: FerretDB over PostgreSQL, covering CRUD, indexes and the wire protocol. Multi-document transactions are not supported. Runs on a CloudNativePG cluster, so failover, backup and point-in-time recovery are the operator's.",
+        "declared": true
+      }
+    },
+    {
       "type": "CyberCloud.Messaging/kafkaClusters",
       "apiVersions": [
         "2026-08-01"
@@ -234,6 +262,19 @@
         "plural": "NATS clusters",
         "alias": "nats",
         "summary": "A managed NATS cluster with JetStream on file storage, optional leaf-node connectivity and an optional firewalled external listener.",
+        "declared": true
+      }
+    },
+    {
+      "type": "CyberCloud.Messaging/rabbitmqClusters",
+      "apiVersions": [
+        "2026-08-01"
+      ],
+      "display": {
+        "name": "RabbitMQ cluster",
+        "plural": "RabbitMQ clusters",
+        "alias": "rabbitmq",
+        "summary": "A managed RabbitMQ cluster on the RabbitMQ Cluster Operator, with quorum queues as the default queue type and the management UI reachable only in-cluster.",
         "declared": true
       }
     },
