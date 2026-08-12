@@ -610,6 +610,21 @@ public static class UniformFailures {
     public const string SignUp =
         "Check that address for a message telling you what to do next.";
 
+    /// <summary>
+    ///     The one answer to "send me a one-time code".
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ Returned whether the code went out, the carrier refused, the per-user issue limit was
+    ///     reached or no delivery seam is wired at all. The caller here is half-authenticated rather
+    ///     than anonymous, so this is not an enumeration defence — it is the <b>guess-budget</b>
+    ///     defence: a caller who could see "you have used your five codes" would know exactly when
+    ///     the window rolls over, and one who could see "delivery failed" would learn that the
+    ///     account's address is undeliverable. The real reason goes to the log, as everywhere else
+    ///     on this path.
+    /// </remarks>
+    public const string OtpSent =
+        "If a code could be sent, it is on its way. Enter it below.";
+
     /// <summary>Builds the uniform sign-in failure.</summary>
     public static Result<SignInOutcome> RejectSignIn() =>
         Result<SignInOutcome>.Failure(ErrorCode.AuthorizationFailed, SignIn);

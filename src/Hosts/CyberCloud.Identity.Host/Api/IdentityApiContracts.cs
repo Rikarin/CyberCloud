@@ -78,7 +78,23 @@ public sealed record PasskeyCompleteRequest(
     [property: JsonPropertyName("returnUrl")] string? ReturnUrl
 );
 
-/// <summary>The body of <c>POST /api/signin/totp</c> and <c>POST /api/signin/recovery-code</c>.</summary>
+/// <summary>The body of <c>POST /api/signin/otp/send</c>.</summary>
+/// <param name="ReturnUrl">Where to go afterwards.</param>
+/// <remarks>
+///     ⚠ <b>There is no address here and no channel, and both absences are the security property.</b>
+///     Who the code is for comes from the pending session cookie and where it goes comes from that
+///     user's grain state. A caller that could name either would be a caller that could have the
+///     second factor delivered to itself, which is the same class of mistake as taking the user id
+///     from a request body — see <c>SignInApi.VerifyTotpAsync</c>.
+/// </remarks>
+public sealed record OtpSendRequest(
+    [property: JsonPropertyName("returnUrl")] string? ReturnUrl
+);
+
+/// <summary>
+///     The body of <c>POST /api/signin/totp</c>, <c>POST /api/signin/otp</c> and
+///     <c>POST /api/signin/recovery-code</c>.
+/// </summary>
 /// <param name="Code">The code typed.</param>
 /// <param name="ReturnUrl">Where to go afterwards.</param>
 public sealed record SecondFactorRequest(

@@ -169,6 +169,10 @@ public static class AuthenticationMethodNames {
         // would make a burnt single-use code indistinguishable from a TOTP in an audit trail — which
         // is the one place the difference matters, because burning one is an auditable event.
         [AuthenticationMethod.RecoveryCode] = "rc",
+        // RFC 8176's `otp` covers "a one-time password", which a delivered code is exactly. It
+        // collides with Totp here and does not collide in AuthenticationMethod, which is the right
+        // way round — see that member for why the two stay distinguishable in the audit trail.
+        [AuthenticationMethod.EmailOtp] = "otp",
         [AuthenticationMethod.ClientCredential] = "swk"
     };
 

@@ -40,6 +40,19 @@
           activation rather than at start-up.
         -->
         <ProjectReference Include="../../CyberCloud.Communication/CyberCloud.Communication.csproj"/>
+        <!--
+          docs/plan/11's identity module. The same two-part arrangement as the line above and for the
+          same reason: Orleans DISCOVERS grains by scanning referenced assemblies, so this line is
+          what puts IUserGrain, IGroupGrain, ISessionGrain, IApplicationGrain,
+          IServicePrincipalGrain and IManagedIdentityGrain in the silo, and the AddSiloIdentity()
+          call in Program.cs is what registers the services their constructors ask for.
+
+          ⚠ ITS ABSENCE WAS LOAD-BEARING IN THE WRONG DIRECTION. Until this line existed, no silo in
+          src/Hosts composed the identity module, so AddCyberCloudIdentity had exactly one caller in
+          the tree and that caller was a test fixture — which meant UnavailableOtpDelivery's
+          operator-facing message was written, tested, and unreachable in production.
+        -->
+        <ProjectReference Include="../../CyberCloud.Identity/CyberCloud.Identity.csproj"/>
     </ItemGroup>
 
     <ItemGroup>

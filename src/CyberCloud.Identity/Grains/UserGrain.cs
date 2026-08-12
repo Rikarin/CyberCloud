@@ -25,10 +25,26 @@ namespace CyberCloud.Identity.Grains;
 public sealed class UserGrain(
     [PersistentState("user", StorageTiers.Durable)] IPersistentState<UserGrainState> state,
     IPasswordHasher hasher,
+    OtpCodeProtector otpCodes,
+    IOtpDeliverySeam otpDelivery,
     IGrainFactory grains,
     IClock clock
 )
     : Grain, IUserGrain {
+    /// <summary>
+    ///     The plaintext of each outstanding code, for <see cref="OtpPolicy.ResendCooldown" /> only.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>A field and not state, and the distinction is the whole of property 4 in
+    ///     <see cref="OtpPolicy" />.</b> Grain state is written to PostgreSQL and captured in every
+    ///     backup; this is the activation's own memory, which is where the plaintext of a credential
+    ///     is allowed to be. It exists so that a <i>retried</i> issue redelivers the same code and
+    ///     therefore computes the same idempotency key — see <see cref="OtpPolicy.ResendCooldown" />
+    ///     for what is lost when the activation was collected in between, which is a second message
+    ///     rather than a silence.
+    /// </remarks>
+    readonly Dictionary<OtpPurpose, string> liveOtpCodes = [];
+
     Guid userId;
     Guid tenantId;
 
@@ -96,6 +112,13 @@ public sealed class UserGrain(
             state.State.RecoveryCodeHashes.Clear();
             state.State.Totp = null;
             state.State.SpentTotpCounters.Clear();
+
+            // ⚠ An outstanding code is a credential, so it goes with the rest of them. Leaving one
+            // behind would let a code issued moments before the deprovision still be redeemed — and
+            // the redemption path checks CanAuthenticate, so it would fail, but a credential that
+            // survives its account is not a state worth relying on a second check to make safe.
+            state.State.OtpChallenges.Clear();
+            liveOtpCodes.Clear();
         }
 
         await state.WriteStateAsync();
@@ -283,6 +306,152 @@ public sealed class UserGrain(
         return Result<bool>.Success(true);
     }
 
+    // ── One-time codes — docs/plan/11 § Credentials, and OtpPolicy for why they live here ───────
+
+    /// <inheritdoc />
+    public async Task<Result> IssueOtpAsync(OtpPurpose purpose, CredentialKind kind) {
+        if (purpose is OtpPurpose.Unknown || !Enum.IsDefined(purpose)) {
+            return Result.Failure(
+                ErrorCode.InvalidRequestBody,
+                $"'{purpose}' is not a reason to send a code. The purpose separates one outstanding "
+                + "challenge from another and is part of the idempotency key the send is deduplicated "
+                + "on, so it cannot be defaulted."
+            );
+        }
+
+        if (!Exists() || !CanAuthenticate()) {
+            // ⚠ A real sentence, for the log. The endpoint above answers UniformFailures.OtpSent
+            // whatever comes back, so this never reaches a caller — IUserGrain.IssueOtpAsync says so.
+            return Result.Failure(
+                ErrorCode.AuthorizationFailed,
+                $"User {userId:D} cannot be sent a code: the account is {state.State.Status}."
+            );
+        }
+
+        var destination = DestinationFor(kind);
+        if (destination.TryGetError(out var undeliverable)) {
+            return Result.Failure(undeliverable);
+        }
+
+        var now = clock.UtcNow;
+
+        // ⚠ Pruned before it is counted, not after. Counting first and pruning later would refuse on
+        // the strength of issues that have already left the window.
+        state.State.OtpIssuedAt.RemoveAll(x => x <= now - OtpPolicy.IssueWindow);
+
+        var existing = Challenge(purpose);
+        var retried = existing is not null
+            && existing.ExpiresAt > now
+            && existing.Kind == kind
+            && existing.IssuedAt > now - OtpPolicy.ResendCooldown
+            && liveOtpCodes.ContainsKey(purpose);
+
+        // ⚠ THE RATE LIMIT IS NOT CHARGED FOR A RETRY. A caller repeating a call it never saw the
+        // answer to would otherwise burn the user's whole allowance on one code, and the user would
+        // then be told to wait fifteen minutes for a code they never received.
+        if (!retried && state.State.OtpIssuedAt.Count >= OtpPolicy.MaxIssuesPerWindow) {
+            await state.WriteStateAsync();
+
+            return Result.Failure(
+                ErrorCode.QuotaExceeded,
+                $"User {userId:D} has been sent {OtpPolicy.MaxIssuesPerWindow} codes inside "
+                + $"{OtpPolicy.IssueWindow.TotalMinutes:F0} minutes, which is the per-user cap. It is "
+                + "per user rather than per host because a cap held in one replica's memory is N times "
+                + "the cap across N replicas — OtpPolicy, property 3."
+            );
+        }
+
+        var code = retried ? liveOtpCodes[purpose] : OtpCodeProtector.Generate();
+
+        if (!retried) {
+            state.State.OtpChallenges.RemoveAll(x => x.Purpose == purpose);
+
+            state.State.OtpChallenges.Add(
+                new() {
+                    Purpose = purpose,
+                    Kind = kind,
+                    Digest = otpCodes.Digest(tenantId, userId, purpose, code),
+                    IssuedAt = now,
+                    ExpiresAt = now + OtpPolicy.Lifetime,
+                    Attempts = 0
+                }
+            );
+
+            state.State.OtpIssuedAt.Add(now);
+            liveOtpCodes[purpose] = code;
+        }
+
+        // ⚠ Before the send, always. A crash after this line and before the carrier answers leaves a
+        // code nobody received, which the user fixes with "resend"; the other order leaves a code the
+        // user is holding and this grain has never heard of, which is a lockout with no explanation.
+        await state.WriteStateAsync();
+
+        // ⚠ The challenge is deliberately NOT rolled back on a delivery failure. The message may have
+        // reached the carrier and the response may be what was lost — IMessageGrain's own remarks
+        // make a dispatched message unre-attemptable for that reason — so tearing up the challenge
+        // would invalidate a code the user is about to read. The caller retries, which redelivers
+        // this same code under this same idempotency key.
+        return await otpDelivery.DeliverAsync(
+            new() {
+                TenantId = tenantId,
+                UserId = userId,
+                Purpose = purpose,
+                Kind = kind,
+                Destination = destination.GetValueOrThrow(),
+                Code = code
+            }
+        );
+    }
+
+    /// <inheritdoc />
+    public async Task<Result<bool>> RedeemOtpAsync(OtpPurpose purpose, string candidate) {
+        // ⚠ Computed before anything branches, and on every path. It is cheap, but the point is that
+        // "there is no challenge" and "the code is wrong" must not differ in what work they do — the
+        // uniform-failure discipline of the sign-in path applied one level down.
+        var offered = otpCodes.Digest(tenantId, userId, purpose, candidate ?? string.Empty);
+
+        if (!CanAuthenticate()) {
+            return Result<bool>.Success(false);
+        }
+
+        var challenge = Challenge(purpose);
+        if (challenge is null) {
+            return Result<bool>.Success(false);
+        }
+
+        var now = clock.UtcNow;
+
+        if (challenge.ExpiresAt <= now || challenge.Attempts >= OtpPolicy.MaxAttempts) {
+            // ⚠ Removed rather than left to rot. A burnt or stale challenge that stayed in state
+            // would keep answering `false` to the right code — correct — but it would also survive a
+            // re-issue race and shadow the new challenge. Clearing it here is what keeps "at most one
+            // outstanding per purpose" true.
+            await ForgetChallengeAsync(purpose);
+            return Result<bool>.Success(false);
+        }
+
+        challenge.Attempts++;
+
+        // ⚠ CONSTANT-TIME, over two fixed-length keyed digests. Ordinary string equality returns as
+        // soon as two characters differ, which on a six-digit code with a million candidates is a
+        // side channel worth having; CredentialDigest.FixedTimeEquals is the primitive the rest of
+        // this module's credential comparisons already go through.
+        var matched = CredentialDigest.FixedTimeEquals(challenge.Digest, offered);
+
+        if (matched) {
+            // ⚠ THE SINGLE-USE GUARANTEE, AND IT IS THESE TWO LINES PLUS THE WRITE BELOW. The grain
+            // is single-threaded, so the second of two concurrent presentations of a correct code
+            // cannot start until this write has returned and the challenge is gone. A host doing the
+            // same read-compare-delete across replicas would need a distributed lock.
+            state.State.OtpChallenges.Remove(challenge);
+            liveOtpCodes.Remove(purpose);
+        }
+
+        await state.WriteStateAsync();
+
+        return Result<bool>.Success(matched);
+    }
+
     /// <inheritdoc />
     public async Task<Result<RecoveryCodeBatch>> GenerateRecoveryCodesAsync() {
         if (!Exists()) {
@@ -388,6 +557,46 @@ public sealed class UserGrain(
         }
 
         state.State.Sessions.Clear();
+    }
+
+    /// <summary>The outstanding challenge for one purpose, or <see langword="null" />.</summary>
+    OtpChallengeState? Challenge(OtpPurpose purpose) =>
+        state.State.OtpChallenges.Find(x => x.Purpose == purpose);
+
+    async Task ForgetChallengeAsync(OtpPurpose purpose) {
+        state.State.OtpChallenges.RemoveAll(x => x.Purpose == purpose);
+        liveOtpCodes.Remove(purpose);
+
+        await state.WriteStateAsync();
+    }
+
+    /// <summary>
+    ///     Where a code of this kind goes, read from this grain's own state.
+    /// </summary>
+    /// <param name="kind">The channel asked for.</param>
+    /// <remarks>
+    ///     ⚠ <b>Never a parameter of the grain call.</b> A destination supplied by the caller would
+    ///     let anything holding a half-authenticated session send its own second factor to an address
+    ///     it controls. <see cref="OtpPolicy" />'s last ⚠ carries the full argument and says what is
+    ///     owed for SMS.
+    /// </remarks>
+    Result<string> DestinationFor(CredentialKind kind) {
+        if (kind is not CredentialKind.EmailOtp) {
+            return Result<string>.Failure(
+                ErrorCode.ResourceNotFound,
+                $"{kind} cannot be sent to user {userId:D}: no verified destination for that channel "
+                + "is enrolled. docs/plan/11 § Credentials lists SMS and WhatsApp codes at M1, but a "
+                + "code may only be sent to a destination this grain already holds as proven — and it "
+                + "holds a verified address and no verified number. Number enrolment is the owed piece."
+            );
+        }
+
+        return state.State.Email.Length > 0
+            ? Result<string>.Success(state.State.Email)
+            : Result<string>.Failure(
+                ErrorCode.ResourceNotFound,
+                $"User {userId:D} has no address recorded, so there is nowhere to send a code."
+            );
     }
 
     bool Exists() => state.State.CreatedAt != default;

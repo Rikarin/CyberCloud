@@ -85,6 +85,90 @@ public sealed class UserGrainState {
     /// </remarks>
     [Id(9)]
     public List<Guid> Sessions { get; set; } = [];
+
+    /// <summary>
+    ///     One outstanding one-time code per <see cref="OtpPurpose" /> — docs/plan/11 § Credentials.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ A list rather than a dictionary because the collection is at most one entry per member
+    ///     of a five-value enum, and a <c>Dictionary</c> keyed by an enum is a serializer question
+    ///     nobody needs to have answered. A linear scan over five entries is not a cost.
+    /// </remarks>
+    [Id(10)]
+    public List<OtpChallengeState> OtpChallenges { get; set; } = [];
+
+    /// <summary>
+    ///     When codes were sent to this user, for <see cref="OtpPolicy.MaxIssuesPerWindow" />.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Timestamps rather than a count-and-reset pair, and bounded by pruning.</b> A count
+    ///     with a window start is one field cheaper and gets the edge wrong: the window resets
+    ///     wholesale, so five codes at 14:59 and five more at 15:00 are ten inside a minute. Sliding
+    ///     the window over the actual issue times has no such edge. Entries older than
+    ///     <see cref="OtpPolicy.IssueWindow" /> can never be counted again and are dropped on the
+    ///     next issue, so this cannot grow — the same argument
+    ///     <see cref="SpentTotpCounters" /> makes for the same reason.
+    /// </remarks>
+    [Id(11)]
+    public List<DateTimeOffset> OtpIssuedAt { get; set; } = [];
+}
+
+/// <summary>
+///     One outstanding one-time code, as the durable tier holds it.
+/// </summary>
+/// <remarks>
+///     <para>
+///         ⚠ <b>THE CODE IS NOT HERE AND CC1005 WOULD NOT HAVE STOPPED IT BEING HERE.</b> The
+///         analyzer bans <c>[Id]</c> members whose names end in <c>Password</c>, <c>Secret</c>,
+///         <c>Token</c> or <c>Key</c> — that is docs/plan/00 § Non-negotiables' list, verbatim and
+///         deliberately closed. A member spelled <c>Code</c>, or <c>Otp</c>, or <c>Digits</c> matches
+///         none of them, so a future edit that stored the plaintext here would compile clean and
+///         ship. Nothing mechanical is guarding this type; what guards it is
+///         <see cref="Digest" /> being the only credential-shaped member and
+///         <c>OtpIssuanceTests.TheCodeIsNowhereInGrainState</c> asserting the plaintext appears in no
+///         serialized member by reflection, which is the same instrument
+///         <c>ManagedIdentityTests.NoSecretIsStoredAnywhereInTheFlow</c> uses for the same reason.
+///     </para>
+///     <para>
+///         ⚠ Durable rather than hot, unlike <see cref="SessionGrainState" />, and for the reason
+///         <see cref="UserGrainState.SpentTotpCounters" /> gives: losing a session costs a sign-in,
+///         and losing a burnt challenge lets an observed code be replayed. Zero loss tolerance puts
+///         it in the durable tier.
+///     </para>
+/// </remarks>
+[GenerateSerializer]
+[Alias("CyberCloud.Identity.OtpChallengeState")]
+public sealed class OtpChallengeState {
+    /// <summary>Which challenge this is. At most one per purpose is outstanding.</summary>
+    [Id(0)]
+    public OtpPurpose Purpose { get; set; } = OtpPurpose.Unknown;
+
+    /// <summary>Which channel it went out on. Recorded so a resend cannot silently switch channel.</summary>
+    [Id(1)]
+    public CredentialKind Kind { get; set; } = CredentialKind.EmailOtp;
+
+    /// <summary>
+    ///     <c>OtpCodeProtector.Digest</c> of the code — an HMAC-SHA-256 under the vault pepper.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ Not a bare SHA-256. Six digits is a million candidates, which is a rounding error to
+    ///     anyone holding a database dump; the pepper is what makes the dump insufficient. See
+    ///     <c>OtpCodeProtector</c>.
+    /// </remarks>
+    [Id(2)]
+    public string Digest { get; set; } = string.Empty;
+
+    /// <summary>When it was issued. <see cref="OtpPolicy.ResendCooldown" /> is measured from here.</summary>
+    [Id(3)]
+    public DateTimeOffset IssuedAt { get; set; }
+
+    /// <summary>When it stops being answerable. <see cref="OtpPolicy.Lifetime" /> after issue.</summary>
+    [Id(4)]
+    public DateTimeOffset ExpiresAt { get; set; }
+
+    /// <summary>How many answers have been tried. At <see cref="OtpPolicy.MaxAttempts" /> it is burnt.</summary>
+    [Id(5)]
+    public int Attempts { get; set; }
 }
 
 /// <summary><c>GroupGrain</c>'s durable state — identity only, no membership.</summary>

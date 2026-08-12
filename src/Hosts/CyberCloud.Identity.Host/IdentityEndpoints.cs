@@ -31,14 +31,26 @@ namespace CyberCloud.Identity.Host;
 ///     </para>
 ///     <para>
 ///         <b>What is still owed.</b> The consent page described at the foot of these remarks has no
-///         endpoint here, and neither does password reset — <c>SignInService.RequestPasswordResetAsync</c>
-///         exists and answers uniformly, but nothing mails the link. ⚠ That sentence used to end
-///         "because <c>IOtpDeliverySeam</c> is <c>UnavailableOtpDelivery</c> in every host in this
-///         repository", and the real position is emptier: nothing calls
-///         <c>IOtpDeliverySeam.DeliverAsync</c> anywhere, and no host registers an implementation of
-///         the seam at all — <c>SignInApi.Offered</c>'s remarks set out why for each host. TOTP is
-///         mapped and will refuse every code until an <c>ITotpSecretSeam</c> is wired over a vault;
-///         recovery codes work today, which is the point of having both.
+///         endpoint here, and neither does password reset —
+///         <c>SignInService.RequestPasswordResetAsync</c> exists and answers uniformly, but nothing
+///         mails the link. TOTP is mapped and will refuse every code until an
+///         <c>ITotpSecretSeam</c> is wired over a vault; recovery codes and the delivered email code
+///         at <c>/api/signin/otp</c> both work today.
+///     </para>
+///     <para>
+///         ⚠ <b>Password reset is owed for a specific reason rather than for want of a caller, and
+///         the reason is a timing oracle.</b> Everything it needs now exists —
+///         <c>IUserGrain.IssueOtpAsync</c> mints and delivers a code, and
+///         <see cref="OtpPurpose.PasswordReset" /> is a purpose it takes. What does not exist is a
+///         way to send one without <i>waiting</i> for the carrier: docs/plan/11 § Credentials
+///         requires the reset endpoint to "take the same time whether or not the account exists",
+///         and the found branch would await an <c>IMessageGrain</c> dispatch that the not-found
+///         branch has no equivalent of. <c>SignInService</c>'s 250 ms floor absorbs a grain
+///         activation and does not absorb a mail provider. The fix is an asynchronous dispatch the
+///         endpoint does not await — an outbox in <c>CyberCloud.Communication</c>, docs/plan/17 —
+///         and wiring reset to the synchronous path in the meantime would trade an unbuilt feature
+///         for a measurable enumeration oracle on the one endpoint whose entire design is not having
+///         one.
 ///     </para>
 ///     <para>
 ///         <b>What the sign-in page needs, end to end:</b>
@@ -66,8 +78,12 @@ namespace CyberCloud.Identity.Host;
 ///             hardening the endpoint pays for.
 ///         </item>
 ///         <item>
-///             <b>When <see cref="SignInOutcome.SecondFactorRequired" /> is set</b>, collect a TOTP
-///             code or a recovery code and post it before treating the session as usable.
+///             <b>When <see cref="SignInOutcome.SecondFactorRequired" /> is set</b>, collect a
+///             second factor and post it before treating the session as usable. Three are offered:
+///             a TOTP code, a recovery code, or — after <c>POST /api/signin/otp/send</c> — a code
+///             mailed to the account's address. ⚠ The <c>send</c> call takes no address; the page
+///             must not collect one, because the whole point is that the platform chooses where a
+///             second factor goes.
 ///         </item>
 ///         <item>
 ///             <b>Then resume the OIDC request</b> by re-issuing the original
@@ -259,6 +275,35 @@ public static class IdentityEndpoints {
                 SignInApi api,
                 CancellationToken cancellationToken
             ) => await IssueAsync(context, await api.VerifyTotpAsync(request, context.User, cancellationToken))
+        ).RequireAuthorization();
+
+        // ── The delivered second factor — docs/plan/11 § Credentials' email OTP row ────────────
+        //
+        // ⚠ TWO ENDPOINTS AND NEITHER OF THEM HOLDS A CODE. `send` asks IUserGrain to mint, record
+        // and deliver one; `otp` asks the same grain to compare and burn it. OtpPolicy carries the
+        // four properties that put both inside a grain rather than here. Both read WHO from the
+        // cookie, and `send` reads WHERE from grain state — an address on either request would let a
+        // half-authenticated caller post the second factor to itself.
+        app.MapPost(
+            "/api/signin/otp/send",
+            async (
+                OtpSendRequest? request,
+                HttpContext context,
+                SignInApi api,
+                CancellationToken cancellationToken
+            ) => Results.Ok(
+                (await api.SendEmailOtpAsync(request, context.User, cancellationToken)).Response
+            )
+        ).RequireAuthorization();
+
+        app.MapPost(
+            "/api/signin/otp",
+            async (
+                SecondFactorRequest? request,
+                HttpContext context,
+                SignInApi api,
+                CancellationToken cancellationToken
+            ) => await IssueAsync(context, await api.VerifyEmailOtpAsync(request, context.User, cancellationToken))
         ).RequireAuthorization();
 
         app.MapPost(

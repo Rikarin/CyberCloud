@@ -177,6 +177,7 @@ public static class AccessTokenPrincipalFactory {
             AuthenticationMethod.Password => "pwd",
             AuthenticationMethod.Totp => "otp",
             AuthenticationMethod.RecoveryCode => "otp",
+            AuthenticationMethod.EmailOtp => "otp",
             AuthenticationMethod.ClientCredential => "pop",
             _ => "unspecified"
         };

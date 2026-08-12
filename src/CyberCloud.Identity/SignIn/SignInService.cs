@@ -142,10 +142,25 @@ public sealed class SignInService(
     ///     regardless."
     /// </returns>
     /// <remarks>
-    ///     ⚠ <b>Delivery is <see cref="IOtpDeliverySeam" />'s job and it is not built</b>, so what
-    ///     this currently does is resolve the address, record the probe, and return the uniform
-    ///     answer. The shape is the part that matters and it is right: nothing about the return
-    ///     value or its timing depends on whether the account exists.
+    ///     <para>
+    ///         ⚠ <b>Still no mail, and it is now a deliberate omission rather than a missing
+    ///         feature.</b> <c>IUserGrain.IssueOtpAsync</c> exists, takes
+    ///         <see cref="OtpPurpose.PasswordReset" />, and would be one call from here. It is not
+    ///         made because it would break the other half of the sentence this method implements:
+    ///         issuing a code awaits an <c>IMessageGrain</c> dispatch, which awaits a mail provider,
+    ///         and the branch where there is no user has nothing equivalent to wait for. The
+    ///         <see cref="SignInOptions.MinimumDuration" /> floor is 250 ms and absorbs a grain
+    ///         activation; it does not absorb a carrier. So wiring it here would replace "the reset
+    ///         mail is the only signal" with "the reset mail is the only signal, and so is the
+    ///         response time" — on the one endpoint whose entire design is not having an oracle.
+    ///     </para>
+    ///     <para>
+    ///         What is owed is a dispatch this method does not await — an outbox in
+    ///         <c>CyberCloud.Communication</c> (docs/plan/17) — after which the call here is
+    ///         unconditional and cheap on both branches. Until then this resolves the address,
+    ///         records the probe, and returns the uniform answer; the shape is right and nothing
+    ///         about the return value or its timing depends on whether the account exists.
+    ///     </para>
     /// </remarks>
     public async Task<Result<string>> RequestPasswordResetAsync(
         Guid tenantId,
