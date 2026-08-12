@@ -1,5 +1,6 @@
 using CyberCloud.Core;
 using CyberCloud.Core.Resources;
+using System.Collections.Immutable;
 
 namespace CyberCloud.Tenancy.Contracts;
 
@@ -73,7 +74,64 @@ public interface IResourceIndexGrain : IGrainWithStringKey {
     ///     docs/plan/06 § Two-phase create, "release the index first".
     /// </summary>
     /// <param name="resourceId">The bound GUID. A mismatch is a <c>Conflict</c>.</param>
+    /// <remarks>
+    ///     ⚠ <b>The child counts go with it.</b> See <see cref="ChildrenAsync" />: the counts belong to
+    ///     the <i>resource</i> at this address, and once the name is free the next create at the same
+    ///     address is a different resource with a different GUID. Carrying a count across that boundary
+    ///     would make a brand-new resource undeletable over children it never had.
+    /// </remarks>
     Task<Result> ReleaseAsync(Guid resourceId);
+
+    /// <summary>
+    ///     Records that a child of <paramref name="childType" /> now hangs off this address —
+    ///     docs/plan/08 § Deleting a parent resource that has children.
+    /// </summary>
+    /// <param name="childType">The child's type, for example <c>…/accounts/buckets</c>.</param>
+    /// <returns>The count for that type after the increment.</returns>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>This is why the counter lives on the index grain rather than in a grain of its
+    ///         own.</b> docs/plan/08 asks for a counter "maintained transactionally where the index
+    ///         claim and release already happen", and this <i>is</i> that place: one activation per
+    ///         parent address, single-threaded, durable, and the same activation the parent's own
+    ///         delete calls <see cref="ReleaseAsync" /> on. "Is the name free" and "does it still have
+    ///         children" are therefore answered by one entity that cannot disagree with itself, which
+    ///         is the property the eventually-consistent resource-graph projection could not offer.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Not idempotent — every call is <c>+1</c>.</b> A set of child ids would be, and
+    ///         would cost the row size <see cref="ChildTypeCount" /> explains. The caller pairs each
+    ///         increment with exactly one <see cref="RemoveChildAsync" />, and the resource manager's
+    ///         write path calls this on the <i>create</i> branch only, once the index claim has been
+    ///         confirmed.
+    ///     </para>
+    /// </remarks>
+    Task<Result<int>> AddChildAsync(ResourceTypeName childType);
+
+    /// <summary>
+    ///     Records that a child of <paramref name="childType" /> is gone.
+    /// </summary>
+    /// <param name="childType">The child's type.</param>
+    /// <returns>The count for that type after the decrement.</returns>
+    /// <remarks>
+    ///     ⚠ <b>Clamped at zero and idempotent there</b>, so a re-driven delete cannot push a count
+    ///     negative and a decrement for a child that was never counted is not an error. That matters
+    ///     because the caller is <c>OperationGrain</c>, which is re-driven from a reminder: the
+    ///     decrement has to be safe to run twice for the same reason the ReBAC unlink beside it does.
+    /// </remarks>
+    Task<Result<int>> RemoveChildAsync(ResourceTypeName childType);
+
+    /// <summary>
+    ///     What still hangs off this address, by type. Empty when nothing does.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>The gate one step before the lock check on the delete path reads this</b> —
+    ///     docs/plan/08 § Deleting a parent resource that has children, <i>"a delete is refused while
+    ///     the resource still has children — 409, not a cascade, and not a silent orphan"</i>. It is a
+    ///     read of the same activation the release below would mutate, so there is no window between
+    ///     "it had no children" and "its name was freed".
+    /// </remarks>
+    Task<Result<ImmutableArray<ChildTypeCount>>> ChildrenAsync();
 
     /// <summary>What the index currently holds. An expired lease reads as <c>Free</c>.</summary>
     Task<Result<IndexEntry>> GetAsync();

@@ -308,6 +308,37 @@ public sealed class OperationGrain(
                 return;
             }
 
+            // ⚠ AND THE PARENT'S CHILD COUNT GOES DOWN, HERE AND NOT AT THE ACCEPT.
+            //
+            // ResourceManagerService.DeleteAsync refuses a delete while the resource still has
+            // children (docs/plan/08 § Deleting a parent resource that has children). This is the other
+            // side of that counter, and it belongs on this line for the two reasons the unlink above
+            // belongs here — and one more that is specific to it.
+            //
+            //   • A child that is still tearing down STILL EXISTS. docs/plan/06 § Two-phase create
+            //     keeps it visible, in Deleting, with its meter ticking, precisely so a failed teardown
+            //     is not mistaken for a completed one. Decrementing at the accept would let the parent
+            //     be deleted while such a child was still running — the orphan the counter exists to
+            //     prevent, reintroduced in the window where it is most likely, because the child's
+            //     teardown is exactly what tends to get stuck.
+            //   • It has to be able to fail and be retried, and this grain is the durable, reminder-
+            //     driven machinery for that. A count left high is worse than a dangling tuple: the
+            //     parent answers 409 to its own delete until somebody clears it by hand.
+            //
+            // ⚠ IDEMPOTENT ON BOTH SIDES, WHICH IS WHAT MAKES THE RETRY SAFE. RemoveChildAsync clamps
+            // at zero and succeeds for a type it is not holding, so a second drive after a partial
+            // success cannot push the count negative — and a negative count would make the parent
+            // deletable while another child was still live, which is the failure with the sign flipped.
+            //
+            // ⚠ From the SPEC's path, like the unlink: Address(spec) reparses ResourcePath, and
+            // ResourceId.Parent is a pure function of it. Nothing here reads the parent's GUID, so
+            // unlike the unlink this converges even for a parent that is already gone.
+            var uncounted = await UncountFromParentAsync(spec);
+            if (uncounted.TryGetError(out var uncountError)) {
+                await ScheduleAsync(ReconcileOutcome.Failed(uncountError, true));
+                return;
+            }
+
             await ReturnCommittedQuotaAsync(spec);
             await TerminateAsync(Contracts.OperationState.Succeeded, null);
             return;
@@ -499,6 +530,29 @@ public sealed class OperationGrain(
                 );
             }
         }
+    }
+
+    /// <summary>
+    ///     Takes this resource off its parent's child counter, now that it is gone.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>A top-level resource has nothing to do here and says so by succeeding.</b> Its parent
+    ///     is the resource <i>group</i>, which cascades by design (docs/plan/06 § The hierarchy) and
+    ///     carries no counter — so the absence of a parent address is the ordinary case rather than a
+    ///     fault, and returning a failure for it would stall every top-level delete on a retry loop.
+    /// </remarks>
+    async Task<Result> UncountFromParentAsync(OperationSpec spec) {
+        var address = Address(spec);
+
+        if (address.Parent is not { } parent) {
+            return Result.Success;
+        }
+
+        var removed = await Tenant(spec)
+            .GetGrain<IResourceIndexGrain>(GrainKeys.PathIndex(parent))
+            .RemoveChildAsync(address.Type);
+
+        return removed.ToResult();
     }
 
     // ── Internals ──────────────────────────────────────────────────────────────────────────────

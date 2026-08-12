@@ -188,20 +188,54 @@ Why refuse, when the resource *group* cascades:
 child whose own delete is stuck holds its parent undeletable. That is why the answer is a `409` *with
 a count* rather than a bare refusal — the caller has to be able to see what is holding it.
 
-**Not implemented, because the platform cannot enumerate children.** `IResourceIndexGrain` is
-path→GUID and one-way ([06](06-tenancy-and-resource-model.md) § Grain keys), so "what are this
-resource's children" is answerable only from the resource-graph projection, which is *eventually
-consistent* — and a delete gate reading a stale index either orphans a child it did not see or refuses
-over a child that is already gone. The two honest options are a per-parent child counter maintained
-transactionally where the index claim and release already happen, or a strongly-consistent child index
-grain keyed on the parent's address. The counter is the smaller and is where this should start.
+**Implemented, and the counter is on the parent's own index grain.** The blocker recorded here was
+that `IResourceIndexGrain` is path→GUID and one-way ([06](06-tenancy-and-resource-model.md) § Grain
+keys), so "what are this resource's children" was answerable only from the resource-graph projection,
+which is *eventually consistent* — and a delete gate reading a stale index either orphans a child it
+did not see or refuses over a child that is already gone. Of the two honest options this named — a
+per-parent counter maintained where the index claim and release already happen, or a
+strongly-consistent child index keyed on the parent's address — **`IResourceIndexGrain` turns out to
+be both at once**, so the counter lives there rather than in a grain of its own:
 
-⚠ **Until it exists, deleting a parent leaves its children addressable and pointing at nothing** — and
-their ReBAC `parent` edge pointing at a resource that is gone. That is the residual defect, recorded
-here rather than left to be rediscovered from an orphaned database. What the platform must *not* do
-instead is re-check the parent on every write to a child: that turns a deleted parent into a frozen
-child which answers `404` to a `GET` for a resource that plainly exists, which is worse than the
-orphan. `ParentExistenceTests.AnUpdateOfAnExistingChildDoesNotRecheckTheParent` pins that.
+- It is keyed on the parent's canonical path, so it is **one activation per parent address**: no new
+  key shape, no new grain type, no new cardinality question ([04](04-orleans-topology.md) § Grain
+  taxonomy's review question is already answered for this key).
+- It is the same activation the parent's delete calls `ReleaseAsync` on, so **"is this name taken" and
+  "does it still have children" are answered by one single-threaded entity that cannot disagree with
+  itself**. That is the strong consistency the projection could not offer.
+- `AddChildAsync` / `RemoveChildAsync` / `ChildrenAsync` count **per child type**, not per child. A
+  list of names would put one entry per child on the parent's durable row and rewrite the whole row on
+  every child create; a count per type is a handful of bytes at any fan-out and still answers "how
+  many, and of what", which is all the refusal needs.
+
+**The two endpoints are the moments the child starts and stops existing, and they are deliberately
+asymmetric.** The increment is on the *create*, immediately after the index claim is confirmed — a
+count raised before the durable write would survive a create that then failed, and nothing would ever
+lower it, so the parent would answer `409` to its own delete forever with only an operator able to
+clear it. The decrement is on the *delete*, in `OperationGrain` after `CompleteDeleteAsync`, beside
+the ReBAC unlink and for the same reasons: a child that is still tearing down **still exists** — 06
+§ Two-phase create keeps it visible, in `Deleting`, with its meter ticking — so it must still hold its
+parent, and the removal has to be re-drivable, because a count left high is worse than a dangling
+tuple. `RemoveChildAsync` clamps at zero so the re-drive is safe; `ReleaseAsync` clears the counts with
+the binding, so a name reused by a new resource cannot inherit the old one's children.
+
+⚠ **The residual is a count that is one too low, and it is the recoverable direction.** A silo lost
+between the index confirm and the increment leaves a child that exists and is not counted — the orphan
+this gate closes, in a microsecond-wide window, and no worse than the behaviour before the gate
+existed. The opposite residual, a count too high, is what the ordering above is chosen to avoid.
+
+What the platform must *not* do instead is re-check the parent on every write to a child: that turns a
+deleted parent into a frozen child which answers `404` to a `GET` for a resource that plainly exists,
+which is worse than the orphan. `ParentExistenceTests.AnUpdateOfAnExistingChildDoesNotRecheckTheParent`
+pins that — and it now makes the parent stop resolving through the index grain directly, because the
+refusal makes "delete the parent out from under a live child" unreachable through the API while
+leaving every *other* way a parent can stop resolving intact.
+
+⚠ **The refusal carries its own error code, `ResourceHasChildren`, and the sentence above about
+reusing `ScopeLocked`'s shape means the message rather than the code.** Same `409`, same "here is what
+is holding it" shape — but a caller with no lock anywhere in their hierarchy must not be told to go
+and find one, and every generated SDK branches on the code. Different recovery, therefore different
+code.
 
 ## The provider registry
 
