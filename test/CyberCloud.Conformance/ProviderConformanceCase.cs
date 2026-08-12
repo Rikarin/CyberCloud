@@ -106,6 +106,44 @@ public sealed record ProviderConformanceCase {
     /// <summary>Whether an object read out of the cluster carries what a desired body asked for.</summary>
     /// <remarks>The parameters are the object's JSON and the desired body's JSON text.</remarks>
     public required Func<string, string, bool> ObjectMatchesDesired { get; init; }
+
+    /// <summary>
+    ///     The <c>CustomResourceDefinition</c>s a real API server must be serving before
+    ///     <see cref="Objects" /> can be addressed at all, as YAML documents. Empty for a provider that
+    ///     renders only built-in kinds.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>This member exists because the cluster-backed half of the suite could not host a
+    ///         real provider without it, and the first one to try was the third provider in the
+    ///         tree.</b> <c>ClusterConformanceTests</c> says "to add a provider, do not touch this file
+    ///         … derive one class from this one in that provider's own <c>.Cluster.Conformance</c>
+    ///         project", and that was true of the reference provider and of the sample because both
+    ///         render a core-group <c>ConfigMap</c>. Every service in docs/plan/12 § The catalogue
+    ///         renders a <b>custom resource</b>, and a bare <c>k3s</c> serves no REST path for one:
+    ///         the apply comes back <c>404</c>, which nothing maps, so all five assertions fail with a
+    ///         serialization error naming <c>k8s.Autorest.HttpOperationException</c> and no status
+    ///         code. Measured, not predicted — <c>CyberCloud.Cache/redis</c> went 5-of-6 red before
+    ///         this existed.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>It is deliberately CRDs and not "manifests".</b> A provider does not get to
+    ///         install an operator, a namespace or a fixture into the suite's cluster — the point of
+    ///         reading around our own code is that the world is the API server's and not the
+    ///         provider's. What a provider is entitled to say is which REST paths have to exist for its
+    ///         objects to be addressable, which is exactly a CRD and nothing else.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>What a stub CRD does and does not prove.</b> Served, it makes the plural address a
+    ///         real path, makes server-side apply real, and makes the seven labels pass real admission
+    ///         — which is what the assertions here are about. It does <i>not</i> prove the rendered
+    ///         spec satisfies the operator's own schema, because the CRD a provider supplies here is
+    ///         the provider's own file. A case that supplied a permissive stub and called the result
+    ///         "the API server accepts our manifest" would be overclaiming, so say in the CRD which one
+    ///         it is.
+    ///     </para>
+    /// </remarks>
+    public ImmutableArray<string> RequiredCrds { get; init; } = [];
 }
 
 /// <summary>

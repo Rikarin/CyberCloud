@@ -48,8 +48,73 @@ public sealed class ValkeyCase : IProviderCaseSource {
             ObjectMatchesDesired = (objectJson, desiredJson) => {
                 using var desired = JsonDocument.Parse(desiredJson);
                 return ValkeyCaches.Matches(objectJson, desired.RootElement);
-            }
+            },
+            // ⚠ THE FIRST NON-EMPTY ONE IN THE TREE, AND IT IS WHY THE MEMBER EXISTS. See below.
+            RequiredCrds = [RedisFailoverCrd]
         };
+
+    /// <summary>
+    ///     The <c>RedisFailover</c> CRD, for the cluster-backed suite only.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>A STUB, AND IT SAYS SO RATHER THAN LOOKING LIKE THE REAL ONE.</b> spotahome's own
+    ///         CRD carries a full pod-spec schema thousands of lines long. What
+    ///         <c>ClusterConformanceTests</c> asserts needs none of it: that the plural addresses a
+    ///         real REST path, that server-side apply behaves as ADR-013 assumes, that the seven labels
+    ///         survive admission, and that the stored object carries the desired shape. All four need
+    ///         the kind to be <i>served</i>; none needs the spec to be <i>validated</i>. So the spec is
+    ///         <c>x-kubernetes-preserve-unknown-fields</c> and the assertions this file supports are
+    ///         about addressing and admission, <b>not</b> about whether
+    ///         <c>ValkeyCaches.RedisFailoverJson</c> satisfies the operator's schema. Nothing in this
+    ///         repository checks that today; <c>charts/managed/valkey/SOURCE</c> records the review
+    ///         date, which is the weaker claim, and labels it as one.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>It is not the CRD the platform installs.</b> That is <c>charts/bundle/</c>'s, along
+    ///         with the operator, and this chart deliberately ships neither — see
+    ///         <c>charts/managed/valkey/templates/redisfailover.yaml</c>. A test fixture and a bundle
+    ///         artifact would be two files claiming to be the same thing, so this one is scoped to the
+    ///         suite by living here and being named for what it is.
+    ///     </para>
+    ///     <para>
+    ///         The group, version, kind, plural, singular, short name and scope are the upstream CRD's,
+    ///         taken from <c>manifests/databases.spotahome.com_redisfailovers.yaml</c> — those seven
+    ///         <b>are</b> the contract this fixture has to get right, because
+    ///         <c>ValkeyCaches.FailoverKind</c> addresses a REST path built from four of them.
+    ///     </para>
+    /// </remarks>
+    public const string RedisFailoverCrd =
+        """
+        apiVersion: apiextensions.k8s.io/v1
+        kind: CustomResourceDefinition
+        metadata:
+          name: redisfailovers.databases.spotahome.com
+        spec:
+          group: databases.spotahome.com
+          scope: Namespaced
+          names:
+            kind: RedisFailover
+            listKind: RedisFailoverList
+            plural: redisfailovers
+            singular: redisfailover
+            shortNames:
+              - rf
+          versions:
+            - name: v1
+              served: true
+              storage: true
+              schema:
+                openAPIV3Schema:
+                  type: object
+                  properties:
+                    spec:
+                      type: object
+                      x-kubernetes-preserve-unknown-fields: true
+                    status:
+                      type: object
+                      x-kubernetes-preserve-unknown-fields: true
+        """;
 
     /// <summary>A valid body with the required major version removed.</summary>
     /// <param name="body">A valid body.</param>

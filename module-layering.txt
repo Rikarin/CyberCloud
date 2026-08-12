@@ -94,6 +94,17 @@ CyberCloud.ResourceManager -> CyberCloud.Tenancy
 # ⚠ NO LINE BETWEEN TWO PROVIDERS MAY EVER BE ADDED HERE. Rule 2 forbids it outright and rule 7
 # cannot grant what rule 2 refuses: cross-provider traffic goes through CyberCloud.ResourceManager
 # by resource id. A line here would fail rule 2 and be deleted, not honoured.
+#
+# ⚠ THE THREE FAMILIES BELOW HAVE IDENTICAL COLUMNS, AND THAT IS THE MEASUREMENT RATHER THAN A
+# COINCIDENCE. docs/plan/25 § R1 asks what a provider costs the platform; four edges, the same four
+# every time, is the answer for a trivial provider, for one with backup and pooling and extensions,
+# and for one that does quantity arithmetic and talks to a third operator. A fourth family arriving
+# with a FIFTH edge is the signal that something has been reached for that a provider should have
+# gone through CyberCloud.ResourceManager to get.
+CyberCloud.Providers.Cache -> CyberCloud.Core
+CyberCloud.Providers.Cache -> CyberCloud.Kubernetes
+CyberCloud.Providers.Cache -> CyberCloud.ResourceManager
+CyberCloud.Providers.Cache -> CyberCloud.Tenancy
 CyberCloud.Providers.DBforPostgreSQL -> CyberCloud.Core
 CyberCloud.Providers.DBforPostgreSQL -> CyberCloud.Kubernetes
 CyberCloud.Providers.DBforPostgreSQL -> CyberCloud.ResourceManager

@@ -6,6 +6,12 @@ using CyberCloud.ResourceManager.Reconcile;
 using CyberCloud.ResourceManager.Registry;
 using CyberCloud.ServiceDefaults.Storage;
 using k8s;
+// ⚠ A k8s.Models type in a TEST project. Rule 3 of docs/plan/03 § Assembly graph rules — "no assembly
+// above CyberCloud.Kubernetes references k8s.Models" — is about the shipped graph and excludes test
+// projects by construction, and this suite already reads V1Patch for the rival apply. A CRD is the one
+// object here that is deliberately NOT created through our own fabric: it is the precondition for the
+// fabric working at all.
+using k8s.Models;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
@@ -227,6 +233,7 @@ public sealed class ClusterConformanceHarness<TSource> : IAsyncDisposable
         ClusterConformanceState<TSource>.Connection = harness.Connection;
 
         await EnsureNamespaceAsync(harness.Raw, Namespace, cancellationToken).ConfigureAwait(false);
+        await EnsureCrdsAsync(harness.Raw, cancellationToken).ConfigureAwait(false);
 
         var builder = new TestClusterBuilder((short)silos);
         builder.Options.ServiceId = serviceId;
@@ -356,6 +363,96 @@ public sealed class ClusterConformanceHarness<TSource> : IAsyncDisposable
             .CreateAsync(tenant, "eu-west-1");
 
         group.IsSuccess.ShouldBeTrue(group.Error?.Message);
+    }
+
+    /// <summary>
+    ///     Serves every <c>CustomResourceDefinition</c> the case declares, and waits until the API
+    ///     server says so.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>Without this, every provider in docs/plan/12 § The catalogue fails this whole suite
+    ///         at the first apply.</b> A bare <c>k3s</c> serves no REST path for a custom resource, so
+    ///         the apply is a <c>404</c> — and <c>KubeApiClient.ApplyAsync</c> maps only a <c>409</c>
+    ///         and <c>IsTransport</c>'s set, so the raw <c>k8s.Autorest.HttpOperationException</c>
+    ///         escapes the grain call and Orleans reports
+    ///         <c>CodecNotFoundException</c> with no status code in it. The reference provider and the
+    ///         sample never met this because both render a core-group <c>ConfigMap</c>;
+    ///         <c>CyberCloud.Cache/redis</c> is the first provider whose object needed a CRD, and it
+    ///         went 5-of-6 red until this ran.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The wait for <c>Established</c> is not optional and is not a sleep.</b> Creating a
+    ///         CRD returns before the API server has wired its REST path; an apply in that window gets
+    ///         the same <c>404</c> as no CRD at all, intermittently, which is the worst possible
+    ///         version of this failure. The condition is the API server's own answer to "is this
+    ///         servable now".
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>A <c>409</c> is the desired end state.</b> A CRD is cluster-scoped and this suite
+    ///         starts two harnesses over one <c>k3s</c> — the lifecycle fixture's and the silo-kill
+    ///         test's successor pair — so the second one finds the first one's CRD, exactly as
+    ///         <see cref="EnsureNamespaceAsync" /> finds the first one's namespace.
+    ///     </para>
+    /// </remarks>
+    static async Task EnsureCrdsAsync(IKubernetes raw, CancellationToken cancellationToken) {
+        foreach (var yaml in Case.RequiredCrds) {
+            var declared = KubernetesYaml.Deserialize<V1CustomResourceDefinition>(yaml);
+            var name = declared.Metadata?.Name
+                ?? throw new InvalidOperationException(
+                    $"a RequiredCrds entry of '{Case.DisplayName}' declares no metadata.name, so "
+                    + "nothing can be created from it or waited on."
+                );
+
+            try {
+                await raw.ApiextensionsV1
+                    .CreateCustomResourceDefinitionAsync(declared, cancellationToken: cancellationToken)
+                    .ConfigureAwait(false);
+            } catch (k8s.Autorest.HttpOperationException ex)
+                when (ex.Response?.StatusCode == System.Net.HttpStatusCode.Conflict) {
+                // Another harness in this process got there first. See the remarks.
+            }
+
+            await WaitUntilEstablishedAsync(raw, name, cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>How long a CRD may take to become servable before that is a failure rather than a wait.</summary>
+    /// <remarks>
+    ///     ⚠ Generous, because the alternative to waiting long enough is a <c>404</c> that looks like a
+    ///     provider bug. k3s establishes a CRD in well under a second; a run that reaches this timeout
+    ///     has something else wrong with it, and saying so beats failing five assertions.
+    /// </remarks>
+    static readonly TimeSpan EstablishmentBudget = TimeSpan.FromSeconds(30);
+
+    static async Task WaitUntilEstablishedAsync(
+        IKubernetes raw,
+        string name,
+        CancellationToken cancellationToken
+    ) {
+        var deadline = DateTimeOffset.UtcNow + EstablishmentBudget;
+
+        while (DateTimeOffset.UtcNow < deadline) {
+            var read = await raw.ApiextensionsV1
+                .ReadCustomResourceDefinitionAsync(name, cancellationToken: cancellationToken)
+                .ConfigureAwait(false);
+
+            if (read.Status?.Conditions?.Any(x =>
+                    string.Equals(x.Type, "Established", StringComparison.Ordinal)
+                    && string.Equals(x.Status, "True", StringComparison.Ordinal))
+                == true) {
+                return;
+            }
+
+            await Task.Delay(TimeSpan.FromMilliseconds(200), cancellationToken).ConfigureAwait(false);
+        }
+
+        throw new InvalidOperationException(
+            $"the CustomResourceDefinition '{name}' did not reach Established within "
+            + $"{EstablishmentBudget.TotalSeconds.ToString("0", CultureInfo.InvariantCulture)}s, so its "
+            + "REST path is not servable and every apply of that kind would be a 404 that nothing in "
+            + "CyberCloud.Kubernetes maps."
+        );
     }
 
     static async Task EnsureNamespaceAsync(IKubernetes raw, string ns, CancellationToken cancellationToken) {
