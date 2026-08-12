@@ -140,10 +140,17 @@ with whoever adds the first child type.
   [07](07-rebac-authorization.md) § The model describes the resource → resourceGroup →
   subscription → tenant chain; a child adds a hop and the schema's `From("parent", …)` rewrites
   already handle it.
-- **Nothing checks that a parent exists at create.** `ResourceManagerService.ResolveAsync` validates
-  the tenant, the subscription, the registry and the index, and never looks for the parent. A topic
-  can be created naming a cluster that does not exist. The check belongs next to the subscription
-  check and must answer the same 404, for the same enumeration-oracle reason.
+- ~~**Nothing checks that a parent exists at create.**~~ **Done.** `ResolveAsync` resolves
+  `ResourceId.Parent` through `IResourceIndexGrain` and answers the same `404` from the same helper,
+  for the enumeration-oracle reason. Only a *confirmed* binding counts, so a parent under an
+  unexpired two-phase-create claim reads as absent. It runs on the **create** only — it sits just
+  after the index read, because "is this a create" is that read's answer — since re-checking on every
+  write would turn a deleted parent into a frozen child that answers `404` to a `GET` or a `PATCH`
+  for a resource that plainly exists. `ParentExistenceTests` holds both halves.
+- **Deleting a parent that has children is still unanswered in code.** The decision is
+  [08 § Deleting a parent resource that has children](08-resource-manager.md) — refuse with a `409`,
+  never cascade — and it is not implemented, because the platform cannot yet enumerate a resource's
+  children. Until it is, deleting a parent leaves its children addressable and pointing at nothing.
 
 ## Sizing vocabulary
 

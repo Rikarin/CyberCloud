@@ -211,6 +211,31 @@ public sealed class ResourceManagerService(
             return NotFound<WriteAccepted>(request.Path);
         }
 
+        // ── ⚠ WHAT IS OWED HERE: THE CHILDREN ───────────────────────────────────────────────────
+        //
+        // Step 1 now refuses a create whose parent does not exist (see ResolveAsync). This is the
+        // other end of that and it is NOT implemented: deleting a resource that has children leaves
+        // them addressable, pointing at nothing, with a ReBAC parent edge aimed at a resource that
+        // is gone.
+        //
+        // The decision, at docs/plan/08 § Deleting a parent resource that has children, is that this
+        // must REFUSE — a 409 naming how many children there are — and must not cascade. A resource
+        // group is a declared lifecycle boundary and a parent resource is not: nobody who types
+        // DELETE on a single-resource URL has said anything about the databases on that server, and a
+        // cascade would tear down an unknown number of resources they never named, with the data in
+        // them, returning their quota under an operation that says it deleted something else. The
+        // refusal belongs here, one step before the lock check, and reuses ScopeLocked's shape rather
+        // than inventing a second one.
+        //
+        // It is unwritten because the platform cannot enumerate children: IResourceIndexGrain is
+        // path→GUID and one-way, and the resource-graph projection is eventually consistent, so a
+        // gate reading it would either orphan a child it did not see or refuse over one already gone.
+        // It needs a per-parent child counter maintained where the index claim and release already
+        // happen. Recorded rather than left to be rediscovered from an orphaned database.
+        //
+        // ⚠ What must NOT be done instead is re-checking the parent on every write to a child: that
+        // turns a deleted parent into a frozen child which answers 404 to a GET for a resource that
+        // plainly exists — worse than the orphan. ParentExistenceTests pins against it.
         trace.Enter(WriteStep.Locks);
 
         var lockLevel = await locks.ResolveAsync(target.Id, cancellationToken);
@@ -884,7 +909,8 @@ public sealed class ResourceManagerService(
 
     /// <summary>
     ///     Parses the path, checks the tenant and the subscription, resolves the identity through the
-    ///     index, and looks the type and version up.
+    ///     index, looks the type and version up, and — for a child type being created — checks that
+    ///     the parent its address names is a resource that exists.
     /// </summary>
     /// <remarks>
     ///     ⚠ <b>The two ownership checks are the first two things that happen and they are in this
@@ -956,6 +982,55 @@ public sealed class ResourceManagerService(
             .GetGrain<IResourceIndexGrain>(GrainKeys.PathIndex(address));
 
         var existing = await index.ResolveAsync();
+
+        // ── The parent resource is real ─────────────────────────────────────────────────────────
+        //
+        // ⚠ A CHILD'S PARENT USED TO BE A SEGMENT NOBODY LOOKED AT. This method validated the tenant,
+        // the subscription, the type and the api-version, and never the parent — so
+        // …/widgets/{gone}/gadgets/{name} was created without complaint, and every layer below here
+        // agreed: the name was free, the quota was there, the claim succeeded, the reconciler ran.
+        //
+        // ⚠ AND THE EDGE STEP 8 WRITES MAKES IT WORSE THAN A DANGLING REFERENCE.
+        // IResourceRelationWriter.LinkToParentAsync derives the ReBAC `parent` edge from this address
+        // and nothing else, so an orphan's edge points at a resource that does not exist and the
+        // child inherits permission from nothing. docs/plan/12 § Child resources chose the
+        // interleaved grammar *because* the flattened one could not express the parent — leaving the
+        // parent unchecked spends that decision and keeps the failure it was meant to remove.
+        //
+        // ⚠ THE ANSWER IS 404 AND IS THE SAME 404 AS "no such resource" — byte for byte, from the
+        // same helper, for the reason the subscription check above gives and one more besides. This
+        // runs BEFORE the enforcement seam, so a caller who may write in a resource group but may not
+        // read a particular widget would otherwise learn, one probe at a time, which widget names are
+        // live: ParentNotFound would confirm the parent's absence and its silence would confirm the
+        // parent's existence. docs/plan/07 § The enforcement seam. The message names the CHILD's path
+        // — the one the caller supplied — and never the parent's, which would hand back the string
+        // they were guessing at.
+        //
+        // ⚠ ONLY A CONFIRMED BINDING IS A PARENT, which is what IResourceIndexGrain.ResolveAsync
+        // already means: a name under an unexpired two-phase-create claim is a lease and not yet a
+        // resource, and a child hung off one would outlive its parent's failure to exist.
+        //
+        // ⚠ THE IMMEDIATE PARENT, NOT THE WHOLE CHAIN. At depth 3 the grandparent is not re-read,
+        // because it was checked when the parent was created and the invariant carries down
+        // inductively. The one thing that can break it is a delete, which is exactly what
+        // docs/plan/08 § Deleting a parent resource that has children is about.
+        //
+        // ⚠ ON THE CREATE AND ONLY ON THE CREATE — hence `existing.IsFailure`, and why this sits
+        // after the index read rather than up beside the subscription check where it otherwise
+        // belongs: "is this a create" is that read's answer. Re-checking every write would mean that
+        // deleting a parent silently froze every child — a GET or a PATCH that had nothing to do with
+        // the parent would start answering 404 for a resource that plainly exists, which is a worse
+        // failure than the one being closed.
+        if (existing.IsFailure && address.Parent is { } parent) {
+            var bound = await grains
+                .ForTenant(address.TenantId.ToString("D", CultureInfo.InvariantCulture))
+                .GetGrain<IResourceIndexGrain>(GrainKeys.PathIndex(parent))
+                .ResolveAsync();
+
+            if (bound.IsFailure) {
+                return NotFound<WriteTarget>(request.Path);
+            }
+        }
 
         return Result<WriteTarget>.Success(
             new(
