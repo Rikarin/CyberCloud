@@ -1,0 +1,205 @@
+{{/*
+The three Cluster API objects a node pool is.
+
+⚠ THREE, WHICH IS EXACTLY WHAT ITS PARENT RENDERS. The only other shipping child type renders one
+object against its parent's one; a node pool is not a subdivision of its cluster, it is its cluster's
+capacity.
+
+⚠ THE MachineDeployment NAMES THE OTHER TWO, so the reconciler applies the templates first. Neither
+ref carries an apiVersion — Cluster API v1beta2's ContractVersionedObjectReference is
+{apiGroup, kind, name} and the version comes from a label on the provider's own CRD.
+*/}}
+{{/*
+──────────────────────────────────────────────────────────────────────────────────────────────────
+What one worker VM looks like.
+
+⚠ ITS SPEC IS IMMUTABLE UPSTREAM. cluster-api-provider-kubevirt ships a validating webhook whose whole
+content is "KubevirtMachineTemplateSpec is immutable" on update, which is why `size` and `osDiskSize`
+are @immutable in values.yaml: a PUT that changed either would be refused on every pass, forever.
+*/}}
+apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
+kind: KubevirtMachineTemplate
+metadata:
+  name: {{ include "kubernetes-agentpool.objectName" . }}
+  labels:
+    {{- include "kubernetes-agentpool.platformLabels" . | nindent 4 }}
+spec:
+  template:
+    spec:
+      virtualMachineTemplate:
+        spec:
+          runStrategy: Always
+          {{/*
+            ⚠ THE SIZING VOCABULARY IS AN OBJECT NAME HERE, NOT A PAIR OF QUANTITIES, AND THAT IS NEW.
+            Every earlier provider turns a preset into resources.requests on a pod. docs/plan/09 wants
+            "an instancetype from a platform catalogue, which is where the t1.micro/c1.large vocabulary
+            from ADR-010 is defined once and reused by every provider" — so the preset name IS the
+            object name. A dot is legal in a DNS-1123 subdomain, which is what an object name is.
+
+            ⚠ THE OBJECT IS CLUSTER-SCOPED AND NOTHING HERE CREATES IT. A missing instancetype is a VM
+            that never starts, and the quota this platform reserved for it was reserved against numbers
+            in ManagedClusters.Presets that nothing compares to the real object.
+            conformance.yaml § owed, `instancetypes-are-the-bundles`.
+
+            ⚠ THE KIND IS WRITTEN OUT even though an empty kind resolves to the cluster-scoped type
+            today, because a default that changes silently is worse than a line.
+          */}}
+          instancetype:
+            kind: VirtualMachineClusterInstancetype
+            name: {{ .Values.size | quote }}
+          dataVolumeTemplates:
+            - metadata:
+                {{/*
+                  ⚠ A TEMPLATE-LOCAL HANDLE RATHER THAN AN OBJECT NAME. CAPK prefixes it with the
+                  machine's name when it creates the real DataVolume.
+                */}}
+                name: root
+              spec:
+                storage:
+                  resources:
+                    requests:
+                      storage: {{ .Values.osDiskSize | quote }}
+                source:
+                  registry:
+                    url: {{ printf "docker://%s:%s" .Values.nodeImageRepository (include "kubernetes-agentpool.pinnedVersion" .) | quote }}
+          template:
+            spec:
+              domain:
+                devices:
+                  disks:
+                    - name: root
+                      disk:
+                        bus: virtio
+                  interfaces:
+                    - name: default
+                      bridge: {}
+              networks:
+                - name: default
+                  pod: {}
+              volumes:
+                - name: root
+                  dataVolume:
+                    name: root
+              {{/*
+                ⚠ `External`, because a KubeVirt VM backing a Kubernetes node must not be live-migrated
+                or evicted by the management cluster's own drain: the node inside it has its own
+                workloads and its own opinion about when it may go away.
+              */}}
+              evictionStrategy: External
+          {{/*
+            ⚠ NO CLOUD-INIT VOLUME AND NO SSH KEY, AND LEAVING THEM OUT IS REQUIRED RATHER THAN TIDY.
+            CAPK's machine controller APPENDS a CloudInitConfigDrive volume and a matching disk to
+            whatever this renders, writing the bootstrap data and its own `capk` user into it. A
+            template that supplied one would end up with two, which is a VM that boots from the wrong
+            config drive.
+
+            ⚠ NO `virtualMachineBootstrapCheck`, so the CRD's own default of `ssh` stands — which is
+            what the Kamaji control-plane provider's published KubeVirt template does. It is the
+            riskiest default on this type: an SSH bootstrap check needs a key CAPK generates while
+            reconciling the KubevirtCluster, and `cluster.x-k8s.io/managed-by: kamaji` makes it skip
+            that object entirely. conformance.yaml § owed, `bootstrap-check-may-never-complete`.
+          */}}
+---
+{{/*
+──────────────────────────────────────────────────────────────────────────────────────────────────
+How a VM joins the cluster.
+
+⚠ IT IS ALMOST EMPTY AND THAT IS CORRECT. The API endpoint, the bootstrap token and the CA hash are
+written by Cluster API's kubeadm bootstrap controller into the per-machine KubeadmConfig it derives
+from this template. What a template is FOR is the part that is the same for every machine in the pool,
+and this platform declares one of them.
+*/}}
+apiVersion: bootstrap.cluster.x-k8s.io/v1beta2
+kind: KubeadmConfigTemplate
+metadata:
+  name: {{ include "kubernetes-agentpool.objectName" . }}
+  labels:
+    {{- include "kubernetes-agentpool.platformLabels" . | nindent 4 }}
+spec:
+  template:
+    spec:
+      joinConfiguration:
+        nodeRegistration:
+          {{/*
+            ⚠ THE ONE THING THIS TEMPLATE SAYS. A kubelet that believes it is on a cloud with no
+            cloud-controller-manager stays NotReady behind an uninitialised taint that nothing removes,
+            and the symptom is a node pool whose machines all exist and none of which will schedule
+            anything.
+          */}}
+          kubeletExtraArgs:
+            - name: cloud-provider
+              value: external
+---
+{{/*
+──────────────────────────────────────────────────────────────────────────────────────────────────
+The MachineDeployment. It stitches the other two together and owns the count.
+*/}}
+apiVersion: cluster.x-k8s.io/v1beta2
+kind: MachineDeployment
+metadata:
+  name: {{ include "kubernetes-agentpool.objectName" . }}
+  labels:
+    {{- include "kubernetes-agentpool.platformLabels" . | nindent 4 }}
+  {{- if .Values.autoscale.enabled }}
+  {{/*
+    ⚠ CLUSTER API'S OWN MECHANISM, NOT A CONVENTION INVENTED HERE. Its MachineDeployment defaulting
+    webhook reads exactly these two when it decides what spec.replicas should be, and the
+    cluster-autoscaler's Cluster API provider reads them to find its bounds. ⚠ NOTHING IN THIS PLATFORM
+    INSTALLS A CLUSTER-AUTOSCALER, so on a bundle without one they are inert and the pool sits at its
+    declared count — a safe failure, and not a silent one only because it is written down.
+    conformance.yaml § owed, `autoscaling-needs-an-autoscaler-in-the-bundle`.
+  */}}
+  annotations:
+    cluster.x-k8s.io/cluster-api-autoscaler-node-group-min-size: {{ .Values.autoscale.minCount | quote }}
+    cluster.x-k8s.io/cluster-api-autoscaler-node-group-max-size: {{ .Values.autoscale.maxCount | quote }}
+  {{- end }}
+spec:
+  {{/*
+    ⚠ FROM THE ADDRESS, AND IT APPEARS TWICE. Cluster API requires clusterName on the spec AND on the
+    machine template and does not derive one from the other; a pool whose two disagreed would be
+    adopted by one cluster and counted by another.
+  */}}
+  clusterName: {{ include "kubernetes-agentpool.clusterName" . | quote }}
+
+  {{/*
+    ⚠ ALWAYS WRITTEN, EVEN UNDER AN AUTOSCALER. Cluster API's defaulting webhook computes a value when
+    the field is missing, so leaving it out would hand the pool's initial size to a webhook rather than
+    to the tenant — and would make a read-back differ from the render on the first create.
+  */}}
+  replicas: {{ .Values.count }}
+
+  {{/*
+    ⚠ THIS MAP AND spec.template.metadata.labels ARE THE SAME MAP, AND CLUSTER API'S VALIDATING WEBHOOK
+    REFUSES THE OBJECT WHEN THEY DISAGREE. One helper, used twice, is why they cannot.
+  */}}
+  selector:
+    matchLabels:
+      {{- include "kubernetes-agentpool.selectorLabels" . | nindent 6 }}
+
+  {{/*
+    ⚠ `spec.rollout.strategy`, NOT `spec.strategy`. The field moved in v1beta2 and the API server prunes
+    the old path, so a rollout policy written the v1beta1 way is accepted and silently absent.
+  */}}
+  rollout:
+    strategy:
+      type: RollingUpdate
+      rollingUpdate:
+        maxSurge: {{ .Values.upgrade.maxSurge }}
+        maxUnavailable: {{ .Values.upgrade.maxUnavailable }}
+
+  template:
+    metadata:
+      labels:
+        {{- include "kubernetes-agentpool.selectorLabels" . | nindent 8 }}
+    spec:
+      clusterName: {{ include "kubernetes-agentpool.clusterName" . | quote }}
+      version: {{ include "kubernetes-agentpool.pinnedVersion" . | quote }}
+      bootstrap:
+        configRef:
+          apiGroup: bootstrap.cluster.x-k8s.io
+          kind: KubeadmConfigTemplate
+          name: {{ include "kubernetes-agentpool.objectName" . }}
+      infrastructureRef:
+        apiGroup: infrastructure.cluster.x-k8s.io
+        kind: KubevirtMachineTemplate
+        name: {{ include "kubernetes-agentpool.objectName" . }}

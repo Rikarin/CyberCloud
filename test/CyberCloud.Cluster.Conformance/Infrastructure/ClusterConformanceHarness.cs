@@ -254,6 +254,14 @@ public sealed class ClusterConformanceHarness<TSource> : IAsyncDisposable
         await harness.CreateSubscriptionAsync(ConformanceIds.Tenant, ConformanceIds.Subscription)
             .ConfigureAwait(false);
 
+        // ⚠ AND THE QUOTA LIMITS ARE LIFTED, for the reason ProviderTestCluster.LiftQuotaAsync gives
+        // in full: this suite creates repeatedly against one subscription and nothing releases the
+        // committed amounts, so a type drawing QuotaMeter.Clusters — whose default limit is five —
+        // would fail here for a reason that has nothing to do with a real API server. Nothing in this
+        // suite asserts a quota limit either.
+        await harness.LiftQuotaAsync(ConformanceIds.Tenant, ConformanceIds.Subscription)
+            .ConfigureAwait(false);
+
         harness.Manager = new ResourceManagerService(
             harness.Registry,
             ClusterConformanceState<TSource>.Authorizer,
@@ -443,6 +451,23 @@ public sealed class ClusterConformanceHarness<TSource> : IAsyncDisposable
             .CreateAsync(tenant, "eu-west-1");
 
         group.IsSuccess.ShouldBeTrue(group.Error?.Message);
+    }
+
+    /// <summary>Puts every quota meter out of the way for one subscription.</summary>
+    /// <param name="tenant">The tenant.</param>
+    /// <param name="subscription">The subscription.</param>
+    /// <remarks>⚠ The twin of <c>ProviderTestCluster.LiftQuotaAsync</c>, whose remarks carry the argument.</remarks>
+    async Task LiftQuotaAsync(Guid tenant, Guid subscription) {
+        var quota = For(tenant).GetGrain<IQuotaGrain>(GrainKeys.Subscription(subscription));
+
+        foreach (var meter in Enum.GetValues<QuotaMeter>()) {
+            if (meter == QuotaMeter.Unknown) {
+                continue;
+            }
+
+            var set = await quota.SetLimitAsync(meter, 1_000_000m);
+            set.IsSuccess.ShouldBeTrue(set.Error?.Message);
+        }
     }
 
     static async Task EnsureNamespaceAsync(IKubernetes raw, string ns, CancellationToken cancellationToken) {

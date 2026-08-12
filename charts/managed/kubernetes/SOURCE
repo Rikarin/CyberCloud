@@ -1,0 +1,111 @@
+# Provenance — charts/README.md § `SOURCE` is required, including when nothing was forked.
+#
+# ADR-010: "Their charts are a starting point, not a dependency. Where a chart is close, fork it into
+# charts/ with the upstream commit recorded in a SOURCE file." Nothing was forked here.
+
+vendored: none
+upstream: https://github.com/kubernetes-sigs/cluster-api
+
+# ⚠ THREE UPSTREAM PROJECTS, EACH SERVING ONE OF THE THREE OBJECTS THIS CHART RENDERS, AND THEY ARE
+# VERSIONED INDEPENDENTLY. Read against the repositories' own CRD YAML and Go types on 2026-08-12,
+# not against a README and not against a quickstart template.
+upstream-api: cluster.x-k8s.io/v1beta2, controlplane.cluster.x-k8s.io/v1alpha2, infrastructure.cluster.x-k8s.io/v1alpha1
+
+cluster-api: https://github.com/kubernetes-sigs/cluster-api             # v1.14.0, released 2026-08-11
+control-plane-provider: https://github.com/clastix/cluster-api-control-plane-provider-kamaji  # v0.20.0
+infrastructure-provider: https://github.com/kubernetes-sigs/cluster-api-provider-kubevirt     # v0.11.2
+datastore-engine: https://github.com/clastix/kamaji
+
+reviewed: 2026-08-12
+
+# ── What the review established, and which claims are weak ────────────────────────────────────
+#
+# ⚠ THE Cluster IS RENDERED AT v1beta2 AND UPSTREAM'S OWN KAMAJI+KUBEVIRT TEMPLATE STILL EMITS
+# v1beta1. `config/crd/bases/cluster.x-k8s.io_clusters.yaml` marks v1beta1 `deprecated: true`,
+# `storage: false`; v1.14.0's release notes say it "is on track to be unserved in CAPI v1.16". The
+# control-plane provider's `templates/kubevirt/capi-kamaji-kubevirt-class.yaml` nonetheless emits
+# `cluster.x-k8s.io/v1beta1` and `spec.topology.class`, while its own controller imports the v1beta2
+# Go package. Copying the template would have pinned this platform to a version that stops being
+# served; the template is a starting point, which is what ADR-010 already says.
+#
+# ⚠ v1beta2 REPLACED corev1.ObjectReference WITH ContractVersionedObjectReference — {apiGroup, kind,
+# name}, all required, and NO apiVersion. `api/core/v1beta2/common_types.go`: "a reference to a
+# resource for which the version is inferred from contract labels." So the version this platform's
+# refs resolve to is decided by a LABEL ON SOMEBODY ELSE'S CRD, and that is the single most fragile
+# upstream fact this row rests on — see conformance.yaml § owed,
+# `capk-crd-carries-the-v1beta1-contract-label`.
+#
+# ⚠ KamajiControlPlane IS v1alpha2 AND THERE IS NO v1alpha1 TO FALL BACK TO. v0.20.0's CRD serves
+# exactly one version. Its `config/metadata.yaml` is also the first to claim the v1beta2 Cluster API
+# contract (minor 20 -> v1beta2; 19 and below -> v1beta1), which is what makes the Cluster's own
+# version choice consistent rather than merely newer.
+#
+# ⚠ FIVE `+kubebuilder:default` MARKERS ON KamajiControlPlaneSpec, AND THIS IS WHY `Matches` IS
+# CONTAINMENT. `replicas=2`; `registry="registry.k8s.io"`; a whole `kubelet` object
+# ({preferredAddressTypes: {InternalIP, ExternalIP, Hostname}, cgroupfs: systemd}); a whole `network`
+# object ({serviceType: LoadBalancer}); and `network.serviceType="LoadBalancer"` again on the nested
+# field. A real API server writes four keys back that this platform never sent. Cluster API's own
+# ClusterSpec, by contrast, carries NO defaults and its mutating webhook is a no-op for a
+# non-topology Cluster — which is worth recording precisely because it is the opposite of the
+# assumption a reader would carry over.
+#
+# ⚠ THE ONE THAT IS A SECURITY DECISION: network.serviceType DEFAULTS TO LoadBalancer. Rendering
+# nothing would publish every tenant's Kubernetes API server on a public address. `ClusterIP` is
+# rendered explicitly, and the reason there is no allow-list instead is below.
+#
+# ⚠ THERE IS NOWHERE UPSTREAM TO PUT A CIDR ALLOW-LIST, WHICH IS WHY THIS TYPE HAS NO EXPOSURE
+# PROPERTY. The KubeVirt provider's `ServiceSpecTemplate` (api/v1alpha1/kubevirtcluster_types.go) has
+# exactly ONE field — `type` — with no ports, no selector and no loadBalancerSourceRanges; Kamaji's
+# `NetworkComponent` offers serviceAnnotations and serviceLabels and no source ranges either.
+# docs/plan/12 § Cross-cutting decisions requires an explicit list on any exposure. Second sighting of
+# an upstream ServiceSpec with nowhere to put a firewall — charts/managed/seaweedfs found the first.
+#
+# ⚠ THE KubevirtCluster CARRIES `cluster.x-k8s.io/managed-by: kamaji` AND WITHOUT IT TWO CONTROLLERS
+# OWN THE SAME FIELD. Read in `controllers/kubevirtcluster_controller.go`: the KubeVirt provider
+# returns immediately for an externally-managed cluster, creating no load-balancer Service, no SSH-key
+# Secret, and never setting status.ready. The Kamaji provider then patches spec.controlPlaneEndpoint
+# and status.ready onto it — through a HARDCODED SWITCH over infrastructure kinds
+# (`kamajicontrolplane_controller_cluster_patch.go`) in which KubevirtCluster is a listed case with
+# patchStatus=true.
+#
+# ⚠ THE DataStore IS CLUSTER-SCOPED. `charts/kamaji/crds/kamaji.clastix.io_datastores.yaml` is
+# `scope: Cluster`. That is why this platform NAMES one rather than creating one per tenant, and why
+# ADR-009's "a dedicated etcd per tenant" is not honoured — conformance.yaml § owed,
+# `datastore-is-shared-and-adr-009-says-it-should-not-be`. `dataStoreName` has no default marker and
+# no required marker, and Kamaji's validating webhook (`internal/webhook/handlers/tcp_datastore.go`)
+# nonetheless Gets the named DataStore and refuses with "<name> DataStore does not exist" — so the
+# field is optional in the schema and mandatory in fact. `default` is the name Kamaji's own chart
+# creates (`defaultDatastoreName: default`, with a kamaji-etcd subchart).
+#
+# ⚠ clusterNetwork.serviceDomain IS NOT DEFAULTED BY CLUSTER API AND IS IMMUTABLE ONCE KAMAJI HAS IT.
+# No +kubebuilder:default, and the mutating webhook never touches it (grepped for ServiceDomain and
+# cluster.local in both the v1.9.7 and v1.14.0 webhook files: zero hits). The Kamaji provider copies
+# it into the tenant control plane's clusterDomain, which carries `self == oldSelf` with the message
+# "changing the cluster domain is not supported". So it is written at creation, because it cannot be
+# added later.
+#
+# ⚠ ONLY THE FIRST CIDR BLOCK IS READ. Cluster API's NetworkRanges.CIDRBlocks allows up to a hundred;
+# the Kamaji provider reads CIDRBlocks[0] for pods and for services. A dual-stack request would
+# silently become single-stack, which is why this chart's surface takes one string per family rather
+# than a list.
+#
+# ⚠ VERSION SKEW IS ENFORCED UPSTREAM IN TWO PLACES AND BY THIS PLATFORM IN NEITHER. Kamaji's
+# `tcp_version.go` refuses a version above its own bundled kubeadm, refuses downgrades, and refuses a
+# two-minor jump ("a minor version in a non-sequential mode"); Cluster API's topology webhook does the
+# same for topology clusters. The kubelet rule — three minors, since Kubernetes 1.28 — is the
+# Kubernetes version-skew policy's. conformance.yaml § owed, `version-skew-is-not-enforced`.
+#
+# ── The weak claims, named because a field list is weaker evidence than a struct ───────────────
+#
+# ⚠ `spec.apiServer.resources`, `spec.controllerManager.resources` and `spec.scheduler.resources` ARE
+# RENDERED ON EVIDENCE OF A FIELD NAME AND NOT OF A GO TYPE. KamajiControlPlaneFields declares
+# ApiServer, ControllerManager and Scheduler as `ControlPlaneComponent`, and that struct's members
+# were NOT read. If it does not carry a `resources` block in the corev1.ResourceRequirements shape,
+# every KamajiControlPlane this chart renders is refused by the CRD's own schema at apply time —
+# visibly, per object, with the API server's own message, which is the failure mode this platform
+# prefers to a silent one. It is called out here for the same reason charts/managed/seaweedfs-bucket's
+# SOURCE calls out `clusterRef`.
+#
+# ⚠ ManagedClusters.PinnedPatch's TWO STRINGS WERE NOT READ OFF A KUBERNETES RELEASE PAGE.
+# conformance.yaml § owed, `pinned-patches-are-unreviewed`.
+upstream-webhook: kamaji core validates the datastore, the version and the certificate SANs on the TenantControlPlane the control-plane provider creates; the control-plane provider itself ships no webhook (config/default/kustomization.yaml has ../webhook commented out); cluster-api ships both a validating and a mutating webhook for Cluster, and the mutating one is a no-op for a non-topology cluster

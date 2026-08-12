@@ -1,0 +1,50 @@
+# A node pool inside a managed Kubernetes cluster — docs/plan/13 § Managed Kubernetes, "Sub-resources:
+# agentPools (a MachineDeployment + instancetype + autoscale bounds)".
+#
+# ⚠ IT IS THE SECOND CHART IN THE TREE WHOSE RESOURCE TYPE IS A CHILD, and — unlike the first — it is
+# not a smaller thing than its parent. charts/managed/seaweedfs-bucket renders one object against its
+# account's one; this renders THREE against its cluster's three, and it draws three derived quota
+# meters against its cluster's two. "A child is smaller than its parent" turns out to have been a fact
+# about object storage.
+#
+# ⚠ AND IT IS THE FIRST CHILD THAT CHANGES ITS PARENT. A bucket is a ceiling inside capacity its
+# account already provisioned; a node pool IS the capacity — a managed cluster with no pools has no
+# worker nodes at all.
+apiVersion: v2
+name: kubernetes-agentpool
+description: A group of identically sized worker virtual machines in a managed Kubernetes cluster, optionally under a cluster-autoscaler.
+type: application
+
+# The chart's own version. Bumped on every change to this directory.
+version: 0.1.0
+
+# ⚠ The Cluster API release this chart's objects were reviewed against — the same one
+# charts/managed/kubernetes pins, because a MachineDeployment and a Cluster are the same project's.
+appVersion: "1.14.0"
+
+kubeVersion: ">=1.31.0-0"
+
+keywords:
+  - kubernetes
+  - cluster-api
+  - kubevirt
+  - node-pool
+
+home: https://cluster-api.sigs.k8s.io
+sources:
+  - https://github.com/kubernetes-sigs/cluster-api
+  - https://github.com/kubernetes-sigs/cluster-api-provider-kubevirt
+  - https://github.com/kubevirt/kubevirt
+
+maintainers:
+  - name: Cyber Cloud Platform
+
+# ⚠ The resource type carries BOTH segments — a child's type path is `managedClusters/agentPools`,
+# interleaved, and a chart annotated with the flattened `agentPools` would pair with a type no provider
+# declares. ⚠ The api-version is the CLUSTER'S, deliberately: a parent and a child served at different
+# dates would make `…/managedClusters/{c}/agentPools/{p}?api-version=…` a request whose single version
+# parameter has to mean two things.
+annotations:
+  cybercloud.io/resource-type: CyberCloud.ContainerService/managedClusters/agentPools
+  cybercloud.io/api-version: "2026-08-01"
+  cybercloud.io/operator: cluster-api-provider-kubevirt

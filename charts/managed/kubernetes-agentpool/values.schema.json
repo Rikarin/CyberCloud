@@ -1,0 +1,233 @@
+{
+  "$id": "https://schema.cybercloud.io/charts/kubernetes-agentpool/values.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "The configuration surface of the kubernetes-agentpool chart. GENERATED from values.yaml by `./build.sh Charts` and diffed in CI — docs/plan/03 § charts/. Edit values.yaml, never this file. Members carrying `x-cybercloud-api: false` are chart or platform plumbing and are not part of the resource body.",
+  "properties": {
+    "autoscale": {
+      "additionalProperties": false,
+      "description": "Whether a cluster-autoscaler may resize the pool.",
+      "properties": {
+        "enabled": {
+          "default": false,
+          "description": "Whether the pool carries autoscaler bounds. Off by default. ⚠ Turning it on changes what the pool costs: quota is then reserved against maxCount, because a pool that may grow to twenty machines has to have twenty machines' worth of headroom to grow into.",
+          "type": "boolean",
+          "x-cybercloud-order": 0,
+          "x-cybercloud-pointer": "/properties/autoscale/enabled"
+        },
+        "maxCount": {
+          "default": 3,
+          "description": "The largest the autoscaler may grow the pool to, and what quota is reserved against while autoscaling is on. ⚠ Nothing checks that it is at least minCount — that is a relation between two properties of one body, which the schema validates nothing about.",
+          "maximum": 100,
+          "minimum": 1,
+          "type": "integer",
+          "x-cybercloud-order": 2,
+          "x-cybercloud-pointer": "/properties/autoscale/maxCount"
+        },
+        "minCount": {
+          "default": 1,
+          "description": "The smallest the autoscaler may shrink the pool to. Ignored when autoscaling is off.",
+          "maximum": 100,
+          "minimum": 1,
+          "type": "integer",
+          "x-cybercloud-order": 1,
+          "x-cybercloud-pointer": "/properties/autoscale/minCount"
+        }
+      },
+      "type": "object",
+      "x-cybercloud-order": 4,
+      "x-cybercloud-pointer": "/properties/autoscale"
+    },
+    "count": {
+      "default": 3,
+      "description": "How many worker VMs the pool runs. ⚠ When autoscaling is on this is the starting size and the autoscaler moves it; quota is reserved against the maximum in that case, not against this.",
+      "maximum": 100,
+      "minimum": 1,
+      "type": "integer",
+      "x-cybercloud-order": 0,
+      "x-cybercloud-pointer": "/properties/count"
+    },
+    "nameOverride": {
+      "default": "",
+      "description": "Replace the generated object-name stem. Empty means derive it from the release name.",
+      "type": "string",
+      "x-cybercloud-api": false,
+      "x-cybercloud-internal-reason": "Helm plumbing. Nothing about it belongs in a resource body.",
+      "x-cybercloud-order": 8,
+      "x-cybercloud-pointer": "/properties/nameOverride"
+    },
+    "nodeImageRepository": {
+      "default": "quay.io/capk/ubuntu-2404-container-disk",
+      "description": "The container-disk image a worker VM boots, without a tag.",
+      "type": "string",
+      "x-cybercloud-api": false,
+      "x-cybercloud-internal-reason": "The tag is the pinned Kubernetes version, so a tenant choosing a repository would be choosing an image the platform has never booted. ⚠ Neither the repository nor any tag was read off a registry — see conformance.yaml § owed.",
+      "x-cybercloud-order": 7,
+      "x-cybercloud-pointer": "/properties/nodeImageRepository"
+    },
+    "osDiskSize": {
+      "default": "60Gi",
+      "description": "The root volume of each VM, in Kubernetes quantity form. It holds the operating system, the container images and every writable layer, so a pool running large images needs more of it than a pool running small ones.",
+      "examples": [
+        "60Gi"
+      ],
+      "pattern": "^(?:\\d+(\\.\\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)$",
+      "type": "string",
+      "x-cybercloud-immutable": true,
+      "x-cybercloud-order": 3,
+      "x-cybercloud-pointer": "/properties/osDiskSize"
+    },
+    "platform": {
+      "additionalProperties": false,
+      "description": "Resource identity injected by the reconciler. Not a tenant-facing setting.",
+      "properties": {
+        "apiVersion": {
+          "default": "2026-08-01",
+          "description": "The api-version the resource was last written at, rendered into the cybercloud.io/api-version label.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 5,
+          "x-cybercloud-pointer": "/properties/platform/apiVersion"
+        },
+        "managedBy": {
+          "default": "cybercloud",
+          "description": "Value of the cybercloud.io/managed-by label. Constant, and the selector every informer filters on.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 6,
+          "x-cybercloud-pointer": "/properties/platform/managedBy"
+        },
+        "parentName": {
+          "default": "",
+          "description": "The name of the managed cluster this pool belongs to. Rendered into every object's name and into the MachineDeployment's clusterName.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 7,
+          "x-cybercloud-pointer": "/properties/platform/parentName"
+        },
+        "resourceGroup": {
+          "default": "",
+          "description": "Resource group name, rendered into the cybercloud.io/resource-group label.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 2,
+          "x-cybercloud-pointer": "/properties/platform/resourceGroup"
+        },
+        "resourceId": {
+          "default": "",
+          "description": "Resource GUID, rendered into the cybercloud.io/resource-id label.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 3,
+          "x-cybercloud-pointer": "/properties/platform/resourceId"
+        },
+        "resourceType": {
+          "default": "CyberCloud.ContainerService/managedClusters/agentPools",
+          "description": "Fully qualified resource type, rendered into the cybercloud.io/resource-type label.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 4,
+          "x-cybercloud-pointer": "/properties/platform/resourceType"
+        },
+        "subscriptionId": {
+          "default": "",
+          "description": "Subscription GUID, rendered into the cybercloud.io/subscription-id label.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 1,
+          "x-cybercloud-pointer": "/properties/platform/subscriptionId"
+        },
+        "tenantId": {
+          "default": "",
+          "description": "Tenant GUID, rendered into the cybercloud.io/tenant-id label.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 0,
+          "x-cybercloud-pointer": "/properties/platform/tenantId"
+        }
+      },
+      "type": "object",
+      "x-cybercloud-api": false,
+      "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+      "x-cybercloud-order": 6,
+      "x-cybercloud-pointer": "/properties/platform"
+    },
+    "size": {
+      "default": "s1.small",
+      "description": "The VM size, from the platform's sizing catalogue. Kubernetes nodes use the s1 family, which is 1 vCPU to 4 GiB. ⚠ Immutable: a Cluster API machine template cannot be resized in place, so changing this would mean replacing every VM in the pool, which is a different operation from the one a PUT looks like.",
+      "enum": [
+        "s1.2xlarge",
+        "s1.4xlarge",
+        "s1.large",
+        "s1.medium",
+        "s1.micro",
+        "s1.nano",
+        "s1.small",
+        "s1.xlarge"
+      ],
+      "type": "string",
+      "x-cybercloud-immutable": true,
+      "x-cybercloud-order": 1,
+      "x-cybercloud-pointer": "/properties/size",
+      "x-cybercloud-widget": "cozy-preset"
+    },
+    "upgrade": {
+      "additionalProperties": false,
+      "description": "How machines are replaced when the pool changes.",
+      "properties": {
+        "maxSurge": {
+          "default": 1,
+          "description": "How many extra machines may exist during a rolling replacement. One means a new VM boots and joins before an old one is removed, which is why it is the default: it costs one machine's capacity and loses none.",
+          "maximum": 10,
+          "minimum": 0,
+          "type": "integer",
+          "x-cybercloud-order": 0,
+          "x-cybercloud-pointer": "/properties/upgrade/maxSurge"
+        },
+        "maxUnavailable": {
+          "default": 0,
+          "description": "How many machines may be missing during a rolling replacement. Zero with a surge of one is the safe pair; raising it is faster and reduces the pool's capacity while it runs. ⚠ Both being zero would make an upgrade unable to start, and nothing refuses that pair.",
+          "maximum": 10,
+          "minimum": 0,
+          "type": "integer",
+          "x-cybercloud-order": 1,
+          "x-cybercloud-pointer": "/properties/upgrade/maxUnavailable"
+        }
+      },
+      "type": "object",
+      "x-cybercloud-order": 5,
+      "x-cybercloud-pointer": "/properties/upgrade"
+    },
+    "version": {
+      "default": "1.33",
+      "description": "The Kubernetes minor version the nodes run. ⚠ It may be up to three minors behind the cluster's control plane and may never be ahead of it. This API does not check that — the cluster's version is a different resource — so an illegal pair is accepted here and produces nodes that join and then misbehave.",
+      "enum": [
+        "1.32",
+        "1.33"
+      ],
+      "type": "string",
+      "x-cybercloud-order": 2,
+      "x-cybercloud-pointer": "/properties/version"
+    }
+  },
+  "required": [
+    "count",
+    "osDiskSize",
+    "size",
+    "version"
+  ],
+  "title": "kubernetes-agentpool chart values",
+  "type": "object",
+  "x-cybercloud-api-version": "2026-08-01",
+  "x-cybercloud-chart": "kubernetes-agentpool",
+  "x-cybercloud-chart-version": "0.1.0",
+  "x-cybercloud-resource-type": "CyberCloud.ContainerService/managedClusters/agentPools"
+}
