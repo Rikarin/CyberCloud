@@ -142,8 +142,17 @@ public sealed record ProviderConformanceCase {
     ///         "the API server accepts our manifest" would be overclaiming, so say in the CRD which one
     ///         it is.
     ///     </para>
+    ///     <para>
+    ///         ⚠ <b><c>required</c>, and it landed optional.</b> An empty default made this member the
+    ///         one thing a case could omit, and
+    ///         <c>SuiteRejectionTests.EveryCaseFieldIsRequiredSoAPartialRegistrationDoesNotCompile</c>
+    ///         failed on exactly that: an optional member is an assertion the suite quietly stops
+    ///         making for the provider that leaves it out. A provider rendering only built-in kinds
+    ///         writes <c>RequiredCrds = []</c> and says so — the empty list is a claim, not a
+    ///         default.
+    ///     </para>
     /// </remarks>
-    public ImmutableArray<string> RequiredCrds { get; init; } = [];
+    public required ImmutableArray<string> RequiredCrds { get; init; }
 }
 
 /// <summary>

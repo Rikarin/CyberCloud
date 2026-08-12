@@ -34,7 +34,12 @@ public sealed class ReferenceCase : IProviderCaseSource {
             ActionName = "ping",
             Objects = (id, ns) =>
                 [new() { Kind = Probes.Kind, Namespace = ns, Name = id.Name }],
-            ObjectMatchesDesired = Probes.Matches
+            ObjectMatchesDesired = Probes.Matches,
+
+            // Empty, and stated rather than defaulted: the probe renders a core-group ConfigMap,
+            // which every API server already serves. A provider rendering a custom resource has to
+            // name its CRDs here or the cluster-backed suite applies into a path that does not exist.
+            RequiredCrds = []
         };
 }
 
