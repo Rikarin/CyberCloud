@@ -45,15 +45,26 @@ public sealed class ReBacResourceRelationWriter(IGrainFactory grains, ILogger<Re
     ///     The relation name of the scope one level up. docs/plan/07 § The model's <c>parent</c>.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>A string, for exactly the reason <c>ReBacResourceAuthorizer.ResourceGroupObjectType</c>
-    ///     is a string.</b> <c>CyberCloud.Authorization.Relations.Parent</c> lives in
-    ///     <c>CyberCloud.Authorization</c> and this assembly references only its <c>.Contracts</c>, so
-    ///     the two constants cannot be shared. A mismatch here would not fail loudly — the tuple would
-    ///     be written against a relation the schema does not rewrite from, and the resource would be
-    ///     invisible with no error anywhere. The isolation suite asserts the two strings agree, which
-    ///     is the same guard the <c>resourcegroup</c>/<c>resourceGroup</c> casing bug earned.
+    ///     ⚠ <b>This used to be its own <c>"parent"</c> literal, for exactly the reason
+    ///     <see cref="ReBacResourceAuthorizer.ResourceGroupObjectType" /> was one</b> — the vocabulary
+    ///     lived in <c>CyberCloud.Authorization</c> and this assembly references only its
+    ///     <c>.Contracts</c>. It <b>is</b> <see cref="Relations.Parent" /> now, so the isolation suite
+    ///     no longer asserts the two strings agree; they cannot differ, and a misspelling is
+    ///     <c>CS0117</c>.
+    ///     <para>
+    ///         ⚠ <b>What is still not a compile error is naming the wrong <i>defined</i> relation, and
+    ///         on this string that failure is silent in a way the casing bug was not.</b> An object
+    ///         type the schema does not define is rejected, but a tuple naming a relation the resource
+    ///         type does not declare is written <b>successfully</b> against a relation no rewrite
+    ///         follows: every create reports 202 and every resource is invisible, with nothing in any
+    ///         log. That is why this constant stays named rather than being inlined —
+    ///         <c>ParentEdgeTests.TheRelationTheWriterNamesIsTheOneTheSchemaRewritesThrough</c> reads
+    ///         it to assert the relation <i>this writer uses</i> is one
+    ///         <c>CyberCloudSchema</c> declares on <see cref="ReBacResourceAuthorizer.ResourceObjectType" />,
+    ///         which is a claim about this class that no test of the schema alone can make.
+    ///     </para>
     /// </remarks>
-    public const string ParentRelation = "parent";
+    public const string ParentRelation = Relations.Parent;
 
     /// <inheritdoc />
     public Task<Result> LinkToParentAsync(ResourceId id, CancellationToken cancellationToken = default) =>

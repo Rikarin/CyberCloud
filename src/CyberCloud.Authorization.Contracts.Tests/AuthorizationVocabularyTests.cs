@@ -13,8 +13,8 @@ namespace CyberCloud.Authorization.Contracts.Tests;
 ///         ALREADY HAPPENED HERE ONCE.</b> <c>resourcegroup</c> where the schema says
 ///         <c>resourceGroup</c> once failed <i>every create in the platform</i> and surfaced as a 404
 ///         whose real reason was in a log line —
-///         <c>CyberCloud.Isolation.OracleTests</c> carries that account. Relation names are worse
-///         still: <c>ReBacResourceRelationWriter.ParentRelation</c>'s remarks point out that a tuple
+///         <c>ReBacResourceAuthorizer.CheckedObject</c>'s remarks carry that account. Relation names
+///         are worse still: <c>ReBacResourceRelationWriter</c>'s remarks point out that a tuple
 ///         written against a relation no rewrite follows is written <i>successfully</i>, so every
 ///         create reports 202 and every resource is invisible with nothing in any log.
 ///     </para>

@@ -52,29 +52,33 @@ namespace CyberCloud.ResourceManager;
 public sealed class ReBacResourceAuthorizer(IGrainFactory grains, ILogger<ReBacResourceAuthorizer> logger)
     : IResourceAuthorizer {
     /// <summary>The ReBAC object type of a resource. docs/plan/07 § The model.</summary>
-    public const string ResourceObjectType = "resource";
+    public const string ResourceObjectType = ObjectTypes.Resource;
 
     /// <summary>The ReBAC object type of a resource group — what a create is checked against.</summary>
     /// <remarks>
-    ///     ⚠ <b><c>resourceGroup</c>, lower-camel, and the capital <c>G</c> is load-bearing.</b> This
-    ///     read <c>resourcegroup</c> and the schema
-    ///     (<c>CyberCloud.Authorization.ObjectTypes.ResourceGroup</c>) reads <c>resourceGroup</c>;
+    ///     ⚠ <b>These two used to be their own literals, and one of them was wrong.</b> The vocabulary
+    ///     lived in <c>CyberCloud.Authorization</c> and this assembly references only its
+    ///     <c>.Contracts</c>, so the strings could not be shared and this one read
+    ///     <c>resourcegroup</c> where the schema says <c>resourceGroup</c>.
     ///     <c>AuthorizationSchema</c> looks a type up through a <c>FrozenDictionary</c> keyed
-    ///     <c>StringComparer.Ordinal</c>, so the two never met. The consequence was not a subtle one:
-    ///     <b>every create failed</b>. A resource that does not exist is checked against its parent
-    ///     group, the evaluator answered <c>SchemaInvalid</c> for an unknown object type, and this
-    ///     class correctly renders an unanswerable check as <c>404</c> — so a <c>PUT</c> to a fresh
-    ///     name came back "does not exist" with the reason only in a log line.
+    ///     <c>StringComparer.Ordinal</c>, so the two never met, and the consequence was not subtle:
+    ///     <b>every create in the platform failed</b>. A resource that does not exist is checked
+    ///     against its parent group, the evaluator answered <see cref="ErrorCode.SchemaInvalid" /> for
+    ///     an unknown object type, and this class correctly renders an unanswerable check as
+    ///     <c>404</c> — so a <c>PUT</c> to a fresh name came back "does not exist" with the reason only
+    ///     in a log line. It survived because every test of the write path substituted a double for
+    ///     this class, so nothing had ever driven a create through the real engine.
     ///     <para>
-    ///         It survived because every existing test of the write path substitutes a double for this
-    ///         class, so nothing had ever driven a create through the real engine. The two constants
-    ///         still cannot be shared: <c>ObjectTypes</c> lives in <c>CyberCloud.Authorization</c>, and
-    ///         <c>CyberCloud.ResourceManager</c> references only its <c>.Contracts</c>. Moving the
-    ///         vocabulary into <c>CyberCloud.Authorization.Contracts</c> would make the mismatch a
-    ///         compile error instead of a spelling one, and is the real fix.
+    ///         The vocabulary now lives in <c>CyberCloud.Authorization.Contracts</c>, which this
+    ///         assembly already referenced, so both of these <b>are</b> the schema's constants rather
+    ///         than copies that have to agree with them — a misspelling is <c>CS0117</c> and the
+    ///         isolation suite no longer asserts the strings match, because they cannot differ. They
+    ///         stay named here because they are what this seam <i>uses</i>, which is a fact a test can
+    ///         read and the schema alone does not fix: see
+    ///         <see cref="CheckedObject" /> and <c>ReBacResourceRelationWriter.ParentRelation</c>.
     ///     </para>
     /// </remarks>
-    public const string ResourceGroupObjectType = "resourceGroup";
+    public const string ResourceGroupObjectType = ObjectTypes.ResourceGroup;
 
     /// <inheritdoc />
     public async Task<Result> AuthorizeAsync(
@@ -146,17 +150,45 @@ public sealed class ReBacResourceAuthorizer(IGrainFactory grains, ILogger<ReBacR
     /// </summary>
     ICheckGrain Check(ResourceId id) {
         var tenant = grains.ForTenant(id.TenantId.ToString("D", CultureInfo.InvariantCulture));
-
-        // ⚠ The group's ReBAC id is the grain key GrainKeys.ResourceGroup builds, not the bare name:
-        // a group name is unique within its SUBSCRIPTION and not within the tenant
-        // (docs/plan/06 § The hierarchy), so a bare name would merge the "prod" groups of every
-        // subscription into one authorization object.
-        var (type, objectId) = id.Id == Guid.Empty
-            ? (ResourceGroupObjectType, GroupObjectId(id))
-            : (ResourceObjectType, id.Id.ToString("N", CultureInfo.InvariantCulture));
+        var (type, objectId) = CheckedObject(id);
 
         return tenant.GetGrain<ICheckGrain>(GrainKeys.CheckCache(type, objectId));
     }
+
+    /// <summary>
+    ///     The ReBAC object a check about <paramref name="id" /> is asked on: the resource itself, or
+    ///     its parent group when the resource does not exist yet.
+    /// </summary>
+    /// <param name="id">The address being authorized. A <see cref="Guid.Empty" /> id means a create.</param>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>The branch is the whole of it, and it is what
+    ///         <c>OracleTests.TheObjectACheckIsAskedOnIsTheGroupForACreateAndTheResourceOtherwise</c>
+    ///         pins.</b> A create has no ReBAC object of its own, so it is checked against the group
+    ///         one level up — docs/plan/08 § The write path, end to end:
+    ///         <c>Check(resource | parent rg, "write", caller)</c>. Collapsing the two arms into one
+    ///         would either check a create against an object nobody holds a tuple on, which fails
+    ///         closed and makes every create impossible, or check an existing resource against its
+    ///         group, which grants on a resource whose own <c>#suspended</c> says otherwise.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The group's ReBAC id is the one <see cref="GroupObjectId" /> builds, not the bare
+    ///         name.</b> A group name is unique within its <b>subscription</b> and not within the
+    ///         tenant (docs/plan/06 § The hierarchy), so a bare name would merge the <c>prod</c> groups
+    ///         of every subscription into one authorization object.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Which type is no longer a spelling question, so it is the only question left.</b>
+    ///         <see cref="ResourceGroupObjectType" />'s remarks carry the casing bug that made both
+    ///         names the schema's own constants; a name the schema does not define is now
+    ///         <c>CS0117</c>. Naming the <i>wrong</i> defined type still compiles, and this branch is
+    ///         where that mistake would live.
+    ///     </para>
+    /// </remarks>
+    public static (string Type, string Id) CheckedObject(ResourceId id) =>
+        id.Id == Guid.Empty
+            ? (ResourceGroupObjectType, GroupObjectId(id))
+            : (ResourceObjectType, id.Id.ToString("N", CultureInfo.InvariantCulture));
 
     /// <summary>
     ///     A resource group's ReBAC object id: <c>{subscriptionId:N}-{name}</c>.
