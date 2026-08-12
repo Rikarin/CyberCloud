@@ -1,0 +1,217 @@
+# Conformance manifest — docs/plan/12 § The pattern, once, piece 8.
+#
+# What the conformance suite asserts about CyberCloud.Analytics/clickhouseClusters. This file is data:
+# `Build.Charts` checks that it is present, non-empty, and names the same resource type as
+# Chart.yaml. The suite that reads the rest of it lives in test/ and does not exist yet, and the
+# target says so in its own log rather than implying otherwise.
+
+resourceType: CyberCloud.Analytics/clickhouseClusters
+apiVersion: "2026-08-01"
+chart: clickhouse
+
+# Objects the reconciler must have applied once the resource reports Succeeded.
+#
+# ⚠ TWO, IN TWO DIFFERENT API GROUPS, AND UNCONDITIONALLY. docs/plan/12 says "ZooKeeper/ClickHouse
+# Keeper managed by the operator", which is half true in a way that costs an object: the Altinity
+# operator does serve a Keeper CRD, but a ClickHouseInstallation does not create one for itself — it
+# NAMES one, by Service, in spec.configuration.zookeeper.nodes. Upstream's own
+# docs/chk-examples/01-chi-simple-with-keeper.yaml is two documents for that reason.
+#
+# ⚠ THERE IS NO `when:` ON THE KEEPER, AND THE POSTGRESQL MANIFEST HAS ONE ON ITS POOLER. A one-shard
+# one-replica ClickHouse does not need coordination to RUN, and a tenant who creates a
+# ReplicatedMergeTree on it — the ordinary thing to create, and theirs to create, because the schema
+# is the tenant's problem — gets Coordination::Exception at DDL time. A Keeper that appeared when
+# `replicas` crossed one would be worse still: the tables that already existed were created without
+# it.
+renders:
+  - group: clickhouse-keeper.altinity.com
+    version: v1
+    kind: ClickHouseKeeperInstallation
+    count: 1
+  - group: clickhouse.altinity.com
+    version: v1
+    kind: ClickHouseInstallation
+    count: 1
+
+# ⚠ THERE IS NO `requiredCrds:` BLOCK HERE, AND ITS ABSENCE IS CORRECT.
+# `ProviderConformanceCase` has no `RequiredCrds` member and never had one — the harness DERIVES the
+# definitions from the case's own `Objects`, which already carries group, version, kind and plural.
+# That decision is recorded at ProviderConformanceCase.cs's long comment, and charts/managed/kafka's
+# manifest records the removal of the block that used to cite the member.
+#
+# What is new here and is worth stating: this is the first type whose derivation has to key on the
+# GROUP as well as the kind. Every earlier custom-resource provider's objects were in one API group;
+# these are in two, served by one operator binary, and a cluster that installed only the first would
+# refuse the Keeper with a 404 on every pass.
+
+# ADR-013 — every rendered object carries all seven labels. Asserted against real rendered output,
+# which is what the Labels architecture gate in docs/plan/23 § The architecture gates requires.
+labels:
+  required:
+    - cybercloud.io/tenant-id
+    - cybercloud.io/subscription-id
+    - cybercloud.io/resource-group
+    - cybercloud.io/resource-id
+    - cybercloud.io/resource-type
+    - cybercloud.io/api-version
+    - cybercloud.io/managed-by
+  # ⚠ Not the resource type verbatim. A `/` is not a legal label value character, so the value is
+  # lower-cased with `/` replaced by `_` — KubeLabels.ResourceTypeValue.
+  values:
+    cybercloud.io/resource-type: cybercloud.analytics_clickhouseclusters
+    cybercloud.io/managed-by: cybercloud
+  # ⚠ NOT one of the seven, and NOT a label at all — which is why it is spelled out here rather than
+  # left in `additional:` where the two manifests before this put an object-to-object binding. What
+  # binds the installation to its Keeper is a STRING IN A SPEC FIELD:
+  # spec.configuration.zookeeper.nodes[0].host must equal `keeper-{resourceName}`, which is the
+  # Service the OPERATOR creates for the Keeper installation. Nothing this provider applies creates
+  # it, so nothing this provider applies fails when it is wrong.
+  additional: {}
+
+# Behaviour a tenant is entitled to. Each is a statement the suite can fail on, not a feature list.
+assertions:
+  - id: query-round-trip
+    says: A client resolves the HTTP endpoint from listKeys, creates a MergeTree, inserts a row and reads it back.
+  - id: coordination-actually-works
+    says: >
+      A ReplicatedMergeTree can be CREATED, which is the assertion that catches a wrong Keeper
+      Service name, a Keeper that never reached quorum, and a zookeeper block written under the
+      cluster instead of under configuration — three separate mistakes whose shared symptom is a
+      cluster that applies cleanly, reads back cleanly, converges, answers SELECT 1, and fails the
+      first DDL statement a tenant writes. ⚠ It is the single most important assertion on this type
+      and the one no unit test can make.
+  - id: replication-survives-one-server
+    says: Deleting one server pod of a two-replica shard leaves a ReplicatedMergeTree readable throughout, and every acknowledged insert is still present afterwards.
+  - id: shards-times-replicas-is-the-server-count
+    says: >
+      A cluster declaring three shards and two replicas runs six ClickHouse StatefulSets, not three
+      and not five. system.clusters on any server reports six hosts under the declared cluster name.
+  - id: the-cluster-name-is-what-listkeys-said
+    says: ON CLUSTER with the name listKeys returned succeeds, and the same statement with any other name fails. That name reaches the tenant's SQL and is the one platform-chosen string that does.
+  - id: the-resource-does-not-manage-tables
+    says: >
+      Nothing the platform applies creates, alters or drops a table. A cluster created, updated
+      through every property, and read back holds exactly the tables the tenant made and no others —
+      docs/plan/12: "A managed ClickHouse that tries to own DDL is a migration tool nobody asked for."
+  - id: storage-grows-never-shrinks
+    says: Increasing storage.size resizes online; decreasing it is refused at the API.
+  - id: secrets-never-round-trip
+    says: A GET of the resource never returns database credentials in any form. The only path out is the listKeys action.
+
+# Meters the type must emit — docs/plan/12 § The pattern, once, piece 3.
+meters:
+  - clickhouse.server.hours
+  - clickhouse.storage.gib.hours
+  - clickhouse.egress.gib
+
+# ── owed ──────────────────────────────────────────────────────────────────────────────────────
+#
+# Named here rather than left to be discovered, because an absent capability that nobody wrote down
+# is indistinguishable from one nobody thought of.
+owed:
+  - id: s3-cold-tier
+    says: >
+      docs/plan/12's THIRD bullet for this row — "S3-backed disks for cold storage tiers" — is not
+      built, and it is the only bullet of the three that is not. It is a SEAM rather than effort.
+      Upstream's shape (docs/chi-examples/03-persistent-volume-08-tiered-s3.yaml) is a
+      <storage_configuration> XML document in spec.configuration.files carrying an endpoint, an
+      access key id and a secret access key, plus a storage policy the tenant names in a table's
+      SETTINGS. All three inputs belong to a CyberCloud.Storage/accounts resource. A provider may not
+      reference another provider — src/Providers/README.md § Hard rule, and rule 2 of docs/plan/03
+      § Assembly graph rules — and the sanctioned route, a resource id through
+      CyberCloud.ResourceManager, has no reader a RECONCILER can call: ReconcileContext carries a
+      cluster connection and an ISecretResolver and nothing that resolves another resource. The
+      credential half is piece 5 on top of that. ⚠ This is the first row in the catalogue whose
+      missing feature is blocked by the cross-provider seam rather than by the registry, the quota
+      grain or an upstream field, and that makes it the first evidence about what that seam costs.
+  - id: listkeys-has-no-handler
+    says: >
+      docs/plan/12 § The pattern, once, piece 5 — credential provisioning into the tenant's Vault —
+      needs an OpenBao integration that does not exist, so listKeys has a declared response shape and
+      nothing that serves it. ⚠ AND THE FAILURE MODE IS THE BEST ONE IN THE CATALOGUE, WHICH IS WORTH
+      AS MUCH AS THE GAP. charts/managed/seaweedfs found the same missing piece producing an
+      ANONYMOUS ADMINISTRATOR; charts/managed/nats found servers that accept every connection in the
+      namespace; charts/managed/postgres found a working database whose password cannot be handed
+      out. Here the operator's own hardening guide says a CHI with no `configuration.users` gets
+      `default` with an empty password behind a host_regexp AND an explicit pod-IP allow-list covering
+      THIS CLUSTER'S OWN PODS, and `clickhouse_operator` behind the operator pod's IP. So the cluster
+      comes up SECURE AND UNREACHABLE. Four services in, the answer to "is it usable without piece 5"
+      is a property of the ENGINE and not of the platform, and the spread runs from
+      administrable-by-anyone to reachable-by-nobody.
+  - id: scrape-object
+    says: >
+      docs/plan/12 § The pattern, once, piece 6 reaches an answer NEITHER OF ITS TWO BRANCHES
+      DESCRIBES, and that is the finding rather than the gap. The corrected piece 6 reads "ask the
+      operator for the scrape object wherever the operator accepts the request, and hand-write one
+      into the chart only when there is no operator to ask." There IS an operator here and it does
+      not accept the request: Altinity exports metrics for every installation it manages through ONE
+      CLUSTER-WIDE exporter on the operator's own pod, and the CHI carries no per-installation
+      ServiceMonitor switch at all — so the first branch has nothing to ask for and the second
+      branch's precondition ("no operator") is false. What the CHI does accept is
+      configuration.settings turning on ClickHouse's own Prometheus endpoint, which this chart writes,
+      so the metrics EXIST and nothing scrapes them. The PodMonitor upstream pairs with those settings
+      selects `clickhouse.altinity.com/app: chop`, which is the OPERATOR's pod label — exactly the
+      hazard piece 6's correction names, and the reason it is owed rather than guessed. The Grafana
+      dashboard is owed with it; that half is ours either way and no service in the catalogue has
+      delivered it.
+  - id: backup
+    says: >
+      Piece 7, and this row cannot decline it the way CyberCloud.Cache/redis did. docs/plan/12
+      § Backups names "ClickHouse `BACKUP`" by name as the engine-native layer, and a ClickHouse
+      cluster IS durable data. It is not built because the destination is a bucket — the same seam
+      `s3-cold-tier` describes, reached from the backup side — and because `BACKUP TO Disk(...)` is a
+      SQL statement, which is the one thing docs/plan/12 forbids this resource from issuing. ⚠ That
+      tension is real and is not resolved here: a backup that the platform triggers is DDL-adjacent
+      work on the tenant's schema, and the honest reading is that the platform provides the
+      DESTINATION and the tenant issues the statement. Deciding it belongs with whoever builds
+      piece 7's second reading rather than with this row.
+  - id: odd-keeper-count-is-unenforced
+    says: >
+      A Raft quorum of two or four tolerates no more failures than the odd count below it, so
+      /properties/keeperNodes wants an odd value and can only say 1..5.
+      SchemaProperty.AllowedValues is Text-only by construction and Minimum/Maximum cannot say "odd",
+      so the constraint is in the property's description and in nothing that enforces it. THIRD
+      SIGHTING — charts/managed/kafka's `odd-node-count-is-unenforced` and charts/managed/nats'
+      `odd-server-count-is-unenforced` are the same registry gap, and three services asking for the
+      same unexpressible thing is what makes it a gap rather than a quirk of any one consensus
+      protocol.
+  - id: tls-and-exposure
+    says: >
+      listKeys returns an `http://` endpoint, and there is no external exposure at all. Both are the
+      same absence: docs/plan/12 § Cross-cutting decisions requires an explicit CIDR allow-list on any
+      exposure, and the operator's ServiceTemplate is a generated Kubernetes Service this provider
+      does not render, so there is nowhere for the platform to put loadBalancerSourceRanges without
+      competing with the controller that owns the object. TLS is the same shape one layer down: the
+      operator serves it when given certificates and nothing in this platform issues them to a
+      tenant's data plane. ⚠ `publicIps` is therefore undeclared for the reason
+      charts/managed/seaweedfs gives rather than the one charts/managed/nats gives — the axis is
+      ABSENT, not conditional — which is the second sighting of that distinction and the thing that
+      makes it a distinction.
+  - id: pod-labels
+    says: >
+      ADR-013's seven labels are injected by KubeCommand onto each OBJECT's metadata. The pods the
+      operator creates from these two objects carry the operator's own labels, and this provider has
+      no template it could inject into — spec.templates.podTemplates[].metadata exists, and writing
+      the seven there would put an api-version label inside a StatefulSet pod template the operator
+      generates a SELECTOR from, so a resource whose api-version changed could never be updated
+      again. SECOND SIGHTING of charts/managed/nats' `pod-labels`, and the harder half: there the pod
+      template was ours and the fix was IKubeCommandBuilder learning to inject non-selector pod
+      labels; here the template is also ours but the selector is derived by somebody else's
+      controller, so closing it needs the operator's own labelling contract read first.
+  - id: version-list-is-two-long
+    says: >
+      /properties/version offers 24.8 and 25.3 — the ClickHouse long-term-support line — and
+      docs/plan/12 § Versions and upgrades wants "supported major versions and a deprecation date"
+      with automatic minor upgrades in a maintenance window. Neither the date nor the window exists
+      anywhere in the platform, so what ships is a closed enum and a new api-version as the only way
+      to add a third value. Same shape as charts/managed/seaweedfs' version note, reached from a
+      project that DOES maintain long-term branches rather than one that does not.
+  - id: child-types-are-refused-by-the-catalogue
+    says: >
+      No child type, and this is the first row where that is a decision of docs/plan/12 rather than a
+      limitation of the platform. Every blocker the four earlier providers recorded is closed —
+      IProviderCaseSource.Ancestors, ProviderTestCluster.Address, CliEmitter and SdkEmitter all carry
+      ancestors, and CyberCloud.Storage/accounts/buckets ships through that door. The obvious children
+      here are databases and tables, and docs/plan/12 forbids them in as many words: "Schema is the
+      tenant's problem and the resource does not manage tables." Recorded so that the next author
+      finds a refusal with a reason rather than an absence that looks like the other four.

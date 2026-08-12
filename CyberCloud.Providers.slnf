@@ -51,6 +51,12 @@
       "src/Providers/CyberCloud.Providers.DocumentDB/CyberCloud.Providers.DocumentDB.Tests/CyberCloud.Providers.DocumentDB.Tests.csproj",
       "src/Providers/CyberCloud.Providers.DocumentDB/CyberCloud.Providers.DocumentDB.Conformance/CyberCloud.Providers.DocumentDB.Conformance.csproj",
       "src/Providers/CyberCloud.Providers.DocumentDB/CyberCloud.Providers.DocumentDB.Cluster.Conformance/CyberCloud.Providers.DocumentDB.Cluster.Conformance.csproj",
+      "src/Providers/CyberCloud.Providers.Analytics/CyberCloud.Providers.Analytics.Contracts/CyberCloud.Providers.Analytics.Contracts.csproj",
+      "src/Providers/CyberCloud.Providers.Analytics/CyberCloud.Providers.Analytics/CyberCloud.Providers.Analytics.csproj",
+      "src/Providers/CyberCloud.Providers.Analytics/CyberCloud.Providers.Analytics.Application/CyberCloud.Providers.Analytics.Application.csproj",
+      "src/Providers/CyberCloud.Providers.Analytics/CyberCloud.Providers.Analytics.Tests/CyberCloud.Providers.Analytics.Tests.csproj",
+      "src/Providers/CyberCloud.Providers.Analytics/CyberCloud.Providers.Analytics.Conformance/CyberCloud.Providers.Analytics.Conformance.csproj",
+      "src/Providers/CyberCloud.Providers.Analytics/CyberCloud.Providers.Analytics.Cluster.Conformance/CyberCloud.Providers.Analytics.Cluster.Conformance.csproj",
       "test/CyberCloud.Conformance/CyberCloud.Conformance.csproj",
       "test/CyberCloud.Cluster.Conformance/CyberCloud.Cluster.Conformance.csproj"
     ]

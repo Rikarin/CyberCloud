@@ -125,14 +125,16 @@ CyberCloud.Vault -> CyberCloud.ResourceManager
 # cannot grant what rule 2 refuses: cross-provider traffic goes through CyberCloud.ResourceManager
 # by resource id. A line here would fail rule 2 and be deleted, not honoured.
 #
-# ⚠ THE FIVE FAMILIES BELOW HAVE IDENTICAL COLUMNS, AND THAT IS THE MEASUREMENT RATHER THAN A
+# ⚠ THE SEVEN FAMILIES BELOW HAVE IDENTICAL COLUMNS, AND THAT IS THE MEASUREMENT RATHER THAN A
 # COINCIDENCE. docs/plan/25 § R1 asks what a provider costs the platform; four edges, the same four
 # every time, is the answer for a trivial provider, for one with backup and pooling and extensions,
 # for one that does quantity arithmetic and talks to a third operator, for one with two resource
 # types in it, and — since 2026-08-12 — for one whose row is not even in docs/plan/12.
 # CyberCloud.Providers.Storage is the first family from another catalogue document and it needed the
-# same four. A family arriving with a FIFTH edge is the signal that something has been reached for
-# that a provider should have gone through CyberCloud.ResourceManager to get.
+# same four; CyberCloud.Providers.Analytics is the first that renders TWO custom resources in TWO API
+# groups and wires one to the other, and it needed the same four. A family arriving with a FIFTH edge
+# is the signal that something has been reached for that a provider should have gone through
+# CyberCloud.ResourceManager to get.
 #
 # ⚠ AND CyberCloud.Providers.Storage IS THE FIRST FAMILY WITH A REASON TO WANT A FIFTH. An HA
 # SeaweedFS filer needs a shared metadata store, and this platform runs a managed PostgreSQL one
@@ -140,6 +142,17 @@ CyberCloud.Vault -> CyberCloud.ResourceManager
 # `filer-is-a-single-point-of-failure`. The line is NOT here, because rule 2 forbids it and the
 # sanctioned route is a resource id through CyberCloud.ResourceManager. Recorded so that the first
 # author who wants the edge finds the refusal and the alternative in the same place.
+#
+# ⚠ AND CyberCloud.Providers.Analytics IS THE SECOND FAMILY WITH A REASON TO WANT A FIFTH — the same
+# reason, from the other end of the same edge. docs/plan/12's ClickHouse row asks for "S3-backed disks
+# for cold storage tiers", whose endpoint and access-key pair belong to a CyberCloud.Storage/accounts
+# resource; charts/managed/clickhouse/conformance.yaml § owed, `s3-cold-tier`. Two families now want
+# the SAME line for two different features, which is what turns "a provider might reach for this" into
+# evidence that the sanctioned route needs a reader a reconciler can actually call. The line stays out.
+CyberCloud.Providers.Analytics -> CyberCloud.Core
+CyberCloud.Providers.Analytics -> CyberCloud.Kubernetes
+CyberCloud.Providers.Analytics -> CyberCloud.ResourceManager
+CyberCloud.Providers.Analytics -> CyberCloud.Tenancy
 CyberCloud.Providers.Cache -> CyberCloud.Core
 CyberCloud.Providers.Cache -> CyberCloud.Kubernetes
 CyberCloud.Providers.Cache -> CyberCloud.ResourceManager
