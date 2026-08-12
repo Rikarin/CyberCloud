@@ -98,9 +98,10 @@ public sealed class NatsDeclarationTests {
         // ⚠ KubeQuantity's remarks: "There is exactly one of these in the platform and there must
         // stay exactly one", and they record that the last provider to keep its own copy of the
         // grammar got a second PARSER written next to it — one that returned 8699999999999 for 8.7T.
-        // KafkaClusters, PostgresServers and TestProvider still carry byte-identical literals;
-        // QuantityParserTests fails if a fourth appears. This asserts the identity is a REFERENCE
-        // rather than a matching string, because a matching string is exactly what those three are.
+        // KafkaClusters, PostgresServers and TestProvider each carried a byte-identical literal until
+        // 2026-08-12 and now point at KubeQuantity too; QuantityParserTests fails if a fresh copy
+        // appears. This asserts the identity is a REFERENCE rather than a matching string — a
+        // matching string is what all four of these were, and it is what a copy would still be.
         NatsClusters.QuantityPattern.ShouldBeSameAs(KubeQuantity.Pattern);
         NatsClusters.OptionalQuantityPattern.ShouldBeSameAs(KubeQuantity.OptionalPattern);
     }

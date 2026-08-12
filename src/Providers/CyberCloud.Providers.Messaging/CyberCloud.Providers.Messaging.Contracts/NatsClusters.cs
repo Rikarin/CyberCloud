@@ -297,12 +297,19 @@ public static class NatsClusters {
     /// <inheritdoc cref="KubeQuantity.Pattern" />
     /// <remarks>
     ///     ⚠ <b>Pointed at <see cref="KubeQuantity" /> rather than copied, which is the whole of what
-    ///     that type's remarks ask for.</b> <c>KafkaClusters.QuantityPattern</c> — in this very
-    ///     assembly — still carries a byte-identical literal, and <c>QuantityParserTests</c> exists
-    ///     because the last time a provider kept its own copy of the grammar, somebody wrote a second
-    ///     parser next to it. A fourth copy is what that test now fails on. There is no rule-2 problem
-    ///     in reaching for it: <see cref="KubeQuantity" /> lives in
-    ///     <c>CyberCloud.ResourceManager.Contracts</c>, which every provider may reference.
+    ///     that type's remarks ask for.</b> <c>QuantityParserTests</c> exists because the last time a
+    ///     provider kept its own copy of the grammar, somebody wrote a second <i>parser</i> next to
+    ///     it — and it disagreed on value rather than on verdict, which is the quieter half. A fresh
+    ///     copy is what that test now fails on. There is no rule-2 problem in reaching for it:
+    ///     <see cref="KubeQuantity" /> lives in <c>CyberCloud.ResourceManager.Contracts</c>, which
+    ///     every provider may reference.
+    ///     <para>
+    ///         ⚠ <b>This remark said the three earlier copies "still carry byte-identical literals",
+    ///         and that stopped being true while this type was being written.</b> Corrected against
+    ///         the tree rather than left standing: <c>KafkaClusters</c>, <c>PostgresServers</c> and
+    ///         <c>TestProvider</c> all point here now, so this is the fourth of four rather than the
+    ///         one clean declaration among four.
+    ///     </para>
     /// </remarks>
     public const string QuantityPattern = KubeQuantity.Pattern;
 
