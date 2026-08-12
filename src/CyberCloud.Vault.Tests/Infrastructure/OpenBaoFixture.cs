@@ -198,6 +198,25 @@ public sealed class OpenBaoFixture : IAsyncLifetime {
         );
     }
 
+    /// <summary>A writer pointed at this container, minting with a fixed token.</summary>
+    /// <param name="token">The token to present.</param>
+    /// <param name="options">The options, or this container's defaults.</param>
+    /// <param name="logger">A logger to capture the operator half of a refusal.</param>
+    public OpenBaoSecretWriter Writer(
+        string token,
+        VaultOptions? options = null,
+        Microsoft.Extensions.Logging.ILogger<OpenBaoSecretWriter>? logger = null
+    ) {
+        var effective = options ?? Options();
+
+        return new(
+            new() { Timeout = effective.RequestTimeout },
+            new FixedTokenSource(token),
+            effective,
+            logger
+        );
+    }
+
     async Task<JsonDocument?> RootAsync(HttpMethod method, string path, object body) {
         using var request = new HttpRequestMessage(method, Address + path) {
             Content = JsonContent.Create(body),

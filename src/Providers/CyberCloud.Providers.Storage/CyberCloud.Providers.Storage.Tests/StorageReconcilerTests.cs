@@ -3,6 +3,7 @@ using CyberCloud.ResourceManager;
 using CyberCloud.ResourceManager.Conformance;
 using CyberCloud.ResourceManager.Reconcile;
 using System.Collections.Concurrent;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
@@ -79,7 +80,11 @@ public sealed class StorageReconcilerTests {
         await Pass(reconciler, connection, alice, aliceBody.RootElement);
         await Pass(reconciler, connection, bob, bobBody.RootElement);
 
-        var applied = connection.Applied;
+        // ⚠ THE SEAWEEDS ONLY, IN PASS ORDER. Each pass now applies two objects — the identities
+        // Secret then the Seaweed — so an index into the raw list would land on a Secret half the
+        // time. Filtering by kind keeps this test about what it has always been about: whether one
+        // singleton instance carries one tenant's body into another tenant's pass.
+        var applied = connection.Applied.Where(x => x.Target.Kind.Kind == "Seaweed").ToList();
         applied.Count.ShouldBe(4);
 
         Volume(applied[0].Body)["replicas"]!.GetValue<int>().ShouldBe(3);
@@ -144,16 +149,33 @@ public sealed class StorageReconcilerTests {
     [Fact]
     public async Task ASecondPassWithTheSameBodyChangesNothing() {
         // Clause 1. Nothing in SeaweedJson counts, appends or timestamps, and this is what says so.
+        //
+        // ⚠ FAILURE CLASS (d), AND IT IS NOT AN AUXILIARY ASSERTION — IT IS THIS ONE. The reconciler
+        // generates a FRESH key pair on every pass and hands it to the vault, so byte-stability here
+        // is a statement about mint-once: the second pass's candidate must be discarded and the
+        // rendered identities Secret must still carry the FIRST pass's pair. A reconciler that
+        // overwrote on mint, or that rendered its candidate instead of what it resolved back, fails
+        // exactly here — with the identities Secret's body differing and the Seaweed's identical.
+        //
+        // ⚠ One vault across both passes, which is what production is. A fresh store per pass would
+        // let a mint-every-time reconciler pass, because each pass would then be the first.
         var connection = new RecordingConnection();
+        var vault = new InMemorySecretVault();
         using var body = JsonDocument.Parse(StorageAccounts.Body(ClusterId));
 
-        await Reconcile(connection, body.RootElement);
+        await Reconcile(connection, body.RootElement, vault);
         var first = connection.Applied.Select(x => x.Body).ToArray();
 
-        await Reconcile(connection, body.RootElement);
+        await Reconcile(connection, body.RootElement, vault);
         var second = connection.Applied.Skip(first.Length).Select(x => x.Body).ToArray();
 
         second.ShouldBe(first);
+
+        vault.Writes.ShouldBe(
+            1,
+            "the second pass minted a second credential. Mint-once is what stops a reconcile loop "
+            + "from rotating a tenant's key pair out from under them on every reminder."
+        );
     }
 
     [Fact]
@@ -194,8 +216,14 @@ public sealed class StorageReconcilerTests {
         );
 
         deleted.ShouldBe(ReconcileOutcome.Converged);
-        connection.Deleted.Count.ShouldBe(1);
+        connection.Deleted.Count.ShouldBe(2);
+
+        // ⚠ THE SEAWEED FIRST AND THE IDENTITIES SECOND, WHICH IS THE APPLY ORDER REVERSED. Removing
+        // the identities file from under a gateway that is still serving would restart it with no
+        // identities — and SeaweedFS answers every unauthenticated caller as ACTION_ADMIN when it has
+        // none. A teardown interrupted between the two leaves a Secret nobody mounts, which is inert.
         connection.Deleted[0].Kind.Kind.ShouldBe("Seaweed");
+        connection.Deleted[1].Kind.Kind.ShouldBe("Secret");
     }
 
     // ── Failure class (f), at the object: the credential reference is never optional ─────────────
@@ -213,7 +241,10 @@ public sealed class StorageReconcilerTests {
 
         await Reconcile(connection, body.RootElement);
 
-        var s3 = JsonNode.Parse(connection.Applied[0].Body)!["spec"]!["s3"]!.AsObject();
+        // ⚠ BY KIND AND NOT BY INDEX. This provider applies two objects now — the identities Secret
+        // first, then the Seaweed that mounts it — and Applied[0] was the Seaweed when it applied
+        // one. An index here would silently start asserting about the wrong document.
+        var s3 = JsonNode.Parse(Seaweed(connection).Body)!["spec"]!["s3"]!.AsObject();
 
         s3["configSecret"].ShouldNotBeNull(
             "the S3 gateway was rendered with no identities file. SeaweedFS treats that as "
@@ -233,10 +264,143 @@ public sealed class StorageReconcilerTests {
 
         await Reconcile(connection, body.RootElement);
 
+        // ⚠ THE SEAWEED, AND ONLY THE SEAWEED — because the identities Secret DOES carry the
+        // credential and has to. That is the whole shape of piece 5: exactly one rendered object
+        // holds the value, it is the one the gateway mounts, and it is built from what the vault
+        // returned rather than from desired state. Asserting this over every applied object would
+        // fail on the object that is supposed to carry it; asserting it over none would let the
+        // credential drift into the CR unnoticed.
         foreach (var forbidden in new[] { "accessKey", "secretKey", "secretAccessKey", "stringData" }) {
-            connection.Applied[0].Body.ShouldNotContain(forbidden, Case.Sensitive, forbidden);
+            Seaweed(connection).Body.ShouldNotContain(forbidden, Case.Sensitive, forbidden);
         }
     }
+
+    [Fact]
+    public async Task TheCredentialReachesTheIdentitiesSecretAndNothingElse() {
+        // ⚠ THE OTHER HALF OF THE TEST ABOVE, AND WITHOUT IT THAT ONE IS SATISFIED BY A RECONCILER
+        // THAT MINTS AND THEN RENDERS NOTHING. A Secret applied with an empty identities list is a
+        // gateway that comes up with `isAuthEnabled = false` — the exact failure the reference in
+        // the CR exists to prevent, reached from the other side.
+        var connection = new RecordingConnection();
+        var vault = new InMemorySecretVault();
+        using var body = JsonDocument.Parse(StorageAccounts.Body(ClusterId));
+
+        (await Reconcile(connection, body.RootElement, vault)).ShouldBe(ReconcileOutcome.Converged);
+
+        var path = StorageAccounts.SecretPath(Address("observed", TenantA, SubscriptionA));
+        var secretAccessKey = vault.Peek(path, StorageAccounts.SecretAccessKeyField);
+
+        secretAccessKey.ShouldNotBeNull("the reconciler did not mint a key pair at all");
+
+        var rendered = connection.Applied.Single(x => x.Target.Kind.Kind == "Secret").Body;
+
+        // ⚠ Decoded, because the Secret carries `data` rather than `stringData` — see
+        // StorageAccounts.ConfigSecretJson for why. A test that searched the base64 for a plain
+        // string would pass whatever the reconciler wrote.
+        var identities = Encoding.UTF8.GetString(
+            Convert.FromBase64String(
+                JsonNode.Parse(rendered)!["data"]![StorageAccounts.ConfigSecretKey]!.GetValue<string>()
+            )
+        );
+
+        identities.ShouldContain(
+            secretAccessKey,
+            customMessage: "the identities Secret does not carry the secret access key the vault "
+            + "holds, so the gateway authenticates nobody — and SeaweedFS answers an unauthenticated "
+            + "caller as ACTION_ADMIN when it has no identities."
+        );
+
+        identities.ShouldContain(
+            vault.Peek(path, StorageAccounts.AccessKeyIdField)!,
+            customMessage: "the identities file names a different access key id than the vault holds, "
+            + "so listKeys hands out a pair the gateway will not accept"
+        );
+    }
+
+    // ── Failure class (e): a partial failure, in the order that survives one ──────────────────
+
+    [Fact]
+    public async Task AVaultThatRefusesLeavesNOTHINGAppliedToTheCluster() {
+        // ⚠ THIS IS THE ORDER ARGUMENT, AS AN ASSERTION.
+        //
+        // Two orders and two partial failures. Mint-then-apply leaves an orphaned KV document: inert,
+        // nothing running, nothing billed, and the next pass reuses it because mint-once makes the
+        // retry converge on the same pair. Apply-then-mint leaves a Seaweed whose gateway has no
+        // identities file — and `weed/s3api/auth_credentials.go` sets
+        // `isAuthEnabled = len(identities) > 0`, so `AuthenticateRequest` answers every
+        // unauthenticated caller as ACTION_ADMIN. A leaked KV entry is housekeeping; an S3 endpoint
+        // open to the cluster network is an incident.
+        //
+        // So the credential goes first, and this asserts that a vault failure stops the pass BEFORE
+        // anything reaches the API server.
+        var connection = new RecordingConnection();
+        var vault = new InMemorySecretVault { RefuseMint = true };
+        using var body = JsonDocument.Parse(StorageAccounts.Body(ClusterId));
+
+        var outcome = await Reconcile(connection, body.RootElement, vault);
+
+        outcome.Kind.ShouldNotBe(ReconcileOutcomeKind.Converged);
+
+        connection.Applied.ShouldBeEmpty(
+            "the reconciler applied to the cluster before the credential existed. A Seaweed whose "
+            + "identities Secret is never written comes up authenticating nobody, and SeaweedFS "
+            + "grants ACTION_ADMIN to every anonymous caller when it has no identities."
+        );
+    }
+
+    [Fact]
+    public async Task AVaultFailureIsRetryableSoTheNextPassCanConverge() {
+        // The other half of the order argument: refusing must not be terminal. A sealed, unreachable
+        // or unwired vault is a resource that has not started, not one that broke — and the sixty
+        // minute ceiling in ReconcileSchedule is what eventually makes it actionable.
+        var connection = new RecordingConnection();
+        var vault = new InMemorySecretVault { RefuseMint = true };
+        using var body = JsonDocument.Parse(StorageAccounts.Body(ClusterId));
+
+        var refused = await Reconcile(connection, body.RootElement, vault);
+        refused.Retryable.ShouldBeTrue(refused.Error?.Message);
+
+        vault.RefuseMint = false;
+
+        (await Reconcile(connection, body.RootElement, vault)).ShouldBe(
+            ReconcileOutcome.Converged,
+            "a pass that failed on the vault left something behind that stops the next one"
+        );
+
+        vault.Writes.ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task AnOrphanedMintIsReusedRatherThanReplacedWhenTheClusterComesBack() {
+        // The surviving failure, driven: the vault write lands, the cluster refuses, and the pass
+        // that succeeds afterwards hands out the SAME pair. That is what makes the orphan harmless —
+        // it is not litter, it is the credential this resource was always going to have.
+        var failing = new RecordingConnection { FailApplies = true };
+        var vault = new InMemorySecretVault();
+        using var body = JsonDocument.Parse(StorageAccounts.Body(ClusterId));
+
+        await Reconcile(failing, body.RootElement, vault);
+
+        var path = StorageAccounts.SecretPath(Address("observed", TenantA, SubscriptionA));
+        var minted = vault.Peek(path, StorageAccounts.SecretAccessKeyField);
+
+        minted.ShouldNotBeNull("the credential was not minted before the cluster was touched");
+
+        var working = new RecordingConnection();
+        (await Reconcile(working, body.RootElement, vault)).ShouldBe(ReconcileOutcome.Converged);
+
+        vault.Peek(path, StorageAccounts.SecretAccessKeyField).ShouldBe(
+            minted,
+            "the recovery pass minted a second credential, so a tenant who had already read the "
+            + "first one holds a key the gateway no longer accepts"
+        );
+
+        vault.Writes.ShouldBe(1);
+    }
+
+    /// <summary>The Seaweed command, found by kind rather than by position.</summary>
+    static KubeCommand Seaweed(RecordingConnection connection) =>
+        connection.Applied.Single(x => x.Target.Kind.Kind == "Seaweed");
 
     // ── Harness ───────────────────────────────────────────────────────────────────────────────
 
@@ -246,17 +410,27 @@ public sealed class StorageReconcilerTests {
     static readonly Guid SubscriptionA = Guid.Parse("22222222-2222-4222-8222-222222222222");
     static readonly Guid SubscriptionB = Guid.Parse("55555555-5555-4555-8555-555555555555");
 
-    static async Task<ReconcileOutcome> Reconcile(RecordingConnection connection, JsonElement desired) =>
+    static async Task<ReconcileOutcome> Reconcile(
+        RecordingConnection connection,
+        JsonElement desired,
+        InMemorySecretVault? vault = null
+    ) =>
         await new StorageAccountReconciler(new FixedClock())
-            .ReconcileAsync(Context(connection, desired), TestContext.Current.CancellationToken);
+            .ReconcileAsync(Context(connection, desired, vault), TestContext.Current.CancellationToken);
 
     static async Task<ReconcileOutcome> Pass(
         StorageAccountReconciler reconciler,
         RecordingConnection connection,
         ResourceId address,
-        JsonElement desired
-    ) =>
-        await reconciler.ReconcileAsync(
+        JsonElement desired,
+        InMemorySecretVault? vault = null
+    ) {
+        // ⚠ One vault per ADDRESS by default, which is what the cross-tenant test needs: two tenants
+        // minting at two paths must not be able to read each other back, and a shared store would
+        // pass that test for free by holding both.
+        var store = vault ?? new InMemorySecretVault();
+
+        return await reconciler.ReconcileAsync(
             new(
                 address,
                 StorageAccounts.V2026,
@@ -264,14 +438,32 @@ public sealed class StorageReconcilerTests {
                 null,
                 ReconcileDriver.NamespaceFor(address),
                 connection,
-                new UnavailableSecretResolver(),
+                store,
                 new NullLog()
-            ),
+            ) {
+                SecretWriter = store
+            },
             TestContext.Current.CancellationToken
         );
+    }
 
-    static ReconcileContext Context(IKubeClusterConnection? connection, JsonElement desired) {
+    /// <summary>
+    ///     A pass over a working vault, which every clause assertion in this file needs.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>The default here used to be <c>UnavailableSecretResolver</c> and could not stay one.</b>
+    ///     This reconciler now mints before it applies — see its own remarks on why the credential
+    ///     goes first — so a context with a refusing writer makes every pass fail for a wiring reason
+    ///     and no clause is exercised at all. <c>InMemorySecretVault</c> implements mint-once for
+    ///     real, so the idempotence assertion is still measuring the reconciler.
+    /// </remarks>
+    static ReconcileContext Context(
+        IKubeClusterConnection? connection,
+        JsonElement desired,
+        InMemorySecretVault? vault = null
+    ) {
         var address = Address("observed", TenantA, SubscriptionA);
+        var store = vault ?? new InMemorySecretVault();
 
         return new(
             address,
@@ -280,9 +472,11 @@ public sealed class StorageReconcilerTests {
             null,
             ReconcileDriver.NamespaceFor(address),
             connection,
-            new UnavailableSecretResolver(),
+            store,
             new NullLog()
-        );
+        ) {
+            SecretWriter = store
+        };
     }
 
     /// <summary>An address in a named tenant and its own subscription.</summary>
@@ -356,10 +550,29 @@ sealed class RecordingConnection : IKubeClusterConnection {
     /// <summary>Whether an apply reports success and stores nothing — the clause-4 trap.</summary>
     public bool SwallowApplies { get; init; }
 
+    /// <summary>
+    ///     Whether every apply fails outright, for the half of a partial failure the cluster owns.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ Distinct from <see cref="Suspend" />, which is "we cannot reach your cluster" and is
+    ///     survivable by definition. This is the API server refusing, which is the case that leaves a
+    ///     credential minted and nothing running.
+    /// </remarks>
+    public bool FailApplies { get; set; }
+
     public Guid ClusterId => Guid.Parse("eeeeeeee-0000-4000-8000-000000000005");
 
     public Task<Result<ApplyOutcome>> ApplyAsync(KubeCommand command, CancellationToken cancellationToken = default) {
         ArgumentNullException.ThrowIfNull(command);
+
+        if (FailApplies) {
+            // ⚠ Not recorded in Applied: a refused apply changed nothing, and the ordering assertion
+            // reads that list to prove the cluster was never touched before the vault was.
+            return Task.FromResult(
+                Result<ApplyOutcome>.Failure(ErrorCode.ProvisioningFailed, "the API server refused.")
+            );
+        }
+
         Applied.Add(command);
 
         if (Suspend) {

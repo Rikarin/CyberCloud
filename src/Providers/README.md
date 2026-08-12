@@ -372,6 +372,13 @@ identical; this is the first evidence that they are identical *across a mileston
   (`CyberCloud.Messaging/natsClusters`). **They are indistinguishable from the resource's status**,
   which is why each provider states which one it is.
 
+  > ⚠ **CORRECTED 2026-08-13: there is now a fourth outcome, and it is the one the others should
+  > reach for.** `CyberCloud.Storage/accounts` moved off this list — it mints its own credential into
+  > the tenant's vault at create time through `ISecretWriter`, renders it into the object the data
+  > plane mounts, and hands it back through a `listKeys` handler. The other three are unchanged and
+  > the reason is per-engine work rather than a missing platform seam: the seam exists now, and what
+  > each of them needs is a decision about whose password wins when the operator also generates one.
+
   > ⚠ The operator's own **documentation contradicts its own code** — `docs/userguide/main.md` says
   > *"By default the operator will use the included demo securityconfig with default users"* and
   > names `admin / admin`. Both can be true at once (demo roles, generated password) and which one a

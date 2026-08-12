@@ -79,30 +79,66 @@ public static class VaultSiloBuilderExtensions {
     /// </exception>
     public static ISiloBuilder AddOpenBaoSecretResolver(this ISiloBuilder silo, VaultOptions options) {
         ArgumentNullException.ThrowIfNull(silo);
+
+        silo.Services.AddOpenBaoSecretResolver(options);
+
+        return silo;
+    }
+
+    /// <summary>
+    ///     The same registrations, for a host that has no <see cref="ISiloBuilder" /> to hang them on.
+    /// </summary>
+    /// <param name="services">The container.</param>
+    /// <param name="options">Where OpenBao is, which role to use, and which mounts to read.</param>
+    /// <returns>The same collection, for chaining.</returns>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>THIS EXISTS BECAUSE THE GATEWAY IS WHERE A SYNCHRONOUS ACTION ACTUALLY RUNS, WHICH
+    ///         IS NOT WHERE ANYBODY WOULD LOOK FIRST.</b> docs/plan/08 § The write path, end to end
+    ///         makes <c>IResourceManager</c> "a service held by the gateway", and a
+    ///         non-<c>LongRunning</c> action is served inside <c>ResourceManagerService.ActionAsync</c>
+    ///         rather than by an operation on a silo. So a <c>listKeys</c> reads the <i>gateway's</i>
+    ///         <see cref="ISecretResolver" />, and a gateway is an Orleans client with no
+    ///         <see cref="ISiloBuilder" /> to take.
+    ///     </para>
+    ///     <para>
+    ///         The same split <c>AddCyberCloudResourceManager</c> already has, for the same reason, and
+    ///         the silo overload is now a call into this one so the two lists cannot drift.
+    ///     </para>
+    /// </remarks>
+    /// <exception cref="InvalidOperationException">
+    ///     The options are incomplete or the address is plaintext without
+    ///     <see cref="VaultOptions.AllowInsecureTransport" />.
+    /// </exception>
+    public static IServiceCollection AddOpenBaoSecretResolver(
+        this IServiceCollection services,
+        VaultOptions options
+    ) {
+        ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(options);
 
         Validate(options);
 
-        silo.Services.TryAddSingleton<IClock, SystemClock>();
-        silo.Services.AddSingleton(options);
+        services.TryAddSingleton<IClock, SystemClock>();
+        services.AddSingleton(options);
 
-        silo.Services.TryAddSingleton<IVaultTokenSource>(
-            services => new KubernetesVaultTokenSource(
+        services.TryAddSingleton<IVaultTokenSource>(
+            provider => new KubernetesVaultTokenSource(
                 CreateClient(options),
                 options,
-                services.GetRequiredService<IClock>()
+                provider.GetRequiredService<IClock>()
             )
         );
 
         // ⚠ Replace, not TryAdd — see the remarks for what the count buys that resolution does not.
-        silo.Services.Replace(
+        services.Replace(
             ServiceDescriptor.Singleton<ISecretResolver>(
-                services => {
+                provider => {
                     if (options.AllowInsecureTransport) {
                         // ⚠ Every start-up, naming the address. A flag that only appears in a values
                         // file is a flag nobody reads; one that appears in the first hundred log
                         // lines of a production silo is one somebody asks about.
-                        services
+                        provider
                             .GetService<ILoggerFactory>()
                             ?.CreateLogger(typeof(VaultSiloBuilderExtensions))
                             .LogWarning(
@@ -117,15 +153,33 @@ public static class VaultSiloBuilderExtensions {
 
                     return new OpenBaoSecretResolver(
                         CreateClient(options),
-                        services.GetRequiredService<IVaultTokenSource>(),
+                        provider.GetRequiredService<IVaultTokenSource>(),
                         options,
-                        services.GetService<ILogger<OpenBaoSecretResolver>>()
+                        provider.GetService<ILogger<OpenBaoSecretResolver>>()
                     );
                 }
             )
         );
 
-        return silo;
+        // ⚠ BOTH HALVES, FROM ONE CALL, AND SPLITTING THEM WOULD BE A HOST THAT CAN READ A CREDENTIAL
+        // IT COULD NOT CREATE. A silo that opted into a vault opted into the whole story: the mint at
+        // create time and the read at every reconcile pass are the same integration, against the same
+        // address, under the same role. A separate AddOpenBaoSecretWriter would be a second call an
+        // operator can forget, and the symptom of forgetting it is a provision that reports success
+        // and a data plane with no credential — see UnavailableSecretWriter for what that costs on
+        // CyberCloud.Storage/accounts.
+        services.Replace(
+            ServiceDescriptor.Singleton<ISecretWriter>(
+                provider => new OpenBaoSecretWriter(
+                    CreateClient(options),
+                    provider.GetRequiredService<IVaultTokenSource>(),
+                    options,
+                    provider.GetService<ILogger<OpenBaoSecretWriter>>()
+                )
+            )
+        );
+
+        return services;
     }
 
     /// <summary>

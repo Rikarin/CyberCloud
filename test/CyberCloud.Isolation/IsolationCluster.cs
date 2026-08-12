@@ -8,6 +8,8 @@ using CyberCloud.Providers.Sample.Contracts;
 using CyberCloud.Providers.Storage;
 using CyberCloud.Providers.Storage.Contracts;
 using CyberCloud.ResourceManager;
+using CyberCloud.ResourceManager.Actions;
+using CyberCloud.ResourceManager.Conformance;
 using CyberCloud.ResourceManager.Registry;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -255,6 +257,25 @@ public sealed class IsolationCluster : IAsyncLifetime {
     /// <summary>The registry, with every provider in it.</summary>
     public IProviderRegistry Registry { get; private set; } = null!;
 
+    /// <summary>
+    ///     The test vault both halves share — the silo mints into it, the client reads out of it.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ Static because the silo resolves its own container and this suite asserts across the
+    ///     boundary, the same reason ConformanceState keys its cluster on a type.
+    /// </remarks>
+    public static InMemorySecretVault Vault { get; } = new();
+
+    /// <summary>The action handlers the client-side dispatcher resolves.</summary>
+    static ServiceProvider Handlers { get; } = BuildHandlers();
+
+    static ServiceProvider BuildHandlers() {
+        var services = new ServiceCollection();
+        services.AddSingleton<StorageAccountListKeysHandler>();
+
+        return services.BuildServiceProvider();
+    }
+
     /// <summary>The client's grain factory.</summary>
     public IGrainFactory Grains => cluster.GrainFactory;
 
@@ -462,6 +483,12 @@ public sealed class IsolationCluster : IAsyncLifetime {
             new NotSupportedPolicyEvaluator(),
             new LoggingResourceChangedSink(NullLogger<LoggingResourceChangedSink>.Instance),
             cluster.GrainFactory,
+            // ⚠ THE ACTION PATH, AND IT IS ON THE SEAM SIDE THIS SUITE EXISTS TO ATTACK. A
+            // synchronous action runs HERE, on the client, outside Orleans.Multitenant's call
+            // filter — so  against another tenant's account is refused by
+            // IResourceAuthorizer or by nothing at all. The vault is shared with the silo so that a
+            // credential the victim's create minted is really there to be stolen.
+            new ActionDispatcher(Handlers, new NoClusterConnectionFactory(), Vault),
             NullLogger<ResourceManagerService>.Instance
         );
 
@@ -592,6 +619,14 @@ public sealed class IsolationCluster : IAsyncLifetime {
                     services.AddSingleton<IResourceProvider, StorageProvider>();
                     services.AddSingleton<StorageAccountReconciler>();
                     services.AddSingleton<StorageBucketReconciler>();
+                    services.AddSingleton<StorageAccountListKeysHandler>();
+
+                    // ⚠ The SAME vault instance the client-side manager reads. The mint happens in
+                    // the silo and listKeys resolves on the client, so two instances would make every
+                    // listKeys assertion below fail as "not found" rather than as a refusal — which
+                    // is a suite that passes for the wrong reason.
+                    services.AddSingleton<ISecretResolver>(Vault);
+                    services.AddSingleton<ISecretWriter>(Vault);
 
                     services.TryAddSingleton<ILoggerFactory>(_ => NullLoggerFactory.Instance);
                 }

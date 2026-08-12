@@ -1,4 +1,5 @@
 using CyberCloud.Core.Contracts;
+using CyberCloud.ResourceManager.Actions;
 using CyberCloud.Core.Time;
 using CyberCloud.ResourceManager.Registry;
 using Microsoft.Extensions.DependencyInjection;
@@ -452,8 +453,29 @@ public sealed class ResourceManagerCluster : IAsyncLifetime {
             new SwitchablePolicyEvaluator(),
             new RecordingChangeSink(),
             cluster.GrainFactory,
+            // ⚠ THE TWO HANDLERS TestingProvider DECLARES, AND DELIBERATELY NOT ITS THIRD ACTION.
+            // `restart` and `listKeys` name handlers and run; `orphaned` names none, which is the
+            // shape every action in the catalogue had before handlers existed and is the refusal
+            // ActionDispatcher must produce by name. The secret resolver stays the refusing one:
+            // ListKeysHandler returns a constant, so the containment suite can search for an exact
+            // string rather than for whatever a vault double happened to hold.
+            new ActionDispatcher(
+                ActionHandlers(),
+                new NoClusterConnectionFactory(),
+                new UnavailableSecretResolver()
+            ),
             NullLogger<ResourceManagerService>.Instance
         );
+    }
+
+    /// <summary>The container the action dispatcher resolves handlers from.</summary>
+    static ServiceProvider ActionHandlers() {
+        var services = new ServiceCollection();
+
+        services.AddSingleton<RestartHandler>();
+        services.AddSingleton<ListKeysHandler>();
+
+        return services.BuildServiceProvider();
     }
 
     /// <summary>

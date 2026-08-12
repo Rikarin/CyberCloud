@@ -60,6 +60,24 @@ public sealed class VaultOptions {
     /// </remarks>
     public string Role { get; set; } = string.Empty;
 
+    /// <summary>
+    ///     Whether this host has been pointed at a vault at all.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>The two keys <c>AddOpenBaoSecretResolver</c> validates, and no more.</b> A host asks
+    ///         this before opting in, so it has to distinguish "nobody configured a vault" — a
+    ///         supported shape, which keeps the refusing seams — from "somebody configured one badly",
+    ///         which is a start-up failure naming the key. Testing anything else here would turn a typo
+    ///         in <c>KvMountPath</c> into a silo that silently has no vault.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ Shaped after <c>SiloIdentityOptions.IsConfigured</c>, which answers the same question
+    ///         for the OTP delivery seam and is the precedent a host's conditional follows.
+    ///     </para>
+    /// </remarks>
+    public bool IsConfigured => Address.Length > 0 && Role.Length > 0;
+
     /// <summary>Where the Kubernetes auth method is mounted. <c>kubernetes</c> unless somebody moved it.</summary>
     public string AuthMountPath { get; set; } = "kubernetes";
 

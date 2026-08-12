@@ -32,6 +32,15 @@ renders:
     version: v1
     kind: Seaweed
     count: 1
+  # The S3 gateway's identities file. ⚠ The platform writes this rather than the operator, and it is
+  # the only object in the catalogue whose CONTENT is a credential: it is built from what the tenant's
+  # vault returned, inside one reconcile pass, and the account's body has no property that carries it.
+  # Applied BEFORE the Seaweed, because the thing that authenticates against a credential must not
+  # exist before the credential does — see `anonymous-access-is-refused`.
+  - group: ""
+    version: v1
+    kind: Secret
+    count: 1
 
 # ⚠ THERE IS NO `requiredCrds:` BLOCK, AND THAT IS CORRECT RATHER THAN AN OMISSION.
 # `ProviderConformanceCase` has no `RequiredCrds` member and never had one — the harness DERIVES the
@@ -62,11 +71,15 @@ assertions:
     says: An S3 client configured from listKeys puts an object into a bucket and gets the same bytes back.
   - id: anonymous-access-is-refused
     says: >
-      A request carrying no credentials is refused. ⚠ THIS IS THE ASSERTION THIS SERVICE MOST NEEDS
-      AND THE ONE IT CANNOT PASS TODAY. SeaweedFS sets isAuthEnabled = len(identities) > 0 and
-      returns an ADMIN identity when it is false, so a gateway with no identities file answers every
-      anonymous request as an administrator. The account does not currently come up at all, which is
-      why the platform is not shipping that — see `listkeys-has-no-handler` below.
+      A request carrying no credentials is refused. ⚠ THIS IS THE ASSERTION THIS SERVICE MOST NEEDS,
+      AND UNTIL 2026-08-13 IT WAS THE ONE IT COULD NOT PASS. SeaweedFS sets
+      isAuthEnabled = len(identities) > 0 and returns an ADMIN identity when it is false, so a gateway
+      with no identities file answers every anonymous request as an administrator. The reconciler now
+      mints a key pair into the tenant's vault and renders the identities Secret from it before it
+      applies the Seaweed, so the file is there on the first pass. ⚠ What is still owed is this
+      assertion being DRIVEN — it needs a live S3 client against a real gateway, which is the
+      cluster-conformance harness plus a SeaweedFS operator, and neither the operator nor an S3 client
+      is in the k3s bundle. See `anonymous-access-is-not-driven` below.
   - id: survives-one-volume-server
     says: Deleting one volume-server pod of a three-server account with replication other than None leaves every previously written object readable throughout.
   - id: replication-is-the-declared-placement
@@ -94,31 +107,43 @@ meters:
 # Named here rather than left to be discovered, because an absent capability that nobody wrote down
 # is indistinguishable from one nobody thought of.
 owed:
-  - id: listkeys-has-no-handler
+  # ⚠ `listkeys-has-no-handler` IS CLOSED — 2026-08-13. It said piece 5 needed "an OpenBao integration
+  # that does not exist", and named exactly what would close it: a resolver backed by OpenBao, a step
+  # that writes one Secret per account holding the JSON form of iam_pb.S3ApiConfiguration, and a
+  # listKeys handler reading it back through the same resolver. All three landed. The note was right
+  # about the parts and wrong about one thing worth recording: it assigned the write to
+  # `ISecretResolver`, following docs/plan/12's own table, and that interface has only `ResolveAsync`.
+  # The mint is `ISecretWriter`, and the doc row is corrected.
+  #
+  # The operator's second route is still not taken, and the reason has changed. It was "the platform
+  # would still need a resolver"; it is now a scope decision: an `S3Credentials` CR whose controller
+  # generates a pair would put the credential's lifecycle in the operator, which is the right shape
+  # for docs/plan/15's `accessKeys/{name}` CHILD TYPE and the wrong shape for an account's own single
+  # owner identity. That child type is still not declared.
+  - id: anonymous-access-is-not-driven
     says: >
-      docs/plan/12 § The pattern, once, piece 5 — credential provisioning into the tenant's Vault —
-      needs an OpenBao integration that does not exist, so listKeys has a declared response shape and
-      nothing that serves it. ⚠ AND THE ANSWER TO "IS THE SERVICE USABLE ANYWAY" IS **NO**, WHICH IS
-      A DIFFERENT ANSWER FROM THE ONE EVERY EARLIER SERVICE GIVES. CyberCloud.DBforPostgreSQL/servers
-      has a working database because CloudNativePG generates its own password; the platform merely
-      cannot hand it out. An S3 endpoint is reachable ONLY with an access-key pair, and the pair is
-      exactly what does not exist — there is no in-band equivalent of "the operator filled it in".
-      ⚠ The gap is also more dangerous here than on CyberCloud.Cache/redis. Checked in
-      weed/s3api/auth_credentials.go rather than assumed: `iam.isAuthEnabled = len(iam.identities) >
-      0`, and AuthenticateRequest opens `if !iam.isAuthEnabled { return &Identity{Name: "admin",
-      Account: &AccountAdmin, Actions: []Action{ACTION_ADMIN}} }`. A gateway with no identities does
-      not skip authentication — it grants ADMIN to every anonymous caller, over HTTP, on a protocol
-      every tool in the industry already speaks. So spec.s3.configSecret is rendered unconditionally
-      against a Secret nothing writes: the gateway pod cannot mount its volume, the account stays in
-      InProgress, and a resource that visibly has not finished beats one that quietly came up open.
-      WHAT CLOSES IT, exactly: an ISecretResolver implementation backed by OpenBao; a step in
-      ResourceManagerService (or a provider seam) that writes one Secret per account holding the JSON
-      form of iam_pb.S3ApiConfiguration with one identity; and a listKeys handler that reads it back
-      through the same resolver. The operator offers a second route that is NOT a substitute for the
-      first — an `S3Credentials` CR whose controller generates a key pair and writes it to a Secret,
-      with status.accessKey published and the secret key "never written to status" — but that is a
-      child resource type (see `bucket-child-type`) and the platform would still need a resolver to
-      read the Secret it produces. Neither route is a provider's to build alone.
+      The identities file is written and rendered, and no suite has yet PUT an object with a key pair
+      or been refused without one. Both assertions need a live S3 client against a real gateway: a
+      SeaweedFS operator in the k3s bundle, a Seaweed that reaches Ready, and an S3 SDK in the
+      cluster-conformance project. What is checked today is one layer in: the reconciler's own tests
+      assert the credential the vault holds is the one inside the rendered Secret, and that a vault
+      refusal leaves NOTHING applied to the cluster — which is the ordering that makes the open-gateway
+      window unrepresentable rather than merely unlikely.
+  - id: regenerate-keys-and-rotation
+    says: >
+      `regenerateKeys` is named in docs/plan/12 § Cross-cutting decisions beside `listKeys` and is
+      still not declared, for the reason every provider before this one gives: rotation is specified
+      with a rolling grace period and nothing in the platform can hold two live credentials for one
+      resource. ⚠ ISecretWriter's mint-once rule is what makes that explicit rather than accidental —
+      it has no update method at all, so rotation is a new seam and not a flag on this one.
+  - id: the-vault-entry-outlives-the-account
+    says: >
+      A deleted account leaves its key pair in the vault. The reconciler's DeleteAsync removes both
+      Kubernetes objects and does not remove the KV document, because a teardown re-driven from a
+      reminder would race its own retry — the retry mints a second pair while the first teardown is
+      still tearing down the gateway that trusts the first. What is left is one inert document per
+      deleted account, addressed by a resource GUID nothing carries any more. Sweeping it belongs to a
+      vault lifecycle job (docs/plan/18 § Rotation is the same machinery), not to a reconcile pass.
   - id: bucket-child-type
     # ⚠ CLOSED 2026-08-12. `CyberCloud.Storage/accounts/buckets` ships: a body shape, a reconciler
     # over the Bucket CRD, charts/managed/seaweedfs-bucket, a conformance case that runs all 28

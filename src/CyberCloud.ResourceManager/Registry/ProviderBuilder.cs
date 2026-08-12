@@ -148,10 +148,42 @@ sealed class ProviderBuilder(string providerNamespace) : IResourceTypeBuilder {
         bool secret = false,
         ResourceSchema? request = null,
         ResourceSchema? response = null,
-        bool longRunning = false
+        bool longRunning = false,
+        Type? handler = null
     ) {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         ArgumentException.ThrowIfNullOrWhiteSpace(permission);
+
+        // ⚠ Checked here rather than where the handler is resolved, and the difference is when you
+        // find out. A Type that does not implement the interface is a typo in a declaration, and a
+        // declaration runs at silo start; leaving it to ActionDispatcher would turn it into a 500 on
+        // the first call to that action, which for `listKeys` means the first time a tenant asks for
+        // the credential they cannot otherwise obtain.
+        if (handler is not null && !typeof(IResourceActionHandler).IsAssignableFrom(handler)) {
+            throw new ArgumentException(
+                $"'{handler.FullName}' is named as the handler for '{name}' and does not implement "
+                + "IResourceActionHandler.",
+                nameof(handler)
+            );
+        }
+
+        // ⚠ REFUSED RATHER THAN IGNORED, BECAUSE IGNORING IT IS A TRAP WITH NO SYMPTOM.
+        // ResourceManagerService.ActionAsync runs a handler only on the SYNCHRONOUS branch; a
+        // long-running action still starts an operation, and OperationGrain drives the type's
+        // RECONCILER for it. So a provider that declared both would ship an action whose handler
+        // never runs, whose 202 looks correct, and whose effect is a reconcile pass. Refusing here
+        // makes that a silo-start failure with a sentence in it. Closing it properly is a change to
+        // OperationGrain.DriveAsync — see the owed note on ActionRegistration.LongRunning.
+        if (handler is not null && longRunning) {
+            throw new ArgumentException(
+                $"'{name}' is declared long-running and names the handler '{handler.FullName}', and "
+                + "the platform cannot run one. A handler is invoked on the synchronous action path "
+                + "only; a long-running action starts an operation, and the operation grain drives "
+                + "the resource type's reconciler rather than an action handler. Declare the action "
+                + "synchronous, or leave the handler off until the operation path can run one.",
+                nameof(handler)
+            );
+        }
 
         var draft = Open(nameof(Action));
 
@@ -175,7 +207,8 @@ sealed class ProviderBuilder(string providerNamespace) : IResourceTypeBuilder {
             new(name, kind, permission, secret) {
                 Request = request,
                 Response = response,
-                LongRunning = longRunning
+                LongRunning = longRunning,
+                HandlerType = handler
             }
         );
 

@@ -79,7 +79,60 @@ public readonly record struct ReconcileContext(
     IKubeClusterConnection? Cluster,
     ISecretResolver Secrets,
     IReconcileLog Log
-);
+) {
+    /// <summary>
+    ///     Mints a credential the resource needs and does not yet have. ⚠ Mint-once — see
+    ///     <see cref="ISecretWriter" />.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>An <c>init</c> property rather than a positional parameter, and the reason is that
+    ///         a refusing default is the only safe one.</b> Every construction of this record that
+    ///         predates the mint path names eight arguments and means them; adding a ninth would make
+    ///         each of those call sites choose a writer, and the ones that did not care would reach for
+    ///         whatever compiled. Initialised here, they all get
+    ///         <see cref="RefusingSecretWriter" /> — which refuses by name, exactly as an unwired host
+    ///         does — and only the driver, which knows what the host wired, replaces it.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Here rather than on a reconciler's constructor, even though
+    ///         <c>ReconcilerConformance.CheckNoHiddenState</c> would have allowed the constructor.</b>
+    ///         Clause 2 is "everything it needs comes from <see cref="ReconcileContext" />", and
+    ///         <see cref="Secrets" /> — the same seam in the other direction — is already here. Two
+    ///         halves of one story arriving by two routes is the shape somebody later has to explain.
+    ///     </para>
+    /// </remarks>
+    public ISecretWriter SecretWriter { get; init; } = new RefusingSecretWriter();
+}
+
+/// <summary>
+///     The <see cref="ISecretWriter" /> a <see cref="ReconcileContext" /> carries when nobody supplied
+///     one.
+/// </summary>
+/// <remarks>
+///     ⚠ <b>A refusal and not a no-op, for the reason every seam in this tree gives.</b> A mint that
+///     silently did nothing would tell a reconciler the credential exists, and the reconciler would
+///     then render a data plane against a secret nobody wrote. <c>CyberCloud.ResourceManager</c>'s
+///     <c>UnavailableSecretWriter</c> is the registered default and says more about the wiring; this
+///     one exists because <see cref="ReconcileContext" /> lives in the contracts assembly and cannot
+///     name it.
+/// </remarks>
+public sealed class RefusingSecretWriter : ISecretWriter {
+    /// <inheritdoc />
+    public Task<Result<SecretMint>> MintAsync(
+        string path,
+        IReadOnlyDictionary<string, string> fields,
+        CancellationToken cancellationToken = default
+    ) =>
+        Task.FromResult(
+            Result<SecretMint>.Failure(
+                ErrorCode.InternalError,
+                $"This reconcile context carries no secret writer, so nothing can be minted at "
+                + $"'{path}'. A pass driven by ReconcileDriver always carries the host's writer; a "
+                + "context built by hand has to supply one through ReconcileContext.SecretWriter."
+            )
+        );
+}
 
 /// <summary>
 ///     What an observation pass is given. Strictly less than <see cref="ReconcileContext" />, because
@@ -164,6 +217,77 @@ public interface ISecretResolver {
     /// <param name="cancellationToken">Cancels the read.</param>
     /// <returns>The value, or a failure. ⚠ Do not persist the value.</returns>
     Task<Result<string>> ResolveAsync(SecretRef reference, CancellationToken cancellationToken = default);
+}
+
+/// <summary>
+///     What a mint did, or found already done.
+/// </summary>
+/// <param name="Minted">
+///     <see langword="true" /> when this call wrote the secret, <see langword="false" /> when one was
+///     already there and was left alone. ⚠ The second is the ordinary outcome — a reconcile pass runs
+///     over and over, and every pass after the first finds the credential it minted.
+/// </param>
+public readonly record struct SecretMint(bool Minted);
+
+/// <summary>
+///     Writes a secret into the vault, once. The half of the credential story
+///     <see cref="ISecretResolver" /> cannot tell.
+/// </summary>
+/// <remarks>
+///     <para>
+///         <b>docs/plan/12 § The pattern, once, piece 5 — "credential provisioning into the tenant's
+///         Vault" — is this interface.</b> That document's table used to assign piece 5 to
+///         <c>ISecretResolver</c>, which reads and cannot provision anything, and the table is
+///         corrected. A managed service whose password nobody can produce is not a managed service:
+///         CloudNativePG happens to generate its own, so <c>CyberCloud.DBforPostgreSQL/servers</c>
+///         merely could not hand the password out, but SeaweedFS has no such fallback and comes up
+///         <i>anonymously administrable</i> without one.
+///     </para>
+///     <para>
+///         ⚠ <b>MINT-ONCE, AND THAT IS THE WHOLE SEMANTIC RATHER THAN AN OPTIMISATION.</b> A
+///         reconciler is idempotent by clause 1 and its reminder fires on a resource that already
+///         converged, so a write that replaced what was there would hand the tenant a new credential
+///         on every pass and break the one they are using. An implementation must therefore write only
+///         when the path holds nothing, and report which happened. OpenBao's <c>kv-v2</c> spells that
+///         <c>cas=0</c>; the check belongs at the vault rather than in a read-then-write here, because
+///         two silos reconciling the same resource would both read "absent" and both write.
+///     </para>
+///     <para>
+///         ⚠ <b>A path and a bag of fields, not a <see cref="SecretRef" />.</b> A ref addresses one
+///         field so that a reconciler can resolve one value; a mint writes the whole document at a
+///         path, because a credential is usually a pair and writing the two halves separately would
+///         make a half-written credential representable. Resolve each field back with a
+///         <see cref="SecretRef" /> naming the same path.
+///     </para>
+///     <para>
+///         ⚠ <b>The value must not be written anywhere durable on the way in either.</b> The same rule
+///         <see cref="ISecretResolver" /> carries, in the other direction: what a caller passes here
+///         belongs in a local for the length of one pass, and in nothing that outlives it.
+///     </para>
+/// </remarks>
+public interface ISecretWriter {
+    /// <summary>Writes a secret at a path, unless one is already there.</summary>
+    /// <param name="path">
+    ///     The vault path, for example <c>tenants/{tenantId}/storage/main</c>. The same string a
+    ///     <see cref="SecretRef.Path" /> reading it back carries.
+    /// </param>
+    /// <param name="fields">
+    ///     The field names and values to write. ⚠ Refused when empty, because an empty document is a
+    ///     path that exists and resolves to nothing — which every reader would report as a missing
+    ///     field rather than as a mint that wrote nothing.
+    /// </param>
+    /// <param name="cancellationToken">Cancels the write.</param>
+    /// <returns>
+    ///     Whether this call wrote, or a failure. ⚠ Finding a secret already at the path is a
+    ///     <b>success</b> carrying <c>Minted: false</c> — the caller's goal is that a credential
+    ///     exists, and the second pass achieving it without writing is the correct outcome rather than
+    ///     a conflict.
+    /// </returns>
+    Task<Result<SecretMint>> MintAsync(
+        string path,
+        IReadOnlyDictionary<string, string> fields,
+        CancellationToken cancellationToken = default
+    );
 }
 
 /// <summary>

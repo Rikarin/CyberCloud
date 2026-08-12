@@ -14,10 +14,42 @@ the platform is missing something and the platform gets fixed, not the service.
 | 2 | A generated `values.schema.json` → the resource type's API schema | `Build.Charts` (ADR-012) |
 | 3 | A `ResourceType` registration with meters, permissions and actions | The provider's `Describe` |
 | 4 | An `IResourceReconciler` — render, apply, observe | ~150 lines |
-| 5 | Credential provisioning into the tenant's Vault, exposed by a `listKeys` action | `ISecretResolver` |
+| 5 | Credential provisioning into the tenant's Vault, exposed by a `listKeys` action | ~~`ISecretResolver`~~ ⚠ `ISecretWriter` + `IResourceActionHandler` — corrected below |
 | 6 | A `ServiceMonitor`/`VMPodScrape` + a Grafana dashboard | ~~The chart~~ ⚠ the operator, where there is one — corrected below |
 | 7 | A backup policy binding (Velero + volume snapshots) | `charts/managed/{svc}/backup.yaml` — ⚠ under-specified, see below |
 | 8 | A conformance manifest | `charts/managed/{svc}/conformance.yaml` |
+
+⚠ **CORRECTED, piece 5: `ISecretResolver` cannot provision anything, and the row named the wrong
+half of the story for as long as the story had only one half.** That interface has exactly one method,
+`ResolveAsync`, which *reads* a `SecretRef`; nothing in it writes, and nothing in the tree wrote to a
+vault at all. So piece 5 was undischargeable by construction, and every provider that reached for it
+found a read seam where the mint was supposed to be. It cost the most on
+`CyberCloud.Storage/accounts`: SeaweedFS sets `iam.isAuthEnabled = len(identities) > 0` and answers an
+unauthenticated request as `ACTION_ADMIN` when that is false, so an account whose identities `Secret`
+nobody could write was an S3 endpoint with no access control.
+
+Piece 5 is **two** seams, and the split is what makes each testable:
+
+- **`ISecretWriter.MintAsync`** puts the credential in the tenant's vault at create time, **once**.
+  Mint-once is the whole semantic rather than an optimisation — a reconciler is idempotent and its
+  reminder fires on a resource that already converged, so a writer that replaced what was there would
+  hand the tenant a new credential on every pass and break the one they are using. `OpenBaoSecretWriter`
+  spells it `kv-v2`'s `cas=0`, at the vault, because two silos reconciling the same resource would both
+  read "absent" and both write.
+- **`IResourceActionHandler`** is what a `listKeys` action actually runs. Before it,
+  `IProviderBuilder.Action` took no handler at all and `OperationKind.Action` was written by
+  `ResourceManagerService` and read by nothing — so a `POST` answered `202` and the operation grain
+  re-ran the resource type's *reconciler*. Twelve actions across nine provider namespaces were declared,
+  published to the OpenAPI document, the SDK and the CLI, and could not execute.
+
+`ISecretResolver` keeps its place in the row's *second* half: the handler reads the value back through
+it, and so does the reconciler when it renders the credential into whatever the data plane mounts.
+
+⚠ **The result of a `secret: true` action does not travel on its operation.** `OperationSpec` and the
+LRO status are durable and are readable by anyone holding `read` on the resource, while `listKeys`
+checks a permission that is deliberately not `read` — [07 § Consistency](07-authorization.md) puts a key
+export in the fully-consistent row for exactly that reason. So a synchronous action starts no operation:
+it answers `200` with its own body, and the value is persisted nowhere.
 
 ⚠ **CORRECTED, piece 6: "The chart" is the wrong place for an operator-managed service.** The outcome
 is right and stays — every managed service is scraped and has a dashboard — but the location is wrong,

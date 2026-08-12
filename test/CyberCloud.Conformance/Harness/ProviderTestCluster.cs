@@ -2,6 +2,8 @@ using CyberCloud.Conformance.Harness;
 using CyberCloud.Core.Contracts;
 using CyberCloud.Core.Time;
 using CyberCloud.ResourceManager;
+using CyberCloud.ResourceManager.Actions;
+using CyberCloud.ResourceManager.Conformance;
 using CyberCloud.ResourceManager.Registry;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -67,6 +69,17 @@ public static class ConformanceState<TSource>
     where TSource : IProviderCaseSource {
     /// <summary>The one fake cluster this provider's harness applies into.</summary>
     public static FakeKubeCluster Cluster { get; } = new(ConformanceIds.Cluster);
+
+    /// <summary>
+    ///     The one test vault this provider's harness mints into and reads back from.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Static for the same reason <see cref="Cluster" /> is, and it is the same defect if it
+    ///     is not.</b> The reconciler mints inside the SILO and a synchronous action resolves inside
+    ///     the test process, so two instances would be a <c>listKeys</c> that cannot find the
+    ///     credential its own create wrote — and the failure would read as a provider bug.
+    /// </remarks>
+    public static InMemorySecretVault Vault { get; } = new();
 
     /// <summary>The clock the silo reads.</summary>
     public static ConformanceClock Clock { get; } = new();
@@ -143,6 +156,33 @@ public class ProviderTestCluster<TSource> : IAsyncLifetime
 
     /// <summary>The fake API server the reconciler applies into.</summary>
     public FakeKubeCluster World => ConformanceState<TSource>.Cluster;
+
+    /// <summary>The test vault a minting reconciler writes into.</summary>
+    public InMemorySecretVault Vault => ConformanceState<TSource>.Vault;
+
+    /// <summary>
+    ///     A container holding every action handler the case's provider declares.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ Built from the registry rather than from a member on the case, because the provider
+    ///     already says which handler serves which action and a second declaration on the case would
+    ///     be one that can disagree with it. <c>Describe</c> is pure — <see cref="IResourceProvider" />
+    ///     requires it — so building the registry twice is the same arrangement
+    ///     <c>AddCyberCloudProvider</c> relies on.
+    /// </remarks>
+    ServiceProvider Handlers() {
+        var services = new ServiceCollection();
+
+        foreach (var handler in Registry.Types
+            .SelectMany(x => x.Actions)
+            .Select(x => x.HandlerType)
+            .OfType<Type>()
+            .Distinct()) {
+            services.AddSingleton(handler);
+        }
+
+        return services.BuildServiceProvider();
+    }
 
     /// <summary>The shared clock.</summary>
     public ConformanceClock Clock => ConformanceState<TSource>.Clock;
@@ -338,6 +378,16 @@ public class ProviderTestCluster<TSource> : IAsyncLifetime
             new NotSupportedPolicyEvaluator(),
             Changes,
             cluster.GrainFactory,
+            // ⚠ THE ACTION PATH, OVER THE SAME FAKE CLUSTER AND THE SAME TEST VAULT THE SILO USES.
+            // A synchronous action runs inside ResourceManagerService rather than on a silo, so this
+            // instance — not the one in the silo's container — is what serves the suite's POST. Both
+            // read Vault, so a credential the reconciler minted inside the silo is the one listKeys
+            // hands back out here.
+            new ActionDispatcher(
+                Handlers(),
+                new FakeClusterConnectionFactory(World),
+                Vault
+            ),
             NullLogger<ResourceManagerService>.Instance
         );
 
@@ -447,6 +497,15 @@ public class ProviderTestCluster<TSource> : IAsyncLifetime
                         new FakeClusterConnectionFactory(ConformanceState<TSource>.Cluster)
                     );
 
+                    // ⚠ BOTH SEAMS FROM ONE OBJECT, AND THE SUITE WOULD BE VACUOUS WITHOUT THEM.
+                    // A provider whose reconciler mints a credential — CyberCloud.Storage/accounts is
+                    // the first — cannot converge against UnavailableSecretWriter, so every
+                    // convergence assertion would fail for a wiring reason. InMemorySecretVault
+                    // implements mint-once for real, which is what keeps the idempotence assertion
+                    // from measuring itself.
+                    services.AddSingleton<ISecretResolver>(ConformanceState<TSource>.Vault);
+                    services.AddSingleton<ISecretWriter>(ConformanceState<TSource>.Vault);
+
                     // The provider, exactly as AddCyberCloudProvider<T> registers one: the provider
                     // itself, and the reconciler as a SINGLETON BY CONCRETE TYPE — clause 2 makes one
                     // instance per process correct, and the registry stores the concrete type because
@@ -465,6 +524,19 @@ public class ProviderTestCluster<TSource> : IAsyncLifetime
                         .Where(x => x != TSource.ProviderCase.ReconcilerType)
                         .Distinct()) {
                         services.AddSingleton(reconciler);
+                    }
+
+                    // ⚠ AND EVERY ACTION HANDLER, for the reason the reconcilers are here: the
+                    // registry stores a concrete Type and ActionDispatcher resolves it from a
+                    // container. A LongRunning action driven inside the silo would otherwise refuse
+                    // with a message about the container, naming the harness rather than the case.
+                    foreach (var handler in ProviderRegistry.Build([TSource.ProviderCase.CreateProvider()])
+                        .Types
+                        .SelectMany(x => x.Actions)
+                        .Select(x => x.HandlerType)
+                        .OfType<Type>()
+                        .Distinct()) {
+                        services.AddSingleton(handler);
                     }
 
                     services.TryAddSingleton<ILoggerFactory>(_ => NullLoggerFactory.Instance);

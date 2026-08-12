@@ -64,6 +64,29 @@ public readonly record struct ActionRegistration(
     ///     for both — and it chose <c>200</c>, which is wrong for every action that does work.
     /// </remarks>
     public bool LongRunning { get; init; }
+
+    /// <summary>
+    ///     The <see cref="IResourceActionHandler" /> that runs this action, or <see langword="null" />
+    ///     when the provider declared none.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>A <see cref="Type" /> resolved from the container, which is the precedent
+    ///         <see cref="ResourceTypeRegistration.ReconcilerType" /> already set</b> rather than a
+    ///         second mechanism invented beside it. <c>ActionDispatcher</c> resolves it the way
+    ///         <c>ReconcileDriver</c> resolves a reconciler, and <c>AddCyberCloudProvider</c> registers
+    ///         it as a singleton by concrete type from the same <c>Describe</c> pass that finds the
+    ///         reconcilers.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b><see langword="null" /> is a declared action that cannot run, and it answers a
+    ///         refusal naming itself.</b> That is every action in the catalogue as it stood: declared,
+    ///         published to the SDK, the CLI and the portal, and unable to execute. A refusal that says
+    ///         which action has no handler is worth more than a <c>202</c> that quietly re-runs the
+    ///         type's reconciler, which is what happened before.
+    ///     </para>
+    /// </remarks>
+    public Type? HandlerType { get; init; }
 }
 
 /// <summary>

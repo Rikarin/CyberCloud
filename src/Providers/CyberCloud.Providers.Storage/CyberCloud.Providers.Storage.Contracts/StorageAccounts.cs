@@ -1,6 +1,12 @@
+// ⚠ For SecretRef, which lives here rather than in CyberCloud.ResourceManager.Contracts where it
+// started — see its own remarks on why the [Alias] stayed put through the move. This is the first
+// provider in the tree that names the type at all, so it is the first that needs the import.
+using CyberCloud.Core.Contracts;
 using System.Collections.Frozen;
 using System.Collections.Immutable;
 using System.Globalization;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
@@ -240,12 +246,22 @@ public static class StorageAccounts {
     /// <param name="name">The resource's own name.</param>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>THE REFERENCE IS RENDERED AND THE SECRET IS NOT WRITTEN, WHICH IS DELIBERATE AND IS
-    ///         THE SINGLE MOST IMPORTANT DECISION ON THIS TYPE.</b> docs/plan/12 § The pattern, once,
-    ///         piece 5 — credential provisioning into the tenant's Vault — needs an OpenBao integration
-    ///         that does not exist; <c>ISecretResolver</c> has one implementation and it refuses. So the
-    ///         gateway pod mounts a <c>Secret</c> that is absent, stays in <c>ContainerCreating</c>, and
-    ///         the account never reports <c>Succeeded</c>.
+    ///         ⚠ <b>THE SECRET IS WRITTEN NOW, AND THE REASON IT HAS TO BE IS THE MOST IMPORTANT FACT ON
+    ///         THIS TYPE.</b> <c>StorageAccountReconciler</c> mints an S3 key pair into the
+    ///         tenant's vault before it applies anything, renders it into this <c>Secret</c> through
+    ///         <see cref="ConfigSecretJson" />, and hands it back through <c>listKeys</c>. Until
+    ///         2026-08-13 none of that was possible: docs/plan/12 § The pattern, once assigned piece 5
+    ///         to <c>ISecretResolver</c>, which reads and cannot provision, so the reference below was
+    ///         rendered against a <c>Secret</c> nobody could write. That doc row is corrected and the
+    ///         seam it should have named is <c>ISecretWriter</c>.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>What the old shape actually was, kept because it is the argument for the ordering.</b>
+    ///         With the reference rendered and the <c>Secret</c> absent, the gateway pod stayed in
+    ///         <c>ContainerCreating</c> and the account never reported <c>Succeeded</c> — visibly
+    ///         unfinished, which was the safe half. The unsafe half was one edit away, and the
+    ///         reconciler now mints <i>before</i> it applies so that a partial failure cannot produce
+    ///         it. See its own remarks.
     ///     </para>
     ///     <para>
     ///         ⚠ <b>The alternative is worse here than on any service before it, and the reason was
@@ -260,18 +276,32 @@ public static class StorageAccounts {
     ///         the industry already speaks.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>And the answer to "is the service usable without piece 5" is different from the one
-    ///         <c>CyberCloud.DBforPostgreSQL/servers</c> gives.</b> CloudNativePG <i>generates</i> a
-    ///         password when the <c>Secret</c> its CR references is absent, so that service has a
-    ///         working database whose credentials <c>listKeys</c> cannot hand out. There is no
-    ///         equivalent here: an S3 endpoint is reachable only with an access-key pair, and the pair
-    ///         is exactly what does not exist. This service is <b>not usable at all</b> until piece 5
-    ///         lands — which is the <c>CyberCloud.Cache/redis</c> answer, one notch worse.
-    ///         <c>charts/managed/seaweedfs/conformance.yaml § owed</c>, <c>listkeys-has-no-handler</c>,
-    ///         says what closes it.
+    ///         ⚠ <b>Why this service is where piece 5 landed rather than
+    ///         <c>CyberCloud.DBforPostgreSQL/servers</c>.</b> CloudNativePG <i>generates</i> a password
+    ///         when the <c>Secret</c> its CR references is absent, so that service had a working
+    ///         database whose credentials <c>listKeys</c> merely could not hand out — an inconvenience.
+    ///         There is no equivalent here: an S3 endpoint is reachable only with an access-key pair,
+    ///         and with no pair the gateway does not refuse callers, it promotes them. So this was the
+    ///         one type where the absence was a security hole rather than a gap, and it is the one the
+    ///         write path was built against.
     ///     </para>
     /// </remarks>
     public static string ConfigSecretName(string name) => name + "-s3-config";
+
+    /// <summary>The <c>core/v1</c> <c>Secret</c> the S3 gateway's identities file lives in.</summary>
+    /// <remarks>
+    ///     ⚠ <b>The core group, so <see cref="GroupVersionKind.Group" /> is empty and
+    ///     <see cref="GroupVersionKind.IsCoreGroup" /> is what reads it.</b> The plural is carried
+    ///     rather than derived, for the reason that property gives.
+    /// </remarks>
+    public static GroupVersionKind SecretKind { get; } =
+        new() { Group = "", Version = "v1", Kind = "Secret", Plural = "secrets" };
+
+    /// <summary>The <c>Secret</c> an account owns.</summary>
+    /// <param name="ns">The resource's namespace.</param>
+    /// <param name="name">The resource's own name.</param>
+    public static ObjectRef ConfigSecretRef(string ns, string name) =>
+        new() { Kind = SecretKind, Namespace = ns, Name = ConfigSecretName(name) };
 
     /// <summary>The key <see cref="ConfigSecretName" /> files the identities under.</summary>
     /// <remarks>
@@ -299,6 +329,200 @@ public static class StorageAccounts {
         + ns
         + ".svc:"
         + S3Port.ToString(CultureInfo.InvariantCulture);
+
+    // ── The credential: where it lives, what it is called, and how one is made ────────────────
+    //
+    // ⚠ THIS BLOCK IS docs/plan/12 § The pattern, once, PIECE 5, AND IT IS WHAT MAKES THIS SERVICE
+    // USABLE AT ALL. Everything above it renders a data plane; without this the data plane comes up
+    // answering every unauthenticated request as an administrator — see ConfigSecretName.
+
+    /// <summary>The vault path an account's S3 key pair lives at.</summary>
+    /// <param name="id">The resource, with its GUID resolved.</param>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>KEYED ON THE RESOURCE GUID AND NOT ON ITS NAME, WHICH IS THE DIFFERENCE BETWEEN A
+    ///         RECREATED ACCOUNT AND THE OLD ONE'S CREDENTIAL.</b> docs/plan/06 § Identifiers makes a
+    ///         name reusable the moment the index entry is released — the delete path releases it
+    ///         first, on purpose, "so the name is immediately reusable". A path built from the name
+    ///         would therefore hand a brand-new account the key pair of the account somebody deleted an
+    ///         hour ago, and <see cref="ISecretWriter" />'s mint-once rule would make that permanent:
+    ///         the new account could never mint its own. The GUID is unique per resource for the life
+    ///         of the platform, so a recreate is a new path and a new pair.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ The tenant is the first segment because docs/plan/18 scopes vault policy per tenant.
+    ///         A path that led with the provider would make "everything this tenant owns" unexpressible
+    ///         as a policy prefix.
+    ///     </para>
+    /// </remarks>
+    public static string SecretPath(ResourceId id) {
+        ArgumentNullException.ThrowIfNull(id.Path);
+
+        return string.Create(
+            CultureInfo.InvariantCulture,
+            $"tenants/{id.TenantId:D}/{ProviderNamespace}/{TypePath}/{id.Id:D}"
+        );
+    }
+
+    /// <summary>The field the access key id is filed under.</summary>
+    public const string AccessKeyIdField = "accessKeyId";
+
+    /// <summary>The field the secret access key is filed under.</summary>
+    public const string SecretAccessKeyField = "secretAccessKey";
+
+    /// <summary>The handle that reads an account's access key id back.</summary>
+    /// <param name="id">The resource, with its GUID resolved.</param>
+    public static SecretRef AccessKeyIdRef(ResourceId id) =>
+        new() { Path = SecretPath(id), Field = AccessKeyIdField };
+
+    /// <summary>The handle that reads an account's secret access key back.</summary>
+    /// <param name="id">The resource, with its GUID resolved.</param>
+    public static SecretRef SecretAccessKeyRef(ResourceId id) =>
+        new() { Path = SecretPath(id), Field = SecretAccessKeyField };
+
+    /// <summary>
+    ///     The identity name inside the S3 identities file.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ One identity per account, and it is the account's owner. docs/plan/15 § The resource model
+    ///     puts <c>accessKeys/{name}</c> under the account as its own type, which would be several
+    ///     identities in this file — that type is not declared, so a second identity would be one the
+    ///     platform could create and no API could name.
+    /// </remarks>
+    public const string IdentityName = "owner";
+
+    /// <summary>How many characters an access key id has.</summary>
+    /// <remarks>
+    ///     ⚠ 20, and the length is the interoperability constraint rather than a security one. An
+    ///     access key id is not secret; it is the identifier a SigV4 <c>Authorization</c> header
+    ///     carries in the clear, and several S3 clients validate its shape against AWS's 20-character
+    ///     uppercase form before they will sign. The entropy that matters is in the secret key.
+    /// </remarks>
+    public const int AccessKeyIdLength = 20;
+
+    /// <summary>How many characters a secret access key has.</summary>
+    /// <remarks>
+    ///     ⚠ 40, matching AWS, which over <see cref="KeyAlphabet" />'s 32 symbols is 200 bits. That is
+    ///     well past the point where the key is the weakest thing about an endpoint served over plain
+    ///     <c>http</c> — see <see cref="Endpoint" /> — and the honest reason to go no further is that
+    ///     a longer key would break clients that size a buffer to AWS's.
+    /// </remarks>
+    public const int SecretAccessKeyLength = 40;
+
+    /// <summary>
+    ///     The symbols a generated key is drawn from: RFC 4648 base32, without padding.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>No lower case and no <c>0</c>, <c>1</c> or <c>8</c>, which is base32's own choice and
+    ///     is worth keeping rather than widening.</b> A key pair is a value people copy out of a
+    ///     terminal and into a configuration file by hand at least once, and <c>O</c>/<c>0</c> and
+    ///     <c>l</c>/<c>1</c> are where that goes wrong. Widening to base64 would buy 0.2 bits per
+    ///     character and cost the property that a mistyped key fails at the client rather than
+    ///     signing wrongly.
+    /// </remarks>
+    public const string KeyAlphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+
+    /// <summary>Generates one S3 key pair.</summary>
+    /// <returns>The access key id and the secret access key.</returns>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>NOT IDEMPOTENT, AND THE PASS THAT CALLS IT STILL IS.</b> This returns a different
+    ///         pair every call, which reads like a clause 1 violation and is not: the reconciler offers
+    ///         the pair to <see cref="ISecretWriter.MintAsync" />, whose <c>cas=0</c> keeps the first
+    ///         one and discards every later candidate, and then <i>resolves</i> what the vault actually
+    ///         holds before rendering anything. So the generated value reaches a manifest only on the
+    ///         pass that minted it, and every rendered object is byte-stable across passes. The
+    ///         alternative — deriving a key from the resource id so that it is reproducible — is a
+    ///         credential anyone who knows a GUID can compute.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <see cref="RandomNumberGenerator.GetString" /> and not <c>Random.Shared</c>. This is a
+    ///         credential; a non-cryptographic generator seeded from a clock is the classic way to make
+    ///         one guessable.
+    ///     </para>
+    /// </remarks>
+    public static (string AccessKeyId, string SecretAccessKey) GenerateKeyPair() =>
+        (
+            RandomNumberGenerator.GetString(KeyAlphabet, AccessKeyIdLength),
+            RandomNumberGenerator.GetString(KeyAlphabet, SecretAccessKeyLength)
+        );
+
+    /// <summary>
+    ///     Builds the S3 identities file the gateway authenticates against.
+    /// </summary>
+    /// <param name="accessKeyId">The access key id, as the vault holds it.</param>
+    /// <param name="secretAccessKey">The secret access key, as the vault holds it.</param>
+    /// <remarks>
+    ///     <para>
+    ///         The JSON form of SeaweedFS' <c>iam_pb.S3ApiConfiguration</c>, which is what
+    ///         <c>-config</c> reads — see <see cref="ConfigSecretKey" /> for how the operator projects
+    ///         the file in.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The action list is what stops the "no identities" behaviour rather than what grants
+    ///         access.</b> <c>weed/s3api/auth_credentials.go</c> sets
+    ///         <c>isAuthEnabled = len(identities) &gt; 0</c>, so the <i>presence</i> of one identity is
+    ///         what turns authentication on at all; <c>Admin</c> is then what this identity may do
+    ///         once it has authenticated. An empty action list would authenticate the tenant and
+    ///         authorise nothing, which is a bucket they own and cannot read.
+    ///     </para>
+    /// </remarks>
+    public static string IdentitiesJson(string accessKeyId, string secretAccessKey) {
+        ArgumentException.ThrowIfNullOrEmpty(accessKeyId);
+        ArgumentException.ThrowIfNullOrEmpty(secretAccessKey);
+
+        return new JsonObject {
+            ["identities"] = new JsonArray {
+                new JsonObject {
+                    ["name"] = IdentityName,
+                    ["credentials"] = new JsonArray {
+                        new JsonObject {
+                            ["accessKey"] = accessKeyId, ["secretKey"] = secretAccessKey
+                        }
+                    },
+                    ["actions"] = new JsonArray { "Admin", "Read", "Write", "List", "Tagging" }
+                }
+            }
+        }.ToJsonString();
+    }
+
+    /// <summary>
+    ///     Builds the <c>Secret</c> the S3 gateway mounts.
+    /// </summary>
+    /// <param name="name">The resource's own name.</param>
+    /// <param name="accessKeyId">The access key id, as the vault holds it.</param>
+    /// <param name="secretAccessKey">The secret access key, as the vault holds it.</param>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>THE ONE OBJECT THIS PROVIDER RENDERS THAT CARRIES A SECRET VALUE, AND IT IS BUILT
+    ///         FROM WHAT THE VAULT RETURNED RATHER THAN FROM DESIRED STATE.</b> The account's body has
+    ///         no credential property and must not grow one: docs/plan/00 § Non-negotiables keeps
+    ///         secrets out of grain state, and a body is grain state. The value exists in a local
+    ///         inside one reconcile pass, goes into this document, and is gone when the pass returns.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b><c>data</c> with the base64 written out, rather than the <c>stringData</c>
+    ///         convenience field, and the reason is the read-back.</b> <c>stringData</c> is write-only:
+    ///         the API server folds it into <c>data</c> and never returns it, so an object applied with
+    ///         one field and read back with another is an object <see cref="Matches" /> would have to
+    ///         accept in two shapes — one of which no real cluster ever produces, and which therefore
+    ///         only ever gets exercised by a fake. Encoding here costs one line and makes apply and
+    ///         read-back the same document.
+    ///     </para>
+    /// </remarks>
+    public static string ConfigSecretJson(string name, string accessKeyId, string secretAccessKey) {
+        ArgumentException.ThrowIfNullOrEmpty(name);
+
+        return new JsonObject {
+            ["metadata"] = new JsonObject { ["name"] = ConfigSecretName(name) },
+            ["type"] = "Opaque",
+            ["data"] = new JsonObject {
+                [ConfigSecretKey] = Convert.ToBase64String(
+                    Encoding.UTF8.GetBytes(IdentitiesJson(accessKeyId, secretAccessKey))
+                )
+            }
+        }.ToJsonString();
+    }
 
     // ── The constraint vocabularies ───────────────────────────────────────────────────────────
 
@@ -628,6 +852,31 @@ public static class StorageAccounts {
             ? value.GetString() ?? DefaultVersion
             : DefaultVersion;
 
+    /// <summary>
+    ///     The region an S3 client signs against, from the body's <c>location</c>.
+    /// </summary>
+    /// <param name="desired">The validated desired body.</param>
+    /// <remarks>
+    ///     ⚠ <b>The billing region and the SigV4 region are one string here, and they are not the same
+    ///     idea.</b> SeaweedFS does not route on a region at all — it accepts whatever the client
+    ///     signed with — so the platform is free to choose, and choosing the value the tenant already
+    ///     sees on the resource means <c>listKeys</c> hands back something they can check. The day
+    ///     SeaweedFS starts caring, this becomes its own property rather than a second reading of
+    ///     <c>location</c>.
+    /// </remarks>
+    public static string Region(JsonElement desired) =>
+        Root(desired, "location") is { ValueKind: JsonValueKind.String } value
+        && value.GetString() is { Length: > 0 } location
+            ? location
+            : DefaultRegion;
+
+    /// <summary>The region reported when a body carries no <c>location</c>.</summary>
+    /// <remarks>
+    ///     ⚠ Reachable only through a body that was never validated — <c>location</c> is required — and
+    ///     it is a real value rather than an empty string because SigV4 refuses to sign without one.
+    /// </remarks>
+    public const string DefaultRegion = "us-east-1";
+
     /// <summary>The master count a body asks for.</summary>
     /// <param name="desired">The validated desired body.</param>
     public static int Masters(JsonElement desired) => Number(desired, "masters", DefaultMasters);
@@ -853,9 +1102,51 @@ public static class StorageAccounts {
             return false;
         }
 
-        if (parsed is not JsonObject document
-            || document["kind"]?.GetValue<string>() is not (null or "Seaweed")
-            || document["spec"] is not JsonObject spec) {
+        if (parsed is not JsonObject document) {
+            return false;
+        }
+
+        // ⚠ A SWITCH RATHER THAN ONE KIND, BECAUSE THIS TYPE NOW OWNS TWO OBJECTS. The `null` case is
+        // the Seaweed as this provider RENDERS it — KubeCommandBuilder injects `kind` from the
+        // GroupVersionKind, so a rendered body carries none until it has been applied and read back.
+        return document["kind"]?.GetValue<string>() switch {
+            null or "Seaweed" => MatchesSeaweed(document, desired),
+            "Secret" => MatchesConfigSecret(document),
+            _ => false
+        };
+    }
+
+    /// <summary>
+    ///     Whether the gateway's identities <c>Secret</c> is there and carries its key.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>PRESENCE AND NOT CONTENT, AND THAT IS FORCED RATHER THAN LAZY.</b> Every other
+    ///         <c>Matches</c> in the catalogue compares an object against the desired <i>body</i>, and
+    ///         the whole point of this object is that its content is <b>not</b> in the body — the
+    ///         credential lives in the vault and reaches a manifest for the length of one pass. There
+    ///         is nothing here to compare against, and inventing something would mean putting the
+    ///         credential in desired state, which is the rule this provider exists to keep.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>What it still catches is the failure that matters.</b> A <c>Secret</c> deleted by
+    ///         a well-meant <c>kubectl</c>, emptied by an admission policy, or never applied is a
+    ///         gateway that comes up with no identities and answers every request as an administrator.
+    ///         All three land as an absent <see cref="ConfigSecretKey" /> and all three make this
+    ///         false, so the next pass re-renders it from the vault.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ Reads <c>data</c>, which is what <see cref="ConfigSecretJson" /> writes and what a
+    ///         real API server returns. The <c>stringData</c> convenience field is write-only and
+    ///         deliberately not used — see that method's remarks.
+    ///     </para>
+    /// </remarks>
+    static bool MatchesConfigSecret(JsonObject document) =>
+        document["data"] is JsonObject data
+        && data[ConfigSecretKey]?.GetValue<string>() is { Length: > 0 };
+
+    static bool MatchesSeaweed(JsonObject document, JsonElement desired) {
+        if (document["spec"] is not JsonObject spec) {
             return false;
         }
 

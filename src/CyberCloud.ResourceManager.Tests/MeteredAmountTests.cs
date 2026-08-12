@@ -1,4 +1,6 @@
+using CyberCloud.ResourceManager.Actions;
 using CyberCloud.ResourceManager.Registry;
+using Microsoft.Extensions.DependencyInjection;
 using CyberCloud.ResourceManager.Tests.Infrastructure;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -226,6 +228,11 @@ public sealed class MeteredAmountTests(ResourceManagerCluster cluster) {
             new SwitchablePolicyEvaluator(),
             new RecordingChangeSink(),
             cluster.Grains,
+            new ActionDispatcher(
+                new ServiceCollection().BuildServiceProvider(),
+                new NoClusterConnectionFactory(),
+                new UnavailableSecretResolver()
+            ),
             NullLogger<ResourceManagerService>.Instance
         );
 

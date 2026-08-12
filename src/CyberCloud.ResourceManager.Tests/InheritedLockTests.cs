@@ -1,4 +1,6 @@
+using CyberCloud.ResourceManager.Actions;
 using CyberCloud.ResourceManager.Tests.Infrastructure;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace CyberCloud.ResourceManager.Tests;
@@ -262,6 +264,11 @@ public sealed class InheritedLockTests(ResourceManagerCluster cluster) {
             new SwitchablePolicyEvaluator(),
             new RecordingChangeSink(),
             cluster.Grains,
+            new ActionDispatcher(
+                new ServiceCollection().BuildServiceProvider(),
+                new NoClusterConnectionFactory(),
+                new UnavailableSecretResolver()
+            ),
             NullLogger<ResourceManagerService>.Instance
         );
 

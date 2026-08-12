@@ -51,6 +51,7 @@ public sealed class ReconcileDriver(
     IGrainFactory grains,
     IClusterConnectionFactory clusters,
     ISecretResolver secrets,
+    ISecretWriter secretWriter,
     IClock clock
 ) {
     /// <summary>How long one pass may take. Clause 3 of docs/plan/08 § The reconcile loop.</summary>
@@ -151,7 +152,11 @@ public sealed class ReconcileDriver(
             connection,
             secrets,
             log
-        );
+        ) {
+            // ⚠ The one place the host's writer reaches a pass. Everything else that builds a context
+            // — a test, a conformance harness — gets RefusingSecretWriter and has to say otherwise.
+            SecretWriter = secretWriter
+        };
 
         using var budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         budget.CancelAfter(PassBudget);

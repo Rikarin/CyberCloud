@@ -1,3 +1,4 @@
+using CyberCloud.ResourceManager.Actions;
 using CyberCloud.ResourceManager.Contracts.Registry;
 using Microsoft.Extensions.Logging;
 using Orleans.Multitenant;
@@ -57,7 +58,7 @@ public sealed class ResourceManagerService(
     IPolicyEvaluator policy,
     IResourceChangedSink changes,
     IGrainFactory grains,
-
+    ActionDispatcher actions,
     ILogger<ResourceManagerService> logger
 )
     : IResourceManager {
@@ -469,6 +470,33 @@ public sealed class ResourceManagerService(
             return NotFound<WriteAccepted>(request.Path);
         }
 
+        // ── An action that does no work answers here, and never starts an operation ──────────────
+        //
+        // ⚠ THE SECRET MUST NOT REACH THE OPERATION RECORD, AND NOT STARTING ONE IS HOW THAT IS
+        // GUARANTEED RATHER THAN REMEMBERED.
+        //
+        // OperationSpec and OperationStatus are DURABLE and are readable by anyone holding `read` on
+        // the resource — OperationGrain writes both to StorageTiers.Durable and IOperationReader
+        // serves the status to any caller who can read the resource. `listKeys` checks its OWN
+        // permission (docs/plan/07 § The enforcement seam puts a key export in the fully-consistent
+        // row precisely because `read` is not enough for it), so a handler that returned the
+        // credential through the operation's public status would hand it to every reader of the
+        // resource AND write it into a backup of the durable tier — defeating the permission split
+        // twice over, without touching the permission itself.
+        //
+        // A handler's result therefore travels on WriteAccepted.ActionResponse, which is the reply to
+        // one caller on one request and is persisted nowhere. `ActionDispatchTests` asserts the value is in
+        // exactly one of the two, and a sabotage run that routed listKeys through the operation path
+        // turned that suite red.
+        //
+        // ⚠ And it is the right ANSWER as well as the safe one: ActionRegistration.LongRunning
+        // exists because `restart` takes a minute and `listKeys` reads two strings. An action that
+        // does no work answering 202-and-poll is a generated client that polls for a value it was
+        // already entitled to have.
+        if (!action.LongRunning) {
+            return await CompleteActionAsync(target, action, request, trace, cancellationToken);
+        }
+
         trace.Enter(WriteStep.StartOperation);
 
         var operationId = Guid.NewGuid();
@@ -502,6 +530,72 @@ public sealed class ResourceManagerService(
                 OperationUri = OperationUri(operationId),
                 RetryAfterSeconds = ReconcileSchedule.InitialRetryAfterSeconds,
                 Resource = snapshot.ValueOrDefault ?? new(),
+                Trace = trace.Build()
+            }
+        );
+    }
+
+    /// <summary>
+    ///     Runs a synchronous action's handler and shapes the <c>200</c>.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>The resource is read for the handler and again for the reply, and the two reads are
+    ///         different things.</b> <c>GetReconcileInputAsync</c> gives the stored <i>superset</i> —
+    ///         which is what a handler wants, because it reads facts about the resource rather than
+    ///         rendering it — and <c>GetAsync</c> gives the api-version's projection, which is what the
+    ///         caller gets back. Handing the handler the projection would hide a property from it the
+    ///         moment somebody added one at a newer date.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>No <c>ResourceChanged</c> is emitted.</b> An action that does no work changed
+    ///         nothing, and a change notification for a read would wake every portal blade watching the
+    ///         resource every time somebody looked at its keys.
+    ///     </para>
+    /// </remarks>
+    async Task<Result<WriteAccepted>> CompleteActionAsync(
+        WriteTarget target,
+        ActionRegistration action,
+        WriteRequest request,
+        WriteTraceBuilder trace,
+        CancellationToken cancellationToken
+    ) {
+        var input = await Resource(target).GetReconcileInputAsync();
+        if (input.TryGetError(out var inputError)) {
+            return Result<WriteAccepted>.Failure(inputError);
+        }
+
+        using var body = JsonDocument.Parse(
+            string.IsNullOrWhiteSpace(request.Body) ? "{}" : request.Body
+        );
+
+        var invoked = await actions.InvokeAsync(
+            target.Id,
+            target.Registration,
+            action,
+            input.GetValueOrThrow(),
+            body.RootElement,
+            cancellationToken
+        );
+
+        if (invoked.TryGetError(out var invokeError)) {
+            return Result<WriteAccepted>.Failure(invokeError);
+        }
+
+        trace.Enter(WriteStep.Accepted);
+
+        var snapshot = await Resource(target).GetAsync(target.ApiVersion.Value, ReadablePointers(target.Schema));
+
+        return Result<WriteAccepted>.Success(
+            new() {
+                // ⚠ Guid.Empty and no OperationUri, because there is no operation. The gateway keys
+                // its 200-versus-202 on Completed rather than on this, so an action that answered
+                // directly cannot also advertise something to poll.
+                OperationId = Guid.Empty,
+                RetryAfterSeconds = 0,
+                Resource = snapshot.ValueOrDefault ?? new(),
+                ActionResponse = invoked.GetValueOrThrow(),
+                Completed = true,
                 Trace = trace.Build()
             }
         );

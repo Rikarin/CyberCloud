@@ -79,6 +79,14 @@
         <ProjectReference Include="../../CyberCloud.ServiceDefaults/CyberCloud.ServiceDefaults.csproj"/>
         <ProjectReference Include="../../CyberCloud.Tenancy/CyberCloud.Tenancy.csproj"/>
         <ProjectReference Include="../../CyberCloud.ResourceManager/CyberCloud.ResourceManager.csproj"/>
+        <!--
+          docs/plan/18's OpenBao client. The reference is here rather than on CyberCloud.Silo.Host
+          because THIS host is the one that composes the resource manager, and a synchronous action —
+          `listKeys` — is served inside ResourceManagerService.ActionAsync in this process. Program.cs
+          calls AddOpenBaoSecretResolver only when CyberCloud:Vault is configured; without it the
+          refusing seams stay, which is a supported shape.
+        -->
+        <ProjectReference Include="../../CyberCloud.Vault/CyberCloud.Vault.csproj"/>
     </ItemGroup>
 
     <ItemGroup Label="CyberCloud.Analyzers — CC1006 is the reason this project exists in the gate">

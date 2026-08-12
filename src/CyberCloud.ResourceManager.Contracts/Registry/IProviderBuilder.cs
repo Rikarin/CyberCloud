@@ -198,6 +198,14 @@ public interface IResourceTypeBuilder : IProviderBuilder {
     ///     anything else in the declaration — <c>restart</c> and <c>listKeys</c> are both
     ///     <see cref="ActionKind.Post" /> and only one of them does work.
     /// </param>
+    /// <param name="handler">
+    ///     The <see cref="IResourceActionHandler" /> that runs it, or <see langword="null" /> for an
+    ///     action nothing can execute yet. ⚠ Named as a <see cref="Type" /> rather than through a
+    ///     generic overload for the reason <c>ActionRegistration.HandlerType</c> gives: it follows
+    ///     <c>ReconcilerType</c>, which the registry already stores and the driver already resolves.
+    ///     Refused unless it implements the interface, at declaration time, because a typo caught at
+    ///     silo start beats a <c>500</c> on the first call.
+    /// </param>
     /// <returns>The same builder.</returns>
     /// <remarks>
     ///     ⚠ An action never creates — docs/plan/08 § The write path, end to end. A <c>POST</c> to a
@@ -217,7 +225,8 @@ public interface IResourceTypeBuilder : IProviderBuilder {
         bool secret = false,
         ResourceSchema? request = null,
         ResourceSchema? response = null,
-        bool longRunning = false
+        bool longRunning = false,
+        Type? handler = null
     );
 
     /// <summary>

@@ -2,6 +2,8 @@ using CyberCloud.Conformance.Harness;
 using CyberCloud.Core.Time;
 using CyberCloud.Kubernetes.Apply;
 using CyberCloud.ResourceManager;
+using CyberCloud.ResourceManager.Actions;
+using CyberCloud.ResourceManager.Conformance;
 using CyberCloud.ResourceManager.Reconcile;
 using CyberCloud.ResourceManager.Registry;
 using CyberCloud.ServiceDefaults.Storage;
@@ -46,6 +48,17 @@ public static class ClusterConformanceState<TSource>
 
     /// <summary>Step 8's recorded ReBAC parent edges.</summary>
     public static RecordingRelationWriter Relations { get; } = new();
+
+    /// <summary>
+    ///     The test vault a minting reconciler writes into, shared with the silo.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ The k3s half is real about the API server and not about OpenBao — nothing in this
+    ///     repository deploys a vault, so this is the seam that lets a provider whose create mints a
+    ///     credential converge at all. What it still exercises for real is mint-once, because
+    ///     InMemorySecretVault implements it.
+    /// </remarks>
+    public static InMemorySecretVault Vault { get; } = new();
 
     /// <summary>The connection to the real API server. Set before the silos start.</summary>
     public static RealClusterConnection Connection { get; set; } = null!;
@@ -103,6 +116,25 @@ public sealed class ClusterConformanceHarness<TSource> : IAsyncDisposable
 
     /// <summary>The registry the write path validates against.</summary>
     public IProviderRegistry Registry { get; private set; } = null!;
+
+    /// <summary>A container holding every action handler the case's provider declares.</summary>
+    /// <remarks>
+    ///     ⚠ Built from the registry rather than from a member on the case — the provider already
+    ///     says which handler serves which action, and a second declaration is one that can disagree.
+    /// </remarks>
+    ServiceProvider Handlers() {
+        var services = new ServiceCollection();
+
+        foreach (var handler in Registry.Types
+            .SelectMany(x => x.Actions)
+            .Select(x => x.HandlerType)
+            .OfType<Type>()
+            .Distinct()) {
+            services.AddSingleton(handler);
+        }
+
+        return services.BuildServiceProvider();
+    }
 
     /// <summary>The raw Kubernetes client — the half of every assertion that is deliberately not us.</summary>
     public IKubernetes Raw { get; private set; } = null!;
@@ -262,6 +294,10 @@ public sealed class ClusterConformanceHarness<TSource> : IAsyncDisposable
             new NotSupportedPolicyEvaluator(),
             ClusterConformanceState<TSource>.Changes,
             harness.cluster.GrainFactory,
+            // ⚠ The same test vault the silo's container holds, for the reason ProviderTestCluster
+            // gives: a synchronous action runs HERE and the mint that produced its credential ran in
+            // the silo, so two instances would be a listKeys that cannot find its own create.
+            new ActionDispatcher(harness.Handlers(), new NoClusterConnectionFactory(), ClusterConformanceState<TSource>.Vault),
             NullLogger<ResourceManagerService>.Instance
         );
 
@@ -759,6 +795,18 @@ public sealed class ClusterConformanceHarness<TSource> : IAsyncDisposable
                         .Where(x => x != TSource.ProviderCase.ReconcilerType)
                         .Distinct()) {
                         services.AddSingleton(reconciler);
+                    }
+
+                    services.AddSingleton<ISecretResolver>(ClusterConformanceState<TSource>.Vault);
+                    services.AddSingleton<ISecretWriter>(ClusterConformanceState<TSource>.Vault);
+
+                    foreach (var handler in ProviderRegistry.Build([TSource.ProviderCase.CreateProvider()])
+                        .Types
+                        .SelectMany(x => x.Actions)
+                        .Select(x => x.HandlerType)
+                        .OfType<Type>()
+                        .Distinct()) {
+                        services.AddSingleton(handler);
                     }
 
                     services.TryAddSingleton<ILoggerFactory>(_ => NullLoggerFactory.Instance);
