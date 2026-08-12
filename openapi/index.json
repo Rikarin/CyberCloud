@@ -176,6 +176,7 @@
   },
   "x-cybercloud-providers": [
     "CyberCloud.DBforPostgreSQL",
+    "CyberCloud.Messaging",
     "CyberCloud.Sample"
   ],
   "x-cybercloud-resource-types": [
@@ -189,6 +190,19 @@
         "plural": "PostgreSQL servers",
         "alias": "postgres",
         "summary": "A managed PostgreSQL cluster on CloudNativePG, with replication, PgBouncer and backup to the tenant's object store.",
+        "declared": true
+      }
+    },
+    {
+      "type": "CyberCloud.Messaging/kafkaClusters",
+      "apiVersions": [
+        "2026-08-01"
+      ],
+      "display": {
+        "name": "Kafka cluster",
+        "plural": "Kafka clusters",
+        "alias": "kafka",
+        "summary": "A managed Apache Kafka cluster on Strimzi in KRaft mode, with Cruise Control, configurable retention and an optional firewalled external listener.",
         "declared": true
       }
     },

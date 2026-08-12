@@ -1,0 +1,141 @@
+# Conformance manifest — docs/plan/12 § The pattern, once, piece 8.
+#
+# What the conformance suite asserts about CyberCloud.Messaging/kafkaClusters. This file is data:
+# `Build.Charts` checks that it is present, non-empty, and names the same resource type as
+# Chart.yaml. The suite that reads the rest of it lives in test/ and does not exist yet, and the
+# target says so in its own log rather than implying otherwise.
+
+resourceType: CyberCloud.Messaging/kafkaClusters
+apiVersion: "2026-08-01"
+chart: kafka
+
+# Objects the reconciler must have applied once the resource reports Succeeded.
+#
+# ⚠ BOTH, UNCONDITIONALLY — there is no `when:` here and the PostgreSQL manifest has one. With
+# strimzi.io/node-pools enabled the Kafka carries no replica count and no storage of its own, so a
+# cluster without its pool is not a smaller cluster, it is one with nowhere to run.
+renders:
+  - group: kafka.strimzi.io
+    version: v1beta2
+    kind: Kafka
+    count: 1
+  - group: kafka.strimzi.io
+    version: v1beta2
+    kind: KafkaNodePool
+    count: 1
+
+# The CRDs a cluster must serve before any of this can be asserted. Read by
+# ProviderConformanceCase.RequiredCrds, which the cluster-backed suite installs before the harness
+# starts.
+#
+# ⚠ THIS LIST IS A CLAIM, NOT A CONVENIENCE. A bare k3s serves no REST path for a custom resource,
+# so every cluster-backed assertion about a Strimzi object fails without it — and it fails as an
+# HttpOperationException with no status code, which names nothing.
+requiredCrds:
+  - group: kafka.strimzi.io
+    version: v1beta2
+    kind: Kafka
+    plural: kafkas
+  - group: kafka.strimzi.io
+    version: v1beta2
+    kind: KafkaNodePool
+    plural: kafkanodepools
+
+# ADR-013 — every rendered object carries all seven labels. Asserted against real rendered output,
+# which is what the Labels architecture gate in docs/plan/23 § The architecture gates requires.
+labels:
+  required:
+    - cybercloud.io/tenant-id
+    - cybercloud.io/subscription-id
+    - cybercloud.io/resource-group
+    - cybercloud.io/resource-id
+    - cybercloud.io/resource-type
+    - cybercloud.io/api-version
+    - cybercloud.io/managed-by
+  # ⚠ Not the resource type verbatim. A `/` is not a legal label value character, so the value is
+  # lower-cased with `/` replaced by `_` — KubeLabels.ResourceTypeValue.
+  values:
+    cybercloud.io/resource-type: cybercloud.messaging_kafkaclusters
+    cybercloud.io/managed-by: cybercloud
+  # ⚠ NOT one of the seven, and not optional either. A KafkaNodePool whose strimzi.io/cluster does
+  # not name an existing Kafka is silently ignored by the operator.
+  additional:
+    KafkaNodePool:
+      strimzi.io/cluster: "{resourceName}"
+
+# Behaviour a tenant is entitled to. Each is a statement the suite can fail on, not a feature list.
+assertions:
+  - id: produce-and-consume
+    says: A client resolves the bootstrap address from listKeys, produces to a topic and consumes what it produced.
+  - id: quorum-survives-one-node
+    says: Deleting one broker pod of a three-node cluster leaves the cluster writable throughout, and every acknowledged record is still readable afterwards.
+  - id: external-is-off-unless-asked
+    says: With external.enabled false no LoadBalancer Service exists for this cluster. Turning it on with an empty allowedCidrs list creates one that accepts no source range, never one that accepts every source range.
+  - id: retention-is-the-declared-window
+    says: A record older than retention.hours is not readable; one inside the window is. Changing retention.hours changes the boundary rather than requiring a new cluster.
+  - id: replication-factor-fits-the-cluster
+    says: A topics.replicationFactor above the node count is refused by the API before it reaches a cluster, rather than producing a cluster where every produce to a new topic fails.
+  - id: storage-grows-never-shrinks
+    says: Increasing storage.size resizes online; decreasing it is refused at the API.
+  - id: secrets-never-round-trip
+    says: A GET of the resource never returns broker credentials in any form. The only path out is the listKeys action.
+
+# Meters the type must emit — docs/plan/12 § The pattern, once, piece 3.
+meters:
+  - kafka.node.hours
+  - kafka.storage.gib.hours
+  - kafka.egress.gib
+
+# ── owed ──────────────────────────────────────────────────────────────────────────────────────
+#
+# Named here rather than left to be discovered, because an absent capability that nobody wrote down
+# is indistinguishable from one nobody thought of.
+owed:
+  - id: scrape-object
+    says: >
+      docs/plan/12 § The pattern, once, piece 6's SECOND branch — "hand-write one into the chart only
+      when there is no operator to ask" — and this is the first service it is true of. Strimzi emits
+      no PodMonitor or ServiceMonitor and has no switch on the Kafka CR that asks it to;
+      spec.kafkaExporter makes the metrics exist and nothing scrapes them. The chart owes a
+      PodMonitor selecting this cluster's pods, and the Grafana dashboard that reads it.
+  - id: dedicated-controller-pool
+    says: >
+      One KafkaNodePool carries both the controller and the broker role. Strimzi's production shape
+      is two pools, so that controllers can be sized and scaled independently of brokers and a broker
+      restart cannot cost quorum. Splitting them changes the rendered object set from two to three
+      and is a change to KafkaClusters.NodePoolJson, the reconciler's Targets, and this file's
+      renders block.
+  - id: listkeys-has-no-handler
+    says: >
+      docs/plan/12 § The pattern, once, piece 5 — credential provisioning into the tenant's Vault —
+      needs an OpenBao integration that does not exist, so listKeys has a declared response shape and
+      nothing that serves it. Until then the SCRAM credentials Strimzi's user operator generates stay
+      in a Secret in the tenant's namespace, which is a working cluster whose credentials this API
+      cannot hand out.
+  - id: odd-node-count-is-unenforced
+    says: >
+      A KRaft quorum of two controllers tolerates no failures, so /properties/nodes wants an odd
+      value. SchemaProperty.AllowedValues is Text-only by construction and Minimum/Maximum cannot say
+      "odd", so the constraint is in the property's description and in nothing that enforces it. A
+      body asking for four nodes is accepted and produces a cluster that looks highly available and
+      is not.
+  - id: cidr-shape-is-unenforced
+    says: >
+      /properties/external/allowedCidrs declares no Pattern, so "999.0.0.1/99" is accepted by the
+      API, reaches loadBalancerSourceRanges, and fails at the API server AFTER the caller was told
+      202. The registry would carry the constraint — SchemaProperty applies a Pattern per element on
+      an array — and ADR-012's fifth surface refuses `@pattern` on a `{array}` while emitting
+      `@enum` there as `items.enum`, which is the same per-element shape. Closing it is one case in
+      ChartAnnotationEmitter and one in Build.Charts' Validate. KafkaClusters.CidrPattern is the
+      string, written down and tested, waiting for a surface that will carry it.
+  - id: replication-factor-versus-node-count
+    says: >
+      The `replication-factor-fits-the-cluster` assertion above is not enforceable by the registry
+      either — it is a relation between two properties, and ResourceSchema validates each property
+      against constants. A cross-property validation seam would close this one and the odd-node one
+      is a different shape again.
+  - id: sub-resources
+    says: >
+      docs/plan/12 names topics and users as sub-resources. They are not declared, and the reason is
+      the resource-id grammar rather than effort — see the remarks on KafkaClusters and
+      src/Providers/README.md § What the third provider measured.

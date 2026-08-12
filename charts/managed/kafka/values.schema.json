@@ -1,0 +1,354 @@
+{
+  "$id": "https://schema.cybercloud.io/charts/kafka/values.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "The configuration surface of the kafka chart. GENERATED from values.yaml by `./build.sh Charts` and diffed in CI — docs/plan/03 § charts/. Edit values.yaml, never this file. Members carrying `x-cybercloud-api: false` are chart or platform plumbing and are not part of the resource body.",
+  "properties": {
+    "cruiseControl": {
+      "additionalProperties": false,
+      "description": "Cruise Control — partition rebalancing and broker-load reporting.",
+      "properties": {
+        "enabled": {
+          "default": true,
+          "description": "Whether Cruise Control runs. On by default: docs/plan/12 puts it in the chart rather than in a follow-up, because rebalancing a Kafka cluster by hand is the operational cost that makes this the most demanding service in the catalogue.",
+          "type": "boolean",
+          "x-cybercloud-order": 0,
+          "x-cybercloud-pointer": "/properties/cruiseControl/enabled"
+        }
+      },
+      "type": "object",
+      "x-cybercloud-order": 8,
+      "x-cybercloud-pointer": "/properties/cruiseControl"
+    },
+    "external": {
+      "additionalProperties": false,
+      "description": "Exposure outside the cluster, via a load balancer and a firewall allow-list.",
+      "properties": {
+        "allowedCidrs": {
+          "default": [],
+          "description": "Source ranges permitted to reach the external listener. Required in substance rather than in schema: an empty list with external exposure on renders a load balancer that accepts nothing, which is the safe reading of an unfinished configuration.",
+          "examples": [
+            [
+              "203.0.113.0/24"
+            ]
+          ],
+          "items": {},
+          "type": "array",
+          "x-cybercloud-order": 1,
+          "x-cybercloud-pointer": "/properties/external/allowedCidrs"
+        },
+        "enabled": {
+          "default": false,
+          "description": "Whether the cluster is reachable from outside the Kubernetes cluster. Off by default — docs/plan/12 § Cross-cutting decisions makes external exposure never the default, because a managed broker on a public IP with a weak password is the most common cloud breach there is.",
+          "type": "boolean",
+          "x-cybercloud-order": 0,
+          "x-cybercloud-pointer": "/properties/external/enabled"
+        }
+      },
+      "type": "object",
+      "x-cybercloud-order": 7,
+      "x-cybercloud-pointer": "/properties/external"
+    },
+    "imageName": {
+      "default": "",
+      "description": "Override the operator's default Kafka image. Empty means the operator chooses, which is what keeps minor upgrades automatic.",
+      "type": "string",
+      "x-cybercloud-api": false,
+      "x-cybercloud-internal-reason": "A pinned image defeats automatic minor upgrades, so it is a platform escape hatch rather than a tenant setting.",
+      "x-cybercloud-order": 11,
+      "x-cybercloud-pointer": "/properties/imageName"
+    },
+    "listener": {
+      "additionalProperties": false,
+      "description": "The in-cluster listener every client reaches.",
+      "properties": {
+        "tls": {
+          "default": true,
+          "description": "Whether the in-cluster listener requires TLS. On by default; turning it off is a plaintext broker on the pod network.",
+          "type": "boolean",
+          "x-cybercloud-order": 0,
+          "x-cybercloud-pointer": "/properties/listener/tls"
+        }
+      },
+      "type": "object",
+      "x-cybercloud-order": 6,
+      "x-cybercloud-pointer": "/properties/listener"
+    },
+    "monitoring": {
+      "additionalProperties": false,
+      "description": "What the platform scrapes.",
+      "properties": {
+        "enabled": {
+          "default": true,
+          "description": "Whether the operator runs a Kafka Exporter alongside the cluster, exposing consumer-lag and topic metrics to the platform's metrics stack.",
+          "type": "boolean",
+          "x-cybercloud-order": 0,
+          "x-cybercloud-pointer": "/properties/monitoring/enabled"
+        }
+      },
+      "type": "object",
+      "x-cybercloud-order": 9,
+      "x-cybercloud-pointer": "/properties/monitoring"
+    },
+    "nameOverride": {
+      "default": "",
+      "description": "Replace the generated object-name stem. Empty means derive it from the release name.",
+      "type": "string",
+      "x-cybercloud-api": false,
+      "x-cybercloud-internal-reason": "Helm plumbing. Nothing about it belongs in a resource body.",
+      "x-cybercloud-order": 12,
+      "x-cybercloud-pointer": "/properties/nameOverride"
+    },
+    "nodes": {
+      "default": 3,
+      "description": "Number of Kafka nodes, each acting as both a KRaft controller and a broker. Use an odd number: a quorum of two tolerates no failures, and one is a single point of failure offered for development only.",
+      "maximum": 9,
+      "minimum": 1,
+      "type": "integer",
+      "x-cybercloud-order": 1,
+      "x-cybercloud-pointer": "/properties/nodes"
+    },
+    "platform": {
+      "additionalProperties": false,
+      "description": "Resource identity injected by the reconciler. Not a tenant-facing setting.",
+      "properties": {
+        "apiVersion": {
+          "default": "2026-08-01",
+          "description": "The api-version the resource was last written at, rendered into the cybercloud.io/api-version label.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 5,
+          "x-cybercloud-pointer": "/properties/platform/apiVersion"
+        },
+        "managedBy": {
+          "default": "cybercloud",
+          "description": "Value of the cybercloud.io/managed-by label. Constant, and the selector every informer filters on.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 6,
+          "x-cybercloud-pointer": "/properties/platform/managedBy"
+        },
+        "resourceGroup": {
+          "default": "",
+          "description": "Resource group name, rendered into the cybercloud.io/resource-group label.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 2,
+          "x-cybercloud-pointer": "/properties/platform/resourceGroup"
+        },
+        "resourceId": {
+          "default": "",
+          "description": "Resource GUID, rendered into the cybercloud.io/resource-id label.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 3,
+          "x-cybercloud-pointer": "/properties/platform/resourceId"
+        },
+        "resourceType": {
+          "default": "CyberCloud.Messaging/kafkaClusters",
+          "description": "Fully qualified resource type, rendered into the cybercloud.io/resource-type label.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 4,
+          "x-cybercloud-pointer": "/properties/platform/resourceType"
+        },
+        "subscriptionId": {
+          "default": "",
+          "description": "Subscription GUID, rendered into the cybercloud.io/subscription-id label.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 1,
+          "x-cybercloud-pointer": "/properties/platform/subscriptionId"
+        },
+        "tenantId": {
+          "default": "",
+          "description": "Tenant GUID, rendered into the cybercloud.io/tenant-id label.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 0,
+          "x-cybercloud-pointer": "/properties/platform/tenantId"
+        }
+      },
+      "type": "object",
+      "x-cybercloud-api": false,
+      "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+      "x-cybercloud-order": 10,
+      "x-cybercloud-pointer": "/properties/platform"
+    },
+    "retention": {
+      "additionalProperties": false,
+      "description": "How long the cluster keeps messages by default. docs/plan/12 calls retention sizing an ongoing operational concern rather than a one-time setting.",
+      "properties": {
+        "hours": {
+          "default": 168,
+          "description": "Default retention in hours. A week by default.",
+          "maximum": 8760,
+          "minimum": 1,
+          "type": "integer",
+          "x-cybercloud-order": 0,
+          "x-cybercloud-pointer": "/properties/retention/hours"
+        },
+        "size": {
+          "default": "",
+          "description": "Default retention by partition size, in Kubernetes quantity form. Empty means retention is by time alone.",
+          "examples": [
+            "50Gi"
+          ],
+          "pattern": "^(?:(\\d+(\\.\\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)?)$",
+          "type": "string",
+          "x-cybercloud-order": 1,
+          "x-cybercloud-pointer": "/properties/retention/size"
+        }
+      },
+      "type": "object",
+      "x-cybercloud-order": 5,
+      "x-cybercloud-pointer": "/properties/retention"
+    },
+    "sizing": {
+      "additionalProperties": false,
+      "description": "CPU and memory per node, either by preset or explicitly.",
+      "properties": {
+        "cpu": {
+          "default": "",
+          "description": "Explicit vCPU quantity in Kubernetes form, for example 500m or 2. Empty means take it from the preset.",
+          "pattern": "^(?:(\\d+(\\.\\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)?)$",
+          "type": "string",
+          "x-cybercloud-order": 1,
+          "x-cybercloud-pointer": "/properties/sizing/cpu"
+        },
+        "memory": {
+          "default": "",
+          "description": "Explicit memory quantity in Kubernetes form, for example 4Gi. Empty means take it from the preset.",
+          "pattern": "^(?:(\\d+(\\.\\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)?)$",
+          "type": "string",
+          "x-cybercloud-order": 2,
+          "x-cybercloud-pointer": "/properties/sizing/memory"
+        },
+        "preset": {
+          "default": "c1.small",
+          "description": "A sizing preset from docs/plan/12. Brokers use the c1 family, which is 1 vCPU to 2 GiB and guaranteed rather than burstable.",
+          "enum": [
+            "c1.nano",
+            "c1.micro",
+            "c1.small",
+            "c1.medium",
+            "c1.large",
+            "c1.xlarge",
+            "c1.2xlarge",
+            "c1.4xlarge"
+          ],
+          "type": "string",
+          "x-cybercloud-order": 0,
+          "x-cybercloud-pointer": "/properties/sizing/preset",
+          "x-cybercloud-widget": "cozy-preset"
+        }
+      },
+      "type": "object",
+      "x-cybercloud-order": 2,
+      "x-cybercloud-pointer": "/properties/sizing"
+    },
+    "storage": {
+      "additionalProperties": false,
+      "description": "The log volume, per node.",
+      "properties": {
+        "class": {
+          "default": "",
+          "description": "StorageClass name. Empty means the cluster default.",
+          "type": "string",
+          "x-cybercloud-immutable": true,
+          "x-cybercloud-order": 1,
+          "x-cybercloud-pointer": "/properties/storage/class",
+          "x-cybercloud-widget": "storageclass"
+        },
+        "deleteClaim": {
+          "default": false,
+          "description": "Whether deleting the resource also deletes the log volumes. Off by default, so a mistaken delete leaves the data recoverable by hand.",
+          "type": "boolean",
+          "x-cybercloud-order": 2,
+          "x-cybercloud-pointer": "/properties/storage/deleteClaim"
+        },
+        "size": {
+          "default": "100Gi",
+          "description": "Log volume size per node, in Kubernetes quantity form. Grows online; never shrinks.",
+          "examples": [
+            "100Gi"
+          ],
+          "pattern": "^(?:\\d+(\\.\\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)$",
+          "type": "string",
+          "x-cybercloud-order": 0,
+          "x-cybercloud-pointer": "/properties/storage/size"
+        }
+      },
+      "required": [
+        "size"
+      ],
+      "type": "object",
+      "x-cybercloud-order": 3,
+      "x-cybercloud-pointer": "/properties/storage"
+    },
+    "topics": {
+      "additionalProperties": false,
+      "description": "Defaults applied to topics the cluster creates automatically. A topic created explicitly overrides them.",
+      "properties": {
+        "minInSyncReplicas": {
+          "default": 2,
+          "description": "How many replicas must acknowledge a write before it is committed. Must be below the replication factor, or the cluster cannot tolerate one broker restart.",
+          "maximum": 9,
+          "minimum": 1,
+          "type": "integer",
+          "x-cybercloud-order": 2,
+          "x-cybercloud-pointer": "/properties/topics/minInSyncReplicas"
+        },
+        "partitions": {
+          "default": 3,
+          "description": "Default partition count for a new topic.",
+          "maximum": 200,
+          "minimum": 1,
+          "type": "integer",
+          "x-cybercloud-order": 0,
+          "x-cybercloud-pointer": "/properties/topics/partitions"
+        },
+        "replicationFactor": {
+          "default": 3,
+          "description": "Default replication factor for a new topic. Must not exceed the node count, or every produce to a new topic fails.",
+          "maximum": 9,
+          "minimum": 1,
+          "type": "integer",
+          "x-cybercloud-order": 1,
+          "x-cybercloud-pointer": "/properties/topics/replicationFactor"
+        }
+      },
+      "type": "object",
+      "x-cybercloud-order": 4,
+      "x-cybercloud-pointer": "/properties/topics"
+    },
+    "version": {
+      "default": "3.9",
+      "description": "Apache Kafka version. Minor upgrades are applied automatically in the maintenance window; a major upgrade is an explicit update to this field.",
+      "enum": [
+        "3.8",
+        "3.9"
+      ],
+      "type": "string",
+      "x-cybercloud-order": 0,
+      "x-cybercloud-pointer": "/properties/version"
+    }
+  },
+  "required": [
+    "nodes",
+    "version"
+  ],
+  "title": "kafka chart values",
+  "type": "object",
+  "x-cybercloud-api-version": "2026-08-01",
+  "x-cybercloud-chart": "kafka",
+  "x-cybercloud-chart-version": "0.1.0",
+  "x-cybercloud-resource-type": "CyberCloud.Messaging/kafkaClusters"
+}

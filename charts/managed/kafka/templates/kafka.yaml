@@ -1,0 +1,86 @@
+{{/*
+The Kafka cluster — docs/plan/12 § The catalogue: "Strimzi, KRaft mode (no ZooKeeper)."
+
+⚠ THE TWO ANNOTATIONS ARE NOT DECORATION. `strimzi.io/kraft: enabled` is what makes the CRD's
+`spec.zookeeper` block dead rather than default, and `strimzi.io/node-pools: enabled` is what moves
+replica count and storage out of `spec.kafka` and onto the KafkaNodePool next door. Remove either
+and this manifest describes a different cluster that the operator will happily build.
+
+⚠ NO `spec.kafka.replicas` AND NO `spec.kafka.storage`, on purpose. With node pools enabled the
+operator ignores both. Writing them anyway would put this chart's field manager in permanent
+ownership of two fields that do nothing — which under server-side apply is two fields the tenant's
+own controller could then never set.
+*/}}
+apiVersion: kafka.strimzi.io/v1beta2
+kind: Kafka
+metadata:
+  name: {{ include "kafka.name" . }}
+  labels:
+    {{- include "kafka.platformLabels" . | nindent 4 }}
+  annotations:
+    strimzi.io/kraft: enabled
+    strimzi.io/node-pools: enabled
+spec:
+  kafka:
+    version: {{ .Values.version | quote }}
+    {{- with .Values.imageName }}
+    image: {{ . | quote }}
+    {{- end }}
+    listeners:
+      - name: internal
+        port: 9092
+        type: internal
+        tls: {{ .Values.listener.tls }}
+      {{- if .Values.external.enabled }}
+      {{/*
+        ⚠ TLS is unconditional on this listener, whatever `listener.tls` says. That property
+        describes the pod network, where plaintext is a defensible tenant choice; this one is a
+        public address, and docs/plan/12 § Cross-cutting decisions is about exactly this listener.
+
+        ⚠ `loadBalancerSourceRanges` is rendered even when the allow-list is EMPTY. An absent key
+        means "from anywhere", so an unfinished allow-list must render a load balancer that accepts
+        nothing rather than one that accepts everything.
+      */}}
+      - name: external
+        port: 9094
+        type: loadbalancer
+        tls: true
+        configuration:
+          loadBalancerSourceRanges:
+            {{- range .Values.external.allowedCidrs }}
+            - {{ . | quote }}
+            {{- end }}
+      {{- end }}
+    config:
+      num.partitions: {{ .Values.topics.partitions | quote }}
+      default.replication.factor: {{ .Values.topics.replicationFactor | quote }}
+      min.insync.replicas: {{ .Values.topics.minInSyncReplicas | quote }}
+      offsets.topic.replication.factor: {{ .Values.topics.replicationFactor | quote }}
+      transaction.state.log.replication.factor: {{ .Values.topics.replicationFactor | quote }}
+      transaction.state.log.min.isr: {{ .Values.topics.minInSyncReplicas | quote }}
+      log.retention.hours: {{ .Values.retention.hours | quote }}
+      {{- with .Values.retention.size }}
+      log.retention.bytes: {{ . | quote }}
+      {{- end }}
+  {{/*
+    On unconditionally. A cluster without the topic and user operators is one where a KafkaTopic or
+    a KafkaUser in this namespace means nothing at all.
+  */}}
+  entityOperator:
+    topicOperator: {}
+    userOperator: {}
+  {{- if .Values.cruiseControl.enabled }}
+  cruiseControl: {}
+  {{- end }}
+  {{- if .Values.monitoring.enabled }}
+  {{/*
+    ⚠ THIS IS THE METRICS ENDPOINT, NOT THE SCRAPE. docs/plan/12 § The pattern, once, piece 6 as
+    corrected: "ask the operator for the scrape object wherever the operator accepts the request, and
+    hand-write one into the chart only when there is no operator to ask." Strimzi is the second case
+    — unlike CloudNativePG it emits no PodMonitor or ServiceMonitor of its own, and there is no
+    switch on this CR that asks it to. `kafkaExporter` makes consumer-lag and topic metrics EXIST on
+    a scrapeable port; the object that scrapes them is ours and is not written yet. See
+    conformance.yaml § owed.
+  */}}
+  kafkaExporter: {}
+  {{- end }}

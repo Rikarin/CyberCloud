@@ -388,6 +388,331 @@
       "x-cybercloud-resource-type": "CyberCloud.DBforPostgreSQL/servers",
       "x-cybercloud-action": "listKeys"
     },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Messaging/kafkaClusters/{resourceName}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "get": {
+        "operationId": "CyberCloud_Messaging_kafkaClusters_Get",
+        "summary": "Read a CyberCloud.Messaging/kafkaClusters.",
+        "description": "The body is this api-version's projection of the resource: docs/plan/08 § The provider registry keeps grain state as a superset and a read at an older version drops what that version did not declare.",
+        "responses": {
+          "200": {
+            "description": "The resource.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Messaging.kafkaClusters"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "read"
+      },
+      "put": {
+        "operationId": "CyberCloud_Messaging_kafkaClusters_CreateOrUpdate",
+        "summary": "Create or replace a CyberCloud.Messaging/kafkaClusters.",
+        "description": "A full replacement. Every property the schema marks required must be present; a read-only property is refused rather than ignored — docs/plan/08 § The write path, end to end.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CyberCloud.Messaging.kafkaClusters"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "headers": {
+              "Azure-AsyncOperation": {
+                "description": "The absolute URL of the operation to poll.",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "Retry-After": {
+                "description": "Seconds to wait before the first poll.",
+                "required": true,
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "write"
+      },
+      "patch": {
+        "operationId": "CyberCloud_Messaging_kafkaClusters_Update",
+        "summary": "Merge-patch a CyberCloud.Messaging/kafkaClusters.",
+        "description": "A merge patch. The patch itself may omit required properties; the merged result is what is validated — see ResourceSchema.Validate.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CyberCloud.Messaging.kafkaClusters"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "headers": {
+              "Azure-AsyncOperation": {
+                "description": "The absolute URL of the operation to poll.",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "Retry-After": {
+                "description": "Seconds to wait before the first poll.",
+                "required": true,
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "write"
+      },
+      "delete": {
+        "operationId": "CyberCloud_Messaging_kafkaClusters_Delete",
+        "summary": "Delete a CyberCloud.Messaging/kafkaClusters.",
+        "description": "The delete is permanent: this type declares no soft-delete window.",
+        "responses": {
+          "202": {
+            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "headers": {
+              "Azure-AsyncOperation": {
+                "description": "The absolute URL of the operation to poll.",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "Retry-After": {
+                "description": "Seconds to wait before the first poll.",
+                "required": true,
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "delete",
+        "x-cybercloud-soft-delete-days": 0
+      },
+      "x-cybercloud-resource-type": "CyberCloud.Messaging/kafkaClusters",
+      "x-cybercloud-display": {
+        "name": "Kafka cluster",
+        "plural": "Kafka clusters",
+        "alias": "kafka",
+        "summary": "A managed Apache Kafka cluster on Strimzi in KRaft mode, with Cruise Control, configurable retention and an optional firewalled external listener.",
+        "declared": true
+      },
+      "x-cybercloud-supports-tags": true,
+      "x-cybercloud-requires-cluster": true,
+      "x-cybercloud-cluster-id-pointer": "/properties/clusterId",
+      "x-cybercloud-soft-delete-days": 0,
+      "x-cybercloud-meters": [
+        {
+          "meter": "Resources",
+          "amountPointer": "",
+          "fallback": 1
+        }
+      ]
+    },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Messaging/kafkaClusters/{resourceName}/listKeys": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "post": {
+        "operationId": "CyberCloud_Messaging_kafkaClusters_ListKeys",
+        "summary": "listKeys a CyberCloud.Messaging/kafkaClusters.",
+        "description": "An action never creates: a POST to a name that does not exist is a 404 — docs/plan/08 § The write path, end to end. ⚠ The response carries secret material. It is always audited and is never cached — docs/plan/08 § The provider registry.",
+        "responses": {
+          "200": {
+            "description": "The action's result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Messaging.kafkaClusters.ListKeysResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "listKeys",
+        "x-cybercloud-secret": true,
+        "x-cybercloud-long-running": false
+      },
+      "x-cybercloud-resource-type": "CyberCloud.Messaging/kafkaClusters",
+      "x-cybercloud-action": "listKeys"
+    },
     "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Sample/widgets/{resourceName}": {
       "parameters": [
         {
@@ -1185,6 +1510,278 @@
         "title": "CyberCloud.DBforPostgreSQL.servers.ListKeysResponse",
         "type": "object"
       },
+      "CyberCloud.Messaging.kafkaClusters": {
+        "additionalProperties": false,
+        "description": "The body of a CyberCloud.Messaging/kafkaClusters. Generated from the provider registry's schema, which is the same object the write path validates against — docs/plan/08 § The provider registry.",
+        "properties": {
+          "location": {
+            "description": "The region the cluster is billed in.",
+            "example": "eu-central",
+            "format": "cybercloud-region",
+            "type": "string",
+            "x-cybercloud-immutable": true,
+            "x-cybercloud-widget": "region"
+          },
+          "properties": {
+            "additionalProperties": false,
+            "description": "The cluster's own settings.",
+            "properties": {
+              "clusterId": {
+                "description": "The cluster whose namespace holds the Strimzi objects.",
+                "format": "uuid",
+                "type": "string",
+                "x-cybercloud-immutable": true,
+                "x-cybercloud-widget": "cluster"
+              },
+              "cruiseControl": {
+                "additionalProperties": false,
+                "description": "Cruise Control — partition rebalancing and broker-load reporting.",
+                "properties": {
+                  "enabled": {
+                    "default": true,
+                    "description": "Whether Cruise Control runs. On by default: docs/plan/12 puts it in the chart rather than in a follow-up, because rebalancing a Kafka cluster by hand is the operational cost that makes this the most demanding service in the catalogue.",
+                    "type": "boolean"
+                  }
+                },
+                "type": "object"
+              },
+              "external": {
+                "additionalProperties": false,
+                "description": "Exposure outside the cluster, via a load balancer and a firewall allow-list.",
+                "properties": {
+                  "allowedCidrs": {
+                    "default": [],
+                    "description": "Source ranges permitted to reach the external listener. Required in substance rather than in schema: an empty list with external exposure on renders a load balancer that accepts nothing, which is the safe reading of an unfinished configuration.",
+                    "example": [
+                      "203.0.113.0/24"
+                    ],
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "enabled": {
+                    "default": false,
+                    "description": "Whether the cluster is reachable from outside the Kubernetes cluster. Off by default — docs/plan/12 § Cross-cutting decisions makes external exposure never the default, because a managed broker on a public IP with a weak password is the most common cloud breach there is.",
+                    "type": "boolean"
+                  }
+                },
+                "type": "object"
+              },
+              "listener": {
+                "additionalProperties": false,
+                "description": "The in-cluster listener every client reaches.",
+                "properties": {
+                  "tls": {
+                    "default": true,
+                    "description": "Whether the in-cluster listener requires TLS. On by default; turning it off is a plaintext broker on the pod network.",
+                    "type": "boolean"
+                  }
+                },
+                "type": "object"
+              },
+              "monitoring": {
+                "additionalProperties": false,
+                "description": "What the platform scrapes.",
+                "properties": {
+                  "enabled": {
+                    "default": true,
+                    "description": "Whether the operator runs a Kafka Exporter alongside the cluster, exposing consumer-lag and topic metrics to the platform's metrics stack.",
+                    "type": "boolean"
+                  }
+                },
+                "type": "object"
+              },
+              "nodes": {
+                "default": 3,
+                "description": "Number of Kafka nodes, each acting as both a KRaft controller and a broker. Use an odd number: a quorum of two tolerates no failures, and one is a single point of failure offered for development only.",
+                "maximum": 9,
+                "minimum": 1,
+                "type": "integer"
+              },
+              "retention": {
+                "additionalProperties": false,
+                "description": "How long the cluster keeps messages by default. docs/plan/12 calls retention sizing an ongoing operational concern rather than a one-time setting.",
+                "properties": {
+                  "hours": {
+                    "default": 168,
+                    "description": "Default retention in hours. A week by default.",
+                    "maximum": 8760,
+                    "minimum": 1,
+                    "type": "integer"
+                  },
+                  "size": {
+                    "default": "",
+                    "description": "Default retention by partition size, in Kubernetes quantity form. Empty means retention is by time alone.",
+                    "example": "50Gi",
+                    "pattern": "^(?:(\\d+(\\.\\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)?)$",
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              },
+              "sizing": {
+                "additionalProperties": false,
+                "description": "CPU and memory per node, either by preset or explicitly.",
+                "properties": {
+                  "cpu": {
+                    "default": "",
+                    "description": "Explicit vCPU quantity in Kubernetes form, for example 500m or 2. Empty means take it from the preset.",
+                    "pattern": "^(?:(\\d+(\\.\\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)?)$",
+                    "type": "string"
+                  },
+                  "memory": {
+                    "default": "",
+                    "description": "Explicit memory quantity in Kubernetes form, for example 4Gi. Empty means take it from the preset.",
+                    "pattern": "^(?:(\\d+(\\.\\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)?)$",
+                    "type": "string"
+                  },
+                  "preset": {
+                    "default": "c1.small",
+                    "description": "A sizing preset from docs/plan/12. Brokers use the c1 family, which is 1 vCPU to 2 GiB and guaranteed rather than burstable.",
+                    "enum": [
+                      "c1.nano",
+                      "c1.micro",
+                      "c1.small",
+                      "c1.medium",
+                      "c1.large",
+                      "c1.xlarge",
+                      "c1.2xlarge",
+                      "c1.4xlarge"
+                    ],
+                    "type": "string",
+                    "x-cybercloud-widget": "cozy-preset"
+                  }
+                },
+                "type": "object"
+              },
+              "storage": {
+                "additionalProperties": false,
+                "description": "The log volume, per node.",
+                "properties": {
+                  "class": {
+                    "default": "",
+                    "description": "StorageClass name. Empty means the cluster default.",
+                    "type": "string",
+                    "x-cybercloud-immutable": true,
+                    "x-cybercloud-widget": "storageclass"
+                  },
+                  "deleteClaim": {
+                    "default": false,
+                    "description": "Whether deleting the resource also deletes the log volumes. Off by default, so a mistaken delete leaves the data recoverable by hand.",
+                    "type": "boolean"
+                  },
+                  "size": {
+                    "default": "100Gi",
+                    "description": "Log volume size per node, in Kubernetes quantity form. Grows online; never shrinks.",
+                    "example": "100Gi",
+                    "pattern": "^(?:\\d+(\\.\\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)$",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "size"
+                ],
+                "type": "object"
+              },
+              "topics": {
+                "additionalProperties": false,
+                "description": "Defaults applied to topics the cluster creates automatically. A topic created explicitly overrides them.",
+                "properties": {
+                  "minInSyncReplicas": {
+                    "default": 2,
+                    "description": "How many replicas must acknowledge a write before it is committed. Must be below the replication factor, or the cluster cannot tolerate one broker restart.",
+                    "maximum": 9,
+                    "minimum": 1,
+                    "type": "integer"
+                  },
+                  "partitions": {
+                    "default": 3,
+                    "description": "Default partition count for a new topic.",
+                    "maximum": 200,
+                    "minimum": 1,
+                    "type": "integer"
+                  },
+                  "replicationFactor": {
+                    "default": 3,
+                    "description": "Default replication factor for a new topic. Must not exceed the node count, or every produce to a new topic fails.",
+                    "maximum": 9,
+                    "minimum": 1,
+                    "type": "integer"
+                  }
+                },
+                "type": "object"
+              },
+              "version": {
+                "default": "3.9",
+                "description": "Apache Kafka version. Minor upgrades are applied automatically in the maintenance window; a major upgrade is an explicit update to this field.",
+                "enum": [
+                  "3.8",
+                  "3.9"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "clusterId",
+              "nodes",
+              "version"
+            ],
+            "type": "object"
+          },
+          "tags": {
+            "type": "object",
+            "description": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "maxProperties": 50,
+            "x-cybercloud-widget": "tag-input"
+          }
+        },
+        "required": [
+          "location"
+        ],
+        "title": "CyberCloud.Messaging/kafkaClusters",
+        "type": "object"
+      },
+      "CyberCloud.Messaging.kafkaClusters.ListKeysResponse": {
+        "additionalProperties": false,
+        "description": "What CyberCloud.Messaging/kafkaClusters/listKeys returns. ⚠ Secret material. docs/plan/08 § The provider registry makes a secret action the only path a secret value leaves by; this schema is therefore the complete list of what does.",
+        "properties": {
+          "bootstrapServers": {
+            "description": "The in-cluster bootstrap address, host:port. ⚠ The external listener's address is not returned here — an address a client cannot reach from where it is running is worse than an absent one.",
+            "type": "string"
+          },
+          "password": {
+            "description": "The SCRAM user's password, read from the tenant's Vault for this call only.",
+            "format": "password",
+            "type": "string",
+            "writeOnly": true,
+            "x-cybercloud-secret": true
+          },
+          "securityProtocol": {
+            "description": "What a client must configure: SASL_SSL when the listener requires TLS, SASL_PLAINTEXT when it does not.",
+            "enum": [
+              "SASL_SSL",
+              "SASL_PLAINTEXT"
+            ],
+            "type": "string"
+          },
+          "username": {
+            "description": "The SCRAM user.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "bootstrapServers",
+          "password",
+          "securityProtocol",
+          "username"
+        ],
+        "title": "CyberCloud.Messaging.kafkaClusters.ListKeysResponse",
+        "type": "object"
+      },
       "CyberCloud.Sample.widgets": {
         "additionalProperties": false,
         "description": "The body of a CyberCloud.Sample/widgets. Generated from the provider registry's schema, which is the same object the write path validates against — docs/plan/08 § The provider registry.",
@@ -1483,5 +2080,5 @@
       }
     }
   },
-  "x-cybercloud-resource-type-count": 2
+  "x-cybercloud-resource-type-count": 3
 }

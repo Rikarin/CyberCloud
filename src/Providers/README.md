@@ -72,6 +72,81 @@ Each provider's `.Conformance` project is one `ProviderConformanceCase` and two 
 The second provider renders two objects rather than one and still needed no change to
 `test/CyberCloud.Conformance`, which is the claim that shape was making.
 
+`CyberCloud.Providers.Messaging` — `CyberCloud.Messaging/kafkaClusters` on Strimzi in KRaft mode,
+[12 § The catalogue](../../docs/plan/12-managed-data-services.md). **The first provider whose objects
+are custom resources on both sides**, and the first with a `.Cluster.Conformance` sibling other than
+the sample's.
+
+⚠ **That row is `M2` in docs/plan/12, not `M1`.** The M1 rows of that table are PostgreSQL, Valkey
+and NATS; the M1 event-streaming service is `CyberCloud.Messaging/natsClusters`. This landed ahead of
+its milestone, and the milestone is recorded rather than quietly changed.
+
+### What the third provider measured
+
+**The nested resource type, which is the thing docs/plan/12 asks this service for and the thing it
+did not get.** That document says Kafka is 1.2 EM rather than 2.5 because *"Strimzi's `KafkaTopic`
+and `KafkaUser` CRDs map to resource types almost one to one"*. The mapping is one to one at the
+**CRD**. It is not one to one at the **address**, and the difference is the whole finding:
+
+- **The registry, the id, the labels and four of the five generated surfaces carry a nested type
+  today, unchanged.** `IProviderBuilder.ResourceType` documents `servers/databases` by name;
+  `ResourceTypeName` validates to `MaxDepth = 3`; `ResourceId.TryParsePath` parses a variable-length
+  type run; `ProviderRegistry` keys on the full canonical name; the gateway delegates to the parser
+  rather than counting segments; `KubeLabels.ResourceTypeValue` maps `/` to `_` and
+  `KubeLabelTests` already pins `cybercloud.dbforpostgresql_servers_databases` against Kubernetes'
+  own regex. `.ResourceType("kafkaClusters/topics")` would compile, start and serve.
+- **⚠ But this platform's id grammar has no parent *instance*, and that is a decision rather than a
+  gap.** Azure spells a child `/kafkaClusters/{cluster}/topics/{topic}`; `ResourceId` spells it
+  `/kafkaClusters/topics/{name}` — one name, at the end, with the type path whole in the middle.
+  `OpenApiEmitter`'s own remarks refuse Azure's shape outright, because emitting it *"would produce
+  URLs that `ResourceId.TryParsePath` rejects — a generated surface disagreeing with the runtime,
+  which is the one failure ADR-012 exists to make impossible."*
+- **So a `topics` type here would be a *sibling* of its cluster, not a child.** Its parent would be a
+  body property (the shape `RequiresCluster` already uses); topic names would be unique per
+  **resource group**, not per cluster; nothing would check the parent exists at create — the write
+  path's `ResolveAsync` validates tenant, subscription, type and api-version and never a parent; and
+  ReBAC's `parent` edge is always resource → resourceGroup, so **the owner of a cluster would not own
+  its topics**. That is a different product from the one docs/plan/12 describes.
+- **Two surfaces would also need work before a nested type shipped**, neither of which is this
+  provider's to do. `CliEmitter.CommandOf` flattens `a/b` to one kebab-cased command, which
+  contradicts [21 § Grammar](../../docs/plan/21-cli-and-sdks.md)'s `cyc <group> <subgroup...> <verb>`
+  — and `CliEmitter`'s `JsonObject` indexer *replaces*, so a flat `kafkaClustersTopics` and a nested
+  `kafkaClusters/topics` kebab to the same key and one type silently vanishes from the CLI, which
+  `DerivedSurfaces.CliProblems` does not check. `SdkEmitter` resolves a display-name collision by
+  prefixing the provider namespace's last segment, which does not disambiguate two colliding types in
+  the **same** namespace — exactly the nesting-shaped case.
+
+**So one solid type landed and the sub-resources did not**, with the reason written at
+`KafkaClusters` and in `charts/managed/kafka/conformance.yaml` § owed rather than left to be
+rediscovered.
+
+**Three other things it measured**, each a second or third sighting that turns an anecdote into a
+finding:
+
+- **The quota meters are undeclarable for a second reason as well as the first.**
+  `CyberCloud.DBforPostgreSQL/servers` found that `Meter(meter, pointer)` reads a *number* and every
+  Kubernetes amount is a string. This type adds two: every amount here is a **product** — one node's
+  quantity times the node count — and `Meter` multiplies by nothing; and `publicIps` is derived from
+  a **boolean**, which no pointer expresses however it is read. `MessagingProvider` carries the
+  arithmetic it would have declared.
+- **⚠ ADR-012's fifth surface refuses `@pattern` on an array while emitting `@enum` there.** The
+  registry applies a `Pattern` per element on an array — `SchemaProperty.ElementKind` says so — and
+  `./build.sh Charts` fails with *"it refines a string, and JSON Schema ignores it on any other
+  type"*, which the same emitter contradicts one directive over: `@enum` on an array becomes
+  `items: {type: string, enum: […]}`, which is the per-element shape `@pattern` needs. So
+  `/properties/external/allowedCidrs` carries **no** shape constraint and a malformed CIDR is
+  accepted by the API and refused by the API server after the caller was told `202`. Closing it is
+  one case in `ChartAnnotationEmitter` and one in `Build.Charts`' `Validate`.
+- **A bare k3s serves no REST path for a custom resource, and the failure names nothing.** The
+  sample's cluster-backed suite renders a core-group `ConfigMap`, whose path the API server serves
+  without being told; a Strimzi `Kafka`'s does not exist, and the client cannot discover the group,
+  so it throws `k8s.Autorest.HttpOperationException` **with no status code**. Five of the six tests
+  in `CyberCloud.Providers.Messaging.Cluster.Conformance` failed that way. The harness now installs a
+  minimal definition per custom kind and waits for `Established` — **derived from the case's own
+  `Objects`**, which already carry group, version, kind and plural, rather than declared as a member
+  a provider author could get wrong by omission and have the omission reported by the worst error
+  message in the suite.
+
 ## Planned namespaces
 
 `Platform`, `Identity`, `ContainerService`, `Compute`, `ContainerInstance`, `ContainerRegistry`,

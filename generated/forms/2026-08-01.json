@@ -481,6 +481,454 @@
         }
       ]
     },
+    "CyberCloud.Messaging/kafkaClusters": {
+      "resourceType": "CyberCloud.Messaging/kafkaClusters",
+      "apiVersion": "2026-08-01",
+      "title": "Kafka cluster",
+      "plural": "Kafka clusters",
+      "summary": "A managed Apache Kafka cluster on Strimzi in KRaft mode, with Cruise Control, configurable retention and an optional firewalled external listener.",
+      "overrideKey": "CyberCloud.Messaging/kafkaClusters@2026-08-01",
+      "coveredPointers": [
+        "/location",
+        "/properties",
+        "/properties/clusterId",
+        "/properties/cruiseControl",
+        "/properties/cruiseControl/enabled",
+        "/properties/external",
+        "/properties/external/allowedCidrs",
+        "/properties/external/enabled",
+        "/properties/listener",
+        "/properties/listener/tls",
+        "/properties/monitoring",
+        "/properties/monitoring/enabled",
+        "/properties/nodes",
+        "/properties/retention",
+        "/properties/retention/hours",
+        "/properties/retention/size",
+        "/properties/sizing",
+        "/properties/sizing/cpu",
+        "/properties/sizing/memory",
+        "/properties/sizing/preset",
+        "/properties/storage",
+        "/properties/storage/class",
+        "/properties/storage/deleteClaim",
+        "/properties/storage/size",
+        "/properties/topics",
+        "/properties/topics/minInSyncReplicas",
+        "/properties/topics/partitions",
+        "/properties/topics/replicationFactor",
+        "/properties/version",
+        "/tags"
+      ],
+      "supportsTags": true,
+      "requiresCluster": true,
+      "clusterIdPointer": "/properties/clusterId",
+      "softDeleteDays": 0,
+      "fields": [
+        {
+          "jsonPointer": "/location",
+          "name": "location",
+          "label": "Location",
+          "control": "xui-region",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "The region the cluster is billed in.",
+          "format": "cybercloud-region",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new Kafka cluster to change it.",
+          "placeholder": "eu-central"
+        },
+        {
+          "jsonPointer": "/properties",
+          "name": "properties",
+          "label": "Properties",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "The cluster's own settings."
+        },
+        {
+          "jsonPointer": "/properties/clusterId",
+          "name": "clusterId",
+          "label": "Cluster id",
+          "control": "xui-cluster",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "The cluster whose namespace holds the Strimzi objects.",
+          "format": "uuid",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new Kafka cluster to change it."
+        },
+        {
+          "jsonPointer": "/properties/cruiseControl",
+          "name": "cruiseControl",
+          "label": "Cruise control",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "Cruise Control — partition rebalancing and broker-load reporting."
+        },
+        {
+          "jsonPointer": "/properties/cruiseControl/enabled",
+          "name": "enabled",
+          "label": "Enabled",
+          "control": "xui-switch",
+          "type": "boolean",
+          "required": false,
+          "section": "cruiseControl",
+          "hint": "Whether Cruise Control runs. On by default: docs/plan/12 puts it in the chart rather than in a follow-up, because rebalancing a Kafka cluster by hand is the operational cost that makes this the most demanding service in the catalogue.",
+          "default": true
+        },
+        {
+          "jsonPointer": "/properties/external",
+          "name": "external",
+          "label": "External",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "Exposure outside the cluster, via a load balancer and a firewall allow-list."
+        },
+        {
+          "jsonPointer": "/properties/external/allowedCidrs",
+          "name": "allowedCidrs",
+          "label": "Allowed cidrs",
+          "control": "xui-chip-input",
+          "type": "array",
+          "required": false,
+          "section": "external",
+          "hint": "Source ranges permitted to reach the external listener. Required in substance rather than in schema: an empty list with external exposure on renders a load balancer that accepts nothing, which is the safe reading of an unfinished configuration.",
+          "default": [],
+          "placeholder": [
+            "203.0.113.0/24"
+          ]
+        },
+        {
+          "jsonPointer": "/properties/external/enabled",
+          "name": "enabled",
+          "label": "Enabled",
+          "control": "xui-switch",
+          "type": "boolean",
+          "required": false,
+          "section": "external",
+          "hint": "Whether the cluster is reachable from outside the Kubernetes cluster. Off by default — docs/plan/12 § Cross-cutting decisions makes external exposure never the default, because a managed broker on a public IP with a weak password is the most common cloud breach there is.",
+          "default": false
+        },
+        {
+          "jsonPointer": "/properties/listener",
+          "name": "listener",
+          "label": "Listener",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "The in-cluster listener every client reaches."
+        },
+        {
+          "jsonPointer": "/properties/listener/tls",
+          "name": "tls",
+          "label": "Tls",
+          "control": "xui-switch",
+          "type": "boolean",
+          "required": false,
+          "section": "listener",
+          "hint": "Whether the in-cluster listener requires TLS. On by default; turning it off is a plaintext broker on the pod network.",
+          "default": true
+        },
+        {
+          "jsonPointer": "/properties/monitoring",
+          "name": "monitoring",
+          "label": "Monitoring",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "What the platform scrapes."
+        },
+        {
+          "jsonPointer": "/properties/monitoring/enabled",
+          "name": "enabled",
+          "label": "Enabled",
+          "control": "xui-switch",
+          "type": "boolean",
+          "required": false,
+          "section": "monitoring",
+          "hint": "Whether the operator runs a Kafka Exporter alongside the cluster, exposing consumer-lag and topic metrics to the platform's metrics stack.",
+          "default": true
+        },
+        {
+          "jsonPointer": "/properties/nodes",
+          "name": "nodes",
+          "label": "Nodes",
+          "control": "xui-slider",
+          "type": "integer",
+          "required": true,
+          "section": "general",
+          "hint": "Number of Kafka nodes, each acting as both a KRaft controller and a broker. Use an odd number: a quorum of two tolerates no failures, and one is a single point of failure offered for development only.",
+          "minimum": 1,
+          "maximum": 9,
+          "default": 3
+        },
+        {
+          "jsonPointer": "/properties/retention",
+          "name": "retention",
+          "label": "Retention",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "How long the cluster keeps messages by default. docs/plan/12 calls retention sizing an ongoing operational concern rather than a one-time setting."
+        },
+        {
+          "jsonPointer": "/properties/retention/hours",
+          "name": "hours",
+          "label": "Hours",
+          "control": "xui-slider",
+          "type": "integer",
+          "required": false,
+          "section": "retention",
+          "hint": "Default retention in hours. A week by default.",
+          "minimum": 1,
+          "maximum": 8760,
+          "default": 168
+        },
+        {
+          "jsonPointer": "/properties/retention/size",
+          "name": "size",
+          "label": "Size",
+          "control": "xui-input",
+          "type": "string",
+          "required": false,
+          "section": "retention",
+          "hint": "Default retention by partition size, in Kubernetes quantity form. Empty means retention is by time alone.",
+          "pattern": "^(?:(\\d+(\\.\\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)?)$",
+          "default": "",
+          "placeholder": "50Gi"
+        },
+        {
+          "jsonPointer": "/properties/sizing",
+          "name": "sizing",
+          "label": "Sizing",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "CPU and memory per node, either by preset or explicitly."
+        },
+        {
+          "jsonPointer": "/properties/sizing/cpu",
+          "name": "cpu",
+          "label": "Cpu",
+          "control": "xui-input",
+          "type": "string",
+          "required": false,
+          "section": "sizing",
+          "hint": "Explicit vCPU quantity in Kubernetes form, for example 500m or 2. Empty means take it from the preset.",
+          "pattern": "^(?:(\\d+(\\.\\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)?)$",
+          "default": ""
+        },
+        {
+          "jsonPointer": "/properties/sizing/memory",
+          "name": "memory",
+          "label": "Memory",
+          "control": "xui-input",
+          "type": "string",
+          "required": false,
+          "section": "sizing",
+          "hint": "Explicit memory quantity in Kubernetes form, for example 4Gi. Empty means take it from the preset.",
+          "pattern": "^(?:(\\d+(\\.\\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)?)$",
+          "default": ""
+        },
+        {
+          "jsonPointer": "/properties/sizing/preset",
+          "name": "preset",
+          "label": "Preset",
+          "control": "xui-cozy-preset",
+          "type": "string",
+          "required": false,
+          "section": "sizing",
+          "hint": "A sizing preset from docs/plan/12. Brokers use the c1 family, which is 1 vCPU to 2 GiB and guaranteed rather than burstable.",
+          "choices": [
+            {
+              "value": "c1.nano",
+              "label": "C1 nano"
+            },
+            {
+              "value": "c1.micro",
+              "label": "C1 micro"
+            },
+            {
+              "value": "c1.small",
+              "label": "C1 small"
+            },
+            {
+              "value": "c1.medium",
+              "label": "C1 medium"
+            },
+            {
+              "value": "c1.large",
+              "label": "C1 large"
+            },
+            {
+              "value": "c1.xlarge",
+              "label": "C1 xlarge"
+            },
+            {
+              "value": "c1.2xlarge",
+              "label": "C1 2xlarge"
+            },
+            {
+              "value": "c1.4xlarge",
+              "label": "C1 4xlarge"
+            }
+          ],
+          "default": "c1.small"
+        },
+        {
+          "jsonPointer": "/properties/storage",
+          "name": "storage",
+          "label": "Storage",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "The log volume, per node."
+        },
+        {
+          "jsonPointer": "/properties/storage/class",
+          "name": "class",
+          "label": "Class",
+          "control": "xui-storageclass",
+          "type": "string",
+          "required": false,
+          "section": "storage",
+          "hint": "StorageClass name. Empty means the cluster default.",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new Kafka cluster to change it.",
+          "default": ""
+        },
+        {
+          "jsonPointer": "/properties/storage/deleteClaim",
+          "name": "deleteClaim",
+          "label": "Delete claim",
+          "control": "xui-switch",
+          "type": "boolean",
+          "required": false,
+          "section": "storage",
+          "hint": "Whether deleting the resource also deletes the log volumes. Off by default, so a mistaken delete leaves the data recoverable by hand.",
+          "default": false
+        },
+        {
+          "jsonPointer": "/properties/storage/size",
+          "name": "size",
+          "label": "Size",
+          "control": "xui-input",
+          "type": "string",
+          "required": true,
+          "section": "storage",
+          "hint": "Log volume size per node, in Kubernetes quantity form. Grows online; never shrinks.",
+          "pattern": "^(?:\\d+(\\.\\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)$",
+          "default": "100Gi",
+          "placeholder": "100Gi"
+        },
+        {
+          "jsonPointer": "/properties/topics",
+          "name": "topics",
+          "label": "Topics",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "Defaults applied to topics the cluster creates automatically. A topic created explicitly overrides them."
+        },
+        {
+          "jsonPointer": "/properties/topics/minInSyncReplicas",
+          "name": "minInSyncReplicas",
+          "label": "Min in sync replicas",
+          "control": "xui-slider",
+          "type": "integer",
+          "required": false,
+          "section": "topics",
+          "hint": "How many replicas must acknowledge a write before it is committed. Must be below the replication factor, or the cluster cannot tolerate one broker restart.",
+          "minimum": 1,
+          "maximum": 9,
+          "default": 2
+        },
+        {
+          "jsonPointer": "/properties/topics/partitions",
+          "name": "partitions",
+          "label": "Partitions",
+          "control": "xui-slider",
+          "type": "integer",
+          "required": false,
+          "section": "topics",
+          "hint": "Default partition count for a new topic.",
+          "minimum": 1,
+          "maximum": 200,
+          "default": 3
+        },
+        {
+          "jsonPointer": "/properties/topics/replicationFactor",
+          "name": "replicationFactor",
+          "label": "Replication factor",
+          "control": "xui-slider",
+          "type": "integer",
+          "required": false,
+          "section": "topics",
+          "hint": "Default replication factor for a new topic. Must not exceed the node count, or every produce to a new topic fails.",
+          "minimum": 1,
+          "maximum": 9,
+          "default": 3
+        },
+        {
+          "jsonPointer": "/properties/version",
+          "name": "version",
+          "label": "Version",
+          "control": "xui-select",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "Apache Kafka version. Minor upgrades are applied automatically in the maintenance window; a major upgrade is an explicit update to this field.",
+          "choices": [
+            {
+              "value": "3.8",
+              "label": "3 8"
+            },
+            {
+              "value": "3.9",
+              "label": "3 9"
+            }
+          ],
+          "default": "3.9"
+        },
+        {
+          "jsonPointer": "/tags",
+          "name": "tags",
+          "label": "Tags",
+          "control": "xui-tag-input",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+          "maxProperties": 50
+        }
+      ],
+      "actions": [
+        {
+          "name": "listKeys",
+          "label": "List keys",
+          "permission": "listKeys",
+          "longRunning": false,
+          "secret": true,
+          "fields": [],
+          "confirmOnly": true
+        }
+      ]
+    },
     "CyberCloud.Sample/widgets": {
       "resourceType": "CyberCloud.Sample/widgets",
       "apiVersion": "2026-08-01",

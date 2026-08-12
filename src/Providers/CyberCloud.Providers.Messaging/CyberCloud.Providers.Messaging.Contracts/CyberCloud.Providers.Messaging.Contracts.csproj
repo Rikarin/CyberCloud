@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      docs/plan/03 § Providers — the first of the five projects: "grain interfaces, resource models,
+      the JSON Schemas". This one is the schema and the Strimzi projection.
+
+      ⚠ NO GRAIN INTERFACES, AND THIS IS THE THIRD PROVIDER TO REPORT THAT. The sample had none and
+      could be dismissed as trivial; CyberCloud.Providers.DBforPostgreSQL had none and called that
+      "evidence about the manager rather than about the resource". A Kafka cluster is the most
+      operationally demanding service in docs/plan/12's catalogue — rebalancing, retention sizing,
+      broker disk pressure — and it still holds no state of its own: everything a reconcile needs is
+      in the desired body ResourceGrain already stores. Three providers with no grain is no longer an
+      observation about any one of them.
+
+      ⚠ IT REFERENCES ONLY CyberCloud.ResourceManager.Contracts AND CyberCloud.Kubernetes.Contracts —
+      the whole reference set docs/plan/03 § The .Contracts split allows a provider, and rule 2 of
+      § Assembly graph rules forbids the rest. In particular it does NOT reference
+      CyberCloud.Providers.DBforPostgreSQL.Contracts, even though KafkaClusters.QuantityPattern is
+      character-for-character PostgresServers.QuantityPattern. That duplication is deliberate and is
+      argued at the constant itself: a shared Kubernetes-quantity pattern belongs in
+      CyberCloud.ResourceManager.Contracts next to SchemaFormat, not in a line between two providers
+      that rule 2 would refuse and rule 7 could not grant.
+    -->
+
+    <ItemGroup>
+        <ProjectReference Include="../../../CyberCloud.ResourceManager.Contracts/CyberCloud.ResourceManager.Contracts.csproj"/>
+        <ProjectReference Include="../../../CyberCloud.Kubernetes.Contracts/CyberCloud.Kubernetes.Contracts.csproj"/>
+    </ItemGroup>
+
+    <ItemGroup Label="CyberCloud.Analyzers — see CyberCloud.Core.csproj for why this is not a reference">
+        <ProjectReference Include="../../../CyberCloud.Analyzers/CyberCloud.Analyzers.csproj"
+                          OutputItemType="Analyzer"
+                          ReferenceOutputAssembly="false"/>
+    </ItemGroup>
+
+</Project>

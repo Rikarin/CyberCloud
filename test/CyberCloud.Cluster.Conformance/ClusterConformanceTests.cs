@@ -319,14 +319,35 @@ public abstract class ClusterConformanceTests<TSource>(ClusterConformanceFixture
         var accepted = (await WriteAsync(harness, name)).GetValueOrThrow();
         await ConvergeAsync(harness, accepted.OperationId);
 
-        var target = ObjectsOf(accepted.Resource.Id, name)[0];
+        var owned = ObjectsOf(accepted.Resource.Id, name);
+        var target = owned[0];
         var desiredHash = harness.Connection.Applied.Last().ReconcileHash;
 
         // ⚠ A REAL `kubectl delete`, THROUGH THE RAW CLIENT, BEHIND THE RECONCILER'S BACK. Not
         // IKubeClusterConnection.DeleteAsync — the point of breaking the world is that it happens by
         // a path the platform cannot observe or record.
-        await DeleteFromClusterAsync(harness, target, token);
-        (await ReadFromClusterAsync(harness, target, token)).ShouldBeNull("the delete did not land.");
+        //
+        // ⚠ EVERY OBJECT THE RESOURCE OWNS, AND UNTIL 2026-08-12 IT WAS ONLY THE FIRST. A stray is a
+        // resource in Succeeded with NO labelled object on the cluster — `DriftScanner` joins on the
+        // resource-id label — so deleting one of two leaves the join satisfied by the survivor and
+        // the scan correctly reports no stray. The assertion below then fails, and it fails for the
+        // suite's reason rather than the provider's.
+        //
+        // Nothing had caught it because the only provider with a `.Cluster.Conformance` project
+        // rendered ONE object: `CyberCloud.Sample/widgets`, a single ConfigMap. The second one to get
+        // that project, `CyberCloud.Messaging/kafkaClusters`, renders a Kafka and a KafkaNodePool and
+        // went red here on its first run. `CyberCloud.DBforPostgreSQL/servers` has rendered two
+        // objects since it landed and would have found it a fortnight earlier if it had had the
+        // project.
+        //
+        // "Somebody kubectl-deleted production" is the whole set, not an arbitrary member of it —
+        // PARTIAL loss is a different finding, and one this suite does not yet assert. It is worth
+        // having: a resource whose Kafka survives and whose node pool is gone is running and
+        // unrunnable at once, and the scan reports it as neither a stray nor an orphan today.
+        foreach (var each in owned) {
+            await DeleteFromClusterAsync(harness, each, token);
+            (await ReadFromClusterAsync(harness, each, token)).ShouldBeNull($"the delete of '{each}' did not land.");
+        }
 
         // ── An orphan: a labelled object whose resource grain does not exist. Applied by somebody
         //    else entirely, carrying our managed-by label and a resource-id nothing owns. ─────────

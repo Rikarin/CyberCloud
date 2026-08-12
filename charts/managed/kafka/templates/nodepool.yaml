@@ -1,0 +1,43 @@
+{{/*
+The nodes the cluster runs on.
+
+⚠ `strimzi.io/cluster` IS THE BINDING, AND IT IS A LABEL RATHER THAN A SPEC FIELD. A pool whose
+label does not name an existing Kafka is not an error the operator reports — it is a pool the
+operator ignores, with no event, no status and no pods. That failure mode is why the reconciler
+applies the Kafka first and why this label goes through IKubeCommandBuilder.WithLabels, where its
+key and value are syntax-checked.
+
+⚠ BOTH ROLES ON ONE POOL. Strimzi's production shape is a controller pool and a broker pool;
+combined-role nodes are supported and are what makes a three-node cluster affordable. Splitting them
+is written down as owed in conformance.yaml rather than implied by its absence.
+
+⚠ `jbod` WITH ONE VOLUME, RATHER THAN A BARE `persistent-claim`. A single-volume jbod is what a
+second log directory can be added to later; a `persistent-claim` storage cannot be widened to jbod
+without recreating every node, which on a broker means moving every partition.
+*/}}
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaNodePool
+metadata:
+  name: {{ include "kafka.name" . }}-nodes
+  labels:
+    strimzi.io/cluster: {{ include "kafka.name" . }}
+    {{- include "kafka.platformLabels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.nodes }}
+  roles:
+    - controller
+    - broker
+  storage:
+    type: jbod
+    volumes:
+      - id: 0
+        type: persistent-claim
+        size: {{ .Values.storage.size | quote }}
+        deleteClaim: {{ .Values.storage.deleteClaim }}
+        {{- with .Values.storage.class }}
+        class: {{ . | quote }}
+        {{- end }}
+  {{- with include "kafka.resources" . }}
+  resources:
+    {{- . | nindent 4 }}
+  {{- end }}

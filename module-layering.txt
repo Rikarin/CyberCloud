@@ -98,6 +98,10 @@ CyberCloud.Providers.DBforPostgreSQL -> CyberCloud.Core
 CyberCloud.Providers.DBforPostgreSQL -> CyberCloud.Kubernetes
 CyberCloud.Providers.DBforPostgreSQL -> CyberCloud.ResourceManager
 CyberCloud.Providers.DBforPostgreSQL -> CyberCloud.Tenancy
+CyberCloud.Providers.Messaging -> CyberCloud.Core
+CyberCloud.Providers.Messaging -> CyberCloud.Kubernetes
+CyberCloud.Providers.Messaging -> CyberCloud.ResourceManager
+CyberCloud.Providers.Messaging -> CyberCloud.Tenancy
 CyberCloud.Providers.Sample -> CyberCloud.Core
 CyberCloud.Providers.Sample -> CyberCloud.Kubernetes
 CyberCloud.Providers.Sample -> CyberCloud.ResourceManager

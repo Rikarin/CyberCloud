@@ -6,6 +6,7 @@ using CyberCloud.ResourceManager.Reconcile;
 using CyberCloud.ResourceManager.Registry;
 using CyberCloud.ServiceDefaults.Storage;
 using k8s;
+using k8s.Models;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
@@ -227,6 +228,7 @@ public sealed class ClusterConformanceHarness<TSource> : IAsyncDisposable
         ClusterConformanceState<TSource>.Connection = harness.Connection;
 
         await EnsureNamespaceAsync(harness.Raw, Namespace, cancellationToken).ConfigureAwait(false);
+        await EnsureCustomResourceDefinitionsAsync(harness.Raw, cancellationToken).ConfigureAwait(false);
 
         var builder = new TestClusterBuilder((short)silos);
         builder.Options.ServiceId = serviceId;
@@ -377,6 +379,147 @@ public sealed class ClusterConformanceHarness<TSource> : IAsyncDisposable
             // test share one k3s and both want the same namespace. A 409 is the other one having
             // won, which is the desired end state; the list above is the cheap path, not the check.
         }
+    }
+
+    /// <summary>
+    ///     Installs a minimal <c>CustomResourceDefinition</c> for every custom kind the case's
+    ///     resource owns, so that the API server serves a REST path for it.
+    /// </summary>
+    /// <param name="raw">The raw client.</param>
+    /// <param name="cancellationToken">The harness's token.</param>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>Without this, a provider whose objects are custom resources fails every
+    ///         cluster-backed assertion, and fails them namelessly.</b> A bare k3s serves no REST
+    ///         path for <c>kafka.strimzi.io/v1beta2</c>, so the apply comes back as a
+    ///         <c>k8s.Autorest.HttpOperationException</c> <b>carrying no status code</b> — the client
+    ///         cannot even discover the group to report a 404 against — and the failure names neither
+    ///         the missing CRD nor the provider. The first provider in this suite rendered a
+    ///         core-group <c>ConfigMap</c>, so the gap could not appear; the first one that renders a
+    ///         custom resource is where it does.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The list is DERIVED from <c>ProviderConformanceCase.Objects</c> rather than
+    ///         declared as a member of the case, and the difference matters.</b> A declared list is a
+    ///         claim a provider author can get wrong by omission — and the failure of an omitted CRD
+    ///         is the nameless one above, so the claim would be checked by the worst possible error
+    ///         message. Every fact a minimal CRD needs is already in the <see cref="ObjectRef" /> the
+    ///         case yields: group, version, kind and the plural that addresses the REST path. Deriving
+    ///         it means a provider cannot under-declare, cannot drift, and costs the twentieth
+    ///         provider nothing.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>What this is NOT: the operator's real CRD, and not the operator.</b> The schema
+    ///         is <c>x-kubernetes-preserve-unknown-fields</c>, so it validates nothing — this suite's
+    ///         four criteria are about REST addressability, server-side apply under our field
+    ///         manager, admission of the seven labels, and conflict parsing, none of which need the
+    ///         upstream schema. It deliberately does not vendor Strimzi's 8 000-line CRD: a copy of
+    ///         an upstream file that nothing checks is drift with a version number on it, and the
+    ///         facts that ARE relied on are pinned in <c>charts/managed/kafka/SOURCE</c> where a
+    ///         human reads them. What no CRD can supply is the controller: nothing in this suite
+    ///         writes <c>status.conditions</c>, which is why every provider's readiness assertion is
+    ///         owed in its <c>conformance.yaml</c> rather than made here.
+    ///     </para>
+    /// </remarks>
+    static async Task EnsureCustomResourceDefinitionsAsync(
+        IKubernetes raw,
+        CancellationToken cancellationToken
+    ) {
+        var kinds = Case
+            .Objects(Address("crd-discovery").WithId(Guid.NewGuid()), Namespace)
+            .Select(x => x.Kind)
+            // The core group has no CRD and needs none — its REST paths are built in.
+            .Where(x => !string.IsNullOrEmpty(x.Group))
+            .DistinctBy(x => x.Group + "/" + x.Plural, StringComparer.Ordinal);
+
+        foreach (var kind in kinds) {
+            var definition = new V1CustomResourceDefinition {
+                ApiVersion = "apiextensions.k8s.io/v1",
+                Kind = "CustomResourceDefinition",
+                Metadata = new() { Name = kind.Plural + "." + kind.Group },
+                Spec = new() {
+                    Group = kind.Group,
+                    Scope = "Namespaced",
+                    Names = new() {
+                        Kind = kind.Kind,
+                        ListKind = kind.Kind + "List",
+                        Plural = kind.Plural,
+                        Singular = kind.Kind.ToLowerInvariant()
+                    },
+                    Versions = [
+                        new() {
+                            Name = kind.Version,
+                            Served = true,
+                            Storage = true,
+                            // The status subresource is not decoration: an operator writes status
+                            // there, and a suite that later asserts on drift needs the spec and the
+                            // status to be separately writable exactly as they are upstream.
+                            Subresources = new() { Status = new() },
+                            Schema = new() {
+                                OpenAPIV3Schema = new() {
+                                    Type = "object", XKubernetesPreserveUnknownFields = true
+                                }
+                            }
+                        }
+                    ]
+                }
+            };
+
+            try {
+                await raw.ApiextensionsV1
+                    .CreateCustomResourceDefinitionAsync(definition, cancellationToken: cancellationToken)
+                    .ConfigureAwait(false);
+            } catch (k8s.Autorest.HttpOperationException ex)
+                when (ex.Response?.StatusCode == System.Net.HttpStatusCode.Conflict) {
+                // Two harnesses share one k3s — the lifecycle fixture and the silo-kill test — and
+                // both install the same definitions. A 409 is the other one having won, which is the
+                // desired end state.
+            }
+        }
+
+        // ⚠ A CRD is served by the API server ASYNCHRONOUSLY: `Established` is a condition the
+        // apiextensions controller sets after the create returns, and an apply issued before it is
+        // the same nameless 404 this whole method exists to remove. Polling the condition is what
+        // makes the wait a fact rather than a sleep.
+        foreach (var kind in kinds) {
+            await WaitUntilEstablishedAsync(raw, kind.Plural + "." + kind.Group, cancellationToken)
+                .ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>Waits for the apiextensions controller to mark a definition <c>Established</c>.</summary>
+    /// <param name="raw">The raw client.</param>
+    /// <param name="name">The definition's name, <c>{plural}.{group}</c>.</param>
+    /// <param name="cancellationToken">The harness's token.</param>
+    /// <exception cref="InvalidOperationException">The definition never became established.</exception>
+    static async Task WaitUntilEstablishedAsync(
+        IKubernetes raw,
+        string name,
+        CancellationToken cancellationToken
+    ) {
+        for (var attempt = 0; attempt < 60; attempt++) {
+            var definition = await raw.ApiextensionsV1
+                .ReadCustomResourceDefinitionAsync(name, cancellationToken: cancellationToken)
+                .ConfigureAwait(false);
+
+            if (definition.Status?.Conditions?.Any(
+                    x => string.Equals(x.Type, "Established", StringComparison.Ordinal)
+                        && string.Equals(x.Status, "True", StringComparison.Ordinal)
+                ) == true) {
+                return;
+            }
+
+            await Task.Delay(TimeSpan.FromMilliseconds(250), cancellationToken).ConfigureAwait(false);
+        }
+
+        // ⚠ Throws rather than returning, and the fixture turns it into a skip naming the provider.
+        // Carrying on would produce the nameless HttpOperationException this method exists to
+        // remove, which is strictly worse than saying what did not happen.
+        throw new InvalidOperationException(
+            $"the CustomResourceDefinition '{name}' was created and never became Established, so the "
+            + "API server serves no REST path for it. Every cluster-backed assertion about an object "
+            + "of this kind would fail as an HttpOperationException with no status code."
+        );
     }
 
     /// <summary>
