@@ -132,14 +132,26 @@ would have been a breaking change to a published api-version.
 
 ### What is still owed
 
-The grammar is in place and the parent is derivable; two consequences are not yet built and belong
+The grammar is in place and the parent is derivable; one consequence is not yet built and belongs
 with whoever adds the first child type.
 
-- **`ReBacResourceRelationWriter` still points every `parent` edge at the resource group.** It should
-  use `ResourceId.Parent` and fall back to the resource group only when that is `null`.
-  [07](07-rebac-authorization.md) § The model describes the resource → resourceGroup →
-  subscription → tenant chain; a child adds a hop and the schema's `From("parent", …)` rewrites
-  already handle it.
+- ~~**`ReBacResourceRelationWriter` still points every `parent` edge at the resource group.**~~
+  **Done.** The subject is `resource:{parentId}` when `ResourceId.Parent` is non-null and the
+  resource group only when it is null. The extra hop needed **no schema change and no
+  `SchemaVersion` bump**, which was checked rather than assumed: `CyberCloudSchema` declares
+  `parent` on `resource` with no subject-type constraint, and gives `resource` the same
+  `This | From(parent, …)` rewrites it gives `resourceGroup`, so the rewrite composes with itself —
+  four hops against `CheckLimits`' twelve.
+  ⚠ The parent's GUID is **not** in the address, so it is resolved through `IResourceIndexGrain`
+  **by the caller** and passed in: the create reuses the lookup the parent-existence check above
+  already makes, and the delete resolves it once, at request time, onto
+  `OperationSpec.ParentResourceId`. The writer must never resolve it itself — `UnlinkFromParentAsync`
+  runs after `CompleteDeleteAsync`, retried from a reminder, by which time the parent may be gone
+  (see the bullet below), so a lookup there would fail every retry and leak the tuple it was trying
+  to remove. For the same reason the edge is now written on the **create only**: a resource's parent
+  cannot change, and re-linking on an update — where the parent GUID is deliberately not
+  resolved — would have left a child holding two `parent` tuples.
+  `ParentEdgeTests.AChildsEdgePointsAtItsParentResourceRatherThanAtTheGroup` reads the tuple.
 - ~~**Nothing checks that a parent exists at create.**~~ **Done.** `ResolveAsync` resolves
   `ResourceId.Parent` through `IResourceIndexGrain` and answers the same `404` from the same helper,
   for the enumeration-oracle reason. Only a *confirmed* binding counts, so a parent under an

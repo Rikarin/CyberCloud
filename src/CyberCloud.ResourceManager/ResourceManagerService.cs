@@ -300,6 +300,32 @@ public sealed class ResourceManagerService(
 
         var snapshot = beginning.GetValueOrThrow();
 
+        // ⚠ THE PARENT'S GUID IS RESOLVED HERE, ONCE, WHILE SOMEONE IS STILL WAITING FOR AN ANSWER.
+        //
+        // The unlink runs from OperationGrain's reminder after CompleteDeleteAsync, off the request
+        // path, and must remove the tuple the create wrote — `resource:{child}#parent@resource:{parent}`
+        // for a child. Neither half of that is recoverable there: the spec carries a PATH, and
+        // docs/plan/06 § Identifiers keeps GUIDs out of paths.
+        //
+        // ⚠ ResolveAsync (step 1) is not where this goes, even though it does the same lookup for a
+        // create. It is shared with ReadAsync and ActionAsync, so resolving there would put an index
+        // read on every GET of every child to serve a value only a create and a delete ever use.
+        //
+        // A parent that no longer resolves leaves this Guid.Empty rather than failing the delete: the
+        // child is an orphan, refusing would strand it undeletable, and the writer's remarks explain
+        // what an empty id costs on the unlink side.
+        var parentResourceId = Guid.Empty;
+
+        if (target.Id.Parent is { } parentAddress) {
+            var bound = await Tenant(target)
+                .GetGrain<IResourceIndexGrain>(GrainKeys.PathIndex(parentAddress))
+                .ResolveAsync();
+
+            if (bound.IsSuccess) {
+                parentResourceId = bound.GetValueOrThrow();
+            }
+        }
+
         trace.Enter(WriteStep.StartOperation);
 
         var started = await Operation(target, operationId)
@@ -327,6 +353,7 @@ public sealed class ResourceManagerService(
                     // left to derive it from.
                     CommittedQuota = CommittedBy(target.Registration, snapshot.Properties),
                     IndexClaimed = false,
+                    ParentResourceId = parentResourceId,
                     Caller = request.Caller
                 }
             );
@@ -651,12 +678,29 @@ public sealed class ResourceManagerService(
         // there is putting it after the durable write by construction, which is the window this step
         // exists to close. The operation grain does own the DELETE side, where there is no such
         // ordering problem and where re-drivability is exactly what is needed.
+        //
+        // ⚠ WRITTEN ONLY FOR A CREATE, in the shape step 6 above already uses: the step is entered
+        // either way and the work inside it is create-only. A resource's parent cannot change — the
+        // address is what the index binds and a different address is a different resource — so the
+        // edge is a create-time fact and re-writing it on every PUT only ever rewrote a tuple that
+        // was already there.
+        //
+        // ⚠ FOR A CHILD IT WOULD BE WORSE THAN REDUNDANT. `target.ParentId` is resolved by step 1's
+        // parent check, which runs on the create and deliberately not on an update — re-checking every
+        // write would turn a deleted parent into a frozen child answering 404 for a resource that
+        // plainly exists, which ParentExistenceTests pins against. So on an update a child's parent
+        // GUID is not known here, and linking anyway would fall back to the resource group and leave
+        // the child with TWO `parent` tuples: the correct one from its create and a group one beside
+        // it. CheckGrain.WalkAncestorsAsync takes the first of them, so which grant applied would
+        // depend on store order.
         trace.Enter(WriteStep.LinkParent);
 
-        var linked = await relations.LinkToParentAsync(addressed, cancellationToken);
-        if (linked.TryGetError(out var linkError)) {
-            await ReleaseAsync(resolvedTarget, leases);
-            return Result<WriteAccepted>.Failure(linkError);
+        if (!target.Exists) {
+            var linked = await relations.LinkToParentAsync(addressed, resolvedTarget.ParentId, cancellationToken);
+            if (linked.TryGetError(out var linkError)) {
+                await ReleaseAsync(resolvedTarget, leases);
+                return Result<WriteAccepted>.Failure(linkError);
+            }
         }
 
         // ── 9. Write durable desired state ──────────────────────────────────────────────────────
@@ -699,7 +743,7 @@ public sealed class ResourceManagerService(
             // that is still alive; removing it because this write failed would take an existing
             // resource away from its owner.
             if (!target.Exists) {
-                _ = await relations.UnlinkFromParentAsync(addressed, cancellationToken);
+                _ = await relations.UnlinkFromParentAsync(addressed, resolvedTarget.ParentId, cancellationToken);
             }
 
             return Result<WriteAccepted>.Failure(submitError);
@@ -751,6 +795,10 @@ public sealed class ResourceManagerService(
                     // operation moved, which is the property the delete path needs on its own side.
                     CommittedQuota = committed,
                     IndexClaimed = true,
+                    // ⚠ What the delete will unlink with. Empty for a top-level resource and for an
+                    // update, which is correct in both cases: the first has no parent resource, and
+                    // the second did not write an edge to begin with.
+                    ParentResourceId = resolvedTarget.ParentId,
                     Caller = request.Caller
                 }
             );
@@ -1021,6 +1069,12 @@ public sealed class ResourceManagerService(
         // deleting a parent silently froze every child — a GET or a PATCH that had nothing to do with
         // the parent would start answering 404 for a resource that plainly exists, which is a worse
         // failure than the one being closed.
+        // ⚠ AND THE GUID IT RESOLVES IS KEPT. It was read and thrown away when all this step owed was
+        // a yes/no, and step 8 needs the same value to aim the child's `parent` edge at the parent
+        // RESOURCE — see WriteTarget.ParentId for why it is carried from here rather than re-read
+        // there.
+        var parentId = Guid.Empty;
+
         if (existing.IsFailure && address.Parent is { } parent) {
             var bound = await grains
                 .ForTenant(address.TenantId.ToString("D", CultureInfo.InvariantCulture))
@@ -1030,6 +1084,8 @@ public sealed class ResourceManagerService(
             if (bound.IsFailure) {
                 return NotFound<WriteTarget>(request.Path);
             }
+
+            parentId = bound.GetValueOrThrow();
         }
 
         return Result<WriteTarget>.Success(
@@ -1038,7 +1094,8 @@ public sealed class ResourceManagerService(
                 found.Registration,
                 found.ApiVersion,
                 found.Schema,
-                existing.IsSuccess
+                existing.IsSuccess,
+                parentId
             )
         );
     }
@@ -1449,11 +1506,30 @@ public sealed class ResourceManagerService(
     ///     confirmed binding, because returning a claimed one would let a caller address a resource
     ///     that may never exist.
     /// </param>
+    /// <param name="ParentId">
+    ///     The GUID of the resource <see cref="ResourceId.Parent" /> names, or <see cref="Guid.Empty" />
+    ///     when the address is top-level or this is not a create.
+    ///     <para>
+    ///         ⚠ <b>Resolved here and carried, rather than looked up again at step 8, and the reason is
+    ///         the DELETE path.</b> <c>ResolveAsync</c> already reads this binding to answer the child's
+    ///         404, so a second read would be a second chance to disagree with the first. That is the
+    ///         small reason. The large one is that <c>IResourceRelationWriter</c> must be able to
+    ///         reconstruct the tuple it wrote when the resource is <i>gone</i> — <c>OperationGrain</c>
+    ///         unlinks after <c>CompleteDeleteAsync</c>, retrying from a reminder — and by then the
+    ///         parent may be gone too: docs/plan/08 § Deleting a parent resource that has children
+    ///         records that the refusal which would prevent that is decided and not built. A writer
+    ///         that resolved the parent itself would fail every retry, converge never, and leave
+    ///         exactly the dangling tuple <c>ParentEdgeTests.DeleteLeavesNoDanglingTuple</c> exists to
+    ///         catch. So the GUID is resolved once, on the path that already has it, and persisted on
+    ///         <c>OperationSpec</c> for the unlink.
+    ///     </para>
+    /// </param>
     readonly record struct WriteTarget(
         ResourceId Id,
         ResourceTypeRegistration Registration,
         ApiVersion ApiVersion,
         ResourceSchema Schema,
-        bool Exists
+        bool Exists,
+        Guid ParentId
     );
 }

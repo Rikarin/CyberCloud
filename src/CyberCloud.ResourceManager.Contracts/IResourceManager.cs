@@ -311,12 +311,34 @@ public interface IResourceAuthorizer {
 /// </remarks>
 public interface IResourceRelationWriter {
     /// <summary>
-    ///     Records <c>resource:{id}#parent@resourceGroup:{subscription}-{group}</c>. Idempotent.
+    ///     Records <c>resource:{id}#parent@resource:{parentId}</c> for a child, or
+    ///     <c>resource:{id}#parent@resourceGroup:{subscription}-{group}</c> for a top-level resource.
+    ///     Idempotent.
     /// </summary>
     /// <param name="id">
     ///     The resource, with <see cref="ResourceId.Id" /> set. ⚠ The GUID is minted at the quota step
     ///     and the name is claimed at the index step, both <i>before</i> durable state exists — which
     ///     is what lets this run before the resource does.
+    /// </param>
+    /// <param name="parentId">
+    ///     The GUID of the resource <see cref="ResourceId.Parent" /> names, or <see cref="Guid.Empty" />
+    ///     when it is <see langword="null" />.
+    ///     <para>
+    ///         ⚠ <b>Passed in rather than resolved here, and the delete path is why.</b>
+    ///         <see cref="ResourceId.Parent" /> is an <i>address</i>: docs/plan/06 § Identifiers keeps
+    ///         the GUID out of the path, so turning it into a subject needs
+    ///         <c>IResourceIndexGrain</c>. An implementation that did that lookup itself would do it on
+    ///         <see cref="UnlinkFromParentAsync" /> too — which runs when the resource is gone, retried
+    ///         from a reminder, at a point where the parent may also be gone (docs/plan/08 § Deleting a
+    ///         parent resource that has children records that the refusal which would prevent that is
+    ///         decided and not built). The unlink would then fail on every retry and the tuple would
+    ///         leak. The caller resolves once, on the write path, and persists it on the operation.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <see cref="Guid.Empty" /> for an id whose <see cref="ResourceId.Parent" /> is
+    ///         <i>not</i> null is a caller error and is refused, not quietly aimed at the resource
+    ///         group: that fallback is what made a child inherit from its group instead of its parent.
+    ///     </para>
     /// </param>
     /// <param name="cancellationToken">Cancels the write.</param>
     /// <returns>
@@ -324,12 +346,17 @@ public interface IResourceRelationWriter {
     ///     failure here, which it can only do honestly because the call happens before
     ///     <c>SubmitDesiredAsync</c> — see the write path's step 8.
     /// </returns>
-    Task<Result> LinkToParentAsync(ResourceId id, CancellationToken cancellationToken = default);
+    Task<Result> LinkToParentAsync(ResourceId id, Guid parentId, CancellationToken cancellationToken = default);
 
     /// <summary>
     ///     Removes the <c>parent</c> tuple. Idempotent — removing one that is not there succeeds.
     /// </summary>
     /// <param name="id">The resource, with <see cref="ResourceId.Id" /> set.</param>
+    /// <param name="parentId">
+    ///     The same GUID <see cref="LinkToParentAsync" /> was given. ⚠ It must be the same one: a
+    ///     delete removes the tuple it wrote, so a different subject here removes nothing and leaves
+    ///     the real edge behind. <c>OperationSpec</c> persists it for exactly this call.
+    /// </param>
     /// <param name="cancellationToken">Cancels the write.</param>
     /// <remarks>
     ///     ⚠ <b>Called when the resource is <i>gone</i>, not when a delete is requested.</b> A
@@ -339,7 +366,7 @@ public interface IResourceRelationWriter {
     ///     <c>CompleteDeleteAsync</c>, and retries it from its reminder if it fails — a tuple pointing
     ///     at an object that no longer exists is a slow leak in the tenant's tuple store.
     /// </remarks>
-    Task<Result> UnlinkFromParentAsync(ResourceId id, CancellationToken cancellationToken = default);
+    Task<Result> UnlinkFromParentAsync(ResourceId id, Guid parentId, CancellationToken cancellationToken = default);
 }
 
 /// <summary>

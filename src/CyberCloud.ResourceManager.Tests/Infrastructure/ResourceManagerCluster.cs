@@ -163,23 +163,41 @@ public sealed class RecordingRelationWriter : IResourceRelationWriter {
     }
 
     /// <inheritdoc />
-    public Task<Result> LinkToParentAsync(ResourceId id, CancellationToken cancellationToken = default) {
+    public Task<Result> LinkToParentAsync(
+        ResourceId id,
+        Guid parentId,
+        CancellationToken cancellationToken = default
+    ) {
         Calls.Enqueue("link");
 
         if (FailLink) {
             return Task.FromResult(Result.Failure(ErrorCode.InternalError, "the tuple store is down"));
         }
 
-        Edges[id.Id] = id.SubscriptionId.ToString("N", CultureInfo.InvariantCulture) + "-" + id.ResourceGroup;
+        Edges[id.Id] = SubjectOf(id, parentId);
         return Task.FromResult(Result.Success);
     }
 
     /// <inheritdoc />
-    public Task<Result> UnlinkFromParentAsync(ResourceId id, CancellationToken cancellationToken = default) {
+    public Task<Result> UnlinkFromParentAsync(
+        ResourceId id,
+        Guid parentId,
+        CancellationToken cancellationToken = default
+    ) {
         Calls.Enqueue("unlink");
         Edges.TryRemove(id.Id, out _);
         return Task.FromResult(Result.Success);
     }
+
+    /// <summary>
+    ///     What the real writer would aim the edge at. ⚠ A double that always recorded the group would
+    ///     agree with a writer that always wrote the group, which is the bug this pair exists to
+    ///     surface — so the branch is mirrored here even though this class writes no tuples.
+    /// </summary>
+    static string SubjectOf(ResourceId id, Guid parentId) =>
+        id.Parent is null
+            ? id.SubscriptionId.ToString("N", CultureInfo.InvariantCulture) + "-" + id.ResourceGroup
+            : parentId.ToString("N", CultureInfo.InvariantCulture);
 }
 
 /// <summary>Records every <c>resource-changed</c> event step 11 emitted.</summary>

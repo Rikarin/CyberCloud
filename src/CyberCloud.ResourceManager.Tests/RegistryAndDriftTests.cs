@@ -344,6 +344,7 @@ public sealed class StubbedSeamTests {
 
         var refused = await writer.LinkToParentAsync(
             ResourceManagerCluster.Address("no-identity"),
+            Guid.Empty,
             TestContext.Current.CancellationToken
         );
 

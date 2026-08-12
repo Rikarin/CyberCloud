@@ -109,6 +109,82 @@ public sealed class ParentEdgeTests(IsolationCluster cluster) {
     }
 
     [Fact]
+    public async Task AChildsEdgePointsAtItsParentResourceRatherThanAtTheGroup() {
+        // ⚠ THE HOP THE INTERLEAVED GRAMMAR WAS CHOSEN TO MAKE EXPRESSIBLE, ASSERTED AT THE TUPLE.
+        //
+        // docs/plan/12 § Child resources picked `…/probes/{parent}/samples/{child}` over the
+        // flattened `…/probes/samples/{child}` for one reason above the others: the flattened form
+        // cannot say WHICH parent, so the edge could only ever point at the resource group.
+        // ReBacResourceRelationWriter then went on doing exactly that for every resource regardless
+        // of depth, which spends the decision and keeps the failure it was meant to remove — granting
+        // somebody the parent would grant nothing on its children.
+        //
+        // The test above pins the top-level case, and it is not enough on its own: an edge aimed at
+        // the group makes a child readable to a GROUP owner, so a read-back would pass while every
+        // `resource:{parent}#contributor` assignment granted nothing. Same shape of defect as
+        // parent-at-the-subscription, one level down. So the tuple itself is read.
+        var parentName = "child-edge-parent";
+        var childName = "child-edge-child";
+
+        var parentId = await cluster.CreateAsync(
+            Probes,
+            parentName,
+            IsolationCluster.Victim,
+            IsolationCluster.VictimSubscription,
+            IsolationCluster.VictimUser
+        );
+
+        var childAddress = new ResourceId(
+            IsolationCluster.Victim,
+            IsolationCluster.VictimSubscription,
+            IsolationCluster.Group,
+            Conformance.Reference.Probes.ChildType,
+            childName,
+            Guid.Empty,
+            parentName
+        );
+
+        var accepted = await cluster.Manager.WriteAsync(
+            new() {
+                Path = childAddress.Path,
+                ApiVersion = Conformance.Reference.Probes.V2026,
+                Verb = WriteVerb.Put,
+                Body = Conformance.Reference.Probes.ChildBody(),
+                Caller = IsolationCluster.Caller(IsolationCluster.Victim, IsolationCluster.VictimUser)
+            },
+            TestContext.Current.CancellationToken
+        );
+
+        accepted.IsSuccess.ShouldBeTrue(
+            "the child could not be created at all: " + accepted.Error?.Message
+        );
+
+        var childId = accepted.GetValueOrThrow().Resource.Id;
+
+        var parents = await cluster.ParentsOfAsync(IsolationCluster.Victim, childId);
+
+        parents.Count.ShouldBe(1, "a resource has exactly one parent scope");
+
+        parents[0].Type.ShouldBe(
+            ObjectTypes.Resource,
+            "the child's parent edge names an object type other than `resource`, so the hop "
+            + "docs/plan/12 § Child resources bought does not exist"
+        );
+
+        // ⚠ "N", because that is what SubjectRef.Of(type, Guid) writes and therefore what the tuple
+        // holds — the same spelling ReBacResourceAuthorizer.GroupObjectId uses for the subscription
+        // half of a group's object id.
+        parents[0].Id.ShouldBe(
+            parentId.ToString("N", CultureInfo.InvariantCulture),
+            "the child's parent edge does not point at the parent RESOURCE — granting a role on the "
+            + "parent grants nothing on its children, which is the failure the interleaved address "
+            + "was chosen to remove"
+        );
+
+        parents[0].Relation.ShouldBeNullOrEmpty("the parent's subject is an object, not a userset");
+    }
+
+    [Fact]
     public void TheRelationTheWriterNamesIsTheOneTheSchemaRewritesThrough() {
         // ⚠ THE SAME GUARD THE resourcegroup/resourceGroup CASING BUG EARNED, ON THE OTHER STRING —
         // AND THE HALF OF IT THAT SURVIVED THE VOCABULARY MOVE.
@@ -254,4 +330,12 @@ public sealed class ParentEdgeTests(IsolationCluster cluster) {
 
     /// <summary>The providers under attack.</summary>
     public static TheoryData<IsolationTarget> Targets => IsolationCatalog.All;
+
+    /// <summary>
+    ///     The reference provider, which is the one with a child type. ⚠ Named rather than indexed
+    ///     out of <see cref="IsolationCatalog.Targets" />: reordering that list must not silently
+    ///     repoint the child test at a provider whose type has no children.
+    /// </summary>
+    static IsolationTarget Probes =>
+        IsolationCatalog.Targets.Single(target => target.Type == Conformance.Reference.Probes.Type);
 }

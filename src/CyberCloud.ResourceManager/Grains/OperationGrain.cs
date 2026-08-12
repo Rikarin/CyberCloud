@@ -298,7 +298,11 @@ public sealed class OperationGrain(
             // previous attempt is not a problem either. The loop ends the way every other one does:
             // at ReconcileSchedule's sixty-minute ceiling, with a Failed operation that names the
             // reason — which is the actionable outcome, and is what a stuck operation is for.
-            var unlinked = await relations.UnlinkFromParentAsync(Address(spec));
+            // ⚠ From the SPEC, not re-resolved. Address(spec) reparses a path, and a parsed path
+            // carries no GUIDs at all — so the parent's id has to have been written down at create
+            // time. See OperationSpec.ParentResourceId: a lookup here would be a lookup made after
+            // the resource is gone, on a retry loop, against a parent that may be gone too.
+            var unlinked = await relations.UnlinkFromParentAsync(Address(spec), spec.ParentResourceId);
             if (unlinked.TryGetError(out var unlinkError)) {
                 await ScheduleAsync(ReconcileOutcome.Failed(unlinkError, true));
                 return;

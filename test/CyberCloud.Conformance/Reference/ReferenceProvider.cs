@@ -36,6 +36,43 @@ public static class Probes {
     /// <summary>The type.</summary>
     public static ResourceTypeName Type { get; } = new(ProviderNamespace, TypePath);
 
+    // ── The child type ─────────────────────────────────────────────────────────────────────────
+
+    /// <summary>The nested type's path. Its parent type is <see cref="TypePath" />.</summary>
+    /// <remarks>
+    ///     ⚠ <b>This exists so the isolation suite can assert the shape of a <i>child's</i> parent
+    ///     edge against the real writer, the real authorizer and the real schema.</b> No shipping
+    ///     provider declares a nested type yet — docs/plan/12 § The catalogue lists
+    ///     <c>servers/databases</c> and its siblings as owed — and <c>TestingProvider</c>'s
+    ///     <c>widgets/gadgets</c> lives in <c>CyberCloud.ResourceManager.Tests</c>, where both halves
+    ///     of the authorization seam are doubled. A double writes whatever tuple its author believed
+    ///     in, which is exactly what a test of the edge's subject cannot use.
+    /// </remarks>
+    public const string ChildTypePath = "probes/samples";
+
+    /// <summary>The nested type.</summary>
+    public static ResourceTypeName ChildType { get; } = new(ProviderNamespace, ChildTypePath);
+
+    /// <summary>
+    ///     The child's shape. ⚠ Nothing in it names the parent — the address does, and that is the
+    ///     whole of docs/plan/12 § Child resources.
+    /// </summary>
+    public static ResourceSchema ChildSchema { get; } =
+        ResourceSchema.Of(
+            [
+                new("/location", SchemaKind.Text, Required: true),
+                new("/properties", SchemaKind.Nested),
+                new("/properties/note", SchemaKind.Text, Required: true)
+            ]
+        );
+
+    /// <summary>A valid child body.</summary>
+    /// <param name="note">What the child says.</param>
+    public static string ChildBody(string note = "first") =>
+        new JsonObject {
+            ["location"] = "eu-central", ["properties"] = new JsonObject { ["note"] = note }
+        }.ToJsonString();
+
     /// <summary>The object a probe becomes.</summary>
     public static GroupVersionKind Kind { get; } =
         new() { Group = "", Version = "v1", Kind = "ConfigMap", Plural = "configmaps" };
@@ -118,7 +155,14 @@ public sealed class ReferenceProvider : IResourceProvider {
             .Permissions("read", "write", "delete")
             .Action("ping", ActionKind.Post, "write")
             .SupportsTags()
-            .RequiresCluster();
+            .RequiresCluster()
+            // ⚠ No reconciler and no RequiresCluster: this type exists to be addressed, not to be
+            // provisioned. The parent edge is written at step 8, before any provider work, so the
+            // assertions it carries do not need a child that reaches a cluster.
+            .ResourceType(Probes.ChildTypePath)
+            .ApiVersion(Probes.V2026, Probes.ChildSchema)
+            .Meters(QuotaMeter.Resources)
+            .Permissions("read", "write", "delete");
     }
 }
 
