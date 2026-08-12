@@ -89,6 +89,11 @@ public sealed class TenancyWireContractTests {
         ("IndexEntry", 3, "LeaseExpiresAt"),
         ("IndexEntry", 4, "ModifiedAt"),
 
+        // What IResourceIndexGrain.ChildrenAsync answers with — docs/plan/08 § Deleting a parent
+        // resource that has children.
+        ("ChildTypeCount", 0, "Type"),
+        ("ChildTypeCount", 1, "Count"),
+
         ("QuotaLease", 0, "LeaseId"),
         ("QuotaLease", 1, "SubscriptionId"),
         ("QuotaLease", 2, "Meter"),
@@ -141,6 +146,7 @@ public sealed class TenancyWireContractTests {
         ("TenantStatus", "CyberCloud.Tenancy.TenantStatus"),
 
         // Wire records.
+        ("ChildTypeCount", "CyberCloud.Tenancy.ChildTypeCount"),
         ("IndexEntry", "CyberCloud.Tenancy.IndexEntry"),
         ("QuotaLease", "CyberCloud.Tenancy.QuotaLease"),
         ("QuotaUsage", "CyberCloud.Tenancy.QuotaUsage"),

@@ -253,11 +253,25 @@ public sealed class ParentExistenceTests(ResourceManagerCluster cluster) {
     [Fact]
     public async Task AnUpdateOfAnExistingChildDoesNotRecheckTheParent() {
         // ⚠ THE CHECK IS ON THE CREATE AND ONLY ON THE CREATE, and this test is what pins that.
-        // Re-checking on every write would mean that deleting a parent silently froze every child —
-        // a PATCH that had nothing to do with the parent would start answering 404 for a resource
-        // that plainly exists, which is a worse failure than the one being closed. What SHOULD happen
-        // to children when a parent is deleted is a lifecycle decision, recorded at
-        // docs/plan/08 § Deleting a parent resource that has children; it is not this line's job.
+        // Re-checking on every write would mean that a child whose parent stopped resolving silently
+        // froze — a PATCH that had nothing to do with the parent would start answering 404 for a
+        // resource that plainly exists, which is a worse failure than the one being closed.
+        //
+        // ⚠ THE FIXTURE USED TO DELETE THE PARENT THROUGH THE MANAGER, AND THAT IS NO LONGER A THING
+        // THAT CAN HAPPEN. docs/plan/08 § Deleting a parent resource that has children is now built:
+        // a delete is refused, 409, while the resource still has children, so "the parent goes away
+        // underneath a live child" is unreachable through the API by construction —
+        // ChildDeleteRefusalTests is what asserts that.
+        //
+        // ⚠ WHICH DOES NOT MAKE THIS TEST OBSOLETE, and replacing it with the 409 would be the wrong
+        // fix. The property it pins is about the CHILD's write path — that ResolveAsync consults the
+        // parent on the create branch only — and that property has to hold however the parent came to
+        // stop resolving. The refusal is a gate at one entrance, not an invariant: a create that
+        // confirmed but never reached the parent's counter, a repair tool, a peer that predates the
+        // gate, or the index lease expiring under a partially applied create all produce a child whose
+        // parent does not resolve. So the fixture now makes the parent stop resolving DIRECTLY,
+        // through the index grain the manager reads, which is the state every one of those paths
+        // arrives at — and the assertion below is unchanged.
         ResourceManagerCluster.ResetDoubles();
 
         var parent = await CreateParentAsync("transient-widget");
@@ -267,18 +281,15 @@ public sealed class ParentExistenceTests(ResourceManagerCluster cluster) {
         created.IsSuccess.ShouldBeTrue(created.Error?.Message);
         await ConvergeAsync(created.GetValueOrThrow());
 
-        // The parent goes away underneath the child, which is the case a check written on every
-        // write rather than on the create would break.
-        var removed = await cluster.Manager.DeleteAsync(
-            new() {
-                Path = parent.Path,
-                ApiVersion = TestingProvider.V2026,
-                Caller = ResourceManagerCluster.Caller()
-            },
-            TestContext.Current.CancellationToken
-        );
+        var bound = await cluster.Index(parent).ResolveAsync();
+        bound.IsSuccess.ShouldBeTrue("the fixture's parent was never bound in the first place");
 
-        removed.IsSuccess.ShouldBeTrue(removed.Error?.Message ?? "the fixture could not delete the parent");
+        var removed = await cluster.Index(parent).ReleaseAsync(bound.GetValueOrThrow());
+        removed.IsSuccess.ShouldBeTrue(removed.Error?.Message ?? "the fixture could not unbind the parent");
+
+        (await cluster.Index(parent).ResolveAsync()).IsFailure.ShouldBeTrue(
+            "the fixture did not actually make the parent stop resolving"
+        );
 
         var updated = await cluster.Manager.WriteAsync(
             new() {

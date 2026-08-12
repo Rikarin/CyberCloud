@@ -3,6 +3,7 @@ using CyberCloud.Core.Contracts;
 using CyberCloud.Core.Resources;
 using CyberCloud.Core.Time;
 using CyberCloud.Tenancy.Contracts;
+using System.Collections.Immutable;
 
 namespace CyberCloud.Tenancy;
 
@@ -74,9 +75,104 @@ public sealed class ResourceIndexGrain(
         await PersistAsync(IndexClaimMachine.Confirm(state.State.Entry, resourceId, clock.UtcNow, Describe()));
 
     /// <inheritdoc />
-    public async Task<Result> ReleaseAsync(Guid resourceId) =>
-        (await PersistAsync(IndexClaimMachine.Release(state.State.Entry, resourceId, clock.UtcNow, Describe())))
-        .ToResult();
+    public async Task<Result> ReleaseAsync(Guid resourceId) {
+        var released = await PersistAsync(
+            IndexClaimMachine.Release(state.State.Entry, resourceId, clock.UtcNow, Describe())
+        );
+
+        if (released.TryGetError(out var error)) {
+            return Result.Failure(error);
+        }
+
+        // ⚠ THE COUNTS BELONG TO THE RESOURCE AND NOT TO THE ADDRESS, SO THEY GO WHEN THE BINDING DOES.
+        //
+        // The name is reusable the instant this returns — docs/plan/06 § Two-phase create, "release the
+        // index first (so the name is immediately reusable)" — and the next create at the same path is
+        // a DIFFERENT resource with a different GUID. A count that survived would be inherited by it,
+        // and a brand-new resource that answers 409 to its own delete over children it never had is
+        // unrecoverable without an operator.
+        //
+        // Nothing is normally cleared here: the manager's gate refused the delete unless every count
+        // was already zero, so this is the second line of defence rather than the first. It is worth
+        // having because the failure it prevents is permanent and the cost is one dictionary clear.
+        if (state.State.Children.Count > 0) {
+            state.State.Children.Clear();
+            await state.WriteStateAsync();
+        }
+
+        return Result.Success;
+    }
+
+    /// <inheritdoc />
+    public async Task<Result<int>> AddChildAsync(ResourceTypeName childType) {
+        if (childType.IsEmpty) {
+            return Result<int>.Failure(
+                ErrorCode.InvalidResourceType,
+                "A child was registered against this address with no type. The refusal a parent's "
+                + "delete gives has to name what is holding it — docs/plan/08 § Deleting a parent "
+                + "resource that has children — and an untyped count cannot."
+            );
+        }
+
+        var key = Key(childType);
+        var count = state.State.Children.GetValueOrDefault(key) + 1;
+
+        state.State.Children[key] = count;
+        await state.WriteStateAsync();
+
+        return Result<int>.Success(count);
+    }
+
+    /// <inheritdoc />
+    public async Task<Result<int>> RemoveChildAsync(ResourceTypeName childType) {
+        if (childType.IsEmpty) {
+            return Result<int>.Failure(
+                ErrorCode.InvalidResourceType,
+                "A child was deregistered from this address with no type, so there is no count to "
+                + "decrement."
+            );
+        }
+
+        var key = Key(childType);
+
+        // ⚠ Clamped at zero rather than allowed to go negative, and a decrement for a type that is not
+        // counted succeeds. OperationGrain calls this from a re-drivable delete, so "run twice" is the
+        // normal case and not the exceptional one; a negative count would make the parent DELETABLE
+        // while a child still existed, which is the whole failure this counter closes.
+        if (!state.State.Children.TryGetValue(key, out var count) || count <= 1) {
+            if (state.State.Children.Remove(key)) {
+                await state.WriteStateAsync();
+            }
+
+            return Result<int>.Success(0);
+        }
+
+        state.State.Children[key] = count - 1;
+        await state.WriteStateAsync();
+
+        return Result<int>.Success(count - 1);
+    }
+
+    /// <inheritdoc />
+    public Task<Result<ImmutableArray<ChildTypeCount>>> ChildrenAsync() =>
+        Task.FromResult(
+            Result<ImmutableArray<ChildTypeCount>>.Success(
+                [
+                    .. state.State.Children
+                        // ⚠ A key that no longer parses is dropped rather than surfaced. Only Key()
+                        // writes this dictionary and it writes ToString()'s exact form, so this is
+                        // unreachable; if it ever were reachable, a refusal naming a type nobody can
+                        // act on is worse than one that undercounts, and the count would be visible in
+                        // the resource-graph projection either way.
+                        .Where(x => x.Value > 0 && ResourceTypeName.TryParse(x.Key, out _))
+                        // Ordered so a refusal message is the same on every retry. An unordered
+                        // dictionary would make "2 databases and 1 firewallRule" and the reverse the
+                        // same refusal with two different texts, which reads as two different faults.
+                        .OrderBy(x => x.Key, StringComparer.Ordinal)
+                        .Select(x => new ChildTypeCount { Type = Parse(x.Key), Count = x.Value })
+                ]
+            )
+        );
 
     /// <inheritdoc />
     public Task<Result<IndexEntry>> GetAsync() =>
@@ -101,6 +197,15 @@ public sealed class ResourceIndexGrain(
     public Task DeactivateAsync() {
         DeactivateOnIdle();
         return Task.CompletedTask;
+    }
+
+    /// <summary>The dictionary key for a child type — canonical, for the reason IndexState gives.</summary>
+    static string Key(ResourceTypeName childType) => childType.Canonical.ToString();
+
+    /// <summary>The inverse of <see cref="Key" />, for a key the filter above has already accepted.</summary>
+    static ResourceTypeName Parse(string key) {
+        _ = ResourceTypeName.TryParse(key, out var type);
+        return type;
     }
 
     string Describe() =>
