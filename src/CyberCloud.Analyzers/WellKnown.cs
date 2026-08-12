@@ -79,7 +79,9 @@ static class WellKnown {
 
     /// <summary>
     ///     The assembly that is allowed to hold a secret value — docs/plan/00 § Non-negotiables and
-    ///     docs/plan/18. It does not exist yet; the rule is written so that it does not have to.
+    ///     docs/plan/18. Written before it existed so the rule would not have to be revisited when it
+    ///     landed; it exists now, and <c>src/CyberCloud.Vault/CyberCloud.Vault.csproj</c> records
+    ///     that its project name is load-bearing because of this constant.
     /// </summary>
     public const string VaultAssembly = "CyberCloud.Vault";
 }

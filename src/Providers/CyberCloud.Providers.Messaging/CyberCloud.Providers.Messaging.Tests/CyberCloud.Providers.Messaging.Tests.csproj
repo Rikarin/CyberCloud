@@ -41,6 +41,17 @@
         -->
         <EmbeddedResource Include="../../../../charts/managed/nats/templates/_helpers.tpl"
                           LogicalName="nats.helpers.tpl"/>
+        <!--
+          ⚠ The RabbitMQ chart's helpers carry TWO hand-maintained blocks, and the second is not a
+          table. `rabbitmq.resources` is the same shape the other two charts have.
+          `rabbitmq.additionalConfig` is the rabbitmq.conf fragment `default_queue_type` reaches the
+          broker through — the setting docs/plan/12's whole RabbitMQ row is about, which the operator
+          gives no CRD field for. Nothing generates a Helm template, so that fragment and
+          RabbitmqClusters.AdditionalConfig are two hand-written spellings of one file, and
+          RabbitmqSizingTests holds both against each other.
+        -->
+        <EmbeddedResource Include="../../../../charts/managed/rabbitmq/templates/_helpers.tpl"
+                          LogicalName="rabbitmq.helpers.tpl"/>
     </ItemGroup>
 
     <ItemGroup>

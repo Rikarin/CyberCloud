@@ -1,0 +1,91 @@
+# Managed RabbitMQ — the configuration surface, once.
+#
+# ⚠ EVERY NON-`@internal` BLOCK BELOW IS GENERATED from RabbitmqClusters.Schema2026 by
+# `./build.sh Charts`, and so is values.schema.json. ADR-010 § Which end authors the schema: "The C#
+# ResourceSchema is authored. The chart's @param annotations are generated from it and diffed."
+# Editing a generated row here is undone on the next run and fails the build in between; add the
+# field in C# instead.
+#
+# The `@internal` rows at the end of each level are the ones that are NOT generated. They are
+# carried through as bytes and must sit after every generated key at their own level, so that each
+# level's generated keys are one contiguous run — charts/README.md § What a chart cannot say.
+
+## @param version {string} RabbitMQ version. Minor upgrades are applied automatically in the maintenance window; a major upgrade is an explicit update to this field. Only 4.x is offered: classic queue mirroring was removed in 4.0, so on every version here the replicated queue type is the quorum queue.
+## @required
+## @enum 4.0 | 4.1
+version: "4.1"
+
+## @param nodes {integer} Number of RabbitMQ nodes. Use an odd number of at least three: a quorum queue is a Raft group, so a group of two tolerates no failures and an even count buys nothing over the odd count below it. One is offered for development only and replicates nothing.
+## @required
+## @range 1..7
+nodes: 3
+
+## @param sizing {object} CPU and memory per node, either by preset or explicitly.
+sizing:
+  ## @param preset {string} A sizing preset from docs/plan/12. Brokers use the c1 family, which is 1 vCPU to 2 GiB and guaranteed rather than burstable.
+  ## @enum c1.2xlarge | c1.4xlarge | c1.large | c1.medium | c1.micro | c1.nano | c1.small | c1.xlarge
+  ## @widget cozy-preset
+  preset: c1.small
+  ## @param cpu {string} Explicit vCPU quantity in Kubernetes form, for example 500m or 2. Empty means take it from the preset.
+  ## @pattern (\d+(\.\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)?
+  cpu: ""
+  ## @param memory {string} Explicit memory quantity in Kubernetes form, for example 4Gi. Empty means take it from the preset.
+  ## @pattern (\d+(\.\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)?
+  memory: ""
+
+## @param storage {object} The message store, per node.
+storage:
+  ## @param size {string} Message-store volume size per node, in Kubernetes quantity form. Grows online; never shrinks. A quorum queue keeps its whole Raft log on every member, so this is the same figure on every node rather than a share of one.
+  ## @required
+  ## @pattern \d+(\.\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?
+  ## @example "20Gi"
+  size: "20Gi"
+  ## @param class {string} StorageClass name. Empty means the cluster default.
+  ## @immutable
+  ## @widget storageclass
+  class: ""
+
+## @param queues {object} How queues behave when a client does not say.
+queues:
+  ## @param defaultType {string} The queue type a client gets when it declares a queue without asking for one. Quorum by default — docs/plan/12: a quorum queue is replicated through Raft across the nodes above, and on 4.x a classic queue is not replicated at all, so leaving this unset would put a single-node queue on a cluster the tenant paid three nodes for. This is a node-wide fallback: a vhost created with its own default queue type overrides it.
+  ## @enum classic | quorum | stream
+  defaultType: quorum
+
+## @param limits {object} Broker limits a client can run into.
+limits:
+  ## @param maxMessageSize {integer} Largest message a client may publish, in bytes. Raising it costs memory on every node that holds a copy, which for a quorum queue is all of them.
+  ## @range 65536..536870912
+  maxMessageSize: 134217728
+
+## @param plugins {object} Protocols and features beyond AMQP.
+plugins:
+  ## @param additional {array} Plugins to enable on top of the three the operator always enables — peer discovery, the management UI and the Prometheus endpoint. Each recognised plugin adds its own port to the cluster's in-cluster Service.
+  ## @enum rabbitmq_federation | rabbitmq_mqtt | rabbitmq_shovel | rabbitmq_stomp | rabbitmq_stream | rabbitmq_web_mqtt | rabbitmq_web_stomp
+  ## @example ["rabbitmq_stream"]
+  additional: []
+
+## @param platform {object} Resource identity injected by the reconciler. Not a tenant-facing setting.
+## @internal Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.
+platform:
+  ## @param tenantId {string} Tenant GUID, rendered into the cybercloud.io/tenant-id label.
+  tenantId: ""
+  ## @param subscriptionId {string} Subscription GUID, rendered into the cybercloud.io/subscription-id label.
+  subscriptionId: ""
+  ## @param resourceGroup {string} Resource group name, rendered into the cybercloud.io/resource-group label.
+  resourceGroup: ""
+  ## @param resourceId {string} Resource GUID, rendered into the cybercloud.io/resource-id label.
+  resourceId: ""
+  ## @param resourceType {string} Fully qualified resource type, rendered into the cybercloud.io/resource-type label.
+  resourceType: CyberCloud.Messaging/rabbitmqClusters
+  ## @param apiVersion {string} The api-version the resource was last written at, rendered into the cybercloud.io/api-version label.
+  apiVersion: "2026-08-01"
+  ## @param managedBy {string} Value of the cybercloud.io/managed-by label. Constant, and the selector every informer filters on.
+  managedBy: cybercloud
+
+## @param imageName {string} Override the broker image. Empty means rabbitmq:{version}-management, which is what keeps minor upgrades automatic.
+## @internal A pinned image defeats automatic minor upgrades, so it is a platform escape hatch rather than a tenant setting. ⚠ It is NOT the same thing as leaving spec.image unset — the operator's MUTATING WEBHOOK fills spec.image from its own build-time default when the field is absent, so "no image" is the operator's RabbitMQ rather than the tenant's version. Both this row and RabbitmqClusters.Image exist so that /properties/version means what it says.
+imageName: ""
+
+## @param nameOverride {string} Replace the generated object-name stem. Empty means derive it from the release name.
+## @internal Helm plumbing. Nothing about it belongs in a resource body.
+nameOverride: ""
