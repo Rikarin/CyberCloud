@@ -106,16 +106,30 @@ public sealed class OtpSeamWiringTests {
     }
 
     [Fact]
-    public void TheRefusingSeamNeedsNothingTheRealOneNeeds() {
-        // ⚠ Asserted by the absence below rather than in prose: Resolve() registers no IMessageSender,
-        // so a default that had quietly become CommunicationOtpDelivery would throw here instead of
-        // returning. That is what makes the first test above a real assertion rather than a tautology
-        // about whichever type happened to be registered.
-        var services = new ServiceCollection();
+    public void AnUnwiredSiloResolvesItsSeamWithNoCommunicationModuleInTheContainerAtAll() {
+        // ⚠ NO IMessageSender HERE, AND THE ABSENCE IS THE ASSERTION. Every other row in this class
+        // goes through Compose(), which supplies a double so the WIRED cases can construct. This one
+        // deliberately does not: an unwired silo must be able to resolve its IOtpDeliverySeam without
+        // CyberCloud.Communication being present, because such a silo has not called
+        // AddCyberCloudCommunication and has no IMessageSender to give.
+        //
+        // That is what makes "the default is UnavailableOtpDelivery" load-bearing rather than
+        // cosmetic. If the default ever became CommunicationOtpDelivery, this resolution throws an
+        // InvalidOperationException naming IMessageSender — at the first ACTIVATION on a real silo,
+        // not at start-up, and with a stack trace in place of the sentence UnavailableOtpDelivery
+        // was written to hand an operator.
+        var builder = new ServiceCollectionSiloBuilder();
+        builder.AddCyberCloudIdentity();
 
-        services.Any(x => x.ServiceType == typeof(IMessageSender)).ShouldBeFalse();
+        builder.Services.Any(x => x.ServiceType == typeof(IMessageSender)).ShouldBeFalse(
+            "AddCyberCloudIdentity must not drag the sending module into a silo that did not ask "
+            + "for it — module independence, docs/plan/17"
+        );
 
-        Seam(silo => silo.AddCyberCloudIdentity()).ShouldNotBeNull();
+        builder.Services
+            .BuildServiceProvider()
+            .GetRequiredService<IOtpDeliverySeam>()
+            .ShouldBeOfType<UnavailableOtpDelivery>();
     }
 
     /// <summary>
