@@ -1,0 +1,85 @@
+# A managed Kubernetes cluster — the configuration surface, once.
+#
+# ⚠ EVERY NON-`@internal` BLOCK BELOW IS GENERATED from ManagedClusters.Schema2026 by
+# `./build.sh Charts`, and so is values.schema.json. ADR-010 § Which end authors the schema: "The C#
+# ResourceSchema is authored. The chart's @param annotations are generated from it and diffed."
+# Editing a generated row here is undone on the next run and fails the build in between; add the
+# field in C# instead.
+#
+# ⚠ THE SURFACE IS SMALL AND THE ABSENCES ARE THE INTERESTING PART. There is no exposure setting,
+# because there is nowhere upstream to attach a CIDR allow-list and docs/plan/12 § Cross-cutting
+# decisions requires one; no `addons`, because an addon is installed inside the cluster this creates
+# and the platform cannot reach that cluster; and no `subnetId`, because that is another provider's
+# resource. All three are argued at ManagedClusters.Schema2026 and recorded in conformance.yaml § owed.
+
+## @param version {string} The Kubernetes minor version of the control plane. The patch level is the platform's. ⚠ Upgrade the control plane before the node pools and by at most one minor at a time; a node pool may run up to three minors behind and may never run ahead. Neither rule is enforced by this API today — an illegal pair is refused by the cluster's own admission, after the create was accepted.
+## @required
+## @enum 1.32 | 1.33
+version: "1.33"
+
+## @param controlPlane {object} The control plane, which runs as pods in the management cluster.
+controlPlane:
+  ## @param replicas {integer} How many copies of the API server, controller manager and scheduler to run. Two survives a node failure; one is offered for development. ⚠ Unlike an etcd quorum this is a plain replica count — the datastore is separate and is shared — so an even number is not the mistake it would be on a Raft member set.
+  ## @required
+  ## @range 1..5
+  replicas: 2
+
+## @param network {object} The address space of the cluster being created.
+network:
+  ## @param podCidr {string} The CIDR block pods are addressed from. ⚠ It must not overlap the management cluster's own pod or service range, and nothing checks that — an overlap produces a cluster whose nodes route the platform's addresses to themselves.
+  ## @required
+  ## @immutable
+  ## @pattern ((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.){3}(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)/([0-9]|[12]\d|3[0-2])
+  ## @example "10.244.0.0/16"
+  ## @widget cidr
+  podCidr: "10.244.0.0/16"
+  ## @param serviceCidr {string} The CIDR block Service cluster IPs are allocated from. The same overlap warning applies.
+  ## @required
+  ## @immutable
+  ## @pattern ((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.){3}(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)/([0-9]|[12]\d|3[0-2])
+  ## @example "10.96.0.0/12"
+  ## @widget cidr
+  serviceCidr: "10.96.0.0/12"
+
+## @param monitoring {object} What the platform scrapes.
+monitoring:
+  ## @param enabled {boolean} Whether the control plane's own metrics endpoints are scraped. On by default — docs/plan/12: "a managed service the tenant cannot see the health of is a black box they will not trust with production". ⚠ It covers the control plane, which runs in the management cluster. Nothing scrapes inside the cluster being created; that needs an agent in the bundle.
+  enabled: true
+
+## @param platform {object} Resource identity injected by the reconciler. Not a tenant-facing setting.
+## @internal Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.
+platform:
+  ## @param tenantId {string} Tenant GUID, rendered into the cybercloud.io/tenant-id label.
+  tenantId: ""
+  ## @param subscriptionId {string} Subscription GUID, rendered into the cybercloud.io/subscription-id label.
+  subscriptionId: ""
+  ## @param resourceGroup {string} Resource group name, rendered into the cybercloud.io/resource-group label.
+  resourceGroup: ""
+  ## @param resourceId {string} Resource GUID, rendered into the cybercloud.io/resource-id label.
+  resourceId: ""
+  ## @param resourceType {string} Fully qualified resource type, rendered into the cybercloud.io/resource-type label.
+  resourceType: CyberCloud.ContainerService/managedClusters
+  ## @param apiVersion {string} The api-version the resource was last written at, rendered into the cybercloud.io/api-version label.
+  apiVersion: "2026-08-01"
+  ## @param managedBy {string} Value of the cybercloud.io/managed-by label. Constant, and the selector every informer filters on.
+  managedBy: cybercloud
+
+## @param dataStoreName {string} The Kamaji DataStore the control plane keeps its state in.
+## @internal A DataStore is CLUSTER-SCOPED, so it cannot be a per-tenant object this platform creates — it is installed with Kamaji and named here. ADR-009 asks for a dedicated etcd per tenant and this is not that; see conformance.yaml § owed.
+dataStoreName: default
+
+## @param serviceDomain {string} The DNS domain of the cluster being created.
+## @internal Cluster API does not default it and Kamaji freezes it on first write, so it must be set at creation and can never be changed. Every chart and sidecar in the ecosystem assumes cluster.local, so it is a constant rather than a setting.
+serviceDomain: cluster.local
+
+## @param controlPlaneCpu {string} CPU request per control-plane container.
+## @internal Platform-chosen. A Kubernetes API server's working set is a function of the objects in it rather than of anything on this form, so a "control plane size" would be a number nobody can choose correctly. It is also what the quota meters reserve against.
+controlPlaneCpu: 500m
+
+## @param controlPlaneMemory {string} Memory request per control-plane container.
+## @internal The other half of controlPlaneCpu.
+controlPlaneMemory: 1Gi
+
+## @param nameOverride {string} Replace the generated object-name stem. Empty means derive it from the release name.
+## @internal Helm plumbing. Nothing about it belongs in a resource body.
+nameOverride: ""

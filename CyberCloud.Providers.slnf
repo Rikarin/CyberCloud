@@ -63,6 +63,12 @@
       "src/Providers/CyberCloud.Providers.DBforMySQL/CyberCloud.Providers.DBforMySQL.Tests/CyberCloud.Providers.DBforMySQL.Tests.csproj",
       "src/Providers/CyberCloud.Providers.DBforMySQL/CyberCloud.Providers.DBforMySQL.Conformance/CyberCloud.Providers.DBforMySQL.Conformance.csproj",
       "src/Providers/CyberCloud.Providers.DBforMySQL/CyberCloud.Providers.DBforMySQL.Cluster.Conformance/CyberCloud.Providers.DBforMySQL.Cluster.Conformance.csproj",
+      "src/Providers/CyberCloud.Providers.ContainerService/CyberCloud.Providers.ContainerService.Contracts/CyberCloud.Providers.ContainerService.Contracts.csproj",
+      "src/Providers/CyberCloud.Providers.ContainerService/CyberCloud.Providers.ContainerService/CyberCloud.Providers.ContainerService.csproj",
+      "src/Providers/CyberCloud.Providers.ContainerService/CyberCloud.Providers.ContainerService.Application/CyberCloud.Providers.ContainerService.Application.csproj",
+      "src/Providers/CyberCloud.Providers.ContainerService/CyberCloud.Providers.ContainerService.Tests/CyberCloud.Providers.ContainerService.Tests.csproj",
+      "src/Providers/CyberCloud.Providers.ContainerService/CyberCloud.Providers.ContainerService.Conformance/CyberCloud.Providers.ContainerService.Conformance.csproj",
+      "src/Providers/CyberCloud.Providers.ContainerService/CyberCloud.Providers.ContainerService.Cluster.Conformance/CyberCloud.Providers.ContainerService.Cluster.Conformance.csproj",
       "test/CyberCloud.Conformance/CyberCloud.Conformance.csproj",
       "test/CyberCloud.Cluster.Conformance/CyberCloud.Cluster.Conformance.csproj"
     ]

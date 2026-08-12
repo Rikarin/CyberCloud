@@ -1,0 +1,51 @@
+# A managed Kubernetes cluster — docs/plan/13 § Managed Kubernetes, "CyberCloud.ContainerService/
+# managedClusters · M1 · 4.0 EM", on the substrate docs/plan/09 § Kubernetes in Kubernetes describes
+# and ADR-009 decides: Cluster API + Kamaji + KubeVirt.
+#
+# ⚠ IT IS UNDER charts/managed/ AND charts/README.md's OWN DIRECTORY SKETCH SAYS charts/tenant-cluster/.
+# That sketch is corrected rather than honoured. `Build.Charts` requires SOURCE, conformance.yaml and
+# both cybercloud.io/* annotations only for a chart under charts/managed/, so a chart outside it is a
+# managed service that quietly owes no conformance manifest — docs/plan/12 § The pattern, once's eighth
+# piece, dropped by a directory name. A managed Kubernetes cluster is a catalogue row like every other.
+#
+# ⚠ THIS IS THE FIRST CHART IN THE TREE WHOSE PRODUCT IS A KUBERNETES API SERVER. Everything it
+# renders is a REQUEST for a cluster; the cluster itself is made by three controllers this chart does
+# not install. See conformance.yaml § owed, `converged-is-not-ready`.
+apiVersion: v2
+name: kubernetes
+description: A managed Kubernetes cluster — a Kamaji-hosted control plane, a KubeVirt infrastructure, and the Cluster API object that stitches them together.
+type: application
+
+# The chart's own version. Bumped on every change to this directory.
+#
+# ⚠ A PATCH-LEVEL KUBERNETES VERSION MOVES THIS AND NOT THE api-version. ManagedClusters.PinnedPatch
+# maps each offered minor to the full version rendered into the control plane; a patch is not an API
+# change and no stored resource body carries one.
+version: 0.1.0
+
+# ⚠ THREE UPSTREAM PROJECTS AND appVersion CAN ONLY NAME ONE, so it names the one whose contract the
+# other two implement. The versions of all three are in SOURCE, which is where a reader needs them.
+appVersion: "1.14.0"
+
+kubeVersion: ">=1.31.0-0"
+
+keywords:
+  - kubernetes
+  - cluster-api
+  - kamaji
+  - kubevirt
+
+home: https://cluster-api.sigs.k8s.io
+sources:
+  - https://github.com/kubernetes-sigs/cluster-api
+  - https://github.com/clastix/cluster-api-control-plane-provider-kamaji
+  - https://github.com/kubernetes-sigs/cluster-api-provider-kubevirt
+
+maintainers:
+  - name: Cyber Cloud Platform
+
+# ⚠ These three are read by `Build.Charts` and written into `values.schema.json` as `x-cybercloud-*`.
+annotations:
+  cybercloud.io/resource-type: CyberCloud.ContainerService/managedClusters
+  cybercloud.io/api-version: "2026-08-01"
+  cybercloud.io/operator: cluster-api-control-plane-provider-kamaji

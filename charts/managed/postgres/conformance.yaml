@@ -62,3 +62,59 @@ meters:
   - postgres.instance.hours
   - postgres.storage.gib.hours
   - postgres.backup.gib.hours
+
+# ── owed ──────────────────────────────────────────────────────────────────────────────────────
+#
+# Named here rather than left to be discovered, because an absent capability that nobody wrote down
+# is indistinguishable from one nobody thought of. The convention is charts/managed/ferretdb's.
+owed:
+  - id: shared-preload-libraries-is-not-a-parameter
+    status: closed
+    closed: 2026-08-12
+    says: >
+      ⚠ CLOSED, AND KEPT BECAUSE THE SHAPE OF THE MISS IS WORTH MORE THAN THE FIX.
+      PostgresServers.ClusterJson and templates/cluster.yaml both wrote
+      `spec.postgresql.parameters.shared_preload_libraries` whenever /properties/extensions was
+      non-empty. CloudNativePG declares that key as `AdditionalLibraries []string` on
+      PostgresConfiguration — a SIBLING of `parameters` (api/v1/cluster_types.go) — lists it in
+      FixedConfigurationParameters (pkg/postgres/configuration.go), and its validating webhook walks
+      spec.postgresql.parameters and answers a fixed key with "Can't set fixed configuration
+      parameter" (internal/webhook/v1/cluster_webhook.go). So every server created with pgvector,
+      postgis, pg_stat_statements or timescaledb was refused at admission AFTER the caller was told
+      202. Both spellings now render a list beside `parameters`.
+      ⚠ THE DEFAULT IS `[]`, WHICH IS THE WHOLE REASON IT SURVIVED. Every test and every manual run
+      used a body that named no extension, so the one placement that is refused was the one nothing
+      exercised, and the suite that would notice cannot: the cluster-backed conformance suites run
+      against a bare k3s with no CloudNativePG operator and no admission webhook, so a green cluster
+      run is not evidence about this and never was.
+      ⚠ AND IT WAS FOUND BY WRITING THE SECOND RENDERING, not by reading the first.
+      CyberCloud.Providers.DocumentDB renders the same CRD independently — src/Providers/README.md
+      § Hard rule forbids sharing a renderer — and got it right, which is what made the disagreement
+      visible. Recorded at charts/managed/ferretdb/conformance.yaml § owed until 2026-08-12.
+  - id: the-cluster-pair-is-held-together-by-one-test
+    says: >
+      templates/cluster.yaml and PostgresServers.ClusterJson are two hand-maintained spellings of one
+      CloudNativePG Cluster and NOTHING in ./build.sh compares them. ChartSurfaces filters
+      `templates/` out of the chart tree on purpose and build/Build.Charts.cs line-filters the same
+      directory, so no emitter has ever read a Helm template — ADR-012's fifth surface reaches
+      values.yaml and stops there. What holds the pair together is
+      ChartRegistryPairTests.TheChartPutsThePreloadLibrariesBesideParametersAndNotInsideThem and
+      PostgresReconcilerTests.ThePreloadLibrariesAreASiblingOfParametersInBothSpellings, which assert
+      one field each by regular expression over the template. ⚠ That is a check per field somebody
+      remembered, not a check of the object, and `shared-preload-libraries-is-not-a-parameter` above
+      is what a field nobody remembered costs. Closing it is an emitter that renders the chart and
+      diffs it against the registry's projection, which is a seam ChartSurfaces does not have.
+  - id: extension-names-are-not-library-names
+    says: >
+      /properties/extensions is one list used as two vocabularies: it reaches
+      `bootstrap.initdb.postInitApplicationSQL` as `CREATE EXTENSION IF NOT EXISTS <value>` and
+      `spec.postgresql.shared_preload_libraries` as a library name, and PostgreSQL does not agree
+      that those are the same string. `pgvector` installs as the extension `vector`; `pgvector` and
+      `postgis` need no preload entry at all, while `timescaledb` and `pg_stat_statements` do. So the
+      allow-list as spelled produces a CREATE EXTENSION that fails for pgvector and asks the
+      postmaster to preload two libraries that do not exist. ⚠ Noticed while moving the key out of
+      `parameters` and deliberately NOT fixed there: the placement was a live 422 on every extension
+      body and this is a different defect with a different fix — a table mapping each allowed value
+      to its extension name and its preload requirement, which is a schema-shaped change rather than
+      a rendering one. Closing it also wants one run against a real cluster per allowed value, which
+      is what `extensions-are-the-allow-list` above already asks for and nothing yet runs.

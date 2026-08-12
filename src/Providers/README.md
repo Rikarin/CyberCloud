@@ -438,15 +438,18 @@ operator's CRD.
   `CyberCloud.DBforPostgreSQL/servers` and § Hard rule below forbids the reference, so this provider
   renders the CloudNativePG `Cluster` CRD independently. Writing the second rendering surfaced the
   first one's: `PostgresServers.ClusterJson` and `charts/managed/postgres/templates/cluster.yaml`
-  both write `spec.postgresql.parameters.shared_preload_libraries`, and CloudNativePG declares that
+  both wrote `spec.postgresql.parameters.shared_preload_libraries`, and CloudNativePG declares that
   key as a **sibling** of `parameters` (`api/v1/cluster_types.go`,
   `AdditionalLibraries []string json:"shared_preload_libraries"`), lists it in
   `FixedConfigurationParameters` (`pkg/postgres/configuration.go`), and refuses it inside
   `parameters` from its validating webhook (`internal/webhook/v1/cluster_webhook.go`, *"Can't set
-  fixed configuration parameter"*). **Every Postgres server created with an extension is rejected at
+  fixed configuration parameter"*). **Every Postgres server created with an extension was rejected at
   admission after the caller was told `202`.** The default body asks for none, which is why nothing
-  had noticed. Not fixed here — that provider is not this one's — and recorded at
-  `charts/managed/ferretdb/conformance.yaml § owed`.
+  had noticed. Fixed in that provider on 2026-08-12 — both spellings, plus one test each, because
+  nothing in `./build.sh` compares a Helm template to a registry — and recorded at
+  `charts/managed/postgres/conformance.yaml § owed`. **The lesson survives the fix**: the duplication
+  § Hard rule forces is not only a cost, it is a second opinion, and it is the only reader either
+  rendering has ever had.
 - **⚠ Piece 6 takes BOTH of its branches on one resource, which nothing had done.** CloudNativePG
   answers the first branch (`spec.monitoring.enablePodMonitor`) for the PostgreSQL half; there is no
   operator to ask for the FerretDB half, so the chart hand-writes a `PodMonitor`. The second
@@ -610,9 +613,132 @@ already a customer of.
   needed no fifth edge and no seventh project. ⚠ It *wants* a fifth edge for the S3 cold tier and
   did not take one; that is the open request recorded above, not a satisfied dependency.
 
+`CyberCloud.Providers.ContainerService` — `CyberCloud.ContainerService/managedClusters` and its
+`agentPools` child, on Cluster API + Kamaji + KubeVirt.
+[13 § Managed Kubernetes](../../docs/plan/13-compute-vm-containers.md), **M1 · 4.0 EM**, with
+[09 § Kubernetes in Kubernetes](../../docs/plan/09-kubernetes-fabric.md) as the substrate and ADR-009
+as the decision. **The first provider whose product is a Kubernetes API server.**
+
+### What the tenth provider measured
+
+- **⚠ THE RESOURCE'S PRODUCT IS NOT THE OBJECTS IT APPLIES, AND THAT IS THE FIRST TIME.** Nine
+  families render objects into a cluster the platform owns and the tenant never sees; what they sell
+  is a workload, and "the operator will get there" makes spec containment a fair proxy for it. This
+  one renders three Cluster API objects whose *effect* is a second cluster. A `Cluster` whose spec
+  reads back perfectly can be a tenant with no API server, no nodes and no kubeconfig — docs/plan/09
+  budgets **six to nine minutes** between those two states. So `ManagedClusterReconciler` is the only
+  reconciler in the tree whose `Converged` reads a `status`, and it reports Cluster API's own
+  condition messages as progress, which is what docs/plan/08 means by *"what turns a four-minute
+  cluster creation from a spinner into a story"*.
+  <br>⚠ **Its third answer is a hole and it is named rather than hidden.** An object with no `status`
+  at all **converges**. The platform cannot distinguish "Cluster API has not looked yet" from
+  "Cluster API is not running", and — decisively — **neither conformance harness can produce anything
+  else**: `FakeKubeCluster` echoes an apply back with no status and the k3s harness installs a
+  schema-less CRD stub with no controller behind it. A reconciler that refused would never converge
+  in either suite, and *"a provider is not registered until it passes"* would make the row
+  unshippable. What keeps the hole small is that a management cluster with no Cluster API **fails at
+  the apply, by name**. `charts/managed/kubernetes/conformance.yaml § owed`,
+  `converged-is-not-ready`.
+- **⚠ The first type to draw `QuotaMeter.Clusters`, and the shared conformance harness could not host
+  it — which is the second sighting of a budget nobody had spent and the first that is fatal rather
+  than tuneable.** That meter has existed since `QuotaGrain` was written (`Defaults` gives it **5**)
+  and `MeterCatalog` already bills `BillingMeter.ClusterHours` off it as *"Managed Kubernetes clusters
+  × hours"*; nine families shipped without declaring it because none of them is a cluster. The suite
+  creates against **one** subscription twenty-eight times and nothing releases in between, so the
+  sixth assertion onwards failed with a quota error naming neither the provider nor the harness.
+  `CyberCloud.Providers.Search` met the same wall and could tune its way out by choosing a smaller
+  service; **a cluster cannot ask for less than one cluster.** `ProviderTestCluster.LiftQuotaAsync`
+  and its twin in `ClusterConformanceHarness` close it for every provider, which discharges
+  `charts/managed/opensearch/conformance.yaml § owed`'s
+  `conformance-quota-is-a-budget-per-provider` rather than diagnosing it.
+- **⚠ The first child type that CHANGES its parent, and therefore the first whose quota is not a
+  create-time constant.** `CyberCloud.Storage/accounts/buckets` declares `meters: []` and argues —
+  correctly — that a bucket is a ceiling inside capacity its account already reserved. An agent pool
+  is the opposite: a managed cluster with no pools has **no worker nodes at all**, so every worker
+  VM's vCPU, memory and disk is reserved on the child or nowhere. And with an autoscaler on, the
+  number of machines is moved by a controller the platform does not observe — so `EffectiveCount`
+  reserves **`maxCount` rather than `count`**, which is a meter whose input is a *ceiling* rather than
+  a *size* and is a shape nothing in the catalogue had. ⚠ A reservation is not a bill: docs/plan/22's
+  usage pipeline samples what ran, and the two disagreeing here is not a bug in either.
+- **⚠ Also the first child that is not structurally smaller than its parent.** Three objects against
+  its parent's three, three derived meters against its parent's two. *"A child is a smaller thing
+  than its parent"* turns out to have been a fact about object storage.
+- **⚠ docs/plan/13 and docs/plan/09 disagree about whether a BYO cluster is this type, and three
+  platform facts decide it rather than a preference.** docs/plan/13 puts both flavours behind one
+  type with a `kind` discriminator; docs/plan/09 § Cluster connections spells them as two paths.
+  `ResourceSchema` has no conditional, so a discriminated body makes `network.podCidr` required for
+  one flavour and meaningless for the other; every derived meter would be **zero** for a `Connected`
+  cluster, which `QuotaGrain.TryReserveAsync`'s positive-amount refusal makes undeclarable (**fourth
+  sighting**); and *"returns `null` for node-pool operations"* has nowhere to live, because a node
+  pool is a child resource **type** and a PUT to one either creates a resource or answers `404`.
+- **⚠ docs/plan/13's "the API enforces [version skew] with a clear error" is REFUTED, and the reason
+  is the seam `charts/managed/seaweedfs-bucket` already recorded.** A node pool's version lives in a
+  *different resource* from its cluster's and `ResourceSchema` validates one body against constants.
+  Second sighting of `bucket-cluster-may-differ-from-its-accounts`, and the first where the
+  consequence is a broken cluster rather than an unreconciled object. `SkewIsLegal` and
+  `UpgradeIsLegal` exist, are tested, and are called by **nothing** on the write path — deliberately,
+  so closing the seam is wiring rather than writing. ⚠ docs/plan/13's *"at most one minor"* is also
+  about a different rule than it looks: that is the control plane's own **step size**; the kubelet
+  rule is **three** minors, and has been since Kubernetes 1.28.
+- **⚠ ADR-009's "a dedicated etcd per tenant" is not honoured, and the blocker is a SCOPE rather than
+  a cost.** Kamaji's `DataStore` is **cluster-scoped** (`kamaji.clastix.io_datastores.yaml`,
+  `scope: Cluster`). Every object this platform applies is namespaced and lives inside
+  `{subscriptionId:N}-{resourceGroup}`; a cluster-scoped object has no namespace to be isolated by,
+  so two tenants would compete for one name in one flat space. What is given up is stated rather than
+  glossed: tenant control planes share an etcd, which is a **blast-radius** boundary rather than a
+  data-visibility one. ⚠ The same shape blocks the KubeVirt instancetype catalogue, which is also
+  cluster-scoped and also named rather than created — two independent features wanting the same
+  missing mechanism, which is what turns it into a finding.
+- **⚠ The cluster this provider creates is NOT reachable afterwards, and that is the M1 exit story's
+  fourth step.** docs/plan/24: *"create an in-house Kubernetes cluster … → create a VPC and a Postgres
+  server **in it**"*. `IClusterConnectionGrain.AttachAsync` exists, `ClusterConnectionKind.InHouse`
+  exists, and `IKubeApiClientFactory` has a case for it — and **nothing in the shipping tree calls
+  `AttachAsync`**, grepped rather than assumed. It is blocked by a missing *write*, not by a missing
+  module edge, and `module-layering.txt` records why the edge is refused and what the alternative is.
+- **⚠ The API server is deliberately unreachable from outside, and it is the second sighting of an
+  upstream `ServiceSpec` with nowhere to put a firewall.** docs/plan/12 § Cross-cutting decisions
+  requires an explicit CIDR allow-list on any exposure. The KubeVirt provider's `ServiceSpecTemplate`
+  has exactly **one** field, `type`; Kamaji's `NetworkComponent` has `serviceAnnotations` and no
+  `loadBalancerSourceRanges`. So `serviceType: ClusterIP` is rendered — **overriding a CRD default of
+  `LoadBalancer`**, which is the one line standing between this row and a publicly reachable Kubernetes
+  API server per tenant. `charts/managed/seaweedfs` found the first sighting and declared the whole
+  exposure axis absent over it; this one declares no exposure property at all, because a property that
+  renders nothing is worse than the absence.
+- **⚠ `Matches` is containment for a reason that is a WEBHOOK on one type and a CRD MARKER on the
+  other, and a reader who checked only for markers would get the pool wrong.** The
+  `KamajiControlPlane` CRD carries five `+kubebuilder:default`s on its top-level spec; **neither
+  `MachineDeploymentSpec` nor `MachineSpec` carries a single one**, and Cluster API's *mutating
+  webhook* writes `replicas`, the whole rollout strategy, two labels into the selector *and* the
+  template, and a `v` prefix onto the version instead. ⚠ **Measured**: an equality comparison was run
+  against both, and `ManagedClusterMatchesTests.AnObjectCarryingTheCrdsOwnDefaultsStillMatches` was
+  the only red thing in the tree while the shared suite stayed **58 of 58 green** — an exact
+  reproduction of what `CyberCloud.Providers.Search` measured, on a different provider and a different
+  defaulting mechanism.
+- **⚠ The structural statelessness check's blind spot, confirmed a SIXTH time — and this sighting
+  differs from the five before it.** A `readonly Dictionary` cache added to
+  `ManagedClusterReconciler` left `ReconcilerConformance.CheckNoHiddenState` **green**; it failed
+  `OneReconcilerInstanceServesTwoTenantsWithoutMixingThem` *and*, unlike every earlier sighting, one
+  shared-suite assertion (`APutWithADifferentBodyReachesTheClusterAsWell`) — because this cache keyed
+  on a resource name the suite reuses. That is luck rather than coverage, and the cross-tenant test is
+  still the one that is guaranteed to catch it.
+- **⚠ The `object-matches-desired-cannot-see-an-address` limit, second sighting, and this time it was
+  DEMONSTRATED.** Flattening `AgentPools.ObjectNameOf` so two clusters' pools collide on one
+  `MachineDeployment` left the shared suite **58 of 58 green** and failed only two hand-written tests.
+  On a bucket that mistake produces two buckets fighting over one object; here it moves every worker
+  VM in a resource group between two tenants' clusters on each pass.
+- **Four module edges, six projects, one `ProviderConformanceCase` per type — a tenth family with
+  identical columns**, for a resource that renders three custom resources across three API groups from
+  **three separate upstream projects** and whose child renders three more across three more. ⚠ It was
+  expected to need a fifth edge — a cluster's kubeconfig is what would let the platform reach it — and
+  it does not; the refusal and the alternative are in `module-layering.txt`.
+- **The chart-annotation emitter's output is predictable by hand — a fifth and sixth sighting.** Both
+  charts' `@param` blocks were written to match what `ChartAnnotationEmitter` would produce and came
+  back **unchanged on the first `./build.sh Charts` run**. Only `values.schema.json` had to be
+  generated.
+
 ## Planned namespaces
 
-`Platform`, `Identity`, `ContainerService`, `Compute`, `ContainerInstance`, `ContainerRegistry`,
+`Platform`, `Identity`, `Compute`, `ContainerInstance`, `ContainerRegistry`,
 `Network`, `Storage`, `Data`, `Messaging`, `KeyVault`, `Security`, `Monitor`, `Communication`,
 `Mail`, `Terminal`, `DesktopVirtualization` — see
 [docs/plan/03 § Providers](../../docs/plan/03-repository-layout.md).

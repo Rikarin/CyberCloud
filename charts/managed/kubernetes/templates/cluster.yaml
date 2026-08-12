@@ -1,0 +1,152 @@
+{{/*
+The three Cluster API objects a managed Kubernetes cluster is.
+
+⚠ THREE OBJECTS IN THREE API GROUPS FROM THREE UPSTREAM PROJECTS, AND THIS CHART INSTALLS NONE OF
+THEM. Cluster API core, the Kamaji control-plane provider and the KubeVirt infrastructure provider are
+the platform bundle's; a management cluster without them refuses these applies by name, which is the
+one failure mode on this row that is loud.
+
+⚠ THE ORDER IS PART OF THE DESIGN. Helm applies a rendered manifest in kind order rather than document
+order, so this file's order is for a reader; the RECONCILER applies infrastructure, then control
+plane, then Cluster, because the Cluster names the other two and Cluster API reports an unresolvable
+reference as a condition on an object nothing in this platform reads.
+*/}}
+{{/*
+──────────────────────────────────────────────────────────────────────────────────────────────────
+The infrastructure. It creates nothing.
+
+⚠ ITS SPEC IS EMPTY AND THE ANNOTATION IS THE WHOLE OBJECT. `cluster.x-k8s.io/managed-by` makes the
+KubeVirt provider's controller return immediately — no load-balancer Service, no SSH-key Secret, no
+status.ready — and the Kamaji provider then patches spec.controlPlaneEndpoint and status.ready onto
+this object itself, through a hardcoded switch in which KubevirtCluster is a listed case. Drop the
+annotation and two controllers both believe they own the endpoint.
+*/}}
+apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
+kind: KubevirtCluster
+metadata:
+  name: {{ include "kubernetes.objectName" . }}
+  labels:
+    {{- include "kubernetes.platformLabels" . | nindent 4 }}
+  annotations:
+    cluster.x-k8s.io/managed-by: kamaji
+spec: {}
+---
+{{/*
+──────────────────────────────────────────────────────────────────────────────────────────────────
+The control plane. This is the object the tenant is buying: kube-apiserver, kube-controller-manager
+and kube-scheduler as pods in the management cluster, per ADR-009.
+*/}}
+apiVersion: controlplane.cluster.x-k8s.io/v1alpha2
+kind: KamajiControlPlane
+metadata:
+  name: {{ include "kubernetes.controlPlaneName" . }}
+  labels:
+    {{- include "kubernetes.platformLabels" . | nindent 4 }}
+spec:
+  {{/*
+    ⚠ IT NAMES A CLUSTER-SCOPED OBJECT THIS CHART DOES NOT CREATE, AND KAMAJI'S WEBHOOK REFUSES A NAME
+    THAT DOES NOT RESOLVE — "<name> DataStore does not exist", on the TenantControlPlane the provider
+    derives from this object rather than on this object. So an install with `kamaji-etcd.deploy=false`
+    fails every cluster create with nothing on the Cluster to say so.
+  */}}
+  dataStoreName: {{ .Values.dataStoreName | quote }}
+
+  replicas: {{ .Values.controlPlane.replicas }}
+
+  {{/*
+    ⚠ A FULL SEMANTIC VERSION, BECAUSE KAMAJI COMPARES ONE. The resource body says `1.33`; a
+    two-component string is not a semver and the version webhook parses one.
+  */}}
+  version: {{ include "kubernetes.pinnedVersion" . | quote }}
+
+  {{/*
+    ⚠ ClusterIP OVERRIDES A CRD DEFAULT OF LoadBalancer, AND IT IS THE MOST CONSEQUENTIAL LINE IN THIS
+    CHART. Rendering nothing here publishes every tenant's Kubernetes API server on a public address
+    with no allow-list. There is nowhere upstream to put a CIDR list — the KubeVirt provider's
+    ServiceSpecTemplate has exactly one field and Kamaji's NetworkComponent has no
+    loadBalancerSourceRanges — and docs/plan/12 § Cross-cutting decisions requires one on any exposure.
+    So the cluster is reachable from inside the management cluster and from nowhere else, which is
+    conformance.yaml § owed, `api-server-has-no-restrictable-exposure`.
+  */}}
+  network:
+    serviceType: ClusterIP
+
+  {{/*
+    ⚠ THREE BLOCKS WITH THE SAME FIGURES, BECAUSE THERE IS NO "all of them". The CRD takes apiServer,
+    controllerManager and scheduler separately — which is also why the quota meters multiply the
+    replica count by three.
+
+    ⚠ AND THE SHAPE OF THESE BLOCKS IS THE WEAKEST CLAIM IN THIS CHART. SOURCE says so in as many
+    words: the review recorded the three fields as `ControlPlaneComponent` without reading that
+    struct's members. If it carries no `resources` block, every KamajiControlPlane here is refused by
+    the CRD's own schema at apply time.
+  */}}
+  apiServer:
+    resources:
+      {{- include "kubernetes.controlPlaneResources" . | nindent 6 }}
+  controllerManager:
+    resources:
+      {{- include "kubernetes.controlPlaneResources" . | nindent 6 }}
+  scheduler:
+    resources:
+      {{- include "kubernetes.controlPlaneResources" . | nindent 6 }}
+
+  {{/*
+    ⚠ NO `addons` BLOCK. Kamaji offers CoreDNS, kube-proxy and konnectivity, and each is software
+    installed INSIDE the cluster being created. Leaving the block out takes the provider's own
+    defaults, which is the honest position for a platform that cannot see inside that cluster to check
+    the result.
+
+    ⚠ NO `registry` OVERRIDE. The CRD defaults it to registry.k8s.io, which is where a reader would
+    expect control-plane images to come from, and a platform mirror is a bundle decision rather than a
+    per-cluster one.
+  */}}
+---
+{{/*
+──────────────────────────────────────────────────────────────────────────────────────────────────
+The Cluster. It stitches the other two together and owns the address space.
+*/}}
+apiVersion: cluster.x-k8s.io/v1beta2
+kind: Cluster
+metadata:
+  name: {{ include "kubernetes.objectName" . }}
+  labels:
+    {{- include "kubernetes.platformLabels" . | nindent 4 }}
+spec:
+  clusterNetwork:
+    {{/*
+      ⚠ ONE BLOCK PER FAMILY, NOT A LIST, AND UPSTREAM IS WHY. The schema allows up to a hundred CIDR
+      blocks; the Kamaji provider reads index 0 for pods and index 0 for services. A tenant offered a
+      list could ask for dual-stack and get single-stack with nothing reporting it.
+    */}}
+    pods:
+      cidrBlocks:
+        - {{ .Values.network.podCidr | quote }}
+    services:
+      cidrBlocks:
+        - {{ .Values.network.serviceCidr | quote }}
+    {{/*
+      ⚠ WRITTEN AT CREATION BECAUSE IT CANNOT BE ADDED LATER. Cluster API does not default it — no
+      +kubebuilder:default and no webhook defaulting — and the Kamaji provider copies it into a field
+      whose CEL rule is `self == oldSelf` with the message "changing the cluster domain is not
+      supported". An empty value takes Kamaji's own default and then freezes.
+    */}}
+    serviceDomain: {{ .Values.serviceDomain | quote }}
+
+  {{/*
+    ⚠ NEITHER REF CARRIES AN apiVersion, AND THAT IS CLUSTER API v1beta2 RATHER THAN AN OMISSION. A
+    ContractVersionedObjectReference is {apiGroup, kind, name}; the version is resolved from a
+    `cluster.x-k8s.io/<contract>` label on the provider's own CRD. See conformance.yaml § owed,
+    `capk-crd-carries-the-v1beta1-contract-label`, for the one upstream fact most likely to break this.
+
+    ⚠ AND NEITHER IS CHECKED BY ANYTHING AT APPLY TIME. A ref naming an object that does not exist is
+    admitted, stored, and reported as a condition on an object nothing in this platform reads.
+  */}}
+  controlPlaneRef:
+    apiGroup: controlplane.cluster.x-k8s.io
+    kind: KamajiControlPlane
+    name: {{ include "kubernetes.controlPlaneName" . }}
+  infrastructureRef:
+    apiGroup: infrastructure.cluster.x-k8s.io
+    kind: KubevirtCluster
+    name: {{ include "kubernetes.objectName" . }}

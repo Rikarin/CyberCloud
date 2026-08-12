@@ -1,0 +1,205 @@
+# Conformance manifest — docs/plan/12 § The pattern, once, piece 8.
+#
+# What the conformance suite asserts about CyberCloud.ContainerService/managedClusters/agentPools.
+# This file is data: `Build.Charts` checks that it is present, non-empty, and names the same resource
+# type as Chart.yaml.
+#
+# ⚠ THE MILESTONE IS RECORDED RATHER THAN QUIETLY CHOSEN, BECAUSE THE TWO DOCUMENTS DISAGREE.
+# docs/plan/13 § Managed Kubernetes lists `agentPools` as a SUB-RESOURCE of its M1 row; docs/plan/01
+# § The catalogue gives "AKS node pools / autoscaling" its own line and marks it **M2**. This ships
+# with the parent, which is docs/plan/13's reading, and the reason is not scheduling: a managed
+# cluster with no node pools has no worker nodes at all, so shipping the M1 row without this one
+# would put a resource in the catalogue that cannot run anything. The M2 half of docs/plan/01's line
+# is `autoscaling`, and that IS still owed — see § owed,
+# `autoscaling-needs-an-autoscaler-in-the-bundle`.
+#
+# ⚠ THE SECOND MANIFEST IN THE TREE FOR A CHILD TYPE, AND THE FIRST FOR A CHILD THAT IS NOT SMALLER
+# THAN ITS PARENT. charts/managed/seaweedfs-bucket renders one object and declares `meters: []`; this
+# renders three and declares three derived meters, because a node pool IS its cluster's capacity rather
+# than a ceiling inside capacity the cluster already reserved.
+
+resourceType: CyberCloud.ContainerService/managedClusters/agentPools
+apiVersion: "2026-08-01"
+chart: kubernetes-agentpool
+
+# Objects the reconciler must have applied once the resource reports Succeeded.
+renders:
+  - group: infrastructure.cluster.x-k8s.io
+    version: v1alpha1
+    kind: KubevirtMachineTemplate
+    count: 1
+  - group: bootstrap.cluster.x-k8s.io
+    version: v1beta2
+    kind: KubeadmConfigTemplate
+    count: 1
+  - group: cluster.x-k8s.io
+    version: v1beta2
+    kind: MachineDeployment
+    count: 1
+
+# ADR-013 — every rendered object carries all seven labels.
+labels:
+  required:
+    - cybercloud.io/tenant-id
+    - cybercloud.io/subscription-id
+    - cybercloud.io/resource-group
+    - cybercloud.io/resource-id
+    - cybercloud.io/resource-type
+    - cybercloud.io/api-version
+    - cybercloud.io/managed-by
+  # ⚠ TWO underscores, as charts/managed/seaweedfs-bucket's are, and for the same reason: a child type
+  # path has two slashes and `/` is not a legal label VALUE character.
+  values:
+    cybercloud.io/resource-type: cybercloud.containerservice_managedclusters_agentpools
+    cybercloud.io/managed-by: cybercloud
+
+assertions:
+  - id: two-clusters-may-hold-the-same-pool-name
+    says: >
+      Two managed clusters in ONE resource group each hold a pool named `workers`, and the two are
+      different pools with different machines. ⚠ THIS IS THE ASSERTION A CHILD TYPE EXISTS FOR AND THE
+      ONE A FLATTENED ADDRESS WOULD FAIL, and the damage here is worse than on a bucket: the two
+      MachineDeployments carry different clusterNames, so each pass would move every worker VM in the
+      resource group from one tenant's cluster to the other's and back.
+  - id: creating-under-an-absent-cluster-is-the-same-404
+    says: >
+      A create under a managed cluster that does not exist is refused with the same status, the same
+      target and the same message — modulo the caller's own path — as a GET of a pool that was never
+      created. ⚠ A distinct ParentNotFound would be an existence oracle. ⚠ AND THE CREATE IT REFUSES
+      WOULD OTHERWISE SUCCEED VISIBLY AND DO NOTHING: a MachineDeployment naming a Cluster that is not
+      there is admitted by Cluster API, stored, and never reconciled, so the tenant would see a pool
+      reporting Succeeded with no machines in it.
+  - id: a-pool-is-what-gives-a-cluster-nodes
+    says: >
+      A managed cluster with one pool of three machines has three worker nodes, and deleting the pool
+      leaves the cluster running with none. There is no implicit default pool anywhere.
+  - id: resizing-is-a-put-and-replacing-is-not
+    says: >
+      Changing `count` is a PUT and rolls no machines. Changing `size` or `osDiskSize` is refused,
+      because KubevirtMachineTemplateSpec is immutable upstream and a PUT that changed either would be
+      refused by the API server on every pass with the resource stuck InProgress.
+  - id: autoscaling-reserves-the-ceiling
+    says: >
+      Turning autoscaling on reserves quota against maxCount rather than count, and the refusal a
+      tenant meets when there is not enough headroom names maxCount. ⚠ A reservation is not a bill:
+      docs/plan/22's usage pipeline samples what actually ran, and the two disagreeing here is not a
+      bug in either.
+  - id: the-node-version-may-lag-and-may-not-lead
+    says: >
+      A pool three minors behind its cluster works; a pool ahead of its cluster does not. ⚠ NEITHER IS
+      ENFORCED BY THIS API — see charts/managed/kubernetes/conformance.yaml § owed,
+      `version-skew-is-not-enforced` — so today this assertion describes Kubernetes rather than the
+      platform.
+
+# Meters the type must emit.
+#
+# ⚠ THREE DERIVED METERS ON A CHILD TYPE, WHICH THE ONLY OTHER SHIPPING CHILD DELIBERATELY DOES NOT
+# HAVE. charts/managed/seaweedfs-bucket declares `meters: []` and argues that a bucket's storage was
+# already reserved by its account's volume servers. The opposite holds here: a managed cluster reserves
+# its CONTROL PLANE and nothing else, so every worker VM's vCPU, memory and disk is reserved here or
+# nowhere.
+#
+# ⚠ AND THE INPUT IS A CEILING RATHER THAN A SIZE WHEN AUTOSCALING IS ON, which is a meter shape
+# nothing in the catalogue had. AgentPools.EffectiveCount is the one place that is spelled.
+meters:
+  - meter: resources
+    amount: 1
+  - meter: vcpu
+    amount: (autoscale.enabled ? autoscale.maxCount : count) × the size preset's cpu
+  - meter: memoryGb
+    amount: (autoscale.enabled ? autoscale.maxCount : count) × the size preset's memory
+  - meter: storageGb
+    amount: (autoscale.enabled ? autoscale.maxCount : count) × osDiskSize
+
+# ── owed ──────────────────────────────────────────────────────────────────────────────────────
+owed:
+  - id: instancetypes-are-the-bundles
+    says: >
+      ⚠ THE SIZING VOCABULARY REACHES THE CLUSTER AS AN OBJECT NAME AND NOTHING CHECKS THE OBJECT.
+      docs/plan/09 wants "an instancetype from a platform catalogue, which is where the
+      t1.micro/c1.large vocabulary from ADR-010 is defined once and reused by every provider", so a
+      pool renders `instancetype: {kind: VirtualMachineClusterInstancetype, name: s1.small}`. That
+      object is CLUSTER-SCOPED, is created by the bundle, and is not this provider's to render — for
+      the same reason ManagedClusters.DataStoreName gives: a cluster-scoped object has no namespace to
+      be isolated by. ⚠ SO THE NUMBERS IN ManagedClusters.Presets ARE A BELIEF. They reach quota and
+      reach nothing else; an instancetype in the bundle that does not match would be billed at one size
+      and run at another, and nothing anywhere would notice. Closing it is either a bundle test that
+      compares the two, or a platform-owned catalogue object whose creation the same mechanism as the
+      DataStore's would own.
+  - id: node-image-is-unverified
+    says: >
+      `quay.io/capk/ubuntu-2404-container-disk`, tagged with ManagedClusters.PinnedPatch's value.
+      Neither the repository nor any tag was read off a registry on the date this shipped. A tag that
+      does not exist is a VM that never boots, with the reason in a DataVolume's events — three objects
+      below anything this platform reads, and invisible to a tenant who has no credential for the
+      cluster. It is the twin of charts/managed/kubernetes/conformance.yaml's
+      `pinned-patches-are-unreviewed` and should be checked in the same pass.
+  - id: bootstrap-check-may-never-complete
+    says: >
+      ⚠ THE RISKIEST DEFAULT ON THIS TYPE, AND IT IS A DEFAULT RATHER THAN A CHOICE.
+      VirtualMachineBootstrapCheckSpec.CheckStrategy defaults to `ssh`, and this chart renders no
+      override — which is what the Kamaji control-plane provider's own published KubeVirt template
+      does. An SSH bootstrap check makes CAPK connect into the guest as `capk` and look for
+      /run/cluster-api/bootstrap-success.complete, using a key CAPK generates while reconciling the
+      KubevirtCluster — and `cluster.x-k8s.io/managed-by: kamaji` makes it skip that object entirely
+      (controllers/kubevirtcluster_controller.go returns immediately for an externally-managed
+      cluster). If the machine-level path does not supply the key, every machine in every pool provisions
+      and never reports bootstrap complete. `checkStrategy: none` is the one-line alternative and it
+      trades a real signal for a guess, so it is not taken blind. This needs a real management cluster
+      to settle, which is exactly the nightly e2e docs/plan/09 § Testing the fabric asks for.
+  - id: autoscaling-needs-an-autoscaler-in-the-bundle
+    says: >
+      /properties/autoscale renders two `cluster.x-k8s.io/cluster-api-autoscaler-node-group-*-size`
+      annotations, which is Cluster API's own mechanism — its MachineDeployment defaulting webhook
+      reads them and the cluster-autoscaler's Cluster API provider uses them as bounds. NOTHING IN THIS
+      TREE INSTALLS A CLUSTER-AUTOSCALER. On a bundle without one the annotations are inert and the pool
+      sits at its declared count, which is a safe failure. ⚠ The quota consequence runs the other way
+      and is not safe to leave unsaid: EffectiveCount reserves maxCount whether or not an autoscaler
+      exists, so a tenant who turns the switch on today pays headroom for a controller that will never
+      use it.
+  - id: taints-and-labels-wait-for-credentials
+    says: >
+      An AKS node pool has taints and node labels; both are renderable here
+      (joinConfiguration.nodeRegistration takes them) and both are left out. A taint is the one property
+      whose misuse is unrecoverable from the API: a pool tainted so that nothing schedules on it looks
+      identical to a pool whose VMs never booted, and the tenant's own diagnostic — `kubectl describe
+      node` — needs the credential charts/managed/kubernetes/conformance.yaml § owed says this platform
+      cannot hand out. They belong in the api-version that ships alongside a working listCredentials.
+  - id: pool-readiness-is-not-observed
+    says: >
+      Unlike its parent, this reconciler's Converged does not read a status. ⚠ THAT IS A DECISION AND
+      IT HAS A PLAINER HALF THAN THE ARGUMENT ABOUT PRODUCTS. MachineDeployment.status.readyReplicas
+      reaching the requested count is a claim about whether workloads placed on the pool can run, which
+      is a question about the cluster inside; and a pool under an autoscaler has NO target count to
+      compare a status against, because the number the platform asked for and the number that should
+      exist are deliberately different. What that costs: a pool whose machines all fail to boot —
+      missing instancetype, missing image tag, failed bootstrap check — reports Succeeded. Every one of
+      those failure modes has its own item above, which is the honest way to leave it.
+  - id: tenant-pvcs-are-not-metered
+    says: >
+      QuotaMeter.StorageGb counts each machine's ROOT volume and nothing else. A workload inside the
+      produced cluster provisions storage through that cluster's own CSI driver, against volumes in the
+      management cluster — docs/plan/09 puts that on kubevirt-csi — and this platform sees none of it.
+      So the storage figure is the floor a pool costs rather than the ceiling. Closing it needs the
+      connection charts/managed/kubernetes/conformance.yaml § owed's
+      `the-cluster-this-creates-is-not-connectable` is about, plus docs/plan/22's usage pipeline.
+  - id: upgradenodeimage-has-no-handler
+    says: >
+      IProviderBuilder.Action takes no handler delegate on any type in this platform, so this action is
+      a declaration. Its mechanism when it exists is a rolling MachineDeployment update driven by a NEW
+      KubevirtMachineTemplate name — which is what makes Cluster API replace machines rather than mutate
+      them, and which is also the mechanism a `size` change would need if that property were ever made
+      mutable. Both are the same piece of work.
+  - id: drain-timeout-is-not-expressible
+    says: >
+      docs/plan/13 § Upgrades asks for "a rolling MachineDeployment update with a max-unavailable AND A
+      DRAIN TIMEOUT". The first two are properties here; the third is `spec.template.spec.deletion.
+      nodeDrainTimeoutSeconds` on the Machine, which this chart does not render. It is left out rather
+      than guessed because a drain timeout is a promise about how long a tenant's own PodDisruptionBudgets
+      will be honoured before they are overridden, and picking that number for somebody without being
+      able to see their workloads is the kind of default that loses data.
+  - id: grafana-dashboard
+    says: >
+      FIFTH SIGHTING of charts/managed/nats' item of the same name. Everything worth showing about a
+      node pool — node pressure, allocatable versus requested, pods per node — is inside the cluster
+      this platform cannot reach.

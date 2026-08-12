@@ -1,0 +1,89 @@
+# Provenance — charts/README.md § `SOURCE` is required, including when nothing was forked.
+
+vendored: none
+upstream: https://github.com/kubernetes-sigs/cluster-api
+
+upstream-api: cluster.x-k8s.io/v1beta2, bootstrap.cluster.x-k8s.io/v1beta2, infrastructure.cluster.x-k8s.io/v1alpha1
+
+cluster-api: https://github.com/kubernetes-sigs/cluster-api             # v1.14.0
+infrastructure-provider: https://github.com/kubernetes-sigs/cluster-api-provider-kubevirt  # v0.11.2
+hypervisor: https://github.com/kubevirt/kubevirt                        # v1.9.0
+
+reviewed: 2026-08-12
+
+# ── What the review established ───────────────────────────────────────────────────────────────
+#
+# ⚠ MachineDeploymentSpec's ROLLOUT POLICY MOVED IN v1beta2 AND THE OLD PATH IS SILENTLY PRUNED.
+#
+#   v1beta1:  spec.strategy.rollingUpdate.{maxSurge,maxUnavailable}, spec.strategy.deletePolicy
+#   v1beta2:  spec.rollout.strategy.rollingUpdate.{maxSurge,maxUnavailable}
+#             spec.deletion.order, spec.rollout.after, spec.remediation.maxInFlight
+#
+# A chart copied from a v1beta1 template applies cleanly, is admitted, and drops the rollout policy on
+# the floor. Both `bootstrap.configRef` and `infrastructureRef` also became version-less
+# ContractVersionedObjectReferences.
+#
+# ⚠ NEITHER MachineDeploymentSpec NOR MachineSpec CARRIES A SINGLE `+kubebuilder:default`, AND YET FOUR
+# THINGS ARE DEFAULTED — BY A MUTATING WEBHOOK. `core/webhooks/admission/machinedeployment.go` writes
+# spec.replicas (honouring the autoscaler annotations, else 1), the whole rollout strategy (RollingUpdate,
+# maxSurge 1, maxUnavailable 0), two `cluster.x-k8s.io/*` labels into BOTH the selector and the template
+# labels, and a `v` prefix onto spec.template.spec.version. ⚠ THIS IS WHY `Matches` IS CONTAINMENT, and
+# it is a DIFFERENT reason from the one three earlier providers give: the defaulting is a webhook rather
+# than a CRD marker, so an equality comparison fails against a real API server and passes in BOTH
+# conformance suites — a derived CRD stub has no webhook behind it any more than it has defaults.
+#
+# ⚠ THE WEBHOOK ALSO VALIDATES THAT spec.selector MATCHES spec.template.metadata.labels, so those two
+# maps are built from one expression in C# and from one helper here. It further requires one of
+# `spec.template.spec.bootstrap.dataSecretName` or `.configRef`.
+#
+# ⚠ THE KubevirtMachineTemplate SPEC IS SEVEN LEVELS DEEP AND EVERY LEVEL IS SOMEBODY ELSE'S TYPE:
+#
+#   spec.template.spec.virtualMachineTemplate.spec.template.spec.domain
+#     │      │      │            │              │      │      └ kubevirtv1.VirtualMachineInstanceSpec
+#     │      │      │            │              │      └ json:"template" (required)
+#     │      │      │            │              └ kubevirtv1.VirtualMachineSpec
+#     │      │      │            └ CAPK's OWN VirtualMachineTemplateSpec, not kubevirtv1's
+#     │      │      └ KubevirtMachineSpec
+#     │      └ KubevirtMachineTemplateResource
+#     └ KubevirtMachineTemplateSpec
+#
+# Note also that the Go field BootstrapCheckSpec has the JSON key `virtualMachineBootstrapCheck`, and
+# that its inner key is `checkStrategy` rather than `bootstrapCheckStrategy`.
+#
+# ⚠ CAPK APPENDS OBJECTS AND VOLUMES THIS CHART MUST NOT RENDER. Its machine controller creates
+# `<bootstrapDataSecretName>-userdata` with an injected `capk` user and SSH key, appends a
+# CloudInitConfigDrive volume and a matching virtio disk, force-overwrites the VM's metadata, and
+# prefixes dataVolumeTemplates names with `<machine-name>-`. A template that supplied its own cloud-init
+# volume would end up with two.
+#
+# ⚠ KubevirtMachineTemplateSpec IS IMMUTABLE. `pkg/webhookhandler/validator.go` is a validating-only
+# webhook whose whole content is "KubevirtMachineTemplateSpec is immutable" on update. ⚠ THAT IS WHY
+# /properties/size AND /properties/osDiskSize ARE `@immutable` IN THIS CHART: a PUT that changed either
+# would be refused by the API server on the second pass, forever, with the resource stuck InProgress.
+# Resizing a pool is replacing it, and Cluster API's own idiom for that is a NEW template name — which
+# is what the `upgradeNodeImage` action's mechanism will be.
+#
+# ⚠ THE INSTANCETYPE IS CLUSTER-SCOPED AND THIS CHART DOES NOT CREATE IT.
+# `VirtualMachineClusterInstancetype` is scope: Cluster (instancetype.kubevirt.io/v1beta1, plural
+# virtualmachineclusterinstancetypes); `VirtualMachineInstancetype` is the namespaced one. An
+# InstancetypeMatcher with an EMPTY kind resolves to the cluster-scoped type — `pkg/instancetype/find/
+# spec.go` puts "" in the same switch case — so writing the kind out is correct today and is written
+# out anyway, because a default that changes silently is worse than a line.
+#
+# ⚠ ONLY THREE `+kubebuilder:default` MARKERS EXIST IN CAPK's api/v1alpha1, and two of them are status
+# fields: KubevirtClusterStatus.Ready=false, KubevirtMachineStatus.Ready=false, and
+# VirtualMachineBootstrapCheckSpec.CheckStrategy=ssh (enum: none;ssh).
+#
+# ── The weak claims ───────────────────────────────────────────────────────────────────────────
+#
+# ⚠ NodeImageRepository AND ITS TAG WERE NOT READ OFF A REGISTRY. `quay.io/capk/ubuntu-2404-container-disk`
+# tagged with ManagedClusters.PinnedPatch's value. A tag that does not exist is a VM that never boots,
+# with the reason in a DataVolume's events — three objects below anything this platform reads.
+# conformance.yaml § owed, `node-image-is-unverified`.
+#
+# ⚠ `virtualMachineBootstrapCheck` IS NOT RENDERED, SO THE CRD's `ssh` DEFAULT STANDS — which is what
+# the control-plane provider's own published KubeVirt template does. It is nonetheless the riskiest
+# default on this type: an SSH bootstrap check needs a key CAPK generates while reconciling the
+# KubevirtCluster, and `cluster.x-k8s.io/managed-by: kamaji` makes it skip that object entirely.
+# conformance.yaml § owed, `bootstrap-check-may-never-complete`.
+upstream-webhook: cluster-api ships a MUTATING webhook for MachineDeployment that writes replicas, the rollout strategy, two labels and a version prefix; cluster-api-provider-kubevirt ships one validating webhook, for KubevirtMachineTemplate immutability, and no mutating webhook at all

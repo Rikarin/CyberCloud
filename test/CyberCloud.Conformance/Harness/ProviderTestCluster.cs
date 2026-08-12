@@ -330,6 +330,26 @@ public class ProviderTestCluster<TSource> : IAsyncLifetime
         await CreateSubscriptionAsync(ConformanceIds.Tenant, ConformanceIds.Subscription);
         await CreateSubscriptionAsync(ConformanceIds.OtherTenant, ConformanceIds.OtherSubscription);
 
+        // ⚠ AND THE QUOTA LIMITS ARE LIFTED, WHICH CLOSES AN ITEM charts/managed/opensearch OWED AND
+        // WHICH THE TENTH PROVIDER COULD NOT SHIP WITHOUT.
+        //
+        // Every assertion in this suite creates against ONE subscription and nothing releases the
+        // committed amounts between them, so a provider's usable assertion count used to be
+        // `QuotaGrain.Defaults[meter] / its own draw`. CyberCloud.Search met that as a tuning problem —
+        // four assertions failed with "300 committed + 90 reserved + 30 requested > 400" and the case
+        // was changed to use a smaller service. CyberCloud.ContainerService/managedClusters cannot be
+        // tuned out of it: it draws QuotaMeter.Clusters, whose default limit is FIVE, and a cluster
+        // cannot ask for less than one cluster. Twenty-eight assertions against a limit of five is a
+        // suite that fails from the sixth test onwards, in every provider that is a cluster, forever.
+        //
+        // ⚠ NOTHING IN THIS SUITE ASSERTS A QUOTA LIMIT, so lifting them removes an accidental
+        // coupling rather than an assertion. Quota's own behaviour — reserve, commit, release, refuse
+        // over the limit — is CyberCloud.Tenancy.Tests' QuotaGrainTests, which sets its own limits and
+        // is unaffected. What this restores is the property the suite was written to have: that the
+        // twenty-eighth assertion is as independent of the first as the second is.
+        await LiftQuotaAsync(ConformanceIds.Tenant, ConformanceIds.Subscription);
+        await LiftQuotaAsync(ConformanceIds.OtherTenant, ConformanceIds.OtherSubscription);
+
         Manager = new ResourceManagerService(
             Registry,
             Authorizer,
@@ -355,6 +375,29 @@ public class ProviderTestCluster<TSource> : IAsyncLifetime
         // parent check, before the caller's tenant is ever compared — so the test would pass while
         // testing nothing. This is what keeps the assertion about the tenant boundary.
         await CreateAncestorsAsync(ConformanceIds.OtherTenant, ConformanceIds.OtherSubscription);
+    }
+
+    /// <summary>Puts every quota meter out of the way for one subscription.</summary>
+    /// <param name="tenant">The tenant.</param>
+    /// <param name="subscription">The subscription.</param>
+    /// <remarks>
+    ///     ⚠ <b>Every declared meter, rather than the ones the provider under test happens to
+    ///     draw.</b> A harness that lifted only what today's providers use would go back to being a
+    ///     budget the day somebody declared <see cref="QuotaMeter.PublicIps" />, and the failure would
+    ///     name quota rather than the harness — which is exactly what made this cost a provider author
+    ///     an afternoon the first time.
+    /// </remarks>
+    async Task LiftQuotaAsync(Guid tenant, Guid subscription) {
+        var quota = For(tenant).GetGrain<IQuotaGrain>(GrainKeys.Subscription(subscription));
+
+        foreach (var meter in Enum.GetValues<QuotaMeter>()) {
+            if (meter == QuotaMeter.Unknown) {
+                continue;
+            }
+
+            var set = await quota.SetLimitAsync(meter, 1_000_000m);
+            set.IsSuccess.ShouldBeTrue(set.Error?.Message);
+        }
     }
 
     /// <summary>Creates the ancestors the type under test hangs off, outermost first.</summary>

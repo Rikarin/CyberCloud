@@ -340,6 +340,33 @@
         <Project Path="src/Providers/CyberCloud.Providers.DBforMySQL/CyberCloud.Providers.DBforMySQL.Tests/CyberCloud.Providers.DBforMySQL.Tests.csproj"/>
         <Project Path="src/Providers/CyberCloud.Providers.DBforMySQL/CyberCloud.Providers.DBforMySQL.Conformance/CyberCloud.Providers.DBforMySQL.Conformance.csproj"/>
         <Project Path="src/Providers/CyberCloud.Providers.DBforMySQL/CyberCloud.Providers.DBforMySQL.Cluster.Conformance/CyberCloud.Providers.DBforMySQL.Cluster.Conformance.csproj"/>
+
+        <!--
+          The tenth provider family — CyberCloud.ContainerService/managedClusters and its agentPools
+          child, on Cluster API + Kamaji + KubeVirt. docs/plan/13 § Managed Kubernetes, "M1 · 4.0 EM",
+          with docs/plan/09 § Kubernetes in Kubernetes as the substrate and ADR-009 as the decision.
+
+          ⚠ IT IS THE FIRST FAMILY WHOSE PRODUCT IS A KUBERNETES API SERVER. Every other provider
+          renders objects into a cluster the platform owns and the tenant never sees; this one creates
+          a cluster the tenant then talks to directly, which changes what "converged" is allowed to
+          mean. The argument is on ManagedClusters and the hole it leaves is
+          charts/managed/kubernetes/conformance.yaml § owed, `converged-is-not-ready`.
+
+          ⚠ IT IS THE FIRST TYPE TO DRAW QuotaMeter.Clusters. That meter has existed since the quota
+          grain was written — QuotaGrain.Defaults gives it 5 — and MeterCatalog already bills
+          BillingMeter.ClusterHours off it. Nine families shipped without a single declaration of it,
+          because none of them is a cluster.
+
+          ⚠ AND IT IS THE FIRST WHOSE CHILD TYPE CHANGES THE PARENT'S CAPACITY. A bucket does not
+          resize its account; an agent pool is the only way a cluster gets bigger, so this family's
+          quota is not a create-time constant on either type.
+        -->
+        <Project Path="src/Providers/CyberCloud.Providers.ContainerService/CyberCloud.Providers.ContainerService.Contracts/CyberCloud.Providers.ContainerService.Contracts.csproj"/>
+        <Project Path="src/Providers/CyberCloud.Providers.ContainerService/CyberCloud.Providers.ContainerService/CyberCloud.Providers.ContainerService.csproj"/>
+        <Project Path="src/Providers/CyberCloud.Providers.ContainerService/CyberCloud.Providers.ContainerService.Application/CyberCloud.Providers.ContainerService.Application.csproj"/>
+        <Project Path="src/Providers/CyberCloud.Providers.ContainerService/CyberCloud.Providers.ContainerService.Tests/CyberCloud.Providers.ContainerService.Tests.csproj"/>
+        <Project Path="src/Providers/CyberCloud.Providers.ContainerService/CyberCloud.Providers.ContainerService.Conformance/CyberCloud.Providers.ContainerService.Conformance.csproj"/>
+        <Project Path="src/Providers/CyberCloud.Providers.ContainerService/CyberCloud.Providers.ContainerService.Cluster.Conformance/CyberCloud.Providers.ContainerService.Cluster.Conformance.csproj"/>
     </Folder>
     <Folder Name="/src/Hosts/">
         <Project Path="src/Hosts/CyberCloud.Gateway.Host/CyberCloud.Gateway.Host.csproj"/>

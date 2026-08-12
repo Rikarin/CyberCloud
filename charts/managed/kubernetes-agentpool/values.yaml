@@ -1,0 +1,83 @@
+# A node pool inside a managed Kubernetes cluster — the configuration surface, once.
+#
+# ⚠ EVERY NON-`@internal` BLOCK BELOW IS GENERATED from AgentPools.Schema2026 by `./build.sh Charts`,
+# and so is values.schema.json. ADR-010 § Which end authors the schema: "The C# ResourceSchema is
+# authored. The chart's @param annotations are generated from it and diffed." Editing a generated row
+# here is undone on the next run and fails the build in between; add the field in C# instead.
+#
+# ⚠ `size` AND `osDiskSize` ARE IMMUTABLE AND THAT IS UPSTREAM'S RULE RATHER THAN A POLICY. The KubeVirt
+# provider ships a validating webhook whose whole content is "KubevirtMachineTemplateSpec is immutable"
+# on update, so a PUT that changed either would be refused by the API server on every pass with the
+# resource stuck InProgress. Resizing a pool is replacing it.
+
+## @param count {integer} How many worker VMs the pool runs. ⚠ When autoscaling is on this is the starting size and the autoscaler moves it; quota is reserved against the maximum in that case, not against this.
+## @required
+## @range 1..100
+count: 3
+
+## @param size {string} The VM size, from the platform's sizing catalogue. Kubernetes nodes use the s1 family, which is 1 vCPU to 4 GiB. ⚠ Immutable: a Cluster API machine template cannot be resized in place, so changing this would mean replacing every VM in the pool, which is a different operation from the one a PUT looks like.
+## @required
+## @immutable
+## @enum s1.2xlarge | s1.4xlarge | s1.large | s1.medium | s1.micro | s1.nano | s1.small | s1.xlarge
+## @widget cozy-preset
+size: s1.small
+
+## @param version {string} The Kubernetes minor version the nodes run. ⚠ It may be up to three minors behind the cluster's control plane and may never be ahead of it. This API does not check that — the cluster's version is a different resource — so an illegal pair is accepted here and produces nodes that join and then misbehave.
+## @required
+## @enum 1.32 | 1.33
+version: "1.33"
+
+## @param osDiskSize {string} The root volume of each VM, in Kubernetes quantity form. It holds the operating system, the container images and every writable layer, so a pool running large images needs more of it than a pool running small ones.
+## @required
+## @immutable
+## @pattern \d+(\.\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?
+## @example "60Gi"
+osDiskSize: "60Gi"
+
+## @param autoscale {object} Whether a cluster-autoscaler may resize the pool.
+autoscale:
+  ## @param enabled {boolean} Whether the pool carries autoscaler bounds. Off by default. ⚠ Turning it on changes what the pool costs: quota is then reserved against maxCount, because a pool that may grow to twenty machines has to have twenty machines' worth of headroom to grow into.
+  enabled: false
+  ## @param minCount {integer} The smallest the autoscaler may shrink the pool to. Ignored when autoscaling is off.
+  ## @range 1..100
+  minCount: 1
+  ## @param maxCount {integer} The largest the autoscaler may grow the pool to, and what quota is reserved against while autoscaling is on. ⚠ Nothing checks that it is at least minCount — that is a relation between two properties of one body, which the schema validates nothing about.
+  ## @range 1..100
+  maxCount: 3
+
+## @param upgrade {object} How machines are replaced when the pool changes.
+upgrade:
+  ## @param maxSurge {integer} How many extra machines may exist during a rolling replacement. One means a new VM boots and joins before an old one is removed, which is why it is the default: it costs one machine's capacity and loses none.
+  ## @range 0..10
+  maxSurge: 1
+  ## @param maxUnavailable {integer} How many machines may be missing during a rolling replacement. Zero with a surge of one is the safe pair; raising it is faster and reduces the pool's capacity while it runs. ⚠ Both being zero would make an upgrade unable to start, and nothing refuses that pair.
+  ## @range 0..10
+  maxUnavailable: 0
+
+## @param platform {object} Resource identity injected by the reconciler. Not a tenant-facing setting.
+## @internal Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.
+platform:
+  ## @param tenantId {string} Tenant GUID, rendered into the cybercloud.io/tenant-id label.
+  tenantId: ""
+  ## @param subscriptionId {string} Subscription GUID, rendered into the cybercloud.io/subscription-id label.
+  subscriptionId: ""
+  ## @param resourceGroup {string} Resource group name, rendered into the cybercloud.io/resource-group label.
+  resourceGroup: ""
+  ## @param resourceId {string} Resource GUID, rendered into the cybercloud.io/resource-id label.
+  resourceId: ""
+  ## @param resourceType {string} Fully qualified resource type, rendered into the cybercloud.io/resource-type label.
+  resourceType: CyberCloud.ContainerService/managedClusters/agentPools
+  ## @param apiVersion {string} The api-version the resource was last written at, rendered into the cybercloud.io/api-version label.
+  apiVersion: "2026-08-01"
+  ## @param managedBy {string} Value of the cybercloud.io/managed-by label. Constant, and the selector every informer filters on.
+  managedBy: cybercloud
+  ## @param parentName {string} The name of the managed cluster this pool belongs to. Rendered into every object's name and into the MachineDeployment's clusterName.
+  parentName: ""
+
+## @param nodeImageRepository {string} The container-disk image a worker VM boots, without a tag.
+## @internal The tag is the pinned Kubernetes version, so a tenant choosing a repository would be choosing an image the platform has never booted. ⚠ Neither the repository nor any tag was read off a registry — see conformance.yaml § owed.
+nodeImageRepository: quay.io/capk/ubuntu-2404-container-disk
+
+## @param nameOverride {string} Replace the generated object-name stem. Empty means derive it from the release name.
+## @internal Helm plumbing. Nothing about it belongs in a resource body.
+nameOverride: ""
