@@ -1,0 +1,207 @@
+# docs/plan/23 § CI shape, row `release.yml`: "Tag | Full gate, publish everything, staged rollout".
+#
+# ── ⚠ WHY THERE IS NO `uses: ./.github/workflows/gate.yml` HERE ──────────────────────────────────
+#
+# pr.yml and main.yml both call the reusable gate. This one does not, and the reason is a decision
+# the build already made. Build.Publish.cs:
+#
+#   "docs/plan/23 § CI shape gives release.yml exactly one job — 'full gate, publish everything' —
+#    so `./build.sh Publish` has to BE that gate rather than trust a workflow file to have run the
+#    gate first."
+#
+# `Publish` depends on Test, Generate, Architecture, Portal and Licence, and Licence in turn on
+# Charts and Images. Calling gate.yml as well would run those targets twice, and — worse — would
+# suggest the workflow is what gates the release. It is not. If somebody ever runs
+# `./build.sh Publish` from a laptop, the same gate runs.
+#
+# ── ⚠ E2E, CHAOS AND LOAD ARE NOT HERE, AND THAT IS ALSO NOT AN OMISSION ─────────────────────────
+#
+# docs/plan/23 § Test layers gates a release on all three, and Build.Publish.cs explains why they are
+# not dependencies: "They run against a real deployment of the candidate, so the order is gate →
+# deploy the candidate → suites → publish, and this edge would invert it." The suites live in
+# nightly.yml and weekly.yml, against staging. `rollout` below is where that order would be encoded,
+# and it is blocked.
+#
+# ── ⚠ SECRETS THIS WORKFLOW REQUIRES ─────────────────────────────────────────────────────────────
+#
+#   CONTAINER_REGISTRY   registry and repository prefix for the images Licence scans.
+#   REGISTRY_USERNAME    a principal that can push to it.
+#   REGISTRY_PASSWORD    its password or token.
+#   NUGET_FEED           the feed packages go to. Build.Publish.cs gives it no default on purpose:
+#                        "a default feed is how a pre-release build ends up on nuget.org".
+#   NUGET_API_KEY        its API key.
+#   CHART_REGISTRY       OCI registry for packaged charts, e.g. oci://ghcr.io/acme/cybercloud/charts.
+#   PROD_KUBECONFIG      for the staged rollout. Currently unusable — see `rollout`.
+
+name: release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  DOTNET_CLI_TELEMETRY_OPTOUT: 1
+  DOTNET_NOLOGO: 1
+  NUKE_TELEMETRY_OPTOUT: 1
+
+jobs:
+  publish:
+    name: publish
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    environment: release
+    permissions:
+      contents: read
+      # cosign keyless, for the images `Licence` scans. Build.Images.cs § CosignKey.
+      id-token: write
+    env:
+      CONTAINER_REGISTRY: ${{ secrets.CONTAINER_REGISTRY }}
+      REGISTRY_USERNAME: ${{ secrets.REGISTRY_USERNAME }}
+      REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
+      NUGET_FEED: ${{ secrets.NUGET_FEED }}
+      NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+      CHART_REGISTRY: ${{ secrets.CHART_REGISTRY }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # ⚠ Build.Publish.cs § Version falls back to "the tag on HEAD when there is exactly one",
+          # which it reads with git. A shallow checkout carries no tags and the fallback silently
+          # finds none, so the run would block on a version it could have worked out.
+          fetch-depth: 0
+
+      - uses: ./.github/actions/dotnet
+
+      - name: Preconditions
+        run: |
+          .github/scripts/require-secrets.sh publish \
+            "docs/plan/23 § Build, row Publish: 'NuGet, npm, charts, CLI binaries per RID', behind docs/plan/23 § CI shape's single release.yml job." \
+            "CONTAINER_REGISTRY=create the secret with the registry and repository prefix" \
+            "REGISTRY_USERNAME=create the secret with a principal that can push there" \
+            "REGISTRY_PASSWORD=create the secret with its password or token" \
+            "NUGET_FEED=create the secret with the feed to push to" \
+            "NUGET_API_KEY=create the secret with its API key" \
+            "CHART_REGISTRY=create the secret with an oci:// registry for packaged charts"
+
+      - name: Install syft
+        uses: anchore/sbom-action/download-syft@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+
+      - name: Log in to the registry
+        run: |
+          echo "$REGISTRY_PASSWORD" | docker login "${CONTAINER_REGISTRY%%/*}" \
+            --username "$REGISTRY_USERNAME" --password-stdin
+
+      # ⚠ The version is taken from the tag rather than passed, so the artefacts cannot be named
+      # after something other than what triggered the release. Build.Publish.cs § Version does the
+      # same fallback; passing it explicitly here makes the failure "the tag is not vN.N.N" rather
+      # than "HEAD carries no tag", which is a more useful thing to read.
+      - name: ./build.sh Publish
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          case "$version" in
+            *[!0-9.a-zA-Z-]* | '' )
+              echo "::error title=Publish::the tag '$GITHUB_REF_NAME' does not look like a version. release.yml triggers on 'v*' and the version is the tag with the leading v removed."
+              exit 1
+              ;;
+          esac
+          echo "Publishing $version from $GITHUB_REF_NAME"
+          ./build.sh Publish \
+            --version "$version" \
+            --container-registry "$CONTAINER_REGISTRY" \
+            --container-image-tag "$version" \
+            --nuget-feed "$NUGET_FEED" \
+            --nuget-api-key "$NUGET_API_KEY" \
+            --chart-registry "$CHART_REGISTRY" 2>&1 | tee "$RUNNER_TEMP/publish.log"
+
+      # ⚠ `Publish` reports zero npm packages and carries on, deliberately — docs/plan/21 § Other
+      # SDKs says the TypeScript client is not written. It does NOT tolerate zero of the other
+      # three, but "tolerates" is a property of the target and this is a release: the check that the
+      # artefacts exist belongs to whoever is about to be unable to install them.
+      - name: Something was actually published
+        if: always()
+        run: |
+          packages=$(find artifacts/packages -name '*.nupkg' 2>/dev/null | wc -l | tr -d ' ')
+          charts=$(find artifacts/charts -name '*.tgz' 2>/dev/null | wc -l | tr -d ' ')
+          binaries=$(find artifacts/cyc -maxdepth 1 -mindepth 1 -type d 2>/dev/null | wc -l | tr -d ' ')
+          echo "nupkg: $packages, charts: $charts, cyc RIDs: $binaries"
+          if [ "$packages" -eq 0 ] && [ "$charts" -eq 0 ] && [ "$binaries" -eq 0 ]; then
+            echo "::error title=Publish::the release produced no packages, no charts and no CLI binaries. Whatever else this run did, it did not release anything."
+            exit 1
+          fi
+
+      - name: Upload the release artefacts
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-${{ github.ref_name }}
+          path: |
+            artifacts/packages/
+            artifacts/charts/
+            artifacts/cyc/
+            artifacts/images.json
+            artifacts/sbom/
+          if-no-files-found: warn
+          retention-days: 400
+
+  # ── docs/plan/23 § Environments and rollout: canary → 25 % → 100 % ──────────────────────────────
+  #
+  # ⚠ BLOCKED, on the same two things as main.yml's deploy-dev plus one of its own.
+  #
+  #   1. There is no `Deploy` target — Build.cs § target graph.
+  #   2. `charts/platform` does not exist; charts/ holds only managed/postgres.
+  #   3. Nothing measures the rollback triggers. docs/plan/23 § Environments and rollout requires
+  #      "automatic rollback on error rate, p99 or grain-activation-failure regression", which needs
+  #      those three signals queryable per canary. docs/plan/16 describes the observability that
+  #      would answer them; nothing here reads it.
+  #
+  # ⚠ A staged rollout without 3 is not a staged rollout, it is a slow deploy. Written down because
+  # the tempting shortcut is to ship 1 and 2 with a `sleep 600` between stages and call the row
+  # done — and the whole value of a canary is the thing that decides to stop.
+  rollout:
+    name: rollout
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    needs: publish
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: What a staged rollout needs that this repository does not have
+        run: |
+          cat <<'BLOCKED'
+          ::error title=rollout::rollout is BLOCKED on 3 input(s), none of them a secret.
+          BLOCKED
+          cat <<'BLOCKED'
+
+            ✘ the build has no `Deploy` target.
+              To unblock: add one, in build/. ⚠ Not `helm upgrade` written here — docs/plan/23
+              § Build makes ./build.sh the single entry point so CI and a workstation run the same
+              code, and a rollout is exactly the procedure you most want to be able to rehearse.
+
+            ✘ charts/platform does not exist.
+              To unblock: add it. deploy/README.md § What an operator actually types documents
+              `helm install cybercloud charts/platform --set image=…`.
+
+            ✘ nothing can answer "is the canary healthy?".
+              To unblock: make error rate, p99 and grain-activation failures queryable per rollout
+              stage — docs/plan/16 § Observability. docs/plan/23 § Environments and rollout requires
+              AUTOMATIC rollback on a regression in any of the three, and a canary with no abort
+              condition is a deploy with extra steps.
+
+          The release itself is unaffected: `publish` above pushed the packages, charts and binaries.
+          What has not happened is the staged rollout onto prod.
+          BLOCKED
+          exit 1

@@ -71,7 +71,7 @@ sealed partial class Build : NukeBuild
     //                         ├──► Load           (blocks: no suite, no environment)
     //                         ├──► Charts ────────┐
     //                         └──► Images ────────┴──► Licence (stub)
-    //   Portal (stub)
+    //   Portal
     //
     //   Publish ──► Test, Generate, Architecture, Portal, Licence   (blocks: no version, no feeds, no cyc)
     //

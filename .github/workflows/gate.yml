@@ -1,0 +1,245 @@
+# The "Every PR" rows of docs/plan/23 § Test layers, in one place.
+#
+# ── ⚠ WHY THIS IS A REUSABLE WORKFLOW AND NOT COPIED INTO THREE FILES ────────────────────────────
+#
+# docs/plan/23 § CI shape gives `pr.yml`, `main.yml` and `release.yml` the same gate — main adds
+# images and a deploy on top of it, release adds publishing on top of that. Three copies of these
+# five jobs is three chances for one of them to lose a step, and the way that shows up is a merge
+# that passes a gate the PR ran and main did not. Nuke already solved the same problem one level
+# down: `./build.sh <Target>` is the unit of work precisely so that "what CI runs" is one answer.
+#
+# Everything here invokes the build. Nothing here reimplements it. The steps that are not a
+# `./build.sh` call are all of one kind: proving that the call was not a no-op.
+
+name: gate
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    # `shell: bash` adds `-o pipefail`. Without it `./build.sh X | tee log` reports tee's exit code
+    # and a failed build looks green — which is this repository's own worst failure class, one
+    # layer up from the one Build.Test.cs § RunSuites guards.
+    shell: bash
+
+env:
+  DOTNET_CLI_TELEMETRY_OPTOUT: 1
+  DOTNET_NOLOGO: 1
+  NUKE_TELEMETRY_OPTOUT: 1
+
+jobs:
+  # ── docs/plan/23 § The architecture gates ────────────────────────────────────────────────────────
+  architecture:
+    name: architecture
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/dotnet
+
+      - name: ./build.sh Architecture
+        run: ./build.sh Architecture 2>&1 | tee "$RUNNER_TEMP/architecture.log"
+
+      # ⚠ Build.Architecture.cs § GateStatus already separates "enforced" from "inspected nothing"
+      # and prints ○ for the second. It does not fail on ○, because a tree too small for a gate is a
+      # state the build has to tolerate. What it must never be is ALL of them: twelve gates that
+      # each inspected zero candidates is a target that ran against an empty checkout and said so in
+      # a warning nobody read.
+      - name: At least one gate was actually enforced
+        run: |
+          enforced=$(grep -c '✔ ' "$RUNNER_TEMP/architecture.log" || true)
+          echo "gates enforced: $enforced"
+          if [ "$enforced" -eq 0 ]; then
+            echo "::error title=Architecture::every gate came back ○ (inspected nothing) or ▪ (blocked). Build.Architecture.cs § Report calls that green and worth nobody's trust; on a gate it is a failure. docs/plan/23 § The architecture gates."
+            exit 1
+          fi
+          {
+            echo "### Architecture gates"
+            echo '```'
+            grep -E '  [✔○⌨▪✘] ' "$RUNNER_TEMP/architecture.log" | sed 's/^[0-9:]* \[INF\] //'
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # ── docs/plan/23 § Test layers, rows Unit, Grain, Reconciler, Conformance, Isolation, Contract ───
+  test:
+    name: test
+    # ⚠ Pinned to x64, NOT `ubuntu-latest` and never an `-arm` runner. dotnet-coverage 18.9.0 ships
+    # no arm64 profiler for Linux — tools/net8.0/any/ in the package has ubuntu/x64, alpine/x64 and
+    # macos/x64 and nothing else — and its way of telling you is to exit 0 with an empty report,
+    # after which the coverage floor reports every project at 0 % and blames the tests.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/dotnet
+
+      # ⚠ dotnet-coverage's native profiler links against libxml2, which is not in the runner
+      # image's declared package set. One second of apt for a dependency whose absence is otherwise
+      # completely silent.
+      - name: Install libxml2 for the coverage profiler
+        run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends libxml2
+
+      - name: Prove the coverage profiler works here
+        run: .github/scripts/assert-coverage-profiler.sh
+
+      # docs/plan/23 § Test layers puts Testcontainers (Redis, Postgres, NATS) under Grain and k3s
+      # under Reconciler. This fails once, loudly, rather than letting five suites fail one at a
+      # time with connection errors that each look like a different bug.
+      - name: Prove Docker can run the container-backed suites
+        run: |
+          docker version --format 'client {{.Client.Version}}, server {{.Server.Version}}'
+          docker run --rm hello-world > /dev/null
+          echo "Docker works — the Grain, Reconciler and Conformance layers have what they need."
+
+      - name: ./build.sh Test
+        run: ./build.sh Test 2>&1 | tee "$RUNNER_TEMP/test.log"
+
+      # always(): the guard is diagnostic as well as a gate, and "26 suites, 3 104 tests" is worth
+      # as much beside a failed run as beside a green one.
+      - name: Prove the suites actually ran
+        if: always()
+        run: .github/scripts/assert-suites-ran.sh artifacts/test-results "$RUNNER_TEMP/test.log"
+
+      - name: Upload test results and coverage
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: test-results
+          path: |
+            artifacts/test-results/
+            artifacts/coverage/
+          if-no-files-found: error
+          retention-days: 14
+
+  # ── docs/plan/23 § Build, row `Generate`: "Fails on drift" ───────────────────────────────────────
+  generate:
+    name: generate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/dotnet
+
+      - name: ./build.sh Generate
+        run: ./build.sh Generate 2>&1 | tee "$RUNNER_TEMP/generate.log"
+
+      # ⚠ Belt and braces over Build.Generate.cs, which fails on drift for PUBLISHED documents and
+      # rewrites unpublished ones in place. An unpublished api-version that regenerates differently
+      # is still a diff somebody has to commit, and a run that rewrote a checked-in file and then
+      # threw the result away is a run whose green tick does not describe the tree.
+      - name: openapi/ and generated/ are what the registry produces
+        run: |
+          if ! git diff --exit-code --stat -- openapi generated portal/libs; then
+            echo "::error title=Generated surfaces::./build.sh Generate rewrote checked-in files, listed above. docs/plan/23 § Build, row Generate: 'Fails on drift'. Run ./build.sh Generate locally and commit the diff."
+            exit 1
+          fi
+          echo "openapi/, generated/ and portal/libs regenerate byte-identically."
+
+      # ⚠ A clean `git diff` is also what a generator that wrote nothing produces. Build.Generate.cs
+      # already warns when it finds no provider; this makes that a failure, because the repository
+      # has one and a run that found zero has broken discovery, not an empty registry.
+      - name: The generator found something to generate
+        run: |
+          if grep -q 'no provider is registered' "$RUNNER_TEMP/generate.log"; then
+            echo "::error title=Generate::./build.sh Generate found 0 providers and exited 0. src/Providers holds a registered provider, so zero means assembly discovery broke. Build.Generate.cs § ProviderAssemblies."
+            exit 1
+          fi
+          grep -E 'Generate: [0-9]+ provider' "$RUNNER_TEMP/generate.log"
+
+  # ── docs/plan/23 § Build, row `Charts` ───────────────────────────────────────────────────────────
+  charts:
+    name: charts
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # `Charts` depends on `Compile` (Build.cs § target graph — a chart's @param block is generated
+      # from the provider registry, ADR-012's fifth surface), so this job builds the solution before
+      # it lints anything. `helm` comes with the runner image; Build.Charts.cs § ResolveHelm fails
+      # naming it if it ever stops doing so.
+      - uses: ./.github/actions/dotnet
+
+      - name: ./build.sh Charts
+        run: ./build.sh Charts 2>&1 | tee "$RUNNER_TEMP/charts.log"
+
+      # Build.Charts.cs prints "inspected 0 chart(s) … ○, not ✔" and passes. Right answer for a
+      # build on a tree with no charts; wrong answer for a gate in a repository that has them,
+      # where zero means the glob stopped matching.
+      #
+      # ⚠ Before the upload, not after. `if-no-files-found: error` below would also catch an empty
+      # charts/ — with a message about a missing artifact, which sends the reader to the wrong file.
+      - name: Charts were actually linted
+        run: |
+          if grep -q 'inspected 0 chart' "$RUNNER_TEMP/charts.log"; then
+            echo "::error title=Charts::./build.sh Charts inspected 0 charts and exited 0. charts/ holds Chart.yaml files here, so zero means discovery broke, not that there is nothing to lint."
+            exit 1
+          fi
+          grep -E 'Charts: [0-9]+ chart' "$RUNNER_TEMP/charts.log" | tail -2
+
+      - name: Upload packaged charts
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: charts
+          path: artifacts/charts/
+          if-no-files-found: error
+          retention-days: 14
+
+  # ── docs/plan/23 § Test layers, row Portal ───────────────────────────────────────────────────────
+  #
+  # ⚠ THE TRIPWIRE AT THE END OF THIS JOB IS STILL HERE, AND IT IS NOW QUIET FOR THE RIGHT REASON.
+  #
+  # build/Build.Portal.cs used to be a stub whose stated blocker was that the pnpm workspace did not
+  # exist yet. It did: portal/ has pnpm-lock.yaml, angular.json, five libs, scripts/bundle-budget.mjs,
+  # axe-core and jest-axe, and a `pnpm gates` script chaining node:gate, lint, test and the
+  # production build. So the stub's own reason had expired, the tripwire fired, and this job was red.
+  # The fix was to implement the target, which `./build.sh Portal` now does. The tripwire stays: it
+  # short-circuits on a log with no "Not implemented yet" in it, and it is what would notice if
+  # Portal ever regressed to a stub over a workspace that exists.
+  portal:
+    name: portal
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # `Portal` has no DependsOn and compiles nothing .NET (Build.Portal.cs § BuildPortal), so
+      # unlike the `charts` job above this never builds the solution. The SDK is still needed:
+      # build.sh runs the Nuke project itself.
+      - uses: ./.github/actions/dotnet
+
+      # ⚠ node-version-file, not a literal "24" here. portal/README.md § Node settles the pin across
+      # .nvmrc, .node-version and package.json engines, and ends on "the CI image must be Node 24 —
+      # that is the half of this decision that lives outside this repo". This step is that half, and
+      # a fourth copy of the number in this file is a fourth thing to update when the pin moves.
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: portal/.node-version
+
+      # corepack rather than pnpm/action-setup, for the same one-pin reason: corepack takes the
+      # version from `packageManager: pnpm@11.18.0` in portal/package.json, so it is declared once,
+      # in the workspace that has to install with it.
+      #
+      # ⚠ COREPACK_ENABLE_DOWNLOAD_PROMPT=0 because corepack asks before fetching a version it does
+      # not already have, and build.sh's own header makes the case: "A CI step that blocks on a
+      # question is a hung pipeline, not a failing one."
+      #
+      # `pnpm --version` runs from portal/, which is where the packageManager field is — from the
+      # repository root there is no package.json and corepack would answer with its own default.
+      - name: Enable pnpm from portal/package.json's packageManager pin
+        env:
+          COREPACK_ENABLE_DOWNLOAD_PROMPT: 0
+        run: |
+          corepack enable pnpm
+          echo "node: $(node --version)"
+          echo "pnpm: $(cd portal && pnpm --version)"
+
+      - name: ./build.sh Portal
+        run: ./build.sh Portal 2>&1 | tee "$RUNNER_TEMP/portal.log"
+
+      - name: Portal is not a stub over a real workspace
+        run: .github/scripts/assert-stub-still-blocked.sh Portal "$RUNNER_TEMP/portal.log" portal/pnpm-lock.yaml

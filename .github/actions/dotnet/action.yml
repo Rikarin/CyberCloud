@@ -1,0 +1,42 @@
+# The .NET half of every job's setup, in one place so the five workflows cannot drift on which SDK
+# they build with — docs/plan/23 § Build: "`./build.sh <Target>` locally and in CI, so 'works on my
+# machine' and 'works in CI' are the same code path". Two copies of the SDK selection is how that
+# sentence stops being true.
+
+name: Set up .NET
+description: Restore the SDK from global.json, warm the NuGet cache, and prove the toolchain resolves.
+
+runs:
+  using: composite
+  steps:
+    # global-json-file rather than a literal version. global.json pins 10.0.100 with
+    # rollForward: latestFeature, and repeating "10.0.x" here would be a second pin that nobody
+    # updates when the first one moves.
+    - name: Install the SDK from global.json
+      uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+      with:
+        global-json-file: global.json
+
+    # Keyed on the two files that decide the restore graph. Central Package Management means every
+    # version lives in Directory.Packages.props, so a change there is the only thing that can
+    # invalidate the closure; global.json is in the key because an SDK bump changes the targeting
+    # packs that come down with it.
+    - name: Cache NuGet
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        # One path: local tools are NuGet packages too, so `dotnet tool restore` in build.sh warms
+        # the same directory the solution's restore does.
+        path: ~/.nuget/packages
+        key: nuget-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Directory.Packages.props', 'global.json', '.config/dotnet-tools.json') }}
+        restore-keys: |
+          nuget-${{ runner.os }}-${{ runner.arch }}-
+
+    # ⚠ Not a formality. `dotnet --version` run from the repository root fails outright when the
+    # SDK on PATH cannot satisfy global.json, and it fails here — in a step named for the
+    # toolchain — rather than forty lines into a restore, where the message is about a package.
+    - name: Prove the SDK satisfies global.json
+      shell: bash
+      run: |
+        set -euo pipefail
+        echo "SDK: $(dotnet --version)"
+        echo "runner: ${{ runner.os }}/${{ runner.arch }}"

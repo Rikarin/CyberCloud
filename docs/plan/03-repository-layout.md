@@ -283,6 +283,15 @@ portal/
 └── libs/charts/            # metric/log views over @xui/echarts
 ```
 
+⚠ **The tree above is the target, not the state. As of 2026-08-12 the workspace itself is real and
+gated; three of its entries are not yet built out.** `portal/` has `pnpm-lock.yaml`, `angular.json`,
+a Jest suite that runs axe and `scripts/bundle-budget.mjs`, and `./build.sh Portal` installs it and
+runs the workspace's own `pnpm` gate on every PR — [23 § Build](23-build-ci-and-testing.md), row
+`Portal`. The three: `apps/admin`, which needs the platform-scope API from
+[06](06-tenancy-and-resource-model.md) and a separate auth scope, and `libs/resource-forms` and
+`libs/charts`, which are interfaces only so far. Each, with what it needs first, is in
+[portal/README.md § What is not here](../../portal/README.md).
+
 ## `deploy/`
 
 ```

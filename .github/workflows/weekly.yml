@@ -1,0 +1,199 @@
+# docs/plan/23 § CI shape, row `weekly.yml`: "Sunday | Load, licence scan, dependency review, a
+# restore drill".
+#
+# ── ⚠ ONE OF THOSE FOUR CANNOT LIVE HERE, AND IT IS A DOC DEFECT RATHER THAN A CHOICE ────────────
+#
+# "dependency review" is actions/dependency-review-action, which compares a pull request's
+# dependency graph against its base. A schedule has no pull request and no base, so the action
+# cannot run here at all. It lives in pr.yml, where it works. What runs weekly instead is the
+# vulnerability audit over the full transitive closure — which is the half of "dependency review"
+# that is meaningful without a diff, and which catches an advisory published against a package
+# nobody has touched in a month.
+#
+# ── ⚠ SECRETS THIS WORKFLOW REQUIRES ─────────────────────────────────────────────────────────────
+#
+#   E2E_BASE_URL   an environment that can be driven to 10 000 tenants, 5 000 rps and 2 000 000
+#                  resident grains. Build.Load.cs is explicit that a smaller one "does not produce a
+#                  smaller version of these answers, it produces different ones".
+
+name: weekly
+
+on:
+  schedule:
+    # ⚠ Sunday, 03:00 UTC. docs/plan/23 § CI shape says "Sunday" and no time; an hour after the
+    # nightly so the two do not contend for runners.
+    - cron: '0 3 * * 0'
+  workflow_dispatch:
+
+concurrency:
+  group: weekly
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  DOTNET_CLI_TELEMETRY_OPTOUT: 1
+  DOTNET_NOLOGO: 1
+  NUKE_TELEMETRY_OPTOUT: 1
+
+jobs:
+  # ── docs/plan/23 § Test layers, row Load; the budgets are § The load scenarios ───────────────────
+  load:
+    name: load
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    env:
+      E2E_BASE_URL: ${{ secrets.E2E_BASE_URL }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/dotnet
+
+      - name: Preconditions
+        run: |
+          .github/scripts/require-secrets.sh load \
+            "docs/plan/23 § Test layers, row Load: the docs/plan/00 quality bar at scale, gating 'budgets met' before a release." \
+            "E2E_BASE_URL=create the secret with an environment that can actually be driven to the numbers in docs/plan/23 § The load scenarios"
+
+      # ⚠ Expected to fail on three preconditions today: no test/CyberCloud.Load, and no committed
+      # load baseline — without which the 20 %-regression rule in docs/plan/23 § The load scenarios
+      # is unenforceable and "the budgets alone would pass a release that got five times slower
+      # while staying under them".
+      - name: ./build.sh Load
+        run: ./build.sh Load --e2e-base-url "$E2E_BASE_URL" 2>&1 | tee "$RUNNER_TEMP/load.log"
+
+      - name: Upload the load results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: load-results
+          path: artifacts/load/
+          # ⚠ `warn`, not `error`, and this is the one place in these workflows that is right.
+          # Build.Load.cs § LoadResults exists because "the run and the gate genuinely happen in
+          # different places" — a blocked run has no results to upload and the job is already red
+          # for the real reason.
+          if-no-files-found: warn
+          retention-days: 400
+
+  # ── docs/plan/23 § Build, row `Licence`: "ADR-011 scan over charts and images" ───────────────────
+  #
+  # ⚠ THIS JOB IS RED TODAY FOR A REASON THAT IS NOT THE STUB, AND THE ORDER MATTERS.
+  #
+  # `Licence` depends on `Charts` and `Images`. `Images` is BLOCKED without a registry, syft and
+  # cosign, so `./build.sh Licence` never reaches ScanLicences at all — verified by running it: it
+  # ends "Images is BLOCKED on 3 of 3 precondition(s)". Configure those and the target will reach
+  # Build.Licence.cs, which is a stub that logs "Not implemented yet" and returns success.
+  #
+  # That second state is the dangerous one — a green weekly licence scan that scanned nothing, on
+  # the row with a legal consequence — and it is what the tripwire below is armed for.
+  licence:
+    name: licence
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      CONTAINER_REGISTRY: ${{ secrets.CONTAINER_REGISTRY }}
+      REGISTRY_USERNAME: ${{ secrets.REGISTRY_USERNAME }}
+      REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/dotnet
+
+      - name: Preconditions
+        run: |
+          .github/scripts/require-secrets.sh licence \
+            "docs/plan/23 § Build, row Licence: an ADR-011 scan over charts and images. Build.cs makes Licence depend on Charts and Images, so the images have to exist to be scanned." \
+            "CONTAINER_REGISTRY=create the secret with the registry and repository prefix" \
+            "REGISTRY_USERNAME=create the secret with a principal that can push there" \
+            "REGISTRY_PASSWORD=create the secret with its password or token"
+
+      - name: Install syft
+        uses: anchore/sbom-action/download-syft@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+
+      - name: Log in to the registry
+        run: |
+          echo "$REGISTRY_PASSWORD" | docker login "${CONTAINER_REGISTRY%%/*}" \
+            --username "$REGISTRY_USERNAME" --password-stdin
+
+      - name: ./build.sh Licence
+        run: |
+          ./build.sh Licence \
+            --container-registry "$CONTAINER_REGISTRY" \
+            --container-image-tag "weekly-${GITHUB_SHA::7}" 2>&1 | tee "$RUNNER_TEMP/licence.log"
+
+      # The moment there is something to scan, a stub that scans it is no longer an acceptable pass.
+      - name: Licence is not a stub over real artefacts
+        if: always()
+        run: |
+          .github/scripts/assert-stub-still-blocked.sh Licence "$RUNNER_TEMP/licence.log" \
+            artifacts/images.json 'artifacts/charts/*.tgz'
+
+  # ── docs/plan/23 § CI shape, row `weekly.yml`, the "dependency review" column ────────────────────
+  dependencies:
+    name: dependencies
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/dotnet
+
+      - name: NuGetAudit over the full closure
+        run: .github/scripts/audit-packages.sh
+
+      # Not a gate — an inventory. docs/plan/23 does not put a freshness bar on dependencies and
+      # this workflow is not the place to invent one; what it is good for is noticing that a package
+      # has gone three majors behind while nobody was looking.
+      - name: Outdated packages, for the record
+        run: |
+          dotnet list CyberCloud.slnx package --outdated 2>&1 | tee "$RUNNER_TEMP/outdated.log" || true
+          {
+            echo "### Outdated packages"
+            echo
+            echo '```'
+            grep -E '^\s+> ' "$RUNNER_TEMP/outdated.log" | sort -u || echo "(none)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # ── docs/plan/23 § CI shape, row `weekly.yml`, the "restore drill" column ────────────────────────
+  #
+  # ⚠ BLOCKED, AND NOT ON A SECRET. Written out rather than omitted, because "a restore drill" is one
+  # of the four things that row promises and a weekly workflow with three of them is a workflow that
+  # quietly redefined the row.
+  restore-drill:
+    name: restore-drill
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: What a restore drill needs that this repository does not have
+        run: |
+          cat <<'BLOCKED'
+          ::error title=restore-drill::restore-drill is BLOCKED on 3 input(s), none of them a secret.
+          BLOCKED
+          cat <<'BLOCKED'
+
+            ✘ nothing in the repository takes a backup.
+              To unblock: decide where the durable tier's backups live and how they are taken.
+              docs/plan/05 § The two tiers describes the tiers; nothing describes their backup.
+
+            ✘ there is no documented restore procedure to drill.
+              To unblock: write it. deploy/README.md § Idempotence has the closest thing — the
+              recovery SQL that drops and reapplies the Orleans schema — and that is schema repair,
+              not data restore. A drill of a procedure nobody wrote is a drill of nothing.
+
+            ✘ there is no scratch environment to restore INTO.
+              To unblock: a throwaway shard per drill. docs/plan/23 § Environments and rollout has
+              dev, staging and prod, and restoring over any of the three is not a drill.
+
+          ⚠ The point of a restore drill is finding out that the backups do not restore. Reporting
+          this as green until somebody writes the three things above would be the most expensive
+          possible version of exactly that discovery, made at exactly the wrong moment.
+          BLOCKED
+          exit 1
