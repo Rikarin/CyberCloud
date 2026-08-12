@@ -65,6 +65,14 @@ CyberCloud.Identity -> CyberCloud.Communication
 # ── Identity — docs/plan/11 ────────────────────────────────────────────────────────────────────
 # Identity is a consumer of everything under it and a supplier to nothing here: only hosts and the
 # gateway reach it, and neither is in scope for this rule.
+#
+# ⚠ THE LINE BELOW EXISTS ONLY IN A .csproj, AND IT IS WHY THIS RULE DOES NOT READ METADATA ALONE.
+# CyberCloud.Identity references the CyberCloud.Authorization IMPLEMENTATION assembly for
+# ObjectTypes and Relations — the ReBAC vocabulary, deliberately not copied (see that .csproj) — and
+# every member of both is a `const string`. The compiler inlines them, so CyberCloud.Identity's
+# AssemblyRef table has no row for CyberCloud.Authorization at all. A rule 7 built on binding
+# references would not merely have missed this edge, it would have called this line stale and asked
+# for it to be deleted. It is real, it is intended, and only the ProjectReference set can see it.
 CyberCloud.Identity -> CyberCloud.Authorization
 CyberCloud.Identity -> CyberCloud.Core
 CyberCloud.Identity -> CyberCloud.Tenancy
