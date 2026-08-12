@@ -183,77 +183,24 @@ public sealed class ResourceSchemaTests {
     }
 
     // ── The api-version projection — the other half of the immutable-date rule ──────────────────
-
-    [Fact]
-    public void AReadAtAnOldVersionDoesNotSeeANewerVersionsField() {
-        // ⚠ THE POINT OF THE WHOLE MACHINE. docs/plan/08 § The provider registry: "Adding a field is a
-        // new version … the grain's state is a SUPERSET and a read at an old version projects down."
-        // An SDK generated against 2026-08-01 has no member for `backupRetentionDays`, and receiving
-        // one is the break the immutable-date rule exists to prevent.
-        var v2026 = Sku2026;
-        var v2027 = ResourceSchema.Of(
-            [
-                new("/location", SchemaKind.Text, Required: true),
-                new("/properties", SchemaKind.Nested),
-                new("/properties/version", SchemaKind.Text, Required: true),
-                new("/properties/storageGb", SchemaKind.WholeNumber),
-                new("/properties/backupRetentionDays", SchemaKind.WholeNumber)
-            ]
-        );
-
-        var superset = JsonNode.Parse(
-            """
-            {"location":"eu-central",
-             "properties":{"version":"17","storageGb":100,"backupRetentionDays":7}}
-            """
-        )!.AsObject();
-
-        var old = v2026.Project(superset);
-        var current = v2027.Project(superset);
-
-        old["properties"]!.AsObject().ContainsKey("backupRetentionDays").ShouldBeFalse();
-        old["properties"]!["storageGb"]!.GetValue<int>().ShouldBe(100);
-        old["location"]!.GetValue<string>().ShouldBe("eu-central");
-
-        current["properties"]!["backupRetentionDays"]!.GetValue<int>().ShouldBe(7);
-    }
-
-    [Fact]
-    public void ASecretPropertyIsDroppedByTheProjectionRatherThanReturned() {
-        // A projection is a read. docs/plan/08 § The provider registry's `secret: true` actions are the
-        // only path a secret value leaves by.
-        var schema = ResourceSchema.Of(
-            [
-                new("/properties", SchemaKind.Nested),
-                new("/properties/adminPassword", SchemaKind.Text, Secret: true),
-                new("/properties/adminUser", SchemaKind.Text)
-            ]
-        );
-
-        var superset = JsonNode.Parse("""{"properties":{"adminPassword":"hunter2","adminUser":"pg"}}""")!
-            .AsObject();
-
-        var projected = schema.Project(superset);
-
-        projected["properties"]!.AsObject().ContainsKey("adminPassword").ShouldBeFalse();
-        projected["properties"]!["adminUser"]!.GetValue<string>().ShouldBe("pg");
-        projected.ToJsonString().ShouldNotContain("hunter2");
-    }
-
-    [Fact]
-    public void ProjectingAContainerDoesNotCarryItsUndeclaredMembersThrough() {
-        // If a declared /properties object were projected whole, every undeclared member inside it
-        // would ride along and the filter would be a no-op for anything nested.
-        var schema = ResourceSchema.Of(
-            [new("/properties", SchemaKind.Nested), new("/properties/known", SchemaKind.Text)]
-        );
-
-        var superset = JsonNode.Parse("""{"properties":{"known":"a","unknown":"b"}}""")!.AsObject();
-        var projected = schema.Project(superset);
-
-        projected["properties"]!.AsObject().ContainsKey("unknown").ShouldBeFalse();
-        projected["properties"]!["known"]!.GetValue<string>().ShouldBe("a");
-    }
+    //
+    // ⚠ THE PROJECTION IS NOT TESTED HERE, BECAUSE IT NO LONGER LIVES HERE. ResourceSchema used to
+    // carry a Project(JsonObject) that only these tests ever called; the projection a real GET runs is
+    // ResourceGrain.Project, over the pointer list ResourceManagerService hands down. Testing the
+    // unreachable copy is how its secret drop came to look like a platform guarantee for as long as it
+    // did. The three cases that were here — a read at an old version, a container not carrying its
+    // undeclared members, and a Secret property withheld — are now
+    // CyberCloud.ResourceManager.Tests.WritePathTests.AReadAtAnOldVersionKeepsGettingTheShapeItWasWrittenAgainst
+    // and .ASecretPropertyIsNeverProjectedBackToTheCaller, against the code a request reaches.
+    //
+    // What this file still owns is the SCHEMA: what it declares, what it validates, and what it
+    // refuses.
+    //
+    // ⚠ An all-Secret schema is NOT refused here, and that is deliberate: a schema does not know what
+    // it is for. An action's response is legitimately all-secret — `listKeys` — while a resource body
+    // that shape would project its whole superset on a read. ProviderBuilder.ApiVersion is where a
+    // schema becomes a body and is where the refusal lives;
+    // CyberCloud.ResourceManager.Tests.RegistryDeclarationTests asserts it.
 
     [Fact]
     public void DeclaresIsExactAndIsNotAPrefixMatch() {

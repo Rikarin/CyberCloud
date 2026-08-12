@@ -380,6 +380,53 @@ public sealed class WritePathTests(ResourceManagerCluster cluster) {
     }
 
     [Fact]
+    public async Task ASecretPropertyIsNeverProjectedBackToTheCaller() {
+        // ⚠ The write stores it and every read withholds it. ResourceManagerService keeps two pointer
+        // lists — the complete one the grain replaces the slice with, and ReadablePointers, which drops
+        // every SchemaProperty.Secret. This asserts all three surfaces a caller can see: the write's
+        // own response, a later GET, and a no-op PUT's response.
+        //
+        // ⚠ It does NOT assert confidentiality, and the last two lines say why: the value is in the
+        // grain's superset in plaintext because nothing on the write path substitutes a SecretRef.
+        // docs/plan/02 § ADR-010. If that is ever closed, this test should get stricter rather than go.
+        ResourceManagerCluster.ResetDoubles();
+        var address = ResourceManagerCluster.Address("secret-drop");
+        var body = """{"location":"eu-central","properties":{"size":2,"adminPassword":"hunter2"}}""";
+
+        var created = await Write(address, body);
+
+        created.IsSuccess.ShouldBeTrue(created.Error?.Message);
+        created.GetValueOrThrow().Resource.Properties.ShouldNotContain("hunter2");
+        created.GetValueOrThrow().Resource.Properties.ShouldNotContain("adminPassword");
+
+        var read = await cluster.Manager.ReadAsync(
+            new() { Path = address.Path, ApiVersion = TestingProvider.V2026, Caller = ResourceManagerCluster.Caller() },
+            TestContext.Current.CancellationToken
+        );
+
+        read.IsSuccess.ShouldBeTrue(read.Error?.Message);
+        read.GetValueOrThrow().Properties.ShouldNotContain("hunter2");
+        read.GetValueOrThrow().Properties.ShouldContain("eu-central");
+
+        // The no-op branch answers from the grain's own snapshot rather than from a re-read, so it is
+        // its own surface and it needs its own assertion.
+        await Converge(created.GetValueOrThrow());
+        var repeated = await Write(address, body);
+
+        repeated.IsSuccess.ShouldBeTrue(repeated.Error?.Message);
+        repeated.GetValueOrThrow().NoOp.ShouldBeTrue();
+        repeated.GetValueOrThrow().Resource.Properties.ShouldNotContain("hunter2");
+
+        // ⚠ And here is the half that is NOT closed: the plaintext is in durable state. The grain is
+        // asked with the unfiltered pointer list, which is what the write path itself uses.
+        var stored = await cluster
+            .Resource(ResourceManagerCluster.Tenant, created.GetValueOrThrow().Resource.Id)
+            .GetAsync(TestingProvider.V2026, TestingProvider.Pointers2026);
+
+        stored.GetValueOrThrow().Properties.ShouldContain("hunter2");
+    }
+
+    [Fact]
     public async Task AnUnknownApiVersionIsRefusedAndTheErrorNamesTheOnesThatExist() {
         ResourceManagerCluster.ResetDoubles();
 

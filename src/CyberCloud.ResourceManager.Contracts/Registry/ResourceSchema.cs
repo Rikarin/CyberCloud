@@ -1,7 +1,6 @@
 using System.Collections.Immutable;
 using System.Globalization;
 using System.Text.Json;
-using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 
 namespace CyberCloud.ResourceManager.Contracts.Registry;
@@ -23,6 +22,31 @@ namespace CyberCloud.ResourceManager.Contracts.Registry;
 ///         model flat — a list an emitter can walk in one pass and a validator can index — and it
 ///         makes the api-version projection a set membership test rather than a tree walk.
 ///     </para>
+///     <para>
+///         ⚠ <b><see cref="Secret" /> labels a property; it does not protect one.</b> Nothing on the
+///         write path swaps a secret value for a <see cref="SecretRef" /> before durable state is
+///         written. The body travels from <c>ResourceManagerService.WriteAsync</c> to
+///         <c>ResourceGrain.SubmitDesiredAsync</c> untransformed — the policy engine is the only hook
+///         that may rewrite it and it is secret-blind — so a <c>Secret</c> property lands in the
+///         grain's superset in plaintext, and docs/plan/05 § What is deliberately not in either tier
+///         says what that costs: <i>"Grain state is JSON in Postgres and in backups. A secret there is
+///         a secret in every backup forever."</i> <c>CC1005</c> cannot catch it either — the analyzer
+///         matches C# member names, and this value rides inside a JSON string. docs/plan/02 § ADR-010
+///         records the gap and puts it on the resource manager rather than on any provider.
+///     </para>
+///     <para>
+///         What the flag does buy is the generated surfaces — an OpenAPI <c>writeOnly</c> with
+///         <c>format: password</c>, a masked portal control, a chart annotation — and a real drop on
+///         the read path: <c>ResourceManagerService.ReadablePointers</c> withholds the pointer, so a
+///         <c>GET</c> and a write's own response never carry the value back. ⚠ That is a projection
+///         filter and not confidentiality — the value is still in the superset, and
+///         <c>OperationSpec.Desired</c> holds a second copy. <b>So until the substitution exists, don't
+///         mark a body property <c>Secret</c>.</b> Take a
+///         <see cref="SecretRef" /> from the caller instead, or keep the value out of the API and let
+///         the reconciler mint it into Vault — which is what <c>CyberCloud.DBforPostgreSQL/servers</c>
+///         does with its bootstrap password, with <c>PostgresSecretTests</c> holding the line for that
+///         type.
+///     </para>
 /// </remarks>
 /// <param name="JsonPointer">
 ///     The RFC 6901 pointer to this property, for example <c>/properties/sku/name</c>. ⚠ Must start
@@ -39,9 +63,9 @@ namespace CyberCloud.ResourceManager.Contracts.Registry;
 ///     silently ignored, because "I set it and it did not take" is the bug report nobody can act on.
 /// </param>
 /// <param name="Secret">
-///     Whether the value is a secret. ⚠ A secret property's value never reaches grain state — it is
-///     replaced by a <see cref="SecretRef" /> before step 8 — so this flag is what a generated form
-///     masks and what the write path redacts.
+///     Whether the value is meant to be treated as a secret. ⚠ It masks the property on the generated
+///     surfaces and does nothing else — the write path stores the value in plaintext. Read the remarks
+///     before setting it.
 /// </param>
 /// <param name="Description">
 ///     What the property means, for the generated OpenAPI, CLI help and portal form. ADR-012's
@@ -488,10 +512,13 @@ public readonly record struct SchemaProperty(
 ///         back in play.
 ///     </para>
 ///     <para>
-///         ⚠ <b><see cref="Project" /> is the other half of the immutable-date rule.</b> The grain's
-///         state is a superset of every version's properties; a read at an old version keeps exactly
-///         the properties that version declared and drops the rest. That is what stops an SDK
-///         generated against <c>2026-08-01</c> from receiving a field it has no member for.
+///         ⚠ <b>The projection is the other half of the immutable-date rule, and it does not live
+///         here.</b> The grain's state is a superset of every version's properties; a read at an old
+///         version keeps exactly the properties that version declared and drops the rest, which is what
+///         stops an SDK generated against <c>2026-08-01</c> from receiving a field it has no member
+///         for. <c>ResourceGrain.Project</c> runs it, over the pointer list
+///         <c>ResourceManagerService</c> hands down — this type supplies
+///         <see cref="Properties" /> and <see cref="Declares" /> and nothing that walks a document.
 ///     </para>
 /// </remarks>
 public sealed record ResourceSchema {
@@ -686,45 +713,14 @@ public sealed record ResourceSchema {
         );
     }
 
-    /// <summary>
-    ///     Keeps only what this version declares — the "projects down" half of
-    ///     docs/plan/08 § The provider registry.
-    /// </summary>
-    /// <param name="superset">
-    ///     The grain's whole state, which is the union of every version's properties.
-    /// </param>
-    /// <returns>
-    ///     A new object carrying exactly the declared pointers that are present in
-    ///     <paramref name="superset" />. ⚠ Secret properties are dropped rather than projected — a
-    ///     projection is a read, and docs/plan/08 § The provider registry's <c>secret: true</c>
-    ///     actions are the only path a secret value leaves by.
-    /// </returns>
-    public JsonObject Project(JsonObject superset) {
-        ArgumentNullException.ThrowIfNull(superset);
-
-        var projected = new JsonObject();
-
-        foreach (var property in Properties) {
-            if (property.Secret) {
-                continue;
-            }
-
-            var node = Resolve(superset, property.JsonPointer);
-            if (node is null) {
-                continue;
-            }
-
-            // A container property is created by whichever of its children lands first, so an object
-            // or array declared purely as a container is skipped and its leaves rebuild it.
-            if (property.Kind is SchemaKind.Nested) {
-                continue;
-            }
-
-            Place(projected, property.JsonPointer, node.DeepClone());
-        }
-
-        return projected;
-    }
+    // ⚠ THERE IS NO Project HERE, AND THAT IS THE DECISION RATHER THAN AN OMISSION.
+    //
+    // A schema-shaped Project(JsonObject) lived here and nothing but its own tests ever called it: the
+    // projection a real GET runs is ResourceGrain.Project, which takes a flat pointer list because the
+    // grain must not depend on the registry (see ResourceWriteSubmission.DeclaredPointers). Two
+    // implementations of one rule is how the secret drop came to exist in the one nobody reached, so
+    // the reachable one is now the only one. ResourceManagerService.ReadablePointers is what decides
+    // which pointers it gets, and WritePathTests is where the behaviour is asserted.
 
     /// <summary>Whether this schema declares <paramref name="jsonPointer" />.</summary>
     /// <param name="jsonPointer">An RFC 6901 pointer.</param>
@@ -754,40 +750,6 @@ public sealed record ResourceSchema {
         }
 
         return true;
-    }
-
-    /// <summary>Reads a pointer out of a <see cref="JsonNode" />.</summary>
-    static JsonNode? Resolve(JsonNode root, string jsonPointer) {
-        var current = root;
-
-        foreach (var token in Tokens(jsonPointer)) {
-            if (current is not JsonObject obj || !obj.TryGetPropertyValue(token, out var next) || next is null) {
-                return null;
-            }
-
-            current = next;
-        }
-
-        return current;
-    }
-
-    /// <summary>Writes a value at a pointer, creating the objects on the way.</summary>
-    static void Place(JsonObject root, string jsonPointer, JsonNode value) {
-        var tokens = Tokens(jsonPointer).ToArray();
-        var current = root;
-
-        for (var i = 0; i < tokens.Length - 1; i++) {
-            if (current[tokens[i]] is JsonObject existing) {
-                current = existing;
-                continue;
-            }
-
-            var created = new JsonObject();
-            current[tokens[i]] = created;
-            current = created;
-        }
-
-        current[tokens[^1]] = value;
     }
 
     /// <summary>

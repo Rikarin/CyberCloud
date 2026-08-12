@@ -679,10 +679,12 @@ public static class OpenApiEmitter {
     ///         ⚠ <b>One schema serves both directions.</b> <c>readOnly</c> and <c>writeOnly</c> are
     ///         exactly the two JSON Schema keywords needed to say "the server owns this" and "this
     ///         never comes back", which are exactly <see cref="SchemaProperty.ReadOnly" /> and
-    ///         <see cref="SchemaProperty.Secret" /> — <see cref="ResourceSchema.Project" /> drops
-    ///         secrets on every read, so <c>writeOnly</c> is a statement of what the code does rather
-    ///         than a wish. Emitting a request schema and a response schema instead would double
-    ///         every component and make the compatibility diff compare four things where two would do.
+    ///         <see cref="SchemaProperty.Secret" />. ⚠ <c>readOnly</c> is enforced —
+    ///         <see cref="ResourceSchema.Validate" /> refuses a body that sets one — but
+    ///         <c>writeOnly</c> is currently a wish: no runtime read strips a secret, for the reasons
+    ///         the remarks on <see cref="SchemaProperty" /> lay out. Emitting a request schema and a
+    ///         response schema instead would double every component and make the compatibility diff
+    ///         compare four things where two would do.
     ///     </para>
     ///     <para>
     ///         ⚠ <b>Three shapes are refused rather than emitted</b>, because each is a body no caller
@@ -942,8 +944,9 @@ public static class OpenApiEmitter {
         }
 
         if (property.Secret) {
-            // writeOnly because ResourceSchema.Project drops every secret property on a read, and
-            // format=password because that is what a portal form masks on.
+            // writeOnly because that is what a secret property is meant to be — ⚠ the runtime read
+            // path does not yet strip one, see SchemaProperty's remarks — and format=password because
+            // that is what a portal form masks on.
             node["writeOnly"] = true;
             node["format"] = "password";
             node["x-cybercloud-secret"] = true;

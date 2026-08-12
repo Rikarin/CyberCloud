@@ -111,6 +111,46 @@ public sealed class RegistryDeclarationTests {
         registration.ClusterIdPointer.ShouldBe("/clusterRef");
     }
 
+    [Fact]
+    public void ABodyWhoseEveryPropertyIsSecretIsRefusedAtDeclaration() {
+        // ⚠ ResourceManagerService.ReadablePointers withholds Secret pointers by handing the grain the
+        // others, and an empty pointer list means "project the whole superset" downstream — the escape
+        // hatch the delete path needs. A body with nothing readable would therefore return everything
+        // it meant to withhold, and silently. Silo start is the cheap place to find that.
+        var thrown = Should.Throw<ArgumentException>(
+            () => Build(b => b
+                .ResourceType("allSecret")
+                .ApiVersion("2026-08-01", ResourceSchema.Of([new("/adminPassword", SchemaKind.Text, Secret: true)])))
+        );
+
+        thrown!.Message.ShouldContain("Every property of");
+        thrown.Message.ShouldContain("is Secret");
+    }
+
+    [Fact]
+    public void AnActionResponseMayBeAllSecretBecauseItIsNeverProjected() {
+        // ⚠ The counterpart, and it is why the check above is on the builder rather than on
+        // ResourceSchema.Of. docs/plan/08 § The provider registry's `listKeys` returns nothing but
+        // secret material by definition. An action response is returned by its handler and never goes
+        // through the read projection, so the rule that governs a body does not reach it.
+        var registry = Build(b => b
+            .ResourceType("keyed")
+            .ApiVersion("2026-08-01", ResourceSchema.Of([new("/location", SchemaKind.Text)]))
+            .Action(
+                "listKeys",
+                ActionKind.Post,
+                "listKeys",
+                secret: true,
+                response: ResourceSchema.Of([
+                    new("/primary", SchemaKind.Text, Required: true, Secret: true),
+                    new("/secondary", SchemaKind.Text, Required: true, Secret: true)
+                ])
+            ));
+
+        registry.TryGetType(new("CyberCloud.Declaring", "keyed"), out var registration).ShouldBeTrue();
+        registration.Actions.Single(x => x.Name == "listKeys").Response!.Properties.Length.ShouldBe(2);
+    }
+
     // ── Display metadata ───────────────────────────────────────────────────────────────────────
 
     [Fact]
