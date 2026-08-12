@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Globalization;
 
 namespace CyberCloud.ResourceManager.Contracts.Registry;
 
@@ -134,18 +135,57 @@ public readonly record struct DisplayMetadata(
 }
 
 /// <summary>
-///     One declared quota draw: which meter, and where in the body the amount comes from.
+///     One declared quota draw: which meter, and how much of it a body draws.
 /// </summary>
 /// <param name="Meter">Which limit to draw against.</param>
 /// <param name="AmountPointer">
-///     An RFC 6901 pointer to a number in the body, or <c>""</c> for a flat one unit.
+///     An RFC 6901 pointer to a number in the body, <c>""</c> for a flat amount, or <c>""</c> with a
+///     <see cref="Derivation" /> when the amount is computed.
 /// </param>
-/// <param name="Fallback">What to reserve when the pointer is absent.</param>
+/// <param name="Fallback">
+///     What to reserve when <see cref="AmountPointer" /> is absent from the body, or
+///     <see langword="null" /> to refuse the write.
+/// </param>
+/// <remarks>
+///     ⚠ <b><paramref name="Fallback" /> is nullable, and <see langword="null" /> is the default a
+///     provider gets.</b> It used to be <c>decimal</c> defaulting to <c>1</c>, so a pointer that
+///     stopped resolving — a property renamed, an api-version bumped, a schema and a meter that drifted
+///     apart — quietly reserved one unit. Quota passed, the resource provisioned, and the meter that
+///     was supposed to bound it recorded a number nobody chose. A meter that cannot determine its
+///     amount now refuses the write; declaring a fallback is how a provider says a value genuinely has
+///     a server default, and it is a thing said out loud rather than a thing inherited.
+/// </remarks>
 public readonly record struct MeterRegistration(
     QuotaMeter Meter,
     string AmountPointer,
-    decimal Fallback
-);
+    decimal? Fallback
+) {
+    /// <summary>
+    ///     How the amount is computed, when it is not a number at <see cref="AmountPointer" />.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ Supersedes <see cref="AmountPointer" /> and <see cref="Fallback" /> entirely when present —
+    ///     a derivation states its own absent case. See <see cref="MeterDerivation" /> for why the
+    ///     function has to be pure in the body it is handed.
+    /// </remarks>
+    public MeterDerivation? Derivation { get; init; }
+
+    /// <summary>What this meter draws, in one line, for a generated document.</summary>
+    /// <remarks>
+    ///     ⚠ Every meter has one, including the flat and pointer cases, so
+    ///     <c>OpenApiEmitter</c> publishes one shape rather than branching — and so
+    ///     "what moves this quota" is answerable from the document for every type.
+    /// </remarks>
+    public string Expression =>
+        Derivation?.Expression
+        ?? (AmountPointer.Length > 0
+            ? AmountPointer
+            : (Fallback ?? 1m).ToString(CultureInfo.InvariantCulture));
+
+    /// <summary>Every pointer the amount reads. Empty for a flat amount.</summary>
+    public ImmutableArray<string> Reads =>
+        Derivation?.Reads ?? (AmountPointer.Length > 0 ? [AmountPointer] : []);
+}
 
 /// <summary>
 ///     One api-version of one resource type: the date, the schema, and nothing else.

@@ -102,28 +102,64 @@ public interface IResourceTypeBuilder : IProviderBuilder {
     ///     not a quantity a reservation can hold. Billing meters are docs/plan/22's and are a separate
     ///     declaration when they land.
     ///     <para>
-    ///         Use <see cref="Meter(QuotaMeter, string, decimal)" /> when the amount comes from the
-    ///         body rather than being one unit.
+    ///         Use <see cref="Meter(QuotaMeter, string, decimal?)" /> when the amount is a number in the
+    ///         body, and <see cref="Meter(QuotaMeter, MeterDerivation)" /> when it is anything else —
+    ///         which, for every managed service in the catalogue, it is.
     ///     </para>
     /// </remarks>
     IResourceTypeBuilder Meters(params QuotaMeter[] meters);
 
     /// <summary>
-    ///     Declares a quota meter whose amount is read out of the request body.
+    ///     Declares a quota meter whose amount is a number in the request body.
     /// </summary>
     /// <param name="meter">Which limit to draw against.</param>
     /// <param name="amountPointer">
-    ///     An RFC 6901 pointer to a number in the body, for example <c>/properties/sku/vcpu</c>. ⚠ A
-    ///     pointer rather than a delegate on purpose: a delegate validates and reserves but cannot be
-    ///     <i>generated</i> from, and docs/plan/08 § The provider registry requires this one object to
-    ///     do both.
+    ///     An RFC 6901 pointer to a number in the body, for example <c>/properties/sku/vcpu</c>.
     /// </param>
     /// <param name="fallback">
-    ///     What to reserve when the pointer is absent from the body — for a property with a server
-    ///     default.
+    ///     What to reserve when the pointer is absent from the body, for a property with a server
+    ///     default — or <see langword="null" />, the default, to refuse the write instead.
     /// </param>
     /// <returns>The same builder.</returns>
-    IResourceTypeBuilder Meter(QuotaMeter meter, string amountPointer, decimal fallback = 1m);
+    /// <remarks>
+    ///     ⚠ <b><paramref name="fallback" /> defaulted to <c>1</c> and now defaults to refusal, which is
+    ///     a behaviour change.</b> A pointer that stops resolving is the failure worth designing for: a
+    ///     property is renamed, an api-version moves, a schema and a meter drift apart, and the meter
+    ///     silently reserves one unit while the resource provisions at whatever size it likes. Zero and
+    ///     one are both wrong and both pass. A provider that means "absent has a server default" now
+    ///     says so.
+    /// </remarks>
+    IResourceTypeBuilder Meter(QuotaMeter meter, string amountPointer, decimal? fallback = null);
+
+    /// <summary>
+    ///     Declares a quota meter whose amount is computed from the body.
+    /// </summary>
+    /// <param name="meter">Which limit to draw against.</param>
+    /// <param name="derivation">
+    ///     The computation, and the description of it the generated document publishes.
+    /// </param>
+    /// <returns>The same builder.</returns>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>This overload exists because the pointer one cannot express a single real meter.</b>
+    ///         Every amount a managed service draws is a Kubernetes quantity string — <c>500m</c>,
+    ///         <c>4Gi</c> — rather than a JSON number; most of them are absent from the body entirely
+    ///         and named indirectly by a sizing preset; and the total a resource consumes is
+    ///         per-instance × instances. A pointer addresses one value and none of those is one value,
+    ///         which is why both managed-data providers could declare <see cref="QuotaMeter.Resources" />
+    ///         and nothing else.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>It puts provider code on the quota path, and two rules keep that safe.</b> The
+    ///         function must be pure in the body it is handed — the delete path re-derives committed
+    ///         amounts from the stored body through this same step, and an impure derivation
+    ///         reintroduces quota drifting upward across delete cycles. And it must carry
+    ///         <see cref="MeterDerivation.Expression" /> and <see cref="MeterDerivation.Reads" />, so
+    ///         the objection to a delegate — that it "cannot be <i>generated</i> from" — is answered by
+    ///         the derivation describing itself rather than by the registry giving up on the meter.
+    ///     </para>
+    /// </remarks>
+    IResourceTypeBuilder Meter(QuotaMeter meter, MeterDerivation derivation);
 
     /// <summary>
     ///     Names the ReBAC permissions the three verbs check.

@@ -50,7 +50,10 @@ sealed class DiscoveringProviderBuilder : IResourceTypeBuilder {
     public IResourceTypeBuilder Meters(params QuotaMeter[] meters) => this;
 
     /// <inheritdoc />
-    public IResourceTypeBuilder Meter(QuotaMeter meter, string amountPointer, decimal fallback = 1m) => this;
+    public IResourceTypeBuilder Meter(QuotaMeter meter, string amountPointer, decimal? fallback = null) => this;
+
+    /// <inheritdoc />
+    public IResourceTypeBuilder Meter(QuotaMeter meter, MeterDerivation derivation) => this;
 
     /// <inheritdoc />
     public IResourceTypeBuilder Permissions(string read, string write, string delete) => this;

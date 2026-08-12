@@ -995,7 +995,33 @@ public sealed class ResourceManagerService(
         var amounts = ImmutableArray.CreateBuilder<QuotaCommitment>(target.Registration.Meters.Length);
 
         foreach (var meter in target.Registration.Meters) {
-            var amount = AmountFor(meter, body);
+            var derived = AmountFor(meter, body);
+
+            // ⚠ A METER THAT CANNOT SAY HOW MUCH REFUSES THE WRITE, AND THAT IS THE WHOLE POINT.
+            // The alternative — which is what a `decimal Fallback = 1m` did — is that a pointer which
+            // stopped resolving reserved one unit, quota passed, the resource provisioned at whatever
+            // size it liked, and the meter that was supposed to bound it recorded a number nobody
+            // chose. Zero and one are both wrong and both succeed; only a refusal is visible.
+            //
+            // Nothing has been reserved yet on the first iteration and everything taken so far is
+            // released below on a later one, so this leaves no lease behind either way.
+            if (derived.TryGetError(out var amountError)) {
+                foreach (var leaseId in taken) {
+                    _ = await quota.ReleaseAsync(leaseId);
+                }
+
+                logger.LogError(
+                    "The meter {Meter} on {Type} could not determine an amount for this body: "
+                    + "{Message}",
+                    meter.Meter,
+                    target.Registration.Type,
+                    amountError.Message
+                );
+
+                return Result<Reservation>.Failure(amountError);
+            }
+
+            var amount = derived.GetValueOrThrow();
             var reserved = await quota.TryReserveAsync(meter.Meter, amount, operationId);
 
             if (reserved.TryGetError(out var quotaError)) {
@@ -1030,15 +1056,27 @@ public sealed class ResourceManagerService(
     ///         number the create reserved and committed.
     ///     </para>
     ///     <para>
+    ///         ⚠ <b>A <see cref="MeterRegistration.Derivation" /> keeps that symmetry only because it is
+    ///         a pure function of the body.</b> The seam lets a provider compute an amount the body does
+    ///         not spell — <c>replicas × sizing.cpu</c>, a preset resolved to a quantity — and the
+    ///         create and the delete both run that same function over the same stored JSON, so the two
+    ///         cannot disagree. A derivation that consulted a clock, configuration, or anything outside
+    ///         its argument would reintroduce exactly the drift this method exists to stop, which is why
+    ///         <see cref="MeterDerivation" /> says so at length and declares its own read set.
+    ///     </para>
+    ///     <para>
     ///         ⚠ <b>An update that moves a metered value is a gap, and it is an older one than this.</b>
     ///         Step 6 reserves only for a create — <i>"an update does not draw new quota"</i> — so
     ///         committed usage already does not track a body that grew. Closing that needs quota to be
     ///         re-evaluated on update, which is a change to step 6 and not to the delete path; what
     ///         this method must not do is invent a different number, so it derives the same way step 6
-    ///         does and inherits step 6's answer.
+    ///         does and inherits step 6's answer. <b>The seam makes that closable rather than closing
+    ///         it</b>: <see cref="AmountFor" /> is now a total function from a body to an amount or a
+    ///         stated refusal, so re-reserving on a <c>PATCH</c> is running it over the new body and
+    ///         moving the difference — which is a change to step 6, deliberately not made here.
     ///     </para>
     /// </remarks>
-    static ImmutableArray<QuotaCommitment> CommittedBy(ResourceTypeRegistration registration, string properties) {
+    ImmutableArray<QuotaCommitment> CommittedBy(ResourceTypeRegistration registration, string properties) {
         if (registration.Meters.IsDefaultOrEmpty) {
             return [];
         }
@@ -1058,31 +1096,101 @@ public sealed class ResourceManagerService(
             var amounts = ImmutableArray.CreateBuilder<QuotaCommitment>(registration.Meters.Length);
 
             foreach (var meter in registration.Meters) {
-                amounts.Add(new() { Meter = meter.Meter, Amount = AmountFor(meter, body.RootElement) });
+                var derived = AmountFor(meter, body.RootElement);
+
+                // ⚠ A delete does not fail because a meter stopped deriving, and it does not guess
+                // either. The create refused every body this could not measure, so a stored resource
+                // whose amount no longer derives means the DECLARATION moved under it — a provider
+                // renamed a property, or an api-version changed the shape — between the create and the
+                // delete. Crediting a number this run computed would credit a different number than
+                // the one that was committed, which is the drift with the sign flipped. Skipping it
+                // leaves that meter high by one resource's worth, logged, and lets the tear-down
+                // finish; a delete that refused would leave the resource undeletable instead.
+                if (derived.TryGetError(out var amountError)) {
+                    logger.LogError(
+                        "The meter {Meter} on {Type} no longer derives an amount from the stored body, "
+                        + "so a delete cannot return what the create committed and that meter will "
+                        + "read high: {Message}",
+                        meter.Meter,
+                        registration.Type,
+                        amountError.Message
+                    );
+
+                    continue;
+                }
+
+                amounts.Add(new() { Meter = meter.Meter, Amount = derived.GetValueOrThrow() });
             }
 
             return amounts.DrainToImmutable();
         }
     }
 
-    /// <summary>How much of a meter this body draws — from the declared pointer, or the fallback.</summary>
-    static decimal AmountFor(MeterRegistration meter, JsonElement body) {
-        if (meter.AmountPointer.Length == 0) {
-            return meter.Fallback;
-        }
-
-        var current = body;
-        foreach (var token in meter.AmountPointer.Split('/', StringSplitOptions.RemoveEmptyEntries)) {
-            if (current.ValueKind != JsonValueKind.Object || !current.TryGetProperty(token, out var next)) {
-                return meter.Fallback;
+    /// <summary>
+    ///     How much of a meter this body draws — the derivation, the declared pointer, or a refusal.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>The one step both a create and a delete go through, which is what makes them
+    ///         symmetric.</b> Anything that changes how an amount is derived changes it for both at
+    ///         once; a second derivation on either side is the bug <c>DeletePathTests</c>'
+    ///         <c>ADeleteReturnsExactlyWhatTheCreateCommittedOnEveryMeter</c> pins.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Refusal is the default and zero is never the answer.</b> A pointer that resolves to
+    ///         nothing, a quantity that does not parse, a preset a provider does not know — each one
+    ///         used to mean "reserve the fallback", which defaulted to one unit. That is the failure
+    ///         nobody sees: the write succeeds, the resource provisions, and the meter carries a number
+    ///         nobody chose. A fallback now has to be declared to exist.
+    ///     </para>
+    /// </remarks>
+    /// <param name="meter">The declared meter.</param>
+    /// <param name="body">The body — the request's on a create, the stored superset on a delete.</param>
+    /// <returns>The amount, or the refusal that names why it could not be determined.</returns>
+    static Result<decimal> AmountFor(MeterRegistration meter, JsonElement body) {
+        if (meter.Derivation is { } derivation) {
+            try {
+                return derivation.Amount(body);
             }
-
-            current = next;
+            // ⚠ A provider's lambda runs here, on the write path, holding no lease yet. A throw would
+            // escape into the gateway as a 500 with a stack trace on a create, and on a DELETE it would
+            // escape AFTER the index was released — leaving a name freed and a resource that never
+            // tears down. Turning it into the same refusal a returned failure produces keeps both paths
+            // on one behaviour. OperationCanceledException is excluded because cancellation is not a
+            // derivation failure and must keep propagating.
+            catch (Exception exception) when (exception is not OperationCanceledException) {
+                return Result<decimal>.Failure(
+                    ErrorCode.InternalError,
+                    $"The derivation '{derivation.Expression}' for {meter.Meter} threw "
+                    + $"{exception.GetType().Name}, so the amount this resource draws is unknown and "
+                    + "the write is refused. A derivation must be a total, pure function of the body — "
+                    + "see MeterDerivation."
+                );
+            }
         }
 
-        return current.ValueKind == JsonValueKind.Number && current.TryGetDecimal(out var amount) && amount > 0
-            ? amount
-            : meter.Fallback;
+        if (meter.AmountPointer.Length == 0) {
+            // A flat meter. `Meters(meter)` always supplies 1m and the builder refuses a pointerless
+            // meter with no fallback, so the coalesce is unreachable rather than a second default.
+            return Result<decimal>.Success(meter.Fallback ?? 1m);
+        }
+
+        if (MeterDerivation.Resolve(body, meter.AmountPointer) is { } found
+            && found.ValueKind == JsonValueKind.Number
+            && found.TryGetDecimal(out var amount)
+            && amount > 0) {
+            return Result<decimal>.Success(amount);
+        }
+
+        return meter.Fallback is { } fallback
+            ? Result<decimal>.Success(fallback)
+            : Result<decimal>.Failure(
+                ErrorCode.InternalError,
+                $"'{meter.AmountPointer}' does not hold a positive number, so the {meter.Meter} this "
+                + "resource draws cannot be determined and the write is refused. The meter and the "
+                + "schema have drifted apart; declare a fallback on the meter if absent genuinely means "
+                + "a server default — docs/plan/06 § Quota."
+            );
     }
 
     async Task ReleaseAsync(WriteTarget target, ImmutableArray<Guid> leases) {

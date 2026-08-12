@@ -484,12 +484,29 @@ public static class OpenApiEmitter {
         foreach (var meter in type.Meters
                      .OrderBy(x => x.Meter.ToString(), StringComparer.Ordinal)
                      .ThenBy(x => x.AmountPointer, StringComparer.Ordinal)) {
+            var reads = new JsonArray();
+            foreach (var pointer in meter.Reads) {
+                reads.Add(pointer);
+            }
+
             meters.Add(new JsonObject {
                 ["meter"] = meter.Meter.ToString(),
-                // A pointer rather than a delegate is what makes this generable at all — see the
-                // remarks on IResourceTypeBuilder.Meter.
                 ["amountPointer"] = meter.AmountPointer,
-                ["fallback"] = meter.Fallback
+                ["fallback"] = meter.Fallback,
+                // ⚠ THE TWO MEMBERS THAT KEEP A COMPUTED AMOUNT GENERABLE.
+                //
+                // This used to carry a pointer and a fallback and nothing else, on the argument that
+                // "a pointer rather than a delegate is what makes this generable at all". The argument
+                // was right about delegates and wrong about the conclusion: every managed service's
+                // real amount is a Kubernetes quantity, is usually absent from the body and named by a
+                // preset, and is per-instance × instances — so a pointer could not address any of them
+                // and the honest generated document for a Postgres server listed one meter, `Resources`,
+                // reserving one. A published pointer that was never the amount is not more generable
+                // than a published formula; it is less true. MeterDerivation therefore has to declare
+                // both of these, and every meter — flat, pointed or derived — reports them the same
+                // way, so "what moves this quota" is answerable from the document for every type.
+                ["expression"] = meter.Expression,
+                ["reads"] = reads
             });
         }
 

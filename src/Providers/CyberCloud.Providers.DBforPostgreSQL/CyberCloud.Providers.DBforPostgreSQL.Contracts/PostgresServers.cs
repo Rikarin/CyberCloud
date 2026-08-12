@@ -775,6 +775,34 @@ public static class PostgresServers {
         return (cpu.Length > 0 ? cpu : fallback.Cpu, memory.Length > 0 ? memory : fallback.Memory);
     }
 
+    /// <summary>How many instances a body asks for, including the primary.</summary>
+    /// <param name="desired">The validated desired body.</param>
+    /// <returns>The declared value, or the schema default (<c>2</c>) when absent.</returns>
+    /// <remarks>
+    ///     ⚠ <b>Public because quota multiplies by it, and that is not a detail.</b> CloudNativePG runs
+    ///     <c>spec.instances</c> pods and each one carries the whole <c>spec.resources</c> block and its
+    ///     own data PVC — <see cref="ClusterJson" /> writes both once because the CR is per-cluster, not
+    ///     because the cost is. A meter that reserved the per-instance figure would under-reserve a
+    ///     two-instance server, which is the default, by half.
+    /// </remarks>
+    public static int Replicas(JsonElement desired) => Number(desired, "replicas", 2);
+
+    /// <summary>The data volume size a body asks for, <b>per instance</b>.</summary>
+    /// <param name="desired">The validated desired body.</param>
+    /// <returns>The declared quantity, or the schema default (<c>20Gi</c>) when absent.</returns>
+    public static string StorageSize(JsonElement desired) => Text(desired, "storage", "size", "20Gi");
+
+    /// <summary>
+    ///     The separate write-ahead-log volume size, per instance, or <c>""</c> when the WAL shares the
+    ///     data volume.
+    /// </summary>
+    /// <param name="desired">The validated desired body.</param>
+    /// <remarks>
+    ///     ⚠ <c>""</c> is not zero storage — it means one volume rather than two, and the data volume's
+    ///     size already counts. <see cref="ClusterJson" /> reads it the same way.
+    /// </remarks>
+    public static string WalSize(JsonElement desired) => Text(desired, "storage", "walSize", string.Empty);
+
     /// <summary>The extensions a body asks for, in the order it listed them.</summary>
     /// <param name="desired">The validated desired body.</param>
     public static ImmutableArray<string> Extensions(JsonElement desired) {
