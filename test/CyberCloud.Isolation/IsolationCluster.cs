@@ -24,6 +24,23 @@ namespace CyberCloud.Isolation;
 /// <param name="ApiVersion">An api-version it serves.</param>
 /// <param name="Body">A body it accepts, for the harness's cluster.</param>
 /// <param name="Action">An action it declares.</param>
+/// <param name="Ancestors">
+///     The targets this one nests inside, <b>outermost first</b>. Empty for a top-level type.
+///     <para>
+///         ⚠ <b>A child cannot be created until its parent exists</b> — the write path resolves the
+///         parent's index binding on every create and answers the same 404 as "no such resource" when
+///         it is absent. So a suite that attacks a child has to have built one first, in the tenant
+///         it is attacking <i>and</i> in the attacker's own. This member is what
+///         <see cref="IsolationCluster.Address" /> interleaves into the path and what
+///         <c>IsolationCluster.CreateAncestorsAsync</c> creates.
+///     </para>
+///     <para>
+///         ⚠ <b>Positional and therefore unskippable, unlike its conformance counterpart.</b> This
+///         record is the suite's own and has exactly one construction site — the catalogue below — so
+///         a default would buy nothing and would let the next child target be added without anybody
+///         deciding what its ancestors are.
+///     </para>
+/// </param>
 /// <remarks>
 ///     ⚠ <b>Deliberately not <c>ProviderConformanceCase</c>.</b> An attacker's suite that reused the
 ///     provider's own conformance fixture would inherit whatever that fixture assumes, and the point
@@ -35,8 +52,18 @@ public sealed record IsolationTarget(
     ResourceTypeName Type,
     string ApiVersion,
     Func<Guid, string> Body,
-    string Action
+    string Action,
+    ImmutableArray<IsolationTarget> Ancestors
 ) {
+    /// <summary>The name this suite gives the ancestor at <paramref name="level" />, outermost 0.</summary>
+    /// <param name="level">The nesting level.</param>
+    public static string AncestorName(int level) =>
+        "ancestor-" + level.ToString(CultureInfo.InvariantCulture);
+
+    /// <summary>The <c>/</c>-separated ancestor names an address for this target carries.</summary>
+    public string ParentNames =>
+        string.Join('/', Ancestors.Select((_, level) => AncestorName(level)));
+
     /// <inheritdoc />
     public override string ToString() => Name;
 }
@@ -48,6 +75,17 @@ public sealed record IsolationTarget(
 ///     that is worth being able to see at a glance rather than inferring from which files exist.
 /// </remarks>
 public static class IsolationCatalog {
+    /// <summary>The reference provider's top-level type, which the child below nests inside.</summary>
+    static IsolationTarget Probes { get; } =
+        new(
+            "CyberCloud.ConformanceReference/probes",
+            Conformance.Reference.Probes.Type,
+            Conformance.Reference.Probes.V2026,
+            cluster => Conformance.Reference.Probes.Body(cluster),
+            "ping",
+            []
+        );
+
     /// <summary>The providers under attack.</summary>
     public static ImmutableArray<IsolationTarget> Targets { get; } = [
         new(
@@ -55,14 +93,31 @@ public static class IsolationCatalog {
             SampleWidgets.Type,
             SampleWidgets.V2026,
             cluster => SampleWidgets.Body(cluster),
-            "ping"
+            "ping",
+            []
         ),
+        Probes,
+        // ⚠ A CHILD, AND IT IS IN THE SWEEP RATHER THAN IN A TEST OF ITS OWN.
+        //
+        // Every theory in this project reads this list, so one entry puts a nested type through the
+        // whole attack surface — every verb, the oracle sweep, and the below-the-manager reads —
+        // rather than through whichever handful of them somebody thought to write a child version
+        // of. That is the same argument ProviderConformanceTests makes for a shared suite, and it is
+        // load-bearing for the same reason: a child-specific test file is free to assert less and
+        // nothing says which assertions it dropped.
+        //
+        // ⚠ AND THE PARENT HOP IS WHY IT CANNOT BE SKIPPED. Until 2026-08-12 a resource's ReBAC
+        // `parent` edge always named its resource GROUP; a child's now names its PARENT RESOURCE. So
+        // a child's visibility is decided by a rewrite through an object in the tenant's own tuple
+        // store rather than by the group every isolation assertion here was written against, and
+        // "the boundary holds one level down" stopped being implied by "the boundary holds".
         new(
-            "CyberCloud.ConformanceReference/probes",
-            Conformance.Reference.Probes.Type,
+            "CyberCloud.ConformanceReference/probes/samples",
+            Conformance.Reference.Probes.ChildType,
             Conformance.Reference.Probes.V2026,
-            cluster => Conformance.Reference.Probes.Body(cluster),
-            "ping"
+            cluster => Conformance.Reference.Probes.ChildBody(cluster),
+            "ping",
+            [Probes]
         )
     ];
 
@@ -164,7 +219,7 @@ public sealed class IsolationCluster : IAsyncLifetime {
     /// <param name="subscription">Whose subscription.</param>
     public static ResourceId Address(IsolationTarget target, string name, Guid tenant, Guid subscription) {
         ArgumentNullException.ThrowIfNull(target);
-        return new(tenant, subscription, Group, target.Type, name, Guid.Empty);
+        return new(tenant, subscription, Group, target.Type, name, Guid.Empty, target.ParentNames);
     }
 
     /// <summary>A caller.</summary>
@@ -228,6 +283,23 @@ public sealed class IsolationCluster : IAsyncLifetime {
             && snapshot.GetValueOrThrow().ByRelation.TryGetValue(Relations.Parent, out var parents)
                 ? parents
                 : [];
+    }
+
+    /// <summary>Resolves an address to the resource's GUID through the tenant's path index.</summary>
+    /// <param name="tenant">Whose index.</param>
+    /// <param name="address">The address.</param>
+    /// <remarks>
+    ///     ⚠ Only a <b>confirmed</b> binding resolves, which is what makes this the same question the
+    ///     write path's parent check asks. A test that read the claim instead would call a name under
+    ///     an unexpired two-phase lease a parent.
+    /// </remarks>
+    public async Task<Guid> ResolveAsync(Guid tenant, ResourceId address) {
+        var bound = await For(tenant)
+            .GetGrain<IResourceIndexGrain>(GrainKeys.PathIndex(address))
+            .ResolveAsync();
+
+        bound.IsSuccess.ShouldBeTrue($"'{address.Path}' is not bound: {bound.Error?.Message}");
+        return bound.GetValueOrThrow();
     }
 
     /// <summary>Writes one tuple into a tenant's store.</summary>
@@ -343,6 +415,54 @@ public sealed class IsolationCluster : IAsyncLifetime {
 
         await GrantGroupOwnerAsync(Victim, VictimSubscription, VictimUser);
         await GrantGroupOwnerAsync(Attacker, AttackerSubscription, AttackerUser);
+
+        // ⚠ THE ANCESTORS, IN BOTH TENANTS, AND THE SECOND ONE IS THE POINT. A child's create resolves
+        // its parent's index binding before the enforcement seam runs, so an attacker's request
+        // against a child whose parent does not exist in the ATTACKER's tenant would be refused by
+        // the parent check — and every cross-tenant assertion in this suite would pass without the
+        // seam being consulted at all. Building the same parent on both sides is what keeps the 404s
+        // below about the tenant boundary rather than about a missing fixture.
+        await CreateAncestorsAsync(Victim, VictimSubscription, VictimUser);
+        await CreateAncestorsAsync(Attacker, AttackerSubscription, AttackerUser);
+    }
+
+    /// <summary>Creates every ancestor every target in the catalogue nests inside.</summary>
+    /// <param name="tenant">The tenant.</param>
+    /// <param name="subscription">Its subscription.</param>
+    /// <param name="user">Who creates them.</param>
+    /// <remarks>
+    ///     ⚠ One shared parent per catalogue level, named by <see cref="IsolationTarget.AncestorName" />
+    ///     and created once. A parent per test would spend a create per assertion to prove what the
+    ///     parent's own row in the sweep already proves.
+    /// </remarks>
+    async Task CreateAncestorsAsync(Guid tenant, Guid subscription, string user) {
+        foreach (var target in IsolationCatalog.Targets.Where(x => !x.Ancestors.IsEmpty)) {
+            for (var level = 0; level < target.Ancestors.Length; level++) {
+                var ancestor = target.Ancestors[level];
+                var name = IsolationTarget.AncestorName(level);
+
+                var address = new ResourceId(
+                    tenant,
+                    subscription,
+                    Group,
+                    ancestor.Type,
+                    name,
+                    Guid.Empty,
+                    string.Join('/', Enumerable.Range(0, level).Select(IsolationTarget.AncestorName))
+                );
+
+                var bound = await For(tenant)
+                    .GetGrain<IResourceIndexGrain>(GrainKeys.PathIndex(address))
+                    .GetAsync();
+
+                if (bound.IsSuccess && bound.GetValueOrThrow().State == IndexEntryState.Confirmed) {
+                    // Two targets may share an ancestor; the first one built it.
+                    continue;
+                }
+
+                await CreateAsync(ancestor, name, tenant, subscription, user);
+            }
+        }
     }
 
     /// <summary>Creates a tenant's subscription and its <c>prod</c> group.</summary>
@@ -399,6 +519,12 @@ public sealed class IsolationCluster : IAsyncLifetime {
                     services.AddSingleton<IResourceProvider, Conformance.Reference.ReferenceProvider>();
                     services.AddSingleton<WidgetReconciler>();
                     services.AddSingleton<Conformance.Reference.ProbeReconciler>();
+
+                    // ⚠ The CHILD type's reconciler. ReconcileDriver resolves each type's reconciler
+                    // from this container by the concrete type the registry stores, so a child whose
+                    // reconciler is not registered fails inside the silo — where nothing on the
+                    // request path can attribute it to the harness.
+                    services.AddSingleton<Conformance.Reference.SampleReconciler>();
 
                     services.TryAddSingleton<ILoggerFactory>(_ => NullLoggerFactory.Instance);
                 }

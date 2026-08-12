@@ -387,6 +387,107 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
         Cluster.World.Applied.ShouldBeEmpty("a refused write must never reach a provider");
     }
 
+    // ── a child whose parent does not exist → the same 404 ──────────────────────────────────────
+
+    [Fact]
+    public async Task CreatingUnderAParentThatDoesNotExistIsTheSame404AsAnAbsentResource() {
+        // ⚠ THE CHECK THAT MAKES A CHILD TYPE HARD, ASSERTED WHERE IT IS CHEAPEST TO ASSERT.
+        //
+        // docs/plan/12 § Child resources chose the interleaved address so a child's ReBAC `parent`
+        // edge could name its parent. A child created under a parent that does not exist gets an edge
+        // pointing at nothing — it inherits permission from nothing, and it is invisible to the
+        // caller who just created it. ResourceManagerService.ResolveAsync closes that by resolving
+        // the parent's index binding on every CREATE.
+        //
+        // ⚠ AND THE ANSWER IS THE SAME 404, WHICH IS THE HALF THAT IS EASY TO GET WRONG. A distinct
+        // ParentNotFound would be an existence oracle: this check runs BEFORE the enforcement seam,
+        // so a caller who may write in a resource group but may not read a particular parent would
+        // learn, one probe at a time, which parent names are live. docs/plan/07 § The enforcement
+        // seam. Compared here against the 404 for a resource that is simply absent, modulo the path
+        // the caller themselves supplied — the same comparison
+        // CrossTenantVerbTests.TheAnswerForAnInvisibleResourceIsIdenticalToTheAnswerForAnAbsentOne
+        // makes one level up.
+        if (Case.Type.Depth == 1) {
+            Assert.Skip(
+                $"SKIPPED — '{Case.Type}' is a top-level type, so its parent is the resource group "
+                + "and there is no parent-existence check to fire. This assertion is not vacuous for "
+                + "it; it is inapplicable, and saying so is how a Docker-free reader can tell which "
+                + "providers in a run actually exercised the child grammar."
+            );
+        }
+
+        ProviderTestCluster<TSource>.Reset();
+
+        // ⚠ The SAME type at the SAME depth, hung off ancestors nothing ever created. Not a shallower
+        // address and not a malformed one — the only thing wrong with this path is that its parent
+        // is not there, which is the one fact the assertion is about.
+        var orphaned = ProviderTestCluster<TSource>.Address("orphan-child") with {
+            ParentNames = string.Join(
+                '/',
+                Enumerable.Range(0, Case.Type.Depth - 1).Select(level => "no-such-parent-" + level)
+            )
+        };
+
+        var refused = await Cluster.Manager.WriteAsync(
+            Request(orphaned),
+            TestContext.Current.CancellationToken
+        );
+
+        refused.IsFailure.ShouldBeTrue(
+            $"'{orphaned.Path}' was created under a parent that does not exist, so its ReBAC parent "
+            + "edge points at nothing and it inherits permission from nothing"
+        );
+
+        refused.Error!.Code.ShouldBe(ErrorCode.ResourceNotFound);
+
+        refused.Error.Code.ShouldNotBe(
+            ErrorCode.AuthorizationFailed,
+            "403 here would confirm the parent exists to somebody who cannot read it"
+        );
+
+        // The reference answer: a GET for a child at a perfectly good address that was never created.
+        var absent = ProviderTestCluster<TSource>.Address("never-created-child");
+
+        var onAbsent = await Cluster.Manager.ReadAsync(
+            new() {
+                Path = absent.Path,
+                ApiVersion = Case.ApiVersion,
+                Caller = ProviderTestCluster<TSource>.Caller()
+            },
+            TestContext.Current.CancellationToken
+        );
+
+        onAbsent.IsFailure.ShouldBeTrue();
+        onAbsent.Error!.Code.ShouldBe(refused.Error.Code);
+        onAbsent.Error.Target.ShouldBe(refused.Error.Target);
+
+        // ⚠ THE MESSAGE, NOT ONLY THE CODE. Two 404s whose wording differs are still a way to ask
+        // "is this parent real". The one legitimate difference is that each names the path it was
+        // given — and NEITHER may name the parent's path, which is the string the caller was guessing
+        // at.
+        refused.Error.Message.Replace(orphaned.Path, "PATH", StringComparison.Ordinal)
+            .ShouldBe(onAbsent.Error.Message.Replace(absent.Path, "PATH", StringComparison.Ordinal));
+
+        // ⚠ AND "the message never names the parent's path" IS NOT ASSERTABLE AS WRITTEN, WHICH IS A
+        // FACT ABOUT THE GRAMMAR RATHER THAN A GAP HERE. ResourceManagerService's own remarks say the
+        // refusal "names the CHILD's path … and never the parent's". Under the interleaved address the
+        // parent's path is a literal PREFIX of the child's —
+        // `…/probes/{p}` inside `…/probes/{p}/samples/{c}` — so any message quoting the path the
+        // caller supplied contains the parent's path too, and a substring check for it fails on a
+        // correct implementation. It is also not a leak: the caller wrote the whole child path, so the
+        // parent's is a string they already had. What actually has to hold is that the refusal carries
+        // NOTHING BEYOND the path they supplied, and that is what the comparison above establishes —
+        // mask the caller's own path out of both messages and they are the same sentence.
+        refused.Error.Message.ShouldContain(
+            orphaned.Path,
+            customMessage: "the refusal does not say which path was refused"
+        );
+
+        // And nothing happened: no name claimed, nothing applied.
+        (await Cluster.Index(orphaned).GetAsync()).GetValueOrThrow().State.ShouldBe(IndexEntryState.Free);
+        Cluster.World.Applied.ShouldBeEmpty("a refused create reached a provider");
+    }
+
     // ── delete while an operation is running → 409 ──────────────────────────────────────────────
 
     [Fact]

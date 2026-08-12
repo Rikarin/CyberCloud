@@ -33,15 +33,104 @@ public sealed class ReferenceCase : IProviderCaseSource {
             InvalidBodyTarget = "/properties/note",
             ActionName = "ping",
             Objects = (id, ns) =>
-                [new() { Kind = Probes.Kind, Namespace = ns, Name = id.Name }],
+                [new() { Kind = Probes.Kind, Namespace = ns, Name = Probes.ObjectNameOf(id) }],
             ObjectMatchesDesired = Probes.Matches
         };
+}
+
+/// <summary>
+///     The reference provider's <b>child</b> type, registered exactly as its parent is.
+/// </summary>
+/// <remarks>
+///     <para>
+///         ⚠ <b>This is the whole cost of putting a child type under the shared suite, and it is one
+///         member longer than a top-level one.</b> Everything else is the same object shape:
+///         <see cref="ProviderConformanceCase" /> gained nothing, the four shipping providers'
+///         case files were not touched, and the child inherits all <b>28</b> assertions rather than a
+///         subset — <c>ProviderTestCluster.Address</c> interleaves the ancestors the harness created,
+///         so every assertion that addressed <c>…/probes/{name}</c> now addresses
+///         <c>…/probes/ancestor-0/samples/{name}</c> and nothing else about it changes. All 28 are
+///         <i>applicable</i> to it, where a top-level type self-skips the parent-existence one; the
+///         child is therefore the only case in the tree that runs the whole suite.
+///     </para>
+///     <para>
+///         ⚠ <see cref="Ancestors" /> is the parent's own case object rather than a description of it
+///         — see <c>IProviderCaseSource.Ancestors</c>. A provider shipping <c>servers/databases</c>
+///         writes <c>[ServersCase.ProviderCase]</c> here for the same reason.
+///     </para>
+/// </remarks>
+public sealed class ReferenceChildCase : IProviderCaseSource {
+    /// <inheritdoc />
+    public static ProviderConformanceCase ProviderCase { get; } =
+        new() {
+            DisplayName = "CyberCloud.ConformanceReference/probes/samples",
+            CreateProvider = () => new ReferenceProvider(),
+            ReconcilerType = typeof(SampleReconciler),
+            CreateReconciler = clock => new SampleReconciler(clock),
+            Type = Probes.ChildType,
+            ApiVersion = Probes.V2026,
+            Body = cluster => Probes.ChildBody(cluster),
+            ChangedBody = cluster => Probes.ChildBody(cluster, "second"),
+            InvalidBody = Probes.ChildBodyWithoutNote,
+            InvalidBodyTarget = "/properties/note",
+            ActionName = "ping",
+            Objects = (id, ns) =>
+                [new() { Kind = Probes.Kind, Namespace = ns, Name = Probes.ObjectNameOf(id) }],
+            ObjectMatchesDesired = Probes.Matches
+        };
+
+    /// <inheritdoc />
+    public static ImmutableArray<ProviderConformanceCase> Ancestors { get; } =
+        [ReferenceCase.ProviderCase];
+}
+
+/// <summary>
+///     A depth-2 source that describes no ancestors — the omission, so the guard can be shown to
+///     catch it.
+/// </summary>
+/// <remarks>
+///     ⚠ <b>Deliberately wrong, and it must never be given a test class of its own.</b> It exists so
+///     <c>SuiteRejectionTests</c> can point the harness at the mistake a provider author makes once
+///     and assert the message names the member. <see cref="Ancestors" /> is not written here at all,
+///     which is the point: the default is what is under test.
+/// </remarks>
+public sealed class AncestorlessChildCase : IProviderCaseSource {
+    /// <inheritdoc />
+    public static ProviderConformanceCase ProviderCase => ReferenceChildCase.ProviderCase;
+}
+
+/// <summary>A depth-2 source whose one ancestor is not its own — the copy-paste, so the guard can be
+///     shown to catch it.</summary>
+public sealed class WrongAncestorChildCase : IProviderCaseSource {
+    /// <inheritdoc />
+    public static ProviderConformanceCase ProviderCase => ReferenceChildCase.ProviderCase;
+
+    /// <inheritdoc />
+    public static ImmutableArray<ProviderConformanceCase> Ancestors { get; } =
+        [ReferenceChildCase.ProviderCase];
 }
 
 /// <summary>The shared suite, run against the reference provider.</summary>
 /// <param name="cluster">The harness.</param>
 public sealed class ReferenceProviderConformance(ProviderTestCluster<ReferenceCase> cluster)
     : ProviderConformanceTests<ReferenceCase>(cluster), IClassFixture<ProviderTestCluster<ReferenceCase>>;
+
+/// <summary>
+///     The <b>same</b> suite, run against the reference provider's child type.
+/// </summary>
+/// <remarks>
+///     ⚠ <b>The same class, not a child-shaped copy of it.</b> A separate suite for children would be
+///     free to assert less and nothing would say which assertions it had dropped — the exact shape of
+///     "a suite that goes green because it asked less". Deriving from
+///     <c>ProviderConformanceTests&lt;T&gt;</c> makes the count a fact of the compiler rather than of
+///     anybody's diligence, and
+///     <c>SuiteRejectionTests.TheChildRunsEveryAssertionTheParentDoesRatherThanASubset</c> is the
+///     assertion that says so out loud — measured at 28 apiece.
+/// </remarks>
+/// <param name="cluster">The harness.</param>
+public sealed class ReferenceChildProviderConformance(ProviderTestCluster<ReferenceChildCase> cluster)
+    : ProviderConformanceTests<ReferenceChildCase>(cluster),
+        IClassFixture<ProviderTestCluster<ReferenceChildCase>>;
 
 /// <summary>
 ///     The signpost to the container-backed half, which runs in <c>CyberCloud.Cluster.Conformance</c>.
@@ -161,6 +250,75 @@ public sealed class SuiteRejectionTests {
         report.Conforms.ShouldBeFalse("clause 4 was not checked and was reported as passing");
         report.ToString().ShouldContain("SKIPPED");
     }
+
+    [Fact]
+    public void ADepthTwoSourceWithNoAncestorsIsRefusedByNameRatherThanFailingEveryTestAtOnce() {
+        // ⚠ THE CALIBRATION FOR IProviderCaseSource.Ancestors' DEFAULT, and the reason that default is
+        // not the "optional member the suite quietly stops asserting" the case record forbids.
+        //
+        // Pointed at a source that is registered for a depth-2 type and describes no ancestors — the
+        // exact omission a provider author makes once. The failure has to name the case and the
+        // member. Without this guard it is ResourceId's constructor throwing ArgumentException about
+        // parent-name counts, from a static helper every test calls, so xUnit reports all 27 as
+        // failed and none of them says which member is missing.
+        var thrown = Should.Throw<InvalidOperationException>(
+            () => ProviderTestCluster<AncestorlessChildCase>.Address("anything")
+        );
+
+        thrown.Message.ShouldContain("Ancestors");
+        thrown.Message.ShouldContain(Probes.ChildTypePath);
+        thrown.Message.ShouldContain("a child cannot be created until its parent exists");
+    }
+
+    [Fact]
+    public void AnAncestorThatIsNotTheTypesOwnAncestorIsRefused() {
+        // ⚠ The other half, and it is the one a copy-paste produces: the right NUMBER of ancestors
+        // naming the wrong type. The harness registers ONE provider, so a case pointing at somebody
+        // else's parent would have the harness creating a resource this run's registry cannot
+        // address — and the create would fail with the registry's message rather than the case's.
+        var thrown = Should.Throw<InvalidOperationException>(
+            () => ProviderTestCluster<WrongAncestorChildCase>.Address("anything")
+        );
+
+        thrown.Message.ShouldContain(Probes.ChildTypePath);
+        thrown.Message.ShouldContain("the same provider by construction");
+    }
+
+    [Fact]
+    public void TheChildRunsEveryAssertionTheParentDoesRatherThanASubset() {
+        // ⚠ FAILURE CLASS (a), ASSERTED RATHER THAN INTENDED. "The child case runs the same suite" is
+        // a claim about a count, and a claim about a count that nothing counts is how a suite goes
+        // green by asking less — this harness has been bitten by exactly that once, when a drift test
+        // deleted one object of two.
+        //
+        // Both classes derive from ProviderConformanceTests<T>, so the count is a fact of the
+        // compiler; what this pins is that neither has grown a `new` member, an override that hides
+        // one, or a second base. It reads the RUNNABLE facts — public, [Fact]-attributed — off the
+        // two closed generic types, which is what xUnit itself enumerates.
+        var parent = RunnableFactsOf(typeof(ReferenceProviderConformance));
+        var child = RunnableFactsOf(typeof(ReferenceChildProviderConformance));
+
+        child.ShouldBe(
+            parent,
+            "the child type runs a different set of assertions than its parent does. A child-shaped "
+            + "copy of the suite is free to assert less, and nothing but this test would say which "
+            + "assertions it had dropped"
+        );
+
+        // …and the set is not empty, which is the other way a set comparison passes for free.
+        parent.Length.ShouldBeGreaterThan(20);
+    }
+
+    /// <summary>Every <c>[Fact]</c> a test class runs, by name, ordered.</summary>
+    /// <param name="suite">The closed test class.</param>
+    static ImmutableArray<string> RunnableFactsOf(Type suite) =>
+        [
+            .. suite
+                .GetMethods(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance)
+                .Where(x => x.GetCustomAttributes(typeof(FactAttribute), true).Length > 0)
+                .Select(x => x.Name)
+                .OrderBy(x => x, StringComparer.Ordinal)
+        ];
 
     [Fact]
     public void EveryCaseFieldIsRequiredSoAPartialRegistrationDoesNotCompile() {

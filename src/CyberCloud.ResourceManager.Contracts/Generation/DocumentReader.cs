@@ -218,6 +218,77 @@ public static class DocumentReader {
     public static int Number(JsonNode? node) =>
         node is JsonValue value && value.TryGetValue<int>(out var number) ? number : 0;
 
+    /// <summary>The placeholder the resource's own name occupies in a path template.</summary>
+    public const string ResourceNamePlaceholder = "resourceName";
+
+    /// <summary>The tenant placeholder.</summary>
+    public const string TenantPlaceholder = "tenantId";
+
+    /// <summary>The subscription placeholder.</summary>
+    public const string SubscriptionPlaceholder = "subscriptionId";
+
+    /// <summary>The resource group placeholder.</summary>
+    public const string ResourceGroupPlaceholder = "resourceGroupName";
+
+    /// <summary>
+    ///     The <c>{…}</c> placeholders a path template carries, in the order they appear.
+    /// </summary>
+    /// <param name="path">A path template, as <see cref="DocumentType.Path" /> spells one.</param>
+    /// <remarks>
+    ///     ⚠ <b>Read off the template rather than derived a second time from the type path, and that
+    ///     is the point of putting it here.</b> <c>OpenApiEmitter.PathOf</c> is the one place the
+    ///     interleaved grammar of docs/plan/12 § Child resources is turned into a URL — a nested type
+    ///     is <c>…/servers/{serversName}/databases/{resourceName}</c>, alternating — and every other
+    ///     surface is generated from the <i>document</i> rather than from the registry precisely so a
+    ///     fact cannot reach one surface and stop at another (docs/plan/21 § Generation's one hop).
+    ///     Two emitters each re-splitting the type path would be two more chances to disagree about
+    ///     which server a database is in, and the disagreement would be silent: a CLI flag that is
+    ///     absent and an SDK parameter that is absent both look like a surface that simply never had
+    ///     one.
+    /// </remarks>
+    public static ImmutableArray<string> PlaceholdersOf(string path) {
+        ArgumentNullException.ThrowIfNull(path);
+
+        var found = ImmutableArray.CreateBuilder<string>();
+
+        for (var i = 0; i < path.Length; i++) {
+            if (path[i] != '{') {
+                continue;
+            }
+
+            var close = path.IndexOf('}', i + 1);
+            if (close < 0) {
+                break;
+            }
+
+            found.Add(path[(i + 1)..close]);
+            i = close;
+        }
+
+        return found.ToImmutable();
+    }
+
+    /// <summary>
+    ///     The ancestors' name placeholders — every one that is neither the platform envelope's nor
+    ///     the resource's own. Empty for a top-level type.
+    /// </summary>
+    /// <param name="path">A path template.</param>
+    /// <remarks>
+    ///     ⚠ <b>These are the parameters a child's caller has to be able to supply, and until
+    ///     2026-08-12 no derived surface had them.</b> <c>cyc</c> offered four address flags read
+    ///     from a hard-coded list, so a command for <c>servers/databases</c> could say a database's
+    ///     name and never which server; the SDK's collection took <c>(name, data)</c>, so a caller
+    ///     could not address one either. Both lost the information without saying so — the flag list
+    ///     was simply four long and the method signature simply had two parameters.
+    /// </remarks>
+    public static ImmutableArray<string> AncestorPlaceholdersOf(string path) =>
+        [
+            .. PlaceholdersOf(path)
+                .Where(x =>
+                    x is not (TenantPlaceholder or SubscriptionPlaceholder or ResourceGroupPlaceholder
+                        or ResourceNamePlaceholder))
+        ];
+
     /// <summary>
     ///     Every leaf of a body schema, flattened to <c>(pointer, schema, required)</c> in
     ///     depth-first, name-sorted order.

@@ -152,6 +152,160 @@ public sealed class DerivedSurfaceTests {
         ).ShouldBeTrue();
     }
 
+    // ── A nested type, on the two surfaces that address one ────────────────────────────────────
+    //
+    // ⚠ Both of these were shipping surfaces that could not address a child at all, and neither said
+    // so. docs/plan/12 § Child resources landed the grammar — the id spells
+    // `…/servers/{serverName}/databases/{databaseName}`, OpenApiEmitter.PathOf emits it — and the
+    // three surfaces DERIVED from that document went on describing a top-level type: a CLI command
+    // with four address flags read off a hard-coded list, and an SDK collection whose
+    // CreateOrUpdateAsync took (name, data). Each is a URL its own PathTemplate declares and its own
+    // API cannot build, and the failure is invisible in the finished artifact — a flag list is
+    // simply four long, a method signature simply has two parameters.
+
+    static JsonNode Databases =>
+        Cli["groups"]!["dbforpostgresql"]!["commands"]!["servers-databases"]!;
+
+    static JsonArray DatabaseFlags(string verb) => Databases["verbs"]![verb]!["flags"]!.AsArray();
+
+    static JsonNode? DatabaseFlag(string verb, string name) =>
+        DatabaseFlags(verb).FirstOrDefault(x => DocumentReader.Text(x?["name"]) == name);
+
+    [Fact]
+    public void ANestedTypesCommandCanSayWhichParentAndSaysWhichPlaceholderItFills() {
+        // ⚠ THE WHOLE POINT: `cyc postgres servers-databases create --name orders` names the database
+        // and, before this, could not name the server. The flag exists on every verb, because every
+        // verb has to build the same URL.
+        foreach (var verb in new[] { "create", "show", "update", "delete" }) {
+            var flag = DatabaseFlag(verb, "--servers-name");
+
+            flag.ShouldNotBeNull(
+                $"'{verb}' on a nested type offers no way to name the parent, so the host cannot "
+                + "build the path the same verb declares"
+            );
+
+            DocumentReader.Flag(flag["required"]).ShouldBeTrue(
+                "a parent's name is part of the address and there is no profile default for it"
+            );
+
+            // ⚠ And it names the placeholder rather than leaving the host to infer it from the flag
+            // name. jsonPointer answers this question for a body flag; this is its address-side twin.
+            DocumentReader.Text(flag["pathPlaceholder"]).ShouldBe("serversName");
+        }
+    }
+
+    [Fact]
+    public void EveryPlaceholderInAVerbsPathIsFilledByExactlyOneOfItsFlags() {
+        // ⚠ THE PROPERTY, RATHER THAN THE ONE CASE. A verb declares a `path` and a flag list; a
+        // placeholder with no flag is an unbuildable URL and a flag naming no placeholder is a flag
+        // the host cannot place. Asserted over EVERY verb of EVERY command, so the next nesting level
+        // — or the next platform-envelope segment — cannot be added to one and not the other.
+        foreach (var group in Cli["groups"]!.AsObject()) {
+            foreach (var command in group.Value!["commands"]!.AsObject()) {
+                foreach (var verb in command.Value!["verbs"]!.AsObject()) {
+                    var path = DocumentReader.Text(verb.Value!["path"]);
+
+                    var filled = verb.Value["flags"]!.AsArray()
+                        .Select(x => DocumentReader.Text(x?["pathPlaceholder"]))
+                        .Where(x => x.Length > 0)
+                        .ToList();
+
+                    // An action's path ends in `/{action}`, which is a literal rather than a
+                    // placeholder, so the set is the same either way.
+                    filled.Order(StringComparer.Ordinal).ShouldBe(
+                        DocumentReader.PlaceholdersOf(path).Order(StringComparer.Ordinal),
+                        $"'{group.Key} {command.Key} {verb.Key}' declares path '{path}' and its flags "
+                        + "do not fill exactly its placeholders"
+                    );
+                }
+            }
+        }
+    }
+
+    [Fact]
+    public void TwoFlagsThatWouldShareANameFailRatherThanBothBeingEmitted() {
+        // ⚠ THE SIBLING OF THE `commands[name] = …` BUG, AND IT LOSES INFORMATION THE OTHER WAY.
+        // A JsonObject indexer REPLACES, so a colliding command name left a type out of the tree. A
+        // JsonArray ADDS, so a colliding flag name leaves BOTH in — and the host binds whichever it
+        // resolves first, so a body property or an ancestor is silently unreachable.
+        //
+        // The reachable case is the one FlagsOf' fold creates: `/properties/servers/name` collides
+        // with the resource's own `--name`, folds to the dotted path `--servers-name`, and that is
+        // exactly the ancestor flag a `servers/databases` command carries. The rename is checked
+        // against the address list; the RESULT of the rename was not.
+        var registry = new FakeRegistry {
+            Namespaces = ["CyberCloud.Colliding"],
+            Types = [
+                new ResourceTypeRegistration {
+                    Type = new("CyberCloud.Colliding", "servers"),
+                    ApiVersions = [new(ApiVersion.Parse(Fixtures.FirstVersion), ResourceSchema.Of([]))],
+                    Display = new("Server", "Servers", "srv", "A server.")
+                },
+                new ResourceTypeRegistration {
+                    Type = new("CyberCloud.Colliding", "servers/databases"),
+                    ApiVersions = [
+                        new(
+                            ApiVersion.Parse(Fixtures.FirstVersion),
+                            ResourceSchema.Of([
+                                new("/properties", SchemaKind.Nested),
+                                new("/properties/servers", SchemaKind.Nested),
+                                new("/properties/servers/name", SchemaKind.Text)
+                            ])
+                        )
+                    ],
+                    Display = new("Database", "Databases", "db", "A database.")
+                }
+            ]
+        };
+
+        var document = OpenApiEmitter.Emit(registry, ApiVersion.Parse(Fixtures.FirstVersion));
+        var thrown = Should.Throw<InvalidOperationException>(() => CliEmitter.Emit(document));
+
+        thrown.Message.ShouldContain("--servers-name");
+        thrown.Message.ShouldContain("silently unreachable");
+    }
+
+    [Fact]
+    public void ANestedTypesSdkCollectionTakesItsAncestorsAndTakesThemFirst() {
+        // ⚠ The signature that could not build its own PathTemplate. Ancestors lead, outermost first,
+        // because that is the order the URL reads in — any other order makes two `string` arguments
+        // swappable at the call site with no compile error and a 404 at run time.
+        Sdk.ShouldContain(
+            "CreateOrUpdateAsync(\n        WaitUntil waitUntil,\n        string serversName, string name,"
+        );
+
+        Sdk.ShouldContain("GetAsync(string serversName, string name, CancellationToken");
+
+        // ⚠ And the listing, which is the one that is easy to leave behind: a child collection with no
+        // ancestor could only mean "every database in the group", which is not a scope the API serves.
+        Sdk.ShouldContain("GetAllAsync(string serversName, CancellationToken");
+
+        // The parent is unchanged — a top-level collection gains nothing.
+        Sdk.ShouldContain("GetAllAsync(CancellationToken cancellationToken = default);");
+    }
+
+    [Fact]
+    public void EverySdkCollectionTakesOneParameterPerPlaceholderTheApiVersionsPathDeclares() {
+        // ⚠ The property behind the case above, over every type in the document. A collection's own
+        // PathTemplate is emitted a few lines from its methods, so the two disagreeing is a fact the
+        // generated file already contains and nothing was reading.
+        foreach (var type in DocumentReader.TypesOf(Document)) {
+            var ancestors = DocumentReader.AncestorPlaceholdersOf(type.Path);
+            var template = "public const string PathTemplate = \"" + type.Path + "\";";
+
+            Sdk.ShouldContain(template, customMessage: $"'{type.ResourceType}' has no collection");
+
+            foreach (var placeholder in ancestors) {
+                Sdk.ShouldContain(
+                    "string " + char.ToLowerInvariant(placeholder[0]) + placeholder[1..] + ",",
+                    customMessage:
+                    $"'{type.ResourceType}' declares '{{{placeholder}}}' in its path and its "
+                    + "collection takes no parameter for it, so the URL cannot be built"
+                );
+            }
+        }
+    }
+
     // ── The portal forms ───────────────────────────────────────────────────────────────────────
 
     [Fact]
