@@ -1,0 +1,100 @@
+# Managed MariaDB — the configuration surface, once.
+#
+# ⚠ THE `@param` BLOCK BELOW IS GENERATED, up to the blank line before `credentials:`. `./build.sh
+# Charts` rewrites it from `MariaDbServers.Schema2026` and fails on drift — ADR-010 § Which end
+# authors the schema, DECIDED 2026-08-11: the C# ResourceSchema is authored and the chart's
+# annotations are generated from it. Edit the schema; this file follows.
+#
+# ⚠ values.schema.json next to this file is generated from THIS file by the same target, and is
+# diffed in CI. Edit neither.
+#
+# The rows after the generated block are `@internal`: they are rendering inputs rather than parts of
+# the resource body, they are carried through as bytes, and they are the only rows in this file a
+# person edits. The annotation format is charts/README.md § The annotation format.
+
+## @param version {string} Major MariaDB version, by LTS series. Minor upgrades are applied automatically in the maintenance window.
+## @required
+## @enum 10.11 | 11.4 | 11.8
+version: "11.4"
+
+## @param highAvailability {string} Replication topology. Galera is three synchronous instances; None is a single instance and a single point of failure, offered for development only.
+## @immutable
+## @enum None | Galera
+highAvailability: Galera
+
+## @param sizing {object} CPU and memory, either by preset or explicitly.
+sizing:
+  ## @param preset {string} A sizing preset from docs/plan/12. Databases use the s1 family, which is 1 vCPU to 4 GiB.
+  ## @enum s1.nano | s1.micro | s1.small | s1.medium | s1.large | s1.xlarge | s1.2xlarge | s1.4xlarge
+  ## @widget cozy-preset
+  preset: s1.small
+  ## @param cpu {string} Explicit vCPU quantity in Kubernetes form, for example 500m or 2. Empty means take it from the preset.
+  ## @pattern (\d+(\.\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)?
+  cpu: ""
+  ## @param memory {string} Explicit memory quantity in Kubernetes form, for example 4Gi. Empty means take it from the preset.
+  ## @pattern (\d+(\.\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)?
+  memory: ""
+
+## @param storage {object} The data volume. Every instance gets its own.
+storage:
+  ## @param size {string} Data volume size in Kubernetes quantity form. Grows online; never shrinks.
+  ## @required
+  ## @pattern \d+(\.\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?
+  ## @example "20Gi"
+  size: "20Gi"
+  ## @param class {string} StorageClass name. Empty means the cluster default.
+  ## @immutable
+  ## @widget storageclass
+  class: ""
+
+## @param bootstrap {object} What exists in the database the moment it comes up.
+bootstrap:
+  ## @param database {string} Name of the application database created on first start. Lower case only, because on Linux a database is a directory and its name is therefore case-sensitive.
+  ## @length 1..64
+  ## @pattern [a-z_][a-z0-9_]*
+  database: app
+  ## @param username {string} Account granted every privilege on the application database. Capped at MySQL's 32 characters rather than MariaDB's longer limit, because this row is sold as MySQL-compatible.
+  ## @length 1..32
+  ## @pattern [a-z_][a-z0-9_]*
+  username: app
+
+## @param monitoring {object} What the platform scrapes.
+monitoring:
+  ## @param enabled {boolean} Whether the operator runs a mysqld-exporter beside the server.
+  enabled: true
+
+## @param credentials {object} The Secrets the operator reads the root and application passwords from. Not a tenant-facing setting.
+## @internal The values are provisioned into the tenant's Vault and reach the MariaDB CR as Secret REFERENCES BY NAME (spec.rootPasswordSecretKeyRef, spec.passwordSecretKeyRef), never as values. Declaring either in the resource body would put a plaintext password into grain state — nothing on the write path substitutes a SecretRef before the grain persists the body — which docs/plan/00 § Non-negotiables forbids outright. docs/plan/12 § Cross-cutting decisions, Credentials, puts the values themselves behind listKeys.
+credentials:
+  ## @param rootPassword {string} The root password. Resolved from the tenant's Vault at render time by ISecretResolver; it is never written into a values file or into grain state. Empty means the operator generates one, because both refs carry `generate: true`.
+  ## @secret
+  rootPassword: ""
+  ## @param password {string} The application account's password, on the same terms as rootPassword.
+  ## @secret
+  password: ""
+
+## @param platform {object} Resource identity injected by the reconciler. Not a tenant-facing setting.
+## @internal Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.
+platform:
+  ## @param tenantId {string} Tenant GUID, rendered into the cybercloud.io/tenant-id label.
+  tenantId: ""
+  ## @param subscriptionId {string} Subscription GUID, rendered into the cybercloud.io/subscription-id label.
+  subscriptionId: ""
+  ## @param resourceGroup {string} Resource group name, rendered into the cybercloud.io/resource-group label.
+  resourceGroup: ""
+  ## @param resourceId {string} Resource GUID, rendered into the cybercloud.io/resource-id label.
+  resourceId: ""
+  ## @param resourceType {string} Fully qualified resource type, rendered into the cybercloud.io/resource-type label.
+  resourceType: CyberCloud.DBforMySQL/servers
+  ## @param apiVersion {string} The api-version the resource was last written at, rendered into the cybercloud.io/api-version label.
+  apiVersion: "2026-08-01"
+  ## @param managedBy {string} Value of the cybercloud.io/managed-by label. Constant, and the selector every informer filters on.
+  managedBy: cybercloud
+
+## @param imageName {string} Override the MariaDB image. Empty means derive it from `version`, which is what keeps minor upgrades automatic.
+## @internal A pinned image defeats automatic minor upgrades, so it is a platform escape hatch rather than a tenant setting. ⚠ Empty must NOT mean "let the operator choose": mariadb-operator falls back to RelatedMariadbImage, an image chosen by whoever installed the operator rather than by the api-version the tenant asked for.
+imageName: ""
+
+## @param nameOverride {string} Replace the generated object-name stem. Empty means derive it from the release name.
+## @internal Helm plumbing. Nothing about it belongs in a resource body.
+nameOverride: ""

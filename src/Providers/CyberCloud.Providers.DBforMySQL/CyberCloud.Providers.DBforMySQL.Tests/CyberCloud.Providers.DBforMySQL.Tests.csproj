@@ -1,0 +1,43 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      docs/plan/03 § Providers — the fourth project: "TestCluster + k3s".
+
+      ⚠ NEITHER, HERE. The TestCluster half is test/CyberCloud.Conformance's, because a provider's
+      lifecycle is the SHARED suite's assertion, and the k3s half is this provider's
+      *.Cluster.Conformance project. What is left is what only THIS provider can be wrong about: its
+      compatibility claim, its schema against the chart, its MariaDB projection, its quota arithmetic,
+      and its reconciler's behaviour against a connection it does not control.
+
+      ⚠ IT EMBEDS TWO FILES FROM charts/managed/mariadb/, and the row-by-row schema comparison is NOT
+      one of the reasons. `./build.sh Charts` generates the chart's @param block from the registry and
+      byte-diffs it, so comparing the two here would be comparing a file with the file it was
+      generated from. What generation does not reach is templates/ — ChartSurfaces filters it out on
+      purpose, no emitter has ever read a Helm template — so the preset table comparison lives here;
+      and the ANCHORING of an emitted `pattern`, which is a property of the shipped values.schema.json
+      that neither half of the round trip can assert on its own.
+    -->
+
+    <ItemGroup>
+        <PackageReference Include="xunit.v3"/>
+        <PackageReference Include="Shouldly"/>
+    </ItemGroup>
+
+    <ItemGroup Label="Global usings">
+        <Using Include="Xunit"/>
+    </ItemGroup>
+
+    <ItemGroup Label="The other half of the pair — see the header">
+        <EmbeddedResource Include="../../../../charts/managed/mariadb/values.schema.json"
+                          LogicalName="mariadb.values.schema.json"/>
+        <EmbeddedResource Include="../../../../charts/managed/mariadb/templates/_helpers.tpl"
+                          LogicalName="mariadb.helpers.tpl"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../CyberCloud.Providers.DBforMySQL/CyberCloud.Providers.DBforMySQL.csproj"/>
+        <!-- ProviderRegistry.Build, so the declaration is checked the way a silo checks it at start. -->
+        <ProjectReference Include="../../../CyberCloud.ResourceManager/CyberCloud.ResourceManager.csproj"/>
+    </ItemGroup>
+
+</Project>

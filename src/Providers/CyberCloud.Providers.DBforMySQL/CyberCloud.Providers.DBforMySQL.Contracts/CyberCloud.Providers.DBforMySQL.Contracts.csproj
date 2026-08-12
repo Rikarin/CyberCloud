@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      docs/plan/03 § Providers — the first of the five projects: "grain interfaces, resource models,
+      the JSON Schemas". This one is the schema, the mariadb-operator `MariaDB` projection, and the
+      supported-subset table docs/plan/12 line 310 makes this row's central obligation.
+
+      ⚠ NO GRAIN INTERFACES. A server's desired state is held by CyberCloud.ResourceManager's
+      ResourceGrain. This is the SIXTH family to need none — docs/plan/25 § R1's measurement, now
+      taken across two relational databases, a cache, two brokers and an object store.
+
+      ⚠ ITS REFERENCE SET IS CyberCloud.ResourceManager.Contracts AND CyberCloud.Kubernetes.Contracts,
+      and nothing else. Rule 2 of docs/plan/03 § Assembly graph rules forbids a Providers.* assembly
+      referencing another Providers.* assembly, and this project is the one with the strongest reason
+      to want to: CyberCloud.Providers.DBforPostgreSQL.Contracts declares the SAME s1 sizing family,
+      the same identifier-pattern idea and the same listKeys response shape. The rule holds and the
+      duplication is recorded on MariaDbServers.Presets rather than resolved.
+    -->
+
+    <ItemGroup>
+        <ProjectReference Include="../../../CyberCloud.ResourceManager.Contracts/CyberCloud.ResourceManager.Contracts.csproj"/>
+        <ProjectReference Include="../../../CyberCloud.Kubernetes.Contracts/CyberCloud.Kubernetes.Contracts.csproj"/>
+    </ItemGroup>
+
+    <ItemGroup Label="CyberCloud.Analyzers — see CyberCloud.Core.csproj for why this is not a reference">
+        <ProjectReference Include="../../../CyberCloud.Analyzers/CyberCloud.Analyzers.csproj"
+                          OutputItemType="Analyzer"
+                          ReferenceOutputAssembly="false"/>
+    </ItemGroup>
+
+</Project>

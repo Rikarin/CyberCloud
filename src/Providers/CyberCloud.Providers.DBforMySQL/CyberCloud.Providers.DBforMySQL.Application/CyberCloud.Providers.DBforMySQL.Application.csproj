@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      docs/plan/03 § Providers — the third of the five projects: "ABP application services the gateway
+      routes to".
+
+      ⚠ IT HOLDS THE ABP MODULE AND NO APPLICATION SERVICE, AND THIS IS THE SIXTH PROVIDER TO REPORT
+      THAT. PUT, GET, DELETE and POST listKeys are generic resource-manager verbs the gateway routes
+      from the provider registry (ADR-012), so there is nothing for a per-provider controller to do.
+      Six data points across six families is no longer a claim about the sample.
+
+      ⚠ Rule 4 of docs/plan/03 § Assembly graph rules ("nothing references a *.Application assembly")
+      now has six candidates. The rule as enforced is weaker than the document's —
+      Build.Architecture.cs § AssemblyGraphGate, rule 4 says so in its own report — and a sixth
+      candidate does not fix that; it only makes the weaker rule non-vacuous in one more place.
+    -->
+
+    <ItemGroup>
+        <PackageReference Include="Volo.Abp.Ddd.Application"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../CyberCloud.Providers.DBforMySQL.Contracts/CyberCloud.Providers.DBforMySQL.Contracts.csproj"/>
+    </ItemGroup>
+
+    <ItemGroup Label="CyberCloud.Analyzers — see CyberCloud.Core.csproj for why this is not a reference">
+        <ProjectReference Include="../../../CyberCloud.Analyzers/CyberCloud.Analyzers.csproj"
+                          OutputItemType="Analyzer"
+                          ReferenceOutputAssembly="false"/>
+    </ItemGroup>
+
+</Project>

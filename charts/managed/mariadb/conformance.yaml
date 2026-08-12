@@ -1,0 +1,146 @@
+# Conformance manifest — docs/plan/12 § The pattern, once, piece 8.
+#
+# What the conformance suite asserts about CyberCloud.DBforMySQL/servers. This file is data:
+# `Build.Charts` checks only that it is present, non-empty, and names the same resource type as
+# Chart.yaml, and it says so in its own log rather than implying otherwise. The `renders` and
+# `labels` blocks below are asserted today by the two suites that DO run —
+# src/Providers/CyberCloud.Providers.DBforMySQL/CyberCloud.Providers.DBforMySQL.Conformance
+# (Docker-free) and …Cluster.Conformance (a real k3s API server) — through MariaDbCase, not by
+# reading this file.
+
+resourceType: CyberCloud.DBforMySQL/servers
+apiVersion: "2026-08-01"
+chart: mariadb
+
+# ── The compatibility claim ────────────────────────────────────────────────────────────────────
+#
+# ⚠ docs/plan/12 line 310: "Positioned as MySQL-compatible; the same honesty rule as FerretDB applies
+# to the compatibility claim." That rule, at line 262: "This is a compatibility layer and the product
+# page must say so, with a supported-subset table. … Selling it as 'MongoDB' produces a churn event
+# at the first `$lookup`. Selling it as 'MongoDB-compatible document database, here is exactly what
+# works' produces a happy customer with a smaller use case."
+#
+# THE CLAIM, IN ONE SENTENCE: this is a managed MariaDB server that speaks the MySQL client/server
+# protocol. It is not MySQL, and the rows marked `no` below are where a MySQL 8 application finds
+# that out. The same table is on MariaDbServers in
+# src/Providers/CyberCloud.Providers.DBforMySQL/CyberCloud.Providers.DBforMySQL.Contracts, which is
+# the type's own documentation and the copy a provider author reads; this one is the copy a product
+# page and a conformance suite read. `MariaDbCompatibilityTests` asserts the API surface repeats the
+# claim, so it cannot be quietly dropped from the type's summary.
+compatibility:
+  engine: MariaDB
+  claim: MySQL wire-compatible — MariaDB, not MySQL.
+  supported:
+    - id: wire-protocol
+      says: The MySQL client/server protocol on port 3306. Standard MySQL connectors, `mysql`/`mariadb` CLI clients and ORMs connect unmodified.
+      supported: yes
+    - id: sql-core
+      says: SQL:2016 core, InnoDB transactions, foreign keys, prepared statements, stored routines, triggers, views, window functions and common table expressions.
+      supported: yes
+    - id: dump-restore
+      says: Logical migration in and out via `mysqldump`/`mariadb-dump`, subject to the collation row below.
+      supported: yes
+    - id: auth-plugin
+      says: MySQL 8's default `caching_sha2_password` authentication plugin. MariaDB does not implement it, so a client configured for MySQL 8 defaults must be told to use `mysql_native_password` or `ed25519`. This is the first thing a MySQL 8 application hits and it is a connection failure, not a query failure.
+      supported: no
+    - id: collations
+      says: The MySQL 8.0 `utf8mb4_0900_*` collation family. It does not exist in MariaDB, so a `mysqldump` taken from MySQL 8 with `COLLATE utf8mb4_0900_ai_ci` in it does not import unmodified. This is the row that plays the part `$lookup` plays for FerretDB.
+      supported: no
+    - id: replication-interop
+      says: Replicating from or to a MySQL 8 server. MariaDB and MySQL use different GTID formats and the two projects do not support replication between them.
+      supported: no
+    - id: data-directory
+      says: Opening a MySQL data directory in place. Migration between the two engines is logical (dump and restore), never a volume you move.
+      supported: no
+    - id: x-protocol
+      says: The X Protocol on port 33060 and the MySQL Document Store / `mysqlx` API.
+      supported: no
+    - id: group-replication
+      says: MySQL Group Replication and InnoDB Cluster. HA on this row is Galera, which is a different thing with different semantics — synchronous certification-based replication rather than a group consensus protocol.
+      supported: no
+    - id: json-type
+      says: MySQL 8's binary JSON column type. MariaDB's `JSON` is an alias for `LONGTEXT` with a check constraint, so the functions largely match and `SHOW CREATE TABLE` does not.
+      supported: no
+
+# Objects the reconciler must have applied once the resource reports Succeeded.
+#
+# ⚠ ONE, and the count is the interesting part. A MariaDB expands into a StatefulSet, four Services,
+# ConfigMaps, and under Galera an agent and a recovery Job — all of them the operator's, none of them
+# this provider's. A manifest listing them would be asserting on a controller's implementation
+# detail, which breaks on the operator's next minor release without anything being wrong.
+renders:
+  - group: k8s.mariadb.com
+    version: v1alpha1
+    kind: MariaDB
+    count: 1
+
+# ADR-013 — every rendered object carries all seven labels. Asserted against real rendered output,
+# which is what the Labels architecture gate in docs/plan/23 § The architecture gates requires.
+labels:
+  required:
+    - cybercloud.io/tenant-id
+    - cybercloud.io/subscription-id
+    - cybercloud.io/resource-group
+    - cybercloud.io/resource-id
+    - cybercloud.io/resource-type
+    - cybercloud.io/api-version
+    - cybercloud.io/managed-by
+  # ⚠ Not the resource type verbatim. A `/` is not a legal label value character, so the value is
+  # lower-cased with `/` replaced by `_` — KubeLabels.ResourceTypeValue.
+  values:
+    cybercloud.io/resource-type: cybercloud.dbformysql_servers
+    cybercloud.io/managed-by: cybercloud
+
+# Behaviour a tenant is entitled to. Each is a statement the suite can fail on, not a feature list.
+assertions:
+  - id: connect-with-a-mysql-client
+    says: A stock MySQL client library connects to the listKeys host and port with the returned credentials and runs SELECT 1, with no MariaDB-specific driver.
+  - id: the-product-page-says-mariadb
+    says: Every surface a human reads — display name, summary, CLI help, portal blade — says MariaDB and says MySQL-compatible, and none of them says the server is MySQL. The supported-subset table above is reachable from the product page.
+  - id: auth-plugin-is-stated-before-it-fails
+    says: A client configured for MySQL 8's caching_sha2_password default fails to authenticate, and the documented subset said so before the tenant tried it.
+  - id: galera-survives-losing-one-instance
+    says: With highAvailability Galera, deleting one of the three pods leaves the cluster writable and every transaction that returned success before the delete is still readable afterwards.
+  - id: storage-grows-never-shrinks
+    says: Increasing storage.size resizes online; decreasing it is refused at the API.
+  - id: secrets-never-round-trip
+    says: A GET of the resource never returns the root or application password in any form. The only path out is the listKeys action.
+  - id: root-is-never-passwordless
+    says: The rendered CR never carries rootEmptyPassword true, and a server that comes up has a root password whether the platform supplied it or the operator generated it.
+
+# ⚠ OWED, AND NAMED RATHER THAN OMITTED. Each of these is something docs/plan/12 or this platform
+# asks of this row and cannot have today. Checked against the operator's own source on 2026-08-12 —
+# see SOURCE next to this file for the files and the fields.
+owed:
+  - id: async-replication-topology
+    says: docs/plan/12 line 309 says "Galera for HA, or async replication". `highAvailability` offers None and Galera, and not Replication.
+    blocked-by: mariadb-operator's own documentation marks `spec.replication` alpha and recommends Galera for production. Offering an alpha topology as a product mode is the pretence the row's compatibility ⚠ forbids in the other direction. Closing it is an upstream maturity question, not a provider change; the property already exists and is immutable, so a third member is a new api-version and nothing else.
+  - id: replica-count-is-not-a-setting
+    says: The instance count is derived from `highAvailability` — None is 1, Galera is 3 — rather than being a tenant-facing number.
+    blocked-by: The CRD refuses an even replica count under Galera ("An odd number of MariaDB instances … is required to avoid split brain"), and `ResourceSchema` can express Minimum and Maximum and not "odd". A `replicas` property of 1..5 would validate here and then produce a CR the API server refuses, AFTER the caller was told 202 — for 2 and 4, which is half the range. Closing it means a parity or step constraint in `SchemaProperty`, which is a resource-manager change rather than a provider's.
+  - id: credentials-are-provisioned
+    says: docs/plan/12 § The pattern, once, piece 5 — the credential is generated at create and written to the tenant's Vault. Both `generate: true` refs are rendered and the Secrets they name are not written by anything.
+    blocked-by: There is no OpenBao integration and ISecretResolver's only implementation refuses. ⚠ The consequence here is the PostgreSQL row's rather than the Valkey row's, and it is reached by an explicit choice rather than by an operator's default — mariadb-operator generates a password only when `generate` is true, and that field's own default is false. So the server comes up, authenticated, with a password `listKeys` cannot hand out.
+  - id: listkeys-has-no-handler
+    says: The action, its permission and its response shape are declared and nothing serves it. A POST reaches the resource manager, which has no dispatch for a provider action.
+    blocked-by: No action dispatch exists anywhere in CyberCloud.ResourceManager. What this row loses is the whole credential path — a tenant with a running MariaDB has no supported way to learn its password, and the two Secrets the operator generated are readable only with cluster access the tenant does not have. Declared rather than faked, because an undeclared response is the one part of an API surface with no contract.
+  - id: crd-is-v1alpha1
+    says: `k8s.mariadb.com/v1alpha1` is the only served version of this CRD, and this api-version is published as though it were stable.
+    blocked-by: Upstream. The registry's api-version is a promise about OUR body shape, which the platform controls; a v1alpha1 → v1beta1 conversion upstream is a reconciler change and, if a field's meaning moves, a new api-version. Recorded so the first person to see a conversion webhook knows it was expected.
+  - id: tls-is-on-and-unmanaged
+    says: The operator enables TLS by default (`spec.tls.enabled` defaults to true) and issues its own certificates. No `tls` property is declared.
+    blocked-by: The platform does not manage the issuer, so there is nothing a tenant could set that this provider could honour — the same rule that keeps a `tls.enabled` off the Valkey row, reached from the opposite direction. What is owed is a tenant-visible CA and a `tls.required` switch, both of which need a PKI decision this row does not own.
+  - id: volumes-outlive-the-resource
+    says: DeleteAsync removes the MariaDB CR and does not set `storage.pvcRetentionPolicy`, so what happens to the data volumes is the StatefulSet default rather than a decision this platform made.
+    blocked-by: Nothing reads SoftDeleteDays, so there is no recovery path a retained volume could be restored from, and no reclaim path an orphaned one is swept by. Both halves land with soft delete; until then the behaviour is the operator's and this row does not claim otherwise.
+
+# Meters the type must emit — docs/plan/12 § The pattern, once, piece 3. Listed here so the
+# conformance suite and the provider's Describe can be diffed against one file rather than agreeing
+# by coincidence.
+#
+# ⚠ These are BILLING meters (docs/plan/22) and are not the QUOTA meters Describe declares. The four
+# quota meters — vcpu, memoryGb, storageGb, resources — are asserted in MariaDbDeclarationTests,
+# against the registry, which is the only place either kind is real today.
+meters:
+  - mariadb.instance.hours
+  - mariadb.storage.gib.hours

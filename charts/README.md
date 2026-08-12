@@ -36,6 +36,7 @@ Five charts are paired today, and the split is worth reading as a ratio rather t
 | `managed/nats` | 31 | 21 | 10 |
 | `managed/seaweedfs` | 25 | 15 | 10 |
 | `managed/clickhouse` | 25 | 13 | 12 |
+| `managed/mariadb` | 27 | 14 | 13 |
 
 ⚠ **The `@internal` count barely moves and the generated count varies by a factor of two**, which is
 the shape to expect for the rest: the hand-written tail is the platform's identity block (eight rows),

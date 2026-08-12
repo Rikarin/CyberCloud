@@ -316,6 +316,30 @@
         <Project Path="src/Providers/CyberCloud.Providers.Analytics/CyberCloud.Providers.Analytics.Tests/CyberCloud.Providers.Analytics.Tests.csproj"/>
         <Project Path="src/Providers/CyberCloud.Providers.Analytics/CyberCloud.Providers.Analytics.Conformance/CyberCloud.Providers.Analytics.Conformance.csproj"/>
         <Project Path="src/Providers/CyberCloud.Providers.Analytics/CyberCloud.Providers.Analytics.Cluster.Conformance/CyberCloud.Providers.Analytics.Cluster.Conformance.csproj"/>
+
+        <!--
+          The ninth provider family — CyberCloud.DBforMySQL/servers on mariadb-operator,
+          docs/plan/12 § The catalogue, "MariaDB · M3 · 0.8 EM".
+
+          ⚠ ITS OBLIGATION IS A SENTENCE RATHER THAN A FEATURE. docs/plan/12 line 310 positions the row
+          as MySQL-compatible and applies the FerretDB honesty rule (line 262) to the claim: the product
+          page must say it is a compatibility layer and carry a supported-subset table. The engine is
+          MariaDB, the resource path is the Azure-parity one, and the table is
+          MariaDbServers.SupportedSubset — as data, so a test can walk it and an edit cannot quietly
+          drop it.
+
+          ⚠ It is the THIRD family whose namespace spells an engine it does not run. CyberCloud.Cache
+          runs Valkey at the path `redis` and CyberCloud.DocumentDB runs FerretDB at `accounts`, both
+          for ADR-011's reason; this one runs MariaDB at `DBforMySQL` for docs/plan/12 line 310's. That
+          is a pattern rather than an exception, and the pattern is: the path keeps parity, the prose
+          tells the truth, and the supported-subset table is where the difference is written down.
+        -->
+        <Project Path="src/Providers/CyberCloud.Providers.DBforMySQL/CyberCloud.Providers.DBforMySQL.Contracts/CyberCloud.Providers.DBforMySQL.Contracts.csproj"/>
+        <Project Path="src/Providers/CyberCloud.Providers.DBforMySQL/CyberCloud.Providers.DBforMySQL/CyberCloud.Providers.DBforMySQL.csproj"/>
+        <Project Path="src/Providers/CyberCloud.Providers.DBforMySQL/CyberCloud.Providers.DBforMySQL.Application/CyberCloud.Providers.DBforMySQL.Application.csproj"/>
+        <Project Path="src/Providers/CyberCloud.Providers.DBforMySQL/CyberCloud.Providers.DBforMySQL.Tests/CyberCloud.Providers.DBforMySQL.Tests.csproj"/>
+        <Project Path="src/Providers/CyberCloud.Providers.DBforMySQL/CyberCloud.Providers.DBforMySQL.Conformance/CyberCloud.Providers.DBforMySQL.Conformance.csproj"/>
+        <Project Path="src/Providers/CyberCloud.Providers.DBforMySQL/CyberCloud.Providers.DBforMySQL.Cluster.Conformance/CyberCloud.Providers.DBforMySQL.Cluster.Conformance.csproj"/>
     </Folder>
     <Folder Name="/src/Hosts/">
         <Project Path="src/Hosts/CyberCloud.Gateway.Host/CyberCloud.Gateway.Host.csproj"/>
