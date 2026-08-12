@@ -1,0 +1,73 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      docs/plan/18 § CyberCloud.KeyVault/vaults — the platform's own client for OpenBao, and the one
+      implementation of ISecretResolver that reads a real value.
+
+      ⚠ THIS IS THE PLATFORM'S SECRET RESOLVER, NOT THE TENANT-FACING VAULT PROVIDER. docs/plan/18's
+      resource model — vaults/{name} with secrets, keys, certificates and ReBAC accessPolicies — is a
+      resource provider under CyberCloud.KeyVault and belongs in src/Providers. What lives here is
+      the other half of that document: the platform reading a credential it provisioned, at the data
+      plane, so a reconciler can put a password into a Kubernetes Secret it is applying without the
+      password ever entering desired state. The two share a cluster and share nothing else.
+
+      ⚠ THE ASSEMBLY NAME IS LOAD-BEARING AND IS NOT A MATTER OF TASTE. CC1005 exempts exactly this
+      assembly, by an exact-or-dotted-prefix match on Compilation.AssemblyName —
+      CyberCloud.Analyzers/WellKnown.cs's VaultAssembly const, and SecretInGrainStateAnalyzer's
+      OnCompilationStart. Renaming this project turns the rule back on here and turns it OFF nowhere,
+      so the failure would be loud; renaming it to something the prefix match still accepts
+      (CyberCloud.Vault.Anything) silently widens the exemption.
+
+      ⚠ AND BECAUSE CC1005 IS OFF HERE, THE ANALYZER CANNOT BE THE GUARD. Every claim this assembly
+      makes about where a secret does not reach is asserted by reflection over the compiled types —
+      CyberCloud.Vault.Tests' SecretContainmentTests — for the same reason the OTP work had to:
+      an analyzer that is disabled proves nothing, and a member called `Code` matched none of
+      CC1005's four suffixes even where it was enabled.
+
+      ⚠ NO GRAINS, NO [GenerateSerializer], NO PERSISTENT STATE, DELIBERATELY. docs/plan/05 § What is
+      not in a grain keeps secrets out of the durable tier, and the cheapest way to hold that line is
+      an assembly with nothing Orleans could persist or put on the wire. A resolved value lives in a
+      local, is handed to the caller, and is never assigned to a field.
+      SecretContainmentTests.NothingInThisAssemblyIsOrleansSerializable is the assertion.
+    -->
+
+    <ItemGroup>
+        <!--
+          ⚠ Microsoft.Extensions.Http is NOT referenced and there is no IHttpClientFactory, which
+          matches the tree rather than departing from it: nothing in this repository calls
+          AddHttpClient. CyberCloud.Identity's HttpClusterOidcDiscovery is registered as a singleton
+          over a bare HttpClient with a short timeout and says why; this follows it.
+        -->
+        <!--
+          ISiloBuilder for the registration extension, and the Microsoft.Extensions.* pieces
+          (Options.ConfigurationExtensions for BindConfiguration, Logging.Abstractions for the audit
+          line) that arrive with it. No grains live here. CyberCloud.Kubernetes takes its options
+          binding through the same transitive route.
+        -->
+        <PackageReference Include="Microsoft.Orleans.Server"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../CyberCloud.Core/CyberCloud.Core.csproj"/>
+        <ProjectReference Include="../CyberCloud.Core.Contracts/CyberCloud.Core.Contracts.csproj"/>
+        <!--
+          ISecretResolver lives here. ⚠ The edge runs Vault -> ResourceManager and never the other
+          way: CyberCloud.ResourceManager keeps UnavailableSecretResolver as its TryAdd default and
+          must not learn this assembly's name, because that pair of references is a module cycle.
+          module-layering.txt carries both lines.
+        -->
+        <ProjectReference Include="../CyberCloud.ResourceManager.Contracts/CyberCloud.ResourceManager.Contracts.csproj"/>
+    </ItemGroup>
+
+    <ItemGroup Label="CyberCloud.Analyzers — see CyberCloud.Core.csproj for why this is not a reference">
+        <!--
+          ⚠ Referenced even though CC1005 excuses this assembly, because the other rules do not.
+          CC1003, CC1006 and the rest still apply here, and dropping the analyzer to silence one rule
+          would drop them all.
+        -->
+        <ProjectReference Include="../CyberCloud.Analyzers/CyberCloud.Analyzers.csproj"
+                          OutputItemType="Analyzer"
+                          ReferenceOutputAssembly="false"/>
+    </ItemGroup>
+
+</Project>

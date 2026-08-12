@@ -58,9 +58,16 @@ public sealed class SecretInGrainStateAnalyzer : DiagnosticAnalyzer {
     }
 
     static void OnCompilationStart(CompilationStartAnalysisContext context) {
-        // ⚠ The vault is the one assembly allowed to hold a secret value. It does not exist yet
-        // (docs/plan/18); writing the exemption now means the rule does not have to be revisited
-        // when it lands, and means an assembly cannot opt out by being named CyberCloud.VaultThing.
+        // ⚠ The vault is the one assembly allowed to hold a secret value (docs/plan/18). This
+        // exemption was written before it existed so the rule would not have to be revisited when it
+        // landed, and the exact-or-dotted-prefix match means an assembly cannot opt out by being
+        // named CyberCloud.VaultThing.
+        //
+        // ⚠ CyberCloud.Vault NOW EXISTS, WHICH MEANS THIS BRANCH IS LIVE AND THE RULE NO LONGER
+        // GUARDS THE ONE ASSEMBLY WITH THE MOST TO GAIN FROM IT. That is correct — a client that
+        // reads a value has to hold one — and it is why CyberCloud.Vault.Tests' SecretContainmentTests
+        // asserts by reflection what this rule would otherwise have asserted: no [GenerateSerializer],
+        // no [Id], and one named field holding a credential.
         var assembly = context.Compilation.AssemblyName;
         if (string.Equals(assembly, WellKnown.VaultAssembly, StringComparison.Ordinal)
             || (assembly is not null && assembly.StartsWith(WellKnown.VaultAssembly + ".", StringComparison.Ordinal))) {
