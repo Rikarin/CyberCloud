@@ -66,13 +66,22 @@ CyberCloud.Identity -> CyberCloud.Communication
 # Identity is a consumer of everything under it and a supplier to nothing here: only hosts and the
 # gateway reach it, and neither is in scope for this rule.
 #
-# ⚠ THE LINE BELOW EXISTS ONLY IN A .csproj, AND IT IS WHY THIS RULE DOES NOT READ METADATA ALONE.
-# CyberCloud.Identity references the CyberCloud.Authorization IMPLEMENTATION assembly for
-# ObjectTypes and Relations — the ReBAC vocabulary, deliberately not copied (see that .csproj) — and
-# every member of both is a `const string`. The compiler inlines them, so CyberCloud.Identity's
-# AssemblyRef table has no row for CyberCloud.Authorization at all. A rule 7 built on binding
-# references would not merely have missed this edge, it would have called this line stale and asked
-# for it to be deleted. It is real, it is intended, and only the ProjectReference set can see it.
+# ⚠ THE LINE BELOW IS NOW A BOUND EDGE, AND THE PARAGRAPH THAT USED TO BE HERE WAS WRONG ABOUT WHY
+# IT WAS NOT. It read: "this line exists only in a .csproj … a rule 7 built on binding references
+# would not merely have missed this edge, it would have called this line stale and asked for it to
+# be deleted." The first half was true of one ASSEMBLY — CyberCloud.Identity referenced the
+# CyberCloud.Authorization implementation for ObjectTypes and Relations, every member of both a
+# `const string`, so that assembly's AssemblyRef table genuinely had no row. The conclusion did not
+# follow, because rule 7 is a MODULE rule: CyberCloud.Identity.Contracts binds SubjectRef and
+# ObjectRef from CyberCloud.Authorization.Contracts, ModuleOf() truncates both names to two
+# segments, and so this exact line was already produced by a bound edge. A metadata-only rule 7
+# would have kept it, not deleted it.
+#
+# The `const` blind spot is real; this was not a live instance of it. The vocabulary has since been
+# lifted into CyberCloud.Authorization.Contracts (AuthorizationVocabulary.cs) and
+# CyberCloud.Identity's ProjectReference on the implementation assembly is gone, so nothing in the
+# tree now depends on the ProjectReference half of rule 7 to see an edge. That is an argument for
+# keeping it — an unexercised half of a rule is the half that rots — not against.
 CyberCloud.Identity -> CyberCloud.Authorization
 CyberCloud.Identity -> CyberCloud.Core
 CyberCloud.Identity -> CyberCloud.Tenancy
