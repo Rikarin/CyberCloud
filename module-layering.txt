@@ -94,6 +94,27 @@ CyberCloud.ResourceManager -> CyberCloud.Core
 CyberCloud.ResourceManager -> CyberCloud.Kubernetes
 CyberCloud.ResourceManager -> CyberCloud.Tenancy
 
+# ── The vault — docs/plan/18 ───────────────────────────────────────────────────────────────────
+# CyberCloud.Vault is the platform's OpenBao client: the one ISecretResolver that returns a value.
+# It reaches CyberCloud.ResourceManager for that interface (it lives in
+# CyberCloud.ResourceManager.Contracts) and CyberCloud.Core for SecretRef and Result.
+#
+# ⚠ THE DIRECTION IS THE WHOLE REVIEW, AND THE REVERSE EDGE WOULD BE A CYCLE. The obvious wiring is
+# for AddCyberCloudResourceManager to register the OpenBao resolver directly, and it cannot:
+# CyberCloud.ResourceManager -> CyberCloud.Vault plus the line below is two modules that have become
+# one, and the third direction of this file refuses it. So the resource manager keeps
+# UnavailableSecretResolver as its TryAdd default and never learns this module's name, and a host
+# that has a vault calls AddOpenBaoSecretResolver — which is also what keeps the refusing default
+# the default for every silo that does not.
+#
+# ⚠ NO EDGE TO CyberCloud.Identity, AND IT IS THE ONE THAT WILL BE ASKED FOR FIRST. Identity's
+# ITotpSecretSeam is four lines over ISecretResolver and UnavailableTotpSecrets' own remarks name
+# the adapter as intended — "in a host that already references both". A line here would make the
+# module that gates sign-in depend on the module that reads the vault, which is the same shape
+# CyberCloud.Communication refuses one section above and for the same reason.
+CyberCloud.Vault -> CyberCloud.Core
+CyberCloud.Vault -> CyberCloud.ResourceManager
+
 # ── Providers — docs/plan/03 § The .Contracts split ────────────────────────────────────────────
 # A provider declares a ProjectReference on CyberCloud.ResourceManager.Contracts and
 # CyberCloud.Kubernetes.Contracts and nothing else; the CyberCloud.Core and CyberCloud.Tenancy edges

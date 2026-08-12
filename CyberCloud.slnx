@@ -118,6 +118,17 @@
         -->
         <Project Path="src/CyberCloud.Sdk/CyberCloud.Sdk.csproj"/>
         <Project Path="src/CyberCloud.Sdk.Tests/CyberCloud.Sdk.Tests.csproj"/>
+
+        <!--
+          docs/plan/18 § CyberCloud.KeyVault/vaults — the platform's OpenBao client and the one
+          ISecretResolver that returns a value. ⚠ No .Contracts pair, and the absence is the design:
+          it implements an interface that already exists in CyberCloud.ResourceManager.Contracts, so
+          a contracts assembly of its own would only be a second place to declare a seam. ⚠ The
+          assembly name is fixed by CC1005 — CyberCloud.Analyzers/WellKnown.cs's VaultAssembly is the
+          exemption, matched exactly or by dotted prefix.
+        -->
+        <Project Path="src/CyberCloud.Vault/CyberCloud.Vault.csproj"/>
+        <Project Path="src/CyberCloud.Vault.Tests/CyberCloud.Vault.Tests.csproj"/>
     </Folder>
     <!--
       docs/plan/03 § Providers — the five projects every provider has. CyberCloud.Sample is the first
