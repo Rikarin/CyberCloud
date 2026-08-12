@@ -22,8 +22,11 @@ namespace CyberCloud.Providers.Messaging;
 ///             remarks), so one instance serves every tenant in the process. A field caching, say,
 ///             the last rendered listener list would hand tenant B tenant A's allow-list — and a
 ///             <c>readonly</c> field holding a mutable dictionary is the shape that gets past a
-///             structural check, because the field never reassigns. <c>KafkaStatelessnessTests</c>
-///             asserts both halves.
+///             structural check, because the field never reassigns.
+///             <c>KafkaReconcilerTests.TheReconcilerHoldsNoMutableState</c> asserts the structural
+///             half and
+///             <c>KafkaReconcilerTests.OneReconcilerInstanceServesTwoTenantsWithoutMixingThem</c>
+///             the half a structural check cannot see.
 ///         </item>
 ///         <item>
 ///             <b>Bounded.</b> At most two applies and two reads, all on the caller's token. ⚠ There
@@ -253,9 +256,11 @@ public sealed class KafkaClusterReconciler(IClock clock) : IResourceReconciler {
     ///     ⚠ <b>A property rather than a static field, and that is the clause-2 rule rather than a
     ///     style choice.</b> A reconciler is a singleton serving every tenant, so any field is shared
     ///     state; this one would be immutable and harmless, and the check that would allow it is a
-    ///     check that has to reason about mutability. <c>KafkaStatelessnessTests</c> asserts the
-    ///     declared field count is one — the clock — and an exception for "but this one is fine" is
-    ///     how the next field gets in.
+    ///     check that has to reason about mutability.
+    ///     <c>KafkaReconcilerTests.TheReconcilerHoldsNoMutableState</c> asserts — through
+    ///     <c>ReconcilerConformance.CheckNoHiddenState</c> — that this type declares no writable
+    ///     instance field at all, and an exception for "but this one is fine" is how the next field
+    ///     gets in.
     /// </remarks>
     static (string Key, string Value)[] KraftAnnotations => [
         (KafkaClusters.KraftAnnotation, KafkaClusters.Enabled),

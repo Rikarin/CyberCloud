@@ -99,26 +99,28 @@ partial class Build
     ///     plus one this build adds. Named here so the target's log output is the checklist, and so
     ///     adding a gate is a visible diff against the doc rather than a silent omission.
     ///     <para>
-    ///         ⚠ <b>Four of the ten are enforced by the compiler instead, and this target must not
-    ///         re-implement them.</b> <c>src/CyberCloud.Analyzers</c> ships CC1001–CC1007:
+    ///         ⚠ <b>Three of the ten are enforced by the compiler instead, and this target must not
+    ///         re-implement them.</b> <c>src/CyberCloud.Analyzers</c> ships CC1001–CC1007. It was four
+    ///         until <b>Serializer discipline</b> stopped being a sentence and became a gate:
     ///     </para>
     ///     <list type="bullet">
     ///         <item><b>Tenant keys</b> — the "no string literal containing '|' in a GetGrain argument" half is CC1004. The "every tenant-scoped grain interface is IGrainWithStringKey" half is cross-assembly and is enforced here.</item>
-    ///         <item><b>Serializer discipline</b> — the "[Alias] on every [GenerateSerializer]" half is CC1003. The "[Id(n)] numbers never reused, checked against a committed manifest" half is a reflection test, <c>CyberCloud.Core.Contracts.Tests.WireContractTests</c>.</item>
+    ///         <item><b>Serializer discipline</b> — ⚠ <b>this row is no longer one of the four, and the sentence that used to sit here is why.</b> It read "the [Alias] on every [GenerateSerializer] half is CC1003; the [Id(n)] half is a reflection test, <c>CyberCloud.Core.Contracts.Tests.WireContractTests</c>" — a string constant that named a test covering <b>6 of the tree's 212</b> aliased wire types and checked neither that the test existed nor that it passed. <see cref="SerializerDisciplineGate" /> evaluates the row instead.</item>
     ///         <item><b>Secrets</b> — CC1005, in full.</item>
     ///         <item><b>No blocking</b> — CC1001 and CC1002. ⚠ Wider than the doc's wording: the doc says "in grain assemblies", the analyzers apply everywhere they are referenced, because a gateway that blocks is a stalled request even though it is not a stalled activation.</item>
     ///     </list>
     ///     <para>
-    ///         A compile-time rule beats a build-target sweep for all four: it names the line, it runs
+    ///         A compile-time rule beats a build-target sweep for all three: it names the line, it runs
     ///         in the IDE, and it cannot be outrun by a file the sweep's glob missed. What it cannot
-    ///         do is see across assemblies, which is why the other six stay here.
+    ///         do is see across assemblies, which is why the rest stay here.
     ///     </para>
     ///     <para>
     ///         ⚠ <b>The analyzer's reach is a project-file opt-in, and it is not universal.</b> A
     ///         project polices itself only if its <c>.csproj</c> carries the
-    ///         <c>OutputItemType="Analyzer"</c> reference. <see cref="AnalyzerCoverageGate" /> is the
-    ///         gate that keeps the four rows above honest — without it, "compiler-enforced" is a
-    ///         claim about six projects wearing the clothes of a claim about the tree.
+    ///         <c>OutputItemType="Analyzer"</c> reference — and an opted-in project still runs nothing
+    ///         if the rule's severity has been turned down. <see cref="AnalyzerCoverageGate" /> is the
+    ///         gate that keeps the rows above honest on both counts; without it, "compiler-enforced" is
+    ///         a claim about six projects wearing the clothes of a claim about the tree.
     ///     </para>
     /// </summary>
     static readonly (string Gate, string Checks)[] ArchitectureGates =
@@ -156,7 +158,9 @@ partial class Build
     ///         exemption — which is the argument for not writing a gate that asserts one.
     ///     </para>
     /// </summary>
-    IReadOnlyList<(AbsolutePath Project, AbsolutePath Assembly)> ShippingAssemblyPaths =>
+    // List rather than IReadOnlyList: CA1859 is an error here and this is a private helper — the same
+    // reason ShippingProjectFiles below returns a Dictionary.
+    List<(AbsolutePath Project, AbsolutePath Assembly)> ShippingAssemblyPaths =>
         Solution.AllProjects
             .Select(x => (AbsolutePath)x.Path)
             .Where(project => SuiteOwning(project) is null)
@@ -224,9 +228,7 @@ partial class Build
             AssemblyGraphGate(),
             StorageTierGate(),
             TenantKeyGate(),
-            GateOutcome.Analyzer(
-                "Serializer discipline",
-                "CC1003 for [Alias]; the [Id(n)] manifest is CyberCloud.Core.Contracts.Tests.WireContractTests"),
+            SerializerDisciplineGate(),
             WireCompatibilityGate(),
             GateOutcome.Analyzer("Secrets", "CC1005, in full"),
             GateOutcome.Analyzer("No blocking", "CC1001 and CC1002, wider than the doc's 'grain assemblies'"),
@@ -1280,6 +1282,196 @@ partial class Build
 
     AbsolutePath WireManifest(string tag) => WireDirectory / (tag + ".txt");
 
+    List<WireType>? currentWireTypes;
+
+    /// <summary>
+    ///     Every aliased wire type in the tree, read once and shared by the two rows that are about
+    ///     the wire. Reading the assemblies twice would double the only expensive thing either row
+    ///     does and could — if a build wrote between the two reads — let them disagree.
+    /// </summary>
+    IReadOnlyList<WireType> CurrentWireTypes =>
+        currentWireTypes ??= WireContract.Read(ShippingAssemblyPaths.Select(x => x.Assembly));
+
+    // ── Gate: serializer discipline — docs/plan/23 § The architecture gates ───────────────────
+
+    /// <summary>
+    ///     docs/plan/23 § The architecture gates, row <b>Serializer discipline</b>: "every
+    ///     <c>[GenerateSerializer]</c> type has a stable <c>[Alias]</c>; <c>[Id(n)]</c> numbers never
+    ///     reused, checked against a committed manifest."
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>This row was a string constant, and it is the third instance of the defect this
+    ///         file has now removed twice before.</b> It read <c>GateOutcome.Analyzer("Serializer
+    ///         discipline", "CC1003 for [Alias]; the [Id(n)] manifest is
+    ///         CyberCloud.Core.Contracts.Tests.WireContractTests")</c>. Nothing checked that the named
+    ///         test existed, that it passed, or that CC1003 was still switched on — and the named test
+    ///         reflects over <c>typeof(ResultSurrogate).Assembly</c>, which is
+    ///         <c>CyberCloud.Core.Contracts</c> and <b>6 of the tree's 212 aliased wire types</b>. A
+    ///         singular claim over a plural subject, printed with a tick.
+    ///         <see cref="LabelsGate" />'s remarks make the general argument: a status line that
+    ///         asserts a condition it does not evaluate is worse than no status line.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>What this closes that <see cref="WireCompatibilityGate" /> does not, stated
+    ///         narrowly, because the overlap is larger than it looks.</b> That gate compares the tree
+    ///         against <i>released</i> manifests, and <c>build/wire/v0.1.0.txt</c> happens to contain
+    ///         every wire type in the tree today — so "numbers never reused, never reordered" is in
+    ///         fact enforced for all 212 right now, by a committed manifest, exactly as the doc's row
+    ///         words it. The per-assembly baselines in the test suites are <b>not</b> what makes that
+    ///         true, and a report claiming otherwise would be wrong in the tree's favour.
+    ///     </para>
+    ///     <para>
+    ///         The gap is the <b>window between a type being written and a release being cut</b>. A
+    ///         type added after the newest tag appears in no released manifest, so its numbers may be
+    ///         renumbered freely until somebody tags — and the renumber then lands in the first
+    ///         baseline as if it had always been that way. That count is what this row reports, and it
+    ///         is <see cref="GateStatus.Vacuous" /> whenever it is not zero: an unpinned type is a
+    ///         subject the row cannot see, which is ○ with the number rather than ✔.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The half that is not about baselines at all is the half nothing else could do.</b>
+    ///         CC1003 sees one compilation. It cannot see two assemblies claiming one alias, which is
+    ///         a coin flip at deserialization; it cannot see whether it is still error-severity in
+    ///         some project; and it does not run over an assembly at all unless that project opted in
+    ///         (<see cref="AnalyzerCoverageGate" />). Reading the metadata that shipped answers all
+    ///         three from the artefact rather than from the configuration that produced it.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The cost is deliberately near zero, and that is a design constraint rather than a
+    ///         happy result.</b> <c>Architecture</c> is about thirteen seconds and people run it
+    ///         constantly. <see cref="LabelsGate" /> is the shape this row would otherwise copy — run
+    ///         the suite, believe only the result — but there are five per-assembly baseline suites
+    ///         and each <c>dotnet run</c> costs about 1.2s, which would be roughly a 50% increase for
+    ///         a property the metadata already answers more completely. So this row reads the
+    ///         assemblies <see cref="CurrentWireTypes" /> has already opened and the manifests
+    ///         <see cref="WireCompatibilityGate" /> already parses, and claims nothing about any test.
+    ///         <c>Test</c> runs those suites; this row does not pretend to.
+    ///     </para>
+    /// </remarks>
+    GateOutcome SerializerDisciplineGate()
+    {
+        var current = CurrentWireTypes;
+        var serializable = WireContract.Serializable(ShippingAssemblyPaths.Select(x => x.Assembly));
+        var violations = new List<string>();
+
+        // ⚠ THE EMPTY-INPUT VIOLATION, which is failure class (b) from the wire gate's own sabotage:
+        // every check below is a loop over what was read, so a read that returned nothing produces no
+        // violations and the row would print a confident count of zero. This tree cannot have zero
+        // wire types — CyberCloud.Core.Contracts alone publishes six — so an empty read means the
+        // assemblies were not the ones this gate thinks it opened.
+        if (current.Count == 0 || serializable.Count == 0)
+        {
+            violations.Add(
+                $"reading {ShippingAssemblyPaths.Count} shipping assembl(y/ies) found {current.Count} "
+                + $"aliased type(s) and {serializable.Count} [GenerateSerializer] type(s). Neither can be "
+                + "zero in this tree, so the metadata this row inspected is not the wire surface it "
+                + "believes it read — every check in this gate loops over that set and would otherwise "
+                + "report a clean sweep of nothing");
+        }
+
+        // The CC1003 property, evaluated against what shipped rather than asserted about the compiler.
+        foreach (var (assembly, clrName, _) in serializable.Where(x => !x.Aliased))
+        {
+            violations.Add(
+                $"{clrName} ({assembly}) carries [GenerateSerializer] and no [Alias]. CC1003 is supposed "
+                + "to make this uncompilable, so if it is in the tree the analyzer did not run here — "
+                + "check the project's OutputItemType=\"Analyzer\" reference and CC1003's severity. "
+                + "docs/plan/04 § Failure and upgrade: the alias is what a peer looks the type up by");
+        }
+
+        // ⚠ Cross-assembly, which is the one thing no analyzer in this tree can be. CC1003 sees a
+        // single compilation; two assemblies each declaring [Alias("CyberCloud.Core.Result")] compile
+        // cleanly and separately, and Orleans then hands a peer's payload to whichever won the
+        // registration race.
+        foreach (var clash in current
+            .GroupBy(x => x.Alias, StringComparer.Ordinal)
+            .Where(x => x.Count() > 1)
+            .OrderBy(x => x.Key, StringComparer.Ordinal))
+        {
+            violations.Add(
+                $"the alias \"{clash.Key}\" is declared by {clash.Count()} types — "
+                + $"{string.Join(", ", clash.Select(x => $"{x.ClrName} ({x.Assembly})"))}. An alias is the "
+                + "primary key of the wire, so two claimants is a coin flip at deserialization rather "
+                + "than an error anything reports");
+        }
+
+        // "Never reused", in the one form that needs no baseline at all: within a single type. A
+        // number declared twice is the same slot written twice, and the far side reads whichever the
+        // codec emitted last.
+        foreach (var type in current)
+        {
+            foreach (var duplicate in type.Members
+                .GroupBy(x => x.Id)
+                .Where(x => x.Count() > 1)
+                .OrderBy(x => x.Key))
+            {
+                violations.Add(
+                    $"\"{type.Alias}\" ({type.ClrName}) declares [Id({duplicate.Key})] on "
+                    + $"{string.Join(" and ", duplicate.Select(x => x.Name))}. docs/plan/05 § Serialization "
+                    + "and schema evolution: numbers are never reused, and two members in one slot is the "
+                    + "shortest way to break that");
+            }
+        }
+
+        // ── Coverage: which of these types has a committed manifest pinning its numbers ──────────
+        var pinned = PinnedAliases();
+
+        var unpinned = current
+            .Select(x => x.Alias)
+            .Where(alias => !pinned.Contains(alias))
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)
+            .ToList();
+
+        var detail =
+            $"{serializable.Count} [GenerateSerializer] type(s), all checked for an [Alias]; "
+            + $"{current.Count} aliased wire type(s), checked for a unique alias and for no [Id(n)] "
+            + $"declared twice; {current.Count - unpinned.Count} of {current.Count} have their numbers "
+            + $"pinned by a committed manifest under build/{WireContract.ManifestDirectoryName}";
+
+        if (unpinned.Count > 0)
+        {
+            detail += $". {unpinned.Count} do not and can be renumbered until the next release tag "
+                + $"records them — {string.Join(", ", unpinned.Take(5))}"
+                + (unpinned.Count > 5 ? $" and {unpinned.Count - 5} more" : string.Empty);
+        }
+
+        return new GateOutcome(
+            "Serializer discipline",
+            violations.Count > 0 ? GateStatus.Failed
+            : unpinned.Count > 0 ? GateStatus.Vacuous
+            : GateStatus.Enforced,
+            detail,
+            violations);
+    }
+
+    /// <summary>
+    ///     Every alias any committed manifest under <c>build/wire/</c> records.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ Every manifest, not only the three <see cref="ReleaseTags" /> returns. A number pinned by
+    ///     a manifest that has since fallen out of the comparison window is still a number somebody
+    ///     wrote down and reviewed, and this row is counting what is <i>pinned</i> rather than what is
+    ///     <i>compared</i>. <see cref="WireCompatibilityGate" /> is the row about the window.
+    /// </remarks>
+    HashSet<string> PinnedAliases()
+    {
+        var pinned = new HashSet<string>(StringComparer.Ordinal);
+
+        if (!WireDirectory.DirectoryExists())
+            return pinned;
+
+        foreach (var manifest in WireDirectory.GlobFiles("*.txt").Where(x => x != BurnedAliasesFile))
+        {
+            var (_, _, released) = WireContract.Parse(manifest.Name, manifest.ReadAllLines());
+
+            pinned.UnionWith(released.Select(x => x.Alias));
+        }
+
+        return pinned;
+    }
+
     /// <summary>
     ///     docs/plan/23 § The architecture gates, row <b>Wire compatibility</b>: "round-trip every
     ///     wire type through the last three released contract assemblies."
@@ -1317,7 +1509,7 @@ partial class Build
     /// </remarks>
     GateOutcome WireCompatibilityGate()
     {
-        var current = WireContract.Read(ShippingAssemblyPaths.Select(x => x.Assembly));
+        var current = CurrentWireTypes;
         var burned = BurnedAliases();
         var tags = ReleaseTags();
         var violations = WireContract.Revived(current, burned);
