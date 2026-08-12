@@ -1,0 +1,28 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    // The same shape as apps/portal/tsconfig.spec.json, and for the same reasons — ts-jest emits
+    // CommonJS, which pins `moduleResolution` to node10, and node10 predates package `exports`
+    // maps. The `paths` entries below restate mappings the packages already declare.
+    "outDir": "../../out-tsc/identity-spec",
+    "module": "commonjs",
+    "moduleResolution": "node10",
+    "target": "ES2022",
+    "types": ["jest", "node", "@angular/localize"],
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "isolatedModules": false,
+    "paths": {
+      "@angular/localize/init": ["../../node_modules/@angular/localize/types/init.d.ts"],
+      "@angular/core/testing": ["../../node_modules/@angular/core/types/testing.d.ts"],
+      "@angular/common/http": ["../../node_modules/@angular/common/types/http.d.ts"],
+      "@angular/common/http/testing": ["../../node_modules/@angular/common/types/http-testing.d.ts"],
+      "@angular/platform-browser/testing": [
+        "../../node_modules/@angular/platform-browser/types/testing.d.ts"
+      ],
+      "@angular/router/testing": ["../../node_modules/@angular/router/types/testing.d.ts"],
+      "@xui/core/*": ["../../node_modules/@xui/core/types/xui-core-*.d.ts"]
+    }
+  },
+  "include": ["src/**/*.ts"]
+}

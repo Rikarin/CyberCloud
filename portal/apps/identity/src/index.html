@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Sign in — Cyber Cloud</title>
+    <base href="/" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" href="favicon.ico" />
+    <!--
+      ⚠ `noindex`, and it is not an SEO preference. This origin serves only the sign-in, sign-up,
+      reset and consent pages. A search engine that indexed `/signin?returnUrl=…` would publish a
+      corpus of live authorization requests, and the snippets would carry client ids and scopes.
+    -->
+    <meta name="robots" content="noindex, nofollow" />
+    <!--
+      ⚠ `strict-origin-when-cross-origin` keeps the query string off the wire when the browser
+      leaves this origin. The sign-in URL carries the OIDC request's parameters, and a full
+      `Referer` would hand them to whatever the user clicks next.
+    -->
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
+  </head>
+  <body>
+    <cc-root></cc-root>
+  </body>
+</html>
