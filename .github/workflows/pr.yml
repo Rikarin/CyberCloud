@@ -1,0 +1,155 @@
+# docs/plan/23 § CI shape, row `pr.yml`: "Every PR | ≤ 25 min — everything in the 'Every PR' rows
+# above, parallelised".
+#
+# ── ⚠ THERE ARE NO `paths:` FILTERS IN THIS FILE, AND THAT IS THE FIRST DECISION ─────────────────
+#
+# docs/plan/23 § Test layers says "Every PR" in eight rows and qualifies exactly one of them —
+# Conformance, "Every PR touching a provider". A path filter is the obvious way to honour that, and
+# it is also the most reliable way to build a workflow that is green because it ran nothing: a glob
+# that stops matching after a directory is renamed turns a required check into a no-op that still
+# reports success, and nobody reads a green tick to find out how much of it ran.
+#
+# The conformance suites are discovered by name (`*.Conformance`) inside `./build.sh Test`, so they
+# run on every PR regardless. That costs seconds on PRs that touch no provider and buys a pipeline
+# with no filter in it anywhere.
+#
+# ── ⚠ AND THE 25 MINUTES IS MEASURED, NOT ASSUMED ────────────────────────────────────────────────
+#
+# `budget` reads this run's own timings off the Actions API and fails naming the job that finished
+# last. `timeout-minutes` on each job is a backstop against a hang, not the budget: a cancelled job
+# is a red tick with no diagnosis, which is what .github/scripts/assert-budget.sh exists to avoid.
+
+name: pr
+
+on:
+  pull_request:
+  merge_group:
+
+# One pipeline per PR. A force-push that leaves the previous run going burns a runner and doubles
+# the queue every other job waits in, which is a budget problem as much as a cost one.
+concurrency:
+  group: pr-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # The "Every PR" rows, shared verbatim with main.yml and release.yml so a merge cannot pass a
+  # gate the PR ran and main did not.
+  gate:
+    uses: ./.github/workflows/gate.yml
+
+  # ── docs/plan/23 § Test layers, row Security: "Every PR + nightly" ───────────────────────────────
+  #
+  # Four of the five things that row names run here. Trivy needs images and ZAP needs staging, so
+  # both live in nightly.yml where those exist — see the note at the head of that file.
+  security:
+    name: security
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # trufflehog diffs a commit range, and a shallow clone has no range to diff.
+          fetch-depth: 0
+
+      - uses: ./.github/actions/dotnet
+
+      # ⚠ CodeQL with build-mode: none extracts whatever it finds. This is the cheap half of the
+      # guard against it finding nothing and passing; the analyze step's own "no source code was
+      # seen" error is the other half.
+      - name: There is C# for CodeQL to analyse
+        run: |
+          count=$(git ls-files '*.cs' | wc -l | tr -d ' ')
+          echo "tracked .cs files: $count"
+          if [ "$count" -eq 0 ]; then
+            echo "::error title=CodeQL::the checkout contains no tracked .cs files, so an analysis of it would find nothing and pass."
+            exit 1
+          fi
+
+      # build-mode: none rather than autobuild. Buildless extraction costs minutes rather than a
+      # second full compile, and `gate / architecture` and `gate / test` already prove the tree
+      # compiles. The trade is worth naming: buildless analysis does not see code that only exists
+      # after a build — here that is the Orleans serializers, which CC1003 and the Serializer
+      # discipline gate cover at compile time anyway.
+      - name: Initialise CodeQL
+        uses: github/codeql-action/init@5595ccaf912efad79be6eef63a5619ff05969be3 # v4.37.6
+        with:
+          languages: csharp
+          build-mode: none
+          queries: security-extended
+
+      - name: Analyse
+        uses: github/codeql-action/analyze@5595ccaf912efad79be6eef63a5619ff05969be3 # v4.37.6
+        with:
+          category: /language:csharp
+
+      # docs/plan/23 § Test layers, row Security names `NuGetAudit`. Directory.Build.props § Restore
+      # turns it on at NuGetAuditMode=direct and then exempts NU1901-NU1904 from
+      # TreatWarningsAsErrors, with the comment "CI runs Build.Licence/audit separately". This is
+      # that separate run, and it widens the mode to `all`: a critical CVE in a transitive package
+      # is in the shipped closure whether or not anything references it directly.
+      - name: NuGetAudit over the full closure
+        run: .github/scripts/audit-packages.sh
+
+      # docs/plan/23 § Test layers, row Security names "secret scanning". GitHub's own secret
+      # scanning is a repository setting rather than a workflow step, so it cannot be committed
+      # here; this is the part that can be. ⚠ Both are wanted — this one reads the diff, GitHub's
+      # reads the whole history and gives you push protection.
+      - name: Secret scan
+        uses: trufflesecurity/trufflehog@6f3c981e7b77f235fd2702dd74af25fc4b72bf11 # v3.96.0
+        with:
+          base: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
+          head: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha }}
+          extra_args: --results=verified,unknown --fail
+
+      # ⚠ docs/plan/23 § CI shape lists dependency review under `weekly.yml`. It cannot live there:
+      # actions/dependency-review-action compares a pull request's dependency graph against its
+      # base, and a schedule has no such pair. Reported as a doc defect rather than worked around
+      # silently — the check belongs on a PR, which is where it is.
+      - name: Dependency review
+        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        if: github.event_name == 'pull_request'
+        with:
+          fail-on-severity: moderate
+          comment-summary-in-pr: never
+
+  # ── docs/plan/23 § CI shape: "25 minutes for a PR is a budget, not an observation" ───────────────
+  budget:
+    name: budget
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    # ⚠ Every job above, and `always()`. Without `needs` this measures a pipeline that has not
+    # finished; without `always()` it does not run when a job fails, which is exactly when a
+    # pipeline is most likely to have been slow.
+    needs: [gate, security]
+    if: always()
+    permissions:
+      contents: read
+      actions: read
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Enforce the 25-minute budget
+        env:
+          GH_TOKEN: ${{ github.token }}
+          # docs/plan/23 § CI shape. Change this only with the written reason the doc asks for.
+          BUDGET_MINUTES: 25
+          SELF_JOB: budget
+          # ⚠ The roster. The gate's jobs are reported by the API as "gate / architecture" and so
+          # on; assert-budget.sh matches a bare name against that shape. A job deleted from gate.yml
+          # without being deleted here fails this check rather than quietly making the budget
+          # easier to meet.
+          EXPECTED_JOBS: architecture,test,generate,charts,portal,security
+        run: .github/scripts/assert-budget.sh

@@ -1,0 +1,182 @@
+# docs/plan/23 § CI shape, row `main.yml`: "Merge | + images, charts, SBOM, signatures, deploy to
+# dev".
+#
+# The "+" is doing real work in that sentence: main runs everything a PR runs and then four more
+# things. `gate` below is the same reusable workflow pr.yml calls, so "everything a PR runs" cannot
+# quietly become "most of what a PR runs".
+#
+# ── ⚠ SECRETS THIS WORKFLOW REQUIRES ─────────────────────────────────────────────────────────────
+#
+#   CONTAINER_REGISTRY   registry and repository prefix, e.g. ghcr.io/acme/cybercloud.
+#                        Build.Images.cs § ContainerRegistry: required, no default, because an unset
+#                        registry makes the SDK push into the local daemon and produce an image id
+#                        rather than the repository digest docs/plan/18 requires.
+#   REGISTRY_USERNAME    a principal that can push to it.
+#   REGISTRY_PASSWORD    its password or token.
+#   DEV_KUBECONFIG       kubeconfig for the dev environment — docs/plan/23 § Environments and
+#                        rollout, row `dev`: "Every merge to main".
+#
+# Images are signed KEYLESSLY, so there is deliberately no COSIGN_KEY secret: `id-token: write` on
+# the images job gives cosign the workflow's OIDC identity, and the resulting signature is bound to
+# this repository and this workflow rather than to a key somebody has to rotate.
+
+name: main
+
+on:
+  push:
+    branches: [master]
+
+# ⚠ No cancel-in-progress. On a PR the newest commit is the only one that matters; on main every
+# commit is a candidate for the dev environment, and cancelling one halfway through a registry push
+# leaves a digest nothing points at.
+concurrency:
+  group: main
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  gate:
+    uses: ./.github/workflows/gate.yml
+
+  # ── docs/plan/23 § Build, row `Images`; docs/plan/18 § Platform security, row Supply chain ───────
+  images:
+    name: images
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    needs: gate
+    permissions:
+      contents: read
+      # cosign keyless. Build.Images.cs § CosignKey: "Absent means keyless signing, which needs an
+      # OIDC identity."
+      id-token: write
+    env:
+      CONTAINER_REGISTRY: ${{ secrets.CONTAINER_REGISTRY }}
+      REGISTRY_USERNAME: ${{ secrets.REGISTRY_USERNAME }}
+      REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/dotnet
+
+      # ⚠ FIRST, and unconditional. The tempting shape is `if: secrets.CONTAINER_REGISTRY != ''` on
+      # the push step, and it produces a green `images` job that pushed nothing — see
+      # .github/scripts/require-secrets.sh for why that is the one thing this job must not do.
+      - name: Preconditions
+        run: |
+          .github/scripts/require-secrets.sh images \
+            "docs/plan/18 § Platform security, row Supply chain: 'Every image built in CI, SBOM generated, signed with cosign, verified at admission. A pinned digest, never a tag.'" \
+            "CONTAINER_REGISTRY=create the secret with the registry and repository prefix, e.g. ghcr.io/acme/cybercloud" \
+            "REGISTRY_USERNAME=create the secret with a principal that can push there" \
+            "REGISTRY_PASSWORD=create the secret with its password or token"
+
+      # Build.Images.cs § TargetPreconditions resolves both off PATH and fails naming them, so this
+      # is the install that makes those checks pass rather than a second copy of them.
+      - name: Install syft
+        uses: anchore/sbom-action/download-syft@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+
+      # The SDK's container tooling speaks the registry API directly (Build.Images.cs § there is no
+      # Dockerfile) and reads credentials from ~/.docker/config.json, which is what this writes.
+      - name: Log in to the registry
+        run: |
+          registry="${CONTAINER_REGISTRY%%/*}"
+          echo "$REGISTRY_PASSWORD" | docker login "$registry" --username "$REGISTRY_USERNAME" --password-stdin
+          echo "Logged in to $registry."
+
+      - name: ./build.sh Images
+        run: |
+          ./build.sh Images \
+            --container-registry "$CONTAINER_REGISTRY" \
+            --container-image-tag "${GITHUB_SHA::7}" 2>&1 | tee "$RUNNER_TEMP/images.log"
+
+      # Build.Images.cs prints "inspected 0 host project(s) … ○, not ✔" and returns success when
+      # src/Hosts holds nothing publishable. docs/plan/03 § Hosts lists four hosts and the tree has
+      # them, so zero here means discovery broke — and a merge that pushed no images while reporting
+      # success is a release with nothing in it, found later.
+      - name: Images were actually built
+        run: |
+          if grep -q 'inspected 0 host project' "$RUNNER_TEMP/images.log"; then
+            echo "::error title=Images::./build.sh Images inspected 0 host projects and exited 0. src/Hosts holds publishable hosts here, so zero means discovery broke."
+            exit 1
+          fi
+          if [ ! -s artifacts/images.json ]; then
+            echo "::error title=Images::artifacts/images.json is missing or empty. It is the only durable output of the target and the sole source of the digests bootstrap.sh and the Helm chart need."
+            exit 1
+          fi
+          {
+            echo "### Images"
+            echo ''
+            echo '```json'
+            cat artifacts/images.json
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the digest manifest and SBOMs
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: images
+          path: |
+            artifacts/images.json
+            artifacts/sbom/
+          if-no-files-found: error
+          retention-days: 90
+
+  # ── docs/plan/23 § Environments and rollout, row `dev`: "Every merge to main" ────────────────────
+  #
+  # ⚠ THIS JOB IS BLOCKED, AND ON MORE THAN A SECRET. Both blockers are named because installing the
+  # kubeconfig alone would not unblock it:
+  #
+  #   1. There is no `Deploy` target. Build.cs § target graph says so outright — "There is no
+  #      `Deploy` target" — and gives the reason: the deployment is an input to E2E/Chaos/Load, not
+  #      something the graph produces. Writing the install here in YAML instead would put the one
+  #      thing docs/plan/23 § Build says must live in the build outside it.
+  #   2. `charts/platform` does not exist. deploy/README.md § What an operator actually types ends
+  #      with `helm install cybercloud charts/platform --set image=…`, and charts/ currently holds
+  #      only `managed/postgres`.
+  deploy-dev:
+    name: deploy-dev
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    needs: images
+    environment: dev
+    env:
+      DEV_KUBECONFIG: ${{ secrets.DEV_KUBECONFIG }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Preconditions
+        run: |
+          .github/scripts/require-secrets.sh deploy-dev \
+            "docs/plan/23 § Environments and rollout puts dev on every merge to main, with synthetic data." \
+            "DEV_KUBECONFIG=create the secret with a kubeconfig for the dev cluster"
+
+      - name: The build has nothing to deploy with
+        run: |
+          cat <<'BLOCKED'
+          ::error title=deploy-dev::deploy-dev is BLOCKED on 2 input(s) that are not secrets.
+          BLOCKED
+          cat <<'BLOCKED'
+
+            ✘ the build has no `Deploy` target.
+              To unblock: add one, in build/. Build.cs § target graph deliberately does not have it
+              today — "the deployment is an input to the run, not something the graph produces" —
+              so this is a decision to revisit rather than an omission to patch. ⚠ The fix is NOT
+              to write `helm upgrade` here: docs/plan/23 § Build makes ./build.sh the single entry
+              point for every build action precisely so that CI and a workstation run the same code.
+
+            ✘ charts/platform does not exist.
+              To unblock: add it. deploy/README.md § What an operator actually types documents
+              `helm install cybercloud charts/platform --namespace cybercloud --set image=…` as the
+              step after bootstrap.sh, and charts/ holds only managed/postgres.
+
+          Both are real work, not configuration. Until they land, a merge to master builds, signs and
+          pushes images — that part works — and stops here.
+          BLOCKED
+          exit 1
