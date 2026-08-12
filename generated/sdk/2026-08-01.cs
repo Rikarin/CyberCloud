@@ -2258,6 +2258,246 @@ public sealed partial class RabbitMQClusterCollection {
     public partial AsyncPageable<RabbitMQClusterResource> GetAllAsync(CancellationToken cancellationToken = default);
 }
 
+/// <summary>The body of a CyberCloud.Network/virtualNetworks.</summary>
+/// <remarks>A private routing domain on Kube-OVN with its own address space. Network-layer tenant separation: a private routing domain with its own address space, on shared hardware.</remarks>
+public sealed partial class VirtualNetworkData {
+
+    /// <summary>The region the virtual network lives in. ⚠ It selects which reserved ranges the address space is checked against — a region's underlay is part of that list.</summary>
+    /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+    [JsonPropertyName("location")]
+    public required string Location { get; set; }
+
+    /// <summary>The IPv4 range the network plans for, in CIDR form. It may overlap another of your own virtual networks — that is what a VPC is for — and it may not overlap a range the platform reserves, which is refused with the conflicting range named.</summary>
+    /// <remarks>Required on a create. ⚠ Cannot change after create. Defaults to "10.20.0.0/16" when left unset.</remarks>
+    [JsonPropertyName("v4")]
+    public required string V4 { get; set; }
+
+    /// <summary>The IPv6 range the network plans for, or empty for an IPv4-only network. ⚠ docs/plan/14 § IPv6 asks for dual-stack from day one rather than as a retrofit, which is why this is here at the first api-version even though a v4-only network is the ordinary case.</summary>
+    /// <remarks>⚠ Cannot change after create. Defaults to "" when left unset.</remarks>
+    [JsonPropertyName("v6")]
+    public string? V6 { get; set; }
+
+    /// <summary>The cluster whose fabric carries the network.</summary>
+    /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+    [JsonPropertyName("clusterId")]
+    public required Guid ClusterId { get; set; }
+
+    /// <summary>Whether the network's router is attached to the external network. Off by default: a network that reaches the outside without being asked is a network whose owner did not choose that. ⚠ Turning it on requires the cluster to have an external subnet configured; without one the Vpc is accepted and the attachment never completes.</summary>
+    /// <remarks>Defaults to false when left unset.</remarks>
+    [JsonPropertyName("enableExternal")]
+    public bool? EnableExternal { get; set; }
+
+    /// <summary>Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.</summary>
+    [JsonPropertyName("tags")]
+    public IDictionary<string, string> Tags { get; set; } = new Dictionary<string, string>(StringComparer.Ordinal);
+}
+
+/// <summary>One Virtual network, and the operations on it.</summary>
+public sealed partial class VirtualNetworkResource {
+    /// <summary>The resource's fully qualified id.</summary>
+    public string Id { get; init; } = string.Empty;
+
+    /// <summary>The body, projected at this api-version.</summary>
+    public VirtualNetworkData Data { get; init; } = new();
+
+    /// <summary>Re-reads the resource.</summary>
+    public partial Task<Response<VirtualNetworkResource>> GetAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Amends the resource. A merge patch: what is not set is not changed.</summary>
+    public partial Task<Operation<VirtualNetworkResource>> UpdateAsync(
+        WaitUntil waitUntil,
+        VirtualNetworkData data,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Deletes the resource. ⚠ Permanent: this type declares no soft-delete window.</summary>
+    public partial Task<Operation> DeleteAsync(
+        WaitUntil waitUntil,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>What showIsolation returns.</summary>
+    public sealed partial class ShowIsolationResult {
+
+        /// <summary>What tenant isolation this network provides, in one sentence. It is the same sentence for every virtual network on the platform, and it is deliberately narrower than 'isolated'.</summary>
+        [JsonPropertyName("claim")]
+        public required string Claim { get; set; }
+
+        /// <summary>What this network does NOT guarantee, one entry per limit, each naming the guarantee, why the substrate does not deliver it, and what to ask for instead. ⚠ Read this before deciding a virtual network satisfies a compliance requirement.</summary>
+        [JsonPropertyName("limits")]
+        public IList<string> Limits { get; set; } = new List<string>();
+
+        /// <summary>The technology enforcing the separation, named so that a tenant's own security review has something to review.</summary>
+        [JsonPropertyName("substrate")]
+        public required string Substrate { get; set; }
+    }
+
+    /// <summary>ShowIsolation. ⚠ An action never creates — a POST to a name that does not exist is a 404.</summary>
+    public partial Task<Response<ShowIsolationResult>> ShowIsolationAsync(
+        CancellationToken cancellationToken = default);
+}
+
+/// <summary>The Virtual networks in one resource group.</summary>
+/// <remarks>⚠ Every write is long-running: docs/plan/08 § The write path, end to end
+/// ends in a 202 for every verb, so there is no synchronous overload to offer.</remarks>
+public sealed partial class VirtualNetworkCollection {
+    /// <summary>The resource type these address.</summary>
+    public const string ResourceType = "CyberCloud.Network/virtualNetworks";
+
+    /// <summary>The URL template, with the api-version this file was generated at.</summary>
+    public const string PathTemplate = "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Network/virtualNetworks/{resourceName}";
+
+    /// <inheritdoc cref="GeneratedApiVersion.Value" />
+    public const string ApiVersion = "2026-08-01";
+
+    /// <summary>Creates or replaces one Virtual network.</summary>
+    /// <remarks>⚠ Poll with GetProgressAsync() rather than only WaitForCompletionAsync():
+    /// docs/plan/21 § The .NET SDK — "Azure's LROs expose no progress; ours do and the
+    /// SDK should not hide it".</remarks>
+    public partial Task<Operation<VirtualNetworkResource>> CreateOrUpdateAsync(
+        WaitUntil waitUntil,
+        string name,
+        VirtualNetworkData data,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Reads one Virtual network by name.</summary>
+    public partial Task<Response<VirtualNetworkResource>> GetAsync(string name, CancellationToken cancellationToken = default);
+
+    /// <summary>The Virtual networks in this group, paged.</summary>
+    public partial AsyncPageable<VirtualNetworkResource> GetAllAsync(CancellationToken cancellationToken = default);
+}
+
+/// <summary>The body of a CyberCloud.Network/virtualNetworks/subnets.</summary>
+/// <remarks>A range inside a virtual network that workloads are given addresses from, with optional outbound NAT and optional isolation from other subnets.</remarks>
+public sealed partial class SubnetData {
+
+    /// <summary>The region the subnet lives in. ⚠ It selects which reserved ranges the prefix is checked against, and it must be the network's own region — nothing checks that.</summary>
+    /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+    [JsonPropertyName("location")]
+    public required string Location { get; set; }
+
+    /// <summary>The IPv4 prefix, in CIDR form. ⚠ Host bits are cleared by the fabric, so 10.20.1.7/24 is stored as 10.20.1.0/24 and both name the same network. It may not overlap a range the platform reserves, which is refused with the conflicting range named.</summary>
+    /// <remarks>Required on a create. ⚠ Cannot change after create. Defaults to "10.20.1.0/24" when left unset.</remarks>
+    [JsonPropertyName("v4")]
+    public required string V4 { get; set; }
+
+    /// <summary>The IPv6 prefix, or empty for an IPv4-only subnet. Setting both makes the subnet dual-stack — docs/plan/14 § IPv6.</summary>
+    /// <remarks>⚠ Cannot change after create. Defaults to "" when left unset.</remarks>
+    [JsonPropertyName("v6")]
+    public string? V6 { get; set; }
+
+    /// <summary>The cluster whose fabric carries the subnet. Must be the cluster the network is in — nothing checks that, and a subnet placed elsewhere binds to a Vpc that does not exist there.</summary>
+    /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+    [JsonPropertyName("clusterId")]
+    public required Guid ClusterId { get; set; }
+
+    /// <summary>Whether the fabric answers DHCP in this subnet. Off by default: an address is assigned to a workload's port when the port is created, and DHCP is for guests that insist on asking — a virtual machine rather than a container.</summary>
+    /// <remarks>Defaults to false when left unset.</remarks>
+    [JsonPropertyName("enableDhcp")]
+    public bool? EnableDhcp { get; set; }
+
+    /// <summary>Whether workloads in this subnet reach the internet through source NAT. Off by default. ⚠ This is the opposite of Kube-OVN's own default for its cluster subnet, deliberately: a tenant subnet that silently egresses is a surprise, and docs/plan/12 § Cross-cutting decisions defaults external exposure to off. It also requires the network's enableExternal to be on; without it the flag is accepted and nothing egresses.</summary>
+    /// <remarks>Defaults to false when left unset.</remarks>
+    [JsonPropertyName("natOutgoing")]
+    public bool? NatOutgoing { get; set; }
+
+    /// <summary>Whether the subnet refuses traffic from other subnets. Off by default. ⚠ In this api-version it has no exception list, so on means no traffic from any other subnet in the network at all.</summary>
+    /// <remarks>Defaults to false when left unset.</remarks>
+    [JsonPropertyName("private")]
+    public bool? Private { get; set; }
+
+    /// <summary>Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.</summary>
+    [JsonPropertyName("tags")]
+    public IDictionary<string, string> Tags { get; set; } = new Dictionary<string, string>(StringComparer.Ordinal);
+}
+
+/// <summary>One Subnet, and the operations on it.</summary>
+public sealed partial class SubnetResource {
+    /// <summary>The resource's fully qualified id.</summary>
+    public string Id { get; init; } = string.Empty;
+
+    /// <summary>The body, projected at this api-version.</summary>
+    public SubnetData Data { get; init; } = new();
+
+    /// <summary>Re-reads the resource.</summary>
+    public partial Task<Response<SubnetResource>> GetAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Amends the resource. A merge patch: what is not set is not changed.</summary>
+    public partial Task<Operation<SubnetResource>> UpdateAsync(
+        WaitUntil waitUntil,
+        SubnetData data,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Deletes the resource. ⚠ Permanent: this type declares no soft-delete window.</summary>
+    public partial Task<Operation> DeleteAsync(
+        WaitUntil waitUntil,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>What listAddressUsage returns.</summary>
+    public sealed partial class ListAddressUsageResult {
+
+        /// <summary>When the fabric last reported these figures, RFC 3339. ⚠ Returned because a count with no timestamp is a count a caller will read as live, and these come from the Subnet object's status rather than from a live query.</summary>
+        [JsonPropertyName("sampledAt")]
+        public required DateTimeOffset SampledAt { get; set; }
+
+        /// <summary>How many IPv4 addresses remain. ⚠ Zero here is the answer to 'why will nothing schedule in this subnet'.</summary>
+        [JsonPropertyName("available")]
+        public required long Available { get; set; }
+
+        /// <summary>How many IPv4 addresses the prefix contains that may be allocated, excluding the network address, the broadcast address and the gateway.</summary>
+        [JsonPropertyName("total")]
+        public required long Total { get; set; }
+
+        /// <summary>How many IPv4 addresses are currently allocated to ports.</summary>
+        [JsonPropertyName("used")]
+        public required long Used { get; set; }
+
+        /// <summary>How many IPv6 addresses remain, as a decimal string, or empty for an IPv4-only subnet.</summary>
+        [JsonPropertyName("available")]
+        public string? Available { get; set; }
+
+        /// <summary>How many IPv6 addresses the prefix contains, as a decimal string, or empty for an IPv4-only subnet. ⚠ A string because a /64 does not fit in the signed 64-bit integer SchemaKind.WholeNumber validates through.</summary>
+        [JsonPropertyName("total")]
+        public string? Total { get; set; }
+    }
+
+    /// <summary>ListAddressUsage. ⚠ An action never creates — a POST to a name that does not exist is a 404.</summary>
+    public partial Task<Response<ListAddressUsageResult>> ListAddressUsageAsync(
+        CancellationToken cancellationToken = default);
+}
+
+/// <summary>The Subnets in one parent.</summary>
+/// <remarks>⚠ Every write is long-running: docs/plan/08 § The write path, end to end
+/// ends in a 202 for every verb, so there is no synchronous overload to offer.
+/// ⚠ The leading parameter(s) name the ancestors this type nests inside —
+/// docs/plan/12 § Child resources addresses a child
+/// '…/{parentType}/{parentName}/{childType}/{childName}', so the parent's name is
+/// part of the address rather than part of the body.</remarks>
+public sealed partial class SubnetCollection {
+    /// <summary>The resource type these address.</summary>
+    public const string ResourceType = "CyberCloud.Network/virtualNetworks/subnets";
+
+    /// <summary>The URL template, with the api-version this file was generated at.</summary>
+    public const string PathTemplate = "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Network/virtualNetworks/{virtualNetworksName}/subnets/{resourceName}";
+
+    /// <inheritdoc cref="GeneratedApiVersion.Value" />
+    public const string ApiVersion = "2026-08-01";
+
+    /// <summary>Creates or replaces one Subnet.</summary>
+    /// <remarks>⚠ Poll with GetProgressAsync() rather than only WaitForCompletionAsync():
+    /// docs/plan/21 § The .NET SDK — "Azure's LROs expose no progress; ours do and the
+    /// SDK should not hide it".</remarks>
+    public partial Task<Operation<SubnetResource>> CreateOrUpdateAsync(
+        WaitUntil waitUntil,
+        string virtualNetworksName, string name,
+        SubnetData data,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Reads one Subnet by name.</summary>
+    public partial Task<Response<SubnetResource>> GetAsync(string virtualNetworksName, string name, CancellationToken cancellationToken = default);
+
+    /// <summary>The Subnets in one parent, paged.</summary>
+    public partial AsyncPageable<SubnetResource> GetAllAsync(string virtualNetworksName, CancellationToken cancellationToken = default);
+}
+
 /// <summary>The values /properties/tier accepts. ⚠ Closed: the write path refuses anything else.</summary>
 public enum WidgetTier {
     /// <summary>Never assigned. Not a value the API accepts.</summary>

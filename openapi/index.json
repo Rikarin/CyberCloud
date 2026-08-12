@@ -184,6 +184,7 @@
     "CyberCloud.DBforPostgreSQL",
     "CyberCloud.DocumentDB",
     "CyberCloud.Messaging",
+    "CyberCloud.Network",
     "CyberCloud.Sample",
     "CyberCloud.Search",
     "CyberCloud.Storage"
@@ -316,6 +317,32 @@
         "plural": "RabbitMQ clusters",
         "alias": "rabbitmq",
         "summary": "A managed RabbitMQ cluster on the RabbitMQ Cluster Operator, with quorum queues as the default queue type and the management UI reachable only in-cluster.",
+        "declared": true
+      }
+    },
+    {
+      "type": "CyberCloud.Network/virtualNetworks",
+      "apiVersions": [
+        "2026-08-01"
+      ],
+      "display": {
+        "name": "Virtual network",
+        "plural": "Virtual networks",
+        "alias": "vnet",
+        "summary": "A private routing domain on Kube-OVN with its own address space. Network-layer tenant separation: a private routing domain with its own address space, on shared hardware.",
+        "declared": true
+      }
+    },
+    {
+      "type": "CyberCloud.Network/virtualNetworks/subnets",
+      "apiVersions": [
+        "2026-08-01"
+      ],
+      "display": {
+        "name": "Subnet",
+        "plural": "Subnets",
+        "alias": "subnet",
+        "summary": "A range inside a virtual network that workloads are given addresses from, with optional outbound NAT and optional isolation from other subnets.",
         "declared": true
       }
     },

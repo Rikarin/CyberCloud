@@ -301,7 +301,8 @@
           }
         },
         "x-cybercloud-permission": "delete",
-        "x-cybercloud-soft-delete-days": 0
+        "x-cybercloud-soft-delete-days": 0,
+        "x-cybercloud-purge-permission": ""
       },
       "x-cybercloud-resource-type": "CyberCloud.Analytics/clickhouseClusters",
       "x-cybercloud-display": {
@@ -315,6 +316,8 @@
       "x-cybercloud-requires-cluster": true,
       "x-cybercloud-cluster-id-pointer": "/properties/clusterId",
       "x-cybercloud-soft-delete-days": 0,
+      "x-cybercloud-purge-permission": "",
+      "x-cybercloud-purge-protection-pointer": "",
       "x-cybercloud-meters": [
         {
           "meter": "MemoryGb",
@@ -666,7 +669,8 @@
           }
         },
         "x-cybercloud-permission": "delete",
-        "x-cybercloud-soft-delete-days": 0
+        "x-cybercloud-soft-delete-days": 0,
+        "x-cybercloud-purge-permission": ""
       },
       "x-cybercloud-resource-type": "CyberCloud.Cache/redis",
       "x-cybercloud-display": {
@@ -680,6 +684,8 @@
       "x-cybercloud-requires-cluster": true,
       "x-cybercloud-cluster-id-pointer": "/properties/clusterId",
       "x-cybercloud-soft-delete-days": 0,
+      "x-cybercloud-purge-permission": "",
+      "x-cybercloud-purge-protection-pointer": "",
       "x-cybercloud-meters": [
         {
           "meter": "Resources",
@@ -1005,7 +1011,8 @@
           }
         },
         "x-cybercloud-permission": "delete",
-        "x-cybercloud-soft-delete-days": 0
+        "x-cybercloud-soft-delete-days": 0,
+        "x-cybercloud-purge-permission": ""
       },
       "x-cybercloud-resource-type": "CyberCloud.ContainerService/managedClusters/agentPools",
       "x-cybercloud-display": {
@@ -1019,6 +1026,8 @@
       "x-cybercloud-requires-cluster": true,
       "x-cybercloud-cluster-id-pointer": "/properties/clusterId",
       "x-cybercloud-soft-delete-days": 0,
+      "x-cybercloud-purge-permission": "",
+      "x-cybercloud-purge-protection-pointer": "",
       "x-cybercloud-meters": [
         {
           "meter": "MemoryGb",
@@ -1391,7 +1400,8 @@
           }
         },
         "x-cybercloud-permission": "delete",
-        "x-cybercloud-soft-delete-days": 0
+        "x-cybercloud-soft-delete-days": 0,
+        "x-cybercloud-purge-permission": ""
       },
       "x-cybercloud-resource-type": "CyberCloud.ContainerService/managedClusters",
       "x-cybercloud-display": {
@@ -1405,6 +1415,8 @@
       "x-cybercloud-requires-cluster": true,
       "x-cybercloud-cluster-id-pointer": "/properties/clusterId",
       "x-cybercloud-soft-delete-days": 0,
+      "x-cybercloud-purge-permission": "",
+      "x-cybercloud-purge-protection-pointer": "",
       "x-cybercloud-meters": [
         {
           "meter": "Clusters",
@@ -1743,7 +1755,8 @@
           }
         },
         "x-cybercloud-permission": "delete",
-        "x-cybercloud-soft-delete-days": 0
+        "x-cybercloud-soft-delete-days": 0,
+        "x-cybercloud-purge-permission": ""
       },
       "x-cybercloud-resource-type": "CyberCloud.DBforMySQL/servers",
       "x-cybercloud-display": {
@@ -1757,6 +1770,8 @@
       "x-cybercloud-requires-cluster": true,
       "x-cybercloud-cluster-id-pointer": "/properties/clusterId",
       "x-cybercloud-soft-delete-days": 0,
+      "x-cybercloud-purge-permission": "",
+      "x-cybercloud-purge-protection-pointer": "",
       "x-cybercloud-meters": [
         {
           "meter": "MemoryGb",
@@ -2102,7 +2117,8 @@
           }
         },
         "x-cybercloud-permission": "delete",
-        "x-cybercloud-soft-delete-days": 0
+        "x-cybercloud-soft-delete-days": 0,
+        "x-cybercloud-purge-permission": ""
       },
       "x-cybercloud-resource-type": "CyberCloud.DBforPostgreSQL/servers",
       "x-cybercloud-display": {
@@ -2116,6 +2132,8 @@
       "x-cybercloud-requires-cluster": true,
       "x-cybercloud-cluster-id-pointer": "/properties/clusterId",
       "x-cybercloud-soft-delete-days": 0,
+      "x-cybercloud-purge-permission": "",
+      "x-cybercloud-purge-protection-pointer": "",
       "x-cybercloud-meters": [
         {
           "meter": "MemoryGb",
@@ -2462,7 +2480,8 @@
           }
         },
         "x-cybercloud-permission": "delete",
-        "x-cybercloud-soft-delete-days": 0
+        "x-cybercloud-soft-delete-days": 0,
+        "x-cybercloud-purge-permission": ""
       },
       "x-cybercloud-resource-type": "CyberCloud.DocumentDB/accounts",
       "x-cybercloud-display": {
@@ -2476,6 +2495,8 @@
       "x-cybercloud-requires-cluster": true,
       "x-cybercloud-cluster-id-pointer": "/properties/clusterId",
       "x-cybercloud-soft-delete-days": 0,
+      "x-cybercloud-purge-permission": "",
+      "x-cybercloud-purge-protection-pointer": "",
       "x-cybercloud-meters": [
         {
           "meter": "MemoryGb",
@@ -2823,7 +2844,8 @@
           }
         },
         "x-cybercloud-permission": "delete",
-        "x-cybercloud-soft-delete-days": 0
+        "x-cybercloud-soft-delete-days": 0,
+        "x-cybercloud-purge-permission": ""
       },
       "x-cybercloud-resource-type": "CyberCloud.Messaging/kafkaClusters",
       "x-cybercloud-display": {
@@ -2837,6 +2859,8 @@
       "x-cybercloud-requires-cluster": true,
       "x-cybercloud-cluster-id-pointer": "/properties/clusterId",
       "x-cybercloud-soft-delete-days": 0,
+      "x-cybercloud-purge-permission": "",
+      "x-cybercloud-purge-protection-pointer": "",
       "x-cybercloud-meters": [
         {
           "meter": "Resources",
@@ -3150,7 +3174,8 @@
           }
         },
         "x-cybercloud-permission": "delete",
-        "x-cybercloud-soft-delete-days": 0
+        "x-cybercloud-soft-delete-days": 0,
+        "x-cybercloud-purge-permission": ""
       },
       "x-cybercloud-resource-type": "CyberCloud.Messaging/natsClusters",
       "x-cybercloud-display": {
@@ -3164,6 +3189,8 @@
       "x-cybercloud-requires-cluster": true,
       "x-cybercloud-cluster-id-pointer": "/properties/clusterId",
       "x-cybercloud-soft-delete-days": 0,
+      "x-cybercloud-purge-permission": "",
+      "x-cybercloud-purge-protection-pointer": "",
       "x-cybercloud-meters": [
         {
           "meter": "MemoryGb",
@@ -3509,7 +3536,8 @@
           }
         },
         "x-cybercloud-permission": "delete",
-        "x-cybercloud-soft-delete-days": 0
+        "x-cybercloud-soft-delete-days": 0,
+        "x-cybercloud-purge-permission": ""
       },
       "x-cybercloud-resource-type": "CyberCloud.Messaging/rabbitmqClusters",
       "x-cybercloud-display": {
@@ -3523,6 +3551,8 @@
       "x-cybercloud-requires-cluster": true,
       "x-cybercloud-cluster-id-pointer": "/properties/clusterId",
       "x-cybercloud-soft-delete-days": 0,
+      "x-cybercloud-purge-permission": "",
+      "x-cybercloud-purge-protection-pointer": "",
       "x-cybercloud-meters": [
         {
           "meter": "MemoryGb",
@@ -3629,6 +3659,690 @@
       },
       "x-cybercloud-resource-type": "CyberCloud.Messaging/rabbitmqClusters",
       "x-cybercloud-action": "listKeys"
+    },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Network/virtualNetworks/{resourceName}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "get": {
+        "operationId": "CyberCloud_Network_virtualNetworks_Get",
+        "summary": "Read a CyberCloud.Network/virtualNetworks.",
+        "description": "The body is this api-version's projection of the resource: docs/plan/08 § The provider registry keeps grain state as a superset and a read at an older version drops what that version did not declare.",
+        "responses": {
+          "200": {
+            "description": "The resource.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Network.virtualNetworks"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "read"
+      },
+      "put": {
+        "operationId": "CyberCloud_Network_virtualNetworks_CreateOrUpdate",
+        "summary": "Create or replace a CyberCloud.Network/virtualNetworks.",
+        "description": "A full replacement. Every property the schema marks required must be present; a read-only property is refused rather than ignored — docs/plan/08 § The write path, end to end.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CyberCloud.Network.virtualNetworks"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "headers": {
+              "Azure-AsyncOperation": {
+                "description": "The absolute URL of the operation to poll.",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "Retry-After": {
+                "description": "Seconds to wait before the first poll.",
+                "required": true,
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "write"
+      },
+      "patch": {
+        "operationId": "CyberCloud_Network_virtualNetworks_Update",
+        "summary": "Merge-patch a CyberCloud.Network/virtualNetworks.",
+        "description": "A merge patch. The patch itself may omit required properties; the merged result is what is validated — see ResourceSchema.Validate.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CyberCloud.Network.virtualNetworks"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "headers": {
+              "Azure-AsyncOperation": {
+                "description": "The absolute URL of the operation to poll.",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "Retry-After": {
+                "description": "Seconds to wait before the first poll.",
+                "required": true,
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "write"
+      },
+      "delete": {
+        "operationId": "CyberCloud_Network_virtualNetworks_Delete",
+        "summary": "Delete a CyberCloud.Network/virtualNetworks.",
+        "description": "The delete is permanent: this type declares no soft-delete window.",
+        "responses": {
+          "202": {
+            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "headers": {
+              "Azure-AsyncOperation": {
+                "description": "The absolute URL of the operation to poll.",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "Retry-After": {
+                "description": "Seconds to wait before the first poll.",
+                "required": true,
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "delete",
+        "x-cybercloud-soft-delete-days": 0,
+        "x-cybercloud-purge-permission": ""
+      },
+      "x-cybercloud-resource-type": "CyberCloud.Network/virtualNetworks",
+      "x-cybercloud-display": {
+        "name": "Virtual network",
+        "plural": "Virtual networks",
+        "alias": "vnet",
+        "summary": "A private routing domain on Kube-OVN with its own address space. Network-layer tenant separation: a private routing domain with its own address space, on shared hardware.",
+        "declared": true
+      },
+      "x-cybercloud-supports-tags": true,
+      "x-cybercloud-requires-cluster": true,
+      "x-cybercloud-cluster-id-pointer": "/properties/clusterId",
+      "x-cybercloud-soft-delete-days": 0,
+      "x-cybercloud-purge-permission": "",
+      "x-cybercloud-purge-protection-pointer": "",
+      "x-cybercloud-meters": [
+        {
+          "meter": "Resources",
+          "amountPointer": "",
+          "fallback": 1,
+          "expression": "1",
+          "reads": []
+        }
+      ]
+    },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Network/virtualNetworks/{resourceName}/showIsolation": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "post": {
+        "operationId": "CyberCloud_Network_virtualNetworks_ShowIsolation",
+        "summary": "showIsolation a CyberCloud.Network/virtualNetworks.",
+        "description": "An action never creates: a POST to a name that does not exist is a 404 — docs/plan/08 § The write path, end to end.",
+        "responses": {
+          "200": {
+            "description": "The action's result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Network.virtualNetworks.ShowIsolationResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "read",
+        "x-cybercloud-secret": false,
+        "x-cybercloud-long-running": false
+      },
+      "x-cybercloud-resource-type": "CyberCloud.Network/virtualNetworks",
+      "x-cybercloud-action": "showIsolation"
+    },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Network/virtualNetworks/{virtualNetworksName}/subnets/{resourceName}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "name": "virtualNetworksName",
+          "in": "path",
+          "required": true,
+          "description": "The name of the parent resource this one lives inside. A child is addressed through its parent — docs/plan/12 § Child resources.",
+          "schema": {
+            "type": "string",
+            "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
+            "minLength": 1,
+            "maxLength": 63
+          }
+        },
+        {
+          "$ref": "#/components/parameters/ResourceName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "get": {
+        "operationId": "CyberCloud_Network_virtualNetworks_subnets_Get",
+        "summary": "Read a CyberCloud.Network/virtualNetworks/subnets.",
+        "description": "The body is this api-version's projection of the resource: docs/plan/08 § The provider registry keeps grain state as a superset and a read at an older version drops what that version did not declare.",
+        "responses": {
+          "200": {
+            "description": "The resource.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Network.virtualNetworks.subnets"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "read"
+      },
+      "put": {
+        "operationId": "CyberCloud_Network_virtualNetworks_subnets_CreateOrUpdate",
+        "summary": "Create or replace a CyberCloud.Network/virtualNetworks/subnets.",
+        "description": "A full replacement. Every property the schema marks required must be present; a read-only property is refused rather than ignored — docs/plan/08 § The write path, end to end.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CyberCloud.Network.virtualNetworks.subnets"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "headers": {
+              "Azure-AsyncOperation": {
+                "description": "The absolute URL of the operation to poll.",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "Retry-After": {
+                "description": "Seconds to wait before the first poll.",
+                "required": true,
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "write"
+      },
+      "patch": {
+        "operationId": "CyberCloud_Network_virtualNetworks_subnets_Update",
+        "summary": "Merge-patch a CyberCloud.Network/virtualNetworks/subnets.",
+        "description": "A merge patch. The patch itself may omit required properties; the merged result is what is validated — see ResourceSchema.Validate.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CyberCloud.Network.virtualNetworks.subnets"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "headers": {
+              "Azure-AsyncOperation": {
+                "description": "The absolute URL of the operation to poll.",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "Retry-After": {
+                "description": "Seconds to wait before the first poll.",
+                "required": true,
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "write"
+      },
+      "delete": {
+        "operationId": "CyberCloud_Network_virtualNetworks_subnets_Delete",
+        "summary": "Delete a CyberCloud.Network/virtualNetworks/subnets.",
+        "description": "The delete is permanent: this type declares no soft-delete window.",
+        "responses": {
+          "202": {
+            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "headers": {
+              "Azure-AsyncOperation": {
+                "description": "The absolute URL of the operation to poll.",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "Retry-After": {
+                "description": "Seconds to wait before the first poll.",
+                "required": true,
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "delete",
+        "x-cybercloud-soft-delete-days": 0,
+        "x-cybercloud-purge-permission": ""
+      },
+      "x-cybercloud-resource-type": "CyberCloud.Network/virtualNetworks/subnets",
+      "x-cybercloud-display": {
+        "name": "Subnet",
+        "plural": "Subnets",
+        "alias": "subnet",
+        "summary": "A range inside a virtual network that workloads are given addresses from, with optional outbound NAT and optional isolation from other subnets.",
+        "declared": true
+      },
+      "x-cybercloud-supports-tags": true,
+      "x-cybercloud-requires-cluster": true,
+      "x-cybercloud-cluster-id-pointer": "/properties/clusterId",
+      "x-cybercloud-soft-delete-days": 0,
+      "x-cybercloud-purge-permission": "",
+      "x-cybercloud-purge-protection-pointer": "",
+      "x-cybercloud-meters": [
+        {
+          "meter": "Resources",
+          "amountPointer": "",
+          "fallback": 1,
+          "expression": "1",
+          "reads": []
+        }
+      ]
+    },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Network/virtualNetworks/{virtualNetworksName}/subnets/{resourceName}/listAddressUsage": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "name": "virtualNetworksName",
+          "in": "path",
+          "required": true,
+          "description": "The name of the parent resource this one lives inside. A child is addressed through its parent — docs/plan/12 § Child resources.",
+          "schema": {
+            "type": "string",
+            "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
+            "minLength": 1,
+            "maxLength": 63
+          }
+        },
+        {
+          "$ref": "#/components/parameters/ResourceName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "post": {
+        "operationId": "CyberCloud_Network_virtualNetworks_subnets_ListAddressUsage",
+        "summary": "listAddressUsage a CyberCloud.Network/virtualNetworks/subnets.",
+        "description": "An action never creates: a POST to a name that does not exist is a 404 — docs/plan/08 § The write path, end to end.",
+        "responses": {
+          "200": {
+            "description": "The action's result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Network.virtualNetworks.subnets.ListAddressUsageResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "read",
+        "x-cybercloud-secret": false,
+        "x-cybercloud-long-running": false
+      },
+      "x-cybercloud-resource-type": "CyberCloud.Network/virtualNetworks/subnets",
+      "x-cybercloud-action": "listAddressUsage"
     },
     "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Sample/widgets/{resourceName}": {
       "parameters": [
@@ -3868,7 +4582,8 @@
           }
         },
         "x-cybercloud-permission": "delete",
-        "x-cybercloud-soft-delete-days": 0
+        "x-cybercloud-soft-delete-days": 0,
+        "x-cybercloud-purge-permission": ""
       },
       "x-cybercloud-resource-type": "CyberCloud.Sample/widgets",
       "x-cybercloud-display": {
@@ -3882,6 +4597,8 @@
       "x-cybercloud-requires-cluster": true,
       "x-cybercloud-cluster-id-pointer": "/properties/clusterId",
       "x-cybercloud-soft-delete-days": 0,
+      "x-cybercloud-purge-permission": "",
+      "x-cybercloud-purge-protection-pointer": "",
       "x-cybercloud-meters": [
         {
           "meter": "Resources",
@@ -4205,7 +4922,8 @@
           }
         },
         "x-cybercloud-permission": "delete",
-        "x-cybercloud-soft-delete-days": 0
+        "x-cybercloud-soft-delete-days": 0,
+        "x-cybercloud-purge-permission": ""
       },
       "x-cybercloud-resource-type": "CyberCloud.Search/services",
       "x-cybercloud-display": {
@@ -4219,6 +4937,8 @@
       "x-cybercloud-requires-cluster": true,
       "x-cybercloud-cluster-id-pointer": "/properties/clusterId",
       "x-cybercloud-soft-delete-days": 0,
+      "x-cybercloud-purge-permission": "",
+      "x-cybercloud-purge-protection-pointer": "",
       "x-cybercloud-meters": [
         {
           "meter": "MemoryGb",
@@ -4582,7 +5302,8 @@
           }
         },
         "x-cybercloud-permission": "delete",
-        "x-cybercloud-soft-delete-days": 0
+        "x-cybercloud-soft-delete-days": 0,
+        "x-cybercloud-purge-permission": ""
       },
       "x-cybercloud-resource-type": "CyberCloud.Storage/accounts/buckets",
       "x-cybercloud-display": {
@@ -4596,6 +5317,8 @@
       "x-cybercloud-requires-cluster": true,
       "x-cybercloud-cluster-id-pointer": "/properties/clusterId",
       "x-cybercloud-soft-delete-days": 0,
+      "x-cybercloud-purge-permission": "",
+      "x-cybercloud-purge-protection-pointer": "",
       "x-cybercloud-meters": [
         {
           "meter": "Resources",
@@ -4921,7 +5644,8 @@
           }
         },
         "x-cybercloud-permission": "delete",
-        "x-cybercloud-soft-delete-days": 0
+        "x-cybercloud-soft-delete-days": 0,
+        "x-cybercloud-purge-permission": ""
       },
       "x-cybercloud-resource-type": "CyberCloud.Storage/accounts",
       "x-cybercloud-display": {
@@ -4935,6 +5659,8 @@
       "x-cybercloud-requires-cluster": true,
       "x-cybercloud-cluster-id-pointer": "/properties/clusterId",
       "x-cybercloud-soft-delete-days": 0,
+      "x-cybercloud-purge-permission": "",
+      "x-cybercloud-purge-protection-pointer": "",
       "x-cybercloud-meters": [
         {
           "meter": "MemoryGb",
@@ -7333,6 +8059,252 @@
         "title": "CyberCloud.Messaging.rabbitmqClusters.ListKeysResponse",
         "type": "object"
       },
+      "CyberCloud.Network.virtualNetworks": {
+        "additionalProperties": false,
+        "description": "The body of a CyberCloud.Network/virtualNetworks. Generated from the provider registry's schema, which is the same object the write path validates against — docs/plan/08 § The provider registry.",
+        "properties": {
+          "location": {
+            "description": "The region the virtual network lives in. ⚠ It selects which reserved ranges the address space is checked against — a region's underlay is part of that list.",
+            "example": "eu-central",
+            "format": "cybercloud-region",
+            "type": "string",
+            "x-cybercloud-immutable": true,
+            "x-cybercloud-widget": "region"
+          },
+          "properties": {
+            "additionalProperties": false,
+            "description": "The virtual network's own settings.",
+            "properties": {
+              "addressSpace": {
+                "additionalProperties": false,
+                "description": "The address range the network plans for. ⚠ Declarative: it is checked against the region's reserved ranges and is not rendered into the fabric, because a Kube-OVN Vpc carries no CIDR — the subnets do.",
+                "properties": {
+                  "v4": {
+                    "default": "10.20.0.0/16",
+                    "description": "The IPv4 range the network plans for, in CIDR form. It may overlap another of your own virtual networks — that is what a VPC is for — and it may not overlap a range the platform reserves, which is refused with the conflicting range named.",
+                    "example": "10.20.0.0/16",
+                    "pattern": "^(?:(\\d{1,3}\\.){3}\\d{1,3}/\\d{1,2})$",
+                    "type": "string",
+                    "x-cybercloud-immutable": true
+                  },
+                  "v6": {
+                    "default": "",
+                    "description": "The IPv6 range the network plans for, or empty for an IPv4-only network. ⚠ docs/plan/14 § IPv6 asks for dual-stack from day one rather than as a retrofit, which is why this is here at the first api-version even though a v4-only network is the ordinary case.",
+                    "example": "fd00:20::/48",
+                    "pattern": "^(?:([0-9A-Fa-f:.]+/[0-9]{1,3})?)$",
+                    "type": "string",
+                    "x-cybercloud-immutable": true
+                  }
+                },
+                "required": [
+                  "v4"
+                ],
+                "type": "object"
+              },
+              "clusterId": {
+                "description": "The cluster whose fabric carries the network.",
+                "format": "uuid",
+                "type": "string",
+                "x-cybercloud-immutable": true,
+                "x-cybercloud-widget": "cluster"
+              },
+              "enableExternal": {
+                "default": false,
+                "description": "Whether the network's router is attached to the external network. Off by default: a network that reaches the outside without being asked is a network whose owner did not choose that. ⚠ Turning it on requires the cluster to have an external subnet configured; without one the Vpc is accepted and the attachment never completes.",
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "clusterId"
+            ],
+            "type": "object"
+          },
+          "tags": {
+            "type": "object",
+            "description": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "maxProperties": 50,
+            "x-cybercloud-widget": "tag-input"
+          }
+        },
+        "required": [
+          "location"
+        ],
+        "title": "CyberCloud.Network/virtualNetworks",
+        "type": "object"
+      },
+      "CyberCloud.Network.virtualNetworks.ShowIsolationResponse": {
+        "additionalProperties": false,
+        "description": "What CyberCloud.Network/virtualNetworks/showIsolation returns.",
+        "properties": {
+          "claim": {
+            "description": "What tenant isolation this network provides, in one sentence. It is the same sentence for every virtual network on the platform, and it is deliberately narrower than 'isolated'.",
+            "type": "string"
+          },
+          "limits": {
+            "description": "What this network does NOT guarantee, one entry per limit, each naming the guarantee, why the substrate does not deliver it, and what to ask for instead. ⚠ Read this before deciding a virtual network satisfies a compliance requirement.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "substrate": {
+            "description": "The technology enforcing the separation, named so that a tenant's own security review has something to review.",
+            "example": "Kube-OVN (Open vSwitch)",
+            "type": "string"
+          }
+        },
+        "required": [
+          "claim",
+          "limits",
+          "substrate"
+        ],
+        "title": "CyberCloud.Network.virtualNetworks.ShowIsolationResponse",
+        "type": "object"
+      },
+      "CyberCloud.Network.virtualNetworks.subnets": {
+        "additionalProperties": false,
+        "description": "The body of a CyberCloud.Network/virtualNetworks/subnets. Generated from the provider registry's schema, which is the same object the write path validates against — docs/plan/08 § The provider registry.",
+        "properties": {
+          "location": {
+            "description": "The region the subnet lives in. ⚠ It selects which reserved ranges the prefix is checked against, and it must be the network's own region — nothing checks that.",
+            "example": "eu-central",
+            "format": "cybercloud-region",
+            "type": "string",
+            "x-cybercloud-immutable": true,
+            "x-cybercloud-widget": "region"
+          },
+          "properties": {
+            "additionalProperties": false,
+            "description": "The subnet's own settings.",
+            "properties": {
+              "addressPrefix": {
+                "additionalProperties": false,
+                "description": "The range addresses are allocated from.",
+                "properties": {
+                  "v4": {
+                    "default": "10.20.1.0/24",
+                    "description": "The IPv4 prefix, in CIDR form. ⚠ Host bits are cleared by the fabric, so 10.20.1.7/24 is stored as 10.20.1.0/24 and both name the same network. It may not overlap a range the platform reserves, which is refused with the conflicting range named.",
+                    "example": "10.20.1.0/24",
+                    "pattern": "^(?:(\\d{1,3}\\.){3}\\d{1,3}/\\d{1,2})$",
+                    "type": "string",
+                    "x-cybercloud-immutable": true
+                  },
+                  "v6": {
+                    "default": "",
+                    "description": "The IPv6 prefix, or empty for an IPv4-only subnet. Setting both makes the subnet dual-stack — docs/plan/14 § IPv6.",
+                    "example": "fd00:20:1::/64",
+                    "pattern": "^(?:([0-9A-Fa-f:.]+/[0-9]{1,3})?)$",
+                    "type": "string",
+                    "x-cybercloud-immutable": true
+                  }
+                },
+                "required": [
+                  "v4"
+                ],
+                "type": "object"
+              },
+              "clusterId": {
+                "description": "The cluster whose fabric carries the subnet. Must be the cluster the network is in — nothing checks that, and a subnet placed elsewhere binds to a Vpc that does not exist there.",
+                "format": "uuid",
+                "type": "string",
+                "x-cybercloud-immutable": true,
+                "x-cybercloud-widget": "cluster"
+              },
+              "enableDhcp": {
+                "default": false,
+                "description": "Whether the fabric answers DHCP in this subnet. Off by default: an address is assigned to a workload's port when the port is created, and DHCP is for guests that insist on asking — a virtual machine rather than a container.",
+                "type": "boolean"
+              },
+              "natOutgoing": {
+                "default": false,
+                "description": "Whether workloads in this subnet reach the internet through source NAT. Off by default. ⚠ This is the opposite of Kube-OVN's own default for its cluster subnet, deliberately: a tenant subnet that silently egresses is a surprise, and docs/plan/12 § Cross-cutting decisions defaults external exposure to off. It also requires the network's enableExternal to be on; without it the flag is accepted and nothing egresses.",
+                "type": "boolean"
+              },
+              "private": {
+                "default": false,
+                "description": "Whether the subnet refuses traffic from other subnets. Off by default. ⚠ In this api-version it has no exception list, so on means no traffic from any other subnet in the network at all.",
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "clusterId"
+            ],
+            "type": "object"
+          },
+          "tags": {
+            "type": "object",
+            "description": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "maxProperties": 50,
+            "x-cybercloud-widget": "tag-input"
+          }
+        },
+        "required": [
+          "location"
+        ],
+        "title": "CyberCloud.Network/virtualNetworks/subnets",
+        "type": "object"
+      },
+      "CyberCloud.Network.virtualNetworks.subnets.ListAddressUsageResponse": {
+        "additionalProperties": false,
+        "description": "What CyberCloud.Network/virtualNetworks/subnets/listAddressUsage returns.",
+        "properties": {
+          "sampledAt": {
+            "description": "When the fabric last reported these figures, RFC 3339. ⚠ Returned because a count with no timestamp is a count a caller will read as live, and these come from the Subnet object's status rather than from a live query.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "v4": {
+            "additionalProperties": false,
+            "description": "IPv4 address usage.",
+            "properties": {
+              "available": {
+                "description": "How many IPv4 addresses remain. ⚠ Zero here is the answer to 'why will nothing schedule in this subnet'.",
+                "type": "integer"
+              },
+              "total": {
+                "description": "How many IPv4 addresses the prefix contains that may be allocated, excluding the network address, the broadcast address and the gateway.",
+                "type": "integer"
+              },
+              "used": {
+                "description": "How many IPv4 addresses are currently allocated to ports.",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "available",
+              "total",
+              "used"
+            ],
+            "type": "object"
+          },
+          "v6": {
+            "additionalProperties": false,
+            "description": "IPv6 address usage.",
+            "properties": {
+              "available": {
+                "description": "How many IPv6 addresses remain, as a decimal string, or empty for an IPv4-only subnet.",
+                "type": "string"
+              },
+              "total": {
+                "description": "How many IPv6 addresses the prefix contains, as a decimal string, or empty for an IPv4-only subnet. ⚠ A string because a /64 does not fit in the signed 64-bit integer SchemaKind.WholeNumber validates through.",
+                "type": "string"
+              }
+            },
+            "type": "object"
+          }
+        },
+        "required": [
+          "sampledAt"
+        ],
+        "title": "CyberCloud.Network.virtualNetworks.subnets.ListAddressUsageResponse",
+        "type": "object"
+      },
       "CyberCloud.Sample.widgets": {
         "additionalProperties": false,
         "description": "The body of a CyberCloud.Sample/widgets. Generated from the provider registry's schema, which is the same object the write path validates against — docs/plan/08 § The provider registry.",
@@ -8104,5 +9076,5 @@
       }
     }
   },
-  "x-cybercloud-resource-type-count": 14
+  "x-cybercloud-resource-type-count": 16
 }

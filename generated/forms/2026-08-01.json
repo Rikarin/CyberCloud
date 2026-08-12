@@ -34,6 +34,8 @@
       "requiresCluster": true,
       "clusterIdPointer": "/properties/clusterId",
       "softDeleteDays": 0,
+      "purgePermission": "",
+      "purgeProtectionPointer": "",
       "fields": [
         {
           "jsonPointer": "/location",
@@ -324,6 +326,8 @@
       "requiresCluster": true,
       "clusterIdPointer": "/properties/clusterId",
       "softDeleteDays": 0,
+      "purgePermission": "",
+      "purgeProtectionPointer": "",
       "fields": [
         {
           "jsonPointer": "/location",
@@ -695,6 +699,8 @@
       "requiresCluster": true,
       "clusterIdPointer": "/properties/clusterId",
       "softDeleteDays": 0,
+      "purgePermission": "",
+      "purgeProtectionPointer": "",
       "fields": [
         {
           "jsonPointer": "/location",
@@ -890,6 +896,8 @@
       "requiresCluster": true,
       "clusterIdPointer": "/properties/clusterId",
       "softDeleteDays": 0,
+      "purgePermission": "",
+      "purgeProtectionPointer": "",
       "fields": [
         {
           "jsonPointer": "/location",
@@ -1162,6 +1170,8 @@
       "requiresCluster": true,
       "clusterIdPointer": "/properties/clusterId",
       "softDeleteDays": 0,
+      "purgePermission": "",
+      "purgeProtectionPointer": "",
       "fields": [
         {
           "jsonPointer": "/location",
@@ -1488,6 +1498,8 @@
       "requiresCluster": true,
       "clusterIdPointer": "/properties/clusterId",
       "softDeleteDays": 0,
+      "purgePermission": "",
+      "purgeProtectionPointer": "",
       "fields": [
         {
           "jsonPointer": "/location",
@@ -1958,6 +1970,8 @@
       "requiresCluster": true,
       "clusterIdPointer": "/properties/clusterId",
       "softDeleteDays": 0,
+      "purgePermission": "",
+      "purgeProtectionPointer": "",
       "fields": [
         {
           "jsonPointer": "/location",
@@ -2313,6 +2327,8 @@
       "requiresCluster": true,
       "clusterIdPointer": "/properties/clusterId",
       "softDeleteDays": 0,
+      "purgePermission": "",
+      "purgeProtectionPointer": "",
       "fields": [
         {
           "jsonPointer": "/location",
@@ -2756,6 +2772,8 @@
       "requiresCluster": true,
       "clusterIdPointer": "/properties/clusterId",
       "softDeleteDays": 0,
+      "purgePermission": "",
+      "purgeProtectionPointer": "",
       "fields": [
         {
           "jsonPointer": "/location",
@@ -3135,6 +3153,8 @@
       "requiresCluster": true,
       "clusterIdPointer": "/properties/clusterId",
       "softDeleteDays": 0,
+      "purgePermission": "",
+      "purgeProtectionPointer": "",
       "fields": [
         {
           "jsonPointer": "/location",
@@ -3458,6 +3478,302 @@
         }
       ]
     },
+    "CyberCloud.Network/virtualNetworks": {
+      "resourceType": "CyberCloud.Network/virtualNetworks",
+      "apiVersion": "2026-08-01",
+      "title": "Virtual network",
+      "plural": "Virtual networks",
+      "summary": "A private routing domain on Kube-OVN with its own address space. Network-layer tenant separation: a private routing domain with its own address space, on shared hardware.",
+      "overrideKey": "CyberCloud.Network/virtualNetworks@2026-08-01",
+      "coveredPointers": [
+        "/location",
+        "/properties",
+        "/properties/addressSpace",
+        "/properties/addressSpace/v4",
+        "/properties/addressSpace/v6",
+        "/properties/clusterId",
+        "/properties/enableExternal",
+        "/tags"
+      ],
+      "supportsTags": true,
+      "requiresCluster": true,
+      "clusterIdPointer": "/properties/clusterId",
+      "softDeleteDays": 0,
+      "purgePermission": "",
+      "purgeProtectionPointer": "",
+      "fields": [
+        {
+          "jsonPointer": "/location",
+          "name": "location",
+          "label": "Location",
+          "control": "xui-region",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "The region the virtual network lives in. ⚠ It selects which reserved ranges the address space is checked against — a region's underlay is part of that list.",
+          "format": "cybercloud-region",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new Virtual network to change it.",
+          "placeholder": "eu-central"
+        },
+        {
+          "jsonPointer": "/properties",
+          "name": "properties",
+          "label": "Properties",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "The virtual network's own settings."
+        },
+        {
+          "jsonPointer": "/properties/addressSpace",
+          "name": "addressSpace",
+          "label": "Address space",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "The address range the network plans for. ⚠ Declarative: it is checked against the region's reserved ranges and is not rendered into the fabric, because a Kube-OVN Vpc carries no CIDR — the subnets do."
+        },
+        {
+          "jsonPointer": "/properties/addressSpace/v4",
+          "name": "v4",
+          "label": "V4",
+          "control": "xui-input",
+          "type": "string",
+          "required": true,
+          "section": "addressSpace",
+          "hint": "The IPv4 range the network plans for, in CIDR form. It may overlap another of your own virtual networks — that is what a VPC is for — and it may not overlap a range the platform reserves, which is refused with the conflicting range named.",
+          "pattern": "^(?:(\\d{1,3}\\.){3}\\d{1,3}/\\d{1,2})$",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new Virtual network to change it.",
+          "default": "10.20.0.0/16",
+          "placeholder": "10.20.0.0/16"
+        },
+        {
+          "jsonPointer": "/properties/addressSpace/v6",
+          "name": "v6",
+          "label": "V6",
+          "control": "xui-input",
+          "type": "string",
+          "required": false,
+          "section": "addressSpace",
+          "hint": "The IPv6 range the network plans for, or empty for an IPv4-only network. ⚠ docs/plan/14 § IPv6 asks for dual-stack from day one rather than as a retrofit, which is why this is here at the first api-version even though a v4-only network is the ordinary case.",
+          "pattern": "^(?:([0-9A-Fa-f:.]+/[0-9]{1,3})?)$",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new Virtual network to change it.",
+          "default": "",
+          "placeholder": "fd00:20::/48"
+        },
+        {
+          "jsonPointer": "/properties/clusterId",
+          "name": "clusterId",
+          "label": "Cluster id",
+          "control": "xui-cluster",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "The cluster whose fabric carries the network.",
+          "format": "uuid",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new Virtual network to change it."
+        },
+        {
+          "jsonPointer": "/properties/enableExternal",
+          "name": "enableExternal",
+          "label": "Enable external",
+          "control": "xui-switch",
+          "type": "boolean",
+          "required": false,
+          "section": "general",
+          "hint": "Whether the network's router is attached to the external network. Off by default: a network that reaches the outside without being asked is a network whose owner did not choose that. ⚠ Turning it on requires the cluster to have an external subnet configured; without one the Vpc is accepted and the attachment never completes.",
+          "default": false
+        },
+        {
+          "jsonPointer": "/tags",
+          "name": "tags",
+          "label": "Tags",
+          "control": "xui-tag-input",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+          "maxProperties": 50
+        }
+      ],
+      "actions": [
+        {
+          "name": "showIsolation",
+          "label": "Show isolation",
+          "permission": "read",
+          "longRunning": false,
+          "secret": false,
+          "fields": [],
+          "confirmOnly": true
+        }
+      ]
+    },
+    "CyberCloud.Network/virtualNetworks/subnets": {
+      "resourceType": "CyberCloud.Network/virtualNetworks/subnets",
+      "apiVersion": "2026-08-01",
+      "title": "Subnet",
+      "plural": "Subnets",
+      "summary": "A range inside a virtual network that workloads are given addresses from, with optional outbound NAT and optional isolation from other subnets.",
+      "overrideKey": "CyberCloud.Network/virtualNetworks/subnets@2026-08-01",
+      "coveredPointers": [
+        "/location",
+        "/properties",
+        "/properties/addressPrefix",
+        "/properties/addressPrefix/v4",
+        "/properties/addressPrefix/v6",
+        "/properties/clusterId",
+        "/properties/enableDhcp",
+        "/properties/natOutgoing",
+        "/properties/private",
+        "/tags"
+      ],
+      "supportsTags": true,
+      "requiresCluster": true,
+      "clusterIdPointer": "/properties/clusterId",
+      "softDeleteDays": 0,
+      "purgePermission": "",
+      "purgeProtectionPointer": "",
+      "fields": [
+        {
+          "jsonPointer": "/location",
+          "name": "location",
+          "label": "Location",
+          "control": "xui-region",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "The region the subnet lives in. ⚠ It selects which reserved ranges the prefix is checked against, and it must be the network's own region — nothing checks that.",
+          "format": "cybercloud-region",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new Subnet to change it.",
+          "placeholder": "eu-central"
+        },
+        {
+          "jsonPointer": "/properties",
+          "name": "properties",
+          "label": "Properties",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "The subnet's own settings."
+        },
+        {
+          "jsonPointer": "/properties/addressPrefix",
+          "name": "addressPrefix",
+          "label": "Address prefix",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "The range addresses are allocated from."
+        },
+        {
+          "jsonPointer": "/properties/addressPrefix/v4",
+          "name": "v4",
+          "label": "V4",
+          "control": "xui-input",
+          "type": "string",
+          "required": true,
+          "section": "addressPrefix",
+          "hint": "The IPv4 prefix, in CIDR form. ⚠ Host bits are cleared by the fabric, so 10.20.1.7/24 is stored as 10.20.1.0/24 and both name the same network. It may not overlap a range the platform reserves, which is refused with the conflicting range named.",
+          "pattern": "^(?:(\\d{1,3}\\.){3}\\d{1,3}/\\d{1,2})$",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new Subnet to change it.",
+          "default": "10.20.1.0/24",
+          "placeholder": "10.20.1.0/24"
+        },
+        {
+          "jsonPointer": "/properties/addressPrefix/v6",
+          "name": "v6",
+          "label": "V6",
+          "control": "xui-input",
+          "type": "string",
+          "required": false,
+          "section": "addressPrefix",
+          "hint": "The IPv6 prefix, or empty for an IPv4-only subnet. Setting both makes the subnet dual-stack — docs/plan/14 § IPv6.",
+          "pattern": "^(?:([0-9A-Fa-f:.]+/[0-9]{1,3})?)$",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new Subnet to change it.",
+          "default": "",
+          "placeholder": "fd00:20:1::/64"
+        },
+        {
+          "jsonPointer": "/properties/clusterId",
+          "name": "clusterId",
+          "label": "Cluster id",
+          "control": "xui-cluster",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "The cluster whose fabric carries the subnet. Must be the cluster the network is in — nothing checks that, and a subnet placed elsewhere binds to a Vpc that does not exist there.",
+          "format": "uuid",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new Subnet to change it."
+        },
+        {
+          "jsonPointer": "/properties/enableDhcp",
+          "name": "enableDhcp",
+          "label": "Enable dhcp",
+          "control": "xui-switch",
+          "type": "boolean",
+          "required": false,
+          "section": "general",
+          "hint": "Whether the fabric answers DHCP in this subnet. Off by default: an address is assigned to a workload's port when the port is created, and DHCP is for guests that insist on asking — a virtual machine rather than a container.",
+          "default": false
+        },
+        {
+          "jsonPointer": "/properties/natOutgoing",
+          "name": "natOutgoing",
+          "label": "Nat outgoing",
+          "control": "xui-switch",
+          "type": "boolean",
+          "required": false,
+          "section": "general",
+          "hint": "Whether workloads in this subnet reach the internet through source NAT. Off by default. ⚠ This is the opposite of Kube-OVN's own default for its cluster subnet, deliberately: a tenant subnet that silently egresses is a surprise, and docs/plan/12 § Cross-cutting decisions defaults external exposure to off. It also requires the network's enableExternal to be on; without it the flag is accepted and nothing egresses.",
+          "default": false
+        },
+        {
+          "jsonPointer": "/properties/private",
+          "name": "private",
+          "label": "Private",
+          "control": "xui-switch",
+          "type": "boolean",
+          "required": false,
+          "section": "general",
+          "hint": "Whether the subnet refuses traffic from other subnets. Off by default. ⚠ In this api-version it has no exception list, so on means no traffic from any other subnet in the network at all.",
+          "default": false
+        },
+        {
+          "jsonPointer": "/tags",
+          "name": "tags",
+          "label": "Tags",
+          "control": "xui-tag-input",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+          "maxProperties": 50
+        }
+      ],
+      "actions": [
+        {
+          "name": "listAddressUsage",
+          "label": "List address usage",
+          "permission": "read",
+          "longRunning": false,
+          "secret": false,
+          "fields": [],
+          "confirmOnly": true
+        }
+      ]
+    },
     "CyberCloud.Sample/widgets": {
       "resourceType": "CyberCloud.Sample/widgets",
       "apiVersion": "2026-08-01",
@@ -3481,6 +3797,8 @@
       "requiresCluster": true,
       "clusterIdPointer": "/properties/clusterId",
       "softDeleteDays": 0,
+      "purgePermission": "",
+      "purgeProtectionPointer": "",
       "fields": [
         {
           "jsonPointer": "/location",
@@ -3671,6 +3989,8 @@
       "requiresCluster": true,
       "clusterIdPointer": "/properties/clusterId",
       "softDeleteDays": 0,
+      "purgePermission": "",
+      "purgeProtectionPointer": "",
       "fields": [
         {
           "jsonPointer": "/location",
@@ -3953,6 +4273,8 @@
       "requiresCluster": true,
       "clusterIdPointer": "/properties/clusterId",
       "softDeleteDays": 0,
+      "purgePermission": "",
+      "purgeProtectionPointer": "",
       "fields": [
         {
           "jsonPointer": "/location",
@@ -4272,6 +4594,8 @@
       "requiresCluster": true,
       "clusterIdPointer": "/properties/clusterId",
       "softDeleteDays": 0,
+      "purgePermission": "",
+      "purgeProtectionPointer": "",
       "fields": [
         {
           "jsonPointer": "/location",
