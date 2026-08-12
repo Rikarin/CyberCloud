@@ -46,10 +46,12 @@ public sealed class ReferenceCase : IProviderCaseSource {
 ///         ⚠ <b>This is the whole cost of putting a child type under the shared suite, and it is one
 ///         member longer than a top-level one.</b> Everything else is the same object shape:
 ///         <see cref="ProviderConformanceCase" /> gained nothing, the four shipping providers'
-///         case files were not touched, and the child inherits all 27 assertions rather than a
+///         case files were not touched, and the child inherits all <b>28</b> assertions rather than a
 ///         subset — <c>ProviderTestCluster.Address</c> interleaves the ancestors the harness created,
 ///         so every assertion that addressed <c>…/probes/{name}</c> now addresses
-///         <c>…/probes/ancestor-0/samples/{name}</c> and nothing else about it changes.
+///         <c>…/probes/ancestor-0/samples/{name}</c> and nothing else about it changes. All 28 are
+///         <i>applicable</i> to it, where a top-level type self-skips the parent-existence one; the
+///         child is therefore the only case in the tree that runs the whole suite.
 ///     </para>
 ///     <para>
 ///         ⚠ <see cref="Ancestors" /> is the parent's own case object rather than a description of it
@@ -121,8 +123,9 @@ public sealed class ReferenceProviderConformance(ProviderTestCluster<ReferenceCa
 ///     free to assert less and nothing would say which assertions it had dropped — the exact shape of
 ///     "a suite that goes green because it asked less". Deriving from
 ///     <c>ProviderConformanceTests&lt;T&gt;</c> makes the count a fact of the compiler rather than of
-///     anybody's diligence, and <c>ChildConformanceCoverageTests</c> is the assertion that says so out
-///     loud.
+///     anybody's diligence, and
+///     <c>SuiteRejectionTests.TheChildRunsEveryAssertionTheParentDoesRatherThanASubset</c> is the
+///     assertion that says so out loud — measured at 28 apiece.
 /// </remarks>
 /// <param name="cluster">The harness.</param>
 public sealed class ReferenceChildProviderConformance(ProviderTestCluster<ReferenceChildCase> cluster)
