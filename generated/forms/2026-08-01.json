@@ -2205,6 +2205,122 @@
           "confirmOnly": true
         }
       ]
+    },
+    "CyberCloud.Storage/accounts/buckets": {
+      "resourceType": "CyberCloud.Storage/accounts/buckets",
+      "apiVersion": "2026-08-01",
+      "title": "Bucket",
+      "plural": "Buckets",
+      "summary": "An S3 bucket inside a managed object-storage account, with an optional size limit and optional object versioning.",
+      "overrideKey": "CyberCloud.Storage/accounts/buckets@2026-08-01",
+      "coveredPointers": [
+        "/location",
+        "/properties",
+        "/properties/clusterId",
+        "/properties/quota",
+        "/properties/quota/size",
+        "/properties/versioning",
+        "/tags"
+      ],
+      "supportsTags": true,
+      "requiresCluster": true,
+      "clusterIdPointer": "/properties/clusterId",
+      "softDeleteDays": 0,
+      "fields": [
+        {
+          "jsonPointer": "/location",
+          "name": "location",
+          "label": "Location",
+          "control": "xui-region",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "The region the bucket is billed in.",
+          "format": "cybercloud-region",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new Bucket to change it.",
+          "placeholder": "eu-central"
+        },
+        {
+          "jsonPointer": "/properties",
+          "name": "properties",
+          "label": "Properties",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "The bucket's own settings."
+        },
+        {
+          "jsonPointer": "/properties/clusterId",
+          "name": "clusterId",
+          "label": "Cluster id",
+          "control": "xui-cluster",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "The cluster whose namespace holds the bucket. Must be the cluster the account is in — nothing checks that, and a bucket placed elsewhere is applied into a namespace with no object store in it.",
+          "format": "uuid",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new Bucket to change it."
+        },
+        {
+          "jsonPointer": "/properties/quota",
+          "name": "quota",
+          "label": "Quota",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "How much the bucket may hold."
+        },
+        {
+          "jsonPointer": "/properties/quota/size",
+          "name": "size",
+          "label": "Size",
+          "control": "xui-input",
+          "type": "string",
+          "required": false,
+          "section": "quota",
+          "hint": "The bucket's size limit, in Kubernetes quantity form. Empty means no limit other than the account's own provisioned capacity. ⚠ This is a limit inside capacity the account already reserved; it does not add any, and it is not what the bucket is billed on.",
+          "pattern": "^(?:(\\d+(\\.\\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)?)$",
+          "default": "",
+          "placeholder": "50Gi"
+        },
+        {
+          "jsonPointer": "/properties/versioning",
+          "name": "versioning",
+          "label": "Versioning",
+          "control": "xui-switch",
+          "type": "boolean",
+          "required": false,
+          "section": "general",
+          "hint": "Whether the bucket keeps previous versions of an overwritten object. Off by default. ⚠ docs/plan/15 § Object storage: SeaweedFS' S3 implementation is \"good but not complete\" and names object versioning as one of the partial areas, so the supported-operations table for the deployed version — not this property — is what says how completely it behaves.",
+          "default": false
+        },
+        {
+          "jsonPointer": "/tags",
+          "name": "tags",
+          "label": "Tags",
+          "control": "xui-tag-input",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+          "maxProperties": 50
+        }
+      ],
+      "actions": [
+        {
+          "name": "stats",
+          "label": "Stats",
+          "permission": "read",
+          "longRunning": false,
+          "secret": false,
+          "fields": [],
+          "confirmOnly": true
+        }
+      ]
     }
   }
 }

@@ -1,0 +1,252 @@
+# Conformance manifest — docs/plan/12 § The pattern, once, piece 8.
+#
+# What the conformance suite asserts about CyberCloud.Storage/accounts/buckets. This file is data:
+# `Build.Charts` checks that it is present, non-empty, and names the same resource type as
+# Chart.yaml. The suite that reads the rest of it lives in test/ and does not exist yet, and the
+# target says so in its own log rather than implying otherwise.
+#
+# ⚠ THIS IS THE FIRST MANIFEST IN THE TREE FOR A CHILD TYPE. The type is docs/plan/15 § The three
+# kinds' other half — "Object · CyberCloud.Storage/accounts + /buckets" — and § The resource model's
+# "buckets/{name} ← globally-unique-per-account name, quota, versioning, lifecycle". docs/plan/12 has
+# no storage row at all; what it owns here is the OPERATOR, through ADR-010 clause 1, and the eight
+# pieces this file is the eighth of.
+
+resourceType: CyberCloud.Storage/accounts/buckets
+apiVersion: "2026-08-01"
+chart: seaweedfs-bucket
+
+# Objects the reconciler must have applied once the resource reports Succeeded.
+#
+# ⚠ ONE, AND UNLIKE ITS PARENT'S ONE THIS REALLY IS A SMALL THING. charts/managed/seaweedfs renders
+# one object that expands into four workloads; this renders one object that is a name, a size limit
+# and a flag. So the two ends of "object count is not a measure of a service's size" are now bracketed
+# by two charts that both say `count: 1`.
+renders:
+  - group: seaweed.seaweedfs.com
+    version: v1
+    kind: Bucket
+    count: 1
+
+# ⚠ THERE IS NO `requiredCrds:` BLOCK, AND THAT IS CORRECT RATHER THAN AN OMISSION.
+# `ProviderConformanceCase` has no `RequiredCrds` member and never had one — the harness DERIVES the
+# definitions from the case's own `Objects`, which already carries group, version, kind and plural.
+
+# ADR-013 — every rendered object carries all seven labels.
+labels:
+  required:
+    - cybercloud.io/tenant-id
+    - cybercloud.io/subscription-id
+    - cybercloud.io/resource-group
+    - cybercloud.io/resource-id
+    - cybercloud.io/resource-type
+    - cybercloud.io/api-version
+    - cybercloud.io/managed-by
+  # ⚠ TWO underscores, not one, and this is the first type in the tree for which that is true. A `/`
+  # is not a legal label VALUE character and a child type path has two of them, so
+  # KubeLabels.ResourceTypeValue replaces both. A single-replacement implementation would render
+  # `cybercloud.storage_accounts/buckets`, which the API server refuses at admission, per object,
+  # rather than at lint time. StorageBucketOpenApiCasingTests pins this string against a literal.
+  values:
+    cybercloud.io/resource-type: cybercloud.storage_accounts_buckets
+    cybercloud.io/managed-by: cybercloud
+
+# Behaviour a tenant is entitled to. Each is a statement the suite can fail on, not a feature list.
+assertions:
+  - id: two-accounts-may-hold-the-same-bucket-name
+    says: >
+      Two accounts in ONE resource group each hold a bucket named `assets`, and the two are different
+      buckets holding different objects. ⚠ THIS IS THE ASSERTION A CHILD TYPE EXISTS FOR AND THE ONE
+      A FLATTENED ADDRESS WOULD FAIL. ReconcileDriver.NamespaceFor is
+      `{subscriptionId:N}-{resourceGroup}`, so a parent resource lives INSIDE a namespace rather than
+      being one — a renderer that ignored ResourceId.ParentNames would have both buckets fighting
+      over one Bucket object, each converging by overwriting the other, with neither reporting an
+      error anywhere.
+  - id: creating-under-an-absent-account-is-the-same-404
+    says: >
+      A create under an account that does not exist is refused with the same status, the same target
+      and the same message — modulo the caller's own path — as a GET of a bucket that was simply never
+      created. ⚠ A distinct ParentNotFound would be an existence oracle: the check runs BEFORE the
+      enforcement seam, so a caller who may write in a resource group but may not read a particular
+      account would learn which account names are live, one probe at a time.
+  - id: a-bucket-is-addressable-through-its-accounts-endpoint-only
+    says: >
+      An S3 client configured from the ACCOUNT's listKeys puts an object into the bucket and gets the
+      same bytes back. There is no bucket-scoped endpoint and no bucket-scoped credential. ⚠ SAME
+      BLOCKER AS THE PARENT'S `put-and-get-an-object`, and it is the parent's rather than this type's:
+      the account's S3 gateway mounts a Secret nothing writes.
+  - id: public-access-stays-off
+    says: >
+      A request carrying no credentials is refused for every bucket, and no property anywhere turns
+      that off. ⚠ THE DEFAULT IS HONOURED AND THE MECHANISM THAT WOULD ENFORCE IT IS THE PARENT'S AND
+      IS BROKEN — SeaweedFS sets `isAuthEnabled = len(identities) > 0` and returns an ADMIN identity
+      when it is false, so an account whose gateway DID come up with no identities would serve every
+      bucket in it to every anonymous caller as an administrator. What makes this assertion true today
+      is that the account does not come up at all.
+  - id: quota-is-a-ceiling-and-not-a-reservation
+    says: >
+      Raising quota.size does not change what the account's cluster provisions and does not change
+      what the tenant is charged at write time. The bucket draws QuotaMeter.Resources and nothing
+      else, because the capacity it limits was already reserved by the account's volume servers.
+  - id: deleting-a-bucket-leaves-its-account-alone
+    says: >
+      Deleting a bucket removes its Bucket object and nothing else: the account's Seaweed, its other
+      buckets and its filer metadata are untouched, and the account stays in whatever state it was in.
+
+# Meters the type must emit.
+#
+# ⚠ EMPTY, AND IT IS THE FIRST MANIFEST IN THE TREE THAT IS. docs/plan/15 § Metering samples
+# `storage.object.gb_month` "hourly from SeaweedFS volume stats PER BUCKET" and prices
+# `storage.object.requests` per 10 000 — both are counters that exist only once traffic has flowed,
+# which is docs/plan/22's usage pipeline (UsageEvent.Quantity) and not a MeterDerivation. A quota
+# meter is a pure function of the resource BODY, reserved at write time; there is nothing in a
+# bucket's body to derive either figure from. Declaring `storage.object.gb_month` here against
+# `quota.size` would be worse than declaring nothing: it would bill the CEILING rather than the
+# contents, on the meter docs/plan/15 § Metering says customers dispute.
+#
+# ⚠ AND THE PARENT ALREADY RESERVES THE DISK. StorageProvider's StorageDrawn counts every volume
+# server's PVC plus the filer's volume; a bucket meter over the same bytes would reserve them twice.
+meters: []
+
+# ── owed ──────────────────────────────────────────────────────────────────────────────────────
+#
+# Named here rather than left to be discovered, because an absent capability that nobody wrote down
+# is indistinguishable from one nobody thought of.
+owed:
+  - id: parent-delete-orphans-buckets
+    says: >
+      ⚠ THE QUESTION THIS TYPE WAS ASKED TO ANSWER, AND THE ANSWER IS THAT IT WAS ALREADY ANSWERED
+      SOMEWHERE ELSE. docs/plan/08 § Deleting a parent resource that has children: "a delete is
+      refused while the resource still has children — 409, not a cascade, and not a silent orphan.
+      The refusal names how many children there are and their type". So `buckets` does not get to
+      pick a lifecycle of its own; it inherits a decided one that is NOT IMPLEMENTED, and the reason
+      it is not is enumeration — IResourceIndexGrain is path→GUID and one-way,
+      IResourceGroupGrain.ListAsync exists and the resource manager never writes to it, and the
+      resource-graph projection has no sink. docs/plan/08 names the fix: "a per-parent child counter
+      maintained transactionally where the index claim and release already happen".
+      ⚠ WHAT IT COSTS ON THIS TYPE SPECIFICALLY, which is worse than on the reference provider's
+      `probes/samples`. Deleting an account tears down its Seaweed with a Background cascade, taking
+      every volume server's PVC with it. The buckets' Bucket objects are NOT owned by that Seaweed —
+      the platform applied them, not the operator — so each survives in the namespace naming a
+      `clusterRef` to a cluster that is gone, while the objects it described are already destroyed.
+      The bucket RESOURCE also survives: still addressable, still writable (docs/plan/08 forbids
+      re-checking the parent on a write), still drawing QuotaMeter.Resources, and carrying a ReBAC
+      `parent` tuple pointing at a GUID that no longer resolves — which by docs/plan/07's own
+      sentence ("a resource with no parent tuple is a resource the walk cannot leave, so it inherits
+      nothing, so its own creator cannot read it") makes it invisible to the person who owns it.
+      ⚠ WHY REFUSAL RATHER THAN CASCADE IS ALSO THE RIGHT ANSWER UNDER A SOFT-DELETE WINDOW, stated
+      here because that work will be written against this choice. docs/plan/06 § Tags, locks promises
+      "7 days for resources carrying data (Vault, Storage, databases)"; the registry can express it
+      (IProviderBuilder.SupportsSoftDelete) and nothing in CyberCloud.ResourceManager reads
+      SoftDeleteDays, which is why all five providers decline to declare it and this one does too.
+      Under a window, CASCADE has to answer a question REFUSAL never raises: is a bucket of a
+      soft-deleted account recoverable with it, separately, or not at all? Every answer is bad. Hard-
+      deleting the children while the parent is recoverable makes "restore" return an account whose
+      buckets are gone, which is worse than not restoring — the tenant is told the thing came back.
+      Soft-deleting the children with it needs a restore that is transactional over a set, which the
+      platform has no shape for: OperationGrainState.Children is an unwritten field. Refusal makes
+      the fourth state UNREACHABLE BY CONSTRUCTION — the delete never starts, so there is never a
+      soft-deleted parent with live children — which is the strongest form of forward compatibility
+      available and means the soft-delete work has to answer nothing about children at all.
+      ⚠ AND ORPHANING IS WRONG HERE FOR A REASON THAT DID NOT EXIST BEFORE 2026-08-12: until then a
+      resource's ReBAC `parent` edge always named its resource GROUP, so an "orphan" still inherited
+      from something. A child's now names its PARENT RESOURCE, so an orphan inherits from nothing.
+      What closes this: the child counter, then roughly ten lines at ResourceManagerService.cs's
+      delete path between the 404 and the lock check, shaped like the ScopeLocked refusal already
+      there. ⚠ It will break
+      CyberCloud.ResourceManager.Tests' AnUpdateOfAnExistingChildDoesNotRecheckTheParent as written,
+      whose fixture deletes a parent that still has a live child.
+  - id: bucket-cluster-may-differ-from-its-accounts
+    says: >
+      /properties/clusterId is required on a bucket and NOTHING COMPARES IT TO THE ACCOUNT'S. A body
+      naming a different cluster produces a Bucket applied into a namespace whose Seaweed is
+      elsewhere, which the operator leaves unreconciled forever with no error on the create. ⚠ THIS IS
+      A NEW SHAPE OF THE CROSS-PROPERTY GAP RATHER THAN A SIGHTING OF THE OLD ONE.
+      charts/managed/kafka's `replication-factor-versus-node-count` compares two properties of ONE
+      body, so a cross-property validation seam would close it; charts/managed/seaweedfs'
+      `replication-versus-topology` needs a fact about the CLUSTER that no body contains. This one
+      needs a property of ANOTHER RESOURCE — the parent's — which the write path already resolves (it
+      reads the parent's index binding to get its GUID) and then does not read the body of. Closing it
+      is either a `RequiresCluster` variant that inherits placement from the parent rather than
+      declaring it, or a validation hook that gets the parent's stored body. The first is smaller and
+      is probably right: a child that could be placed anywhere is a child whose placement is a lie.
+  - id: name-grammar-is-wider-than-s3s
+    says: >
+      ResourceNaming is DNS-1123 — `[a-z0-9]([-a-z0-9]*[a-z0-9])?`, 1 to 63 characters — and S3
+      requires 3 to 63. So `ab` is a legal resource name and an illegal bucket name, and there is
+      NOWHERE TO PUT THE RULE: a resource's name is part of its ADDRESS, not a schema property, so
+      ResourceSchema never sees it and there is no @pattern to carry it. ⚠ The refusal that does
+      arrive comes from the TENANT'S OWN S3 CLIENT, which validates the name before it opens a socket
+      — so the symptom is a bucket the platform created, the operator reconciled, and no SDK will
+      address. Everything else in S3's rule is already implied: the character class forbids upper
+      case, underscores and dots, so a name cannot look like an IPv4 address or fail a signer.
+      StorageBucketDeclarationTests pins the two numbers against literals so this goes red the day
+      either rule moves. Closing it needs a per-type name constraint in the registry, which no type
+      has ever asked for.
+  - id: forms-cannot-address-a-child
+    says: >
+      ⚠ THE FIRST TIME THIS GAP HAS FIRED FOR A SHIPPING PROVIDER, AND IT IS RECORDED RATHER THAN
+      WORKED AROUND. CliEmitter and SdkEmitter both grew ancestor support on 2026-08-12 — a
+      `--accounts-name` flag carrying `pathPlaceholder: accountsName`, and ancestor parameters
+      leading every SDK accessor. FormsEmitter did not, and it has no guard either: `Emit` iterates
+      every type unconditionally and a form's fields come only from DocumentReader.LeavesOf(body).
+      generated/forms/2026-08-01.json now carries a `CyberCloud.Storage/accounts/buckets` entry whose
+      coveredPointers are `/location`, `/properties/clusterId`, `/properties/quota/size`,
+      `/properties/versioning` and `/tags` — a form that LOOKS complete and from which the portal
+      cannot construct the address, because the account's name is nowhere in it. It is not
+      structurally malformed and nothing fails, which is exactly why it needs writing down. Closing it
+      is an address-side section on the form model plus a renderer that knows what to do with it —
+      docs/plan/20's, not a provider's.
+  - id: object-matches-desired-cannot-see-an-address
+    says: >
+      ⚠ THE ONE PLACE THE SHARED CONFORMANCE HARNESS ASKS A CHILD TYPE FOR LESS THAN IT ASKS A
+      TOP-LEVEL ONE, FOUND BY BEING THE FIRST CHILD TO RUN IT. ProviderConformanceCase's
+      `ObjectMatchesDesired` is `(objectJson, desiredJson) => bool` and carries NO ADDRESS — which is
+      exactly right for the five top-level types that ship, whose whole rendered spec is a function of
+      the body. A bucket's is not: `spec.name` is its own name and `spec.clusterRef` is its PARENT'S,
+      and both live in the address. So the predicate the suite evaluates for a bucket
+      (`StorageBuckets.MatchesBody` — versioning and quota) is strictly smaller than the one the
+      reconciler evaluates (`StorageBuckets.Matches`), and five assertions in the shared suite —
+      WhatTheProviderAppliedIsInTheClusterAndMatchesTheDesiredBody, AHandEditIsOverwrittenOnTheNextPass,
+      APutWithADifferentBodyReachesTheClusterAsWell, DriftIsCorrectedWhenSomebodyDeletesTheObjectsByHand
+      and TheReconcilerSatisfiesTheFourClauseContract — check less for a bucket than they would for an
+      account. ⚠ THIS WAS DISCOVERED BY THE SUITE GOING RED, NOT BY READING: the first version of this
+      case reconstructed the harness's own address inside the case object, which worked for the
+      ancestor's name and failed on the resource name, which every assertion picks differently. The
+      other tempting fix — deriving the address FROM the object, `metadata.name` minus `spec.name` —
+      would compare the object against itself, which is the shape that let an earlier provider's
+      casing sabotage stay green. ⚠ WHAT STANDS IN MEANWHILE: StorageBucketReconcilerTests asserts
+      `spec.clusterRef` and `spec.name` against real addresses, including the case the harness could
+      never build — two accounts in ONE resource group each holding a bucket called `assets`. Closing
+      it is an `ObjectMatchesDesired` overload taking the ResourceId, which is a change to
+      ProviderConformanceCase and therefore to every provider's case file, so it is recorded here
+      rather than made unilaterally by the first type that wanted it.
+  - id: bucket-lifecycle-policies
+    says: >
+      docs/plan/15 § The resource model gives an account FOUR kinds of child — buckets, accessKeys,
+      lifecyclePolicies, and per-bucket properties — and this ships the first. The operator has real
+      objects for the rest: BucketLifecyclePolicy, S3Identity, S3Credentials, S3Policy,
+      S3PolicyBinding. `lifecyclePolicies/{name}` is docs/plan/15 § Archive and tiering's M3 row and
+      needs the cold volume set that row describes; `accessKeys/{name}` is blocked on the same OpenBao
+      integration as the account's listKeys — see charts/managed/seaweedfs/conformance.yaml § owed,
+      `listkeys-has-no-handler` — and would additionally be a depth-2 type whose own children are
+      credentials, which is a third level the ResourceTypeName cap allows and nothing has tried.
+  - id: a-buckets-lock-is-not-its-accounts
+    says: >
+      ⚠ FOUND WHILE ANSWERING THE DELETE QUESTION, AND IT IS THE OTHER HALF OF THE SAME HOLE.
+      docs/plan/06 § Tags, locks says CanNotDelete and ReadOnly are "inherited down the hierarchy",
+      and ResourceScopeLockResolver walks resource → resource GROUP → subscription. IT DOES NOT WALK
+      THE PARENT RESOURCE. So a CanNotDelete on an account does not protect the buckets inside it, and
+      "the parent decides" is not spelled anywhere for resource-to-resource nesting — the only place
+      it is spelled is the scope hierarchy, which is flat at the resource level. docs/plan/06 already
+      states the walk reaches "three scopes and not four"; what it does not say is that the fourth
+      missing hop is a PARENT RESOURCE rather than a management group. It is a smaller fix than the
+      child counter — ILockResolver has the address and ResourceId.Parent is a pure function of it, so
+      the hop is a read per level with the same short-circuit the existing walk uses — and it is a
+      CyberCloud.ResourceManager change, not a provider's.
+  - id: grafana-dashboard
+    says: >
+      docs/plan/12 § The pattern, once, piece 6 keeps the dashboard chart-side. There is no scrape for
+      a bucket to be on: the operator emits a ServiceMonitor per Seaweed COMPONENT and a Bucket is not
+      a component, so per-bucket figures come from the same usage pipeline `meters: []` above is
+      waiting on. THIRD SIGHTING of charts/managed/nats' item of the same name, and at three of six it
+      is now firmly a property of the pattern rather than of any service.

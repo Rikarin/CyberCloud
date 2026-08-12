@@ -120,6 +120,15 @@ owed:
       child resource type (see `bucket-child-type`) and the platform would still need a resolver to
       read the Secret it produces. Neither route is a provider's to build alone.
   - id: bucket-child-type
+    # ⚠ CLOSED 2026-08-12. `CyberCloud.Storage/accounts/buckets` ships: a body shape, a reconciler
+    # over the Bucket CRD, charts/managed/seaweedfs-bucket, a conformance case that runs all 28
+    # assertions, and a row in test/CyberCloud.Isolation's sweep. It is the SEVENTH resource type and
+    # the first child type in a shipping provider. The remaining three of docs/plan/15 § The resource
+    # model's four child kinds — accessKeys, lifecyclePolicies and per-bucket properties — are owed at
+    # charts/managed/seaweedfs-bucket/conformance.yaml, `bucket-lifecycle-policies`, along with what
+    # blocks each. The text below is kept because its CORRECTION is the useful half and deleting it
+    # would delete the record of a blocker that was reported three times after it had been fixed.
+    status: closed 2026-08-12 — see charts/managed/seaweedfs-bucket/
     says: >
       docs/plan/15 § The resource model gives an account four kinds of child — buckets, accessKeys,
       lifecyclePolicies, and per-bucket properties — and NONE IS DECLARED. ⚠ Unlike
@@ -196,6 +205,15 @@ owed:
       `anonymousRead`, which lives on the child type this file already owes. A two-step opt-in whose
       first step has no second step would be a property that does nothing; it waits for
       `bucket-child-type`.
+      ⚠ REVISED 2026-08-12, AND THE BLOCKER MOVED RATHER THAN CLOSING. `bucket-child-type` shipped and
+      `anonymousRead` STILL IS NOT DECLARED, on either type. The reason has inverted: it is now the
+      ACCOUNT that is the blocker rather than the bucket. Shipping the bucket half alone would be a
+      ONE-step opt-in, which is the exact thing docs/plan/15's sentence forbids, and adding the
+      account-level first step means adding a property to a PUBLISHED, IMMUTABLE api-version — so it
+      is a new date on this type, not an edit. The order that works is: new api-version on
+      `accounts` carrying `publicAccess.enabled` (default false), then `anonymousRead` on
+      `accounts/buckets` at the same new date, gated on it. Doing the two in the other order, or at
+      one date, is how the two-step becomes one.
   - id: egress-is-not-derivable
     says: >
       docs/plan/15 § Metering makes storage.egress.gb "the meter customers care most about and the one

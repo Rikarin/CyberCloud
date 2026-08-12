@@ -40,6 +40,20 @@
         <ProjectReference Include="../../src/CyberCloud.Authorization/CyberCloud.Authorization.csproj"/>
         <ProjectReference Include="../../src/CyberCloud.Tenancy/CyberCloud.Tenancy.csproj"/>
         <ProjectReference Include="../../src/Providers/CyberCloud.Providers.Sample/CyberCloud.Providers.Sample/CyberCloud.Providers.Sample.csproj"/>
+        <!--
+          ⚠ THE FIRST SHIPPING PROVIDER THIS SUITE ATTACKS, and it is here for its CHILD type.
+          `CyberCloud.Storage/accounts/buckets` is the first depth-2 type outside a fixture, so it is
+          the first thing in the tree for which "the boundary holds one level down" is a claim about
+          real code — a child's ReBAC `parent` edge names its PARENT RESOURCE rather than its resource
+          group, so its visibility is decided by a rewrite through an object in the tenant's own tuple
+          store. Its parent is in the list too, because a child cannot be created until its parent
+          exists in the attacker's tenant as well as the victim's.
+
+          ⚠ This is the PROVIDER assembly, not its .Conformance or .Tests one. An attacker's suite
+          that borrowed a provider's own fixtures would inherit whatever they assume; everything here
+          is built from the public contracts, the way an outside caller would build it.
+        -->
+        <ProjectReference Include="../../src/Providers/CyberCloud.Providers.Storage/CyberCloud.Providers.Storage/CyberCloud.Providers.Storage.csproj"/>
     </ItemGroup>
 
 </Project>

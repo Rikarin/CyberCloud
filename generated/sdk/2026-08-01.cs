@@ -1436,3 +1436,109 @@ public sealed partial class StorageAccountCollection {
     /// <summary>The Storage accounts in this group, paged.</summary>
     public partial AsyncPageable<StorageAccountResource> GetAllAsync(CancellationToken cancellationToken = default);
 }
+
+/// <summary>The body of a CyberCloud.Storage/accounts/buckets.</summary>
+/// <remarks>An S3 bucket inside a managed object-storage account, with an optional size limit and optional object versioning.</remarks>
+public sealed partial class BucketData {
+
+    /// <summary>The region the bucket is billed in.</summary>
+    /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+    [JsonPropertyName("location")]
+    public required string Location { get; set; }
+
+    /// <summary>The cluster whose namespace holds the bucket. Must be the cluster the account is in — nothing checks that, and a bucket placed elsewhere is applied into a namespace with no object store in it.</summary>
+    /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+    [JsonPropertyName("clusterId")]
+    public required Guid ClusterId { get; set; }
+
+    /// <summary>The bucket's size limit, in Kubernetes quantity form. Empty means no limit other than the account's own provisioned capacity. ⚠ This is a limit inside capacity the account already reserved; it does not add any, and it is not what the bucket is billed on.</summary>
+    /// <remarks>Defaults to "" when left unset.</remarks>
+    [JsonPropertyName("size")]
+    public string? Size { get; set; }
+
+    /// <summary>Whether the bucket keeps previous versions of an overwritten object. Off by default. ⚠ docs/plan/15 § Object storage: SeaweedFS' S3 implementation is "good but not complete" and names object versioning as one of the partial areas, so the supported-operations table for the deployed version — not this property — is what says how completely it behaves.</summary>
+    /// <remarks>Defaults to false when left unset.</remarks>
+    [JsonPropertyName("versioning")]
+    public bool? Versioning { get; set; }
+
+    /// <summary>Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.</summary>
+    [JsonPropertyName("tags")]
+    public IDictionary<string, string> Tags { get; set; } = new Dictionary<string, string>(StringComparer.Ordinal);
+}
+
+/// <summary>One Bucket, and the operations on it.</summary>
+public sealed partial class BucketResource {
+    /// <summary>The resource's fully qualified id.</summary>
+    public string Id { get; init; } = string.Empty;
+
+    /// <summary>The body, projected at this api-version.</summary>
+    public BucketData Data { get; init; } = new();
+
+    /// <summary>Re-reads the resource.</summary>
+    public partial Task<Response<BucketResource>> GetAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Amends the resource. A merge patch: what is not set is not changed.</summary>
+    public partial Task<Operation<BucketResource>> UpdateAsync(
+        WaitUntil waitUntil,
+        BucketData data,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Deletes the resource. ⚠ Permanent: this type declares no soft-delete window.</summary>
+    public partial Task<Operation> DeleteAsync(
+        WaitUntil waitUntil,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>What stats returns.</summary>
+    public sealed partial class StatsResult {
+
+        /// <summary>How many objects the bucket holds, as of the last sample.</summary>
+        [JsonPropertyName("objectCount")]
+        public required long ObjectCount { get; set; }
+
+        /// <summary>When the two figures above were sampled, RFC 3339. ⚠ Returned because a sampled number with no timestamp is a number a caller will read as live.</summary>
+        [JsonPropertyName("sampledAt")]
+        public required DateTimeOffset SampledAt { get; set; }
+
+        /// <summary>How many bytes the bucket holds before replication, as of the last sample. ⚠ Sampled rather than live — docs/plan/15 § Metering samples SeaweedFS volume stats hourly per bucket — so it is not a number to write an assertion against immediately after a PUT.</summary>
+        [JsonPropertyName("sizeBytes")]
+        public required long SizeBytes { get; set; }
+    }
+
+    /// <summary>Stats. ⚠ An action never creates — a POST to a name that does not exist is a 404.</summary>
+    public partial Task<Response<StatsResult>> StatsAsync(
+        CancellationToken cancellationToken = default);
+}
+
+/// <summary>The Buckets in one parent.</summary>
+/// <remarks>⚠ Every write is long-running: docs/plan/08 § The write path, end to end
+/// ends in a 202 for every verb, so there is no synchronous overload to offer.
+/// ⚠ The leading parameter(s) name the ancestors this type nests inside —
+/// docs/plan/12 § Child resources addresses a child
+/// '…/{parentType}/{parentName}/{childType}/{childName}', so the parent's name is
+/// part of the address rather than part of the body.</remarks>
+public sealed partial class BucketCollection {
+    /// <summary>The resource type these address.</summary>
+    public const string ResourceType = "CyberCloud.Storage/accounts/buckets";
+
+    /// <summary>The URL template, with the api-version this file was generated at.</summary>
+    public const string PathTemplate = "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Storage/accounts/{accountsName}/buckets/{resourceName}";
+
+    /// <inheritdoc cref="GeneratedApiVersion.Value" />
+    public const string ApiVersion = "2026-08-01";
+
+    /// <summary>Creates or replaces one Bucket.</summary>
+    /// <remarks>⚠ Poll with GetProgressAsync() rather than only WaitForCompletionAsync():
+    /// docs/plan/21 § The .NET SDK — "Azure's LROs expose no progress; ours do and the
+    /// SDK should not hide it".</remarks>
+    public partial Task<Operation<BucketResource>> CreateOrUpdateAsync(
+        WaitUntil waitUntil,
+        string accountsName, string name,
+        BucketData data,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Reads one Bucket by name.</summary>
+    public partial Task<Response<BucketResource>> GetAsync(string accountsName, string name, CancellationToken cancellationToken = default);
+
+    /// <summary>The Buckets in one parent, paged.</summary>
+    public partial AsyncPageable<BucketResource> GetAllAsync(string accountsName, CancellationToken cancellationToken = default);
+}

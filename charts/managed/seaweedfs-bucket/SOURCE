@@ -1,0 +1,43 @@
+# Provenance — charts/README.md § `SOURCE` is required, including when nothing was forked.
+#
+# ADR-010: "Their charts are a starting point, not a dependency. Where a chart is close, fork it into
+# charts/ with the upstream commit recorded in a SOURCE file." Nothing was forked here, and
+# `vendored: none` is an answer to "where did this come from" where a missing file is not.
+
+vendored: none
+upstream: https://github.com/seaweedfs/seaweedfs-operator
+
+# The upstream API this chart's template targets. ⚠ An API group/version, not a commit: nothing is
+# vendored, so there is no upstream tree to pin.
+upstream-api: seaweed.seaweedfs.com/v1
+
+engine: https://github.com/seaweedfs/seaweedfs
+
+# ⚠ THE FIELD LIST BELOW IS INHERITED FROM charts/managed/seaweedfs/SOURCE'S REVIEW OF 2026-08-12
+# AND WAS NOT RE-READ AGAINST UPSTREAM ON THIS DATE. That review recorded, from
+# `api/v1/seaweed_types.go` and its siblings, that the operator ships twelve CRDs beside `Seaweed`
+# and that `BucketSpec` is:
+#
+#     (name, clusterRef, reclaimPolicy, adoptExisting, versioning, objectLock, quota, owner,
+#      access, placement, anonymousRead)
+#
+# — "docs/plan/15 § The resource model's child types almost one to one". This chart renders FOUR of
+# those eleven and the seven omissions are each argued at
+# `StorageBuckets.Schema2026`'s remarks in src/Providers/CyberCloud.Providers.Storage.
+#
+# ⚠ WHAT THAT MEANS FOR A READER, STATED RATHER THAN IMPLIED: `spec.clusterRef` is rendered as a
+# STRING naming the Seaweed in the same namespace, and the recorded review names the field without
+# giving its Go type. If upstream spells it as an object (`{name, namespace}`) rather than a string,
+# every Bucket this chart renders is refused by the CRD's own schema at apply time — visibly, per
+# object, with the API server's own message, which is the failure mode this platform prefers to a
+# silent one. It is called out here because a field list is weaker evidence than a struct, and
+# saying which claim is weak is the point of this file.
+inherited-review: charts/managed/seaweedfs/SOURCE, reviewed 2026-08-12
+
+# ⚠ THE MUTATING WEBHOOK, WHICH IS WHY `StorageBuckets.Matches` IS CONTAINMENT RATHER THAN EQUALITY.
+# `api/v1/seaweed_webhook.go` registers a defaulter whose body is a log line and
+# `// TODO(user): fill in your defaulting logic.` It mutates nothing at the reviewed commit — so an
+# equality comparison would pass against this operator and break silently against whichever release
+# fills the TODO in, with the symptom being every bucket stuck in InProgress while its cluster is
+# perfectly correct.
+upstream-webhook: mutating, defaulter unimplemented as of 2026-08-12

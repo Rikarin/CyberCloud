@@ -1,0 +1,50 @@
+# A bucket inside a managed object-storage account — the configuration surface, once.
+#
+# ⚠ EVERY NON-`@internal` BLOCK BELOW IS GENERATED from StorageBuckets.Schema2026 by
+# `./build.sh Charts`, and so is values.schema.json. ADR-010 § Which end authors the schema: "The C#
+# ResourceSchema is authored. The chart's @param annotations are generated from it and diffed."
+# Editing a generated row here is undone on the next run and fails the build in between; add the
+# field in C# instead.
+#
+# ⚠ THE GENERATED HALF IS TWO ROWS AND THAT IS THE POINT OF THE TYPE RATHER THAN A THIN CHART. A
+# bucket's whole tenant-facing surface is docs/plan/15 § The resource model's own list — "name,
+# quota, versioning" — of which the name is the ADDRESS. Seven further BucketSpec fields exist
+# upstream and are each declined with an argument at StorageBuckets.Schema2026; the one worth
+# repeating is `anonymousRead`, which cannot ship as a bucket property because docs/plan/15 requires
+# a TWO-STEP opt-in and the first step is an account-level switch that does not exist.
+
+## @param quota {object} How much the bucket may hold.
+quota:
+  ## @param size {string} The bucket's size limit, in Kubernetes quantity form. Empty means no limit other than the account's own provisioned capacity. ⚠ This is a limit inside capacity the account already reserved; it does not add any, and it is not what the bucket is billed on.
+  ## @pattern (\d+(\.\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)?
+  ## @example "50Gi"
+  size: ""
+
+## @param versioning {boolean} Whether the bucket keeps previous versions of an overwritten object. Off by default. ⚠ docs/plan/15 § Object storage: SeaweedFS' S3 implementation is "good but not complete" and names object versioning as one of the partial areas, so the supported-operations table for the deployed version — not this property — is what says how completely it behaves.
+versioning: false
+
+## @param platform {object} Resource identity injected by the reconciler. Not a tenant-facing setting.
+## @internal Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.
+platform:
+  ## @param tenantId {string} Tenant GUID, rendered into the cybercloud.io/tenant-id label.
+  tenantId: ""
+  ## @param subscriptionId {string} Subscription GUID, rendered into the cybercloud.io/subscription-id label.
+  subscriptionId: ""
+  ## @param resourceGroup {string} Resource group name, rendered into the cybercloud.io/resource-group label.
+  resourceGroup: ""
+  ## @param resourceId {string} Resource GUID, rendered into the cybercloud.io/resource-id label.
+  resourceId: ""
+  ## @param resourceType {string} Fully qualified resource type, rendered into the cybercloud.io/resource-type label.
+  resourceType: CyberCloud.Storage/accounts/buckets
+  ## @param apiVersion {string} The api-version the resource was last written at, rendered into the cybercloud.io/api-version label.
+  apiVersion: "2026-08-01"
+  ## @param managedBy {string} Value of the cybercloud.io/managed-by label. Constant, and the selector every informer filters on.
+  managedBy: cybercloud
+  ## @param parentName {string} The name of the account this bucket lives in. Rendered into spec.clusterRef and into the object's own name.
+  parentName: ""
+  ## @param bucketName {string} The bucket's own resource name — the name an S3 client addresses. Empty means derive it from the release name.
+  bucketName: ""
+
+## @param nameOverride {string} Replace the generated object-name stem. Empty means derive it from the release name.
+## @internal Helm plumbing. Nothing about it belongs in a resource body.
+nameOverride: ""

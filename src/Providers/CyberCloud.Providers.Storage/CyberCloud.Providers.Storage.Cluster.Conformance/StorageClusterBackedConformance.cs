@@ -31,3 +31,31 @@ public sealed class StorageAccountLifecycleConformance(ClusterConformanceFixture
 
 /// <summary>docs/plan/24 § Phase 1's exit criterion 3, against the managed object-storage provider.</summary>
 public sealed class StorageAccountSiloKillConformance : SiloKillConformanceTests<StorageCase>;
+
+/// <summary>
+///     The same two suites against the <b>child</b> type, <c>CyberCloud.Storage/accounts/buckets</c>.
+/// </summary>
+/// <remarks>
+///     <para>
+///         ⚠ <b>Two more class declarations in the SAME project, not a project of its own.</b> A
+///         second type in a namespace needs no second <c>*.Cluster.Conformance</c>: the fixture is
+///         generic over the case source, so the only thing a child costs here is the two lines below.
+///     </para>
+///     <para>
+///         ⚠ <b>What this half does against a real API server that the Docker-free half cannot:
+///         create the ACCOUNT first.</b> <c>ClusterConformanceHarness.CreateAncestorsAsync</c> drives
+///         the ancestor's own case through the real write path before the child's address is usable,
+///         so a bucket here is applied into a namespace where a <c>Seaweed</c> genuinely exists —
+///         and the parent-existence 404 is an assertion about a name that was really claimed rather
+///         than about a fixture. ⚠ It still does not run a SeaweedFS operator: the CRD stub the
+///         harness derives from <c>ProviderConformanceCase.Objects</c> makes the REST path exist and
+///         nothing more, so no bucket here has ever held an object.
+///     </para>
+/// </remarks>
+/// <param name="fixture">The harness.</param>
+public sealed class StorageBucketLifecycleConformance(ClusterConformanceFixture<StorageBucketCase> fixture)
+    : ClusterConformanceTests<StorageBucketCase>(fixture),
+        IClassFixture<ClusterConformanceFixture<StorageBucketCase>>;
+
+/// <summary>docs/plan/24 § Phase 1's exit criterion 3, against the bucket child type.</summary>
+public sealed class StorageBucketSiloKillConformance : SiloKillConformanceTests<StorageBucketCase>;

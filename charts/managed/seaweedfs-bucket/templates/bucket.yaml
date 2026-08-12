@@ -1,0 +1,81 @@
+{{/*
+seaweedfs-operator `Bucket` — docs/plan/15 § The resource model, "buckets/{name}".
+
+⚠ This renders a custom resource; it does not install the operator, and it does not create the
+account. The account is CyberCloud.Storage/accounts, one chart directory over, and the write path —
+not this chart — is what refuses a bucket whose account does not exist:
+ResourceManagerService.ResolveAsync resolves the parent's index binding on every CREATE and answers
+the SAME 404 as an unauthorized read, because a distinct "no such parent" would be an existence
+oracle for anyone who may write in a resource group but may not read a particular account.
+
+⚠ ONE object, and no Service, no Secret and no ServiceMonitor. A bucket has no endpoint of its own:
+it is addressed through its account's S3 gateway, on that account's endpoint, with that account's
+credentials. There is no per-bucket credential in SeaweedFS to render even if there were one to
+issue — see charts/managed/seaweedfs/conformance.yaml § owed, `listkeys-has-no-handler`.
+*/}}
+apiVersion: seaweed.seaweedfs.com/v1
+kind: Bucket
+metadata:
+  {{/*
+    ⚠ The account's name is IN this name, and the joining happened before this chart saw it — see
+    `seaweedfs-bucket.objectName`. Two accounts in one resource group share a namespace, so a bucket
+    named for itself alone would have two tenants' buckets fighting over one object, each converging
+    by overwriting the other, with neither reporting an error.
+  */}}
+  name: {{ include "seaweedfs-bucket.objectName" . }}
+  labels:
+    {{- include "seaweedfs-bucket.platformLabels" . | nindent 4 }}
+spec:
+  {{/*
+    ⚠ `spec.name` IS THE BUCKET'S OWN NAME AND `metadata.name` IS NOT. The S3 bucket a tenant
+    addresses is `{bucketName}`; rendering the qualified object name here would hand them a bucket at
+    an address neither they nor docs/plan/15 named.
+  */}}
+  name: {{ include "seaweedfs-bucket.bucketName" . | quote }}
+
+  {{/*
+    ⚠ THE ONE FIELD THAT MAKES THIS A CHILD, AND IT COMES FROM THE ADDRESS RATHER THAN THE BODY.
+    docs/plan/12 § Child resources makes the parent a pure function of the address and
+    ResourceId.Parent is that function; a `parentAccount` property in the body would be a second
+    spelling of the same fact, and the two would disagree the first time a body was sent under the
+    wrong path. `platform.parentName` is @internal in values.yaml for exactly that reason — it is
+    projected out of the address by the reconciler, not set by a tenant.
+
+    ⚠ AND IT IS RENDERED AS A STRING ON WEAKER EVIDENCE THAN ANYTHING ELSE IN EITHER CHART. SOURCE
+    says so in as many words: the recorded review names `clusterRef` as a BucketSpec field without
+    giving its Go type. If upstream spells it `{name, namespace}`, every Bucket here is refused by
+    the CRD's own schema at apply time — per object, with the API server's own message.
+  */}}
+  clusterRef: {{ .Values.platform.parentName | quote }}
+
+  {{/*
+    ⚠ A limit INSIDE capacity the account already reserved, which is why no quota meter is declared
+    for it. StorageProvider's StorageDrawn already reserves every volume server's PVC; a derived
+    meter here would reserve the same gibibyte twice, once as the disk it is written to and once as
+    the ceiling on part of it. Omitted entirely when empty, so the CRD's own default stands rather
+    than a "" this chart invented.
+  */}}
+  {{- if .Values.quota.size }}
+  quota: {{ .Values.quota.size | quote }}
+  {{- end }}
+
+  versioning: {{ .Values.versioning }}
+
+  {{/*
+    ⚠ NO `anonymousRead`, AND ITS ABSENCE IS THE MOST DELIBERATE LINE IN THIS FILE. docs/plan/15:
+    "Public access is off by default at the account level and requires an explicit TWO-STEP opt-in",
+    and it calls a publicly readable bucket "the most-reported cloud misconfiguration in existence".
+    Shipping the bucket half alone is a ONE-step opt-in — the exact thing that sentence forbids. The
+    first step is an account-level switch, and the account's api-version is published and immutable,
+    so it is a new date on the PARENT rather than a property here. Leaving the field unset rather
+    than rendering `false` also means the day that switch exists, turning it on is a new field and
+    not a changed value.
+
+    ⚠ NO `reclaimPolicy`, NO `adoptExisting`, NO `objectLock`, NO `placement`, NO `owner`, NO
+    `access`. Each is argued at StorageBuckets.Schema2026's remarks. The shortest form: Retain leaves
+    object data alive with no resource addressing it; adoptExisting binds a platform resource to
+    storage the platform did not create; objectLock and versioning are the two SeaweedFS S3 areas
+    docs/plan/15 calls "partial or absent"; placement belongs to the account, whose own `replication`
+    is immutable for the same reason; and owner and access both name S3 identities, of which there
+    are none.
+  */}}

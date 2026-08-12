@@ -259,6 +259,19 @@
         "summary": "A managed S3-compatible object store on SeaweedFS, with replicated volume servers, a filer and a scalable S3 gateway.",
         "declared": true
       }
+    },
+    {
+      "type": "CyberCloud.Storage/accounts/buckets",
+      "apiVersions": [
+        "2026-08-01"
+      ],
+      "display": {
+        "name": "Bucket",
+        "plural": "Buckets",
+        "alias": "bucket",
+        "summary": "An S3 bucket inside a managed object-storage account, with an optional size limit and optional object versioning.",
+        "declared": true
+      }
     }
   ],
   "x-cybercloud-api-versions": [

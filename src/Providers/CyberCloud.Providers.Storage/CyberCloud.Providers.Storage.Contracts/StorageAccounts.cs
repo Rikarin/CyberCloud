@@ -52,10 +52,27 @@ namespace CyberCloud.Providers.Storage.Contracts;
 ///         <c>charts/managed/seaweedfs/SOURCE</c> records the line.
 ///     </para>
 ///     <para>
-///         ⚠ <b><c>buckets</c> is docs/plan/15's other half and is not declared.</b> The operator
-///         <i>does</i> ship a <c>Bucket</c> CRD, so unlike NATS accounts there is a real object to
-///         render — the blocker is the conformance harness being single-type, which is somebody else's
-///         to close. <c>charts/managed/seaweedfs/conformance.yaml § owed</c>, <c>bucket-child-type</c>.
+///         ⚠ <b><c>buckets</c> is docs/plan/15's other half and SHIPS — see
+///         <see cref="StorageBuckets" />.</b> ⚠ <b>The claim this paragraph used to make was wrong
+///         within the hour and the correction is worth keeping.</b> It said the blocker was "the
+///         conformance harness being single-type, which is somebody else's to close"; that harness
+///         gained <c>IProviderCaseSource.Ancestors</c> on 2026-08-12, the same day, and what was left
+///         was scope. What an account owes its child now is one thing and it is a
+///         <i>read-only</i> one: <see cref="StorageBuckets.ClusterRefOf" /> renders this account's
+///         <b>name</b> into every <c>Bucket</c>'s <c>spec.clusterRef</c>, off the child's address, so
+///         renaming an account is not a thing that could ever work and nothing offers it.
+///     </para>
+///     <para>
+///         ⚠ <b>WHAT AN ACCOUNT DOES NOT DO WHEN IT IS DELETED, WHICH IS THE HALF THAT MATTERS.</b>
+///         [08 § Deleting a parent resource that has children](../../../../docs/plan/08-resource-manager.md)
+///         decides that a delete is <i>refused</i> — <c>409</c> with a count — while a resource still
+///         has children, and that decision is <b>not implemented</b>: the platform cannot enumerate
+///         children. So deleting an account today tears down its <c>Seaweed</c> and leaves every
+///         bucket under it addressable, writable, and pointing at a cluster that is gone.
+///         <c>charts/managed/seaweedfs-bucket/conformance.yaml § owed</c>,
+///         <c>parent-delete-orphans-buckets</c>, says what it costs and why refusal — not cascade —
+///         is the choice that stays right when the 7-day soft-delete window docs/plan/06 promises
+///         arrives.
 ///     </para>
 ///     <para>
 ///         ⚠ <b><see cref="Schema2026" /> is the authored side of the pair</b> and

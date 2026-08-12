@@ -5,6 +5,8 @@ using CyberCloud.Core.Contracts;
 using CyberCloud.Core.Time;
 using CyberCloud.Providers.Sample;
 using CyberCloud.Providers.Sample.Contracts;
+using CyberCloud.Providers.Storage;
+using CyberCloud.Providers.Storage.Contracts;
 using CyberCloud.ResourceManager;
 using CyberCloud.ResourceManager.Registry;
 using Microsoft.Extensions.DependencyInjection;
@@ -86,6 +88,32 @@ public static class IsolationCatalog {
             []
         );
 
+    /// <summary>
+    ///     The shipping object-storage account, which the bucket in the list below nests inside.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Declared BEFORE <see cref="Targets" />, as <see cref="Probes" /> is, and the compiler
+    ///     is what enforces it</b> — a static initializer that read this after <c>Targets</c> would
+    ///     put a <see langword="null" /> ancestor in the list, which is <c>CS8601</c> here and would
+    ///     have been an ancestorless child at run time.
+    ///     <para>
+    ///         ⚠ <b>Built from the provider's public contracts, exactly as an outside caller would.</b>
+    ///         This suite deliberately does not reuse <c>StorageCase</c> — an attacker's suite that
+    ///         borrowed the provider's own conformance fixture would inherit whatever that fixture
+    ///         assumes, and the point of docs/plan/03 § test/'s separate project is that this one
+    ///         assumes nothing.
+    ///     </para>
+    /// </remarks>
+    static IsolationTarget StorageAccount { get; } =
+        new(
+            "CyberCloud.Storage/accounts",
+            StorageAccounts.Type,
+            StorageAccounts.V2026,
+            cluster => StorageAccounts.Body(cluster),
+            StorageAccounts.ListKeysAction,
+            []
+        );
+
     /// <summary>The providers under attack.</summary>
     public static ImmutableArray<IsolationTarget> Targets { get; } = [
         new(
@@ -118,6 +146,29 @@ public static class IsolationCatalog {
             cluster => Conformance.Reference.Probes.ChildBody(cluster),
             "ping",
             [Probes]
+        ),
+        // ⚠ THE FIRST SHIPPING PROVIDER IN THIS LIST, AND ITS CHILD, AND BOTH HALVES ARE THE POINT.
+        //
+        // Until now every target here was a fixture: CyberCloud.Sample/widgets is docs/plan/24's
+        // deliberately-trivial instrument and the reference provider exists only so the shared suite
+        // has something to run against. So "every provider, every verb, wrong tenant → 404" was a
+        // claim about two types that nobody ships. This is the first row an outside caller could
+        // actually address, and — because it is object storage — the first whose 404 protects
+        // something a tenant would notice losing.
+        //
+        // ⚠ AND THE CHILD IS WHY THE ACCOUNT IS HERE RATHER THAN ONLY THE BUCKET. A child cannot be
+        // created until its parent exists, in the ATTACKER'S tenant as well as the victim's — see
+        // CreateAncestorsAsync — so the account has to be a target in its own right for the bucket to
+        // be attackable at all. That the account then gets the whole sweep for free is the shape this
+        // list is for.
+        StorageAccount,
+        new(
+            "CyberCloud.Storage/accounts/buckets",
+            StorageBuckets.Type,
+            StorageBuckets.V2026,
+            cluster => StorageBuckets.Body(cluster),
+            StorageBuckets.StatsAction,
+            [StorageAccount]
         )
     ];
 
@@ -381,7 +432,15 @@ public sealed class IsolationCluster : IAsyncLifetime {
         cluster = builder.Build();
         await cluster.DeployAsync();
 
-        Registry = ProviderRegistry.Build([new SampleProvider(), new Conformance.Reference.ReferenceProvider()]);
+        // ⚠ THE SAME THREE PROVIDERS THE SILO'S CONFIGURATOR REGISTERS, AND THE TWO LISTS ARE TWO
+        // COPIES OF ONE FACT. The silo builds its own registry from `GetServices<IResourceProvider>()`
+        // — ResourceManagerSiloBuilderExtensions — and this one is the CLIENT'S, constructed the way
+        // the gateway constructs it. A provider added to one and not the other produces "'…' is not a
+        // resource type this platform serves" from whichever half was forgotten, which is a clear
+        // enough message that a third copy to diff them would cost more than it catches.
+        Registry = ProviderRegistry.Build(
+            [new SampleProvider(), new Conformance.Reference.ReferenceProvider(), new StorageProvider()]
+        );
 
         Manager = new ResourceManagerService(
             Registry,
@@ -525,6 +584,14 @@ public sealed class IsolationCluster : IAsyncLifetime {
                     // reconciler is not registered fails inside the silo — where nothing on the
                     // request path can attribute it to the harness.
                     services.AddSingleton<Conformance.Reference.SampleReconciler>();
+
+                    // ⚠ The first SHIPPING provider in this suite, and both of its types. One
+                    // IResourceProvider registration carries both — StorageProvider.Describe chains
+                    // the child onto the parent — and each type still needs its own reconciler
+                    // singleton, because ProviderRegistry stores them by CONCRETE TYPE.
+                    services.AddSingleton<IResourceProvider, StorageProvider>();
+                    services.AddSingleton<StorageAccountReconciler>();
+                    services.AddSingleton<StorageBucketReconciler>();
 
                     services.TryAddSingleton<ILoggerFactory>(_ => NullLoggerFactory.Instance);
                 }

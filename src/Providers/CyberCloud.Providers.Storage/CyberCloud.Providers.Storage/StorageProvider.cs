@@ -7,9 +7,30 @@ using System.Text.Json;
 namespace CyberCloud.Providers.Storage;
 
 /// <summary>
-///     Managed object storage — one resource type, on SeaweedFS.
+///     Managed object storage — an account and the buckets inside it, on SeaweedFS.
 /// </summary>
 /// <remarks>
+///     <para>
+///         ⚠ <b>THE FIRST PROVIDER IN THE TREE WITH TWO RESOURCE TYPES, AND THE SECOND IS A CHILD OF
+///         THE FIRST.</b> docs/plan/15 § The three kinds names both halves in one row — <i>"Object ·
+///         <c>CyberCloud.Storage/accounts</c> <b>+ <c>/buckets</c></b>"</i> — and until now no
+///         shipping provider had declared a nested type at all. What it cost, measured rather than
+///         estimated: one chained block in <see cref="Describe" />, one contracts file, one
+///         reconciler, one chart, one <c>ProviderConformanceCase</c> with <b>one extra member</b>,
+///         and two lines in the <c>*.Cluster.Conformance</c> project. Nothing in
+///         <c>test/CyberCloud.Conformance</c>, <c>CliEmitter</c> or <c>SdkEmitter</c> changed —
+///         <c>FormsEmitter</c> is the one surface that could not carry it, and that is recorded at
+///         <c>charts/managed/seaweedfs-bucket/conformance.yaml § owed</c>,
+///         <c>forms-cannot-address-a-child</c>, rather than worked around.
+///     </para>
+///     <para>
+///         ⚠ <b>Nothing in the bucket half looks the account up.</b> docs/plan/12 § Child resources
+///         makes the parent a pure function of the address; the parent-existence check belongs on the
+///         create, in <c>ResourceManagerService.ResolveAsync</c>, where it answers the same 404 as an
+///         unauthorized read. ⚠ On this provider there is a second reason: the account never reports
+///         <c>Succeeded</c> — see below — so a bucket that waited for its parent to be healthy would
+///         never converge for anybody.
+///     </para>
 ///     <para>
 ///         ⚠ <b>THE FIRST PROVIDER IN THE TREE THAT IS NOT A ROW OF docs/plan/12.</b> That document's
 ///         catalogue is <i>"databases, caches, brokers, search"</i> and contains no storage row at all.
@@ -133,7 +154,64 @@ public sealed class StorageProvider : IResourceProvider {
             )
             .Chart(StorageAccounts.ChartName)
             .SupportsTags()
-            .RequiresCluster(StorageAccounts.ClusterIdPointer);
+            .RequiresCluster(StorageAccounts.ClusterIdPointer)
+            // ── The child, docs/plan/15 § The three kinds' other half ─────────────────────────
+            //
+            // ⚠ THE FIRST CHILD TYPE IN A SHIPPING PROVIDER, AND IT COSTS ONE CHAINED BLOCK. Every
+            // capability below is one the shared conformance suite has an assertion for — a child
+            // that declared only a schema and three permissions would have no reconciler for
+            // TheTypeIsRegisteredWithAReconcilerAndAllThreePermissions, own no objects for the four
+            // cluster-facing assertions, declare no action for the two POST ones, and refuse tags.
+            // A case for it would then pass a suite that quietly asked less.
+            //
+            // ⚠ THE BLOCKER THIS PROVIDER RECORDED WHEN IT SHIPPED THE PARENT IS CLOSED, AND THE
+            // CORRECTION IS THE USEFUL HALF. `charts/managed/seaweedfs/conformance.yaml § owed`,
+            // `bucket-child-type`, said the conformance harness could not address a depth-2 type:
+            // ProviderConformanceCase was single-type, ProviderTestCluster.Address built a
+            // ResourceId with no ParentNames, CliEmitter.Address had a hard-coded four-flag list and
+            // SdkEmitter.AppendCollection took no ancestor parameters. All four landed on
+            // 2026-08-12, the same day the note was written. What was left was scope, and this is it.
+            //
+            // ⚠ NO `.Meter(...)` DERIVATION, WHICH IS A DECISION RATHER THAN AN OMISSION. A bucket's
+            // quota is a limit INSIDE capacity the account already reserved — StorageDrawn counts
+            // every volume server's PVC — so a derived storage meter here would reserve the same
+            // gibibyte twice, once as the disk it is written to and once as the ceiling on part of
+            // it. That is the same double-count StorageDrawn refuses when it declines to multiply by
+            // `replication`. What a bucket genuinely costs is measured rather than reserved:
+            // docs/plan/15 § Metering samples `storage.object.gb_month` "hourly from SeaweedFS volume
+            // stats per bucket", which is docs/plan/22's usage pipeline and not a pure function of a
+            // body. `QuotaMeter.Resources` — the count of resources — is what a bucket actually draws
+            // at write time.
+            .ResourceType(StorageBuckets.TypePath)
+            .ApiVersion(StorageBuckets.V2026, StorageBuckets.Schema2026)
+            .Reconciler<StorageBucketReconciler>()
+            .Meters(QuotaMeter.Resources)
+            .Permissions("read", "write", "delete")
+            .Action(
+                StorageBuckets.StatsAction,
+                ActionKind.Post,
+                StorageBuckets.StatsPermission,
+                response: StorageBuckets.StatsResponse
+            )
+            // ⚠ `bucket`, and the check the parent's own comment demands is the one that made this
+            // safe: `CliEmitter` derives the CLI group key from the provider namespace, so
+            // `CyberCloud.Storage` is already the group `storage` — which is why the parent ships as
+            // `objectstore` rather than the `storage` docs/plan/21 § Grammar would spell. `bucket` is
+            // neither a group key (sample, dbforpostgresql, cache, messaging, storage) nor any
+            // existing alias, and `StorageBucketDeclarationTests` asserts both halves against
+            // literals. ⚠ `ProviderRegistry.Build` still refuses only a DUPLICATE short name and
+            // still never compares one against a group name — `short-name-collides-with-the-group`
+            // stays owed, and this type is the second one that had to satisfy it by hand.
+            .Display(
+                "Bucket",
+                "Buckets",
+                shortName: "bucket",
+                summary: "An S3 bucket inside a managed object-storage account, with an optional size "
+                + "limit and optional object versioning."
+            )
+            .Chart(StorageBuckets.ChartName)
+            .SupportsTags()
+            .RequiresCluster(StorageBuckets.ClusterIdPointer);
     }
 
     // ── What an account draws ──────────────────────────────────────────────────────────────────
