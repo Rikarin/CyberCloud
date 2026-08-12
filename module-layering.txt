@@ -1,0 +1,96 @@
+# module-layering.txt — which module may reference which.
+#
+# docs/plan/03 § Assembly graph rules, rule 7: "Every edge between two modules is declared here, and
+# the declaration is acyclic." Enforced by the Assembly graph gate in build/Build.Architecture.cs.
+#
+# A MODULE is an assembly name truncated to its first two dotted segments, so CyberCloud.Identity
+# and CyberCloud.Identity.Contracts are one module — the .Contracts seam is internal to a module and
+# is not what this file is about. A provider's module is its family: CyberCloud.Providers.Sample and
+# CyberCloud.Providers.Sample.Contracts are one. src/Hosts and cli/ are out of scope; a host is the
+# composition root, referencing modules is its job, and nothing references a host, so no host can be
+# part of a cycle. What a host may reference is rules 4 and 5.
+#
+# Enforced in three directions, each catching a different mistake:
+#
+#   * an edge in the shipping graph that is not a line here is a coupling nobody reviewed;
+#   * a line here with no edge behind it is standing permission for a coupling nobody reviewed —
+#     the next person to need it will find it already granted;
+#   * a cycle in the lines below is two modules that have become one, and no line may declare that.
+#
+# ⚠ ADDING A LINE IS A REVIEW REQUEST, NOT A BUILD FIX. The question a reviewer is being asked is
+# "may this module take a dependency on that one, forever" — module independence is what lets an
+# OTP delivery fail without taking sign-in down (docs/plan/17, and the ⚠ blocks in
+# CyberCloud.Communication.csproj that say which modules it will not reference and why). If the
+# honest answer is "it should go through a seam instead", the line does not belong here.
+#
+# ⚠ WHAT THIS FILE CANNOT SEE. Rule 7 reads the AssemblyRef table and the ProjectReference set. Both
+# miss a dependency expressed some other way — a resource id, a grain key, a string that names a
+# type. That is the point: docs/plan/03 § Assembly graph rules, rule 2 sends cross-provider traffic
+# "through CyberCloud.ResourceManager by resource id" precisely so that it is not an assembly edge,
+# and the same holds between modules. An empty column here is not proof of independence at runtime.
+#
+# One "Module -> Module" per line. Blank lines and lines starting with `#` are ignored. Test
+# projects are out of scope; the gate reads shipping assemblies only.
+
+# ── The floor ──────────────────────────────────────────────────────────────────────────────────
+# CyberCloud.Core references nothing at all — that is rule 1, and it is why it appears only on the
+# right of an arrow. Everything below reaches it, most of them through CyberCloud.Core.Contracts.
+CyberCloud.Authorization -> CyberCloud.Core
+CyberCloud.Communication -> CyberCloud.Core
+CyberCloud.Kubernetes -> CyberCloud.Core
+CyberCloud.ServiceDefaults -> CyberCloud.Core
+CyberCloud.Tenancy -> CyberCloud.Core
+
+# ── Tenancy — docs/plan/06 ─────────────────────────────────────────────────────────────────────
+# The tenant and the shard map. It takes telemetry and health wiring from ServiceDefaults; nothing
+# comes back the other way, which is what keeps ServiceDefaults referenceable by a host that has no
+# tenants at all.
+CyberCloud.Tenancy -> CyberCloud.ServiceDefaults
+
+# ── The platform services ──────────────────────────────────────────────────────────────────────
+# Metering is billing: it reaches tenancy for the tenant a usage record belongs to, and nothing
+# reaches metering. CyberCloud.Communication.csproj § "WHY THIS DOES NOT REFERENCE
+# CyberCloud.Metering" is the other half of that sentence — the send path must not be able to be
+# slowed or failed by billing, so the edge exists in one direction only.
+CyberCloud.Metering -> CyberCloud.Core
+CyberCloud.Metering -> CyberCloud.Tenancy
+
+# ⚠ CyberCloud.Communication reaches CyberCloud.Core and NOTHING ELSE, and that is the single most
+# load-bearing absence in this file. docs/plan/17 makes the platform the sending module's first
+# customer — identity, monitor and billing all call INTO it. An edge the other way would let an OTP
+# delivery take the identity module down with it, which is exactly backwards for the module that
+# gates sign-in. The reverse edge below is the one that is allowed.
+CyberCloud.Identity -> CyberCloud.Communication
+
+# ── Identity — docs/plan/11 ────────────────────────────────────────────────────────────────────
+# Identity is a consumer of everything under it and a supplier to nothing here: only hosts and the
+# gateway reach it, and neither is in scope for this rule.
+CyberCloud.Identity -> CyberCloud.Authorization
+CyberCloud.Identity -> CyberCloud.Core
+CyberCloud.Identity -> CyberCloud.Tenancy
+
+# ── The resource manager — docs/plan/08 ────────────────────────────────────────────────────────
+# Authorization for the ReBAC check, Kubernetes for the fabric it projects onto, tenancy for the
+# tenant a resource id resolves within.
+CyberCloud.ResourceManager -> CyberCloud.Authorization
+CyberCloud.ResourceManager -> CyberCloud.Core
+CyberCloud.ResourceManager -> CyberCloud.Kubernetes
+CyberCloud.ResourceManager -> CyberCloud.Tenancy
+
+# ── Providers — docs/plan/03 § The .Contracts split ────────────────────────────────────────────
+# A provider declares a ProjectReference on CyberCloud.ResourceManager.Contracts and
+# CyberCloud.Kubernetes.Contracts and nothing else; the CyberCloud.Core and CyberCloud.Tenancy edges
+# below are types bound THROUGH those two — ResourceId, ResourceTypeName, TenantId — and are here
+# because rule 7 declares what is reached, not what is written down in a .csproj.
+#
+# ⚠ NO LINE BETWEEN TWO PROVIDERS MAY EVER BE ADDED HERE. Rule 2 forbids it outright and rule 7
+# cannot grant what rule 2 refuses: cross-provider traffic goes through CyberCloud.ResourceManager
+# by resource id. A line here would fail rule 2 and be deleted, not honoured.
+CyberCloud.Providers.DBforPostgreSQL -> CyberCloud.Core
+CyberCloud.Providers.DBforPostgreSQL -> CyberCloud.Kubernetes
+CyberCloud.Providers.DBforPostgreSQL -> CyberCloud.ResourceManager
+CyberCloud.Providers.DBforPostgreSQL -> CyberCloud.Tenancy
+CyberCloud.Providers.Sample -> CyberCloud.Core
+CyberCloud.Providers.Sample -> CyberCloud.Kubernetes
+CyberCloud.Providers.Sample -> CyberCloud.ResourceManager
+CyberCloud.Providers.Sample -> CyberCloud.Tenancy

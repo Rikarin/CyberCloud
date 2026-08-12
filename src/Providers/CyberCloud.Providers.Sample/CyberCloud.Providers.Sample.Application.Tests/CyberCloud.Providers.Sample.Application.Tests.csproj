@@ -39,7 +39,7 @@
       except its own host" — is not violated by this project, and not by an exemption. Rule 4 is
       evaluated over build/Build.Architecture.cs § ShippingAssemblies, which is built from projects
       where SuiteOwning(project) is null; every *.Tests project is claimed by a suite and is therefore
-      not a candidate for any of the six rules. The exemption is real, implicit, and stated here
+      not a candidate for any of the seven rules. The exemption is real, implicit, and stated here
       because nothing in that file says a test project is out of scope for rule 4 specifically.
     -->
 

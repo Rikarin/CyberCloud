@@ -18,9 +18,11 @@ namespace CyberCloud.Kubernetes.Tests;
 ///         compile-time closure of every provider in the platform at once.
 ///     </para>
 ///     <para>
-///         ⚠ These belong in <c>build/Build.Architecture.cs</c>, which docs/plan/03 says enforces the
-///         six rules and which does not implement them yet. Until it does, the rule that bites this
-///         part of the tree is asserted here, where it runs on every PR.
+///         ⚠ These belong in <c>build/Build.Architecture.cs</c>, which docs/plan/03 says enforces
+///         the seven rules — and which now does; "does not implement them yet" was true when this
+///         was written and is not any more. They are kept anyway, because this suite runs from inside
+///         the assembly that owns the rule and names the offending TYPE rather than the offending
+///         assembly, which is the shorter walk to a fix.
 ///     </para>
 /// </remarks>
 public sealed class AssemblyGraphTests {

@@ -21,9 +21,18 @@ partial class Build
     ///     What a gate did, which is not the same question as whether it passed.
     ///     <para>
     ///         ⚠ <see cref="Vacuous" /> exists because a gate that inspected nothing prints the same
-    ///         tick as a gate that inspected everything, and the two are not the same news. Half the
-    ///         rules in docs/plan/03 § Assembly graph rules are about assemblies this repository does
-    ///         not contain yet; reporting them as "passed" would be true and misleading.
+    ///         tick as a gate that inspected everything, and the two are not the same news. It was
+    ///         added when half the rules in docs/plan/03 § Assembly graph rules were about assemblies
+    ///         this repository did not contain yet; reporting those as "passed" would have been true
+    ///         and misleading.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Every assembly-graph rule has candidates now, and that is not the reassurance it
+    ///         reads as.</b> Rule 2 spent its whole life green over three candidates in one provider
+    ///         family — a set in which no violation was constructible — and the <c>const</c> hole
+    ///         underneath it was found only once a second family existed. A candidate count answers
+    ///         "did this rule look at anything", not "could this rule have failed"; the second
+    ///         question is answered by constructing a violation, and only by that.
     ///     </para>
     /// </summary>
     enum GateStatus
@@ -102,7 +111,7 @@ partial class Build
     /// </summary>
     static readonly (string Gate, string Checks)[] ArchitectureGates =
     [
-        ("Assembly graph", "the six rules in docs/plan/03"),
+        ("Assembly graph", "the seven rules in docs/plan/03"),
         ("Storage tier", "every [PersistentState] against durable-grains.txt; a Durable binding outside the list needs [DurableStateRationale]"),
         ("Tenant keys", "no string literal containing '|' in a GetGrain argument; every tenant-scoped grain interface is IGrainWithStringKey"),
         ("Serializer discipline", "every [GenerateSerializer] type has a stable [Alias]; [Id(n)] numbers never reused, checked against a committed manifest"),
@@ -191,8 +200,8 @@ partial class Build
 
     void CheckArchitecture()
     {
-        // Logged before the gates run, not after: the assembly-graph gate narrates its six rules as
-        // it goes, and those lines are unreadable above the header that says what they belong to.
+        // Logged before the gates run, not after: the assembly-graph gate narrates its seven rules
+        // as it goes, and those lines are unreadable above the header that says what they belong to.
         Log.Information(
             "Architecture: {Count} gates — the ten in docs/plan/23 § The architecture gates, plus "
             + "Analyzer coverage and Plan citations, which that table does not list",
@@ -296,22 +305,38 @@ partial class Build
     // ── Gate: assembly graph — docs/plan/03 § Assembly graph rules ────────────────────────────
 
     /// <summary>
-    ///     The six rules, read off the compiled assemblies rather than the project files.
+    ///     The seven rules, read off the compiled assemblies and — where metadata cannot see — off
+    ///     the project files.
     ///     <para>
-    ///         ⚠ <b>Rule 3 is the reason for that choice, and it is worth understanding before
-    ///         changing it.</b> "No assembly above <c>CyberCloud.Kubernetes</c> references
-    ///         <c>k8s.Models</c>" is a rule about <i>types</i>. docs/plan/02 § ADR-004 requires
-    ///         <c>UseKubeMembership()</c> and <c>UseKubernetesHosting()</c>, whose packages both
-    ///         depend on <c>KubernetesClient</c>, so <c>dotnet list package --include-transitive</c>
-    ///         on <c>CyberCloud.ServiceDefaults</c> reports <c>KubernetesClient</c> and always will.
-    ///         A gate phrased over packages is therefore <b>unsatisfiable</b>. The <c>AssemblyRef</c>
-    ///         table is the right instrument: Roslyn writes a row only for an assembly a type was
-    ///         actually bound from, so it says "no code here touches <c>k8s.*</c>" — which is the
-    ///         rule — while staying silent about the restore closure, which is not.
+    ///         ⚠ <b>Rule 3 is the reason metadata is the primary instrument, and it is worth
+    ///         understanding before changing it.</b> "No assembly above <c>CyberCloud.Kubernetes</c>
+    ///         references <c>k8s.Models</c>" is a rule about <i>types</i>. docs/plan/02 § ADR-004
+    ///         requires <c>UseKubeMembership()</c> and <c>UseKubernetesHosting()</c>, whose packages
+    ///         both depend on <c>KubernetesClient</c>, so <c>dotnet list package
+    ///         --include-transitive</c> on <c>CyberCloud.ServiceDefaults</c> reports
+    ///         <c>KubernetesClient</c> and always will. A gate phrased over packages is therefore
+    ///         <b>unsatisfiable</b>. The <c>AssemblyRef</c> table is the right instrument: Roslyn
+    ///         writes a row only for an assembly a type was actually bound from, so it says "no code
+    ///         here touches <c>k8s.*</c>" — which is the rule — while staying silent about the
+    ///         restore closure, which is not.
     ///     </para>
     ///     <para>
-    ///         Rules 2, 4 and 5 are about assemblies this repository does not contain yet and pass
-    ///         vacuously. Each logs its candidate count so that is visible rather than inferable.
+    ///         ⚠ <b>And it is the reason rules 2, 4, 5 and 7 do not read metadata alone.</b>
+    ///         <c>AssemblyRef</c> records <i>binding</i>, and binding is not the same as depending: a
+    ///         <c>const</c> is inlined by the compiler, and so are <c>nameof</c>, a literal attribute
+    ///         argument and — in most positions — the result of a <c>typeof</c> that is only compared.
+    ///         A project could therefore take a <c>ProjectReference</c> on an assembly it is
+    ///         forbidden to depend on, use nothing but consts from it, and leave no row for a gate to
+    ///         find. That was verified rather than reasoned about, on a real cross-provider reference
+    ///         — <c>CyberCloud.Providers.DBforPostgreSQL.Contracts.csproj</c> records the experiment.
+    ///         The four rules that are about <i>our own</i> assemblies close it by reading the
+    ///         declared <c>ProjectReference</c> set as well, through <see cref="InTreeEdges" />: for
+    ///         an in-tree edge the reference itself is the violation, whether or not a type crossed
+    ///         it. Rule 3 cannot do the same and must not try, for the reason above.
+    ///     </para>
+    ///     <para>
+    ///         Every rule logs its candidate count, so a rule that inspected nothing says so rather
+    ///         than leaving it to be inferred from a tick.
     ///     </para>
     /// </summary>
     GateOutcome AssemblyGraphGate()
@@ -350,17 +375,24 @@ partial class Build
         // Rule 2. Read as cross-provider: CyberCloud.Providers.Compute referencing its own
         // .Contracts is a provider's internal seam, and the doc's own next sentence — "Cross-provider
         // references go through CyberCloud.ResourceManager by resource id" — is what the rule is for.
+        //
+        // ⚠ Over InTreeEdges rather than ReferencedAssemblies, and that is this rule's const hole
+        // closing. It stayed open long enough to be written up in two places — src/Providers/README.md
+        // and CyberCloud.Providers.DBforPostgreSQL.Contracts.csproj — because a cross-provider
+        // ProjectReference whose only use is `SampleWidgets.TypePath` emits no AssemblyRef row at all.
+        // A ProjectReference from one provider family to another is never legitimate, so the
+        // declaration is the violation and there is nothing to weigh.
         var providers = ShippingAssemblies.Where(x => ProviderFamily(x.Name) is not null).ToList();
 
         Rule(
             2,
             "No Providers.* assembly references another Providers.* assembly — not even .Contracts.",
             providers.Count,
-            providers.SelectMany(provider => provider.ReferencedAssemblies
-                .Where(reference => ProviderFamily(reference) is { } family
+            providers.SelectMany(provider => InTreeEdges(provider)
+                .Where(edge => ProviderFamily(edge.To) is { } family
                     && !string.Equals(family, ProviderFamily(provider.Name), StringComparison.Ordinal))
-                .Select(reference =>
-                    $"{provider.Name} binds types from {reference}; go through CyberCloud.ResourceManager by resource id")));
+                .Select(edge =>
+                    $"{provider.Name} {edge.How} {edge.To}; go through CyberCloud.ResourceManager by resource id")));
 
         // Rule 3. "Above CyberCloud.Kubernetes" is everything outside its own family.
         var aboveKubernetes = ShippingAssemblies
@@ -379,54 +411,55 @@ partial class Build
 
         // ── Rule 4 ────────────────────────────────────────────────────────────────────────────
         //
-        // ⚠ THE STATEMENT BELOW IS NOT THE DOC'S, AND THE DIFFERENCE IS DELIBERATE.
+        // ⚠ THIS ROW USED TO REPORT A WEAKER RULE UNDER ITS OWN NAME — "nothing outside src/Hosts",
+        // rather than the doc's "except its OWN host" — because nothing in the tree said which host
+        // owns which application layer. `IsHost` reads a directory name, and an application
+        // assembly's name (CyberCloud.Providers.Sample.Application) names its provider, not its host.
         //
-        // docs/plan/03 § Assembly graph rules says "except its OWN host". What is enforced is "except
-        // A host under src/Hosts", which is strictly weaker: a second host binding another host's
-        // application layer passes this and violates the doc.
+        // The mapping now exists: [assembly: OwningHost("…")] in CyberCloud.Core.Contracts, read by
+        // ArchitectureFacts exactly as [DurableStateRationale] already was. That was the first of the
+        // three options the old comment here listed, and it won for the reason it gave — it travels
+        // with the assembly, survives a project move, and is reviewable in the diff that creates the
+        // coupling, which a manifest matches and a ProjectReference-closure inference cannot (that
+        // one derives the rule from the very edge the rule is about).
         //
-        // It used to be reported under the doc's wording with the gap explained in a comment. That is
-        // the wrong place for it — a violation message and a gate report are read by people who are
-        // not reading this file, and a rule that claims more than it checks is a rule everyone
-        // believes is holding. So the statement says what runs, and the shortfall is named in the
-        // report rather than only here.
+        // ⚠ AN APPLICATION ASSEMBLY THAT DECLARES NO OWNING HOST IS NOT EXEMPT, IT IS SEALED. It has
+        // no own host, so rule 4 permits nothing at all to reference it. That is the doc's sentence
+        // read literally, and it is why this rule is not vacuous on a tree where no host has wired an
+        // application layer up yet: the count below is application assemblies, and every one of them
+        // is a candidate whether or not it names a host.
         //
-        // ⚠ WHAT THE STRONGER RULE NEEDS, CONCRETELY, so this is a proposal and not a shrug.
-        // Nothing in the tree says which host owns which application layer: `IsHost` reads a
-        // directory name, and an application assembly's name (`CyberCloud.Providers.Sample.Application`)
-        // names its provider, not its host. Three ways to supply the mapping, in order of preference:
-        //
-        //  1. An assembly-level attribute on the application assembly — `[assembly: OwningHost(
-        //     "CyberCloud.Silo.Host")]` — read here the same way DurableStateRationale already is by
-        //     ArchitectureFacts. It travels with the assembly, survives a project move, and is
-        //     reviewable in the diff that creates the coupling.
-        //  2. A committed manifest, like durable-grains.txt. Same reviewability, but it is a second
-        //     file to keep in step, which durable-grains.txt shows is a real cost.
-        //  3. Inferring it from the host's ProjectReference closure. Cheapest and wrong: it derives
-        //     the rule from the very edge the rule is about, so any host that adds the reference
-        //     immediately becomes its "own host".
-        //
-        // Until one of those exists, doc 03's own sentence is unenforceable as written, and the
-        // honest report is the weaker rule under its own name.
+        // ⚠ THE DECLARED HOST MUST ITSELF BE A HOST. Without that check the attribute would launder
+        // any reference at all — [assembly: OwningHost("CyberCloud.Identity")] would make the
+        // identity module its own application layer's host.
         var applications = ShippingAssemblies
             .Where(x => x.Name.EndsWith(".Application", StringComparison.Ordinal))
-            .Select(x => x.Name)
-            .ToHashSet(StringComparer.Ordinal);
+            .ToList();
+
+        var owningHosts = applications.ToDictionary(
+            x => x.Name,
+            x => x.OwningHosts.Where(host => !string.IsNullOrWhiteSpace(host)).Select(host => host!).ToList(),
+            StringComparer.Ordinal);
 
         Rule(
             4,
-            "Nothing outside src/Hosts references a *.Application assembly. ⚠ WEAKER THAN "
-            + "docs/plan/03 § Assembly graph rules, which says \"except its OWN host\" — there is no "
-            + "host-to-application mapping in the tree, so host-on-another-host's-application passes "
-            + "here. See Build.Architecture.cs § AssemblyGraphGate, rule 4, for the three ways to fix that.",
+            "Nothing references a *.Application assembly except its own host, named by "
+            + "[assembly: OwningHost(\"…\")] on the application assembly.",
             applications.Count,
-            ShippingAssemblies
-                .Where(assembly => !IsHost(assembly.Name))
-                .SelectMany(assembly => assembly.ReferencedAssemblies
-                    .Where(applications.Contains)
-                    .Select(reference => $"{assembly.Name} binds types from {reference} and is not a host under src/Hosts")));
+            OwningHostDeclarationViolations(applications).Concat(
+                ShippingAssemblies.SelectMany(assembly => InTreeEdges(assembly)
+                    .Where(edge => owningHosts.TryGetValue(edge.To, out var owners)
+                        && !owners.Contains(assembly.Name, StringComparer.Ordinal))
+                    .Select(edge => owningHosts[edge.To].Count == 0
+                        ? $"{assembly.Name} {edge.How} {edge.To}, which declares no [OwningHost] and so "
+                        + "has no own host for anything to be. docs/plan/03 § Assembly graph rules, "
+                        + "rule 4 permits nothing to reference it until it names one"
+                        : $"{assembly.Name} {edge.How} {edge.To}, whose own host is "
+                        + $"{string.Join(" or ", owningHosts[edge.To])}"))));
 
-        // Rule 5.
+        // Rule 5. Over InTreeEdges for the same reason as rule 2: a gateway that took a
+        // ProjectReference on a provider implementation and used only its consts would leave no
+        // AssemblyRef row, and the reference is the thing the rule forbids.
         var gateways = ShippingAssemblies
             .Where(x => x.Name.StartsWith("CyberCloud.Gateway", StringComparison.Ordinal))
             .ToList();
@@ -435,9 +468,9 @@ partial class Build
             5,
             "The gateway references no provider implementation assembly, only .Contracts and .Application.",
             gateways.Count,
-            gateways.SelectMany(gateway => gateway.ReferencedAssemblies
-                .Where(IsProviderImplementation)
-                .Select(reference => $"{gateway.Name} binds types from the implementation assembly {reference}")));
+            gateways.SelectMany(gateway => InTreeEdges(gateway)
+                .Where(edge => IsProviderImplementation(edge.To))
+                .Select(edge => $"{gateway.Name} {edge.How} the implementation assembly {edge.To}")));
 
         // Rule 6. Not an assembly rule — portal/libs/api is TypeScript.
         var portalApi = RootDirectory / "portal" / "libs" / "api";
@@ -456,8 +489,91 @@ partial class Build
                     $"{RootDirectory.GetRelativePathTo(file)} carries no generator banner "
                     + "(\"DO NOT EDIT\", \"@generated\" or \"auto-generated\" in its first 2 KB)"));
 
-        return GateOutcome.From("Assembly graph", inspected, "rule candidate(s) across 6 rules", violations);
+        // Rule 7 — see ModuleLayeringViolations.
+        var moduleEdges = ModuleEdges();
+
+        Rule(
+            7,
+            $"Every edge between two modules is declared in {ModuleLayeringFile.Name}, and the "
+            + "declaration is acyclic.",
+            moduleEdges.Count,
+            ModuleLayeringViolations(moduleEdges));
+
+        return GateOutcome.From("Assembly graph", inspected, "rule candidate(s) across 7 rules", violations);
     }
+
+    // ── The edges the rules are about ─────────────────────────────────────────────────────────
+
+    /// <summary>
+    ///     One edge from a shipping assembly to another shipping assembly, and how it was seen.
+    /// </summary>
+    /// <param name="To">The referenced assembly's simple name.</param>
+    /// <param name="How">
+    ///     Verb phrase for a violation message — <c>"binds types from"</c> when the
+    ///     <c>AssemblyRef</c> table has a row, and the longer <c>ProjectReference</c> wording when it
+    ///     does not. The distinction is worth printing: the second case is a dependency the compiler
+    ///     erased, and somebody reading the failure will otherwise go looking for the <c>using</c>
+    ///     that is not there.
+    /// </param>
+    /// <param name="Bound">Whether the <c>AssemblyRef</c> table has a row for it.</param>
+    sealed record AssemblyEdge(string To, string How, bool Bound);
+
+    /// <summary>
+    ///     Every edge from one shipping assembly to another: the union of what it binds and what its
+    ///     project file declares.
+    ///     <para>
+    ///         ⚠ <b>Both halves are load-bearing and they catch different things.</b> The
+    ///         <c>AssemblyRef</c> half sees a type bound through a <i>transitive</i>
+    ///         <c>ProjectReference</c>, which the project file never mentions — SDK-style project
+    ///         references flow, so a project can use a type from a project it does not name. The
+    ///         project-file half sees a reference the compiler erased: a <c>const</c>, a
+    ///         <c>nameof</c>, a literal attribute argument. Either half alone has a documented hole;
+    ///         the union has neither.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ Restricted to assemblies this repository builds. A package reference is not an edge
+    ///         any of these rules is about, and rule 3 — the one rule that <i>is</i> about a package
+    ///         — deliberately does not come through here.
+    ///     </para>
+    /// </summary>
+    IEnumerable<AssemblyEdge> InTreeEdges(AssemblyFacts assembly)
+    {
+        var bound = assembly.ReferencedAssemblies
+            .Where(ShippingProjectFiles.ContainsKey)
+            .ToHashSet(StringComparer.Ordinal);
+
+        var declared = DeclaredProjectReferences(ShippingProjectFiles[assembly.Name])
+            .Where(ShippingProjectFiles.ContainsKey)
+            .ToHashSet(StringComparer.Ordinal);
+
+        return bound.Union(declared, StringComparer.Ordinal)
+            .OrderBy(x => x, StringComparer.Ordinal)
+            .Select(to => new AssemblyEdge(
+                to,
+                bound.Contains(to)
+                    ? "binds types from"
+                    : "declares a <ProjectReference> on, and binds nothing from,",
+                bound.Contains(to)));
+    }
+
+    /// <summary>
+    ///     The assembly name of every <c>ProjectReference</c> a project file declares, by the
+    ///     "folder name == assembly name" rule of docs/plan/03 § src.
+    ///     <para>
+    ///         ⚠ Analyzer references are excluded. <c>CyberCloud.Analyzers</c> is referenced by every
+    ///         project in the tree with <c>OutputItemType="Analyzer"
+    ///         ReferenceOutputAssembly="false"</c> — it contributes no assembly to the graph, and
+    ///         counting it would put an edge from everything to it in every rule below.
+    ///     </para>
+    /// </summary>
+    static IEnumerable<string> DeclaredProjectReferences(AbsolutePath project)
+        => XDocument.Load(project)
+            .Descendants()
+            .Where(x => string.Equals(x.Name.LocalName, "ProjectReference", StringComparison.Ordinal))
+            .Where(x => !string.Equals(x.Attribute("OutputItemType")?.Value, "Analyzer", StringComparison.Ordinal))
+            .Select(x => x.Attribute("Include")?.Value)
+            .Where(x => !string.IsNullOrEmpty(x))
+            .Select(x => Path.GetFileNameWithoutExtension(x!.Replace('\\', '/')));
 
     /// <summary>
     ///     Rule 1, both ways round: nothing in the <c>AssemblyRef</c> table that is not the shared
@@ -536,6 +652,38 @@ partial class Build
         => ShippingProjectFiles.TryGetValue(assembly, out var project)
             && string.Equals(project.Parent.Parent.Name, "Hosts", StringComparison.Ordinal);
 
+    /// <summary>
+    ///     Rule 4's other half: whether the declarations themselves are usable. An
+    ///     <c>[OwningHost]</c> naming something that is not a host would otherwise launder any
+    ///     reference at all into an allowed one, which is the failure mode that made the third
+    ///     option in this rule's history — inferring ownership from the host's own references —
+    ///     the wrong one.
+    /// </summary>
+    IEnumerable<string> OwningHostDeclarationViolations(IEnumerable<AssemblyFacts> applications)
+    {
+        foreach (var application in applications)
+        {
+            foreach (var host in application.OwningHosts)
+            {
+                if (string.IsNullOrWhiteSpace(host))
+                {
+                    yield return $"{application.Name} carries an [OwningHost] with no host name. The "
+                        + "attribute names one host under src/Hosts — docs/plan/03 § Assembly graph rules, rule 4";
+
+                    continue;
+                }
+
+                if (!IsHost(host))
+                {
+                    yield return $"{application.Name} declares [OwningHost(\"{host}\")] and {host} is not "
+                        + "a project under src/Hosts. An application layer's own host is a host; naming "
+                        + "anything else would make the attribute an exemption from rule 4 rather than an "
+                        + "answer to it";
+                }
+            }
+        }
+    }
+
     static bool LooksGenerated(AbsolutePath file)
     {
         using var reader = new StreamReader(file);
@@ -547,6 +695,256 @@ partial class Build
         return text.Contains("DO NOT EDIT", StringComparison.OrdinalIgnoreCase)
             || text.Contains("@generated", StringComparison.OrdinalIgnoreCase)
             || text.Contains("auto-generated", StringComparison.OrdinalIgnoreCase);
+    }
+
+    // ── Rule 7: module layering — docs/plan/03 § Assembly graph rules ─────────────────────────
+
+    /// <summary>
+    ///     The reviewed list of edges between modules, at the repository root beside
+    ///     <c>durable-grains.txt</c> and for the same reason: a change to it should land in a diff
+    ///     nobody scrolls past.
+    /// </summary>
+    AbsolutePath ModuleLayeringFile => RootDirectory / "module-layering.txt";
+
+    /// <summary>
+    ///     The module an assembly belongs to, or <see langword="null" /> if it is out of scope for
+    ///     rule 7.
+    ///     <para>
+    ///         A module is the assembly name truncated to its first two dotted segments —
+    ///         <c>CyberCloud.Identity</c>, <c>CyberCloud.Identity.Contracts</c> and (were there one)
+    ///         <c>CyberCloud.Identity.Application</c> are one module. That collapsing is the whole
+    ///         point: the sibling coupling this rule exists to catch reaches across the seam rather
+    ///         than through it. <c>CyberCloud.Communication</c> binding
+    ///         <c>CyberCloud.Identity.Contracts</c> while <c>CyberCloud.Identity</c> binds
+    ///         <c>CyberCloud.Communication.Contracts</c> is not a cycle between four assemblies; it
+    ///         is a cycle between two modules, and only the module view can see it.
+    ///     </para>
+    ///     <para>
+    ///         A provider's module is its family, so that a module reaching into a provider — and a
+    ///         provider reaching into a module — are both edges this rule sees. Rule 2 stays the hard
+    ///         rule for provider-to-provider, which no declaration may permit.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b><c>src/Hosts</c> and <c>cli/</c> are out of scope, deliberately.</b> A host is the
+    ///         composition root — referencing many modules is its job, nothing references a host
+    ///         except <c>CyberCloud.AppHost</c>, and so no host can be part of a cycle. A declaration
+    ///         listing what each host composes would change on every wiring commit and prevent
+    ///         nothing. What a host may reference is rules 4 and 5, not this one. (Hosts would also
+    ///         collide under the naming above: <c>CyberCloud.Identity.Host</c>'s first two segments
+    ///         are the identity module's.)
+    ///     </para>
+    /// </summary>
+    string? ModuleOf(string assembly)
+    {
+        if (!ShippingProjectFiles.TryGetValue(assembly, out var project))
+            return null;
+
+        if (ProviderFamily(assembly) is { } family)
+            return "CyberCloud.Providers." + family;
+
+        if (!string.Equals(project.Parent.Parent.Name, "src", StringComparison.Ordinal))
+            return null;
+
+        var first = assembly.IndexOf('.', StringComparison.Ordinal);
+
+        if (first < 0)
+            return assembly;
+
+        var second = assembly.IndexOf('.', first + 1);
+
+        return second < 0 ? assembly : assembly[..second];
+    }
+
+    /// <summary>One edge between two modules, and the assembly-level edge that put it there.</summary>
+    sealed record ModuleEdge(string From, string To, string Because);
+
+    /// <summary>
+    ///     Every edge between two different modules in the shipping graph, deduplicated: four
+    ///     assembly references from one module into another are one thing to declare, not four.
+    ///     One assembly edge is kept as the reason so a violation names something concrete to go and
+    ///     look at, and a <i>bound</i> one is preferred — otherwise a module that both binds a
+    ///     sibling's contracts and carries a spare <c>ProjectReference</c> on its implementation
+    ///     would be reported as binding nothing, which is true of that one reference and false of
+    ///     the edge.
+    /// </summary>
+    List<ModuleEdge> ModuleEdges()
+    {
+        var edges = new Dictionary<(string From, string To), (string Because, bool Bound)>();
+
+        foreach (var assembly in ShippingAssemblies)
+        {
+            if (ModuleOf(assembly.Name) is not { } from)
+                continue;
+
+            foreach (var edge in InTreeEdges(assembly))
+            {
+                if (ModuleOf(edge.To) is not { } to || string.Equals(from, to, StringComparison.Ordinal))
+                    continue;
+
+                var because = ($"{assembly.Name} {edge.How} {edge.To}", edge.Bound);
+
+                if (!edges.TryGetValue((from, to), out var existing) || (edge.Bound && !existing.Bound))
+                    edges[(from, to)] = because;
+            }
+        }
+
+        return edges
+            .OrderBy(x => x.Key.From, StringComparer.Ordinal)
+            .ThenBy(x => x.Key.To, StringComparer.Ordinal)
+            .Select(x => new ModuleEdge(x.Key.From, x.Key.To, x.Value.Because))
+            .ToList();
+    }
+
+    /// <summary>
+    ///     Rule 7, in three directions, against <see cref="ModuleLayeringFile" />.
+    ///     <para>
+    ///         ⚠ <b>What this rule is, precisely, because it is easy to over-read.</b> Directions 1
+    ///         and 2 make the file and the graph agree — they do not decide whether a coupling is a
+    ///         good idea, they make sure it was <i>seen</i>. A new edge between two modules costs one
+    ///         line in one reviewed file, which is exactly the cost <c>durable-grains.txt</c> puts on
+    ///         a new durable grain. Direction 3 is the half nothing can talk its way past: the
+    ///         declaration must be acyclic, so the line that would have made the coupling legal fails
+    ///         the build instead when it closes a loop.
+    ///     </para>
+    ///     <para>
+    ///         The alternative considered was direction 3 alone — a cycle rule over the real graph,
+    ///         with no file to keep. It is cheaper and it would have caught the violation that
+    ///         exposed this hole (<c>CyberCloud.Communication</c> binding
+    ///         <c>CyberCloud.Identity.Contracts</c> closes a loop against
+    ///         <c>CyberCloud.Identity</c> → <c>CyberCloud.Communication.Contracts</c>). It would not
+    ///         have caught <c>CyberCloud.Communication</c> reaching into <c>CyberCloud.Metering</c>,
+    ///         which is acyclic and which
+    ///         <c>CyberCloud.Communication.csproj</c> spends two paragraphs forbidding — "metering
+    ///         must not be able to make [the send path] slower or fail it". A rule that cannot see
+    ///         the coupling that assembly's own author wrote down twice is the wrong rule.
+    ///     </para>
+    /// </summary>
+    List<string> ModuleLayeringViolations(List<ModuleEdge> actual)
+    {
+        Assert.True(
+            ModuleLayeringFile.FileExists(),
+            $"{ModuleLayeringFile.Name} is missing. It is the reviewed list of edges between modules "
+            + "— docs/plan/03 § Assembly graph rules, rule 7. Create it at the repository root, one "
+            + "\"Module -> Module\" per line.");
+
+        var modules = ShippingAssemblies
+            .Select(x => ModuleOf(x.Name))
+            .OfType<string>()
+            .ToHashSet(StringComparer.Ordinal);
+
+        var declared = new List<(string From, string To)>();
+        var violations = new List<string>();
+        var lines = ModuleLayeringFile.ReadAllLines();
+
+        for (var i = 0; i < lines.Length; i++)
+        {
+            var line = lines[i].Trim();
+
+            if (line.Length == 0 || line.StartsWith('#'))
+                continue;
+
+            var parts = line.Split("->", StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+
+            if (parts.Length != 2)
+            {
+                violations.Add(
+                    $"{ModuleLayeringFile.Name}:{i + 1} is not \"Module -> Module\" — \"{line}\"");
+
+                continue;
+            }
+
+            var unknown = parts.Where(x => !modules.Contains(x)).ToList();
+
+            foreach (var module in unknown)
+            {
+                violations.Add(
+                    $"{ModuleLayeringFile.Name}:{i + 1} names {module}, which is not a module in this "
+                    + "tree. A module is a shipping project directly under src/, or a provider family "
+                    + "under src/Providers, named by its first two dotted segments");
+            }
+
+            // Not added to `declared`: an unknown name is already reported, and letting it through
+            // would report the same line a second time as a stale edge.
+            if (unknown.Count == 0)
+                declared.Add((parts[0], parts[1]));
+        }
+
+        var declaredSet = declared.ToHashSet();
+
+        // Direction 1: every edge in the graph is declared. This is the direction that would have
+        // caught the sibling reference the gate used to let through.
+        foreach (var edge in actual.Where(x => !declaredSet.Contains((x.From, x.To))))
+        {
+            violations.Add(
+                $"{edge.From} references {edge.To} and {ModuleLayeringFile.Name} does not say it may "
+                + $"({edge.Because}). Adding the line is a review request, not a build fix — "
+                + "docs/plan/03 § Assembly graph rules, rule 7");
+        }
+
+        // Direction 2: every declared edge is real. A line for a coupling that no longer exists is
+        // a permission nobody granted twice, sitting there for the next person to use.
+        var actualSet = actual.Select(x => (x.From, x.To)).ToHashSet();
+
+        foreach (var (from, to) in declared.Where(x => !actualSet.Contains(x)))
+        {
+            violations.Add(
+                $"{ModuleLayeringFile.Name} declares {from} -> {to} and no assembly in {from} "
+                + $"references one in {to}. Delete the line: a stale entry is standing permission for "
+                + "a coupling nobody reviewed");
+        }
+
+        // Direction 3: the declaration is acyclic. Nothing may be written here that makes a cycle
+        // legal — this is the half a reviewer cannot be talked past.
+        violations.AddRange(DeclarationCycles(declared));
+
+        return violations;
+    }
+
+    /// <summary>
+    ///     Every cycle in the declared graph, as a path. Reported as a path rather than as "there is
+    ///     a cycle" because a two-module cycle is obvious and a four-module one is not.
+    /// </summary>
+    static List<string> DeclarationCycles(List<(string From, string To)> declared)
+    {
+        var outgoing = declared
+            .GroupBy(x => x.From, StringComparer.Ordinal)
+            .ToDictionary(x => x.Key, x => x.Select(y => y.To).ToList(), StringComparer.Ordinal);
+
+        // Once a module's own edges have been walked, every cycle running through it has been seen,
+        // so a second arrival need not walk them again.
+        var visited = new HashSet<string>(StringComparer.Ordinal);
+        var reported = new HashSet<string>(StringComparer.Ordinal);
+        var cycles = new List<string>();
+
+        foreach (var start in outgoing.Keys.OrderBy(x => x, StringComparer.Ordinal))
+            Walk(start, []);
+
+        return cycles;
+
+        void Walk(string module, List<string> path)
+        {
+            if (path.Contains(module, StringComparer.Ordinal))
+            {
+                var loop = path[path.IndexOf(module)..];
+                var key = string.Join(" -> ", loop.OrderBy(x => x, StringComparer.Ordinal));
+
+                if (reported.Add(key))
+                {
+                    cycles.Add(
+                        $"the declaration is cyclic: {string.Join(" -> ", loop)} -> {module}. Modules "
+                        + "form a layering, not a mesh — an edge that closes a loop cannot be declared "
+                        + "away, because a cycle is what makes two modules one");
+                }
+
+                return;
+            }
+
+            if (!visited.Add(module) || !outgoing.TryGetValue(module, out var next))
+                return;
+
+            foreach (var to in next.OrderBy(x => x, StringComparer.Ordinal))
+                Walk(to, [.. path, module]);
+        }
     }
 
     // ── Gate: storage tier — docs/plan/05 § Choosing a tier ───────────────────────────────────

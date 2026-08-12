@@ -37,8 +37,18 @@ Enforced by `Build.Architecture`, failing the build on violation:
 1. `CyberCloud.Core` references no Orleans hosting, no `KubernetesClient`, no ABP application layer.
 2. No `Providers.*` assembly references another `Providers.*` assembly — not even `.Contracts`.
 3. No assembly above `CyberCloud.Kubernetes` references `k8s.Models`.
-4. Nothing references a `*.Application` assembly except its own host.
+4. Nothing references a `*.Application` assembly except its own host, which that assembly names with
+   `[assembly: OwningHost("…")]`.
 5. The gateway references no provider *implementation* assembly, only `.Contracts` and `.Application`.
+7. Every edge between two modules is declared in [`module-layering.txt`](../module-layering.txt), and
+   the declaration is acyclic. A module is an assembly name truncated to its first two dotted
+   segments, so `CyberCloud.Identity` and `CyberCloud.Identity.Contracts` are one.
+
+Rule 6 is about `portal/libs/api` and is the one rule here that is not about an assembly.
+
+⚠ Rules 2 and 4 read the declared `ProjectReference` set as well as the compiled `AssemblyRef` table,
+and rule 7 exists at all, because each was a hole found by constructing a violation and watching the
+gate stay green. docs/plan/03 § Assembly graph rules records what each one was.
 
 See [docs/plan/03](../docs/plan/03-repository-layout.md) and
 [docs/plan/00 § Layer discipline](../docs/plan/00-vision-and-principles.md).

@@ -55,13 +55,21 @@ sealed record PersistentStateBinding(string DeclaringType, string StateName, str
 ///     the key kind is always named on the interface that introduces it, and an interface that
 ///     extends a CyberCloud grain interface is reached through that one.
 /// </param>
+/// <param name="OwningHosts">
+///     The hosts named by assembly-level <c>[OwningHost]</c> attributes — the escape hatch of
+///     docs/plan/03 § Assembly graph rules, rule 4, read the same way
+///     <see cref="DurableStateRationales" /> is. Empty for every assembly that declares none, which
+///     is the honest default: an application assembly with no declared host has no own host, and
+///     rule 4 then permits nothing to reference it.
+/// </param>
 sealed record AssemblyFacts(
     string Name,
     AbsolutePath Path,
     IReadOnlyList<string> ReferencedAssemblies,
     IReadOnlyList<PersistentStateBinding> PersistentStateBindings,
     IReadOnlyDictionary<string, string?> DurableStateRationales,
-    IReadOnlyDictionary<string, IReadOnlyList<string>> InterfaceBases)
+    IReadOnlyDictionary<string, IReadOnlyList<string>> InterfaceBases,
+    IReadOnlyList<string?> OwningHosts)
 {
     /// <summary>
     ///     Reads one assembly without loading it.
@@ -89,6 +97,19 @@ sealed record AssemblyFacts(
         var bindings = new List<PersistentStateBinding>();
         var rationales = new Dictionary<string, string?>(StringComparer.Ordinal);
         var interfaceBases = new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal);
+        var owningHosts = new List<string?>();
+
+        // ⚠ Assembly-level attributes hang off the AssemblyDef row, not off any TypeDef, so the type
+        // walk below never sees them. A null entry is an [OwningHost] whose argument is not a string
+        // constant; the gate reports it rather than dropping it, because a silently dropped one
+        // would read as "declares no host" and fail somewhere else with the wrong message.
+        foreach (var handle in metadata.GetAssemblyDefinition().GetCustomAttributes())
+        {
+            var attribute = metadata.GetCustomAttribute(handle);
+
+            if (string.Equals(AttributeTypeName(metadata, attribute), OwningHostAttribute, StringComparison.Ordinal))
+                owningHosts.Add(FixedStringArguments(metadata, attribute).ElementAtOrDefault(0));
+        }
 
         foreach (var typeHandle in metadata.TypeDefinitions)
         {
@@ -139,7 +160,8 @@ sealed record AssemblyFacts(
             references,
             bindings.OrderBy(x => x.DeclaringType, StringComparer.Ordinal).ThenBy(x => x.StateName, StringComparer.Ordinal).ToList(),
             rationales,
-            interfaceBases);
+            interfaceBases,
+            owningHosts);
     }
 
     /// <summary>
@@ -176,6 +198,7 @@ sealed record AssemblyFacts(
     // type by either name — CyberCloud.Core.Contracts owns DurableStateRationaleAttribute.
     const string PersistentStateAttribute = "PersistentStateAttribute";
     const string DurableStateRationaleAttribute = "DurableStateRationaleAttribute";
+    const string OwningHostAttribute = "OwningHostAttribute";
 
     static CustomAttribute? FindAttribute(MetadataReader metadata, CustomAttributeHandleCollection attributes, string name)
     {
