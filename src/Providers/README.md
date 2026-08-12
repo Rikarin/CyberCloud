@@ -438,15 +438,18 @@ operator's CRD.
   `CyberCloud.DBforPostgreSQL/servers` and § Hard rule below forbids the reference, so this provider
   renders the CloudNativePG `Cluster` CRD independently. Writing the second rendering surfaced the
   first one's: `PostgresServers.ClusterJson` and `charts/managed/postgres/templates/cluster.yaml`
-  both write `spec.postgresql.parameters.shared_preload_libraries`, and CloudNativePG declares that
+  both wrote `spec.postgresql.parameters.shared_preload_libraries`, and CloudNativePG declares that
   key as a **sibling** of `parameters` (`api/v1/cluster_types.go`,
   `AdditionalLibraries []string json:"shared_preload_libraries"`), lists it in
   `FixedConfigurationParameters` (`pkg/postgres/configuration.go`), and refuses it inside
   `parameters` from its validating webhook (`internal/webhook/v1/cluster_webhook.go`, *"Can't set
-  fixed configuration parameter"*). **Every Postgres server created with an extension is rejected at
+  fixed configuration parameter"*). **Every Postgres server created with an extension was rejected at
   admission after the caller was told `202`.** The default body asks for none, which is why nothing
-  had noticed. Not fixed here — that provider is not this one's — and recorded at
-  `charts/managed/ferretdb/conformance.yaml § owed`.
+  had noticed. Fixed in that provider on 2026-08-12 — both spellings, plus one test each, because
+  nothing in `./build.sh` compares a Helm template to a registry — and recorded at
+  `charts/managed/postgres/conformance.yaml § owed`. **The lesson survives the fix**: the duplication
+  § Hard rule forces is not only a cost, it is a second opinion, and it is the only reader either
+  rendering has ever had.
 - **⚠ Piece 6 takes BOTH of its branches on one resource, which nothing had done.** CloudNativePG
   answers the first branch (`spec.monitoring.enablePodMonitor`) for the PostgreSQL half; there is no
   operator to ask for the FerretDB half, so the chart hand-writes a `PodMonitor`. The second

@@ -118,6 +118,66 @@ public sealed partial class ChartRegistryPairTests {
         }
     }
 
+    [Fact]
+    public void TheChartPutsThePreloadLibrariesBesideParametersAndNotInsideThem() {
+        // ⚠ THE OTHER HALF OF PostgresReconcilerTests.ThePreloadLibrariesAreASiblingOfParametersInBothSpellings,
+        // and it has to be a separate assertion because the two files are separate artefacts. A fix
+        // applied to PostgresServers.ClusterJson alone would leave anyone rendering the chart by hand
+        // — charts/README.md's whole reason for the chart existing — writing a Cluster that
+        // CloudNativePG's validating webhook rejects, which is exactly the chart↔registry drift
+        // ADR-012's fifth surface exists to prevent and which no generator here can catch.
+        //
+        // CloudNativePG declares `shared_preload_libraries` as PostgresConfiguration.AdditionalLibraries,
+        // a []string SIBLING of `parameters` (api/v1/cluster_types.go); lists it in
+        // FixedConfigurationParameters (pkg/postgres/configuration.go); and refuses any fixed key
+        // found under spec.postgresql.parameters (internal/webhook/v1/cluster_webhook.go).
+        //
+        // ⚠ A regular expression over the TEMPLATE rather than a `helm template` render, for
+        // TheSizingTableIsTheChartsSizingTable's reason: rendering needs `helm` on PATH and a unit
+        // test that silently passes on a machine without it is the vacuous pass Build.Charts' own
+        // warning exists to prevent.
+        var cluster = Embedded("postgres.cluster.yaml");
+
+        var block = Regex.Match(
+            cluster,
+            "\\n    shared_preload_libraries:\\n((?:\\s*\\{\\{.*\\}\\}\\n|      - .*\\n)+)",
+            RegexOptions.None,
+            TimeSpan.FromSeconds(5)
+        );
+
+        block.Success.ShouldBeTrue(
+            "the chart declares no `shared_preload_libraries:` list two levels under spec — which is "
+            + "where CloudNativePG's PostgresConfiguration.AdditionalLibraries sits, beside "
+            + "`parameters` rather than inside it."
+        );
+
+        // ⚠ It ranges over the SAME property the schema's allow-list constrains and that
+        // PostgresServers.Extensions reads, so the two spellings render the same libraries and not
+        // only the same shape.
+        block.Groups[1].Value.ShouldContain("range .Values.extensions");
+
+        var parameters = Regex.Match(
+            cluster,
+            "\\n    parameters:\\n((?:      \\S.*\\n)+)",
+            RegexOptions.None,
+            TimeSpan.FromSeconds(5)
+        );
+
+        parameters.Success.ShouldBeTrue("the chart declares no `parameters:` block");
+
+        parameters.Groups[1].Value.ShouldNotContain(
+            "shared_preload_libraries",
+            customMessage: "the chart writes shared_preload_libraries under spec.postgresql.parameters, "
+            + "where CloudNativePG's validating webhook refuses it as a fixed configuration "
+            + "parameter. Every server created with an extension is rejected at admission after the "
+            + "caller has been told 202."
+        );
+
+        // ⚠ And the one key that IS a parameter is still there, so a fix that emptied the block
+        // rather than moving one key out of it fails here.
+        parameters.Groups[1].Value.ShouldContain("max_connections");
+    }
+
     // ── Reading the chart ─────────────────────────────────────────────────────────────────────
 
     /// <summary>Every <c>pattern</c> keyword in the generated schema, with the pointer carrying it.</summary>
