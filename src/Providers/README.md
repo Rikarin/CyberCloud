@@ -610,6 +610,128 @@ already a customer of.
   needed no fifth edge and no seventh project. ⚠ It *wants* a fifth edge for the S3 cold tier and
   did not take one; that is the open request recorded above, not a satisfied dependency.
 
+`CyberCloud.Providers.Network` — `CyberCloud.Network/virtualNetworks` and
+`virtualNetworks/subnets` on Kube-OVN, [14 § Virtual networks](../../docs/plan/14-networking.md).
+**The first family whose objects are cluster-scoped**, and the first whose resources other resources
+are meant to sit inside.
+
+### What the tenth provider measured
+
+⚠ **It is the first family in ten to need a change to `test/CyberCloud.Cluster.Conformance`, and the
+axis was one nine families had silently agreed on.** Every object the nine providers before it render
+is **namespaced**, so `ReconcileDriver.NamespaceFor` — `{subscriptionId:N}-{resourceGroup}` — has kept
+two tenants' identically-named resources apart for all of them without any provider thinking about
+it. Kube-OVN's `Vpc` and `Subnet` are `+kubebuilder:resource:scope="Cluster"`, checked in
+`pkg/apis/kubeovn/v1/vpc.go` rather than in a README, and **all 25 of the project's `kubeovn.io/v1`
+kinds are cluster-scoped except `VpcEgressGateway`**. That broke the harness in **four** places, each
+of which had to be found separately and each of which failed with a message pointing somewhere else:
+
+- `EnsureCustomResourceDefinitionsAsync` hard-coded `Scope = "Namespaced"` on the derived CRD stub,
+  so the definition served `/apis/…/namespaces/{ns}/vpcs` while the provider applied to
+  `/apis/…/vpcs` — **404 on every cluster-facing assertion**;
+- `ClusterConformanceTests`' own `ReadFromClusterAsync`, `RivalApplyAsync` and
+  `DeleteFromClusterAsync`, and `SiloKillConformanceTests.ReadAsync`, all called the **namespaced**
+  custom-object overloads, which answer a bare `404 page not found` with no Kubernetes `Status` in
+  it — so the silo-kill suite reported *"the operation says Succeeded and `Vpc/…` is not in the real
+  cluster"*, which reads as a **platform durability failure** and is a 404 from the wrong path;
+- the `ListBackedClusterObjectInventory` call site passed the harness namespace unconditionally,
+  which surfaced as the **discovery** error — *"does not serve kubeovn.io/v1 Vpc (as vpcs) … install
+  or upgrade the operator that provides it"* — pointing at a missing CRD.
+
+  > ⚠ **`KubeApiClient` was right the whole time and only the harness was wrong**, which is the useful
+  > half. `ObjectRef.IsClusterScoped` is `Namespace.Length == 0`, and `ApplyAsync`, `GetAsync`,
+  > `DeleteAsync` and `ListAsync` have all branched on it since before any provider needed it. Every
+  > fix above is the harness learning what the shipping client already knew, and the scope is now
+  > **derived from the case's own `ObjectRef`** exactly as group, version, kind and plural are —
+  > so there is no member a provider author can get wrong by omission. **Nothing changes for the nine
+  > earlier families**: every `ObjectRef` they render carries a namespace.
+
+- ⚠ **`Matches` is containment, and for a THIRD mechanism after "the CRD defaults it" and "a mutating
+  webhook rewrites it".** Checked in the CRD YAML and the Go types: across `Vpc`, `Subnet`,
+  `SecurityGroup`, `IptablesEIP` and `OvnEip` there is exactly **one** `+kubebuilder:default`
+  (`Vpc.spec.bfdPort.enabled=false`), and **no `MutatingWebhookConfiguration` anywhere in the
+  project** — the only webhook is a validating one that is **off in a default install**. So the usual
+  argument is false here, as it was for `ClickHouseClusters`. What forces containment is that the
+  **Kube-OVN controller writes back to `.spec`**: `formatSubnet` fills `provider`, `vpc`,
+  `gatewayType` and `enableLb`, derives `gateway`, **appends to and sorts `excludeIps`**, recomputes
+  `protocol` unconditionally, and **canonicalizes `cidrBlock`** through `net.ParseCIDR` — so a tenant
+  who sends `10.20.1.7/24` has `10.20.1.0/24` stored. ⚠ **A string comparison there reports drift on a
+  perfectly converged subnet forever**, and `NetworkMatchesTests` runs that mistake red.
+  ⚠ A trap worth naming: `grep default:` on the `Subnet` schema **hits**, and every hit is a property
+  *named* `default` (`SubnetSpec.Default bool`).
+- ⚠ **docs/plan/14's resource tree asks for a type this substrate cannot carry, and this is a
+  refutation rather than a deferral.** It draws `routeTables/{name}` as a child of a virtual network.
+  **Kube-OVN has no route-table object** — a "route table" there is a bare *string name* referenced
+  from `Vpc.spec.staticRoutes[].routeTable`, with no lifecycle and nothing to observe. So the type
+  would have to write into its parent's `Vpc.spec.staticRoutes`, and that array carries **no
+  `x-kubernetes-list-type`**, so it is **atomic under server-side apply**: two route tables in one
+  network would each converge by *erasing* the other. ⚠ And a static route is
+  `{cidr, nextHop, policy}` — an **array of objects** — which `SchemaProperty.ElementKind` refuses
+  outright, so the body shape has nowhere to put one either. **The same refusal blocks
+  `securityGroups`' rule list**, which is why that type is owed rather than shipped, and forces
+  `showIsolation`'s limits table to be flattened to prose on the way out. Three sightings in one
+  family makes it the most load-bearing limit of `ResourceSchema` for this problem domain, because
+  networking configuration is lists of rules almost everywhere.
+- ⚠ **Where a rule `ResourceSchema` cannot express has to live was established rather than assumed,
+  and the answer is "nowhere good".** docs/plan/14 requires the **API** to validate a tenant's address
+  space against a per-region reserved list and *"reject with the conflicting range named"*.
+  `SchemaProperty` carries `AllowedValues`, `Pattern`, `Format`, bounds and lengths — every one of
+  which compares **one value against a constant** — and a CIDR-overlap check compares one value
+  against a *list*, selected by *another property*, using a *relation* that is not equality. **And
+  there is no provider-supplied predicate anywhere on `ResourceManagerService`'s write path**:
+  `IResourceTypeBuilder` declares ten things and none of them is a validator, and `IPolicyEvaluator`
+  is a *platform* singleton a provider cannot reach. So the check runs in the reconciler, after the
+  `202` — the same defect class the Postgres row shipped — and it is named as a defect at
+  `charts/managed/kube-ovn-vpc/conformance.yaml § owed`, `address-space-is-validated-after-202`, with
+  the one seam that would close it. **This is the fourth family to record a cross-property rule it
+  could not express and the first where the rule is the *subject* of the resource type.**
+- ⚠ **What DID stay at the API is a consequence of not copying docs/plan/14's own spelling.** That
+  document draws `addressSpace: [10.20.0.0/16]` — an array — and ADR-012's fifth surface **refuses
+  `@pattern` on an array**, the gap `charts/managed/kafka` records as `cidr-shape-is-unenforced`.
+  Two typed properties (`v4`, `v6`) instead of one list keeps the pattern enforceable, so a malformed
+  prefix is refused with a `400` and a JSON Pointer *before* the `202` — and it models
+  docs/plan/14 § IPv6's *"a v4 prefix, a v6 prefix, or both"* exactly, which a bag cannot.
+- ⚠ **One interaction bit three times in one family, and it is worth writing down once.**
+  `SchemaProperty.Incoherences` runs a declared `DefaultJson` through the property's **own**
+  constraints, at **class initialisation** — so an optional patterned string whose default is `""` is
+  not a validation that never fires, it is a `TypeInitializationException` that takes down the silo.
+  And `ChartAnnotationEmitter` writes the chart's YAML literal from `DefaultJson`, so a **required**
+  patterned string with no default emits `value: ""` and `./build.sh Charts` refuses the chart because
+  `helm lint` runs it against its own defaults. The two fixes are opposite: the optional half needs a
+  pattern that admits empty (`Cidr.OptionalV6Pattern`), the required half needs a **default on a
+  required property**, which looks contradictory and is the only lintable answer.
+- ⚠ **The first type in the tree whose only quota meter is `Resources`, and that is a shape rather
+  than an under-declaration.** Every provider before this one draws `vcpu`, `memoryGb` and
+  `storageGb` because every one provisions **pods**. A `Vpc` is a logical router in OVN's southbound
+  database: no pod, no disk, nothing attributable. ⚠ And the tempting wrong answer on the subnet is an
+  **address count** — a /16 holds 65 534 — which would consume a tenant's whole allowance for
+  something that is not scarce. What *is* scarce is public IPv4, and docs/plan/14 puts that on
+  `publicIpAddresses`, which is owed.
+- ⚠ **The isolation claim is data, on the `MariaDbServers.CompatibilityClaim` model, because
+  docs/plan/14 makes overclaiming the named risk of this row.** `VirtualNetworks.IsolationClaim` is
+  one sentence — *"network-layer tenant separation … on shared hardware"* — every registered summary
+  derives from it rather than restating it, and `NetworkDeclarationTests` walks a forbidden-word list
+  (`isolated`, `encrypted`, `dedicated hardware`, `guaranteed`, …) against all of them.
+  `IsolationLimits` is the four-row table of what is **not** claimed, each row naming what to ask for
+  instead. ⚠ `POST …/showIsolation` returns it, which makes this the only action in the catalogue
+  whose **content** is ready and whose **plumbing** is not — every other one waits on a Vault or a
+  usage pipeline.
+- ⚠ **The structural statelessness check's blind spot, confirmed a SIXTH time**, in a sixth family.
+  Both halves are in `NetworkReconcilerTests` and both were run red against the counter-example. ⚠ The
+  cross-tenant test ends differently here than in every family before it: those assert the two objects
+  landed in different **namespaces**, and these land in **no namespace at all**, so what has to differ
+  is the **name**.
+- **Four module edges, six projects, one `ProviderConformanceCase` per type** — a tenth family with
+  identical columns, over five schemas, two types, a child, and four Kube-OVN kinds surveyed. ⚠ It is
+  also **the first family other families will want a line TO** rather than from: docs/plan/13's VMs
+  and containers have to name a subnet. `module-layering.txt` records the refusal and the sanctioned
+  route **before the first consumer exists**.
+
+**What landed: `virtualNetworks` and `virtualNetworks/subnets`.** `routeTables` is **refused** with
+the argument above; `securityGroups`, `publicIpAddresses`, `dnsZones`, `loadBalancers` and
+`vpnGateways` are **owed**, each with what was learned about it at `NetworkProvider`'s remarks rather
+than left as a bare gap.
+
 ## Planned namespaces
 
 `Platform`, `Identity`, `ContainerService`, `Compute`, `ContainerInstance`, `ContainerRegistry`,

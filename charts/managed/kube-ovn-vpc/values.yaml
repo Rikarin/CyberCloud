@@ -1,0 +1,57 @@
+# A tenant's virtual network — the configuration surface, once.
+#
+# ⚠ EVERY NON-`@internal` BLOCK BELOW IS GENERATED from VirtualNetworks.Schema2026 by
+# `./build.sh Charts`, and so is values.schema.json. ADR-010 § Which end authors the schema: "The C#
+# ResourceSchema is authored. The chart's @param annotations are generated from it and diffed."
+# Editing a generated row here is undone on the next run and fails the build in between; add the
+# field in C# instead.
+#
+# ⚠ THE ADDRESS SPACE IS TWO TYPED STRINGS RATHER THAN docs/plan/14'S LIST, AND THE PATTERN BELOW IS
+# WHY. ADR-012's fifth surface REFUSES `@pattern` on an array — charts/managed/kafka records the same
+# gap as `cidr-shape-is-unenforced`, whose cost is a body that "may send 999.0.0.1/99 and be
+# accepted". On Kafka the unchecked array is an optional firewall list; here it would be the defining
+# property of the resource. Two properties also model docs/plan/14 § IPv6's "a v4 prefix, a v6
+# prefix, or both" exactly, which a bag cannot.
+#
+# ⚠ AND THE ADDRESS SPACE IS NOT RENDERED INTO THE Vpc AT ALL. A Kube-OVN Vpc carries no CIDR — the
+# subnets do. It is checked against the region's reserved ranges and drawn by the portal, and
+# templates/vpc.yaml says so where the field would otherwise be expected.
+
+## @param addressSpace {object} The address range the network plans for. ⚠ Declarative: it is checked against the region's reserved ranges and is not rendered into the fabric, because a Kube-OVN Vpc carries no CIDR — the subnets do.
+addressSpace:
+  ## @param v4 {string} The IPv4 range the network plans for, in CIDR form. It may overlap another of your own virtual networks — that is what a VPC is for — and it may not overlap a range the platform reserves, which is refused with the conflicting range named.
+  ## @required
+  ## @immutable
+  ## @pattern (\d{1,3}\.){3}\d{1,3}/\d{1,2}
+  ## @example "10.20.0.0/16"
+  v4: "10.20.0.0/16"
+  ## @param v6 {string} The IPv6 range the network plans for, or empty for an IPv4-only network. ⚠ docs/plan/14 § IPv6 asks for dual-stack from day one rather than as a retrofit, which is why this is here at the first api-version even though a v4-only network is the ordinary case.
+  ## @immutable
+  ## @pattern ([0-9A-Fa-f:.]+/[0-9]{1,3})?
+  ## @example "fd00:20::/48"
+  v6: ""
+
+## @param enableExternal {boolean} Whether the network's router is attached to the external network. Off by default: a network that reaches the outside without being asked is a network whose owner did not choose that. ⚠ Turning it on requires the cluster to have an external subnet configured; without one the Vpc is accepted and the attachment never completes.
+enableExternal: false
+
+## @param platform {object} Resource identity injected by the reconciler. Not a tenant-facing setting.
+## @internal Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.
+platform:
+  ## @param tenantId {string} Tenant GUID, rendered into the cybercloud.io/tenant-id label.
+  tenantId: ""
+  ## @param subscriptionId {string} Subscription GUID, rendered into the cybercloud.io/subscription-id label.
+  subscriptionId: ""
+  ## @param resourceGroup {string} Resource group name, rendered into the cybercloud.io/resource-group label.
+  resourceGroup: ""
+  ## @param resourceId {string} Resource GUID, rendered into the cybercloud.io/resource-id label.
+  resourceId: ""
+  ## @param resourceType {string} Fully qualified resource type, rendered into the cybercloud.io/resource-type label.
+  resourceType: CyberCloud.Network/virtualNetworks
+  ## @param apiVersion {string} The api-version the resource was last written at, rendered into the cybercloud.io/api-version label.
+  apiVersion: "2026-08-01"
+  ## @param managedBy {string} Value of the cybercloud.io/managed-by label. Constant, and the selector every informer filters on.
+  managedBy: cybercloud
+
+## @param nameOverride {string} Replace the generated object-name stem. Empty means derive it from the release name.
+## @internal Helm plumbing. Nothing about it belongs in a resource body.
+nameOverride: ""

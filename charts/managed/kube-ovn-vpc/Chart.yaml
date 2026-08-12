@@ -1,0 +1,44 @@
+# A tenant's virtual network — docs/plan/14 § Virtual networks, "A tenant's VPC is a Kube-OVN Vpc;
+# subnets are Subnets bound to it", M1 · 2.5 EM.
+#
+# ⚠ THE FIRST CHART IN THE TREE WHOSE OBJECT IS CLUSTER-SCOPED. `Vpc` is
+# `+kubebuilder:resource:scope="Cluster"`, so there is no namespace to place it in and the object's
+# NAME has to carry the separation the namespace was providing. The joining happens in C# —
+# `VirtualNetworks.ObjectNameOf` is `{namespace}-{name}` — for the same reason
+# charts/managed/seaweedfs-bucket's does: the reconciler is the only thing that knows the address.
+#
+# ⚠ THIS CHART RENDERS A CUSTOM RESOURCE; IT DOES NOT INSTALL KUBE-OVN. ADR-019 puts Kube-OVN on the
+# cluster alongside Cilium as platform infrastructure, with ENABLE_LB=false and ENABLE_NP=false. A
+# tenant's Vpc is a row in that installation, not an installation of its own.
+apiVersion: v2
+name: kube-ovn-vpc
+description: A private routing domain on Kube-OVN with its own address space — network-layer tenant separation on shared hardware.
+type: application
+
+# The chart's own version. Bumped on every change to this directory.
+version: 0.1.0
+
+# ⚠ The Kube-OVN version this chart's object shape was reviewed against. See SOURCE for what was read
+# and where.
+appVersion: "1.16.2"
+
+kubeVersion: ">=1.31.0-0"
+
+keywords:
+  - kube-ovn
+  - vpc
+  - networking
+  - tenant-isolation
+
+home: https://kubeovn.github.io/docs/
+sources:
+  - https://github.com/kubeovn/kube-ovn
+
+maintainers:
+  - name: Cyber Cloud Platform
+
+# ⚠ These three are read by `Build.Charts` and written into `values.schema.json` as `x-cybercloud-*`.
+annotations:
+  cybercloud.io/resource-type: CyberCloud.Network/virtualNetworks
+  cybercloud.io/api-version: "2026-08-01"
+  cybercloud.io/operator: kube-ovn

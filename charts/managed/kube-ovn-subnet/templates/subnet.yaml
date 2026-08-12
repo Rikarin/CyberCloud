@@ -1,0 +1,88 @@
+{{/*
+Kube-OVN `Subnet` — docs/plan/14 § Virtual networks, "subnets are Subnets bound to it".
+
+⚠ This renders a custom resource; it does not install Kube-OVN, and it does not create the network.
+The network is CyberCloud.Network/virtualNetworks, one chart directory over, and the write path — not
+this chart — is what refuses a subnet whose network does not exist:
+ResourceManagerService.ResolveAsync resolves the parent's index binding on every CREATE and answers
+the SAME 404 as an unauthorized read, because a distinct "no such parent" would be an existence
+oracle for anyone who may write in a resource group but may not read a particular network.
+
+⚠ NO `namespace:` IN metadata. `Subnet` is `+kubebuilder:resource:scope="Cluster"`.
+*/}}
+apiVersion: kubeovn.io/v1
+kind: Subnet
+metadata:
+  name: {{ include "kube-ovn-subnet.objectName" . }}
+  labels:
+    {{- include "kube-ovn-subnet.platformLabels" . | nindent 4 }}
+spec:
+  {{/*
+    ⚠ THE ONE FIELD THAT MAKES THIS A CHILD, AND IT COMES FROM THE ADDRESS RATHER THAN THE BODY.
+    docs/plan/12 § Child resources makes the parent a pure function of the address and
+    ResourceId.Parent is that function; a `parentNetwork` property in the body would be a second
+    spelling of the same fact, and the two would disagree the first time a body was sent under the
+    wrong path. `platform.parentName` is @internal in values.yaml for exactly that reason.
+
+    ⚠ IT IS ALSO THE FIELD WHOSE ABSENCE IS WORST. A Kube-OVN Subnet with no `spec.vpc` is not inert:
+    formatSubnet fills it with the CLUSTER ROUTER — `ovn-cluster`, the platform's own default VPC — so
+    an unbound tenant subnet lands in the platform's routing domain rather than failing.
+    `NetworkSubnets.VpcRefOf` throws on an id with no parent rather than rendering an empty string.
+  */}}
+  vpc: {{ .Values.platform.parentName | quote }}
+
+  {{/*
+    ⚠ ONE STRING, IPv4 FIRST — see `kube-ovn-subnet.cidrBlock`.
+
+    ⚠ AND THE FABRIC WILL REWRITE IT. pkg/controller/subnet.go's formatCIDR runs each element through
+    net.ParseCIDR and writes back ipNet.String(), so 10.20.1.7/24 is stored as 10.20.1.0/24. That is
+    why NetworkSubnets.Matches compares PARSED networks rather than strings: a string comparison
+    reports drift on a perfectly converged subnet forever and the reconciler never leaves InProgress.
+  */}}
+  cidrBlock: {{ include "kube-ovn-subnet.cidrBlock" . | quote }}
+
+  {{/*
+    ⚠ OFF BY DEFAULT, WHICH IS THE OPPOSITE OF KUBE-OVN'S OWN CONVENTION. Kube-OVN's default subnet
+    has NAT on, because a cluster pod network is expected to reach the internet. A tenant subnet is
+    not — docs/plan/12 § Cross-cutting decisions defaults external exposure to off — and a subnet that
+    silently egresses is the same class of surprise as a publicly readable bucket. It is the only
+    field in this family where this provider's default and the substrate's convention disagree.
+  */}}
+  natOutgoing: {{ .Values.natOutgoing }}
+
+  {{/*
+    ⚠ `private` SHIPS AND `allowSubnets` DOES NOT, WHICH IS HALF A FEATURE AND IS DELIBERATE.
+    `spec.private` isolates a subnet from every other subnet; `spec.allowSubnets` then punches named
+    holes in it. The holes name OTHER SUBNETS' CIDRs — a cross-resource reference with no reader
+    (rule 2), and an array whose per-element pattern ADR-012's fifth surface refuses. So the honest
+    reading of `private: true` in this api-version is "no traffic from other subnets at all".
+    conformance.yaml § owed, `private-has-no-exceptions`.
+  */}}
+  private: {{ .Values.private }}
+
+  enableDHCP: {{ .Values.enableDhcp }}
+
+  {{/*
+    ⚠ NO `protocol`, AND ITS ABSENCE IS LOAD-BEARING. Kube-OVN's spec.protocol is IPv4/IPv6/Dual and
+    the controller RECOMPUTES it from the CIDR on every pass, unconditionally, discarding whatever was
+    sent (`subnet.Spec.Protocol = util.CheckProtocol(subnet.Spec.CIDRBlock)`). A property here would
+    be a control that does nothing — the document would promise it and the substrate would ignore it.
+
+    ⚠ NO `gateway`. The controller derives it from the CIDR when empty, and the first address of the
+    range is right for effectively every subnet; a tenant-set gateway whose value is wrong produces a
+    subnet that allocates addresses nobody can route from. A real omission rather than an impossible
+    one — conformance.yaml § owed, `gateway-is-not-selectable`.
+
+    ⚠ NO `excludeIps`. formatExcludeIPs APPENDS every gateway IP and sort.Strings() the result in
+    place, so the stored list matches neither what any applier sent nor applier order. Sending one
+    would be sending a value the controller then rewrites.
+
+    ⚠ NO `namespaces`. It binds the subnet to Kubernetes namespaces so that pods created there get
+    addresses from it; this platform's namespace is ReconcileDriver.NamespaceFor's, and a tenant body
+    naming namespaces could bind another tenant's. When docs/plan/13's workloads arrive they will join
+    a subnet by PORT ANNOTATION, which is per-pod and carries no such reach.
+
+    ⚠ NO `vlan`, `provider`, `gatewayType`, `gatewayNode`, `enableLb`, `u2oInterconnection`,
+    `routeTable` or the other twenty-odd SubnetSpec fields. Each is either platform fabric
+    configuration or a field the controller owns.
+  */}}

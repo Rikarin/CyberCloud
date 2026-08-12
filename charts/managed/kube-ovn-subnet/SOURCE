@@ -1,0 +1,31 @@
+# Provenance — charts/README.md § `SOURCE` is required, including when nothing was forked.
+#
+# ADR-010: "Their charts are a starting point, not a dependency. Where a chart is close, fork it into
+# charts/ with the upstream commit recorded in a SOURCE file." Nothing was forked here — Kube-OVN is
+# platform infrastructure installed once per cluster (ADR-019) and what this chart renders is a
+# tenant's row in that installation — and `vendored: none` is an answer to "where did this come from"
+# where a missing file is not.
+
+vendored: none
+upstream: https://github.com/kubeovn/kube-ovn
+
+# The upstream API this chart's template targets. ⚠ An API group/version, not a commit: nothing is
+# vendored, so there is no upstream tree to pin.
+upstream-api: kubeovn.io/v1
+
+engine: https://github.com/ovn-org/ovn
+
+See ../kube-ovn-vpc/SOURCE.
+
+The Subnet CRD, its controller write-back and the dual-stack cidrBlock convention are all recorded
+there, because a Subnet and a Vpc are reconciled by the same controller binary and reading one
+without the other would have been half a review. The facts that bear hardest on THIS chart:
+
+  * Subnet is +kubebuilder:resource:scope="Cluster" (pkg/apis/kubeovn/v1/subnet.go).
+  * The Subnet CRD declares ZERO defaults. The `default:` lines in its schema are a property NAMED
+    `default` (SubnetSpec.Default bool), which is a trap that was checked rather than assumed.
+  * formatSubnet/formatAddress rewrite provider, vpc, gatewayType, enableLb, gateway, excludeIps and
+    protocol, and CANONICALIZE cidrBlock through net.ParseCIDR. That is why Matches is containment
+    and why the CIDR is compared as parsed networks.
+  * An empty spec.vpc is filled with the CLUSTER ROUTER — the platform own default VPC — so an
+    unbound tenant subnet is not inert.

@@ -397,10 +397,21 @@ public abstract class ClusterConformanceTests<TSource>(ClusterConformanceFixture
         // ── THE SCAN. A real LIST against the real API server, filtered by the selector
         //    docs/plan/09 § Observing specifies, joined on the resource-id label ADR-013 puts there
         //    precisely so that this is a hash join rather than a scan. ────────────────────────────
+        // ⚠ THE NAMESPACE IS DERIVED FROM THE OBJECTS RATHER THAN ASSUMED, AND FOR A CLUSTER-SCOPED
+        // KIND IT IS EMPTY. `KubeApiClient.ListAsync` already branches on exactly that — an empty
+        // namespace selects `ListClusterCustomObject` — so the shipping code was right and only this
+        // call site was passing a namespace a cluster-scoped kind has no REST path for. The symptom
+        // was the DISCOVERY error, "does not serve kubeovn.io/v1 Vpc (as vpcs) … install or upgrade
+        // the operator that provides it", which points at a missing CRD and is the one message
+        // guaranteed to send a reader looking in the wrong place.
+        var objectsUnderTest = ObjectsOf(accepted.Resource.Id, name);
+
         var inventory = new ListBackedClusterObjectInventory(
             harness.Api,
-            [.. ObjectsOf(accepted.Resource.Id, name).Select(x => x.Kind).Distinct()],
-            ClusterConformanceHarness<TSource>.Namespace
+            [.. objectsUnderTest.Select(x => x.Kind).Distinct()],
+            objectsUnderTest.All(x => x.IsClusterScoped)
+                ? string.Empty
+                : ClusterConformanceHarness<TSource>.Namespace
         );
 
         var objects = await inventory.ListManagedAsync(ClusterConformanceHarness<TSource>.ClusterId, token);
@@ -728,8 +739,24 @@ public abstract class ClusterConformanceTests<TSource>(ClusterConformanceFixture
         ArgumentNullException.ThrowIfNull(target);
 
         try {
-            using var response = await harness.Raw.CustomObjects
-                .GetNamespacedCustomObjectWithHttpMessagesAsync(
+            // ⚠ THE SCOPE BRANCH, WHICH `KubeApiClient` HAS HAD SINCE BEFORE ANY PROVIDER NEEDED IT
+            // AND THIS HARNESS DID NOT. A cluster-scoped object is served at
+            // /apis/{group}/{version}/{plural}/{name} with no namespace segment, and calling the
+            // namespaced overload for one returns `404 page not found` — the bare Traefik-style body,
+            // with no Kubernetes Status in it, so the failure names neither the object nor the reason.
+            // Every provider family before CyberCloud.Network rendered namespaced objects only, so
+            // this branch had no case to be wrong on. See ClusterConformanceHarness
+            // § EnsureCustomResourceDefinitionsAsync, which derives the CRD stub's own scope from the
+            // same `ObjectRef.IsClusterScoped`.
+            using var response = target.IsClusterScoped
+                ? await harness.Raw.CustomObjects.GetClusterCustomObjectWithHttpMessagesAsync(
+                    target.Kind.Group,
+                    target.Kind.Version,
+                    target.Kind.Plural,
+                    target.Name,
+                    cancellationToken: cancellationToken
+                )
+                : await harness.Raw.CustomObjects.GetNamespacedCustomObjectWithHttpMessagesAsync(
                     target.Kind.Group,
                     target.Kind.Version,
                     target.Namespace,
@@ -778,8 +805,20 @@ public abstract class ClusterConformanceTests<TSource>(ClusterConformanceFixture
     ) {
         ArgumentNullException.ThrowIfNull(target);
 
-        using var response = await harness.Raw.CustomObjects
-            .PatchNamespacedCustomObjectWithHttpMessagesAsync(
+        // ⚠ The scope branch — see ReadFromClusterAsync for why it exists and what its absence looked
+        // like.
+        using var response = target.IsClusterScoped
+            ? await harness.Raw.CustomObjects.PatchClusterCustomObjectWithHttpMessagesAsync(
+                new V1Patch(JsonSerializer.Deserialize<JsonElement>(json), V1Patch.PatchType.ApplyPatch),
+                target.Kind.Group,
+                target.Kind.Version,
+                target.Kind.Plural,
+                target.Name,
+                fieldManager: manager,
+                force: true,
+                cancellationToken: cancellationToken
+            )
+            : await harness.Raw.CustomObjects.PatchNamespacedCustomObjectWithHttpMessagesAsync(
                 new V1Patch(JsonSerializer.Deserialize<JsonElement>(json), V1Patch.PatchType.ApplyPatch),
                 target.Kind.Group,
                 target.Kind.Version,
@@ -803,8 +842,16 @@ public abstract class ClusterConformanceTests<TSource>(ClusterConformanceFixture
     ) {
         ArgumentNullException.ThrowIfNull(target);
 
-        using var response = await harness.Raw.CustomObjects
-            .DeleteNamespacedCustomObjectWithHttpMessagesAsync(
+        // ⚠ The scope branch — see ReadFromClusterAsync.
+        using var response = target.IsClusterScoped
+            ? await harness.Raw.CustomObjects.DeleteClusterCustomObjectWithHttpMessagesAsync(
+                target.Kind.Group,
+                target.Kind.Version,
+                target.Kind.Plural,
+                target.Name,
+                cancellationToken: cancellationToken
+            )
+            : await harness.Raw.CustomObjects.DeleteNamespacedCustomObjectWithHttpMessagesAsync(
                 target.Kind.Group,
                 target.Kind.Version,
                 target.Namespace,

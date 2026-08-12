@@ -1,0 +1,245 @@
+# Conformance manifest — docs/plan/12 § The pattern, once, piece 8.
+#
+# What the conformance suite asserts about CyberCloud.Network/virtualNetworks. This file is data:
+# `Build.Charts` checks that it is present, non-empty, and names the same resource type as Chart.yaml.
+# The suite that reads the rest of it lives in test/ and does not exist yet.
+
+resourceType: CyberCloud.Network/virtualNetworks
+apiVersion: "2026-08-01"
+chart: kube-ovn-vpc
+
+# Objects the reconciler must have applied once the resource reports Succeeded.
+#
+# ⚠ ONE, AND IT IS CLUSTER-SCOPED — the first in the tree. A Vpc is a logical router in OVN's
+# southbound database and a set of flows on nodes that already exist. There is no pod, which is also
+# why `meters` below draws no vcpu, memory or storage.
+renders:
+  - group: kubeovn.io
+    version: v1
+    kind: Vpc
+    count: 1
+    clusterScoped: true
+
+# ADR-013 — every rendered object carries all seven labels.
+labels:
+  required:
+    - cybercloud.io/tenant-id
+    - cybercloud.io/subscription-id
+    - cybercloud.io/resource-group
+    - cybercloud.io/resource-id
+    - cybercloud.io/resource-type
+    - cybercloud.io/api-version
+    - cybercloud.io/managed-by
+  values:
+    cybercloud.io/resource-type: cybercloud.network_virtualnetworks
+    cybercloud.io/managed-by: cybercloud
+
+# Behaviour a tenant is entitled to. Each is a statement the suite can fail on, not a feature list.
+assertions:
+  - id: two-subscriptions-may-hold-the-same-network-name
+    says: >
+      Two subscriptions each create a virtual network called `prod` and the two are different
+      networks with different routing tables. ⚠ THIS IS THE ASSERTION A CLUSTER-SCOPED OBJECT EXISTS
+      TO BE WRONG ABOUT, and no earlier family in the tree has needed it. Every object the nine
+      providers before this one render is NAMESPACED, and ReconcileDriver.NamespaceFor —
+      `{subscriptionId:N}-{resourceGroup}` — has kept two tenants' identically named resources apart
+      for all of them without any provider thinking about it. A Vpc is
+      `+kubebuilder:resource:scope="Cluster"`. A renderer that named the object for the resource alone
+      would have both tenants fighting over one Vpc, each converging by overwriting the other, with
+      nothing reporting an error anywhere. NetworkReconcilerTests asserts it.
+  - id: overlapping-address-spaces-between-tenants-are-fine
+    says: >
+      Two tenants both use 10.20.0.0/16 and neither create is refused, and traffic in one network
+      never reaches the other. docs/plan/14: "Overlapping CIDRs between a tenant's VPCs is fine;
+      overlapping with the platform's underlay is not." ⚠ A reserved list that also refused
+      tenant-to-tenant overlap would make a /16 allocatable exactly once across the platform, which is
+      not a cloud. The second half — that traffic does not cross — is Kube-OVN's per-VPC routing
+      tables and is NOT tested by anything here, because there is no Kube-OVN in the cluster-backed
+      suite.
+  - id: an-address-space-overlapping-the-underlay-is-refused-by-name
+    says: >
+      A create whose address space overlaps a reserved range is refused, and the refusal NAMES the
+      conflicting range, the reason and the tenant's own value — docs/plan/14's own requirement.
+      ⚠ TODAY THE REFUSAL ARRIVES AFTER THE 202, which is the defect recorded under § owed as
+      `address-space-is-validated-after-202`. What IS refused at the API is a malformed prefix, by the
+      schema's own Pattern.
+  - id: the-isolation-claim-is-not-exceeded
+    says: >
+      Every surface that describes a virtual network — the OpenAPI summary, the CLI help, the portal
+      blade, this chart's description — says no more than VirtualNetworks.IsolationClaim, and
+      POST …/showIsolation returns that claim together with the four limits. docs/plan/14: "the
+      marketing must not claim more than the substrate delivers." NetworkDeclarationTests walks a
+      forbidden-word list against the registered summaries.
+  - id: deleting-a-network-does-not-strand-its-subnets
+    says: >
+      Deleting a virtual network that still has subnets is refused with a 409 naming how many children
+      there are — docs/plan/08 § Deleting a parent resource that has children. ⚠ NOT IMPLEMENTED; see
+      § owed, `parent-delete-strands-subnets-into-the-platforms-vpc`, which is materially worse on this
+      family than the same gap is on buckets.
+
+# Meters the type must emit.
+#
+# ⚠ ONE, AND THE THREE THAT ARE ABSENT ARE THE FINDING. Every provider in the catalogue before this
+# one draws vcpu, memoryGb and storageGb because every one of them provisions PODS. This type
+# provisions none: a Vpc consumes no CPU, no memory and no disk attributable to the tenant, and a
+# meter for any of them would reserve capacity nothing uses and bill for hardware nobody added.
+#
+# ⚠ AND `publicIps` — the meter docs/plan/14 actually cares about, because "IPv4 is scarce and must be
+# accounted" — belongs to publicIpAddresses, which is owed. See § owed.
+meters:
+  - resources
+
+# ── owed ──────────────────────────────────────────────────────────────────────────────────────────
+owed:
+  - id: address-space-is-validated-after-202
+    says: >
+      ⚠ THE DEFECT THIS ROW WAS TOLD TO ESTABLISH THE LOCATION OF, AND THE ANSWER IS THAT THERE IS
+      NOWHERE GOOD TO PUT IT. docs/plan/14 requires that "the API validates against a per-region
+      reserved list and rejects with the conflicting range named". ResourceSchema CANNOT express that,
+      and this was established rather than assumed: SchemaProperty carries AllowedValues, Pattern,
+      Format, Minimum/Maximum and two lengths, every one of which compares ONE VALUE AGAINST A
+      CONSTANT. A CIDR-overlap check compares one value against a LIST, selected by ANOTHER PROPERTY
+      (the region), using a RELATION (overlap) that is not equality. ResourceSchema.Validate walks one
+      property at a time and never sees a second one.
+      ⚠ AND THERE IS NO PROVIDER SEAM ANYWHERE ELSE ON THE WRITE PATH, which is the half that cost the
+      most to establish. ResourceManagerService runs parse → schema validate → ReBAC → locks → policy →
+      quota → index claim → parent edge → durable write → 202. IResourceTypeBuilder declares
+      ApiVersion, Reconciler, Meter, Permissions, Action, Display, Chart, SupportsTags,
+      SupportsSoftDelete and RequiresCluster — AND NO PREDICATE. IPolicyEvaluator is the one hook that
+      can refuse a body before the 202 and it is a PLATFORM singleton (docs/plan/08 step 5, M3), not
+      something a provider registers.
+      ⚠ SO THE CHECK RUNS IN THE RECONCILER, AFTER THE 202 — the same shape as the defect docs/plan/12's
+      Postgres row shipped, and it is named as a defect rather than described as a design. What is done
+      about it: everything expressible in the schema IS in the schema, so a MALFORMED prefix is refused
+      with a 400 and a JSON Pointer before the write path answers (this is why the address space is two
+      typed strings rather than docs/plan/14's array — ADR-012's fifth surface refuses @pattern on an
+      array, the gap charts/managed/kafka records as `cidr-shape-is-unenforced`); the reserved list is
+      data a test walks rather than prose; and the reconciler's refusal is TERMINAL — Failed, not
+      InProgress — and names the conflicting range, because a body that overlaps the underlay can never
+      converge and retrying it forever would leave the resource reading as "still working on it".
+      ⚠ WHAT WOULD CLOSE IT: one seam,
+      `IResourceTypeBuilder.Validates(Func<JsonElement, string, Result>)` — a pure predicate over the
+      body and the region, run as step 2b next to the schema, whose failure is the same
+      InvalidRequestBody with a Target that the schema's own is. It is a change to
+      CyberCloud.ResourceManager and to IProviderBuilder, which is platform surface this provider may
+      not take unilaterally. THREE other families have recorded a cross-property rule they could not
+      express — charts/managed/kafka's `replication-factor-versus-node-count`, charts/managed/seaweedfs'
+      `replication-versus-topology`, charts/managed/seaweedfs-bucket's
+      `bucket-cluster-may-differ-from-its-accounts` — and this is the FOURTH and the first where the
+      rule is the SUBJECT of the resource type rather than a refinement of it.
+  - id: reserved-list-is-compiled-in
+    says: >
+      NetworkAddressing.ReservedRanges is a C# constant. A region's operator cannot add their underlay
+      without a release, and the ranges that are genuinely per-region — the physical network a region's
+      nodes sit on — are exactly the ones this repository cannot know. It is a constant because the
+      alternative has no seam either: ReconcileContext carries a cluster connection and an
+      ISecretResolver and nothing else, so configuration does not reach a reconciler. The table ships
+      with the rows that are true in every region (Kubernetes' service CIDR, Kube-OVN's own default and
+      join subnets, loopback, link-local, multicast, IPv6 link-local) plus ONE worked per-region
+      example so the column is exercised. ⚠ Closing this is the same seam as
+      `address-space-is-validated-after-202` plus a source of per-region configuration.
+  - id: subnets-are-not-checked-against-the-address-space
+    says: >
+      A virtual network's `addressSpace` is DECLARATIVE. Nothing compares a child subnet's
+      `addressPrefix` to it, so a subnet may legally sit outside the network that contains it — which
+      reads as a contradiction and is one. It is the same shape as charts/managed/seaweedfs-bucket's
+      `bucket-cluster-may-differ-from-its-accounts`: a relation between two RESOURCES' bodies, which
+      ResourceSchema never sees. ⚠ It is not merely cosmetic here: `addressSpace` is the only thing the
+      network-level reserved-range check runs against, so a subnet outside it is a range that was never
+      checked at the network level either — though it IS checked at its own level, which is what keeps
+      this from being a hole rather than an inconsistency. NetworkAddressTests asserts the FIXTURES are
+      consistent so the family's examples read as a coherent network.
+  - id: route-tables-have-no-object
+    says: >
+      ⚠ docs/plan/14'S RESOURCE TREE ASKS FOR A TYPE THIS SUBSTRATE CANNOT CARRY, and this is the
+      refutation rather than a deferral. That tree draws `routeTables/{name} → static routes,
+      next-hop` as a child of a virtual network. Kube-OVN has NO route-table object: the CRD file
+      defines 25 kubeovn.io/v1 kinds and none of them is a RouteTable, VpcRouteTable or top-level
+      StaticRoute — a "route table" there is a bare STRING NAME referenced from
+      `Vpc.spec.staticRoutes[].routeTable` and `Subnet.spec.routeTable`, with no independent existence,
+      no lifecycle and nothing to observe. (RouterLBRule and SwitchLBRule are OVN load-balancer rules;
+      the names mislead.) So a routeTables resource would have to write into its parent's
+      `Vpc.spec.staticRoutes` — and that array carries no `x-kubernetes-list-type` and no
+      `x-kubernetes-list-map-keys`, so it is ATOMIC under server-side apply and the last applier owns
+      the whole list: two route tables in one network would each converge by ERASING the other, with
+      nothing reporting an error. A type in the registry with no reconciler answers 202 and converges
+      nothing; a type whose two instances silently delete each other is worse. ⚠ What routing WOULD
+      look like: a field on the virtual network itself, owned by one resource, which is what
+      `static-routes-are-not-expressible` blocks.
+  - id: static-routes-are-not-expressible
+    says: >
+      Independently of the above, a static route is `{cidr, nextHop, policy}` — an ARRAY OF OBJECTS —
+      and SchemaProperty.ElementKind refuses that outright: "an array element is a scalar … a nested or
+      nested-array element would need its own pointer space, which is the flat-list property
+      ResourceSchema is built on". So even as a field on the network there is nowhere to put one.
+      ⚠ THIRD SIGHTING IN THIS FAMILY ALONE — the same refusal blocks securityGroups' rule list and
+      forces `showIsolation`'s limits table to be flattened to prose on the way out. It is the single
+      most load-bearing limit of ResourceSchema for this problem domain, because networking
+      configuration is lists of rules almost everywhere.
+  - id: security-group-rules-are-arrays-of-objects
+    says: >
+      `virtualNetworks/securityGroups` is OWED rather than refused, and it is the one of docs/plan/14's
+      children that has a real object: SecurityGroup, cluster-scoped, plural `security-groups`
+      (hyphenated — the CRD-stub derivation reads GroupVersionKind.Plural, and a guessed
+      `securitygroups` would install a definition at a path the apply never reaches). Its blocker is
+      `static-routes-are-not-expressible`: SecurityGroupSpec is `ingressRules`/`egressRules` of
+      SecurityGroupRule{ipVersion, protocol, priority, remoteType, remoteAddress, remoteSecurityGroup,
+      portRangeMin, portRangeMax, policy}, an array of objects. ⚠ Two further notes for whoever builds
+      it. The rule `policy` values are `allow`/`drop`/`pass` — the doc COMMENT in the Go source says
+      "allow, pass or deny" and the constants are SgPolicyAllow/SgPolicyDrop/SgPolicyPass bound to OVN
+      ACL actions, so the value is `drop` and not `deny`; a third README-versus-code disagreement for
+      this tree. And security-groups is NOT covered by the validating webhook even when that webhook is
+      enabled.
+  - id: an-array-of-objects-is-not-expressible
+    says: >
+      The response half of the same limit. VirtualNetworks.IsolationLimits is four fields per row and
+      POST …/showIsolation returns `/limits` as an ARRAY OF SENTENCES, because ElementKind refuses an
+      array of objects on a response schema exactly as it does on a request one. So the structured
+      table the platform holds is flattened to prose on the way out and a client that wanted the four
+      columns has to split strings. It is the cheapest of the three places this family meets the
+      refusal, which is why this type ships with it rather than around it.
+  - id: nothing-can-join-a-network-yet
+    says: >
+      ⚠ THIS IS THE FIRST FAMILY WHOSE RESOURCES OTHER RESOURCES ARE MEANT TO SIT INSIDE, AND NO SUCH
+      RESOURCE EXISTS. docs/plan/13's VMs and containers are the customers. What was avoided is
+      FORECLOSING it, and the assumption is stated so it can be checked: a workload joins a tenant
+      network by naming a SUBNET rather than a network, because a Kube-OVN pod is annotated onto a
+      Subnet and never onto a Vpc. A subnet binds to its VPC through `spec.vpc` naming
+      VirtualNetworks.ObjectNameOf's output, which is derivable from a resource id alone — so the join
+      is a RESOURCE ID a future provider resolves through CyberCloud.ResourceManager, which is the
+      route rule 2 requires, rather than an assembly reference. ⚠ module-layering.txt now records that
+      this is the first family other families will want a line TO, and the refusal is written down
+      there BEFORE the first consumer exists.
+  - id: parent-delete-strands-subnets-into-the-platforms-vpc
+    says: >
+      docs/plan/08 § Deleting a parent resource that has children: "a delete is refused while the
+      resource still has children — 409, not a cascade, and not a silent orphan". NOT IMPLEMENTED — the
+      platform cannot enumerate children. ⚠ WHAT IT COSTS ON THIS FAMILY IS WORSE THAN ON
+      CyberCloud.Storage/accounts/buckets AND IN A SPECIFIC WAY. An orphaned Bucket dangles inertly. An
+      orphaned Kube-OVN Subnet does NOT: formatSubnet fills an empty `spec.vpc` with the CLUSTER ROUTER
+      — `ovn-cluster`, the PLATFORM'S OWN default VPC — and a Subnet whose named Vpc has been deleted
+      is reconciled against a router that no longer exists. So deleting a network can leave a tenant's
+      address range being programmed in, or adjacent to, the platform's own routing domain. Closing it
+      is docs/plan/08's per-parent child counter plus ~10 lines in ResourceManagerService's delete path.
+  - id: the-cluster-backed-suite-proves-less-than-it-looks
+    says: >
+      ⚠ STATED EXPLICITLY BECAUSE THE GAP IS WIDER ON THIS FAMILY THAN ON ANY BEFORE IT. The k3s the
+      cluster suite starts has NO KUBE-OVN AND NO CRDs FOR IT. What it proves: the apply path reaches a
+      CLUSTER-SCOPED REST path (new — ClusterConformanceHarness had `Scope = "Namespaced"` hard-coded
+      and every assertion here 404'd until the scope was derived from ObjectRef.IsClusterScoped),
+      ADR-013 label injection under real admission, server-side apply under this platform's field
+      manager, and the refusal a missing CRD produces. What it does NOT prove: that these manifests
+      satisfy Kube-OVN's schema — the derived stub's schema is x-kubernetes-preserve-unknown-fields, so
+      a field Kube-OVN would refuse is accepted and the one +kubebuilder:default the real CRD carries is
+      absent. And NOTHING about the behaviour this family's Matches is built around, because the thing
+      that rewrites the spec is the CONTROLLER and there is no controller. NetworkMatchesTests
+      hand-writes every controller-shaped read-back for exactly that reason.
+  - id: grafana-dashboard
+    says: >
+      docs/plan/12 § The pattern, once, piece 6 keeps the dashboard chart-side. ⚠ PIECE 6 DOES NOT
+      APPLY TO THIS TYPE AT ALL, which is a fourth outcome after its two branches and Analytics'
+      third. Both branches presuppose a workload to scrape: "ask the operator for the scrape object"
+      or "hand-write one when there is no operator to ask". A Vpc HAS NO POD. The metrics that matter
+      for tenant networking are per-flow and come from Hubble into ClickHouse — docs/plan/14
+      § Observability — which is a pipeline rather than a scrape, and it is docs/plan/16's rather than
+      this provider's.

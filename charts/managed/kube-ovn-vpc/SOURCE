@@ -1,0 +1,161 @@
+# Provenance — charts/README.md § `SOURCE` is required, including when nothing was forked.
+#
+# ADR-010: "Their charts are a starting point, not a dependency. Where a chart is close, fork it into
+# charts/ with the upstream commit recorded in a SOURCE file." Nothing was forked here — Kube-OVN is
+# platform infrastructure installed once per cluster (ADR-019) and what this chart renders is a
+# tenant's row in that installation — and `vendored: none` is an answer to "where did this come from"
+# where a missing file is not.
+
+vendored: none
+upstream: https://github.com/kubeovn/kube-ovn
+
+# The upstream API this chart's template targets. ⚠ An API group/version, not a commit: nothing is
+# vendored, so there is no upstream tree to pin.
+upstream-api: kubeovn.io/v1
+
+engine: https://github.com/ovn-org/ovn
+
+Kube-OVN — what was read, where, and on what date.
+
+⚠ EVERY FACT BELOW COMES FROM THE GO TYPES OR THE GENERATED CRD YAML, NOT FROM THE DOCUMENTATION
+SITE. src/Providers/README.md records two occasions on which a README and the code disagreed, and one
+on which an operator's own user guide contradicted its own defaulting logic. Read on 2026-08-13
+against `master`, cross-checked against tags v1.15.23 and v1.14.9. Latest tag at the time: v1.16.2.
+
+  https://github.com/kubeovn/kube-ovn
+    pkg/apis/kubeovn/v1/vpc.go
+    pkg/apis/kubeovn/v1/subnet.go
+    pkg/apis/kubeovn/v1/security-group.go
+    pkg/apis/kubeovn/v1/iptables-eip.go
+    pkg/apis/kubeovn/v1/ovn-eip.go
+    pkg/controller/vpc.go
+    pkg/controller/subnet.go
+    pkg/util/net.go
+    pkg/webhook/webhook.go
+    charts/kube-ovn/templates/kube-ovn-crd.yaml
+    dist/images/install.sh
+    yamls/webhook.yaml
+
+⚠ THE CRD YAML IS AT charts/kube-ovn/templates/kube-ovn-crd.yaml. There is no `yamls/crd.yaml` and no
+`charts/kube-ovn/crds/` on master, and the Go types are NOT in a single `types.go` — they are split
+per kind under pkg/apis/kubeovn/v1/. Both are worth writing down because both cost a search.
+
+── Scope ─────────────────────────────────────────────────────────────────────────────────────────
+
+EVERY kind this family touches is CLUSTER-SCOPED. From vpc.go:
+
+    // +kubebuilder:resource:scope="Cluster",shortName="vpc",path="vpcs"
+
+and the same shape on Subnet (`shortName="subnet"`, `path="subnets"`), SecurityGroup
+(`shortName="sg"`, path="security-groups", singular="security-group"), IptablesEIP
+(`path="iptables-eips"`) and OvnEip (`path="ovn-eips"`).
+
+⚠ THE CRD FILE DEFINES 25 kubeovn.io/v1 KINDS AND EXACTLY ONE IS NAMESPACED — VpcEgressGateway. That
+is the whole list of exceptions.
+
+⚠ SecurityGroup's plural is `security-groups`, HYPHENATED, not `securitygroups`. The cluster-backed
+conformance harness derives its CRD stub's path from GroupVersionKind.Plural, so a hand-written
+plural that guessed would produce a definition at a path the apply never reaches.
+
+── Defaults and webhooks: there are almost none, and that matters ────────────────────────────────
+
+Across Vpc, Subnet, SecurityGroup, IptablesEIP and OvnEip there are exactly TWO `+kubebuilder:default`
+markers in the whole set:
+
+    Vpc.spec.bfdPort.enabled       // +kubebuilder:default=false
+    VpcDns.spec.corefile           // +kubebuilder:default=vpc-dns-corefile
+
+Subnet: ZERO. SecurityGroup: ZERO. IptablesEIP: ZERO. OvnEip: ZERO. There is also no `required:` and
+no `enum:` anywhere in the vpcs / subnets / security-groups / iptables-eips / ovn-eips schemas — every
+spec field is optional and every string is free-form.
+
+⚠ A TRAP THAT WAS CHECKED SO NOBODY HAS TO CHECK IT AGAIN. Grepping `default:` in the Subnet and Vpc
+schemas HITS — and every hit is a property NAMED `default`, not a default value. Verbatim from the
+Subnet schema:
+
+              default:
+                description: Whether this is the default subnet.
+                type: boolean
+
+That is `SubnetSpec.Default bool json:"default"`. A reviewer who greps and stops has the opposite of
+the truth.
+
+⚠ THERE IS NO MutatingWebhookConfiguration ANYWHERE IN THE PROJECT. pkg/webhook/webhook.go defines
+only `type ValidatingHook`, whose create/update/delete hooks return `Allowed("bypass")` or
+`Denied(...)` and never a patch. The one ValidatingWebhookConfiguration
+(`pod-ip-validating.kube-ovn.io`) is OPT-IN AND OFF BY DEFAULT: dist/images/install.sh contains no
+webhook at all, the v2 chart gates it on `validatingWebhook.enabled: false`, and yamls/webhook.yaml is
+a separate manual apply with `failurePolicy: Ignore`. It does not cover security-groups, ovn-eips or
+vpc-dnses at all.
+
+⚠ SO CLIENT-SIDE VALIDATION IS THE ONLY VALIDATION, which is part of why this provider's
+address-space check exists at all.
+
+── Why Matches is containment anyway: the CONTROLLER writes to .spec ─────────────────────────────
+
+This is the finding. The usual argument for containment — "the CRD defaults fields in" or "a mutating
+webhook rewrites them" — is FALSE here, and containment is still mandatory, because the controller
+issues a full Update against an object the platform applied.
+
+pkg/controller/vpc.go, formatVpc():
+
+    if item.Policy == "" { item.Policy = kubeovnv1.PolicyDst; changed = true }
+    if route.Action != kubeovnv1.PolicyRouteActionReroute { if route.NextHopIP != "" { route.NextHopIP = "" } }
+
+plus a finalizer, then `Vpcs().Update(...)`. And handleDeleteVpcStaticRoute REMOVES entries from
+`vpc.Spec.StaticRoutes` outright.
+
+pkg/controller/subnet.go, formatSubnet() and formatAddress():
+
+    if newSubnet.Spec.Provider == "" { newSubnet.Spec.Provider = util.OvnProvider }          // "ovn"
+    if newSubnet.Spec.Vpc == "" { ... newSubnet.Spec.Vpc = c.config.ClusterRouter }          // "ovn-cluster"
+    if newSubnet.Spec.GatewayType == "" { newSubnet.Spec.GatewayType = GWDistributedType }   // "distributed"
+    if newSubnet.Spec.EnableLb == nil && ... { newSubnet.Spec.EnableLb = &c.config.EnableLb }
+    subnet.Spec.Protocol = util.CheckProtocol(subnet.Spec.CIDRBlock)                          // ALWAYS
+
+    formatCIDR:       each comma-separated element through net.ParseCIDR, written back as ipNet.String()
+    formatGateway:    derived from the CIDR when empty; in Dual a missing family is appended
+    formatExcludeIPs: APPENDS every gateway IP and sort.Strings() in place
+
+⚠ THE `spec.Vpc == ""` BRANCH IS THE MOST DANGEROUS LINE IN THIS FILE. An unbound Subnet is not
+inert — it is assigned to the CLUSTER ROUTER, which is the platform's own default VPC. That is why
+NetworkSubnets.VpcRefOf throws rather than rendering an empty string.
+
+⚠ AND `formatCIDR` IS WHY NetworkSubnets.Matches COMPARES PARSED NETWORKS. A tenant who sends
+10.20.1.7/24 has 10.20.1.0/24 stored, by the controller, one pass later. A string comparison reports
+drift on a converged subnet forever.
+
+── Dual-stack ────────────────────────────────────────────────────────────────────────────────────
+
+`cidrBlock` is COMMA-SEPARATED, IPv4 FIRST. util.CheckProtocol splits on `,` and returns Dual only
+when exactly two entries parse as one v4 and one v6; one entry gives IPv4 or IPv6; anything else gives
+"". `gateway`, `excludeIps` entries and `u2oInterconnectionIP` follow the same convention.
+
+Protocol constants (pkg/apis/kubeovn/v1/subnet.go): ProtocolIPv4 "IPv4", ProtocolIPv6 "IPv6",
+ProtocolDual "Dual", and — on master only, absent in v1.15/v1.14 — ProtocolMac "Mac".
+
+── Server-side apply: every array here is ATOMIC ─────────────────────────────────────────────────
+
+None of Vpc.spec.staticRoutes, Vpc.spec.policyRoutes, Vpc.spec.vpcPeerings, Vpc.spec.namespaces,
+Vpc.spec.extraExternalSubnets, Subnet.spec.excludeIps, Subnet.spec.namespaces,
+Subnet.spec.allowSubnets, SecurityGroup.spec.ingressRules or SecurityGroup.spec.egressRules carries an
+`x-kubernetes-list-type` or `x-kubernetes-list-map-keys` marker, and there are no `+listType=` /
+`+listMapKey=` Go markers. An array with no listType defaults to ATOMIC under SSA, so the last applier
+owns the whole list.
+
+⚠ THIS IS WHY THERE IS NO `routeTables` RESOURCE TYPE. Two platform resources cannot each own a slice
+of one Vpc's static-route list; the second apply replaces the first's entries wholesale.
+
+The only `x-kubernetes-list-type` lines inside the vpcs block belong to
+`bfdPort.nodeSelector.matchExpressions` — controller-gen boilerplate for the embedded
+metav1.LabelSelector. The set/map markers elsewhere in the file all belong to vpc-egress-gateways, the
+one hand-marked CRD.
+
+── There is no route-table object ────────────────────────────────────────────────────────────────
+
+No RouteTable, no VpcRouteTable, no top-level StaticRoute kind. A "route table" in Kube-OVN is a bare
+STRING NAME referenced from Vpc.spec.staticRoutes[].routeTable and Subnet.spec.routeTable. It has no
+independent existence, no lifecycle and nothing to observe.
+
+⚠ RouterLBRule and SwitchLBRule are OVN LOAD-BALANCER rules. The names mislead; they are not routing
+tables.
