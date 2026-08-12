@@ -68,6 +68,27 @@ public sealed record DesiredSubmission {
     /// </remarks>
     [Id(10)]
     public ImmutableArray<string> DeclaredPointers { get; init; } = [];
+
+    /// <summary>
+    ///     The subset of <see cref="DeclaredPointers" /> a caller may see back — everything except the
+    ///     <c>SchemaProperty.Secret</c> properties.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Two lists, because writing and reading want different ones.</b> The write applies
+    ///     <see cref="DeclaredPointers" />, which must stay complete: the grain replaces only the
+    ///     pointers it is handed, so omitting one would make a <c>PUT</c> swallow that property and
+    ///     report success. The response projects this one, so a secret the caller just sent does not
+    ///     come straight back.
+    ///     <para>
+    ///         ⚠ Left empty this falls back to <see cref="DeclaredPointers" />, because an empty pointer
+    ///         list already means "project the whole superset" downstream and a caller that forgot to
+    ///         set this should get today's behaviour rather than everything. <c>ProviderBuilder</c>
+    ///         refuses a resource body whose every property is <c>Secret</c>, which is the one case
+    ///         where the real readable set is legitimately empty.
+    ///     </para>
+    /// </remarks>
+    [Id(11)]
+    public ImmutableArray<string> ReadablePointers { get; init; } = [];
 }
 
 /// <summary>

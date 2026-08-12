@@ -53,6 +53,26 @@ sealed class ProviderBuilder(string providerNamespace) : IResourceTypeBuilder {
             }
         }
 
+        // ⚠ A BODY WHOSE EVERY PROPERTY IS SECRET HAS NO READABLE PROJECTION, AND THAT LEAKS.
+        //
+        // ResourceManagerService.ReadablePointers withholds the Secret pointers by handing the grain
+        // the others, and ResourceGrain.Project reads an empty list as "project the whole superset" —
+        // the escape hatch the delete path and the reconcile driver need. So a body like this would
+        // project everything it meant to withhold, and do it silently.
+        //
+        // ⚠ The check is HERE and not in ResourceSchema.Of, because a schema does not know what it is
+        // for. An action's response schema is legitimately all-secret — the `listKeys` case in
+        // docs/plan/08 § The provider registry is exactly that — and it never goes near the projection.
+        // Only a resource-type body does, and this is the one place a schema is declared to be one.
+        if (!schema.Properties.IsDefaultOrEmpty && schema.Properties.All(x => x.Secret)) {
+            throw new ArgumentException(
+                $"Every property of '{draft.Type}' at '{version}' is Secret, so a read has nothing to "
+                + "project and would fall through to the whole stored superset — the opposite of what "
+                + "Secret asks for. A resource type needs at least one property a caller can read back.",
+                nameof(schema)
+            );
+        }
+
         draft.ApiVersions.Add(new(parsed, schema));
         return this;
     }

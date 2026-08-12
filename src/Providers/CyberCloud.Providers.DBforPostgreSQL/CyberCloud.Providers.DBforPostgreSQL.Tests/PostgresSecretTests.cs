@@ -20,12 +20,12 @@ namespace CyberCloud.Providers.DBforPostgreSQL.Tests;
 ///         field.</b> <c>charts/managed/postgres/values.yaml</c> carries a <c>bootstrap.password</c>
 ///         row, and a provider that mirrored it as a body property would have put a plaintext
 ///         password into the resource grain's desired state through a JSON string that no analyzer
-///         reads. <c>SchemaProperty.Secret</c>'s own remarks say the value <i>"never reaches grain
-///         state — it is replaced by a <c>SecretRef</c> before step 8"</i>, and no such substitution
-///         exists anywhere in <c>src/CyberCloud.ResourceManager</c> — the only thing
-///         <c>Secret</c> does today is make <c>ResourceSchema.Project</c> drop the property on a
-///         <i>read</i>. So the property is absent, the chart row is <c>@internal</c>, and these tests
-///         are what say so out loud.
+///         reads. <c>Secret</c> would not have saved it: nothing on the write path substitutes a
+///         <c>SecretRef</c> before the grain persists the body, so the value would be stored in
+///         plaintext — docs/plan/02 § ADR-010 and the remarks on <c>SchemaProperty</c>. All the flag
+///         buys is that a read withholds the property, which keeps a secret out of the API's answers
+///         and not out of Postgres. So the property is absent, the chart row is <c>@internal</c>, and
+///         these tests are what say so out loud.
 ///     </para>
 /// </remarks>
 public sealed class PostgresSecretTests {
@@ -84,34 +84,15 @@ public sealed class PostgresSecretTests {
         );
     }
 
-    [Fact]
-    public void AProjectionOfTheDesiredBodyIsTheWholeBodyBecauseThereIsNothingToWithhold() {
-        // ⚠ The corollary worth pinning: ResourceSchema.Project drops Secret properties on a read, and
-        // this type has none — so a GET returns everything it stored, and "secrets never round-trip"
-        // holds because none went in. charts/managed/postgres/conformance.yaml's
-        // `secrets-never-round-trip` assertion is satisfied by absence rather than by redaction, which
-        // is the stronger of the two and should not be quietly weakened into the other later.
-        var body = JsonNode.Parse(PostgresServers.Body(Guid.NewGuid()))!.AsObject();
-        var projected = PostgresServers.Schema2026.Project(body);
-
-        // ⚠ Compared with members sorted. Project rebuilds the object in the SCHEMA's declaration
-        // order rather than the body's, so a raw text comparison would be asserting that Body happens
-        // to be written in schema order — which is true today and is not the property under test.
-        Sorted(projected).ShouldBe(Sorted(body));
-    }
-
-    static string Sorted(JsonNode? value) => Sort(value)?.ToJsonString() ?? "null";
-
-    static JsonNode? Sort(JsonNode? value) {
-        if (value is not JsonObject map) {
-            return value?.DeepClone();
-        }
-
-        var sorted = new JsonObject();
-        foreach (var member in map.OrderBy(x => x.Key, StringComparer.Ordinal)) {
-            sorted[member.Key] = Sort(member.Value);
-        }
-
-        return sorted;
-    }
+    // ⚠ A FOURTH TEST WAS HERE AND IT IS GONE ON PURPOSE. It projected a desired body through
+    // ResourceSchema.Project and asserted nothing was withheld. That method has been deleted: it was
+    // the unreachable twin of ResourceGrain.Project, and its secret drop is now
+    // ResourceManagerService.ReadablePointers, asserted end to end by
+    // CyberCloud.ResourceManager.Tests.WritePathTests.ASecretPropertyIsNeverProjectedBackToTheCaller.
+    //
+    // What the deleted test actually pinned — this type withholds nothing on a read because it declares
+    // no Secret property — is the first test above, which says it more directly.
+    // charts/managed/postgres/conformance.yaml's `secrets-never-round-trip` is still satisfied by
+    // absence rather than by redaction, which is the stronger of the two and should not be quietly
+    // weakened into the other later.
 }

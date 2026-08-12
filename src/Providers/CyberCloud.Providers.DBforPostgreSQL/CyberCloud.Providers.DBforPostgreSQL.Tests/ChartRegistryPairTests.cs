@@ -23,10 +23,24 @@ namespace CyberCloud.Providers.DBforPostgreSQL.Tests;
 ///     <para>
 ///         So the row-by-row comparisons are gone. They compared two hand-maintained files, which can
 ///         agree and both be wrong; generation makes one file a function of the other, which cannot
-///         disagree with its source. Three of them had in fact become <i>false</i> by the time they
-///         were deleted — they pinned <c>/properties/clusterId</c> as a body-only property with no
-///         chart row, and the emitter gives it one, because it is under <c>/properties</c>, is not
-///         <c>ReadOnly</c>, and is therefore something the chart's caller sets.
+///         disagree with its source.
+///     </para>
+///     <para>
+///         ⚠ <b>CORRECTED 2026-08-12, later the same day. This note went on to say that three of the
+///         deleted tests "had in fact become <i>false</i>" because they pinned
+///         <c>/properties/clusterId</c> as a body-only property with no chart row, "and the emitter
+///         gives it one, because it is under <c>/properties</c>, is not <c>ReadOnly</c>, and is
+///         therefore something the chart's caller sets". The tests were right and the emitter was
+///         incomplete.</b> Its rule had no word for placement, so the chart grew a
+///         <c>clusterId: ""</c> row under <c>## @format uuid</c> — a default that is not a uuid, in a
+///         chart whose own generated schema declares the format. <c>ChartAnnotationEmitter.Emit</c>
+///         now takes <c>ResourceTypeRegistration.ClusterIdPointer</c> and skips it, so the deleted
+///         assertions are true again — and they stay deleted, because
+///         <c>ChartAnnotationTests.ThePlacementPointerReachesTheEmitterFromTheRegistrationRatherThanTheSchema</c>
+///         asserts the same fact against the generator rather than against a second hand-maintained
+///         file. ⚠ <b>The lesson is the direction of the inference</b>: "the generator does X" is not
+///         evidence that X is right, and a test deleted for disagreeing with a generator should be
+///         read as a report about the generator first.
 ///     </para>
 ///     <para>
 ///         ⚠ <b>What is left is what generation does not reach.</b> The preset table lives in
