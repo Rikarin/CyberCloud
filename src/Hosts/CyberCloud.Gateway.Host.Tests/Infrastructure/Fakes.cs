@@ -35,7 +35,13 @@ sealed class OneTypeRegistry : IProviderRegistry {
                 new(ApiVersion.Parse(OlderVersion), ResourceSchema.Empty),
                 new(ApiVersion.Parse(TheVersion), ResourceSchema.Empty)
             ],
-            Actions = [new("restart", ActionKind.Post, "write", false)]
+            Actions = [
+                new("restart", ActionKind.Post, "write", false),
+                // ⚠ A synchronous, secret-carrying action, because the 200-versus-202 branch and the
+                // no-store header only exist for one. `restart` above stays long-running-shaped so
+                // both branches of DispatchStage.ActionAsync are covered by real declarations.
+                new("listKeys", ActionKind.Post, "listKeys", true)
+            ]
         }
     ];
 
@@ -69,6 +75,7 @@ sealed class OneTypeRegistry : IProviderRegistry {
 /// </remarks>
 sealed class RecordingResourceManager : IResourceManager {
     readonly ConcurrentQueue<string> paths = new();
+    readonly ConcurrentQueue<string> actions = new();
     readonly ConcurrentQueue<CallerContext> callers = new();
 
     /// <summary>Every resource path this manager was asked about, in order.</summary>
@@ -109,6 +116,14 @@ sealed class RecordingResourceManager : IResourceManager {
     public Task<Result<WriteAccepted>> DeleteAsync(WriteRequest request, CancellationToken cancellationToken = default) =>
         Record(request, OnWrite);
 
+    /// <summary>Every action name this manager was asked to run, in order.</summary>
+    /// <remarks>
+    ///     ⚠ <b>Separate from <see cref="Paths" />, because the path does not carry the action.</b>
+    ///     <c>GatewayRouter.ResolveAction</c> strips the last segment before building the address, so
+    ///     "was this dispatched as an action" is not answerable from the path a test can see.
+    /// </remarks>
+    public IReadOnlyCollection<string> Actions => actions;
+
     /// <inheritdoc />
     /// <remarks>
     ///     ⚠ Answers from <see cref="OnRead" /> rather than <see cref="OnWrite" />, because a restore
@@ -126,8 +141,17 @@ sealed class RecordingResourceManager : IResourceManager {
         Record(request, OnWrite);
 
     /// <inheritdoc />
-    public Task<Result<WriteAccepted>> ActionAsync(WriteRequest request, CancellationToken cancellationToken = default) =>
-        Record(request, OnWrite);
+    /// <remarks>
+    ///     ⚠ <b>Enqueues before it records.</b> A sabotage that routed <c>GET</c> here was survived by an
+    ///     assertion of <c>Status.ShouldNotBe(200)</c> — this fake answers <c>202</c>, and 202 ≠ 200, so
+    ///     the assertion held for a reason unrelated to what it claimed. <see cref="Actions" /> is what
+    ///     lets a test ask the only question that matters: whether dispatch was reached at all.
+    /// </remarks>
+    public Task<Result<WriteAccepted>> ActionAsync(WriteRequest request, CancellationToken cancellationToken = default) {
+        actions.Enqueue(request.Action);
+
+        return Record(request, OnWrite);
+    }
 
     /// <summary>Every operation this manager was asked about, in order.</summary>
     public ConcurrentQueue<Guid> Operations { get; } = new();

@@ -185,6 +185,51 @@ public sealed class UnavailableSecretResolver : ISecretResolver {
 }
 
 /// <summary>
+///     The <see cref="ISecretWriter" /> a host with no vault registers: it refuses.
+/// </summary>
+/// <remarks>
+///     <para>
+///         ⚠ <b>Refuses rather than succeeding without writing, and the difference is a service that
+///         comes up open.</b> A no-op mint returns "the credential exists" to a reconciler that then
+///         renders a manifest against a secret nobody wrote — and on
+///         <c>CyberCloud.Storage/accounts</c> an S3 gateway with no identities file
+///         <i>authenticates nobody and authorises everybody</i>. So the refusal is the safe answer for
+///         the same reason <see cref="UnavailableSecretResolver" />'s is, one step earlier in the
+///         story.
+///     </para>
+///     <para>
+///         ⚠ <b>Its message names the wiring rather than the feature</b>, because <c>OpenBaoSecretWriter</c>
+///         exists and writes a real value. Reaching this type means the host did not call
+///         <c>AddOpenBaoSecretResolver</c>, which installs both halves.
+///     </para>
+/// </remarks>
+public sealed class UnavailableSecretWriter : ISecretWriter {
+    /// <inheritdoc />
+    public Task<Result<SecretMint>> MintAsync(
+        string path,
+        IReadOnlyDictionary<string, string> fields,
+        CancellationToken cancellationToken = default
+    ) {
+        ArgumentNullException.ThrowIfNull(path);
+        ArgumentNullException.ThrowIfNull(fields);
+
+        return Task.FromResult(
+            Result<SecretMint>.Failure(
+                ErrorCode.InternalError,
+                $"No secret writer is wired, so a credential cannot be minted at '{path}'. "
+                + "docs/plan/12 § The pattern, once, piece 5 puts credential provisioning in the "
+                + "tenant's Vault and CyberCloud.Vault is the client — but this host registered "
+                + "neither. Call ISiloBuilder.AddOpenBaoSecretResolver() beside "
+                + "AddCyberCloudResourceManager(), with CyberCloud:Vault:Address and "
+                + "CyberCloud:Vault:Role configured. This refuses rather than reporting a mint that "
+                + "did not happen, because a resource whose credential silently does not exist is a "
+                + "data plane that lets everybody in."
+            )
+        );
+    }
+}
+
+/// <summary>
 ///     The <see cref="IClusterConnectionFactory" /> a silo with no Kubernetes wiring registers.
 /// </summary>
 /// <remarks>

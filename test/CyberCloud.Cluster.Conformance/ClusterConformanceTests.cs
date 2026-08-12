@@ -697,9 +697,17 @@ public abstract class ClusterConformanceTests<TSource>(ClusterConformanceFixture
                     null,
                     ReconcileDriver.NamespaceFor(address),
                     harness.Connection,
-                    new UnavailableSecretResolver(),
+                    // ⚠ The harness's vault on both members. This context is built BY HAND rather
+                    // than by ReconcileDriver, so nothing fills SecretWriter in for it — and a
+                    // provider whose pass mints a credential would fail every drift and conflict
+                    // assertion for a wiring reason rather than for the reason under test. The same
+                    // instance the silo holds, so the credential a create minted is the one a repair
+                    // pass finds.
+                    ClusterConformanceState<TSource>.Vault,
                     new RecordingLog()
-                ),
+                ) {
+                    SecretWriter = ClusterConformanceState<TSource>.Vault
+                },
                 TestContext.Current.CancellationToken
             );
     }

@@ -4,7 +4,9 @@ using CyberCloud.Gateway.Host.Pipeline;
 using CyberCloud.Gateway.Host.Routing;
 using CyberCloud.ResourceManager.Contracts.Registry;
 using CyberCloud.ServiceDefaults;
+using CyberCloud.Vault;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Volo.Abp;
 
@@ -28,6 +30,36 @@ var options = new GatewayOptions {
 };
 
 builder.Services.AddCyberCloudGateway(options);
+
+// ── The vault — docs/plan/18, docs/plan/12 § The pattern, once, piece 5 ────────────────────────
+//
+// ⚠ THE GATEWAY AND NOT THE SILO, WHICH IS THE OPPOSITE OF WHERE EVERY COMMENT IN THE TREE SAID
+// THIS LINE WOULD GO, AND THE REASON IS WHERE ACTIONS RUN.
+//
+// AddCyberCloudGateway composes the resource manager (see its remarks), so THIS process holds
+// IResourceManager — and ResourceManagerService.ActionAsync serves a non-LongRunning action inline
+// rather than through an operation on a silo. A `listKeys` therefore resolves its credential from
+// the resolver registered here. CyberCloud.Silo.Host does not call AddCyberCloudResourceManager at
+// all and does not reference the assembly, so there is no ISecretResolver in a silo to replace;
+// adding this line there would be a registration nothing resolves.
+//
+// ⚠ CONDITIONAL, AND AN UNCONFIGURED SECTION LEAVES THE REFUSING SEAMS IN PLACE. That is the shape
+// SiloIdentityOptions.AddSiloIdentity already uses for AddCommunicationOtpDelivery, and the
+// argument is the same: UnavailableSecretResolver's message names the missing call and the two
+// configuration keys, and it is the sentence an operator meets on the first `listKeys` this host is
+// asked to serve. Making the OpenBao resolver the default instead would replace that sentence with
+// a connection error naming an address nobody set.
+//
+// ⚠ MISCONFIGURED IS NOT THE SAME AS UNCONFIGURED. IsConfigured tests the two keys the resolver
+// validates; anything past that — a plaintext address without AllowInsecureTransport, a relative
+// URL — throws out of AddOpenBaoSecretResolver at composition, so the pod does not start. A host
+// that opted in and got the address wrong should fail now rather than at 03:00.
+var vault = new VaultOptions();
+builder.Configuration.GetSection(VaultOptions.SectionName).Bind(vault);
+
+if (vault.IsConfigured) {
+    builder.Services.AddOpenBaoSecretResolver(vault);
+}
 
 // docs/plan/10 § SignalR — AddSignalR and nothing else. No AddStackExchangeRedis: "No SignalR
 // backplane product." The fan-out is a connection grain plus Orleans streams, which is

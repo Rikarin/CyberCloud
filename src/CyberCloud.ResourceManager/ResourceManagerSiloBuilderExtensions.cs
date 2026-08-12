@@ -1,4 +1,5 @@
 using CyberCloud.Core.Time;
+using CyberCloud.ResourceManager.Actions;
 using CyberCloud.ResourceManager.Contracts.Registry;
 using CyberCloud.ResourceManager.Drift;
 using CyberCloud.ResourceManager.Grains;
@@ -95,6 +96,7 @@ public static class ResourceManagerSiloBuilderExtensions {
         services.TryAddSingleton<IResourceChangedSink, LoggingResourceChangedSink>();
         services.TryAddSingleton<ILockResolver, ResourceScopeLockResolver>();
         services.TryAddSingleton<ISecretResolver, UnavailableSecretResolver>();
+        services.TryAddSingleton<ISecretWriter, UnavailableSecretWriter>();
         services.TryAddSingleton<IClusterConnectionFactory, NoClusterConnectionFactory>();
         services.TryAddSingleton<IClusterObjectInventory, UnavailableClusterObjectInventory>();
         services.TryAddSingleton<IResourceAuthorizer, ReBacResourceAuthorizer>();
@@ -107,6 +109,12 @@ public static class ResourceManagerSiloBuilderExtensions {
 
         services.TryAddSingleton<DriftScanner>();
         services.TryAddSingleton<ReconcileDriver>();
+
+        // ⚠ Resolved in the GATEWAY as well as in a silo, and unlike DriftScanner and ReconcileDriver
+        // it is actually used there. IResourceManager is "a service held by the gateway"
+        // (docs/plan/08 § The write path, end to end), a synchronous action runs inside ActionAsync,
+        // so a `listKeys` executes in the gateway's process and reads the gateway's ISecretResolver.
+        services.TryAddSingleton<ActionDispatcher>();
         services.TryAddSingleton<IResourceManager, ResourceManagerService>();
 
         // ── The SignalR connection grain's dependencies. docs/plan/10 § SignalR ──────────────────
@@ -155,6 +163,13 @@ public static class ResourceManagerSiloBuilderExtensions {
 
                 foreach (var reconciler in builder.Reconcilers) {
                     services.TryAddSingleton(reconciler);
+                }
+
+                // ⚠ Singletons by concrete type, for the reasons above and one more that is specific
+                // to a handler: ActionDispatcher resolves ActionRegistration.HandlerType, so a
+                // registration only against IResourceActionHandler would give it a list to search.
+                foreach (var handler in builder.Handlers) {
+                    services.TryAddSingleton(handler);
                 }
             }
         );

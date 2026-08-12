@@ -283,6 +283,43 @@ public sealed record WriteAccepted {
     /// </summary>
     [Id(5)]
     public bool NoOp { get; init; }
+
+    /// <summary>
+    ///     A synchronous action's <c>200</c> body, as JSON, or empty for anything else.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>THIS IS THE ONLY PLACE A <c>secret: true</c> ACTION'S VALUE TRAVELS, AND THE
+    ///         ABSENCE OF THE ALTERNATIVE IS THE POINT.</b> The obvious home for an action's result is
+    ///         the operation it started — an LRO already has a status every client polls. That home is
+    ///         <b>durable</b> and is readable by anyone holding <c>read</c> on the resource, while
+    ///         <c>listKeys</c> deliberately checks a permission that is <i>not</i> <c>read</c>. So a
+    ///         result on the operation would hand the credential to every reader and write it into the
+    ///         durable tier, defeating the permission split without touching the permission.
+    ///     </para>
+    ///     <para>
+    ///         What this is instead: one reply, to one caller, on one request, persisted nowhere. It
+    ///         has no <c>[Id]</c>-annotated relative in grain state and <c>CC1005</c> would refuse one.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ Checked against the action's declared <c>Response</c> schema before it gets here — see
+    ///         <c>ActionDispatcher</c> — so a client generated from the OpenAPI document can
+    ///         deserialize it.
+    ///     </para>
+    /// </remarks>
+    [Id(6)]
+    public string ActionResponse { get; init; } = string.Empty;
+
+    /// <summary>
+    ///     Whether the work is already done, so the answer is <c>200</c> rather than <c>202</c>.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Set only by a synchronous action</b>, which is <c>ActionRegistration.LongRunning</c>
+    ///     being false. A write is never complete on the request path — docs/plan/06 § Two-phase create
+    ///     — and a <c>202</c> whose operation never existed is a client polling a <c>404</c> forever.
+    /// </remarks>
+    [Id(7)]
+    public bool Completed { get; init; }
 }
 
 /// <summary>

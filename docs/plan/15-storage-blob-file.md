@@ -50,10 +50,15 @@ inapplicable.
 >   service's.** `weed/s3api/auth_credentials.go` sets `isAuthEnabled = len(identities) > 0` and
 >   `AuthenticateRequest` returns an **admin** identity when that is false — so a gateway with no
 >   identities file answers every anonymous request as an administrator, over HTTP, on a protocol
->   every tool already speaks. The provider therefore renders `spec.s3.configSecret` against a
->   `Secret` nothing writes, and the account does not come up. [12](12-managed-data-services.md)'s
->   piece 5 is the blocker and the answer to *"is it usable meanwhile"* is **no** — unlike PostgreSQL,
->   whose operator generates its own password.
+>   every tool already speaks. ⚠ **CORRECTED 2026-08-13 — this is the row piece 5 was built against,
+>   and it is built.** The paragraph used to end "the provider therefore renders `spec.s3.configSecret`
+>   against a `Secret` nothing writes, and the account does not come up", with piece 5 as the blocker.
+>   The reconciler now mints an S3 key pair into the tenant's vault **before** it applies anything,
+>   renders the identities `Secret` from what the vault returned, and `listKeys` hands the pair back.
+>   The ordering is chosen by which partial failure is survivable: a mint with no cluster leaves an
+>   inert KV document the next pass reuses, while a cluster with no mint is the open gateway above.
+>   [12](12-managed-data-services.md)'s piece 5 row named `ISecretResolver`, which reads and cannot
+>   provision; it is corrected there to `ISecretWriter` plus `IResourceActionHandler`.
 
 **ADR-008: the API is S3.** Not the Azure Blob dialect. Every SDK, backup tool, CI runner and framework
 already speaks S3; a second dialect buys migration-from-Azure and costs a permanent second surface.

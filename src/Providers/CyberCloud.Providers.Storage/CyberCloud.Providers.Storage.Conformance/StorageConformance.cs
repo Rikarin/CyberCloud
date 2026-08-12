@@ -21,12 +21,29 @@ namespace CyberCloud.Providers.Storage.Conformance;
 ///         on both sides rather than only above.
 ///     </para>
 ///     <para>
-///         ⚠ <b><see cref="ProviderConformanceCase.Objects" /> is one <c>Seaweed</c> and that is not
-///         an under-declaration.</b> The masters, the volume servers, the filer, the S3 gateway, their
-///         Services and — when monitoring is on — four <c>ServiceMonitor</c>s are all created by the
-///         <i>operator</i>, and this suite asserts what the <i>reconciler</i> applied. Listing them
-///         here would make the suite fail against every cluster that has no SeaweedFS operator
-///         installed, which is every cluster the Docker-free half runs against.
+///         ⚠ <b><see cref="ProviderConformanceCase.Objects" /> is a <c>Seaweed</c> and a <c>Secret</c>,
+///         and stopping there is not an under-declaration.</b> The masters, the volume servers, the
+///         filer, the S3 gateway, their Services and — when monitoring is on — four
+///         <c>ServiceMonitor</c>s are all created by the <i>operator</i>, and this suite asserts what
+///         the <i>reconciler</i> applied. Listing them here would make the suite fail against every
+///         cluster that has no SeaweedFS operator installed, which is every cluster the Docker-free
+///         half runs against.
+///     </para>
+///     <para>
+///         ⚠ <b>The <c>Secret</c> is matched on PRESENCE and not on content, and that is forced.</b>
+///         Every other <c>ObjectMatchesDesired</c> in the catalogue compares an object against the
+///         desired <i>body</i>; this object's content is a credential, which is deliberately not in
+///         the body and never will be. <see cref="StorageAccounts.Matches" /> checks that the
+///         identities key is there — which is what a deleted, emptied or never-applied <c>Secret</c>
+///         all fail, and all three are a gateway that comes up granting <c>ACTION_ADMIN</c> to
+///         everybody.
+///     </para>
+///     <para>
+///         ⚠ <b>The harness supplies a vault, and without one this whole case is red.</b>
+///         <c>ProviderTestCluster</c> registers an <c>InMemorySecretVault</c> as both
+///         <c>ISecretResolver</c> and <c>ISecretWriter</c>, shared between the silo and the client,
+///         because the mint happens inside the silo and <c>listKeys</c> resolves outside it. It
+///         implements mint-once for real, so the idempotence assertions still measure the reconciler.
 ///     </para>
 ///     <para>
 ///         ⚠ <b>CORRECTED 2026-08-12 — docs/plan/15's <c>buckets</c> child type IS declared now, and
@@ -63,7 +80,13 @@ public sealed class StorageCase : IProviderCaseSource {
             InvalidBody = cluster => WithoutStorageSize(StorageAccounts.Body(cluster)),
             InvalidBodyTarget = "/properties/storage/size",
             ActionName = StorageAccounts.ListKeysAction,
-            Objects = (id, ns) => [StorageAccounts.SeaweedRef(ns, id.Name)],
+            // ⚠ BOTH OBJECTS, IN APPLY ORDER. The identities Secret is declared rather than left
+            // undeclared-but-applied: the suite's delete assertion only proves what it lists is gone,
+            // and a credential Secret surviving its account is exactly the thing that must not.
+            Objects = (id, ns) => [
+                StorageAccounts.ConfigSecretRef(ns, id.Name),
+                StorageAccounts.SeaweedRef(ns, id.Name)
+            ],
             ObjectMatchesDesired = (objectJson, desiredJson) => {
                 using var desired = JsonDocument.Parse(desiredJson);
                 return StorageAccounts.Matches(objectJson, desired.RootElement);

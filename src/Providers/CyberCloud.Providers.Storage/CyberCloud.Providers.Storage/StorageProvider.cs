@@ -63,13 +63,21 @@ namespace CyberCloud.Providers.Storage;
 ///         the ordinary case rather than the lucky one.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Piece 5 is not built and this is the service where that costs the most.</b> The
-///         argument is at <see cref="StorageAccounts.ConfigSecretName" /> and the short form is: a
-///         SeaweedFS S3 gateway with no identities file authenticates nobody and answers every request
-///         as an <b>administrator</b>, so the reference is rendered anyway and the account does not
-///         finish. Unlike <c>CyberCloud.DBforPostgreSQL/servers</c>, whose operator generates its own
-///         password, this service is <b>not usable at all</b> until there is a Vault to write the
-///         identities from.
+///         ⚠ <b>PIECE 5 IS BUILT, AND THIS IS THE SERVICE IT WAS BUILT AGAINST.</b> A SeaweedFS S3
+///         gateway with no identities file authenticates nobody and answers every request as an
+///         <b>administrator</b> — so unlike <c>CyberCloud.DBforPostgreSQL/servers</c>, whose operator
+///         generates its own password, the absence here was a security hole rather than an
+///         inconvenience. <c>StorageAccountReconciler</c> now mints a key pair into the tenant's vault
+///         before it applies anything, renders the identities <c>Secret</c> from what the vault
+///         returned, and <see cref="StorageAccountListKeysHandler" /> hands the pair back.
+///     </para>
+///     <para>
+///         ⚠ <b>docs/plan/12 § The pattern, once assigned piece 5 to <c>ISecretResolver</c>, which
+///         reads and cannot provision, and that row is corrected.</b> The mint is <c>ISecretWriter</c>
+///         and the action is <c>IResourceActionHandler</c>; the resolver is the third of the three,
+///         used to read the value back on both paths. Before the handler seam existed
+///         <c>IProviderBuilder.Action</c> took no handler at all, so this action — and eleven others
+///         across the catalogue — was declared, published, and could not run.
 ///     </para>
 ///     <para>
 ///         ⚠ <b>No <c>SupportsSoftDelete</c>, for the reason the three providers before this one give</b>:
@@ -130,7 +138,12 @@ public sealed class StorageProvider : IResourceProvider {
                 ActionKind.Post,
                 StorageAccounts.ListKeysPermission,
                 secret: true,
-                response: StorageAccounts.ListKeysResponse
+                response: StorageAccounts.ListKeysResponse,
+                // ⚠ THE FIRST HANDLER IN THE CATALOGUE, AND IT IS THE PARAMETER THAT TURNS EVERY
+                // DECLARATION ABOVE INTO SOMETHING THAT RUNS. Before it existed, a POST to this
+                // action answered 202 and re-ran StorageAccountReconciler — the registry had no way
+                // to name code, so OperationGrain did the only thing it knew.
+                handler: typeof(StorageAccountListKeysHandler)
             )
             // ⚠ THE SHORT NAME IS `objectstore` AND THE OBVIOUS `storage` IS A HARD COLLISION, WHICH
             // NOTHING IN THE REGISTRY CHECKS. docs/plan/21 § Grammar's alias table would spell this

@@ -23,6 +23,18 @@ static class GatewayHeaders {
     /// <summary>Seconds before the next poll, and seconds until a rate limit clears.</summary>
     public const string RetryAfter = "Retry-After";
 
+    /// <summary>
+    ///     Sent as <c>no-store</c> on an action's response. docs/plan/08 § The provider registry makes
+    ///     a <c>secret: true</c> action's response never cached.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Sent on every synchronous action, not only the secret ones.</b> Which actions carry
+    ///     secret material is a per-provider declaration, and a header applied per declaration is one
+    ///     somebody forgets when they add the thirteenth action. An action does work or reads
+    ///     something live; neither is worth caching, so there is nothing to trade away.
+    /// </remarks>
+    public const string CacheControl = "Cache-Control";
+
     /// <summary>How many reads the subscription has left in the window.</summary>
     public const string RemainingSubscriptionReads = "x-ms-ratelimit-remaining-subscription-reads";
 

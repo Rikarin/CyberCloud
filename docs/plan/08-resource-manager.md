@@ -430,7 +430,7 @@ Rules that make this useful rather than decorative:
 |---|---|---|
 | Talk to Kubernetes | `CyberCloud.Kubernetes`, via the reconciler | The manager must work for a provider with no cluster at all (a DNS zone, a mail domain, a role assignment) |
 | Render Helm charts | `CyberCloud.Kubernetes.Charts` | Same |
-| Hold secrets | `ISecretResolver` → OpenBao | [05](05-state-and-storage.md) |
+| Hold secrets | `ISecretResolver` (read) and `ISecretWriter` (mint-once) → OpenBao | [05](05-state-and-storage.md) |
 | Rate limit | Gateway | Per-request work must not touch a grain |
 | Emit metrics/logs for tenants | Providers → `CyberCloud.Telemetry` | Volume |
 | Decide *where* a resource goes | The subscription's default cluster, or the explicit `clusterId` | Placement policy is M3 and would be a scheduler; the manager just carries the id |

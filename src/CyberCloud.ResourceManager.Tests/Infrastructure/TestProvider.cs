@@ -344,8 +344,20 @@ public sealed class TestingProvider : IResourceProvider {
             .Meter(QuotaMeter.Vcpu, "/properties/size")
             .Meters(QuotaMeter.Resources)
             .Permissions("read", "write", "delete")
-            .Action("restart", ActionKind.Post, "write")
-            .Action("listKeys", ActionKind.Post, "listKeys", secret: true)
+            // ⚠ TWO SYNCHRONOUS ACTIONS WITH HANDLERS AND ONE WITHOUT, WHICH IS THREE REAL BRANCHES
+            // RATHER THAN ONE PLUS DECORATION. `restart` and `listKeys` run; `orphaned` below is a
+            // declared action nothing can execute, which is what every action in the catalogue was
+            // before handlers existed and is the refusal ActionDispatcher has to produce.
+            .Action("restart", ActionKind.Post, "write", handler: typeof(RestartHandler))
+            .Action(
+                "listKeys",
+                ActionKind.Post,
+                "listKeys",
+                secret: true,
+                response: ListKeysResponse,
+                handler: typeof(ListKeysHandler)
+            )
+            .Action("orphaned", ActionKind.Post, "write")
             // ⚠ The one action with a declared request, and it is here so the write path's action-body
             // validation has something to refuse. An action that declares no request takes whatever it
             // is given, which is what `restart` and `listKeys` above still do — both branches are real.
@@ -610,6 +622,21 @@ public sealed class TestingProvider : IResourceProvider {
     ///     </para>
     /// </remarks>
     public const string QuantityPattern = KubeQuantity.Pattern;
+
+    /// <summary>The shape <c>listKeys</c> declares, so the dispatcher has something to check against.</summary>
+    public static ResourceSchema ListKeysResponse { get; } =
+        ResourceSchema.Of(
+            [
+                new("/accessKeyId", SchemaKind.Text, Required: true, Description: "The key id."),
+                new(
+                    "/secretAccessKey",
+                    SchemaKind.Text,
+                    Required: true,
+                    Secret: true,
+                    Description: "The secret."
+                )
+            ]
+        );
 
     /// <summary>A body that satisfies <see cref="SizedSchema" />.</summary>
     /// <param name="replicas">How many instances.</param>

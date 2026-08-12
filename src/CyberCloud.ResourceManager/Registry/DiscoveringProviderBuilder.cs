@@ -22,13 +22,24 @@ namespace CyberCloud.ResourceManager.Registry;
 ///         than assumed.
 ///     </para>
 ///     <para>
-///         Every method other than <c>ResourceType</c> and <c>Reconciler</c> is a no-op here: this
-///         collector is not building a registration and has nothing to do with a schema or a meter.
+///         Every method other than <c>ResourceType</c>, <c>Reconciler</c> and <c>Action</c> is a
+///         no-op here: this collector is not building a registration and has nothing to do with a
+///         schema or a meter.
 ///     </para>
 /// </remarks>
 sealed class DiscoveringProviderBuilder : IResourceTypeBuilder {
     /// <summary>The reconciler types the provider named, in declaration order.</summary>
     public List<Type> Reconcilers { get; } = [];
+
+    /// <summary>The action handler types the provider named, in declaration order.</summary>
+    /// <remarks>
+    ///     ⚠ Collected for the same reason the reconcilers are, and the consequence of forgetting is
+    ///     worse: a reconciler nothing registered fails the whole provision with a message naming the
+    ///     type, while an unregistered handler fails only the one action — and the one action most
+    ///     likely to have one is <c>listKeys</c>, whose absence a tenant meets as "this service has no
+    ///     credentials" rather than as a wiring error.
+    /// </remarks>
+    public List<Type> Handlers { get; } = [];
 
     /// <inheritdoc />
     public IResourceTypeBuilder ResourceType(string type) => this;
@@ -66,8 +77,15 @@ sealed class DiscoveringProviderBuilder : IResourceTypeBuilder {
         bool secret = false,
         ResourceSchema? request = null,
         ResourceSchema? response = null,
-        bool longRunning = false
-    ) => this;
+        bool longRunning = false,
+        Type? handler = null
+    ) {
+        if (handler is not null && !Handlers.Contains(handler)) {
+            Handlers.Add(handler);
+        }
+
+        return this;
+    }
 
     /// <inheritdoc />
     public IResourceTypeBuilder Display(string name, string plural, string shortName = "", string summary = "") => this;

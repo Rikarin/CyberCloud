@@ -117,9 +117,25 @@ sealed class DispatchStage(
     ) {
         var accepted = await manager.ActionAsync(Build(context, WriteVerb.Post), cancellationToken);
 
-        return accepted.TryGetError(out var error)
-            ? ResultShaper.Shape(error, path)
-            : Accepted(context, accepted.GetValueOrThrow());
+        if (accepted.TryGetError(out var error)) {
+            return ResultShaper.Shape(error, path);
+        }
+
+        var value = accepted.GetValueOrThrow();
+
+        // ⚠ 200 AND THE ACTION'S OWN BODY, WITH NO Azure-AsyncOperation AND NO Retry-After. An action
+        // that did its work has nothing to poll, and Accepted() below would advertise an operation id
+        // of Guid.Empty — a URL that answers 404 to every client polite enough to follow it.
+        //
+        // ⚠ Cache-Control: no-store, because this is the response a `secret: true` action's value
+        // leaves in. docs/plan/08 § The provider registry makes such an action "never cached", and a
+        // credential sitting in a proxy or a browser's disk cache is the reason.
+        return value.Completed
+            ? new GatewayOutcome {
+                StatusCode = StatusCodes.Status200OK,
+                Json = value.ActionResponse.Length == 0 ? "{}" : value.ActionResponse
+            }.WithHeader(GatewayHeaders.CacheControl, "no-store")
+            : Accepted(context, value);
     }
 
     /// <summary>
