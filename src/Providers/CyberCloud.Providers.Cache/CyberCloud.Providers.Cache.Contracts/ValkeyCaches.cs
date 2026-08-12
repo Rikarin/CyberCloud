@@ -144,33 +144,29 @@ public static class ValkeyCaches {
             Plural = "redisfailovers"
         };
 
-    // ── The two constraint vocabularies, shared with the first provider by shape and not by code ──
+    // ── The two constraint vocabularies, now shared by code rather than by shape ──
     //
-    // ⚠ These are the same two constants CyberCloud.Providers.DBforPostgreSQL.Contracts declares, and
-    // they are DUPLICATED rather than shared. Rule 2 of docs/plan/03 § Assembly graph rules forbids a
-    // Providers.* assembly referencing another, and "a Kubernetes quantity" is a fact about Kubernetes
-    // rather than about either provider — so the place it eventually belongs is
-    // CyberCloud.Kubernetes.Contracts, next to LabelSyntax, which is where that assembly already keeps
-    // the platform's other syntactic rules. Moving it is a change to a shipped assembly and does not
-    // belong in a provider PR (docs/plan/25 § R1 keeps that number at zero), so the duplication is
-    // recorded here as the finding rather than resolved as a convenience.
+    // ⚠ THESE WERE A LOCAL COPY OF THE SAME TWO CONSTANTS CyberCloud.Providers.DBforPostgreSQL.Contracts
+    // DECLARES, AND THE COPY COST THE PLATFORM A SECOND QUANTITY PARSER. The note that stood here said
+    // the duplication was "recorded as the finding rather than resolved as a convenience" and that the
+    // grammar eventually belonged next to LabelSyntax in CyberCloud.Kubernetes.Contracts. What happened
+    // in the meantime is the argument against leaving it: an author who needed to turn one of these
+    // strings into a number found the pattern here, in a provider assembly, and wrote QuantityBytes
+    // beside it — a `double` parser for a grammar the platform already parsed exactly in `decimal`.
+    //
+    // So the grammar moved to KubeQuantity.Pattern instead, beside the parser rather than beside the
+    // other syntax rules. Rule 2 is untouched: KubeQuantity is in CyberCloud.ResourceManager.Contracts,
+    // which this project already references and every provider may. LabelSyntax's neighbourhood was the
+    // tidier home and this one is the one that makes the next author land on the parser.
+    //
+    // ⚠ PostgresServers and KafkaClusters still declare their own copies. Both are out of this change's
+    // scope; until they follow, the duplication that produced the second parser survives in two places.
 
-    /// <summary>A Kubernetes quantity — <c>500m</c>, <c>2</c>, <c>4Gi</c>. Anchored by the validator.</summary>
-    /// <remarks>
-    ///     ⚠ Deliberately narrower than apimachinery's: no sign, no exponent, no fractional binary
-    ///     suffix. A negative or exponent-form CPU request is legal to the API server and is never what
-    ///     a tenant meant.
-    /// </remarks>
-    public const string QuantityPattern = @"\d+(\.\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?";
+    /// <inheritdoc cref="KubeQuantity.Pattern" />
+    public const string QuantityPattern = KubeQuantity.Pattern;
 
-    /// <summary>A quantity or the empty string, for a field whose default is "take it from the preset".</summary>
-    /// <remarks>
-    ///     ⚠ The empty alternative is required rather than cosmetic: <see cref="SchemaProperty" />
-    ///     checks its own <see cref="SchemaProperty.DefaultJson" /> against its own constraints at
-    ///     construction, so a pattern that refused <c>""</c> on a property defaulting to <c>""</c> would
-    ///     throw at silo start.
-    /// </remarks>
-    public const string OptionalQuantityPattern = "(" + QuantityPattern + ")?";
+    /// <inheritdoc cref="KubeQuantity.OptionalPattern" />
+    public const string OptionalQuantityPattern = KubeQuantity.OptionalPattern;
 
     /// <summary>
     ///     The replication topologies this type offers. ⚠ One member, on purpose.
@@ -615,65 +611,40 @@ public static class ValkeyCaches {
     }
 
     /// <summary>
-    ///     A Kubernetes memory quantity in bytes, or <see langword="null" /> when it is not one.
+    ///     A Kubernetes memory quantity as whole bytes, or <see langword="null" /> when it is not one
+    ///     or does not fit.
     /// </summary>
     /// <param name="quantity">A quantity matching <see cref="QuantityPattern" />, for example <c>4Gi</c>.</param>
     /// <remarks>
-    ///     ⚠ <b>This exists because <c>maxmemory-policy</c> does nothing without <c>maxmemory</c>.</b>
-    ///     Valkey applies an eviction policy only when a memory ceiling is set; without one the process
-    ///     grows until the kernel's OOM killer takes the pod, and the tenant's chosen policy has never
-    ///     been consulted. So the ceiling is derived from the container's own memory quantity rather
-    ///     than being a second thing to set — a cache whose <c>maxmemory</c> and whose container limit
-    ///     could disagree is a cache that OOMs while believing it has room.
+    ///     ⚠ <b>This is a rounding rule, not a parser.</b> <see cref="KubeQuantity.TryParse" /> is the
+    ///     platform's one answer to "what number is this string", and it answers in
+    ///     <see langword="decimal" /> because quota reserves fractional cores. Valkey needs something
+    ///     else on top: <c>maxmemory</c> is a whole-byte ceiling, so the exact answer is floored here
+    ///     and nowhere else. Keeping the two apart is the point — a provider that needs different
+    ///     rounding writes a rule like this one, never a second parse.
+    ///     <para>
+    ///         ⚠ <b>This used to be that second parse.</b> It walked the same digits and the same
+    ///         suffix table in <see langword="double" />, and the damage was not the accept set — the
+    ///         two agreed on every string, including <c>""</c>, <c>-1</c>, <c>1e3</c> and <c>4gi</c> —
+    ///         but the values. <c>8.7T</c> came back one byte short at 8699999999999, and <c>8Ei</c>
+    ///         came back as <see cref="long.MaxValue" /> rather than refused, because
+    ///         <c>(double)long.MaxValue</c> rounds up to one past it and the range check compared equal.
+    ///     </para>
     ///     <para>
     ///         ⚠ The <c>m</c> suffix is milli — <c>500m</c> is half a byte — and it is parsed rather
     ///         than refused, because <see cref="QuantityPattern" /> permits it and a caller who writes
-    ///         <c>512m</c> meaning mebibytes must not get a ceiling a thousand times too large. It
-    ///         truncates, and 0 becomes "no ceiling" through <see cref="MaxMemoryBytes" />.
+    ///         <c>512m</c> meaning mebibytes must not get a ceiling a thousand times too large.
+    ///         <see cref="KubeQuantity" /> accepts <c>m</c> on a memory value for the same reason, so
+    ///         consolidating changed nothing here; the floor turns it into 0, and 0 becomes "no
+    ///         ceiling" through <see cref="MaxMemoryBytes" />.
     ///     </para>
     /// </remarks>
-    public static long? QuantityBytes(string quantity) {
-        if (string.IsNullOrEmpty(quantity)) {
-            return null;
-        }
-
-        var digits = 0;
-        while (digits < quantity.Length && (char.IsAsciiDigit(quantity[digits]) || quantity[digits] == '.')) {
-            digits++;
-        }
-
-        if (digits == 0
-            || !double.TryParse(
-                quantity[..digits],
-                NumberStyles.Float,
-                CultureInfo.InvariantCulture,
-                out var magnitude
-            )) {
-            return null;
-        }
-
-        var multiplier = quantity[digits..] switch {
-            "" => 1d,
-            "m" => 0.001d,
-            "k" => 1e3d,
-            "M" => 1e6d,
-            "G" => 1e9d,
-            "T" => 1e12d,
-            "P" => 1e15d,
-            "E" => 1e18d,
-            "Ki" => 1024d,
-            "Mi" => 1024d * 1024,
-            "Gi" => 1024d * 1024 * 1024,
-            "Ti" => 1024d * 1024 * 1024 * 1024,
-            "Pi" => 1024d * 1024 * 1024 * 1024 * 1024,
-            "Ei" => 1024d * 1024 * 1024 * 1024 * 1024 * 1024,
-            _ => double.NaN
-        };
-
-        var bytes = magnitude * multiplier;
-
-        return double.IsNaN(bytes) || bytes < 0 || bytes > long.MaxValue ? null : (long)bytes;
-    }
+    public static long? QuantityBytes(string quantity) =>
+        // No lower bound. The grammar has no sign and every multiplier is positive, so a parse that
+        // succeeds cannot be negative — a `>= 0` guard here would read as if one could.
+        KubeQuantity.TryParse(quantity, out var bytes) && bytes <= long.MaxValue
+            ? (long)bytes
+            : null;
 
     /// <summary>
     ///     The fraction of the container's memory the cache is allowed to hold.
@@ -685,19 +656,38 @@ public static class ValkeyCaches {
     ///     shares the pod's limit. A cache set to exactly its container limit is a cache that is OOM
     ///     killed during its first background save, which looks to a tenant like an unexplained restart
     ///     under load.
+    ///     <para>
+    ///         ⚠ <see langword="decimal" /> rather than <see langword="double" />, so the byte count
+    ///         this multiplies stays exact. Three quarters is exact in binary too, but the moment the
+    ///         fraction changes to something that is not — 0.8, say — a <see langword="double" /> here
+    ///         would put the ceiling a byte or two off a number the operator can read back off the pod,
+    ///         and re-introduce the imprecision consolidating <see cref="QuantityBytes" /> removed.
+    ///     </para>
     /// </remarks>
-    public const double MaxMemoryFraction = 0.75;
+    public const decimal MaxMemoryFraction = 0.75m;
 
     /// <summary>
     ///     The <c>maxmemory</c> value for a body, in bytes, or <see langword="null" /> for no ceiling.
     /// </summary>
     /// <param name="desired">The validated desired body.</param>
+    /// <remarks>
+    ///     ⚠ <b>The zero test is on the ceiling, not on the byte count, and it used to be on the byte
+    ///     count.</b> <c>maxmemory 0</c> means UNLIMITED to Valkey, which is the opposite of what a
+    ///     caller with no usable memory figure should get, so the line is omitted instead. Testing the
+    ///     byte count let one window through: a limit of one byte — <c>1</c>, <c>1500m</c>, <c>1.9</c>
+    ///     — passed the guard, and three quarters of it floored to 0, so the provider wrote the exact
+    ///     line the guard existed to prevent. No preset reaches that window, which is why it survived.
+    /// </remarks>
     public static long? MaxMemoryBytes(JsonElement desired) {
         var (_, memory) = Resources(desired);
 
-        return QuantityBytes(memory) is { } bytes and > 0
-            ? (long)(bytes * MaxMemoryFraction)
-            : null;
+        if (QuantityBytes(memory) is not { } bytes) {
+            return null;
+        }
+
+        var ceiling = (long)(bytes * MaxMemoryFraction);
+
+        return ceiling > 0 ? ceiling : null;
     }
 
     /// <summary>

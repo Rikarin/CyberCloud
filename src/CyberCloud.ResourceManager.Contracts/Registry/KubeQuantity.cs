@@ -20,8 +20,21 @@ namespace CyberCloud.ResourceManager.Contracts.Registry;
 ///         quantity parsers that disagree by a rounding rule is a billing defect that shows up as a
 ///         subscription refused a create it was entitled to, or granted one it was not. A provider that
 ///         needs a quantity calls <see cref="TryParse" /> or <see cref="TryGibibytes" /> rather than
-///         writing its own — and neither the reconcilers nor <c>KubeCommandBuilder</c> parse
-///         quantities at all today, so there is no second implementation to reconcile with.
+///         writing its own.
+///     </para>
+///     <para>
+///         ⚠ <b>That paragraph used to end "so there is no second implementation to reconcile with",
+///         and a second implementation was written anyway.</b>
+///         <c>ValkeyCaches.QuantityBytes</c> parsed the same grammar in <see langword="double" />,
+///         truncated, and returned <see langword="null" /> where this refuses — written by an author
+///         who could not see this file, because the Valkey one lived in a provider's
+///         <c>.Contracts</c> assembly. Consolidated 2026-08-12; the two agreed on every verdict and
+///         disagreed on <i>value</i>, which is the quieter half: <c>8.7T</c> came back as
+///         8699999999999 rather than 8700000000000, and <c>8Ei</c> came back as
+///         <see cref="long.MaxValue" /> rather than being refused, because a
+///         <see langword="double" /> compares equal to <c>(double)long.MaxValue</c> one byte past it.
+///         The lesson is in <see cref="Pattern" />: the grammar and the parser live together now, so
+///         a provider that needs the one finds the other.
 ///     </para>
 ///     <para>
 ///         <b>The conversion is exact, and that is a decision rather than an accident.</b> Everything
@@ -37,14 +50,48 @@ namespace CyberCloud.ResourceManager.Contracts.Registry;
 ///     </para>
 ///     <para>
 ///         ⚠ <b>The accepted grammar is the platform's, not apimachinery's.</b> It is
-///         <c>PostgresServers.QuantityPattern</c> — <c>\d+(\.\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?</c>
-///         — deliberately narrower than upstream: no sign, no exponent form, no fractional binary
-///         suffix. A body reaches this only after <c>ResourceSchema.Validate</c> has checked that
-///         pattern, so anything this refuses is a declaration bug rather than a caller's; refusing it
-///         loudly is the point.
+///         <see cref="Pattern" />, deliberately narrower than upstream: no sign, no exponent form, no
+///         fractional binary suffix. A body reaches this only after <c>ResourceSchema.Validate</c> has
+///         checked that pattern, so anything this refuses is a declaration bug rather than a caller's;
+///         refusing it loudly is the point.
 ///     </para>
 /// </remarks>
 public static class KubeQuantity {
+    /// <summary>
+    ///     The quantity form this platform accepts — <c>500m</c>, <c>2</c>, <c>4Gi</c> — for a schema
+    ///     property's <c>Pattern</c>.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>The grammar lives beside the parser because separating them is how the platform got a
+    ///     second parser.</b> Each provider declared its own copy of this string, so
+    ///     <c>ValkeyCaches.QuantityPattern</c> was reachable from a provider that had never heard of
+    ///     <see cref="KubeQuantity" /> — and the author who needed to turn one of these into a number
+    ///     wrote the conversion where the pattern was. Anything that validates a quantity and anything
+    ///     that reads one now start in the same file.
+    ///     <para>
+    ///         ⚠ It is narrower than apimachinery's on purpose: no sign, no exponent, no fractional
+    ///         binary suffix. A negative or exponent-form CPU request is legal to the API server and is
+    ///         never what a tenant meant.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <c>PostgresServers</c>, <c>KafkaClusters</c> and <c>TestProvider</c> still declare
+    ///         their own byte-identical copies. Those are three assemblies this change does not own;
+    ///         pointing them here is the remaining half of the consolidation, and
+    ///         <c>QuantityParserTests</c> is what notices if one of them drifts into a parser instead.
+    ///     </para>
+    /// </remarks>
+    public const string Pattern = @"\d+(\.\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?";
+
+    /// <summary>A quantity or the empty string, for a field whose default is "take it from elsewhere".</summary>
+    /// <remarks>
+    ///     ⚠ The empty alternative is required rather than cosmetic: <see cref="SchemaProperty" />
+    ///     checks its own <see cref="SchemaProperty.DefaultJson" /> against its own constraints at
+    ///     construction, so a pattern that refused <c>""</c> on a property defaulting to <c>""</c> would
+    ///     throw at silo start. ⚠ <c>""</c> is still not a quantity to <see cref="TryParse" /> and is
+    ///     not zero — see <c>MeterDerivation.TryQuantityAt</c>.
+    /// </remarks>
+    public const string OptionalPattern = "(" + Pattern + ")?";
+
     /// <summary>One gibibyte, in bytes. The divisor <see cref="TryGibibytes" /> applies.</summary>
     /// <remarks>
     ///     ⚠ <c>2^30</c>, not <c>10^9</c>. <c>4Gi</c> is 4294967296 bytes and <c>4G</c> is 4000000000;
