@@ -1,0 +1,102 @@
+# Managed MongoDB-compatible document storage — the configuration surface, once.
+#
+# ⚠ EVERY NON-`@internal` BLOCK BELOW IS GENERATED from DocumentDbAccounts.Schema2026 by
+# `./build.sh Charts`, and so is values.schema.json. ADR-010 § Which end authors the schema: "The C#
+# ResourceSchema is authored. The chart's @param annotations are generated from it and diffed."
+# Editing a generated row here is undone on the next run and fails the build in between; add the
+# field in C# instead.
+#
+# The `@internal` rows at the end of each level are the ones that are NOT generated. They are
+# carried through as bytes and must sit after every generated key at their own level, so that each
+# level's generated keys are one contiguous run — charts/README.md § What a chart cannot say.
+
+## @param version {string} FerretDB minor version. ⚠ One property moves two images: the DocumentDB PostgreSQL extension and the FerretDB gateway are released as a matched pair and a mismatched pair is a proxy talking to an extension it does not know. FerretDB maintains no long-term branch, so the two values here are the two most recent releases and a third is a new api-version.
+## @required
+## @enum 2.5 | 2.7
+version: "2.7"
+
+## @param postgres {object} The CloudNativePG cluster the documents actually live in.
+postgres:
+  ## @param instances {integer} Number of PostgreSQL instances, including the primary. One is a single point of failure and is offered for development only. Failover, replication and point-in-time recovery are CloudNativePG's, which is why this row costs 1.2 engineer-months rather than a rebuild of them.
+  ## @required
+  ## @range 1..5
+  instances: 2
+
+## @param sizing {object} CPU and memory per PostgreSQL instance, either by preset or explicitly. The FerretDB gateway pods are sized by the platform and are not affected.
+sizing:
+  ## @param preset {string} A sizing preset from docs/plan/12. Databases use the s1 family, which is 1 vCPU to 4 GiB.
+  ## @enum s1.2xlarge | s1.4xlarge | s1.large | s1.medium | s1.micro | s1.nano | s1.small | s1.xlarge
+  ## @widget cozy-preset
+  preset: s1.small
+  ## @param cpu {string} Explicit vCPU quantity in Kubernetes form, for example 500m or 2. Empty means take it from the preset.
+  ## @pattern (\d+(\.\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)?
+  cpu: ""
+  ## @param memory {string} Explicit memory quantity in Kubernetes form, for example 4Gi. Empty means take it from the preset.
+  ## @pattern (\d+(\.\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)?
+  memory: ""
+
+## @param storage {object} The data volume, per PostgreSQL instance.
+storage:
+  ## @param size {string} Data volume size per PostgreSQL instance, in Kubernetes quantity form. Every instance carries a full copy, so raw consumption is this times the instance count. Grows online; never shrinks.
+  ## @required
+  ## @pattern \d+(\.\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?
+  ## @example "20Gi"
+  size: "20Gi"
+  ## @param class {string} StorageClass name for the PostgreSQL volumes. Empty means the cluster default.
+  ## @immutable
+  ## @widget storageclass
+  class: ""
+
+## @param gateway {object} The FerretDB gateway — what speaks the MongoDB wire protocol.
+gateway:
+  ## @param replicas {integer} Number of FerretDB pods. The gateway is stateless — it translates and forwards, and every byte is in PostgreSQL — so this is a throughput and availability setting rather than a topology one.
+  ## @required
+  ## @range 1..10
+  replicas: 2
+
+## @param backup {object} Backup to an object store, using CloudNativePG's barman-cloud. docs/plan/12: because it is PostgreSQL underneath, backup and point-in-time recovery are the operator's.
+backup:
+  ## @param enabled {boolean} Whether continuous backup and WAL archiving run. ⚠ Off by default, and only because there is no destination to default to: turning it on without a destinationPath below renders no backup configuration at all rather than an empty one, so the two properties have to be set together.
+  enabled: false
+  ## @param retentionDays {integer} How long base backups and WAL are kept. The point-in-time-recovery window is this number of days.
+  ## @range 1..365
+  retentionDays: 14
+  ## @param destinationPath {string} Object-store URL for base backups and WAL, for example s3://tenant-bucket/documentdb. Empty means no backup configuration is rendered, whatever enabled says.
+  ## @pattern (s3://[a-z0-9][a-z0-9.\-]*[a-z0-9](/[^\s]*)?)?
+  ## @example "s3://tenant-bucket/documentdb"
+  destinationPath: ""
+
+## @param monitoring {object} What the platform scrapes.
+monitoring:
+  ## @param enabled {boolean} Whether both halves of this service are scraped: CloudNativePG is asked for a PodMonitor over the PostgreSQL pods, and the platform writes one over the FerretDB pods because FerretDB has no operator to ask. On by default — docs/plan/12: "a managed service the tenant cannot see the health of is a black box they will not trust with production".
+  enabled: true
+
+## @param platform {object} Resource identity injected by the reconciler. Not a tenant-facing setting.
+## @internal Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.
+platform:
+  ## @param tenantId {string} Tenant GUID, rendered into the cybercloud.io/tenant-id label.
+  tenantId: ""
+  ## @param subscriptionId {string} Subscription GUID, rendered into the cybercloud.io/subscription-id label.
+  subscriptionId: ""
+  ## @param resourceGroup {string} Resource group name, rendered into the cybercloud.io/resource-group label.
+  resourceGroup: ""
+  ## @param resourceId {string} Resource GUID, rendered into the cybercloud.io/resource-id label.
+  resourceId: ""
+  ## @param resourceType {string} Fully qualified resource type, rendered into the cybercloud.io/resource-type label.
+  resourceType: CyberCloud.DocumentDB/accounts
+  ## @param apiVersion {string} The api-version the resource was last written at, rendered into the cybercloud.io/api-version label.
+  apiVersion: "2026-08-01"
+  ## @param managedBy {string} Value of the cybercloud.io/managed-by label. Constant, and the selector every informer filters on.
+  managedBy: cybercloud
+
+## @param gatewayImage {string} Override the full FerretDB image reference, tag included. Empty means ghcr.io/ferretdb/ferretdb at the tag `version` pairs with.
+## @internal One of TWO image overrides, because this chart renders two workloads and one escape hatch could not say which. A pinned reference defeats the version property, so both are platform escape hatches rather than tenant settings.
+gatewayImage: ""
+
+## @param postgresImage {string} Override the full PostgreSQL image reference, tag included. Empty means ghcr.io/ferretdb/postgres-documentdb at the tag `version` pairs with.
+## @internal Overriding this one ALONE is how a cluster ends up with a DocumentDB extension its FerretDB does not know. The pairing is in templates/_helpers.tpl and nothing enforces it once either override is set, which is why both are escape hatches rather than API.
+postgresImage: ""
+
+## @param nameOverride {string} Replace the generated object-name stem. Empty means derive it from the release name.
+## @internal Helm plumbing. Nothing about it belongs in a resource body.
+nameOverride: ""

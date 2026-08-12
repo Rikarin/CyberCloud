@@ -270,6 +270,28 @@
         <Project Path="src/Providers/CyberCloud.Providers.Search/CyberCloud.Providers.Search.Tests/CyberCloud.Providers.Search.Tests.csproj"/>
         <Project Path="src/Providers/CyberCloud.Providers.Search/CyberCloud.Providers.Search.Conformance/CyberCloud.Providers.Search.Conformance.csproj"/>
         <Project Path="src/Providers/CyberCloud.Providers.Search/CyberCloud.Providers.Search.Cluster.Conformance/CyberCloud.Providers.Search.Cluster.Conformance.csproj"/>
+
+        <!--
+          The seventh provider family — CyberCloud.DocumentDB/accounts, FerretDB over CloudNativePG.
+          docs/plan/12 § The catalogue, "MongoDB-compatible · M2 · 1.2 EM"; ADR-011 is why it is
+          FerretDB rather than MongoDB.
+
+          ⚠ IT IS THE FIRST PROVIDER THAT IS TWO WORKLOADS. The PostgreSQL half is an operator's
+          custom resource and the FerretDB half has no operator at all — checked against the GitHub
+          API rather than a README, see charts/managed/ferretdb/SOURCE — so the same resource takes
+          both branches of docs/plan/12 § The pattern, once, piece 6.
+
+          ⚠ It renders the SAME CloudNativePG CRD as the second family, independently, because
+          src/Providers/README.md § Hard rule forbids the reference. Writing the second rendering
+          found a defect in the first — charts/managed/ferretdb/conformance.yaml § owed,
+          `shared-preload-libraries-is-not-a-parameter`.
+        -->
+        <Project Path="src/Providers/CyberCloud.Providers.DocumentDB/CyberCloud.Providers.DocumentDB.Contracts/CyberCloud.Providers.DocumentDB.Contracts.csproj"/>
+        <Project Path="src/Providers/CyberCloud.Providers.DocumentDB/CyberCloud.Providers.DocumentDB/CyberCloud.Providers.DocumentDB.csproj"/>
+        <Project Path="src/Providers/CyberCloud.Providers.DocumentDB/CyberCloud.Providers.DocumentDB.Application/CyberCloud.Providers.DocumentDB.Application.csproj"/>
+        <Project Path="src/Providers/CyberCloud.Providers.DocumentDB/CyberCloud.Providers.DocumentDB.Tests/CyberCloud.Providers.DocumentDB.Tests.csproj"/>
+        <Project Path="src/Providers/CyberCloud.Providers.DocumentDB/CyberCloud.Providers.DocumentDB.Conformance/CyberCloud.Providers.DocumentDB.Conformance.csproj"/>
+        <Project Path="src/Providers/CyberCloud.Providers.DocumentDB/CyberCloud.Providers.DocumentDB.Cluster.Conformance/CyberCloud.Providers.DocumentDB.Cluster.Conformance.csproj"/>
     </Folder>
     <Folder Name="/src/Hosts/">
         <Project Path="src/Hosts/CyberCloud.Gateway.Host/CyberCloud.Gateway.Host.csproj"/>

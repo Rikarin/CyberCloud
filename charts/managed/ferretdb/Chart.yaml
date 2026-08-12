@@ -1,0 +1,55 @@
+# Managed MongoDB-compatible document storage — docs/plan/12 § The catalogue,
+# "MongoDB-compatible — CyberCloud.DocumentDB/accounts · M2 · 1.2 EM. FerretDB (Apache-2.0) over a
+# CloudNativePG cluster. ADR-011: real MongoDB is SSPL and cannot be offered as a service."
+#
+# ⚠ THE FIRST CHART UNDER charts/managed/ THAT RENDERS TWO WORKLOADS RATHER THAN ONE, AND THE FIRST
+# WHERE ONE HALF HAS AN OPERATOR AND THE OTHER DOES NOT. The PostgreSQL half is a CloudNativePG
+# `Cluster`; the FerretDB half is a Deployment, a Service and a hand-written PodMonitor, because
+# checked on 2026-08-12 against the GitHub API there is no FerretDB operator, CRD or Helm chart at
+# all. See SOURCE.
+apiVersion: v2
+name: ferretdb
+description: Managed MongoDB-compatible document database on FerretDB over PostgreSQL — not MongoDB; multi-document transactions are not supported.
+type: application
+
+# The chart's own version. Bumped on every change to this directory.
+version: 0.1.0
+
+# The default FerretDB version, matching values.yaml `version`.
+#
+# ⚠ It is only HALF the version this chart renders. The DocumentDB PostgreSQL extension is released
+# in lockstep with FerretDB and tagged `{pgMajor}-{documentdbVersion}-ferretdb-{ferretdbVersion}`;
+# templates/_helpers.tpl carries the pairing. An appVersion cannot express two images, so it names
+# the one a user would say out loud.
+appVersion: "2.7.0"
+
+kubeVersion: ">=1.31.0-0"
+
+keywords:
+  - ferretdb
+  - documentdb
+  - mongodb-compatible
+  - postgresql
+  - cloudnative-pg
+
+home: https://www.ferretdb.com
+sources:
+  - https://github.com/FerretDB/FerretDB
+  - https://github.com/FerretDB/documentdb
+  - https://github.com/cloudnative-pg/cloudnative-pg
+
+maintainers:
+  - name: Cyber Cloud Platform
+
+# ⚠ These three are read by `Build.Charts` and written into `values.schema.json` as
+# `x-cybercloud-*`. They are what makes the generated schema addressable as a resource type's
+# body rather than as an anonymous blob of Helm values — docs/plan/12 § The pattern, once, piece 2.
+# A chart under charts/managed/ without them fails the build.
+#
+# ⚠ `cybercloud.io/operator` names CloudNativePG and NOT FerretDB, because the annotation means "the
+# controller that expands what this chart applies" and FerretDB has none. A chart naming a
+# non-existent operator here would be the survey's own error copied into a build input.
+annotations:
+  cybercloud.io/resource-type: CyberCloud.DocumentDB/accounts
+  cybercloud.io/api-version: "2026-08-01"
+  cybercloud.io/operator: cloudnative-pg

@@ -1,0 +1,50 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      docs/plan/03 § Providers — the fourth project: "TestCluster + k3s".
+
+      ⚠ NEITHER, HERE. The TestCluster half is test/CyberCloud.Conformance's, because a provider's
+      lifecycle is the SHARED suite's assertion, and the k3s half is
+      CyberCloud.Providers.DocumentDB.Cluster.Conformance's. What is left is what only THIS provider
+      can be wrong about: its schema's casing against the emitted document, its sizing and version
+      tables against the chart's, the two projections, and the two properties of a reconciler that a
+      shared suite driving one tenant cannot see.
+
+      ⚠ IT EMBEDS TWO TEMPLATES AND NO values.schema.json. Earlier providers embedded their chart's
+      generated schema as well, from a time when nothing compared the chart to the registry; ADR-012's
+      fifth surface exists now and `./build.sh Charts` does that comparison by GENERATING the block, so
+      a test asserting the same thing would be a second, weaker copy of a gate. A Helm TEMPLATE is the
+      half generation does not reach — it is not a schema, and ChartSurfaces filters templates/ out of
+      the chart tree on purpose.
+
+      ⚠ TWO TEMPLATES RATHER THAN ONE IS NEW, AND IT IS BECAUSE THIS CHART HAS A SHARED FACT THAT IS
+      NOT A TABLE. _helpers.tpl carries three tables — the sizing presets every provider duplicates,
+      the gateway pod's cost, and the FerretDB-to-DocumentDB version pairing that no other chart has an
+      equivalent of. cluster.yaml carries the fourth: WHERE shared_preload_libraries sits. That one
+      cannot live in a helper, because its whole content is its position in the rendered document —
+      beside `parameters` rather than inside it — and that position is the defect the row above has.
+    -->
+
+    <ItemGroup>
+        <PackageReference Include="xunit.v3"/>
+        <PackageReference Include="Shouldly"/>
+    </ItemGroup>
+
+    <ItemGroup Label="Global usings">
+        <Using Include="Xunit"/>
+    </ItemGroup>
+
+    <ItemGroup Label="The half generation does not reach — see the header">
+        <EmbeddedResource Include="../../../../charts/managed/ferretdb/templates/_helpers.tpl"
+                          LogicalName="ferretdb.helpers.tpl"/>
+        <EmbeddedResource Include="../../../../charts/managed/ferretdb/templates/cluster.yaml"
+                          LogicalName="ferretdb.cluster.yaml"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../CyberCloud.Providers.DocumentDB/CyberCloud.Providers.DocumentDB.csproj"/>
+        <!-- ProviderRegistry.Build, so the declaration is checked the way a silo checks it at start. -->
+        <ProjectReference Include="../../../CyberCloud.ResourceManager/CyberCloud.ResourceManager.csproj"/>
+    </ItemGroup>
+
+</Project>

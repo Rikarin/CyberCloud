@@ -1,0 +1,38 @@
+{{/*
+The MongoDB endpoint.
+
+⚠ ClusterIP, AND THERE IS NO EXTERNAL OPTION AT ANY SETTING. docs/plan/12 § Cross-cutting decisions
+gives every service an optional external listener behind "an explicit CIDR list", and unlike
+charts/managed/seaweedfs this chart COULD render one — a core Service carries
+loadBalancerSourceRanges, where that operator's four-field ServiceSpec does not. It is still not
+offered, because the credential behind this endpoint is a PostgreSQL role whose password the platform
+cannot rotate: docs/plan/12 makes `regenerateKeys` part of the credential story and nothing
+implements it, so a public endpoint here would be a database whose password can never be changed.
+That is a third distinct reason for the same absence — see conformance.yaml § owed,
+`external-exposure`.
+
+⚠ THE DEBUG PORT IS NEVER ON THIS SERVICE. /debug/archive returns a zip of the process's internal
+state on the same listener as the metrics — internal/util/debug/debug.go — so a routable address for
+the metrics is a routable address for that. The PodMonitor scrapes the pod directly and loses
+nothing.
+*/}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "ferretdb.name" . }}
+  labels:
+    {{- include "ferretdb.platformLabels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "ferretdb.selectorLabels" . | nindent 4 }}
+  ports:
+    {{/*
+      ⚠ 27017 is not negotiable and is not a property. Every MongoDB driver defaults to it, and a
+      managed document database on a port the tenant chose is a connection string that breaks the
+      first tool somebody points at it.
+    */}}
+    - name: mongodb
+      port: 27017
+      targetPort: mongodb
+      protocol: TCP
