@@ -73,11 +73,13 @@ spec:
       spec.postgresql.parameters and answers any fixed key with "Can't set fixed configuration
       parameter".
 
-      ⚠ charts/managed/postgres/templates/cluster.yaml PUTS IT IN `parameters`, so every managed
-      PostgreSQL server created with an extension is rejected by admission after the caller was told
-      202. Its default asks for none, which is why nothing has noticed. Recorded at
-      conformance.yaml § owed, `shared-preload-libraries-is-not-a-parameter`; it is not fixed from
-      here, because this chart does not own that one.
+      ⚠ charts/managed/postgres/templates/cluster.yaml PUT IT IN `parameters` until 2026-08-12, so
+      every managed PostgreSQL server created with an extension was rejected by admission after the
+      caller was told 202. Its default asks for none, which is why nothing had noticed. Writing this
+      block is what found it. Now fixed in that chart and in its provider's own renderer; the finding
+      moved to charts/managed/postgres/conformance.yaml § owed, and conformance.yaml § owed,
+      `shared-preload-libraries-is-not-a-parameter`, records the close and one correction to the
+      evidence.
     */}}
     shared_preload_libraries:
       - pg_cron
