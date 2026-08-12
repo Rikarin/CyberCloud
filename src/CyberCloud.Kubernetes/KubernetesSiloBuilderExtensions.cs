@@ -2,6 +2,7 @@ using CyberCloud.Core.Time;
 using CyberCloud.Kubernetes.Connections;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
 
 namespace CyberCloud.Kubernetes;
 
@@ -43,7 +44,10 @@ public static class KubernetesSiloBuilderExtensions {
                 services.TryAddSingleton<IClock, SystemClock>();
                 services.TryAddSingleton<IClusterOperatorAuthority, DenyClusterOperatorAuthority>();
                 services.TryAddSingleton<IKubeApiClientFactory>(sp =>
-                    new KubeApiClientFactory(sp.GetRequiredService<IClock>())
+                    new KubeApiClientFactory(
+                        sp.GetRequiredService<IClock>(),
+                        sp.GetService<ILogger<KubeApiClientFactory>>()
+                    )
                 );
 
                 services.AddOptions<KubernetesOptions>()

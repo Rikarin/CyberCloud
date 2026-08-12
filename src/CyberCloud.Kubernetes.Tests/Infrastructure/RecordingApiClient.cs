@@ -46,9 +46,42 @@ public sealed class RecordingApiClient : IKubeApiClient {
     public Task<Result<KubeObject>> GetAsync(ObjectRef target, CancellationToken cancellationToken = default) =>
         Task.FromResult(Result<KubeObject>.Failure(ErrorCode.ResourceNotFound, "not scripted"));
 
+    /// <summary>
+    ///     What <see cref="ApplyAsync" /> answers, or <see langword="null" /> for a plain
+    ///     <see cref="ApplyResult.Created" />.
+    /// </summary>
+    /// <remarks>
+    ///     Set by tests that need the connection grain to see a <i>refused</i> apply — the case where
+    ///     the cluster answered and said no, which must not be folded into the health window. See
+    ///     <c>ClusterConnectionGrain.Answered</c>.
+    /// </remarks>
+    public Result<ApplyOutcome>? NextApply { get; set; }
+
+    /// <summary>
+    ///     Thrown from <see cref="ApplyAsync" /> instead of answering, or <see langword="null" /> to
+    ///     answer normally.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ There to demonstrate the symptom the failure mapping exists to remove, and for nothing
+    ///     else. An exception that escapes <c>KubeApiClient</c> escapes a grain call, and what the
+    ///     caller sees is not the exception — see
+    ///     <c>SuspendedReconcileTests.AnUnmappedClientExceptionReachesTheCallerAsACodecNotFoundException</c>.
+    /// </remarks>
+    public Exception? ThrowOnApply { get; set; }
+
     /// <inheritdoc />
-    public Task<Result<ApplyOutcome>> ApplyAsync(KubeCommand command, CancellationToken cancellationToken = default) =>
-        Task.FromResult(Result<ApplyOutcome>.Success(new() { Result = ApplyResult.Created, Target = command.Target }));
+    public Task<Result<ApplyOutcome>> ApplyAsync(KubeCommand command, CancellationToken cancellationToken = default) {
+        ArgumentNullException.ThrowIfNull(command);
+
+        if (ThrowOnApply is not null) {
+            throw ThrowOnApply;
+        }
+
+        return Task.FromResult(
+            NextApply
+            ?? Result<ApplyOutcome>.Success(new() { Result = ApplyResult.Created, Target = command.Target })
+        );
+    }
 
     /// <inheritdoc />
     public Task<Result> DeleteAsync(

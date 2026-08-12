@@ -1,6 +1,7 @@
 using CyberCloud.Core.Time;
 using CyberCloud.Kubernetes.Apply;
 using k8s;
+using Microsoft.Extensions.Logging;
 using System.Text;
 
 namespace CyberCloud.Kubernetes.Connections;
@@ -44,7 +45,15 @@ public interface IKubeApiClientFactory {
 ///     A stub that pretended to connect would be exactly the way to
 ///     discover it at the first on-prem customer.
 /// </remarks>
-public sealed class KubeApiClientFactory(IClock clock) : IKubeApiClientFactory {
+/// <param name="clock">The clock a drift event's timestamp comes from.</param>
+/// <param name="logger">
+///     Where an API server's refusal is written in full. ⚠ This is the <i>only</i> place the API
+///     server's own message survives — a refusal's tenant-facing half deliberately drops the parts
+///     that name the platform's service account, its namespaces or its hosts. See
+///     <see cref="KubeRefusal" />.
+/// </param>
+public sealed class KubeApiClientFactory(IClock clock, ILogger<KubeApiClientFactory>? logger = null)
+    : IKubeApiClientFactory {
     /// <summary>
     ///     Resolves a credential reference to kubeconfig YAML.
     /// </summary>
@@ -117,7 +126,7 @@ public sealed class KubeApiClientFactory(IClock clock) : IKubeApiClientFactory {
                 .ConfigureAwait(false);
 
             return Result<IKubeApiClient>.Success(
-                new KubeApiClient(new k8s.Kubernetes(config), descriptor.ClusterId, clock)
+                new KubeApiClient(new k8s.Kubernetes(config), descriptor.ClusterId, clock, logger: logger)
             );
         } catch (Exception ex) when (ex is not OperationCanceledException) {
             return Result<IKubeApiClient>.Failure(

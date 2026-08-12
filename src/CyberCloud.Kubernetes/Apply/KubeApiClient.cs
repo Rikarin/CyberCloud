@@ -2,6 +2,7 @@ using CyberCloud.Core.Time;
 using k8s;
 using k8s.Autorest;
 using k8s.Models;
+using Microsoft.Extensions.Logging;
 using System.Globalization;
 using System.Net;
 using System.Net.Sockets;
@@ -58,8 +59,13 @@ namespace CyberCloud.Kubernetes.Apply;
 ///         server-side apply exists to replace with a named drift event.
 ///     </para>
 /// </remarks>
-public sealed class KubeApiClient(IKubernetes client, Guid clusterId, IClock clock, bool ownsClient = true)
-    : IKubeApiClient {
+public sealed class KubeApiClient(
+    IKubernetes client,
+    Guid clusterId,
+    IClock clock,
+    bool ownsClient = true,
+    ILogger? logger = null
+) : IKubeApiClient {
     /// <summary>The default page size for an informer's list.</summary>
     public const int DefaultListPageSize = 500;
 
@@ -71,6 +77,27 @@ public sealed class KubeApiClient(IKubernetes client, Guid clusterId, IClock clo
                 .ConfigureAwait(false);
 
             return Result<string>.Success(response.Body?.GitVersion ?? "unknown");
+        } catch (HttpOperationException ex) when (!IsTransport(ex)) {
+            // ⚠ The cluster ANSWERED, so this must not become "cannot reach your cluster". A version
+            // probe that comes back 401 means the kubeconfig has expired or been rotated, which is
+            // an operator's job and not a network fault — and ClusterHealth.Message is quoted to the
+            // tenant verbatim when a reconcile is suspended, so it is written here rather than
+            // copied from the API server.
+            var status = ((int?)ex.Response?.StatusCode ?? 0).ToString(CultureInfo.InvariantCulture);
+
+            logger?.LogError(
+                "Cluster {Cluster} answered a version probe with HTTP {Status}: {Body}",
+                clusterId,
+                status,
+                ex.Response?.Content ?? "(no body)"
+            );
+
+            return Result<string>.Failure(
+                ErrorCode.AuthorizationFailed,
+                $"Cluster {clusterId:D} is reachable but answered HTTP {status} to a version probe. "
+                + "The credentials the platform holds for it are not working; the connection needs "
+                + "an operator's attention."
+            );
         } catch (Exception ex) when (IsTransport(ex)) {
             return Result<string>.Failure(Unreachable(ex));
         }
@@ -107,11 +134,12 @@ public sealed class KubeApiClient(IKubernetes client, Guid clusterId, IClock clo
             return Result<KubeObject>.Success(
                 new() { Ref = target, Json = json, ResourceVersion = ResourceVersionOf(json) }
             );
-        } catch (HttpOperationException ex) when (ex.Response?.StatusCode == HttpStatusCode.NotFound) {
-            return Result<KubeObject>.Failure(
-                ErrorCode.ResourceNotFound,
-                $"{target} does not exist in cluster {clusterId:D}."
-            );
+        } catch (HttpOperationException ex) {
+            // ⚠ The 404 handled here used to be unconditional, and that was the read half of the
+            // defect. "The object is absent" and "this cluster does not serve this kind" are both
+            // 404, and reporting the second as ResourceNotFound tells ApplyAsync to go ahead and
+            // create — against a kind that does not exist. KubeFailures tells them apart.
+            return Refuse<KubeObject>(ex, target, "read");
         } catch (Exception ex) when (IsTransport(ex)) {
             return Result<KubeObject>.Failure(Unreachable(ex));
         }
@@ -240,6 +268,16 @@ public sealed class KubeApiClient(IKubernetes client, Guid clusterId, IClock clo
                         : "The apply conflicted with another field manager. " + ex.Response.Content
                 }
             );
+        } catch (HttpOperationException ex) {
+            // ⚠ THE OTHER HALF OF IsTransport, and it was missing entirely.
+            //
+            // Everything the API server refuses that is not a 409 arrived here as a raw
+            // k8s.Autorest.HttpOperationException, which is not a serializable type — so it crossed
+            // the connection grain's boundary and reached the caller as a CodecNotFoundException
+            // naming no status code and no cause. Measured, not predicted: a provider's suite
+            // against a bare k3s went red with that exception and no status, because a 404 for a
+            // kind whose CRD is not served was mapped by nothing.
+            return Refuse<ApplyOutcome>(ex, target, "apply");
         } catch (Exception ex) when (IsTransport(ex)) {
             return Result<ApplyOutcome>.Failure(Unreachable(ex));
         }
@@ -282,11 +320,22 @@ public sealed class KubeApiClient(IKubernetes client, Guid clusterId, IClock clo
                     .ConfigureAwait(false);
 
             return Result.Success;
-        } catch (HttpOperationException ex) when (ex.Response?.StatusCode == HttpStatusCode.NotFound) {
+        } catch (HttpOperationException ex) {
             // Deleting what is already gone is the desired end state. docs/plan/06 § Two-phase
             // create makes delete idempotent so a retried teardown converges instead of alternating
             // between 404 and success.
-            return Result.Success;
+            //
+            // ⚠ But ONLY when the 404 names the object. This catch used to accept every 404, so a
+            // teardown against a cluster that does not serve the kind reported Success and the
+            // resource left `Deleting` as converged — a delete that never happened, recorded as one
+            // that did. KubeFailures.Classify returns ResourceNotFound for "the object is absent"
+            // and InvalidResourceType for "the kind is not served", and only the first is a
+            // successful delete.
+            var refused = Refuse<KubeObject>(ex, target, "delete");
+
+            return refused.Error!.Code == ErrorCode.ResourceNotFound
+                ? Result.Success
+                : Result.Failure(refused.Error);
         } catch (Exception ex) when (IsTransport(ex)) {
             return Result.Failure(Unreachable(ex));
         }
@@ -342,6 +391,10 @@ public sealed class KubeApiClient(IKubernetes client, Guid clusterId, IClock clo
                 + "has been compacted. The informer must fall back to a full list. This is the "
                 + "expected outcome of a resume that arrives too late, not a fault."
             );
+        } catch (HttpOperationException ex) {
+            // A list of a kind the cluster does not serve is the informer's version of the same
+            // defect: it threw out of EstablishAsync instead of naming the kind.
+            return Refuse<ListPage>(ex, new() { Kind = kind, Namespace = ns, Name = "*" }, "list");
         } catch (Exception ex) when (IsTransport(ex)) {
             return Result<ListPage>.Failure(Unreachable(ex));
         }
@@ -556,15 +609,68 @@ public sealed class KubeApiClient(IKubernetes client, Guid clusterId, IClock clo
     // ── Failure classification ─────────────────────────────────────────────────────────────────
 
     /// <summary>
+    ///     Reports an answer the API server refused to act on, logging the operator's copy and
+    ///     returning the tenant's.
+    /// </summary>
+    /// <typeparam name="T">The value the caller wanted.</typeparam>
+    /// <param name="exception">What the client threw.</param>
+    /// <param name="target">The object the call addressed.</param>
+    /// <param name="verb">What was attempted — <c>apply</c>, <c>read</c>, <c>delete</c>, <c>list</c>.</param>
+    /// <remarks>
+    ///     <para>
+    ///         The two strings part company here: <see cref="KubeRefusal.OperatorDetail" /> goes to
+    ///         the log with the API server's full message and every cause, and
+    ///         <see cref="KubeRefusal.TenantMessage" /> goes into the <see cref="Result" /> that the
+    ///         portal and <c>ResourceSnapshot.LastFailure</c> quote. See <see cref="KubeFailures" />
+    ///         for which half of the API server's text ends up in which.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ The <see langword="null" /> branch is not a gap. <see cref="KubeFailures.Classify" />
+    ///         declines exactly the statuses <see cref="IsTransport" /> claims — no response, a
+    ///         <c>408</c>, a <c>429</c>, and any other 5xx — so "unclassified" and "transport" are
+    ///         the same set and nothing falls between them. That is what makes it safe for the
+    ///         callers to catch <see cref="HttpOperationException" /> ahead of the transport filter.
+    ///     </para>
+    /// </remarks>
+    Result<T> Refuse<T>(HttpOperationException exception, ObjectRef target, string verb)
+        where T : notnull {
+        var refusal = KubeFailures.Classify(exception, target, clusterId, verb);
+
+        if (refusal is null) {
+            return Result<T>.Failure(Unreachable(exception));
+        }
+
+        // ⚠ A missing object is not an incident. It is what every create reads before it writes and
+        // what every re-driven delete finds, so logging it would put an error line on the happy
+        // path and bury the refusals that matter.
+        if (refusal.Code != ErrorCode.ResourceNotFound) {
+            logger?.LogError("{Detail}", refusal.OperatorDetail);
+        }
+
+        return Result<T>.Failure(refusal.Code, refusal.TenantMessage);
+    }
+
+    /// <summary>
     ///     Whether an exception means "the cluster did not answer" rather than "we sent nonsense".
     /// </summary>
     /// <remarks>
-    ///     ⚠ This predicate is the machinery behind docs/plan/09 § Cluster connections' central
-    ///     distinction — <i>our</i> failure versus <i>unreachable</i>. It is deliberately broad on
-    ///     the transport side (any <see cref="HttpRequestException" />, any timeout, any TLS or
-    ///     socket failure, and any 5xx) and it deliberately does <b>not</b> swallow 4xx other than
-    ///     the ones handled explicitly above, because a 400 or a 422 is us sending a malformed
-    ///     object and must not be reported to a tenant as "cannot reach your cluster".
+    ///     <para>
+    ///         ⚠ This predicate is the machinery behind docs/plan/09 § Cluster connections' central
+    ///         distinction — <i>our</i> failure versus <i>unreachable</i>. It is deliberately broad on
+    ///         the transport side (any <see cref="HttpRequestException" />, any timeout, any TLS or
+    ///         socket failure, and any 5xx) and it deliberately does <b>not</b> swallow 4xx other than
+    ///         the ones handled explicitly above, because a 400 or a 422 is us sending a malformed
+    ///         object and must not be reported to a tenant as "cannot reach your cluster".
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The "any 5xx" arm is wrong for one measured case and <see cref="KubeFailures" />
+    ///         carves it out before this predicate is consulted.</b> An apply whose body will not
+    ///         type-check — <c>.spec.replicas: "lots"</c> — comes back <b>500</b>, not 400:
+    ///         <c>failed to create typed patch object (…): expected numeric (int or float), got
+    ///         string</c>. Left to this predicate it reports as "cluster … did not answer", which is
+    ///         the exact outcome the paragraph above promises cannot happen. Verified against k3s
+    ///         1.35 in <c>KubeFailureMappingTests</c>.
+    ///     </para>
     /// </remarks>
     static bool IsTransport(Exception ex) =>
         ex switch {
