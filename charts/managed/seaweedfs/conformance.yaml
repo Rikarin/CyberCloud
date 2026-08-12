@@ -128,15 +128,20 @@ owed:
       seaweed.seaweedfs.com/v1, and BucketSpec is (name, clusterRef, reclaimPolicy, adoptExisting,
       versioning, objectLock, quota, owner, access, placement, anonymousRead) — which is
       docs/plan/15's "globally-unique-per-account name, quota, versioning, lifecycle" almost line for
-      line. So this is the first row in the tree where the CHILD TYPE IS BLOCKED ONLY BY THE PLATFORM.
-      The blocker is the conformance harness: ProviderConformanceCase is single-type and both
-      ProviderTestCluster.Address and ClusterConformanceHarness.Address construct a ResourceId with no
-      ParentNames, so a depth-2 Case.Type THROWS in the constructor and every test in the suite fails
-      before it runs — and src/Providers/README.md's rule is that a provider is not registered until
-      it passes conformance. Two smaller ones stand: CliEmitter.Address emits a hard-coded four-flag
-      list, and SdkEmitter.AppendCollection emits no ancestor parameters. THIRD SIGHTING of the same
-      three, after charts/managed/kafka and charts/managed/nats; what this one adds is that the
-      remaining obstacle is now entirely ours.
+      line.
+      ⚠ CORRECTED THE SAME DAY IT WAS WRITTEN, AND THE CORRECTION IS THE USEFUL HALF. This item first
+      said the blocker was the conformance harness — ProviderConformanceCase being single-type, with
+      ProviderTestCluster.Address and ClusterConformanceHarness.Address constructing a ResourceId with
+      no ParentNames, so a depth-2 Case.Type throws in the constructor — plus CliEmitter.Address's
+      hard-coded four-flag list and SdkEmitter.AppendCollection's missing ancestor parameters. THAT
+      WAS TRUE WHEN IT WAS WRITTEN AND IS NO LONGER TRUE: "A child type ships end to end, and the
+      harness that could not address one now can" landed on 2026-08-12. IProviderCaseSource gained a
+      `static virtual Ancestors` composing the parent's own case object, ProviderTestCluster refuses a
+      depth/count mismatch by name, and both emitters carry ancestors. So the SECOND, THIRD AND FOURTH
+      sightings of that blocker are all closed, and what is left here is SCOPE rather than a blocker:
+      `accounts/buckets` is a body shape, a reconciler over the Bucket CRD, a chart and a seventh
+      resource type, and this provider shipped the parent alone. It is the first row in the catalogue
+      for which that sentence is true.
   - id: external-exposure
     says: >
       docs/plan/15 § The three kinds says object storage is "Consumed as HTTPS, S3 API" and

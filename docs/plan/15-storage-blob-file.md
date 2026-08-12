@@ -25,12 +25,14 @@ inapplicable.
 > `charts/managed/seaweedfs/conformance.yaml § owed` carries eleven named debts. The four below are
 > the ones that are this document's to answer rather than a provider's.
 >
-> * **`buckets` did not ship, and for the first time nothing upstream is in the way.** The
->   seaweedfs-operator ships `Bucket`, `S3Identity`, `S3Credentials`, `S3Policy`, `S3PolicyBinding`
->   and `BucketLifecyclePolicy` under `seaweed.seaweedfs.com/v1`, and `BucketSpec` is
+> * **`buckets` did not ship, and nothing is in the way of it.** The seaweedfs-operator ships
+>   `Bucket`, `S3Identity`, `S3Credentials`, `S3Policy`, `S3PolicyBinding` and
+>   `BucketLifecyclePolicy` under `seaweed.seaweedfs.com/v1`, and `BucketSpec` is
 >   `(name, clusterRef, reclaimPolicy, adoptExisting, versioning, objectLock, quota, owner, access,
->   placement, anonymousRead)` — § The resource model's list almost line for line. What blocks it is
->   `ProviderConformanceCase` being single-type, which is the platform's own.
+>   placement, anonymousRead)` — § The resource model's list almost line for line. The conformance
+>   harness that could not address a depth-2 type **stopped being the blocker on the same day**, so
+>   this is the first row in either catalogue whose child type is missing for scope reasons rather
+>   than for a stated impossibility.
 > * **⚠ "Consumed as HTTPS" is not met and the account is in-cluster only.** § Cross-cutting
 >   decisions in [12](12-managed-data-services.md) requires an explicit CIDR allow-list on any
 >   external exposure; the operator's `ServiceSpec` is `{type, annotations, loadBalancerIP,

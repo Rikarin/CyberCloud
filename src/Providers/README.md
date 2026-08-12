@@ -308,14 +308,21 @@ into the tenant's bucket"*. None of that had a provider.
   — `type`, `annotations`, `loadBalancerIP`, `clusterIP` — with **no `loadBalancerSourceRanges`**, and
   docs/plan/12 § Cross-cutting decisions requires an explicit CIDR list on any exposure. Closing this
   one is an upstream field, not a *skip-when-zero* on `MeterRegistration`.
-- **⚠ The first row where a child type is blocked ONLY by this platform.**
-  `charts/managed/kafka` could not address one; `charts/managed/nats` found that a NATS account is
-  not a CRD anybody offers. The seaweedfs-operator ships `Bucket`, `S3Identity`, `S3Credentials`,
-  `S3Policy`, `S3PolicyBinding` and `BucketLifecyclePolicy`, and `BucketSpec` is docs/plan/15's
-  *"globally-unique-per-account name, quota, versioning, lifecycle"* almost line for line. The
-  remaining blocker is `ProviderConformanceCase` being single-type, which throws in `ResourceId`'s
-  constructor for a depth-2 `Type` — third sighting, and the first where nothing upstream is in the
-  way.
+- **⚠ The first row whose child type is not blocked by anything, and the first whose absence is
+  therefore scope rather than a finding.** `charts/managed/kafka` could not address one;
+  `charts/managed/nats` found that a NATS account is not a CRD anybody offers. The seaweedfs-operator
+  ships `Bucket`, `S3Identity`, `S3Credentials`, `S3Policy`, `S3PolicyBinding` and
+  `BucketLifecyclePolicy`, and `BucketSpec` is docs/plan/15's *"globally-unique-per-account name,
+  quota, versioning, lifecycle"* almost line for line.
+
+  > ⚠ **CORRECTED on the day it was written.** This bullet said the remaining blocker was
+  > `ProviderConformanceCase` being single-type — *"third sighting, and the first where nothing
+  > upstream is in the way"*. **The blocker was closed the same day**, by *"A child type ships end to
+  > end, and the harness that could not address one now can"*: `IProviderCaseSource` gained a
+  > `static virtual Ancestors`, `ProviderTestCluster` refuses a depth/count mismatch by name, and both
+  > `CliEmitter` and `SdkEmitter` carry ancestors. So the second, third and fourth sightings of that
+  > blocker are all discharged, and `accounts/buckets` is now a body shape, a reconciler and a
+  > seventh resource type that this provider did not build.
 - **⚠ Piece 5's absence is worse here than anywhere else in the catalogue, and the answer to "is the
   service usable anyway" flips.** `CyberCloud.DBforPostgreSQL/servers` has a working database because
   CloudNativePG generates its own password. An S3 endpoint is reachable *only* with an access-key
