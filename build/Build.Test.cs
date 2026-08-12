@@ -536,7 +536,9 @@ partial class Build
 
         var buildExitCode = 0;
 
-        DotNetTasks.DotNet(
+        // Quiet while it works — this is three lines of scaffolding, not something a reader of a
+        // green `Test` needs to see. The output is kept so a failure can print it.
+        var buildOutput = DotNetTasks.DotNet(
             $"build {probe / "Probe.csproj"} --configuration Release --output {probe / "bin"} --nologo",
             workingDirectory: probe,
             logOutput: false,
@@ -545,6 +547,12 @@ partial class Build
 
         if (buildExitCode != 0 || !assembly.FileExists())
         {
+            // ⚠ Printed, not swallowed. "Could not build the probe" with no compiler output is a
+            // dead end, and the reader has no probe project to go and build by hand — this method
+            // wrote it.
+            foreach (var line in buildOutput.TakeLast(20))
+                Log.Warning("  {Line}", line.Text);
+
             Log.Warning(
                 "Test: could not build the coverage probe in {Probe} (exit {Exit}), so whether "
                 + "dotnet-coverage {Version} works here is unknown. Treating it as unavailable, which "

@@ -6,7 +6,7 @@
 # ── ⚠ WHY THIS EXISTS, WHICH IS NOT "TO BE THOROUGH" ─────────────────────────────────────────────
 #
 # dotnet-coverage 18.9.0 fails to instrument by EXITING 0 AND WRITING AN EMPTY REPORT. Observed
-# three ways while writing this:
+# four ways, the last three in containers on an Apple Silicon host:
 #
 #   macOS 15 / arm64                          "No code coverage data available. Profiler was not
 #                                              initialized." → <packages /> , exit 0

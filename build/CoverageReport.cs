@@ -220,7 +220,14 @@ sealed class CoverageReport
 
             return coverable;
         }
+        // Both answer "not known", which the caller turns into a violation with a message rather
+        // than into a pass. An unreadable assembly is a worse thing to crash the floor over than to
+        // report, and it stays reported either way.
         catch (BadImageFormatException)
+        {
+            return null;
+        }
+        catch (IOException)
         {
             return null;
         }
