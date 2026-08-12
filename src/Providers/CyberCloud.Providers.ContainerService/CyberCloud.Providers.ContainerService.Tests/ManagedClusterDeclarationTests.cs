@@ -311,10 +311,13 @@ public sealed class ManagedClusterDeclarationTests {
             + "guards."
         );
 
-        // And the pair really is illegal against a 1.33 control plane's node rule... no, it is legal:
-        // 1.32 is one minor behind. The point of the assertion above is only that the schema does not
-        // look.
+        // ⚠ AND THE POINT IS THAT THE SCHEMA NEVER LOOKS, NOT THAT THIS PARTICULAR PAIR IS ILLEGAL.
+        // `1.32` against a `1.33` control plane is perfectly legal — one minor behind, well inside the
+        // three the kubelet rule allows. What no body can express is the pair at all: the cluster's
+        // version is in another resource, so the schema above accepts every offered value and the
+        // function below is the only thing in the platform that has an opinion.
         ManagedClusters.SkewIsLegal("1.33", "1.32").ShouldBeTrue();
+        ManagedClusters.SkewIsLegal("1.32", "1.33").ShouldBeFalse();
     }
 
     // ── The upstream constants a reader would otherwise have to trust ───────────────────────────

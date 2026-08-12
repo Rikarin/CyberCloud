@@ -4,6 +4,15 @@
 # This file is data: `Build.Charts` checks that it is present, non-empty, and names the same resource
 # type as Chart.yaml.
 #
+# ⚠ THE MILESTONE IS RECORDED RATHER THAN QUIETLY CHOSEN, BECAUSE THE TWO DOCUMENTS DISAGREE.
+# docs/plan/13 § Managed Kubernetes lists `agentPools` as a SUB-RESOURCE of its M1 row; docs/plan/01
+# § The catalogue gives "AKS node pools / autoscaling" its own line and marks it **M2**. This ships
+# with the parent, which is docs/plan/13's reading, and the reason is not scheduling: a managed
+# cluster with no node pools has no worker nodes at all, so shipping the M1 row without this one
+# would put a resource in the catalogue that cannot run anything. The M2 half of docs/plan/01's line
+# is `autoscaling`, and that IS still owed — see § owed,
+# `autoscaling-needs-an-autoscaler-in-the-bundle`.
+#
 # ⚠ THE SECOND MANIFEST IN THE TREE FOR A CHILD TYPE, AND THE FIRST FOR A CHILD THAT IS NOT SMALLER
 # THAN ITS PARENT. charts/managed/seaweedfs-bucket renders one object and declares `meters: []`; this
 # renders three and declares three derived meters, because a node pool IS its cluster's capacity rather
