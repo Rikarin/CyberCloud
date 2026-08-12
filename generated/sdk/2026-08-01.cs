@@ -1212,6 +1212,192 @@ public sealed partial class WidgetCollection {
     public partial AsyncPageable<WidgetResource> GetAllAsync(CancellationToken cancellationToken = default);
 }
 
+/// <summary>The values /properties/sizing/preset accepts. ⚠ Closed: the write path refuses anything else.</summary>
+public enum OpenSearchServicePreset {
+    /// <summary>Never assigned. Not a value the API accepts.</summary>
+    Unknown = 0,
+
+    /// <summary>m1.2xlarge</summary>
+    [JsonStringEnumMemberName("m1.2xlarge")]
+    M12xlarge = 1,
+
+    /// <summary>m1.4xlarge</summary>
+    [JsonStringEnumMemberName("m1.4xlarge")]
+    M14xlarge = 2,
+
+    /// <summary>m1.large</summary>
+    [JsonStringEnumMemberName("m1.large")]
+    M1Large = 3,
+
+    /// <summary>m1.medium</summary>
+    [JsonStringEnumMemberName("m1.medium")]
+    M1Medium = 4,
+
+    /// <summary>m1.small</summary>
+    [JsonStringEnumMemberName("m1.small")]
+    M1Small = 5,
+
+    /// <summary>m1.xlarge</summary>
+    [JsonStringEnumMemberName("m1.xlarge")]
+    M1Xlarge = 6
+}
+
+/// <summary>The values /properties/version accepts. ⚠ Closed: the write path refuses anything else.</summary>
+public enum OpenSearchServiceVersion {
+    /// <summary>Never assigned. Not a value the API accepts.</summary>
+    Unknown = 0,
+
+    /// <summary>2.19.0</summary>
+    [JsonStringEnumMemberName("2.19.0")]
+    N2190 = 1,
+
+    /// <summary>3.1.0</summary>
+    [JsonStringEnumMemberName("3.1.0")]
+    N310 = 2
+}
+
+/// <summary>The body of a CyberCloud.Search/services.</summary>
+/// <remarks>A managed OpenSearch cluster on the OpenSearch operator, with dedicated cluster-manager, data and optional coordinating node pools and operator-generated transport and HTTP TLS.</remarks>
+public sealed partial class OpenSearchServiceData {
+
+    /// <summary>The region the service is billed in.</summary>
+    /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+    [JsonPropertyName("location")]
+    public required string Location { get; set; }
+
+    /// <summary>The cluster whose namespace holds the search service.</summary>
+    /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+    [JsonPropertyName("clusterId")]
+    public required Guid ClusterId { get; set; }
+
+    /// <summary>Number of coordinating-only nodes — nodes that hold no data and no cluster state and exist to fan a search out and merge the results. Zero is the default and is right until a query pattern makes one data node the bottleneck for every search. They are sized by the same preset as the data nodes.</summary>
+    /// <remarks>Required on a create. Defaults to 0 when left unset.</remarks>
+    [JsonPropertyName("coordinatingNodes")]
+    public required long CoordinatingNodes { get; set; }
+
+    /// <summary>Number of data nodes. This is the capacity axis: total raw capacity is this count times the disk size below, before replicas. Every data node also carries the ingest role, so an indexing pipeline needs no separate pool.</summary>
+    /// <remarks>Required on a create. Defaults to 3 when left unset.</remarks>
+    [JsonPropertyName("dataNodes")]
+    public required long DataNodes { get; set; }
+
+    /// <summary>Number of dedicated cluster-manager nodes. They hold the cluster state in a quorum, so three is the smallest count that survives losing one. One is offered for development and has no quorum at all. An even count is worse than the odd count below it and the API cannot say so — see the service's own documentation.</summary>
+    /// <remarks>Required on a create. Defaults to 3 when left unset.</remarks>
+    [JsonPropertyName("masterNodes")]
+    public required long MasterNodes { get; set; }
+
+    /// <summary>Whether the operator is asked for a ServiceMonitor. On by default — docs/plan/12: "a managed service the tenant cannot see the health of is a black box they will not trust with production". ⚠ The metrics themselves come from the prometheus-exporter plugin, which the operator installs into every node on the first reconcile after this is turned on — so turning it on restarts the pods and turning it off does not remove the plugin.</summary>
+    /// <remarks>Defaults to true when left unset.</remarks>
+    [JsonPropertyName("enabled")]
+    public bool? Enabled { get; set; }
+
+    /// <summary>Explicit vCPU quantity in Kubernetes form, for example 500m or 2. Empty means take it from the preset.</summary>
+    /// <remarks>Defaults to "" when left unset.</remarks>
+    [JsonPropertyName("cpu")]
+    public string? Cpu { get; set; }
+
+    /// <summary>Explicit memory quantity in Kubernetes form, for example 8Gi. Empty means take it from the preset.</summary>
+    /// <remarks>Defaults to "" when left unset.</remarks>
+    [JsonPropertyName("memory")]
+    public string? Memory { get; set; }
+
+    /// <summary>A sizing preset from docs/plan/12. Search nodes use the m1 family, which is 1 vCPU to 8 GiB, because OpenSearch is bound by heap and by the filesystem cache rather than by CPU. The m1 rungs below m1.small are deliberately not offered: OpenSearch derives its JVM heap from the container limit and a node under 4 GiB fails a bootstrap check after passing its readiness probe.</summary>
+    /// <remarks>Defaults to "m1.medium" when left unset.</remarks>
+    [JsonPropertyName("preset")]
+    public OpenSearchServicePreset? Preset { get; set; }
+
+    /// <summary>StorageClass name for every node pool. Empty means the cluster default.</summary>
+    /// <remarks>⚠ Cannot change after create. Defaults to "" when left unset.</remarks>
+    [JsonPropertyName("class")]
+    public string? Class { get; set; }
+
+    /// <summary>Disk size per data node, in Kubernetes quantity form. Grows online; never shrinks. The cluster-manager and coordinating nodes get a fixed 10Gi that is not configurable and is counted against the storage quota anyway.</summary>
+    /// <remarks>Required on a create. Defaults to "100Gi" when left unset.</remarks>
+    [JsonPropertyName("size")]
+    public required string Size { get; set; }
+
+    /// <summary>OpenSearch version. ⚠ OpenSearch is a fork of Elasticsearch 7.10 (ADR-011 — Elasticsearch is SSPL and is not available to us) and the two have diverged since, so an Elasticsearch 8 client is not promised anything here. Upgrades between the values below are online and in the maintenance window; a third value is a new api-version.</summary>
+    /// <remarks>Required on a create. Defaults to "3.1.0" when left unset.</remarks>
+    [JsonPropertyName("version")]
+    public required OpenSearchServiceVersion Version { get; set; }
+
+    /// <summary>Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.</summary>
+    [JsonPropertyName("tags")]
+    public IDictionary<string, string> Tags { get; set; } = new Dictionary<string, string>(StringComparer.Ordinal);
+}
+
+/// <summary>One OpenSearch service, and the operations on it.</summary>
+public sealed partial class OpenSearchServiceResource {
+    /// <summary>The resource's fully qualified id.</summary>
+    public string Id { get; init; } = string.Empty;
+
+    /// <summary>The body, projected at this api-version.</summary>
+    public OpenSearchServiceData Data { get; init; } = new();
+
+    /// <summary>Re-reads the resource.</summary>
+    public partial Task<Response<OpenSearchServiceResource>> GetAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Amends the resource. A merge patch: what is not set is not changed.</summary>
+    public partial Task<Operation<OpenSearchServiceResource>> UpdateAsync(
+        WaitUntil waitUntil,
+        OpenSearchServiceData data,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Deletes the resource. ⚠ Permanent: this type declares no soft-delete window.</summary>
+    public partial Task<Operation> DeleteAsync(
+        WaitUntil waitUntil,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>What listKeys returns. ⚠ Secret material: never log or cache this.</summary>
+    public sealed partial class ListKeysResult {
+
+        /// <summary>The in-cluster REST endpoint, https://host:port. ⚠ No external address is returned, because there is none — see the service's own documentation on exposure.</summary>
+        [JsonPropertyName("endpoint")]
+        public required string Endpoint { get; set; }
+
+        /// <summary>The administrative password, read from the tenant's Vault for this call only.</summary>
+        [JsonPropertyName("password")]
+        public required string Password { get; set; }
+
+        /// <summary>The administrative user. Always "admin": the operator generates exactly one credential and does not name it.</summary>
+        [JsonPropertyName("username")]
+        public required string Username { get; set; }
+    }
+
+    /// <summary>ListKeys. ⚠ An action never creates — a POST to a name that does not exist is a 404. ⚠ The response carries secret material and is always audited.</summary>
+    public partial Task<Response<ListKeysResult>> ListKeysAsync(
+        CancellationToken cancellationToken = default);
+}
+
+/// <summary>The OpenSearch services in one resource group.</summary>
+/// <remarks>⚠ Every write is long-running: docs/plan/08 § The write path, end to end
+/// ends in a 202 for every verb, so there is no synchronous overload to offer.</remarks>
+public sealed partial class OpenSearchServiceCollection {
+    /// <summary>The resource type these address.</summary>
+    public const string ResourceType = "CyberCloud.Search/services";
+
+    /// <summary>The URL template, with the api-version this file was generated at.</summary>
+    public const string PathTemplate = "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Search/services/{resourceName}";
+
+    /// <inheritdoc cref="GeneratedApiVersion.Value" />
+    public const string ApiVersion = "2026-08-01";
+
+    /// <summary>Creates or replaces one OpenSearch service.</summary>
+    /// <remarks>⚠ Poll with GetProgressAsync() rather than only WaitForCompletionAsync():
+    /// docs/plan/21 § The .NET SDK — "Azure's LROs expose no progress; ours do and the
+    /// SDK should not hide it".</remarks>
+    public partial Task<Operation<OpenSearchServiceResource>> CreateOrUpdateAsync(
+        WaitUntil waitUntil,
+        string name,
+        OpenSearchServiceData data,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Reads one OpenSearch service by name.</summary>
+    public partial Task<Response<OpenSearchServiceResource>> GetAsync(string name, CancellationToken cancellationToken = default);
+
+    /// <summary>The OpenSearch services in this group, paged.</summary>
+    public partial AsyncPageable<OpenSearchServiceResource> GetAllAsync(CancellationToken cancellationToken = default);
+}
+
 /// <summary>The values /properties/replication accepts. ⚠ Closed: the write path refuses anything else.</summary>
 public enum StorageAccountReplication {
     /// <summary>Never assigned. Not a value the API accepts.</summary>

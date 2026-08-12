@@ -1773,6 +1773,371 @@
       "x-cybercloud-resource-type": "CyberCloud.Sample/widgets",
       "x-cybercloud-action": "ping"
     },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Search/services/{resourceName}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "get": {
+        "operationId": "CyberCloud_Search_services_Get",
+        "summary": "Read a CyberCloud.Search/services.",
+        "description": "The body is this api-version's projection of the resource: docs/plan/08 § The provider registry keeps grain state as a superset and a read at an older version drops what that version did not declare.",
+        "responses": {
+          "200": {
+            "description": "The resource.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Search.services"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "read"
+      },
+      "put": {
+        "operationId": "CyberCloud_Search_services_CreateOrUpdate",
+        "summary": "Create or replace a CyberCloud.Search/services.",
+        "description": "A full replacement. Every property the schema marks required must be present; a read-only property is refused rather than ignored — docs/plan/08 § The write path, end to end.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CyberCloud.Search.services"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "headers": {
+              "Azure-AsyncOperation": {
+                "description": "The absolute URL of the operation to poll.",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "Retry-After": {
+                "description": "Seconds to wait before the first poll.",
+                "required": true,
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "write"
+      },
+      "patch": {
+        "operationId": "CyberCloud_Search_services_Update",
+        "summary": "Merge-patch a CyberCloud.Search/services.",
+        "description": "A merge patch. The patch itself may omit required properties; the merged result is what is validated — see ResourceSchema.Validate.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CyberCloud.Search.services"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "headers": {
+              "Azure-AsyncOperation": {
+                "description": "The absolute URL of the operation to poll.",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "Retry-After": {
+                "description": "Seconds to wait before the first poll.",
+                "required": true,
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "write"
+      },
+      "delete": {
+        "operationId": "CyberCloud_Search_services_Delete",
+        "summary": "Delete a CyberCloud.Search/services.",
+        "description": "The delete is permanent: this type declares no soft-delete window.",
+        "responses": {
+          "202": {
+            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "headers": {
+              "Azure-AsyncOperation": {
+                "description": "The absolute URL of the operation to poll.",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "Retry-After": {
+                "description": "Seconds to wait before the first poll.",
+                "required": true,
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "delete",
+        "x-cybercloud-soft-delete-days": 0
+      },
+      "x-cybercloud-resource-type": "CyberCloud.Search/services",
+      "x-cybercloud-display": {
+        "name": "OpenSearch service",
+        "plural": "OpenSearch services",
+        "alias": "opensearch",
+        "summary": "A managed OpenSearch cluster on the OpenSearch operator, with dedicated cluster-manager, data and optional coordinating node pools and operator-generated transport and HTTP TLS.",
+        "declared": true
+      },
+      "x-cybercloud-supports-tags": true,
+      "x-cybercloud-requires-cluster": true,
+      "x-cybercloud-cluster-id-pointer": "/properties/clusterId",
+      "x-cybercloud-soft-delete-days": 0,
+      "x-cybercloud-meters": [
+        {
+          "meter": "MemoryGb",
+          "amountPointer": "",
+          "fallback": null,
+          "expression": "(dataNodes + coordinatingNodes) × sizing.memory (from sizing.preset when unset) + masterNodes × 2Gi, in GiB",
+          "reads": [
+            "/properties/dataNodes",
+            "/properties/coordinatingNodes",
+            "/properties/masterNodes",
+            "/properties/sizing/preset",
+            "/properties/sizing/memory"
+          ]
+        },
+        {
+          "meter": "Resources",
+          "amountPointer": "",
+          "fallback": 1,
+          "expression": "1",
+          "reads": []
+        },
+        {
+          "meter": "StorageGb",
+          "amountPointer": "",
+          "fallback": null,
+          "expression": "dataNodes × storage.size + (masterNodes + coordinatingNodes) × 10Gi, in GiB",
+          "reads": [
+            "/properties/dataNodes",
+            "/properties/masterNodes",
+            "/properties/coordinatingNodes",
+            "/properties/storage/size"
+          ]
+        },
+        {
+          "meter": "Vcpu",
+          "amountPointer": "",
+          "fallback": null,
+          "expression": "(dataNodes + coordinatingNodes) × sizing.cpu (from sizing.preset when unset) + masterNodes × 500m, in cores",
+          "reads": [
+            "/properties/dataNodes",
+            "/properties/coordinatingNodes",
+            "/properties/masterNodes",
+            "/properties/sizing/preset",
+            "/properties/sizing/cpu"
+          ]
+        }
+      ]
+    },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Search/services/{resourceName}/listKeys": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "post": {
+        "operationId": "CyberCloud_Search_services_ListKeys",
+        "summary": "listKeys a CyberCloud.Search/services.",
+        "description": "An action never creates: a POST to a name that does not exist is a 404 — docs/plan/08 § The write path, end to end. ⚠ The response carries secret material. It is always audited and is never cached — docs/plan/08 § The provider registry.",
+        "responses": {
+          "200": {
+            "description": "The action's result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Search.services.ListKeysResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "listKeys",
+        "x-cybercloud-secret": true,
+        "x-cybercloud-long-running": false
+      },
+      "x-cybercloud-resource-type": "CyberCloud.Search/services",
+      "x-cybercloud-action": "listKeys"
+    },
     "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Storage/accounts/{accountsName}/buckets/{resourceName}": {
       "parameters": [
         {
@@ -3801,6 +4166,182 @@
         "title": "CyberCloud.Sample.widgets.PingResponse",
         "type": "object"
       },
+      "CyberCloud.Search.services": {
+        "additionalProperties": false,
+        "description": "The body of a CyberCloud.Search/services. Generated from the provider registry's schema, which is the same object the write path validates against — docs/plan/08 § The provider registry.",
+        "properties": {
+          "location": {
+            "description": "The region the service is billed in.",
+            "example": "eu-central",
+            "format": "cybercloud-region",
+            "type": "string",
+            "x-cybercloud-immutable": true,
+            "x-cybercloud-widget": "region"
+          },
+          "properties": {
+            "additionalProperties": false,
+            "description": "The service's own settings.",
+            "properties": {
+              "clusterId": {
+                "description": "The cluster whose namespace holds the search service.",
+                "format": "uuid",
+                "type": "string",
+                "x-cybercloud-immutable": true,
+                "x-cybercloud-widget": "cluster"
+              },
+              "coordinatingNodes": {
+                "default": 0,
+                "description": "Number of coordinating-only nodes — nodes that hold no data and no cluster state and exist to fan a search out and merge the results. Zero is the default and is right until a query pattern makes one data node the bottleneck for every search. They are sized by the same preset as the data nodes.",
+                "maximum": 10,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "dataNodes": {
+                "default": 3,
+                "description": "Number of data nodes. This is the capacity axis: total raw capacity is this count times the disk size below, before replicas. Every data node also carries the ingest role, so an indexing pipeline needs no separate pool.",
+                "maximum": 20,
+                "minimum": 1,
+                "type": "integer"
+              },
+              "masterNodes": {
+                "default": 3,
+                "description": "Number of dedicated cluster-manager nodes. They hold the cluster state in a quorum, so three is the smallest count that survives losing one. One is offered for development and has no quorum at all. An even count is worse than the odd count below it and the API cannot say so — see the service's own documentation.",
+                "maximum": 5,
+                "minimum": 1,
+                "type": "integer"
+              },
+              "monitoring": {
+                "additionalProperties": false,
+                "description": "What the platform scrapes.",
+                "properties": {
+                  "enabled": {
+                    "default": true,
+                    "description": "Whether the operator is asked for a ServiceMonitor. On by default — docs/plan/12: \"a managed service the tenant cannot see the health of is a black box they will not trust with production\". ⚠ The metrics themselves come from the prometheus-exporter plugin, which the operator installs into every node on the first reconcile after this is turned on — so turning it on restarts the pods and turning it off does not remove the plugin.",
+                    "type": "boolean"
+                  }
+                },
+                "type": "object"
+              },
+              "sizing": {
+                "additionalProperties": false,
+                "description": "CPU and memory per data node and per coordinating node, either by preset or explicitly. The cluster-manager nodes are sized by the platform and are not affected.",
+                "properties": {
+                  "cpu": {
+                    "default": "",
+                    "description": "Explicit vCPU quantity in Kubernetes form, for example 500m or 2. Empty means take it from the preset.",
+                    "pattern": "^(?:(\\d+(\\.\\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)?)$",
+                    "type": "string"
+                  },
+                  "memory": {
+                    "default": "",
+                    "description": "Explicit memory quantity in Kubernetes form, for example 8Gi. Empty means take it from the preset.",
+                    "pattern": "^(?:(\\d+(\\.\\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)?)$",
+                    "type": "string"
+                  },
+                  "preset": {
+                    "default": "m1.medium",
+                    "description": "A sizing preset from docs/plan/12. Search nodes use the m1 family, which is 1 vCPU to 8 GiB, because OpenSearch is bound by heap and by the filesystem cache rather than by CPU. The m1 rungs below m1.small are deliberately not offered: OpenSearch derives its JVM heap from the container limit and a node under 4 GiB fails a bootstrap check after passing its readiness probe.",
+                    "enum": [
+                      "m1.2xlarge",
+                      "m1.4xlarge",
+                      "m1.large",
+                      "m1.medium",
+                      "m1.small",
+                      "m1.xlarge"
+                    ],
+                    "type": "string",
+                    "x-cybercloud-widget": "cozy-preset"
+                  }
+                },
+                "type": "object"
+              },
+              "storage": {
+                "additionalProperties": false,
+                "description": "The data volume, per data node.",
+                "properties": {
+                  "class": {
+                    "default": "",
+                    "description": "StorageClass name for every node pool. Empty means the cluster default.",
+                    "type": "string",
+                    "x-cybercloud-immutable": true,
+                    "x-cybercloud-widget": "storageclass"
+                  },
+                  "size": {
+                    "default": "100Gi",
+                    "description": "Disk size per data node, in Kubernetes quantity form. Grows online; never shrinks. The cluster-manager and coordinating nodes get a fixed 10Gi that is not configurable and is counted against the storage quota anyway.",
+                    "example": "100Gi",
+                    "pattern": "^(?:\\d+(\\.\\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)$",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "size"
+                ],
+                "type": "object"
+              },
+              "version": {
+                "default": "3.1.0",
+                "description": "OpenSearch version. ⚠ OpenSearch is a fork of Elasticsearch 7.10 (ADR-011 — Elasticsearch is SSPL and is not available to us) and the two have diverged since, so an Elasticsearch 8 client is not promised anything here. Upgrades between the values below are online and in the maintenance window; a third value is a new api-version.",
+                "enum": [
+                  "2.19.0",
+                  "3.1.0"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "clusterId",
+              "coordinatingNodes",
+              "dataNodes",
+              "masterNodes",
+              "version"
+            ],
+            "type": "object"
+          },
+          "tags": {
+            "type": "object",
+            "description": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "maxProperties": 50,
+            "x-cybercloud-widget": "tag-input"
+          }
+        },
+        "required": [
+          "location"
+        ],
+        "title": "CyberCloud.Search/services",
+        "type": "object"
+      },
+      "CyberCloud.Search.services.ListKeysResponse": {
+        "additionalProperties": false,
+        "description": "What CyberCloud.Search/services/listKeys returns. ⚠ Secret material. docs/plan/08 § The provider registry makes a secret action the only path a secret value leaves by; this schema is therefore the complete list of what does.",
+        "properties": {
+          "endpoint": {
+            "description": "The in-cluster REST endpoint, https://host:port. ⚠ No external address is returned, because there is none — see the service's own documentation on exposure.",
+            "type": "string"
+          },
+          "password": {
+            "description": "The administrative password, read from the tenant's Vault for this call only.",
+            "format": "password",
+            "type": "string",
+            "writeOnly": true,
+            "x-cybercloud-secret": true
+          },
+          "username": {
+            "description": "The administrative user. Always \"admin\": the operator generates exactly one credential and does not name it.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "endpoint",
+          "password",
+          "username"
+        ],
+        "title": "CyberCloud.Search.services.ListKeysResponse",
+        "type": "object"
+      },
       "CyberCloud.Storage.accounts": {
         "additionalProperties": false,
         "description": "The body of a CyberCloud.Storage/accounts. Generated from the provider registry's schema, which is the same object the write path validates against — docs/plan/08 § The provider registry.",
@@ -4264,5 +4805,5 @@
       }
     }
   },
-  "x-cybercloud-resource-type-count": 7
+  "x-cybercloud-resource-type-count": 8
 }

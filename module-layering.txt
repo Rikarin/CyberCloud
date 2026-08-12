@@ -104,7 +104,7 @@ CyberCloud.ResourceManager -> CyberCloud.Tenancy
 # cannot grant what rule 2 refuses: cross-provider traffic goes through CyberCloud.ResourceManager
 # by resource id. A line here would fail rule 2 and be deleted, not honoured.
 #
-# ⚠ THE SIX FAMILIES BELOW HAVE IDENTICAL COLUMNS, AND THAT IS THE MEASUREMENT RATHER THAN A
+# ⚠ THE SEVEN FAMILIES BELOW HAVE IDENTICAL COLUMNS, AND THAT IS THE MEASUREMENT RATHER THAN A
 # COINCIDENCE. docs/plan/25 § R1 asks what a provider costs the platform; four edges, the same four
 # every time, is the answer for a trivial provider, for one with backup and pooling and extensions,
 # for one that does quantity arithmetic and talks to a third operator, for one with two resource
@@ -148,6 +148,10 @@ CyberCloud.Providers.Sample -> CyberCloud.Core
 CyberCloud.Providers.Sample -> CyberCloud.Kubernetes
 CyberCloud.Providers.Sample -> CyberCloud.ResourceManager
 CyberCloud.Providers.Sample -> CyberCloud.Tenancy
+CyberCloud.Providers.Search -> CyberCloud.Core
+CyberCloud.Providers.Search -> CyberCloud.Kubernetes
+CyberCloud.Providers.Search -> CyberCloud.ResourceManager
+CyberCloud.Providers.Search -> CyberCloud.Tenancy
 CyberCloud.Providers.Storage -> CyberCloud.Core
 CyberCloud.Providers.Storage -> CyberCloud.Kubernetes
 CyberCloud.Providers.Storage -> CyberCloud.ResourceManager

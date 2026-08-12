@@ -236,8 +236,30 @@
         <Project Path="src/Providers/CyberCloud.Providers.Storage/CyberCloud.Providers.Storage.Cluster.Conformance/CyberCloud.Providers.Storage.Cluster.Conformance.csproj"/>
 
         <!--
-          The sixth provider family — CyberCloud.Analytics/clickhouseClusters on the Altinity operator,
-          docs/plan/12 § The catalogue.
+          The sixth provider family — CyberCloud.Search/services on the OpenSearch operator.
+
+          docs/plan/12 § The catalogue: "OpenSearch — CyberCloud.Search/services · M3 · 1.0 EM.
+          OpenSearch operator (Apache-2.0, ADR-011 — Elasticsearch is not available to us).
+          Data/master/coordinating node roles, ISM policies, snapshot repository into the tenant's
+          bucket."
+
+          ⚠ IT IS THE FIRST M3 ROW IN THE TREE, and structurally that changes nothing: four module
+          edges, six projects, one ProviderConformanceCase. The milestone is a scheduling fact.
+
+          ⚠ ADR-011 rather than ADR-010 is what picks the ENGINE here — Elasticsearch is SSPL — while
+          ADR-010 clause 1's survey picks the operator. It is the only row in the catalogue whose two
+          halves come from two different decision records.
+        -->
+        <Project Path="src/Providers/CyberCloud.Providers.Search/CyberCloud.Providers.Search.Contracts/CyberCloud.Providers.Search.Contracts.csproj"/>
+        <Project Path="src/Providers/CyberCloud.Providers.Search/CyberCloud.Providers.Search/CyberCloud.Providers.Search.csproj"/>
+        <Project Path="src/Providers/CyberCloud.Providers.Search/CyberCloud.Providers.Search.Application/CyberCloud.Providers.Search.Application.csproj"/>
+        <Project Path="src/Providers/CyberCloud.Providers.Search/CyberCloud.Providers.Search.Tests/CyberCloud.Providers.Search.Tests.csproj"/>
+        <Project Path="src/Providers/CyberCloud.Providers.Search/CyberCloud.Providers.Search.Conformance/CyberCloud.Providers.Search.Conformance.csproj"/>
+        <Project Path="src/Providers/CyberCloud.Providers.Search/CyberCloud.Providers.Search.Cluster.Conformance/CyberCloud.Providers.Search.Cluster.Conformance.csproj"/>
+
+        <!--
+          The seventh provider family — CyberCloud.Analytics/clickhouseClusters on the Altinity
+          operator, docs/plan/12 § The catalogue.
 
           ⚠ THE PLATFORM RUNS CLICKHOUSE AND THE PLATFORM'S CLICKHOUSE IS NOT THIS TYPE. docs/plan/16
           § The stack and docs/plan/22 § The pipeline describe a per-region, database-per-tenant,

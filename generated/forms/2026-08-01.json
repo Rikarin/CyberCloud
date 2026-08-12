@@ -1875,6 +1875,286 @@
         }
       ]
     },
+    "CyberCloud.Search/services": {
+      "resourceType": "CyberCloud.Search/services",
+      "apiVersion": "2026-08-01",
+      "title": "OpenSearch service",
+      "plural": "OpenSearch services",
+      "summary": "A managed OpenSearch cluster on the OpenSearch operator, with dedicated cluster-manager, data and optional coordinating node pools and operator-generated transport and HTTP TLS.",
+      "overrideKey": "CyberCloud.Search/services@2026-08-01",
+      "coveredPointers": [
+        "/location",
+        "/properties",
+        "/properties/clusterId",
+        "/properties/coordinatingNodes",
+        "/properties/dataNodes",
+        "/properties/masterNodes",
+        "/properties/monitoring",
+        "/properties/monitoring/enabled",
+        "/properties/sizing",
+        "/properties/sizing/cpu",
+        "/properties/sizing/memory",
+        "/properties/sizing/preset",
+        "/properties/storage",
+        "/properties/storage/class",
+        "/properties/storage/size",
+        "/properties/version",
+        "/tags"
+      ],
+      "supportsTags": true,
+      "requiresCluster": true,
+      "clusterIdPointer": "/properties/clusterId",
+      "softDeleteDays": 0,
+      "fields": [
+        {
+          "jsonPointer": "/location",
+          "name": "location",
+          "label": "Location",
+          "control": "xui-region",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "The region the service is billed in.",
+          "format": "cybercloud-region",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new OpenSearch service to change it.",
+          "placeholder": "eu-central"
+        },
+        {
+          "jsonPointer": "/properties",
+          "name": "properties",
+          "label": "Properties",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "The service's own settings."
+        },
+        {
+          "jsonPointer": "/properties/clusterId",
+          "name": "clusterId",
+          "label": "Cluster id",
+          "control": "xui-cluster",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "The cluster whose namespace holds the search service.",
+          "format": "uuid",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new OpenSearch service to change it."
+        },
+        {
+          "jsonPointer": "/properties/coordinatingNodes",
+          "name": "coordinatingNodes",
+          "label": "Coordinating nodes",
+          "control": "xui-slider",
+          "type": "integer",
+          "required": true,
+          "section": "general",
+          "hint": "Number of coordinating-only nodes — nodes that hold no data and no cluster state and exist to fan a search out and merge the results. Zero is the default and is right until a query pattern makes one data node the bottleneck for every search. They are sized by the same preset as the data nodes.",
+          "minimum": 0,
+          "maximum": 10,
+          "default": 0
+        },
+        {
+          "jsonPointer": "/properties/dataNodes",
+          "name": "dataNodes",
+          "label": "Data nodes",
+          "control": "xui-slider",
+          "type": "integer",
+          "required": true,
+          "section": "general",
+          "hint": "Number of data nodes. This is the capacity axis: total raw capacity is this count times the disk size below, before replicas. Every data node also carries the ingest role, so an indexing pipeline needs no separate pool.",
+          "minimum": 1,
+          "maximum": 20,
+          "default": 3
+        },
+        {
+          "jsonPointer": "/properties/masterNodes",
+          "name": "masterNodes",
+          "label": "Master nodes",
+          "control": "xui-slider",
+          "type": "integer",
+          "required": true,
+          "section": "general",
+          "hint": "Number of dedicated cluster-manager nodes. They hold the cluster state in a quorum, so three is the smallest count that survives losing one. One is offered for development and has no quorum at all. An even count is worse than the odd count below it and the API cannot say so — see the service's own documentation.",
+          "minimum": 1,
+          "maximum": 5,
+          "default": 3
+        },
+        {
+          "jsonPointer": "/properties/monitoring",
+          "name": "monitoring",
+          "label": "Monitoring",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "What the platform scrapes."
+        },
+        {
+          "jsonPointer": "/properties/monitoring/enabled",
+          "name": "enabled",
+          "label": "Enabled",
+          "control": "xui-switch",
+          "type": "boolean",
+          "required": false,
+          "section": "monitoring",
+          "hint": "Whether the operator is asked for a ServiceMonitor. On by default — docs/plan/12: \"a managed service the tenant cannot see the health of is a black box they will not trust with production\". ⚠ The metrics themselves come from the prometheus-exporter plugin, which the operator installs into every node on the first reconcile after this is turned on — so turning it on restarts the pods and turning it off does not remove the plugin.",
+          "default": true
+        },
+        {
+          "jsonPointer": "/properties/sizing",
+          "name": "sizing",
+          "label": "Sizing",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "CPU and memory per data node and per coordinating node, either by preset or explicitly. The cluster-manager nodes are sized by the platform and are not affected."
+        },
+        {
+          "jsonPointer": "/properties/sizing/cpu",
+          "name": "cpu",
+          "label": "Cpu",
+          "control": "xui-input",
+          "type": "string",
+          "required": false,
+          "section": "sizing",
+          "hint": "Explicit vCPU quantity in Kubernetes form, for example 500m or 2. Empty means take it from the preset.",
+          "pattern": "^(?:(\\d+(\\.\\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)?)$",
+          "default": ""
+        },
+        {
+          "jsonPointer": "/properties/sizing/memory",
+          "name": "memory",
+          "label": "Memory",
+          "control": "xui-input",
+          "type": "string",
+          "required": false,
+          "section": "sizing",
+          "hint": "Explicit memory quantity in Kubernetes form, for example 8Gi. Empty means take it from the preset.",
+          "pattern": "^(?:(\\d+(\\.\\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)?)$",
+          "default": ""
+        },
+        {
+          "jsonPointer": "/properties/sizing/preset",
+          "name": "preset",
+          "label": "Preset",
+          "control": "xui-cozy-preset",
+          "type": "string",
+          "required": false,
+          "section": "sizing",
+          "hint": "A sizing preset from docs/plan/12. Search nodes use the m1 family, which is 1 vCPU to 8 GiB, because OpenSearch is bound by heap and by the filesystem cache rather than by CPU. The m1 rungs below m1.small are deliberately not offered: OpenSearch derives its JVM heap from the container limit and a node under 4 GiB fails a bootstrap check after passing its readiness probe.",
+          "choices": [
+            {
+              "value": "m1.2xlarge",
+              "label": "M1 2xlarge"
+            },
+            {
+              "value": "m1.4xlarge",
+              "label": "M1 4xlarge"
+            },
+            {
+              "value": "m1.large",
+              "label": "M1 large"
+            },
+            {
+              "value": "m1.medium",
+              "label": "M1 medium"
+            },
+            {
+              "value": "m1.small",
+              "label": "M1 small"
+            },
+            {
+              "value": "m1.xlarge",
+              "label": "M1 xlarge"
+            }
+          ],
+          "default": "m1.medium"
+        },
+        {
+          "jsonPointer": "/properties/storage",
+          "name": "storage",
+          "label": "Storage",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "The data volume, per data node."
+        },
+        {
+          "jsonPointer": "/properties/storage/class",
+          "name": "class",
+          "label": "Class",
+          "control": "xui-storageclass",
+          "type": "string",
+          "required": false,
+          "section": "storage",
+          "hint": "StorageClass name for every node pool. Empty means the cluster default.",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new OpenSearch service to change it.",
+          "default": ""
+        },
+        {
+          "jsonPointer": "/properties/storage/size",
+          "name": "size",
+          "label": "Size",
+          "control": "xui-input",
+          "type": "string",
+          "required": true,
+          "section": "storage",
+          "hint": "Disk size per data node, in Kubernetes quantity form. Grows online; never shrinks. The cluster-manager and coordinating nodes get a fixed 10Gi that is not configurable and is counted against the storage quota anyway.",
+          "pattern": "^(?:\\d+(\\.\\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)$",
+          "default": "100Gi",
+          "placeholder": "100Gi"
+        },
+        {
+          "jsonPointer": "/properties/version",
+          "name": "version",
+          "label": "Version",
+          "control": "xui-select",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "OpenSearch version. ⚠ OpenSearch is a fork of Elasticsearch 7.10 (ADR-011 — Elasticsearch is SSPL and is not available to us) and the two have diverged since, so an Elasticsearch 8 client is not promised anything here. Upgrades between the values below are online and in the maintenance window; a third value is a new api-version.",
+          "choices": [
+            {
+              "value": "2.19.0",
+              "label": "2 19 0"
+            },
+            {
+              "value": "3.1.0",
+              "label": "3 1 0"
+            }
+          ],
+          "default": "3.1.0"
+        },
+        {
+          "jsonPointer": "/tags",
+          "name": "tags",
+          "label": "Tags",
+          "control": "xui-tag-input",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+          "maxProperties": 50
+        }
+      ],
+      "actions": [
+        {
+          "name": "listKeys",
+          "label": "List keys",
+          "permission": "listKeys",
+          "longRunning": false,
+          "secret": true,
+          "fields": [],
+          "confirmOnly": true
+        }
+      ]
+    },
     "CyberCloud.Storage/accounts": {
       "resourceType": "CyberCloud.Storage/accounts",
       "apiVersion": "2026-08-01",

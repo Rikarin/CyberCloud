@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      docs/plan/03 § Providers — the first of the five projects: "grain interfaces, resource models,
+      the JSON Schemas". This one is the schema and the OpenSearch projection.
+
+      ⚠ NO GRAIN INTERFACES, AND THIS IS THE FIFTH NAMESPACE TO REPORT THAT. A search service holds a
+      credential it never sees, three node pools it renders as one array, and an admin password the
+      operator generates — and it still needs no state of its own: everything a reconcile needs is in
+      the desired body ResourceGrain already stores.
+
+      ⚠ IT REFERENCES ONLY CyberCloud.ResourceManager.Contracts AND CyberCloud.Kubernetes.Contracts —
+      the whole reference set docs/plan/03 § The .Contracts split allows a provider, and rule 2 of
+      § Assembly graph rules forbids the rest.
+    -->
+
+    <ItemGroup>
+        <ProjectReference Include="../../../CyberCloud.ResourceManager.Contracts/CyberCloud.ResourceManager.Contracts.csproj"/>
+        <ProjectReference Include="../../../CyberCloud.Kubernetes.Contracts/CyberCloud.Kubernetes.Contracts.csproj"/>
+    </ItemGroup>
+
+    <ItemGroup Label="CyberCloud.Analyzers — see CyberCloud.Core.csproj for why this is not a reference">
+        <ProjectReference Include="../../../CyberCloud.Analyzers/CyberCloud.Analyzers.csproj"
+                          OutputItemType="Analyzer"
+                          ReferenceOutputAssembly="false"/>
+    </ItemGroup>
+
+</Project>

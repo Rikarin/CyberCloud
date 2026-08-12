@@ -1,0 +1,212 @@
+# Conformance manifest — docs/plan/12 § The pattern, once, piece 8.
+#
+# What the conformance suite asserts about CyberCloud.Search/services. This file is data:
+# `Build.Charts` checks that it is present, non-empty, and names the same resource type as
+# Chart.yaml. The suite that reads the rest of it lives in test/ and does not exist yet, and the
+# target says so in its own log rather than implying otherwise.
+
+resourceType: CyberCloud.Search/services
+apiVersion: "2026-08-01"
+chart: opensearch
+
+# Objects the reconciler must have applied once the resource reports Succeeded.
+#
+# ⚠ ONE, AND IT EXPANDS INTO THREE STATEFULSETS. The operator turns spec.nodePools into a StatefulSet
+# per component, their Services, the TLS Secrets it generates, the admin-credentials Secret it
+# generates, and a ServiceMonitor. None of those is applied by the platform, so none is listed: this
+# manifest is about what the RECONCILER did.
+renders:
+  - group: opensearch.opster.io
+    version: v1
+    kind: OpenSearchCluster
+    count: 1
+
+# ⚠ THERE IS NO `requiredCrds:` BLOCK HERE, AND ITS ABSENCE IS CORRECT.
+# `ProviderConformanceCase` has no `RequiredCrds` member and never had one — the harness DERIVES the
+# definitions from the case's own `Objects`, which already carries group, version, kind and plural.
+
+# ADR-013 — every rendered object carries all seven labels. Asserted against real rendered output,
+# which is what the Labels architecture gate in docs/plan/23 § The architecture gates requires.
+labels:
+  required:
+    - cybercloud.io/tenant-id
+    - cybercloud.io/subscription-id
+    - cybercloud.io/resource-group
+    - cybercloud.io/resource-id
+    - cybercloud.io/resource-type
+    - cybercloud.io/api-version
+    - cybercloud.io/managed-by
+  # ⚠ Not the resource type verbatim. A `/` is not a legal label value character, so the value is
+  # lower-cased with `/` replaced by `_` — KubeLabels.ResourceTypeValue.
+  values:
+    cybercloud.io/resource-type: cybercloud.search_services
+    cybercloud.io/managed-by: cybercloud
+
+# Behaviour a tenant is entitled to. Each is a statement the suite can fail on, not a feature list.
+assertions:
+  - id: index-and-search
+    says: A client resolves the URL from listKeys, indexes a document, refreshes, and gets it back from a search.
+  - id: the-three-pools-have-the-roles-they-claim
+    says: >
+      GET _cat/nodes reports exactly masterNodes nodes carrying cluster_manager, exactly dataNodes
+      carrying data, and — when coordinatingNodes is non-zero — exactly that many carrying NEITHER.
+      This is the assertion that catches the failure mode pkg/builders/cluster.go's
+      `if len(selectedRoles) == 0 { nodeRolesValue = "[]" }` produces: a node whose roles OpenSearch
+      could not parse joins as a DEFAULT node, holding shards and eligible for cluster manager, and
+      reports itself perfectly healthy while doing it.
+  - id: cluster-actually-forms
+    says: >
+      The nodes form ONE cluster rather than N standalone ones. GET _cluster/health reports
+      number_of_nodes equal to the total and a discovered cluster manager. This is the assertion that
+      catches a missing spec.security.tls block, which is the one omission that produces a set of
+      pods that all pass their readiness probes and never see each other.
+  - id: transport-tls-is-per-node
+    says: Each node's transport certificate carries that node's own subject rather than a certificate shared across the pool, so one compromised pod cannot impersonate the cluster manager.
+  - id: coordinating-zero-renders-two-pools
+    says: With coordinatingNodes 0 the applied object contains exactly two nodePools entries, and no StatefulSet named {cluster}-coordinators exists. A pool declared with replicas 0 is a StatefulSet the operator waits on forever.
+  - id: storage-grows-never-shrinks
+    says: Increasing storage.size resizes online; decreasing it is refused at the API.
+  - id: secrets-never-round-trip
+    says: A GET of the resource never returns the admin password in any form. The only path out is the listKeys action.
+  - id: quota-counts-every-jvm
+    says: The reserved vcpu and memory amounts account for the cluster-manager pool as well as the data pool, and change when masterNodes alone changes.
+
+# Meters the type must emit — docs/plan/12 § The pattern, once, piece 3.
+meters:
+  - opensearch.node.hours
+  - opensearch.storage.gib.hours
+  - opensearch.egress.gib
+
+# ── owed ──────────────────────────────────────────────────────────────────────────────────────
+#
+# Named here rather than left to be discovered, because an absent capability that nobody wrote down
+# is indistinguishable from one nobody thought of.
+owed:
+  - id: demo-securityconfig
+    says: >
+      ⚠ THE ONE ITEM HERE THAT SHOULD BE CHECKED AGAINST A RUNNING OPERATOR BEFORE THIS ROW IS CALLED
+      DONE, because the operator's code and the operator's documentation say different things and the
+      difference is a security posture. pkg/helpers/helpers.go's EnsureAdminCredentialsSecret
+      generates a random admin password when spec.security.config.adminCredentialsSecret is unset —
+      `randomPassword := GenerateSecurePassword()` into a Secret with username: admin. docs/userguide/
+      main.md says "By default the operator will use the included demo securityconfig with default
+      users" and names `admin / admin`. Both can be true at once: the demo securityconfig supplies
+      the roles and role-mappings while the admin PASSWORD is generated. If they are not both true,
+      every service this provider creates ships with a published password. This provider renders no
+      spec.security.config precisely because the code path says the generated credential is the safe
+      one; that reading is what needs confirming.
+  - id: conformance-quota-is-a-budget-per-provider
+    says: >
+      ⚠ A PROPERTY OF test/CyberCloud.Conformance THAT NO EARLIER PROVIDER HAD REACHED, AND THE FIRST
+      SERVICE TO REACH IT FOUND OUT BY BEING REFUSED. The shared suite makes every create against ONE
+      subscription and nothing releases the committed amounts between assertions, so the number of
+      resources a provider can create before quota refuses it is QuotaGrain.Defaults[MemoryGb] divided
+      by that provider's own memory draw — 400 GiB over whatever the ProviderConformanceCase's body
+      costs. This type's SCHEMA DEFAULT (three data nodes at m1.medium plus three cluster managers)
+      draws 30 GiB, twice the heaviest body in the tree before it, and four assertions failed with
+      "300 committed + 90 reserved + 30 requested > 400". The case now uses the smallest legal service
+      (10 GiB) and every assertion is equally true of it, because the suite asserts a LIFECYCLE and
+      OpenSearchQuotaTests is where the sizing is asserted. ⚠ WHAT IS OWED IS THE DIAGNOSTIC, NOT THE
+      WORKAROUND: the failure names a subscription limit in a shared harness and gives a provider
+      author no reason to connect it to their own sizing table. Closing it is either a per-suite quota
+      override (IQuotaGrain.SetLimitAsync exists) or a refusal message that says which case body and
+      which meter produced the number. The next service in docs/plan/12 with a JVM in it meets this
+      again.
+  - id: listkeys-has-no-handler
+    says: >
+      docs/plan/12 § The pattern, once, piece 5 — credential provisioning into the tenant's Vault —
+      needs an OpenBao integration that does not exist, so listKeys has a declared response shape and
+      nothing that serves it. ⚠ AND THE GAP IS THE POSTGRES SHAPE RATHER THAN THE SEAWEEDFS ONE,
+      which is worth stating because the two are indistinguishable from the resource's status. The
+      operator GENERATES an admin credential, so this service comes up authenticated and working and
+      the platform merely cannot hand the password out — a tenant can get it with `kubectl get secret`
+      if they own the cluster and cannot get it any other way. charts/managed/seaweedfs is the other
+      case: there the credential does not exist at all and the resource never converges.
+  - id: api-group-is-deprecated
+    says: >
+      This chart renders opensearch.opster.io/v1, whose own groupversion_info.go says the group "is
+      deprecated and will be removed in a future release. Please migrate to opensearch.org/v1". Both
+      groups exist in the operator's tree today. Rendering the deprecated one is deliberate — it is
+      what a released operator serves, and rendering into a group the installed operator does not
+      watch produces an object that is applied, accepted, and reconciled by NOTHING, which is the one
+      failure mode with no error anywhere in it. Closing it is a new api-version on the resource type
+      plus a charts/bundle/ bump, in that order, and the two must not be done in one commit: a bundle
+      that moved first would strand every existing service.
+  - id: coordinating-is-ingest-only
+    says: >
+      A coordinating-only OpenSearch node is spelled with an EMPTY roles list, and this chart spells
+      it [ingest] instead. pkg/builders/cluster.go filters the declared roles against its own
+      availableRoles and then does `nodeRolesValue := strings.Join(selectedRoles, ",")` with
+      `if len(selectedRoles) == 0 { nodeRolesValue = "[]" }` — it renders the two-character STRING
+      `[]` into an environment variable OpenSearch parses as a roles list. Nothing in the operator's
+      tests or documentation exercises that path, and a node whose roles OpenSearch fails to parse
+      joins as a DEFAULT node — data and cluster-manager both — which is the exact opposite of
+      "coordinating" and reports itself healthy. [ingest] is a role these nodes genuinely have and
+      takes the documented path. What is OWED is the assertion that proves it: `the-three-pools-have-
+      the-roles-they-claim` above needs a running cluster, and until it runs, "these nodes hold no
+      shards" is an argument rather than a measurement.
+  - id: ism-policies
+    says: >
+      docs/plan/12's row names "ISM policies" and none is declared. An Index State Management policy
+      is not a Kubernetes object the operator applies — it is a document PUT to _plugins/_ism/policies
+      on a running cluster over an authenticated connection, which is the same shape
+      charts/managed/nats records for NATS accounts: an object inside a running system rather than an
+      object to apply. It needs the credential piece 5 would provide before it needs anything else.
+      A `services/indexPolicies` child type over that API is the honest first child, and it is a
+      different kind of reconciler from every one in this tree — one that talks to a data plane.
+  - id: snapshot-repository
+    says: >
+      docs/plan/12's row names "snapshot repository into the tenant's bucket" and none is declared,
+      which also means this service declines piece 7. GeneralConfig.SnapshotRepositories exists and
+      would render, so unlike charts/managed/nats this is not "there is no mechanism to ask for". It
+      is blocked on credentials TWICE OVER: the repository needs s3.client.default.access_key and
+      s3.client.default.secret_key in the OpenSearch keystore, which is piece 5 with an extra step,
+      and the bucket it points at is a CyberCloud.Storage/accounts resource this type would have to
+      reference by resource id through CyberCloud.ResourceManager. A snapshot repository that cannot
+      authenticate is a backup policy that reports success until the day it is needed, which is worse
+      than no backup policy.
+  - id: external-exposure
+    says: >
+      docs/plan/12 § Cross-cutting decisions gives every service optional external exposure with a
+      mandatory CIDR allow-list, and none is offered. ⚠ THE REASON IS charts/managed/nats' AND NOT
+      charts/managed/seaweedfs', and the two look identical from the resource. The operator's service
+      spec does carry a type, so exposure is expressible here — what is missing is the firewall list,
+      and offering exposure without one is the single thing that paragraph forbids in as many words.
+      Closing it is loadBalancerSourceRanges upstream OR a Kube-OVN floating IP plus a NetworkPolicy
+      this provider renders itself.
+  - id: ca-bundle-is-not-handed-out
+    says: >
+      The HTTP listener speaks TLS with a certificate from the operator's own generated CA, so a
+      client that does not trust that CA cannot connect and nothing in the API tells it where the CA
+      is. The listKeys response returns an endpoint, a username and a password and no ca bundle.
+      Closing it is a fourth property on ListKeysResponse reading the operator's generated CA Secret
+      — which is the same read piece 5 needs, so it lands with it.
+  - id: dashboards
+    says: >
+      spec.dashboards is not rendered, so OpenSearch Dashboards is not deployed. docs/plan/12's row
+      does not ask for it and a second web application per service is a second thing to expose,
+      authenticate and patch. It is listed because a user who has used OpenSearch anywhere else will
+      expect it and its absence should be a decision they can find.
+  - id: even-master-count-is-unenforced
+    says: >
+      /properties/masterNodes can only say 1..5, and a two- or four-node cluster-manager quorum is
+      strictly worse than the odd count below it — it tolerates the same number of failures and has
+      more ways to lose. SchemaProperty.Minimum/Maximum cannot say "odd" and AllowedValues is
+      Text-only by construction, so the constraint is in the property's description and in nothing
+      that enforces it. THIRD SIGHTING — charts/managed/kafka's `odd-node-count-is-unenforced` and
+      charts/managed/nats' carry the same item. Three services asking for the same unexpressible
+      thing is what makes it a registry gap rather than a quirk of any one engine.
+  - id: grafana-dashboard
+    says: >
+      Piece 6's dashboard half. The metrics exist — spec.general.monitoring.enable makes the operator
+      install the prometheus-exporter plugin and emit a ServiceMonitor — and the dashboard is not
+      here. It is the half of piece 6 no service in the catalogue has yet delivered; this is the
+      second sighting after charts/managed/nats'.
+  - id: monitoring-toggle-restarts-the-pods
+    says: >
+      Turning monitoring.enabled on makes the operator install the prometheus-exporter plugin into
+      every node, which is a pod restart across the whole cluster; turning it off removes the scrape
+      and does NOT remove the plugin. So the property is not symmetric and its cost is not obvious
+      from its name. It is said in the property's own description, which is the only place a tenant
+      would read it, and it is listed here because "a boolean that restarts your search cluster" is
+      the kind of thing a conformance assertion should eventually pin rather than a description.
