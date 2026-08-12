@@ -1,0 +1,38 @@
+# Managed Kafka — docs/plan/12 § The catalogue, "Kafka — CyberCloud.Messaging/kafkaClusters".
+#
+# The operator is Strimzi, taken from Cozystack's survey per docs/plan/02 § ADR-010, and cleared as
+# Apache-2.0 by ADR-011. No Cozystack code is vendored; see SOURCE next to this file.
+apiVersion: v2
+name: kafka
+description: Managed Apache Kafka on Strimzi in KRaft mode — node pools, Cruise Control, firewalled external listener.
+type: application
+
+# The chart's own version. Bumped on every change to this directory.
+version: 0.1.0
+
+# The default Apache Kafka version, matching values.yaml `version`.
+appVersion: "3.9"
+
+kubeVersion: ">=1.31.0-0"
+
+keywords:
+  - kafka
+  - streaming
+  - strimzi
+  - kraft
+
+home: https://strimzi.io
+sources:
+  - https://github.com/strimzi/strimzi-kafka-operator
+
+maintainers:
+  - name: Cyber Cloud Platform
+
+# ⚠ These three are read by `Build.Charts` and written into `values.schema.json` as
+# `x-cybercloud-*`. They are what makes the generated schema addressable as a resource type's
+# body rather than as an anonymous blob of Helm values — docs/plan/12 § The pattern, once, piece 2.
+# A chart under charts/managed/ without them fails the build.
+annotations:
+  cybercloud.io/resource-type: CyberCloud.Messaging/kafkaClusters
+  cybercloud.io/api-version: "2026-08-01"
+  cybercloud.io/operator: strimzi

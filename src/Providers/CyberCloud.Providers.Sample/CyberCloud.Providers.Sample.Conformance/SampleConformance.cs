@@ -46,12 +46,7 @@ public sealed class SampleCase : IProviderCaseSource {
             ObjectMatchesDesired = (objectJson, desiredJson) => {
                 using var desired = JsonDocument.Parse(desiredJson);
                 return SampleWidgets.Matches(objectJson, desired.RootElement);
-            },
-
-            // Empty, and said rather than defaulted. The sample renders a core-group ConfigMap, which
-            // every API server already serves — and that is exactly why it, and the reference
-            // provider, never needed this member and never noticed it was missing.
-            RequiredCrds = []
+            }
         };
 
     /// <summary>A body with one property removed from <c>/properties</c>.</summary>

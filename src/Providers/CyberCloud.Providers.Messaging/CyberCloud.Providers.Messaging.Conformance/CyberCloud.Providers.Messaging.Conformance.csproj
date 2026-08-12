@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      docs/plan/03 § Providers — the fifth project: "the shared provider conformance suite,
+      parameterised".
+
+      ⚠ IT CONTAINS NO ASSERTIONS, AND IT IS THE THIRD PROJECT TO TEST THAT CLAIM. The sample's
+      demonstrated it once; CyberCloud.Providers.DBforPostgreSQL's demonstrated it against a type
+      rendering two objects instead of one. This one is the first whose objects are BOTH custom
+      resources with a required inter-object binding — a KafkaNodePool the operator ignores unless a
+      label names its Kafka — and test/CyberCloud.Conformance still needed no change.
+
+      ⚠ THIS PROJECT IS THE THIRD SUITE THE Labels ARCHITECTURE GATE COUNTS. Build.Architecture
+      § LabelsGate runs EveryAppliedObjectCarriesTheSevenMandatoryLabelsAndBothAnnotations in every
+      *.Conformance project under src/Providers, and it is the first in which an object carries a
+      NON-mandatory label alongside the seven — so it is where "injected and non-overridable" is
+      tested against a provider that legitimately needs a label of its own.
+
+      ⚠ IT REFERENCES A PROJECT UNDER test/, which docs/plan/03 § test/ intends: CyberCloud.Conformance
+      is "the shared provider suite (parameterised, REFERENCED BY PROVIDERS)". docs/plan/03 § Assembly
+      graph rules is about the shipped graph and excludes test projects by construction.
+    -->
+
+    <ItemGroup>
+        <PackageReference Include="xunit.v3"/>
+        <PackageReference Include="Shouldly"/>
+    </ItemGroup>
+
+    <ItemGroup Label="Global usings">
+        <Using Include="Xunit"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../CyberCloud.Providers.Messaging/CyberCloud.Providers.Messaging.csproj"/>
+        <ProjectReference Include="../../../../test/CyberCloud.Conformance/CyberCloud.Conformance.csproj"/>
+    </ItemGroup>
+
+</Project>

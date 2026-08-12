@@ -21,6 +21,7 @@
       "src/Providers/CyberCloud.Providers.DBforPostgreSQL/CyberCloud.Providers.DBforPostgreSQL.Application/CyberCloud.Providers.DBforPostgreSQL.Application.csproj",
       "src/Providers/CyberCloud.Providers.DBforPostgreSQL/CyberCloud.Providers.DBforPostgreSQL.Tests/CyberCloud.Providers.DBforPostgreSQL.Tests.csproj",
       "src/Providers/CyberCloud.Providers.DBforPostgreSQL/CyberCloud.Providers.DBforPostgreSQL.Conformance/CyberCloud.Providers.DBforPostgreSQL.Conformance.csproj",
+<<<<<<< HEAD
       "src/Providers/CyberCloud.Providers.Cache/CyberCloud.Providers.Cache.Contracts/CyberCloud.Providers.Cache.Contracts.csproj",
       "src/Providers/CyberCloud.Providers.Cache/CyberCloud.Providers.Cache/CyberCloud.Providers.Cache.csproj",
       "src/Providers/CyberCloud.Providers.Cache/CyberCloud.Providers.Cache.Application/CyberCloud.Providers.Cache.Application.csproj",
@@ -29,6 +30,14 @@
       "src/Providers/CyberCloud.Providers.Cache/CyberCloud.Providers.Cache.Cluster.Conformance/CyberCloud.Providers.Cache.Cluster.Conformance.csproj",
       "test/CyberCloud.Conformance/CyberCloud.Conformance.csproj",
       "test/CyberCloud.Cluster.Conformance/CyberCloud.Cluster.Conformance.csproj"
+=======
+      "src/Providers/CyberCloud.Providers.Messaging/CyberCloud.Providers.Messaging.Contracts/CyberCloud.Providers.Messaging.Contracts.csproj",
+      "src/Providers/CyberCloud.Providers.Messaging/CyberCloud.Providers.Messaging/CyberCloud.Providers.Messaging.csproj",
+      "src/Providers/CyberCloud.Providers.Messaging/CyberCloud.Providers.Messaging.Application/CyberCloud.Providers.Messaging.Application.csproj",
+      "src/Providers/CyberCloud.Providers.Messaging/CyberCloud.Providers.Messaging.Tests/CyberCloud.Providers.Messaging.Tests.csproj",
+      "src/Providers/CyberCloud.Providers.Messaging/CyberCloud.Providers.Messaging.Conformance/CyberCloud.Providers.Messaging.Conformance.csproj",
+      "test/CyberCloud.Conformance/CyberCloud.Conformance.csproj"
+>>>>>>> worktree-agent-ab2b59424b4e1d048
     ]
   }
 }

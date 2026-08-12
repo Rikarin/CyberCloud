@@ -1224,6 +1224,608 @@
         }
       }
     },
+    "messaging": {
+      "name": "messaging",
+      "summary": "Commands for the CyberCloud.Messaging provider.",
+      "commands": {
+        "kafka-clusters": {
+          "name": "kafka-clusters",
+          "resourceType": "CyberCloud.Messaging/kafkaClusters",
+          "title": "Kafka cluster",
+          "plural": "Kafka clusters",
+          "summary": "A managed Apache Kafka cluster on Strimzi in KRaft mode, with Cruise Control, configurable retention and an optional firewalled external listener.",
+          "verbs": {
+            "create": {
+              "name": "create",
+              "summary": "Create or replace a Kafka cluster.",
+              "method": "PUT",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Messaging/kafkaClusters/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": true,
+              "flags": [
+                {
+                  "name": "--allowed-cidrs",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Source ranges permitted to reach the external listener. Required in substance rather than in schema: an empty list with external exposure on renders a load balancer that accepts nothing, which is the safe reading of an unfinished configuration.",
+                  "jsonPointer": "/properties/external/allowedCidrs",
+                  "repeated": true,
+                  "default": [],
+                  "example": [
+                    "203.0.113.0/24"
+                  ]
+                },
+                {
+                  "name": "--class",
+                  "type": "string",
+                  "required": false,
+                  "summary": "StorageClass name. Empty means the cluster default.",
+                  "jsonPointer": "/properties/storage/class",
+                  "immutable": true,
+                  "widget": "storageclass",
+                  "default": ""
+                },
+                {
+                  "name": "--cluster-id",
+                  "type": "string",
+                  "required": true,
+                  "alias": "--cluster",
+                  "summary": "The cluster whose namespace holds the Strimzi objects.",
+                  "jsonPointer": "/properties/clusterId",
+                  "immutable": true,
+                  "widget": "cluster"
+                },
+                {
+                  "name": "--cpu",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Explicit vCPU quantity in Kubernetes form, for example 500m or 2. Empty means take it from the preset.",
+                  "jsonPointer": "/properties/sizing/cpu",
+                  "default": ""
+                },
+                {
+                  "name": "--cruise-control-enabled",
+                  "type": "switch",
+                  "required": false,
+                  "summary": "Whether Cruise Control runs. On by default: docs/plan/12 puts it in the chart rather than in a follow-up, because rebalancing a Kafka cluster by hand is the operational cost that makes this the most demanding service in the catalogue.",
+                  "jsonPointer": "/properties/cruiseControl/enabled",
+                  "default": true
+                },
+                {
+                  "name": "--delete-claim",
+                  "type": "switch",
+                  "required": false,
+                  "summary": "Whether deleting the resource also deletes the log volumes. Off by default, so a mistaken delete leaves the data recoverable by hand.",
+                  "jsonPointer": "/properties/storage/deleteClaim",
+                  "default": false
+                },
+                {
+                  "name": "--external-enabled",
+                  "type": "switch",
+                  "required": false,
+                  "summary": "Whether the cluster is reachable from outside the Kubernetes cluster. Off by default — docs/plan/12 § Cross-cutting decisions makes external exposure never the default, because a managed broker on a public IP with a weak password is the most common cloud breach there is.",
+                  "jsonPointer": "/properties/external/enabled",
+                  "default": false
+                },
+                {
+                  "name": "--hours",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "Default retention in hours. A week by default.",
+                  "jsonPointer": "/properties/retention/hours",
+                  "default": 168
+                },
+                {
+                  "name": "--location",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The region the cluster is billed in.",
+                  "jsonPointer": "/location",
+                  "immutable": true,
+                  "widget": "region",
+                  "example": "eu-central"
+                },
+                {
+                  "name": "--memory",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Explicit memory quantity in Kubernetes form, for example 4Gi. Empty means take it from the preset.",
+                  "jsonPointer": "/properties/sizing/memory",
+                  "default": ""
+                },
+                {
+                  "name": "--min-in-sync-replicas",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "How many replicas must acknowledge a write before it is committed. Must be below the replication factor, or the cluster cannot tolerate one broker restart.",
+                  "jsonPointer": "/properties/topics/minInSyncReplicas",
+                  "default": 2
+                },
+                {
+                  "name": "--monitoring-enabled",
+                  "type": "switch",
+                  "required": false,
+                  "summary": "Whether the operator runs a Kafka Exporter alongside the cluster, exposing consumer-lag and topic metrics to the platform's metrics stack.",
+                  "jsonPointer": "/properties/monitoring/enabled",
+                  "default": true
+                },
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group."
+                },
+                {
+                  "name": "--nodes",
+                  "type": "integer",
+                  "required": true,
+                  "summary": "Number of Kafka nodes, each acting as both a KRaft controller and a broker. Use an odd number: a quorum of two tolerates no failures, and one is a single point of failure offered for development only.",
+                  "jsonPointer": "/properties/nodes",
+                  "default": 3
+                },
+                {
+                  "name": "--partitions",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "Default partition count for a new topic.",
+                  "jsonPointer": "/properties/topics/partitions",
+                  "default": 3
+                },
+                {
+                  "name": "--preset",
+                  "type": "string",
+                  "required": false,
+                  "summary": "A sizing preset from docs/plan/12. Brokers use the c1 family, which is 1 vCPU to 2 GiB and guaranteed rather than burstable.",
+                  "jsonPointer": "/properties/sizing/preset",
+                  "choices": [
+                    "c1.nano",
+                    "c1.micro",
+                    "c1.small",
+                    "c1.medium",
+                    "c1.large",
+                    "c1.xlarge",
+                    "c1.2xlarge",
+                    "c1.4xlarge"
+                  ],
+                  "widget": "cozy-preset",
+                  "default": "c1.small"
+                },
+                {
+                  "name": "--replication-factor",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "Default replication factor for a new topic. Must not exceed the node count, or every produce to a new topic fails.",
+                  "jsonPointer": "/properties/topics/replicationFactor",
+                  "default": 3
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy."
+                },
+                {
+                  "name": "--retention-size",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Default retention by partition size, in Kubernetes quantity form. Empty means retention is by time alone.",
+                  "jsonPointer": "/properties/retention/size",
+                  "default": "",
+                  "example": "50Gi"
+                },
+                {
+                  "name": "--storage-size",
+                  "type": "string",
+                  "required": true,
+                  "summary": "Log volume size per node, in Kubernetes quantity form. Grows online; never shrinks.",
+                  "jsonPointer": "/properties/storage/size",
+                  "default": "100Gi",
+                  "example": "100Gi"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tags",
+                  "type": "keyValue",
+                  "required": false,
+                  "summary": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+                  "jsonPointer": "/tags",
+                  "widget": "tag-input"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--tls",
+                  "type": "switch",
+                  "required": false,
+                  "summary": "Whether the in-cluster listener requires TLS. On by default; turning it off is a plaintext broker on the pod network.",
+                  "jsonPointer": "/properties/listener/tls",
+                  "default": true
+                },
+                {
+                  "name": "--version",
+                  "type": "string",
+                  "required": true,
+                  "summary": "Apache Kafka version. Minor upgrades are applied automatically in the maintenance window; a major upgrade is an explicit update to this field.",
+                  "jsonPointer": "/properties/version",
+                  "choices": [
+                    "3.8",
+                    "3.9"
+                  ],
+                  "default": "3.9"
+                }
+              ],
+              "waitFlags": [
+                "--wait",
+                "--no-wait"
+              ]
+            },
+            "delete": {
+              "name": "delete",
+              "summary": "Delete a Kafka cluster. Permanent.",
+              "method": "DELETE",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Messaging/kafkaClusters/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": true,
+              "flags": [
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group."
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy."
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "env": "CYC_TENANT"
+                }
+              ],
+              "waitFlags": [
+                "--wait",
+                "--no-wait"
+              ]
+            },
+            "list-keys": {
+              "name": "list-keys",
+              "summary": "listKeys a Kafka cluster. ⚠ The response carries secret material — it is always audited and must not be written to a log or a shell history.",
+              "method": "POST",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Messaging/kafkaClusters/{resourceName}/listKeys",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group."
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy."
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "env": "CYC_TENANT"
+                }
+              ],
+              "action": "listKeys",
+              "permission": "listKeys",
+              "secret": true,
+              "rawBody": true
+            },
+            "show": {
+              "name": "show",
+              "summary": "Read a Kafka cluster.",
+              "method": "GET",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Messaging/kafkaClusters/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group."
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy."
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "env": "CYC_TENANT"
+                }
+              ]
+            },
+            "update": {
+              "name": "update",
+              "summary": "Amend a Kafka cluster. Only the flags given are changed.",
+              "method": "PATCH",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Messaging/kafkaClusters/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": true,
+              "flags": [
+                {
+                  "name": "--allowed-cidrs",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Source ranges permitted to reach the external listener. Required in substance rather than in schema: an empty list with external exposure on renders a load balancer that accepts nothing, which is the safe reading of an unfinished configuration.",
+                  "jsonPointer": "/properties/external/allowedCidrs",
+                  "repeated": true,
+                  "default": [],
+                  "example": [
+                    "203.0.113.0/24"
+                  ]
+                },
+                {
+                  "name": "--class",
+                  "type": "string",
+                  "required": false,
+                  "summary": "StorageClass name. Empty means the cluster default.",
+                  "jsonPointer": "/properties/storage/class",
+                  "immutable": true,
+                  "widget": "storageclass",
+                  "default": ""
+                },
+                {
+                  "name": "--cluster-id",
+                  "type": "string",
+                  "required": false,
+                  "alias": "--cluster",
+                  "summary": "The cluster whose namespace holds the Strimzi objects.",
+                  "jsonPointer": "/properties/clusterId",
+                  "immutable": true,
+                  "widget": "cluster"
+                },
+                {
+                  "name": "--cpu",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Explicit vCPU quantity in Kubernetes form, for example 500m or 2. Empty means take it from the preset.",
+                  "jsonPointer": "/properties/sizing/cpu",
+                  "default": ""
+                },
+                {
+                  "name": "--cruise-control-enabled",
+                  "type": "switch",
+                  "required": false,
+                  "summary": "Whether Cruise Control runs. On by default: docs/plan/12 puts it in the chart rather than in a follow-up, because rebalancing a Kafka cluster by hand is the operational cost that makes this the most demanding service in the catalogue.",
+                  "jsonPointer": "/properties/cruiseControl/enabled",
+                  "default": true
+                },
+                {
+                  "name": "--delete-claim",
+                  "type": "switch",
+                  "required": false,
+                  "summary": "Whether deleting the resource also deletes the log volumes. Off by default, so a mistaken delete leaves the data recoverable by hand.",
+                  "jsonPointer": "/properties/storage/deleteClaim",
+                  "default": false
+                },
+                {
+                  "name": "--external-enabled",
+                  "type": "switch",
+                  "required": false,
+                  "summary": "Whether the cluster is reachable from outside the Kubernetes cluster. Off by default — docs/plan/12 § Cross-cutting decisions makes external exposure never the default, because a managed broker on a public IP with a weak password is the most common cloud breach there is.",
+                  "jsonPointer": "/properties/external/enabled",
+                  "default": false
+                },
+                {
+                  "name": "--hours",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "Default retention in hours. A week by default.",
+                  "jsonPointer": "/properties/retention/hours",
+                  "default": 168
+                },
+                {
+                  "name": "--location",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The region the cluster is billed in.",
+                  "jsonPointer": "/location",
+                  "immutable": true,
+                  "widget": "region",
+                  "example": "eu-central"
+                },
+                {
+                  "name": "--memory",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Explicit memory quantity in Kubernetes form, for example 4Gi. Empty means take it from the preset.",
+                  "jsonPointer": "/properties/sizing/memory",
+                  "default": ""
+                },
+                {
+                  "name": "--min-in-sync-replicas",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "How many replicas must acknowledge a write before it is committed. Must be below the replication factor, or the cluster cannot tolerate one broker restart.",
+                  "jsonPointer": "/properties/topics/minInSyncReplicas",
+                  "default": 2
+                },
+                {
+                  "name": "--monitoring-enabled",
+                  "type": "switch",
+                  "required": false,
+                  "summary": "Whether the operator runs a Kafka Exporter alongside the cluster, exposing consumer-lag and topic metrics to the platform's metrics stack.",
+                  "jsonPointer": "/properties/monitoring/enabled",
+                  "default": true
+                },
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group."
+                },
+                {
+                  "name": "--nodes",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "Number of Kafka nodes, each acting as both a KRaft controller and a broker. Use an odd number: a quorum of two tolerates no failures, and one is a single point of failure offered for development only.",
+                  "jsonPointer": "/properties/nodes",
+                  "default": 3
+                },
+                {
+                  "name": "--partitions",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "Default partition count for a new topic.",
+                  "jsonPointer": "/properties/topics/partitions",
+                  "default": 3
+                },
+                {
+                  "name": "--preset",
+                  "type": "string",
+                  "required": false,
+                  "summary": "A sizing preset from docs/plan/12. Brokers use the c1 family, which is 1 vCPU to 2 GiB and guaranteed rather than burstable.",
+                  "jsonPointer": "/properties/sizing/preset",
+                  "choices": [
+                    "c1.nano",
+                    "c1.micro",
+                    "c1.small",
+                    "c1.medium",
+                    "c1.large",
+                    "c1.xlarge",
+                    "c1.2xlarge",
+                    "c1.4xlarge"
+                  ],
+                  "widget": "cozy-preset",
+                  "default": "c1.small"
+                },
+                {
+                  "name": "--replication-factor",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "Default replication factor for a new topic. Must not exceed the node count, or every produce to a new topic fails.",
+                  "jsonPointer": "/properties/topics/replicationFactor",
+                  "default": 3
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy."
+                },
+                {
+                  "name": "--retention-size",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Default retention by partition size, in Kubernetes quantity form. Empty means retention is by time alone.",
+                  "jsonPointer": "/properties/retention/size",
+                  "default": "",
+                  "example": "50Gi"
+                },
+                {
+                  "name": "--storage-size",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Log volume size per node, in Kubernetes quantity form. Grows online; never shrinks.",
+                  "jsonPointer": "/properties/storage/size",
+                  "default": "100Gi",
+                  "example": "100Gi"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tags",
+                  "type": "keyValue",
+                  "required": false,
+                  "summary": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+                  "jsonPointer": "/tags",
+                  "widget": "tag-input"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--tls",
+                  "type": "switch",
+                  "required": false,
+                  "summary": "Whether the in-cluster listener requires TLS. On by default; turning it off is a plaintext broker on the pod network.",
+                  "jsonPointer": "/properties/listener/tls",
+                  "default": true
+                },
+                {
+                  "name": "--version",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Apache Kafka version. Minor upgrades are applied automatically in the maintenance window; a major upgrade is an explicit update to this field.",
+                  "jsonPointer": "/properties/version",
+                  "choices": [
+                    "3.8",
+                    "3.9"
+                  ],
+                  "default": "3.9"
+                }
+              ],
+              "waitFlags": [
+                "--wait",
+                "--no-wait"
+              ]
+            }
+          },
+          "alias": "kafka"
+        }
+      }
+    },
     "sample": {
       "name": "sample",
       "summary": "Commands for the CyberCloud.Sample provider.",

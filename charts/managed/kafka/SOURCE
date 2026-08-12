@@ -1,0 +1,26 @@
+# Provenance — charts/README.md § `SOURCE` is required, including when nothing was forked.
+#
+# ADR-010: "Their charts are a starting point, not a dependency. Where a chart is close, fork it into
+# charts/ with the upstream commit recorded in a SOURCE file." Nothing was forked here, and
+# `vendored: none` is an answer to "where did this come from" where a missing file is not.
+
+vendored: none
+upstream: https://github.com/strimzi/strimzi-kafka-operator
+
+# The CRD contract these templates and CyberCloud.Providers.Messaging.Contracts render against.
+# ⚠ Both halves must agree with KafkaClusters.KafkaKind and KafkaClusters.NodePoolKind, including the
+# plurals — `kafkas` and `kafkanodepools` are what address a REST path, and neither is derivable from
+# its kind.
+upstream-api: kafka.strimzi.io/v1beta2
+upstream-version: 0.45.0
+
+# ⚠ WHY THE OPERATOR VERSION IS PINNED HERE AND NOT ONLY IN THE BUNDLE. Two facts about the CRD at
+# this version are relied on in code and would be silently wrong against another:
+#
+#   * `spec.kafka` requires `listeners` and NOTHING else — no `replicas`, no `storage` — which is
+#     what makes a node-pool-only topology a legal Kafka. Strimzi requires those two when node pools
+#     are disabled, so a chart that also worked without the strimzi.io/node-pools annotation would be
+#     a different chart.
+#   * the CRD declares NO `default:` anywhere, so the API server's structural defaulting adds nothing
+#     on write. KafkaClusters.Matches' remarks cite this by name when explaining why containment is
+#     the right comparison for reasons OTHER than operator-side spec editing.

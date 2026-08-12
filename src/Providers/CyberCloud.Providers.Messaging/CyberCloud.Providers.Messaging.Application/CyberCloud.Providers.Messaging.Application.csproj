@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      docs/plan/03 § Providers — the third of the five projects: "ABP application services the gateway
+      routes to".
+
+      ⚠ IT HOLDS THE ABP MODULE AND NO APPLICATION SERVICE, AND THIS IS THE THIRD PROVIDER TO REPORT
+      THAT. The sample's could be dismissed as triviality; CyberCloud.Providers.DBforPostgreSQL called
+      its own "evidence about the registry-as-routing-source decision". A Kafka cluster has an
+      external listener with a firewall allow-list, a rebalancer, retention policy and a
+      secret-returning action, and PUT, GET, DELETE and POST listKeys are still all generic
+      resource-manager verbs the gateway routes from the provider registry (ADR-012). Three providers
+      with an empty .Application project is the number at which the project's existence, rather than
+      its emptiness, is the thing worth questioning.
+    -->
+
+    <ItemGroup>
+        <PackageReference Include="Volo.Abp.Ddd.Application"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../CyberCloud.Providers.Messaging.Contracts/CyberCloud.Providers.Messaging.Contracts.csproj"/>
+    </ItemGroup>
+
+    <ItemGroup Label="CyberCloud.Analyzers — see CyberCloud.Core.csproj for why this is not a reference">
+        <ProjectReference Include="../../../CyberCloud.Analyzers/CyberCloud.Analyzers.csproj"
+                          OutputItemType="Analyzer"
+                          ReferenceOutputAssembly="false"/>
+    </ItemGroup>
+
+</Project>

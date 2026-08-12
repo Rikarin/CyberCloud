@@ -46,9 +46,11 @@ core-group `ConfigMap`, and a bare `k3s` serves no REST path for a custom resour
 back `404`, `KubeApiClient` maps neither that nor any other non-`409` 4xx, and the raw
 `k8s.Autorest.HttpOperationException` escapes the grain call — so **all five assertions fail with
 `CodecNotFoundException` and no status code anywhere in the message**. `CyberCloud.Cache/redis` was
-the first provider whose object needed a CRD and it went 5-of-6 red. `ProviderConformanceCase`
-now carries `RequiredCrds`, the harness serves each one and waits for `Established` before the silos
-start, and the same case object supplies both halves. **Every service in
+the first provider whose object needed a CRD and it went 5-of-6 red, and the third repeated it.
+`ClusterConformanceHarness` **derives** the CRDs from `Objects` — which already carries group,
+version, kind and plural — serves each and waits for `Established` before the silos start. Derived
+rather than declared on purpose: a declared list can be under-declared, and the failure when it is
+is the message above. `Objects` cannot be, because the suite fails immediately without it. **Every service in
 [docs/plan/12 § The catalogue](../docs/plan/12-managed-data-services.md) renders a custom resource**,
 so without this the cluster-backed half was available to the reference provider and to nobody else.
 

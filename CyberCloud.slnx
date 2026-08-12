@@ -163,6 +163,11 @@
 
           ⚠ It has no *.Cluster.Conformance sibling yet. That is a gap, not a decision — the two
           projects are class declarations over one ProviderConformanceCase, so adding it is cheap.
+          ⚠ AND IT IS NOW CHEAPER THAN IT WAS, because the third family paid for the part that was
+          not. Adding one would have failed against a bare k3s that serves no REST path for a
+          CloudNativePG Cluster; ClusterConformanceHarness installs a minimal definition per custom
+          kind now, derived from the case's own Objects, so this family needs no new declaration for
+          it.
         -->
         <Project Path="src/Providers/CyberCloud.Providers.DBforPostgreSQL/CyberCloud.Providers.DBforPostgreSQL.Contracts/CyberCloud.Providers.DBforPostgreSQL.Contracts.csproj"/>
         <Project Path="src/Providers/CyberCloud.Providers.DBforPostgreSQL/CyberCloud.Providers.DBforPostgreSQL/CyberCloud.Providers.DBforPostgreSQL.csproj"/>
@@ -171,6 +176,7 @@
         <Project Path="src/Providers/CyberCloud.Providers.DBforPostgreSQL/CyberCloud.Providers.DBforPostgreSQL.Conformance/CyberCloud.Providers.DBforPostgreSQL.Conformance.csproj"/>
 
         <!--
+<<<<<<< HEAD
           The third provider family — CyberCloud.Cache/redis, docs/plan/12's second M1 row. Valkey
           rather than Redis (ADR-011), on spotahome/redis-operator (ADR-010 clause 1).
 
@@ -186,6 +192,24 @@
         <Project Path="src/Providers/CyberCloud.Providers.Cache/CyberCloud.Providers.Cache.Tests/CyberCloud.Providers.Cache.Tests.csproj"/>
         <Project Path="src/Providers/CyberCloud.Providers.Cache/CyberCloud.Providers.Cache.Conformance/CyberCloud.Providers.Cache.Conformance.csproj"/>
         <Project Path="src/Providers/CyberCloud.Providers.Cache/CyberCloud.Providers.Cache.Cluster.Conformance/CyberCloud.Providers.Cache.Cluster.Conformance.csproj"/>
+=======
+          The third provider family — CyberCloud.Messaging/kafkaClusters on Strimzi, docs/plan/12
+          § The catalogue.
+
+          ⚠ IT IS THE FIRST PROVIDER WITH A *.Cluster.Conformance SIBLING OTHER THAN THE SAMPLE'S,
+          and the first whose objects are CUSTOM RESOURCES rather than a core-group ConfigMap. That
+          combination is what turned ProviderConformanceCase.RequiredCrds from an idea into a
+          required member: a bare k3s serves no REST path for a Strimzi Kafka, so five of the six
+          cluster-backed assertions failed against it — as an HttpOperationException carrying no
+          status code, which names neither the CRD nor the provider.
+        -->
+        <Project Path="src/Providers/CyberCloud.Providers.Messaging/CyberCloud.Providers.Messaging.Contracts/CyberCloud.Providers.Messaging.Contracts.csproj"/>
+        <Project Path="src/Providers/CyberCloud.Providers.Messaging/CyberCloud.Providers.Messaging/CyberCloud.Providers.Messaging.csproj"/>
+        <Project Path="src/Providers/CyberCloud.Providers.Messaging/CyberCloud.Providers.Messaging.Application/CyberCloud.Providers.Messaging.Application.csproj"/>
+        <Project Path="src/Providers/CyberCloud.Providers.Messaging/CyberCloud.Providers.Messaging.Tests/CyberCloud.Providers.Messaging.Tests.csproj"/>
+        <Project Path="src/Providers/CyberCloud.Providers.Messaging/CyberCloud.Providers.Messaging.Conformance/CyberCloud.Providers.Messaging.Conformance.csproj"/>
+        <Project Path="src/Providers/CyberCloud.Providers.Messaging/CyberCloud.Providers.Messaging.Cluster.Conformance/CyberCloud.Providers.Messaging.Cluster.Conformance.csproj"/>
+>>>>>>> worktree-agent-ab2b59424b4e1d048
     </Folder>
     <Folder Name="/src/Hosts/">
         <Project Path="src/Hosts/CyberCloud.Gateway.Host/CyberCloud.Gateway.Host.csproj"/>

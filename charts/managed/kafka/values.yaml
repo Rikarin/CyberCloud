@@ -1,0 +1,119 @@
+# Managed Kafka — the configuration surface, once.
+#
+# ⚠ EVERY NON-`@internal` BLOCK BELOW IS GENERATED from KafkaClusters.Schema2026 by
+# `./build.sh Charts`, and so is values.schema.json. ADR-010 § Which end authors the schema: "The C#
+# ResourceSchema is authored. The chart's @param annotations are generated from it and diffed."
+# Editing a generated row here is undone on the next run and fails the build in between; add the
+# field in C# instead.
+#
+# The `@internal` rows at the end of each level are the ones that are NOT generated. They are
+# carried through as bytes and must sit after every generated key at their own level, so that each
+# level's generated keys are one contiguous run — charts/README.md § What a chart cannot say.
+
+## @param version {string} Apache Kafka version. Minor upgrades are applied automatically in the maintenance window; a major upgrade is an explicit update to this field.
+## @required
+## @enum 3.8 | 3.9
+version: "3.9"
+
+## @param nodes {integer} Number of Kafka nodes, each acting as both a KRaft controller and a broker. Use an odd number: a quorum of two tolerates no failures, and one is a single point of failure offered for development only.
+## @required
+## @range 1..9
+nodes: 3
+
+## @param sizing {object} CPU and memory per node, either by preset or explicitly.
+sizing:
+  ## @param preset {string} A sizing preset from docs/plan/12. Brokers use the c1 family, which is 1 vCPU to 2 GiB and guaranteed rather than burstable.
+  ## @enum c1.nano | c1.micro | c1.small | c1.medium | c1.large | c1.xlarge | c1.2xlarge | c1.4xlarge
+  ## @widget cozy-preset
+  preset: c1.small
+  ## @param cpu {string} Explicit vCPU quantity in Kubernetes form, for example 500m or 2. Empty means take it from the preset.
+  ## @pattern (\d+(\.\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)?
+  cpu: ""
+  ## @param memory {string} Explicit memory quantity in Kubernetes form, for example 4Gi. Empty means take it from the preset.
+  ## @pattern (\d+(\.\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)?
+  memory: ""
+
+## @param storage {object} The log volume, per node.
+storage:
+  ## @param size {string} Log volume size per node, in Kubernetes quantity form. Grows online; never shrinks.
+  ## @required
+  ## @pattern \d+(\.\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?
+  ## @example "100Gi"
+  size: "100Gi"
+  ## @param class {string} StorageClass name. Empty means the cluster default.
+  ## @immutable
+  ## @widget storageclass
+  class: ""
+  ## @param deleteClaim {boolean} Whether deleting the resource also deletes the log volumes. Off by default, so a mistaken delete leaves the data recoverable by hand.
+  deleteClaim: false
+
+## @param topics {object} Defaults applied to topics the cluster creates automatically. A topic created explicitly overrides them.
+topics:
+  ## @param partitions {integer} Default partition count for a new topic.
+  ## @range 1..200
+  partitions: 3
+  ## @param replicationFactor {integer} Default replication factor for a new topic. Must not exceed the node count, or every produce to a new topic fails.
+  ## @range 1..9
+  replicationFactor: 3
+  ## @param minInSyncReplicas {integer} How many replicas must acknowledge a write before it is committed. Must be below the replication factor, or the cluster cannot tolerate one broker restart.
+  ## @range 1..9
+  minInSyncReplicas: 2
+
+## @param retention {object} How long the cluster keeps messages by default. docs/plan/12 calls retention sizing an ongoing operational concern rather than a one-time setting.
+retention:
+  ## @param hours {integer} Default retention in hours. A week by default.
+  ## @range 1..8760
+  hours: 168
+  ## @param size {string} Default retention by partition size, in Kubernetes quantity form. Empty means retention is by time alone.
+  ## @pattern (\d+(\.\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)?
+  ## @example "50Gi"
+  size: ""
+
+## @param listener {object} The in-cluster listener every client reaches.
+listener:
+  ## @param tls {boolean} Whether the in-cluster listener requires TLS. On by default; turning it off is a plaintext broker on the pod network.
+  tls: true
+
+## @param external {object} Exposure outside the cluster, via a load balancer and a firewall allow-list.
+external:
+  ## @param enabled {boolean} Whether the cluster is reachable from outside the Kubernetes cluster. Off by default — docs/plan/12 § Cross-cutting decisions makes external exposure never the default, because a managed broker on a public IP with a weak password is the most common cloud breach there is.
+  enabled: false
+  ## @param allowedCidrs {array} Source ranges permitted to reach the external listener. Required in substance rather than in schema: an empty list with external exposure on renders a load balancer that accepts nothing, which is the safe reading of an unfinished configuration.
+  ## @example ["203.0.113.0/24"]
+  allowedCidrs: []
+
+## @param cruiseControl {object} Cruise Control — partition rebalancing and broker-load reporting.
+cruiseControl:
+  ## @param enabled {boolean} Whether Cruise Control runs. On by default: docs/plan/12 puts it in the chart rather than in a follow-up, because rebalancing a Kafka cluster by hand is the operational cost that makes this the most demanding service in the catalogue.
+  enabled: true
+
+## @param monitoring {object} What the platform scrapes.
+monitoring:
+  ## @param enabled {boolean} Whether the operator runs a Kafka Exporter alongside the cluster, exposing consumer-lag and topic metrics to the platform's metrics stack.
+  enabled: true
+
+## @param platform {object} Resource identity injected by the reconciler. Not a tenant-facing setting.
+## @internal Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.
+platform:
+  ## @param tenantId {string} Tenant GUID, rendered into the cybercloud.io/tenant-id label.
+  tenantId: ""
+  ## @param subscriptionId {string} Subscription GUID, rendered into the cybercloud.io/subscription-id label.
+  subscriptionId: ""
+  ## @param resourceGroup {string} Resource group name, rendered into the cybercloud.io/resource-group label.
+  resourceGroup: ""
+  ## @param resourceId {string} Resource GUID, rendered into the cybercloud.io/resource-id label.
+  resourceId: ""
+  ## @param resourceType {string} Fully qualified resource type, rendered into the cybercloud.io/resource-type label.
+  resourceType: CyberCloud.Messaging/kafkaClusters
+  ## @param apiVersion {string} The api-version the resource was last written at, rendered into the cybercloud.io/api-version label.
+  apiVersion: "2026-08-01"
+  ## @param managedBy {string} Value of the cybercloud.io/managed-by label. Constant, and the selector every informer filters on.
+  managedBy: cybercloud
+
+## @param imageName {string} Override the operator's default Kafka image. Empty means the operator chooses, which is what keeps minor upgrades automatic.
+## @internal A pinned image defeats automatic minor upgrades, so it is a platform escape hatch rather than a tenant setting.
+imageName: ""
+
+## @param nameOverride {string} Replace the generated object-name stem. Empty means derive it from the release name.
+## @internal Helm plumbing. Nothing about it belongs in a resource body.
+nameOverride: ""

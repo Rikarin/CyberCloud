@@ -50,19 +50,7 @@ public sealed class PostgresCase : IProviderCaseSource {
             ObjectMatchesDesired = (objectJson, desiredJson) => {
                 using var desired = JsonDocument.Parse(desiredJson);
                 return PostgresServers.Matches(objectJson, desired.RootElement);
-            },
-
-            // ⚠ EMPTY BECAUSE NOTHING READS IT YET, AND THAT IS NOT THE SAME AS "NEEDS NO CRD".
-            // This provider renders postgresql.cnpg.io/v1 Cluster and Pooler — both custom resources,
-            // neither served by a bare API server. RequiredCrds is consumed only by the cluster-backed
-            // harness, and this provider has no *.Cluster.Conformance project (owed), so the list has
-            // no reader and an empty one costs nothing today.
-            //
-            // Whoever adds that project MUST fill this in with the CloudNativePG CRDs first. Inheriting
-            // the empty list is not a slow failure: CyberCloud.Cache/redis went 5-of-6 red before this
-            // member existed, and the failure named k8s.Autorest.HttpOperationException with no status
-            // code, because a 404 for an unserved kind is mapped by nothing in CyberCloud.Kubernetes.
-            RequiredCrds = []
+            }
         };
 
     /// <summary>A valid body with the required data-volume size removed.</summary>

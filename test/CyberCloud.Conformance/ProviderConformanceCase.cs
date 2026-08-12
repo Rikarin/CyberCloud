@@ -107,52 +107,33 @@ public sealed record ProviderConformanceCase {
     /// <remarks>The parameters are the object's JSON and the desired body's JSON text.</remarks>
     public required Func<string, string, bool> ObjectMatchesDesired { get; init; }
 
-    /// <summary>
-    ///     The <c>CustomResourceDefinition</c>s a real API server must be serving before
-    ///     <see cref="Objects" /> can be addressed at all, as YAML documents. Empty for a provider that
-    ///     renders only built-in kinds.
-    /// </summary>
-    /// <remarks>
-    ///     <para>
-    ///         ⚠ <b>This member exists because the cluster-backed half of the suite could not host a
-    ///         real provider without it, and the first one to try was the third provider in the
-    ///         tree.</b> <c>ClusterConformanceTests</c> says "to add a provider, do not touch this file
-    ///         … derive one class from this one in that provider's own <c>.Cluster.Conformance</c>
-    ///         project", and that was true of the reference provider and of the sample because both
-    ///         render a core-group <c>ConfigMap</c>. Every service in docs/plan/12 § The catalogue
-    ///         renders a <b>custom resource</b>, and a bare <c>k3s</c> serves no REST path for one:
-    ///         the apply comes back <c>404</c>, which nothing maps, so all five assertions fail with a
-    ///         serialization error naming <c>k8s.Autorest.HttpOperationException</c> and no status
-    ///         code. Measured, not predicted — <c>CyberCloud.Cache/redis</c> went 5-of-6 red before
-    ///         this existed.
-    ///     </para>
-    ///     <para>
-    ///         ⚠ <b>It is deliberately CRDs and not "manifests".</b> A provider does not get to
-    ///         install an operator, a namespace or a fixture into the suite's cluster — the point of
-    ///         reading around our own code is that the world is the API server's and not the
-    ///         provider's. What a provider is entitled to say is which REST paths have to exist for its
-    ///         objects to be addressable, which is exactly a CRD and nothing else.
-    ///     </para>
-    ///     <para>
-    ///         ⚠ <b>What a stub CRD does and does not prove.</b> Served, it makes the plural address a
-    ///         real path, makes server-side apply real, and makes the seven labels pass real admission
-    ///         — which is what the assertions here are about. It does <i>not</i> prove the rendered
-    ///         spec satisfies the operator's own schema, because the CRD a provider supplies here is
-    ///         the provider's own file. A case that supplied a permissive stub and called the result
-    ///         "the API server accepts our manifest" would be overclaiming, so say in the CRD which one
-    ///         it is.
-    ///     </para>
-    ///     <para>
-    ///         ⚠ <b><c>required</c>, and it landed optional.</b> An empty default made this member the
-    ///         one thing a case could omit, and
-    ///         <c>SuiteRejectionTests.EveryCaseFieldIsRequiredSoAPartialRegistrationDoesNotCompile</c>
-    ///         failed on exactly that: an optional member is an assertion the suite quietly stops
-    ///         making for the provider that leaves it out. A provider rendering only built-in kinds
-    ///         writes <c>RequiredCrds = []</c> and says so — the empty list is a claim, not a
-    ///         default.
-    ///     </para>
-    /// </remarks>
-    public required ImmutableArray<string> RequiredCrds { get; init; }
+    // ── There is deliberately NO RequiredCrds member, and the reason is worth keeping ─────────────
+    //
+    // A bare k3s serves no REST path for a custom resource, so the cluster-backed half of the suite
+    // has to install one before it can address anything a real provider renders. Two designs were
+    // built for that, independently and within hours of each other, and this is the one that won:
+    // ClusterConformanceHarness DERIVES the CRDs from `Objects` above, which already carries every
+    // fact a stub needs — group, version, kind and plural.
+    //
+    // The rejected design was a `required ImmutableArray<string> RequiredCrds` holding CRD YAML. It
+    // is worse for one reason that outweighs everything else: a provider can under-declare it, and
+    // the failure when it does is the worst message in the suite — every assertion fails with
+    // `k8s.Autorest.HttpOperationException` and NO STATUS CODE, because a 404 for an unserved kind
+    // was, at the time, mapped by nothing. Measured twice, not predicted: two providers each went
+    // 5-of-6 red before their CRDs existed. `Objects` cannot be under-declared, because the suite
+    // fails immediately and legibly without it.
+    //
+    // ⚠ WHAT NEITHER DESIGN BUYS. The declared version looked stronger because a provider could
+    // supply the operator's real CRD. In practice it did not: the one provider that used it supplied
+    // a hand-written stub with `x-kubernetes-preserve-unknown-fields` and said so in its own remarks.
+    // A stub — derived or written — makes the plural address a real path, makes server-side apply
+    // real, and makes the seven labels pass real admission. It does NOT prove the rendered spec
+    // satisfies the operator's schema. Nothing in this repository checks that today; each chart's
+    // SOURCE file records a review date, which is the weaker claim and is labelled as one.
+    //
+    // If a provider ever needs the operator's real CRD — to assert its manifest validates rather than
+    // merely applies — add the member back as a SUPPLEMENT to the derivation, never as a replacement
+    // for it. The floor must stay underivable-from-nothing.
 }
 
 /// <summary>

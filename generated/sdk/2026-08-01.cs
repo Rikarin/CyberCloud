@@ -609,6 +609,244 @@ public sealed partial class PostgreSQLServerCollection {
     public partial AsyncPageable<PostgreSQLServerResource> GetAllAsync(CancellationToken cancellationToken = default);
 }
 
+/// <summary>The values /properties/sizing/preset accepts. ⚠ Closed: the write path refuses anything else.</summary>
+public enum KafkaClusterPreset {
+    /// <summary>Never assigned. Not a value the API accepts.</summary>
+    Unknown = 0,
+
+    /// <summary>c1.nano</summary>
+    [JsonStringEnumMemberName("c1.nano")]
+    C1Nano = 1,
+
+    /// <summary>c1.micro</summary>
+    [JsonStringEnumMemberName("c1.micro")]
+    C1Micro = 2,
+
+    /// <summary>c1.small</summary>
+    [JsonStringEnumMemberName("c1.small")]
+    C1Small = 3,
+
+    /// <summary>c1.medium</summary>
+    [JsonStringEnumMemberName("c1.medium")]
+    C1Medium = 4,
+
+    /// <summary>c1.large</summary>
+    [JsonStringEnumMemberName("c1.large")]
+    C1Large = 5,
+
+    /// <summary>c1.xlarge</summary>
+    [JsonStringEnumMemberName("c1.xlarge")]
+    C1Xlarge = 6,
+
+    /// <summary>c1.2xlarge</summary>
+    [JsonStringEnumMemberName("c1.2xlarge")]
+    C12xlarge = 7,
+
+    /// <summary>c1.4xlarge</summary>
+    [JsonStringEnumMemberName("c1.4xlarge")]
+    C14xlarge = 8
+}
+
+/// <summary>The values /properties/version accepts. ⚠ Closed: the write path refuses anything else.</summary>
+public enum KafkaClusterVersion {
+    /// <summary>Never assigned. Not a value the API accepts.</summary>
+    Unknown = 0,
+
+    /// <summary>3.8</summary>
+    [JsonStringEnumMemberName("3.8")]
+    N38 = 1,
+
+    /// <summary>3.9</summary>
+    [JsonStringEnumMemberName("3.9")]
+    N39 = 2
+}
+
+/// <summary>The body of a CyberCloud.Messaging/kafkaClusters.</summary>
+/// <remarks>A managed Apache Kafka cluster on Strimzi in KRaft mode, with Cruise Control, configurable retention and an optional firewalled external listener.</remarks>
+public sealed partial class KafkaClusterData {
+
+    /// <summary>The region the cluster is billed in.</summary>
+    /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+    [JsonPropertyName("location")]
+    public required string Location { get; set; }
+
+    /// <summary>The cluster whose namespace holds the Strimzi objects.</summary>
+    /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+    [JsonPropertyName("clusterId")]
+    public required Guid ClusterId { get; set; }
+
+    /// <summary>Whether Cruise Control runs. On by default: docs/plan/12 puts it in the chart rather than in a follow-up, because rebalancing a Kafka cluster by hand is the operational cost that makes this the most demanding service in the catalogue.</summary>
+    /// <remarks>Defaults to true when left unset.</remarks>
+    [JsonPropertyName("enabled")]
+    public bool? Enabled { get; set; }
+
+    /// <summary>Source ranges permitted to reach the external listener. Required in substance rather than in schema: an empty list with external exposure on renders a load balancer that accepts nothing, which is the safe reading of an unfinished configuration.</summary>
+    /// <remarks>Defaults to [] when left unset.</remarks>
+    [JsonPropertyName("allowedCidrs")]
+    public IList<string> AllowedCidrs { get; set; } = new List<string>();
+
+    /// <summary>Whether the cluster is reachable from outside the Kubernetes cluster. Off by default — docs/plan/12 § Cross-cutting decisions makes external exposure never the default, because a managed broker on a public IP with a weak password is the most common cloud breach there is.</summary>
+    /// <remarks>Defaults to false when left unset.</remarks>
+    [JsonPropertyName("enabled")]
+    public bool? Enabled { get; set; }
+
+    /// <summary>Whether the in-cluster listener requires TLS. On by default; turning it off is a plaintext broker on the pod network.</summary>
+    /// <remarks>Defaults to true when left unset.</remarks>
+    [JsonPropertyName("tls")]
+    public bool? Tls { get; set; }
+
+    /// <summary>Whether the operator runs a Kafka Exporter alongside the cluster, exposing consumer-lag and topic metrics to the platform's metrics stack.</summary>
+    /// <remarks>Defaults to true when left unset.</remarks>
+    [JsonPropertyName("enabled")]
+    public bool? Enabled { get; set; }
+
+    /// <summary>Number of Kafka nodes, each acting as both a KRaft controller and a broker. Use an odd number: a quorum of two tolerates no failures, and one is a single point of failure offered for development only.</summary>
+    /// <remarks>Required on a create. Defaults to 3 when left unset.</remarks>
+    [JsonPropertyName("nodes")]
+    public required long Nodes { get; set; }
+
+    /// <summary>Default retention in hours. A week by default.</summary>
+    /// <remarks>Defaults to 168 when left unset.</remarks>
+    [JsonPropertyName("hours")]
+    public long? Hours { get; set; }
+
+    /// <summary>Default retention by partition size, in Kubernetes quantity form. Empty means retention is by time alone.</summary>
+    /// <remarks>Defaults to "" when left unset.</remarks>
+    [JsonPropertyName("size")]
+    public string? Size { get; set; }
+
+    /// <summary>Explicit vCPU quantity in Kubernetes form, for example 500m or 2. Empty means take it from the preset.</summary>
+    /// <remarks>Defaults to "" when left unset.</remarks>
+    [JsonPropertyName("cpu")]
+    public string? Cpu { get; set; }
+
+    /// <summary>Explicit memory quantity in Kubernetes form, for example 4Gi. Empty means take it from the preset.</summary>
+    /// <remarks>Defaults to "" when left unset.</remarks>
+    [JsonPropertyName("memory")]
+    public string? Memory { get; set; }
+
+    /// <summary>A sizing preset from docs/plan/12. Brokers use the c1 family, which is 1 vCPU to 2 GiB and guaranteed rather than burstable.</summary>
+    /// <remarks>Defaults to "c1.small" when left unset.</remarks>
+    [JsonPropertyName("preset")]
+    public KafkaClusterPreset? Preset { get; set; }
+
+    /// <summary>StorageClass name. Empty means the cluster default.</summary>
+    /// <remarks>⚠ Cannot change after create. Defaults to "" when left unset.</remarks>
+    [JsonPropertyName("class")]
+    public string? Class { get; set; }
+
+    /// <summary>Whether deleting the resource also deletes the log volumes. Off by default, so a mistaken delete leaves the data recoverable by hand.</summary>
+    /// <remarks>Defaults to false when left unset.</remarks>
+    [JsonPropertyName("deleteClaim")]
+    public bool? DeleteClaim { get; set; }
+
+    /// <summary>Log volume size per node, in Kubernetes quantity form. Grows online; never shrinks.</summary>
+    /// <remarks>Required on a create. Defaults to "100Gi" when left unset.</remarks>
+    [JsonPropertyName("size")]
+    public required string Size { get; set; }
+
+    /// <summary>How many replicas must acknowledge a write before it is committed. Must be below the replication factor, or the cluster cannot tolerate one broker restart.</summary>
+    /// <remarks>Defaults to 2 when left unset.</remarks>
+    [JsonPropertyName("minInSyncReplicas")]
+    public long? MinInSyncReplicas { get; set; }
+
+    /// <summary>Default partition count for a new topic.</summary>
+    /// <remarks>Defaults to 3 when left unset.</remarks>
+    [JsonPropertyName("partitions")]
+    public long? Partitions { get; set; }
+
+    /// <summary>Default replication factor for a new topic. Must not exceed the node count, or every produce to a new topic fails.</summary>
+    /// <remarks>Defaults to 3 when left unset.</remarks>
+    [JsonPropertyName("replicationFactor")]
+    public long? ReplicationFactor { get; set; }
+
+    /// <summary>Apache Kafka version. Minor upgrades are applied automatically in the maintenance window; a major upgrade is an explicit update to this field.</summary>
+    /// <remarks>Required on a create. Defaults to "3.9" when left unset.</remarks>
+    [JsonPropertyName("version")]
+    public required KafkaClusterVersion Version { get; set; }
+
+    /// <summary>Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.</summary>
+    [JsonPropertyName("tags")]
+    public IDictionary<string, string> Tags { get; set; } = new Dictionary<string, string>(StringComparer.Ordinal);
+}
+
+/// <summary>One Kafka cluster, and the operations on it.</summary>
+public sealed partial class KafkaClusterResource {
+    /// <summary>The resource's fully qualified id.</summary>
+    public string Id { get; init; } = string.Empty;
+
+    /// <summary>The body, projected at this api-version.</summary>
+    public KafkaClusterData Data { get; init; } = new();
+
+    /// <summary>Re-reads the resource.</summary>
+    public partial Task<Response<KafkaClusterResource>> GetAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Amends the resource. A merge patch: what is not set is not changed.</summary>
+    public partial Task<Operation<KafkaClusterResource>> UpdateAsync(
+        WaitUntil waitUntil,
+        KafkaClusterData data,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Deletes the resource. ⚠ Permanent: this type declares no soft-delete window.</summary>
+    public partial Task<Operation> DeleteAsync(
+        WaitUntil waitUntil,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>What listKeys returns. ⚠ Secret material: never log or cache this.</summary>
+    public sealed partial class ListKeysResult {
+
+        /// <summary>The in-cluster bootstrap address, host:port. ⚠ The external listener's address is not returned here — an address a client cannot reach from where it is running is worse than an absent one.</summary>
+        [JsonPropertyName("bootstrapServers")]
+        public required string BootstrapServers { get; set; }
+
+        /// <summary>The SCRAM user's password, read from the tenant's Vault for this call only.</summary>
+        [JsonPropertyName("password")]
+        public required string Password { get; set; }
+
+        /// <summary>What a client must configure: SASL_SSL when the listener requires TLS, SASL_PLAINTEXT when it does not.</summary>
+        [JsonPropertyName("securityProtocol")]
+        public required ListKeysResultSecurityProtocol SecurityProtocol { get; set; }
+
+        /// <summary>The SCRAM user.</summary>
+        [JsonPropertyName("username")]
+        public required string Username { get; set; }
+    }
+
+    /// <summary>ListKeys. ⚠ An action never creates — a POST to a name that does not exist is a 404. ⚠ The response carries secret material and is always audited.</summary>
+    public partial Task<Response<ListKeysResult>> ListKeysAsync(
+        CancellationToken cancellationToken = default);
+}
+
+/// <summary>The Kafka clusters in one resource group.</summary>
+/// <remarks>⚠ Every write is long-running: docs/plan/08 § The write path, end to end
+/// ends in a 202 for every verb, so there is no synchronous overload to offer.</remarks>
+public sealed partial class KafkaClusterCollection {
+    /// <summary>The resource type these address.</summary>
+    public const string ResourceType = "CyberCloud.Messaging/kafkaClusters";
+
+    /// <summary>The URL template, with the api-version this file was generated at.</summary>
+    public const string PathTemplate = "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Messaging/kafkaClusters/{resourceName}";
+
+    /// <inheritdoc cref="GeneratedApiVersion.Value" />
+    public const string ApiVersion = "2026-08-01";
+
+    /// <summary>Creates or replaces one Kafka cluster.</summary>
+    /// <remarks>⚠ Poll with GetProgressAsync() rather than only WaitForCompletionAsync():
+    /// docs/plan/21 § The .NET SDK — "Azure's LROs expose no progress; ours do and the
+    /// SDK should not hide it".</remarks>
+    public partial Task<Operation<KafkaClusterResource>> CreateOrUpdateAsync(
+        WaitUntil waitUntil,
+        string name,
+        KafkaClusterData data,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Reads one Kafka cluster by name.</summary>
+    public partial Task<Response<KafkaClusterResource>> GetAsync(string name, CancellationToken cancellationToken = default);
+
+    /// <summary>The Kafka clusters in this group, paged.</summary>
+    public partial AsyncPageable<KafkaClusterResource> GetAllAsync(CancellationToken cancellationToken = default);
+}
+
 /// <summary>The values /properties/tier accepts. ⚠ Closed: the write path refuses anything else.</summary>
 public enum WidgetTier {
     /// <summary>Never assigned. Not a value the API accepts.</summary>
