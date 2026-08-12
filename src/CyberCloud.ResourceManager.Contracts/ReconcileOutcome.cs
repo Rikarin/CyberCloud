@@ -137,6 +137,72 @@ public sealed record ReconcileOutcome {
     public static ReconcileOutcome Failed(ErrorCode code, string message, bool retryable = false) =>
         Failed(new Error(code, message), retryable);
 
+    /// <summary>
+    ///     Fails with the retryability <paramref name="error" />'s own code implies, rather than one
+    ///     the caller asserts. <b>This is what a reconciler should return for a failure it did not
+    ///     produce itself</b> — an apply, a read or a delete that came back from the cluster.
+    /// </summary>
+    /// <param name="error">The failure, as the connection reported it.</param>
+    /// <exception cref="ArgumentNullException"><paramref name="error" /> is null.</exception>
+    /// <remarks>
+    ///     ⚠ <b>It exists because every reconciler was passing <c>retryable: true</c> and the sentence
+    ///     justifying it was not true.</b> The claim was that a body the API server rejects outright
+    ///     "comes back as a non-retryable code", which nothing implemented: an admission refusal
+    ///     escaped as a raw client exception, and once <c>KubeFailures.Classify</c> did start mapping
+    ///     one to <see cref="ErrorCode.PolicyViolation" />, no reconciler read the code. The cost is
+    ///     paid by the tenant — <see cref="ReconcileSchedule" />'s ladder retries an unchanging refusal
+    ///     for the full hour and then replaces the admission policy's own message, which was available
+    ///     on the first pass, with an <see cref="ErrorCode.OperationTimeout" />.
+    ///     <para>
+    ///         Deriving it here rather than in each provider is the point: the list is one list, and a
+    ///         provider cannot be the one that forgot a code.
+    ///     </para>
+    /// </remarks>
+    public static ReconcileOutcome FromFailure(Error error) {
+        ArgumentNullException.ThrowIfNull(error);
+        return Failed(error, IsRetryable(error.Code));
+    }
+
+    /// <summary>
+    ///     Whether an identical pass could plausibly get a different answer.
+    /// </summary>
+    /// <param name="code">The code of a failure a reconcile pass is about to report.</param>
+    /// <remarks>
+    ///     <para>
+    ///         <b>The four terminal codes are the four refusals, and each one is a decision that will
+    ///         be made the same way every time it is asked:</b>
+    ///         <see cref="ErrorCode.PolicyViolation" /> is admission control or Pod Security declining
+    ///         the object, <see cref="ErrorCode.InvalidRequestBody" /> is a body the API server will
+    ///         not type-check, <see cref="ErrorCode.InvalidResourceType" /> is a kind the cluster does
+    ///         not serve, and <see cref="ErrorCode.AuthorizationFailed" /> is the platform's own
+    ///         credentials being refused. None of the four is fixed by waiting; three of the four are
+    ///         fixed by a person, and telling them an hour late is the same as not telling them.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Everything else is retryable, including
+    ///         <see cref="ErrorCode.InternalError" />.</b> That is the code a transport fault arrives
+    ///         under — "the cluster did not answer" — and it is by far the commonest failure a
+    ///         reconciler sees. The default therefore has to be the safe one: a terminal-by-default
+    ///         rule would end an operation on a dropped connection, which is the mirror-image bug and
+    ///         the more expensive one, because a retry that was not needed costs a request and a
+    ///         failure that was not warranted costs a resource.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b><see cref="ErrorCode.ResourceNotFound" />, <see cref="ErrorCode.Conflict" /> and
+    ///         <see cref="ErrorCode.PreconditionFailed" /> are deliberately <i>not</i> here</b>, even
+    ///         though <c>KubeFailures.MeansTheClusterAnswered</c> lists them alongside the four. That
+    ///         predicate answers a different question — whether the cluster is healthy enough to keep
+    ///         out of the degradation window — and all three of these are states a later pass really
+    ///         does find changed: an object appears, another writer stops holding a field, a
+    ///         resourceVersion moves on.
+    ///     </para>
+    /// </remarks>
+    public static bool IsRetryable(ErrorCode code) =>
+        code != ErrorCode.PolicyViolation
+        && code != ErrorCode.InvalidRequestBody
+        && code != ErrorCode.InvalidResourceType
+        && code != ErrorCode.AuthorizationFailed;
+
     /// <summary>Whether this is <see cref="ReconcileOutcomeKind.Converged" />.</summary>
     public bool IsConverged => Kind == ReconcileOutcomeKind.Converged;
 

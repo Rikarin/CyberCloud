@@ -100,24 +100,16 @@ public sealed class ValkeyCacheReconciler(IClock clock) : IResourceReconciler {
             .ApplyAsync(cancellationToken);
 
         if (applied.TryGetError(out var applyError)) {
-            // Retryable: an apply that failed on our side is a request that can be made again.
-            //
-            // ⚠ THE FIRST PROVIDER'S COMMENT HERE READ "a body the API server rejects outright comes
-            // back as a non-retryable code from the connection", AND THAT IS NOT TRUE. KubeApiClient
-            // .ApplyAsync catches exactly two things: a 409, which becomes an ApplyResult.Conflict, and
-            // whatever IsTransport matches — no response, a 5xx, a 408, a 429. Every other 4xx —
-            // a 404 for a CRD the cluster does not have, a 403, a 422 from an admission webhook, a 400
-            // for a malformed object — is caught by NOTHING and escapes as a raw
-            // k8s.Autorest.HttpOperationException, which Orleans cannot serialize across the grain
-            // call. What the operation records is
-            // "CodecNotFoundException: Could not find a codec for type
-            // k8s.Autorest.HttpOperationException", with the real status code and the API server's
-            // message nowhere in it. Found by running this provider's own .Cluster.Conformance suite
-            // against a k3s with no RedisFailover CRD; IsTransport's remarks describe the intended
-            // classification and no branch implements the other half of it. It is a
-            // CyberCloud.Kubernetes gap rather than a provider's, so this reconciler does not work
-            // around it — but the comment that assumed it away is gone.
-            return ReconcileOutcome.Failed(applyError, true);
+            // ⚠ The code decides, not this call site — and this provider is where the reason was
+            // written down. The comment here used to report that the CyberCloud.Kubernetes gap was
+            // open: every 4xx other than a 409 escaped KubeApiClient.ApplyAsync as a raw
+            // k8s.Autorest.HttpOperationException, which Orleans could not serialize, so a missing
+            // RedisFailover CRD reached the operation as "CodecNotFoundException" with the status and
+            // the API server's message nowhere in it. Found by running this provider's own
+            // .Cluster.Conformance suite against a k3s with no such CRD. KubeFailures.Classify closed
+            // it, so there is now a code to read, and ReconcileOutcome.FromFailure is what reads it:
+            // the four refusals end the operation on this pass and everything else still comes back.
+            return ReconcileOutcome.FromFailure(applyError);
         }
 
         var outcome = applied.GetValueOrThrow();
@@ -156,7 +148,7 @@ public sealed class ValkeyCacheReconciler(IClock clock) : IResourceReconciler {
                     $"'{target}' was applied and is not readable back yet",
                     TimeSpan.FromSeconds(5)
                 )
-                : ReconcileOutcome.Failed(readError, true);
+                : ReconcileOutcome.FromFailure(readError);
         }
 
         if (!ValkeyCaches.Matches(read.GetValueOrThrow().Json, context.Desired)) {
@@ -205,7 +197,7 @@ public sealed class ValkeyCacheReconciler(IClock clock) : IResourceReconciler {
             .DeleteAsync(CascadePolicy.Foreground, cancellationToken);
 
         if (deleted.TryGetError(out var deleteError) && deleteError.Code != ErrorCode.ResourceNotFound) {
-            return ReconcileOutcome.Failed(deleteError, true);
+            return ReconcileOutcome.FromFailure(deleteError);
         }
 
         // ⚠ Converged once the object is GONE, read back — not once the delete was issued.
@@ -216,7 +208,7 @@ public sealed class ValkeyCacheReconciler(IClock clock) : IResourceReconciler {
         }
 
         if (read.Error!.Code != ErrorCode.ResourceNotFound) {
-            return ReconcileOutcome.Failed(read.Error, true);
+            return ReconcileOutcome.FromFailure(read.Error);
         }
 
         context.Log.Report("deleted", $"the RedisFailover '{name}' is gone", 100);

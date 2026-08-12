@@ -368,6 +368,50 @@ public sealed class ReconcileOutcomeTests {
         ReconcileOutcome.Failed(ErrorCode.ProvisioningFailed, "the api server timed out", retryable: true)
             .IsTerminal.ShouldBeFalse();
     }
+
+    [Theory]
+    [InlineData(nameof(ErrorCode.PolicyViolation))]
+    [InlineData(nameof(ErrorCode.InvalidRequestBody))]
+    [InlineData(nameof(ErrorCode.InvalidResourceType))]
+    [InlineData(nameof(ErrorCode.AuthorizationFailed))]
+    public void TheFourRefusalsAreTerminal(string code) {
+        // ⚠ These four are the whole list, and it is one list because it used to be none: every
+        // reconciler passed `retryable: true` for every failed apply, so an admission rejection was
+        // retried on the 10s/30s/2min/10min ladder for sixty minutes and then reported as an
+        // OperationTimeout — throwing away the policy's own message, which arrived on the first pass.
+        ErrorCode.TryFromValue(code, out var refusal).ShouldBeTrue();
+
+        ReconcileOutcome.IsRetryable(refusal).ShouldBeFalse();
+
+        var outcome = ReconcileOutcome.FromFailure(new Error(refusal, "the cluster said no"));
+
+        outcome.Kind.ShouldBe(ReconcileOutcomeKind.Failed);
+        outcome.Retryable.ShouldBeFalse();
+        outcome.IsTerminal.ShouldBeTrue();
+        outcome.Error!.Code.ShouldBe(refusal);
+    }
+
+    [Theory]
+    [InlineData(nameof(ErrorCode.InternalError))]
+    [InlineData(nameof(ErrorCode.ResourceNotFound))]
+    [InlineData(nameof(ErrorCode.Conflict))]
+    [InlineData(nameof(ErrorCode.PreconditionFailed))]
+    public void EverythingElseStaysRetryable(string code) {
+        // ⚠ InternalError is the one that matters: it is what "the cluster did not answer" arrives as,
+        // and ending an operation on a dropped connection is the mirror-image bug. The other three are
+        // states a later pass really does find changed — an object appears, another writer lets a field
+        // go, a resourceVersion moves on — which is why KubeFailures.MeansTheClusterAnswered listing
+        // them is not a reason to list them here. That predicate answers a different question.
+        ErrorCode.TryFromValue(code, out var transient).ShouldBeTrue();
+
+        ReconcileOutcome.IsRetryable(transient).ShouldBeTrue();
+        ReconcileOutcome.FromFailure(new Error(transient, "not now")).IsTerminal.ShouldBeFalse();
+    }
+
+    [Fact]
+    public void FromFailureRefusesANullError() {
+        Should.Throw<ArgumentNullException>(() => ReconcileOutcome.FromFailure(null!));
+    }
 }
 
 /// <summary>The one error shape, Azure's. docs/plan/08 § Errors.</summary>

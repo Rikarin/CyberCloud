@@ -421,6 +421,81 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
         Cluster.World.Suspended = false;
     }
 
+    // ── an API server refusal ends the operation now, not in an hour ────────────────────────────
+
+    [Fact]
+    public async Task AnAdmissionRefusalFailsTheOperationOnTheFirstPassAndKeepsTheClustersOwnWords() {
+        // ⚠ THE HOUR-LONG-WAIT TEST, and it is a suite-wide assertion because it was a suite-wide bug:
+        // every reconciler in the tree passed `retryable: true` for every failed apply, under a comment
+        // claiming the connection returned "a non-retryable code" for a body the API server rejects.
+        // Nothing did, until KubeFailures.Classify — and once something did, no reconciler read it.
+        //
+        // What that costs is the whole reason this test names the ending rather than the mechanism: an
+        // admission decision does not change between passes, so the ladder in ReconcileSchedule runs
+        // 10s → 30s → 2min → 10min for sixty minutes and the tenant is then handed an OperationTimeout
+        // — in place of the policy's own message, which was available on the first pass.
+        ProviderTestCluster<TSource>.Reset();
+
+        // The cluster ANSWERED. Not Suspended ("we cannot reach it") and not Conflict ("somebody else
+        // owns that field") — both of those are states a later pass really does find changed.
+        Cluster.World.RefuseWith = ErrorCode.PolicyViolation;
+
+        var accepted = (await CreateAsync("refused-by-admission")).GetValueOrThrow();
+        var status = (await Cluster.Operation(ConformanceIds.Tenant, accepted.OperationId).DriveAsync())
+            .GetValueOrThrow();
+
+        // ⚠ ONE pass. This is OperationGrain's `Failed when !Retryable` branch; the branch it must not
+        // take is the ScheduleAsync default that every other Failed outcome falls into.
+        status.Attempts.ShouldBe(1);
+
+        status.State.ShouldBe(
+            OperationState.Failed,
+            $"the operation ended {status.State} on its first pass against a cluster that refused the "
+            + "apply outright — a refusal that is rescheduled is a refusal the tenant learns about an "
+            + "hour late, as an OperationTimeout"
+        );
+
+        status.Error!.Code.ShouldBe(ErrorCode.PolicyViolation, status.Error.Message);
+        status.Error.Code.ShouldNotBe(ErrorCode.OperationTimeout);
+
+        // And the sentence the tenant reads is the cluster's, not ours. KubeRefusal's whole shape is
+        // built on an admission message being the only useful diagnostic there is.
+        status.Error.Message.ShouldContain("admission webhook");
+
+        Cluster.World.RefuseWith = null;
+    }
+
+    [Fact]
+    public async Task AClusterThatDidNotAnswerIsStillRetried() {
+        // ⚠ The other half, and the more expensive one to get wrong. ErrorCode.InternalError is what a
+        // transport fault arrives under — "the cluster did not answer" — and it is by far the commonest
+        // failure a reconciler sees. A terminal-by-default rule would end an operation on a dropped
+        // connection, so the rule has to be a named list of refusals rather than a named list of
+        // hiccups. Asserted per provider because the list is read through each reconciler's own path.
+        ProviderTestCluster<TSource>.Reset();
+
+        Cluster.World.RefuseWith = ErrorCode.InternalError;
+
+        var accepted = (await CreateAsync("cluster-fell-over")).GetValueOrThrow();
+        var status = (await Cluster.Operation(ConformanceIds.Tenant, accepted.OperationId).DriveAsync())
+            .GetValueOrThrow();
+
+        status.IsTerminal.ShouldBeFalse(
+            $"the operation ended {status.State} on a failure that means the cluster did not answer; "
+            + "the next pass is what a dropped connection deserves"
+        );
+
+        // It came back rather than ended, which is the retry the ladder exists for.
+        Cluster.World.RefuseWith = null;
+
+        var recovered = await ConvergeAsync(accepted);
+
+        recovered.State.ShouldBe(
+            OperationState.Succeeded,
+            $"the operation ended {recovered.State}: {recovered.Error?.Message}"
+        );
+    }
+
     // ── reconcile after a manual cluster mutation → drift corrected ─────────────────────────────
 
     [Fact]

@@ -105,6 +105,45 @@ public sealed class PostgresReconcilerTests {
         connection.Applied[0].Force.ShouldBeFalse("forcing would take a field another manager owns");
     }
 
+    [Theory]
+    [InlineData(nameof(ErrorCode.PolicyViolation))]
+    [InlineData(nameof(ErrorCode.InvalidRequestBody))]
+    [InlineData(nameof(ErrorCode.InvalidResourceType))]
+    [InlineData(nameof(ErrorCode.AuthorizationFailed))]
+    public async Task ARefusedApplyIsTerminalRatherThanRetriedForAnHour(string code) {
+        // ⚠ The four codes KubeFailures.Classify reports when the API server ANSWERED and said no: an
+        // admission webhook or Pod Security decision, a body it will not type-check, a kind it does not
+        // serve — a cluster with no CloudNativePG is exactly that one — and the platform's own
+        // credentials being refused. None is fixed by waiting, so a retryable outcome buys the tenant
+        // sixty minutes of backoff and then an OperationTimeout in place of the message above.
+        ErrorCode.TryFromValue(code, out var refusal).ShouldBeTrue();
+
+        var connection = new RecordingConnection { RefuseWith = refusal };
+        using var desired = JsonDocument.Parse(PostgresServers.Body(ClusterId));
+
+        var outcome = await Reconcile(connection, desired.RootElement);
+
+        outcome.Kind.ShouldBe(ReconcileOutcomeKind.Failed);
+        outcome.Retryable.ShouldBeFalse(outcome.ToString());
+        outcome.IsTerminal.ShouldBeTrue("OperationGrain's terminal branch is `Failed when !Retryable`");
+        outcome.Error!.Code.ShouldBe(refusal);
+    }
+
+    [Fact]
+    public async Task AnApplyThatTheClusterNeverAnsweredIsStillRetryable() {
+        // ⚠ The other half. ErrorCode.InternalError is what a transport fault comes back as, and it is
+        // the commonest failure a reconciler sees — a terminal-by-default rule would end an operation
+        // on a dropped connection, which is the mirror-image bug and the more expensive one.
+        var connection = new RecordingConnection { RefuseWith = ErrorCode.InternalError };
+        using var desired = JsonDocument.Parse(PostgresServers.Body(ClusterId));
+
+        var outcome = await Reconcile(connection, desired.RootElement);
+
+        outcome.Kind.ShouldBe(ReconcileOutcomeKind.Failed);
+        outcome.Retryable.ShouldBeTrue(outcome.ToString());
+        outcome.IsTerminal.ShouldBeFalse();
+    }
+
     [Fact]
     public async Task ConvergedFollowsTheReadAndNotTheApply() {
         // ⚠ CLAUSE 4, isolated. Both applies succeed and the reads find nothing — a reconciler that
@@ -385,11 +424,26 @@ sealed class RecordingConnection : IKubeClusterConnection {
     /// <summary>Whether an apply reports success and stores nothing — the clause-4 trap.</summary>
     public bool SwallowApplies { get; init; }
 
+    /// <summary>
+    ///     The code every apply fails with, or <see langword="null" /> — the API server <i>refusing</i>,
+    ///     as <c>KubeFailures.Classify</c> reports one, rather than being out of reach.
+    /// </summary>
+    public ErrorCode? RefuseWith { get; init; }
+
     public Guid ClusterId => Guid.Parse("eeeeeeee-0000-4000-8000-000000000005");
 
     public Task<Result<ApplyOutcome>> ApplyAsync(KubeCommand command, CancellationToken cancellationToken = default) {
         ArgumentNullException.ThrowIfNull(command);
         Applied.Add(command);
+
+        if (RefuseWith is { } refusal) {
+            return Task.FromResult(
+                Result<ApplyOutcome>.Failure(
+                    refusal,
+                    $"Cluster {ClusterId:D} refused to apply {command.Target}. The object was not written."
+                )
+            );
+        }
 
         if (Suspend) {
             return Task.FromResult(

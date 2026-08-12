@@ -57,6 +57,24 @@ public sealed class FakeKubeCluster(Guid clusterId) : IKubeClusterConnection {
     /// </summary>
     public string ConflictOn { get; set; } = string.Empty;
 
+    /// <summary>
+    ///     When set, every apply comes back as a <b>failed</b> <see cref="Result" /> carrying this
+    ///     code — the API server refusing, rather than the API server being out of reach.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>A failed Result, and that is the whole distinction this lever exists to make.</b>
+    ///     <see cref="Suspended" /> and <see cref="ConflictOn" /> both answer <i>successfully</i>,
+    ///     because a cluster we cannot reach and a field somebody else owns are states the reconcile
+    ///     loop expects. A refusal is not: <c>KubeFailures.Classify</c> turns the API server's own
+    ///     answer into one of <see cref="ErrorCode.PolicyViolation" />,
+    ///     <see cref="ErrorCode.InvalidRequestBody" />, <see cref="ErrorCode.InvalidResourceType" />
+    ///     or <see cref="ErrorCode.AuthorizationFailed" />, and the reconciler is supposed to read the
+    ///     code rather than assume another pass will do better. Until this lever existed there was no
+    ///     way to reach that branch of a reconciler from the Docker-free suite at all, which is why
+    ///     every provider was passing <c>retryable: true</c> unchallenged.
+    /// </remarks>
+    public ErrorCode? RefuseWith { get; set; }
+
     /// <summary>Forgets everything, including the levers.</summary>
     public void Reset() {
         objects.Clear();
@@ -65,6 +83,7 @@ public sealed class FakeKubeCluster(Guid clusterId) : IKubeClusterConnection {
         Deleted.Clear();
         Suspended = false;
         ConflictOn = string.Empty;
+        RefuseWith = null;
     }
 
     /// <summary>Whether an object is present.</summary>
@@ -103,6 +122,18 @@ public sealed class FakeKubeCluster(Guid clusterId) : IKubeClusterConnection {
     ) {
         ArgumentNullException.ThrowIfNull(command);
         Applied.Enqueue(command);
+
+        if (RefuseWith is { } refusal) {
+            // The tenant-facing half of a KubeRefusal, phrased the way KubeFailures.Classify phrases
+            // an admission decision: the cluster's own words, and "the object was not written".
+            return Task.FromResult(
+                Result<ApplyOutcome>.Failure(
+                    refusal,
+                    $"Cluster {clusterId:D} refused to apply {command.Target}: admission webhook "
+                    + "\"policy.cybercloud.test\" denied the request. The object was not written."
+                )
+            );
+        }
 
         if (Suspended) {
             // ⚠ A SUCCESSFUL Result carrying Suspended, not a failure. docs/plan/09 § Cluster

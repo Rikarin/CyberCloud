@@ -149,7 +149,7 @@ public sealed class ProbeReconciler(IClock clock) : IResourceReconciler {
             .ApplyAsync(cancellationToken);
 
         if (applied.TryGetError(out var applyError)) {
-            return ReconcileOutcome.Failed(applyError, true);
+            return ReconcileOutcome.FromFailure(applyError);
         }
 
         if (applied.GetValueOrThrow().Result is ApplyResult.Suspended or ApplyResult.Conflict) {
@@ -189,7 +189,7 @@ public sealed class ProbeReconciler(IClock clock) : IResourceReconciler {
             .DeleteAsync(CascadePolicy.Background, cancellationToken);
 
         if (deleted.TryGetError(out var error) && error.Code != ErrorCode.ResourceNotFound) {
-            return ReconcileOutcome.Failed(error, true);
+            return ReconcileOutcome.FromFailure(error);
         }
 
         var read = await cluster.GetAsync(Target(context.Namespace, context.Id.Name), cancellationToken);
@@ -264,7 +264,7 @@ public sealed class AssumingProbeReconciler : IResourceReconciler {
             .ApplyAsync(cancellationToken);
 
         if (result.TryGetError(out var error)) {
-            return ReconcileOutcome.Failed(error, true);
+            return ReconcileOutcome.FromFailure(error);
         }
 
         applied = true;

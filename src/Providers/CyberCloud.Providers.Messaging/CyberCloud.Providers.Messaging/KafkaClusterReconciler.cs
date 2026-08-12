@@ -133,7 +133,7 @@ public sealed class KafkaClusterReconciler(IClock clock) : IResourceReconciler {
                         $"'{target}' was applied and is not readable back yet",
                         TimeSpan.FromSeconds(5)
                     )
-                    : ReconcileOutcome.Failed(readError, true);
+                    : ReconcileOutcome.FromFailure(readError);
             }
 
             if (!KafkaClusters.Matches(read.GetValueOrThrow().Json, context.Desired)) {
@@ -189,7 +189,7 @@ public sealed class KafkaClusterReconciler(IClock clock) : IResourceReconciler {
                 .DeleteAsync(CascadePolicy.Background, cancellationToken);
 
             if (deleted.TryGetError(out var deleteError) && deleteError.Code != ErrorCode.ResourceNotFound) {
-                return ReconcileOutcome.Failed(deleteError, true);
+                return ReconcileOutcome.FromFailure(deleteError);
             }
         }
 
@@ -201,7 +201,7 @@ public sealed class KafkaClusterReconciler(IClock clock) : IResourceReconciler {
             }
 
             if (read.Error!.Code != ErrorCode.ResourceNotFound) {
-                return ReconcileOutcome.Failed(read.Error, true);
+                return ReconcileOutcome.FromFailure(read.Error);
             }
         }
 
@@ -293,9 +293,12 @@ public sealed class KafkaClusterReconciler(IClock clock) : IResourceReconciler {
             .ApplyAsync(cancellationToken);
 
         if (applied.TryGetError(out var applyError)) {
-            // Retryable: an apply that failed on our side is a request that can be made again. A body
-            // the API server rejects outright comes back as a non-retryable code from the connection.
-            return ReconcileOutcome.Failed(applyError, true);
+            // ⚠ The code decides, not this call site. An apply that could not reach the cluster is a
+            // request that can be made again; one the API server refused — an admission policy, a
+            // Strimzi CRD the operator never installed, our own credentials — will be refused
+            // identically for the next hour, and ReconcileOutcome.FromFailure is where the four codes
+            // that mean that are listed.
+            return ReconcileOutcome.FromFailure(applyError);
         }
 
         var outcome = applied.GetValueOrThrow();
