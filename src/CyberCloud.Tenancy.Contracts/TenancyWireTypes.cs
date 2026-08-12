@@ -1,3 +1,5 @@
+using CyberCloud.Core.Resources;
+
 namespace CyberCloud.Tenancy.Contracts;
 
 /// <summary>
@@ -328,6 +330,37 @@ public sealed record IndexEntry {
     /// <summary>When the entry last changed.</summary>
     [Id(4)]
     public DateTimeOffset ModifiedAt { get; init; }
+}
+
+/// <summary>
+///     How many children of one type hang off a parent resource's address — the count
+///     <c>IResourceIndexGrain.ChildrenAsync</c> returns.
+/// </summary>
+/// <remarks>
+///     <para>
+///         ⚠ <b>A count per type rather than a list of names, and the size is the reason.</b>
+///         docs/plan/08 § Deleting a parent resource that has children asks for "a per-parent child
+///         counter maintained transactionally where the index claim and release already happen". A
+///         list would put one entry per child on the parent's durable row and rewrite the whole row
+///         on every child create — a storage account with five thousand buckets would carry a
+///         several-hundred-kilobyte index entry — where a count per type is a handful of bytes
+///         whatever the fan-out. The refusal needs "how many, and of what", and that is exactly this.
+///     </para>
+///     <para>
+///         ⚠ <b><see cref="Count" /> is never negative and a type at zero is not reported at all</b>,
+///         so an empty array means "no children" without a caller having to sum anything.
+///     </para>
+/// </remarks>
+[GenerateSerializer]
+[Alias("CyberCloud.Tenancy.ChildTypeCount")]
+public sealed record ChildTypeCount {
+    /// <summary>The child type, for example <c>CyberCloud.Storage/accounts/buckets</c>.</summary>
+    [Id(0)]
+    public ResourceTypeName Type { get; init; }
+
+    /// <summary>How many children of that type this address has. Always positive.</summary>
+    [Id(1)]
+    public int Count { get; init; }
 }
 
 /// <summary>

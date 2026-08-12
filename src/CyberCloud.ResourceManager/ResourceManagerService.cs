@@ -211,31 +211,53 @@ public sealed class ResourceManagerService(
             return NotFound<WriteAccepted>(request.Path);
         }
 
-        // ── ⚠ WHAT IS OWED HERE: THE CHILDREN ───────────────────────────────────────────────────
+        // ── THE CHILDREN, ONE STEP BEFORE THE LOCK CHECK ────────────────────────────────────────
         //
-        // Step 1 now refuses a create whose parent does not exist (see ResolveAsync). This is the
-        // other end of that and it is NOT implemented: deleting a resource that has children leaves
-        // them addressable, pointing at nothing, with a ReBAC parent edge aimed at a resource that
-        // is gone.
+        // ⚠ THE OTHER END OF STEP 1'S PARENT CHECK, AND IT REFUSES RATHER THAN CASCADING.
         //
-        // The decision, at docs/plan/08 § Deleting a parent resource that has children, is that this
-        // must REFUSE — a 409 naming how many children there are — and must not cascade. A resource
-        // group is a declared lifecycle boundary and a parent resource is not: nobody who types
-        // DELETE on a single-resource URL has said anything about the databases on that server, and a
-        // cascade would tear down an unknown number of resources they never named, with the data in
-        // them, returning their quota under an operation that says it deleted something else. The
-        // refusal belongs here, one step before the lock check, and reuses ScopeLocked's shape rather
-        // than inventing a second one.
+        // docs/plan/08 § Deleting a parent resource that has children: "a delete is refused while the
+        // resource still has children — 409, not a cascade, and not a silent orphan." A resource group
+        // is a declared lifecycle boundary and a parent resource is not: nobody who types DELETE on a
+        // single-resource URL has said anything about the databases on that server, and a cascade
+        // would tear down an unknown number of resources they never named, with the data in them,
+        // returning their quota under an operation that says it deleted something else.
         //
-        // It is unwritten because the platform cannot enumerate children: IResourceIndexGrain is
-        // path→GUID and one-way, and the resource-graph projection is eventually consistent, so a
-        // gate reading it would either orphan a child it did not see or refuse over one already gone.
-        // It needs a per-parent child counter maintained where the index claim and release already
-        // happen. Recorded rather than left to be rediscovered from an orphaned database.
+        // ⚠ WHY THIS IS ANSWERABLE NOW WHEN THE DOCUMENT RECORDED IT AS UNANSWERABLE. The blocker was
+        // that IResourceIndexGrain is path→GUID and one-way, so the only enumeration available was the
+        // eventually-consistent resource-graph projection — "a delete gate reading a stale index either
+        // orphans a child it did not see or refuses over a child that is already gone". The counter the
+        // document then asks for lives ON THE PARENT'S OWN INDEX GRAIN, which is the one activation
+        // that already serialises "is this name taken": the read below and the ReleaseAsync further
+        // down address the same grain, so there is no window in which the answer changes between them
+        // and no second entity to disagree with.
+        //
+        // ⚠ IT COUNTS RESOURCES, WHICH INCLUDES CHILDREN THAT ARE STILL TEARING DOWN, AND THAT IS
+        // CORRECT. docs/plan/06 § Two-phase create keeps a child whose teardown failed visible, in
+        // Deleting, still metered — "never silently gone while its pods still run and its meter still
+        // ticks". A child in that state exists, so it holds its parent. The count is decremented by the
+        // child's own operation grain once CompleteDeleteAsync has cleared it, which is the moment it
+        // stops existing.
+        //
+        // ⚠ BEFORE THE LOCK CHECK, WHICH IS THE ORDER THE DOCUMENT GIVES AND ALSO THE CHEAPER ONE: a
+        // caller who has to delete three databases first should be told that on the first call rather
+        // than after removing a lock they did not need to remove.
+        //
+        // ⚠ AND AFTER THE ENFORCEMENT SEAM, WHICH IS WHAT KEEPS THE COUNT FROM BEING AN ORACLE. The
+        // authorization check above has already answered 404 for a caller who cannot read this
+        // resource, so the only callers who reach this line are ones the child count tells nothing new.
         //
         // ⚠ What must NOT be done instead is re-checking the parent on every write to a child: that
         // turns a deleted parent into a frozen child which answers 404 to a GET for a resource that
         // plainly exists — worse than the orphan. ParentExistenceTests pins against it.
+        var children = await Index(target).ChildrenAsync();
+        if (children.TryGetError(out var childrenError)) {
+            return Result<WriteAccepted>.Failure(childrenError);
+        }
+
+        if (children.GetValueOrThrow() is { Length: > 0 } held) {
+            return Result<WriteAccepted>.Failure(ErrorCode.ResourceHasChildren, ChildRefusal(request.Path, held));
+        }
+
         trace.Enter(WriteStep.Locks);
 
         var lockLevel = await locks.ResolveAsync(target.Id, cancellationToken);
@@ -483,6 +505,41 @@ public sealed class ResourceManagerService(
                 Trace = trace.Build()
             }
         );
+    }
+
+    /// <summary>
+    ///     The refusal a delete gets while the resource still has children.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>The count and the type are the whole point of the message.</b> docs/plan/08
+    ///         § Deleting a parent resource that has children: <i>"The refusal names how many children
+    ///         there are and their type, so the caller can go and delete them"</i>, and the ⚠ beside it
+    ///         says why a bare refusal is not enough — refusing creates a real failure mode where a
+    ///         child whose own delete is stuck holds its parent undeletable, and the only thing that
+    ///         makes that recoverable is being able to see what is holding it.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Types, not names.</b> The counter is per type and deliberately not a list (see
+    ///         <see cref="ChildTypeCount" />), so this cannot name the children. It does not need to:
+    ///         the caller owns the parent, the children live under the parent's own address, and a
+    ///         <c>GET</c> on that address lists them. What the caller cannot work out for themselves is
+    ///         <i>whether</i> anything is there and roughly how much, which is exactly what this says.
+    ///     </para>
+    /// </remarks>
+    static string ChildRefusal(string path, ImmutableArray<ChildTypeCount> children) {
+        var parts = children.Select(
+            x => string.Create(
+                CultureInfo.InvariantCulture,
+                $"{x.Count} of type '{x.Type}'"
+            )
+        );
+
+        return $"'{path}' still has child resources — {string.Join(", ", parts)} — so it cannot be "
+            + "deleted. Delete the children first and retry. A resource group is a declared lifecycle "
+            + "boundary and a parent resource is not, so this refuses rather than cascading: a cascade "
+            + "would tear down resources the caller never named, with the data in them — docs/plan/08 "
+            + "§ Deleting a parent resource that has children.";
     }
 
     /// <summary>
@@ -824,6 +881,48 @@ public sealed class ResourceManagerService(
 
             await ReleaseAsync(resolvedTarget, leases);
             return Result<WriteAccepted>.Failure(confirmError);
+        }
+
+        // ── The parent's child counter, which is what makes its delete refusable ────────────────
+        //
+        // ⚠ AFTER THE CONFIRM, ON THE CREATE ONLY, AND NOT ALLOWED TO FAIL THE WRITE.
+        //
+        // The counter read by DeleteAsync's gate is maintained here and released by the child's own
+        // operation grain once CompleteDeleteAsync has run — docs/plan/08 § Deleting a parent resource
+        // that has children asks for exactly that, "a per-parent child counter maintained
+        // transactionally where the index claim and release already happen".
+        //
+        // ⚠ THE POSITION IS A CHOICE BETWEEN TWO LEAKS AND THIS IS THE RECOVERABLE ONE.
+        // Incrementing BEFORE the durable write means a create that then fails leaves the parent's
+        // count high with no child behind it — and a count that is high for a child that never existed
+        // is never decremented by anything, so the parent answers 409 to its own delete forever and
+        // only an operator can clear it. Incrementing after the confirm means a silo lost in the
+        // microseconds between leaves the count low, which is the orphan this gate is closing —
+        // undesirable, but no worse than the behaviour that existed before the gate, and it heals the
+        // moment the child is deleted and re-created. Unrecoverable-forever loses to
+        // as-bad-as-yesterday, which is the same trade step 8 makes one screen up.
+        //
+        // ⚠ For the same reason it does not fail the write. Everything durable already exists; a 500
+        // here would tell the caller their create failed when it plainly succeeded, and the only thing
+        // actually lost is the parent's protection against being deleted out from under this child.
+        //
+        // ⚠ Only when there IS a parent resource. A top-level type's parent is the resource GROUP,
+        // whose delete cascades by design (docs/plan/06 § The hierarchy) and needs no counter.
+        if (!target.Exists && addressed.Parent is { } parentAddress) {
+            var registered = await Tenant(resolvedTarget)
+                .GetGrain<IResourceIndexGrain>(GrainKeys.PathIndex(parentAddress))
+                .AddChildAsync(addressed.Type);
+
+            if (registered.TryGetError(out var registerError)) {
+                logger.LogError(
+                    "Registering {Path} against its parent's child counter failed: {Message}. The "
+                    + "resource exists and is usable; what is lost is that its parent can now be "
+                    + "deleted without the 409 docs/plan/08 § Deleting a parent resource that has "
+                    + "children requires, leaving this resource an orphan.",
+                    addressed.Path,
+                    registerError.Message
+                );
+            }
         }
 
         // ── 11. Emit resource-changed ───────────────────────────────────────────────────────────
