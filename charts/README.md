@@ -21,7 +21,7 @@ charts/managed/postgres/
 ```
 
 **The annotated `values.yaml` is the description of a managed service's configuration surface, and
-26 of its 37 rows are themselves generated.** `Build.Charts` rewrites the non-`@internal` `@param`
+25 of its 36 rows are themselves generated.** `Build.Charts` rewrites the non-`@internal` `@param`
 block from the provider registry and then generates `values.schema.json` from the whole file. A chart
 whose block or whose schema differs from the checked-in one fails CI. The other 11 rows are
 `@internal` and are carried through as bytes — **at every depth**, which is a correction: see
@@ -250,6 +250,26 @@ The gap runs the other way, and it is where a fact can be lost:
   caller sets, whereas `SchemaProperty.ReadOnly` describes server-owned state that never appears in a
   values file at all. The emitter drops those properties, exactly as the generated CLI drops
   `--provisioning-state`.
+* **Placement is excluded too, and it is the *second* exclusion rather than a quirk of one provider.**
+  The property `RequiresCluster` names — `/properties/clusterId` by default — says which cluster the
+  resource is placed **into**. A chart is rendered into a cluster and has no opinion about which one:
+  the id picks the API server the apply runs against, which is settled before Helm is handed anything,
+  and `templates/` never reads `.Values.clusterId`. `ChartAnnotationEmitter.Emit` is **told** the
+  pointer (`ResourceTypeRegistration.ClusterIdPointer`, from the registration) rather than guessing
+  from a member name or a `format`, because a schema on its own cannot tell a placement uuid from a
+  tenant-chosen one.
+
+  > ⚠ **DECIDED 2026-08-12, and the alternative was a chart whose default fails its own schema.**
+  > While it was generated, the row was `clusterId: ""` under `## @required` and `## @format uuid`,
+  > and `""` is not a uuid. `helm lint --strict` passed it only because JSON Schema 2020-12 treats
+  > `format` as an *annotation* rather than an assertion — under any validator with an assertive
+  > format vocabulary the chart's own default fails the chart's own `values.schema.json`. The emitter
+  > was not at fault and was **not** weakened: every values key must carry a literal (the reader
+  > refuses `null` and so does `helm`), `""` is the only "unset" a string has, and the property
+  > declares no `DefaultJson` because there is no cluster a tenant gets without choosing one. Giving
+  > it the nil uuid would have been worse — a real-looking id nobody chose, which is exactly what
+  > this list's *"a number with no `DefaultJson` is refused"* rule exists to prevent. The row was
+  > never configuration, so it left the chart instead.
 * **Two members have no annotation syntax, and generation *fails* rather than dropping them.**
   `Nullable` and a non-text `ElementKind`. A schema declaring one produces a build failure naming the
   property and the directive that would close it — `@nullable`, `@element`. Neither has a user, and
@@ -300,6 +320,17 @@ destination), `MinLength`/`MaxLength` on two, `ExampleJson` on three and `Schema
 thirteen refusals, and the only red gate in the tree. They are declared in C#, where they are
 enforced, and since 2026-08-12 the chart carries them as well. The two that remain open have no user
 at all.
+
+> ⚠ **`@format` has no user in any chart, and that changed on the same day.** The one
+> `SchemaFormat.Uuid` in that count is `/properties/clusterId`, which is placement and is now excluded
+> from the chart — see the bullet above. So the directive is written, read, cross-checked and
+> exercised by `ChartAnnotationTests`, and no checked-in `values.yaml` contains one. (The one
+> `"format"` left in `charts/managed/postgres/values.schema.json` is `password`, which `@secret`
+> writes — the two directives may not share a key, which is why they are refused together.) That is worth
+> knowing before reading the count as "thirteen facts the chart carries": it carries twelve, and the
+> thirteenth was never a chart row. The directive is not dead — the next `SchemaFormat` a provider
+> declares on a tenant-facing property emits it — but nothing in the tree proves the round trip
+> through `build/Build.Charts.cs` end to end today.
 
 ## Forking discipline
 

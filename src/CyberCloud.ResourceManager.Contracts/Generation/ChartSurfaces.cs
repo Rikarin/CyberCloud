@@ -251,7 +251,10 @@ public static class ChartSurfaces {
             return new(chart, type.Type.ToString(), declaredVersion ?? string.Empty, file, File.Exists(path), false, [.. problems]);
         }
 
-        var block = ChartAnnotationEmitter.Emit(version.Schema);
+        // ⚠ The registration and not the schema is what says which property is placement. It is empty
+        // for a type that declares no RequiresCluster, and this is the only call in the tree that has
+        // a ResourceTypeRegistration to read it from — see the remarks on ChartAnnotationEmitter.
+        var block = ChartAnnotationEmitter.Emit(version.Schema, type.ClusterIdPointer);
 
         if (!block.Problems.IsEmpty) {
             return new(chart, type.Type.ToString(), version.Version.Value, file, true, false, block.Problems);

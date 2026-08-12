@@ -37,7 +37,7 @@
         }
       },
       "type": "object",
-      "x-cybercloud-order": 8,
+      "x-cybercloud-order": 7,
       "x-cybercloud-pointer": "/properties/backup"
     },
     "bootstrap": {
@@ -78,18 +78,8 @@
         }
       },
       "type": "object",
-      "x-cybercloud-order": 9,
+      "x-cybercloud-order": 8,
       "x-cybercloud-pointer": "/properties/bootstrap"
-    },
-    "clusterId": {
-      "default": "",
-      "description": "The cluster whose namespace holds the CloudNativePG objects.",
-      "format": "uuid",
-      "type": "string",
-      "x-cybercloud-immutable": true,
-      "x-cybercloud-order": 0,
-      "x-cybercloud-pointer": "/properties/clusterId",
-      "x-cybercloud-widget": "cluster"
     },
     "extensions": {
       "default": [],
@@ -109,7 +99,7 @@
         "type": "string"
       },
       "type": "array",
-      "x-cybercloud-order": 7,
+      "x-cybercloud-order": 6,
       "x-cybercloud-pointer": "/properties/extensions"
     },
     "imageName": {
@@ -118,7 +108,7 @@
       "type": "string",
       "x-cybercloud-api": false,
       "x-cybercloud-internal-reason": "A pinned image defeats automatic minor upgrades, so it is a platform escape hatch rather than a tenant setting.",
-      "x-cybercloud-order": 12,
+      "x-cybercloud-order": 11,
       "x-cybercloud-pointer": "/properties/imageName"
     },
     "monitoring": {
@@ -134,7 +124,7 @@
         }
       },
       "type": "object",
-      "x-cybercloud-order": 10,
+      "x-cybercloud-order": 9,
       "x-cybercloud-pointer": "/properties/monitoring"
     },
     "nameOverride": {
@@ -143,7 +133,7 @@
       "type": "string",
       "x-cybercloud-api": false,
       "x-cybercloud-internal-reason": "Helm plumbing. Nothing about it belongs in a resource body.",
-      "x-cybercloud-order": 13,
+      "x-cybercloud-order": 12,
       "x-cybercloud-pointer": "/properties/nameOverride"
     },
     "platform": {
@@ -217,7 +207,7 @@
       "type": "object",
       "x-cybercloud-api": false,
       "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
-      "x-cybercloud-order": 11,
+      "x-cybercloud-order": 10,
       "x-cybercloud-pointer": "/properties/platform"
     },
     "pooling": {
@@ -254,7 +244,7 @@
         }
       },
       "type": "object",
-      "x-cybercloud-order": 6,
+      "x-cybercloud-order": 5,
       "x-cybercloud-pointer": "/properties/pooling"
     },
     "replicas": {
@@ -263,7 +253,7 @@
       "maximum": 5,
       "minimum": 1,
       "type": "integer",
-      "x-cybercloud-order": 2,
+      "x-cybercloud-order": 1,
       "x-cybercloud-pointer": "/properties/replicas"
     },
     "sizing": {
@@ -306,7 +296,7 @@
         }
       },
       "type": "object",
-      "x-cybercloud-order": 4,
+      "x-cybercloud-order": 3,
       "x-cybercloud-pointer": "/properties/sizing"
     },
     "storage": {
@@ -346,14 +336,14 @@
         "size"
       ],
       "type": "object",
-      "x-cybercloud-order": 5,
+      "x-cybercloud-order": 4,
       "x-cybercloud-pointer": "/properties/storage"
     },
     "synchronousReplication": {
       "default": false,
       "description": "Whether commits wait for a replica. Costs write latency and removes the window in which a failover loses transactions.",
       "type": "boolean",
-      "x-cybercloud-order": 3,
+      "x-cybercloud-order": 2,
       "x-cybercloud-pointer": "/properties/synchronousReplication"
     },
     "version": {
@@ -365,12 +355,11 @@
         "18"
       ],
       "type": "string",
-      "x-cybercloud-order": 1,
+      "x-cybercloud-order": 0,
       "x-cybercloud-pointer": "/properties/version"
     }
   },
   "required": [
-    "clusterId",
     "replicas",
     "version"
   ],
