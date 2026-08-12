@@ -5,6 +5,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Formats.Tar;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
@@ -12,6 +13,7 @@ using System.Xml.Linq;
 using Nuke.Common;
 using Nuke.Common.IO;
 using Nuke.Common.Tooling;
+using Nuke.Common.Tools.DotNet;
 using Nuke.Common.Tools.Git;
 using Serilog;
 
@@ -40,7 +42,17 @@ partial class Build
         /// <summary>Ran, inspected at least one candidate, found nothing.</summary>
         Enforced,
 
-        /// <summary>Ran and found no candidate to inspect. Green, and worth nobody's trust yet.</summary>
+        /// <summary>
+        ///     Ran and did not have a full set of candidates to inspect. Green, and worth nobody's
+        ///     trust yet.
+        ///     <para>
+        ///         ⚠ Usually "zero candidates". <see cref="Build.WireCompatibilityGate" /> is the first
+        ///         row to report it over a <i>partial</i> set — it compares every wire type in the tree
+        ///         against the released baselines that exist, and docs/plan/23 asks for three. One
+        ///         baseline is a real comparison and is not the property the row claims, so it is ○
+        ///         with the shortfall spelled out in <see cref="GateOutcome.Detail" /> rather than ✔.
+        ///     </para>
+        /// </summary>
         Vacuous,
 
         /// <summary>Enforced by <c>src/CyberCloud.Analyzers</c> at compile time, not here.</summary>
@@ -215,10 +227,7 @@ partial class Build
             GateOutcome.Analyzer(
                 "Serializer discipline",
                 "CC1003 for [Alias]; the [Id(n)] manifest is CyberCloud.Core.Contracts.Tests.WireContractTests"),
-            GateOutcome.Blocked(
-                "Wire compatibility",
-                "the repository has no release tags, so there is no 'last three released contract "
-                + "assemblies' to round-trip through. `git tag` is empty. Implement with the first tag"),
+            WireCompatibilityGate(),
             GateOutcome.Analyzer("Secrets", "CC1005, in full"),
             GateOutcome.Analyzer("No blocking", "CC1001 and CC1002, wider than the doc's 'grain assemblies'"),
             GeneratedSurfacesGate(),
@@ -279,9 +288,16 @@ partial class Build
 
         if (vacuous.Count > 0)
         {
+            // ⚠ Not "inspected zero candidates", which is what this said until Wire compatibility
+            // became the first row to report ○ over a set it had partly inspected. That row reads
+            // 212 wire types against 1 of the 3 released baselines its own rule names, so the old
+            // wording was a warning that misdescribed the thing it was warning about — the same
+            // defect, one level up, as a gate whose status line states a condition it never
+            // evaluated. Each row's Detail says which of the two it is, in numbers.
             Log.Warning(
-                "{Count} gate(s) inspected zero candidates and are green because they found nothing, "
-                + "not because the tree is clean: {Gates}. ○, not ✔.",
+                "{Count} gate(s) did not have a full set of candidates to inspect and are green "
+                + "because of what they did not find, not because the tree is clean: {Gates}. "
+                + "○, not ✔ — each row's detail says how much it saw.",
                 vacuous.Count,
                 string.Join(", ", vacuous));
         }
@@ -1224,6 +1240,268 @@ partial class Build
             diffable.Count,
             "published api-version document(s) diffed against their checked-in predecessor",
             violations);
+    }
+
+    // ── Gate: wire compatibility — docs/plan/23 § The architecture gates, row Wire compatibility ─
+
+    /// <summary>
+    ///     How many released contract assemblies docs/plan/23 § The architecture gates wants the tree
+    ///     round-tripped through.
+    ///     <para>
+    ///         ⚠ <b>Three rather than one, and the doc says why in a sentence worth not paraphrasing
+    ///         away:</b> <i>"a hotfix branch will eventually be older than the previous tag, and
+    ///         discovering that during an incident is the worst time."</i> That is the whole design.
+    ///         Comparing against the newest release only would pass a tree that is compatible with
+    ///         <c>v1.2.0</c> and unreadable by the <c>v1.0.x</c> silo the hotfix is being cut for.
+    ///     </para>
+    ///     <para>
+    ///         It also sets the window in which a burned <c>[Id(n)]</c> number is actually enforced:
+    ///         a number removed in one release and quietly reused four releases later is outside what
+    ///         any diff of three manifests can see. The convention covers that case and this gate does
+    ///         not; the convention is <c>CyberCloud.Core.Contracts.Tests.WireContractTests</c>'
+    ///         append-only baseline, which is per-assembly and forever.
+    ///     </para>
+    /// </summary>
+    const int ReleasesCompared = 3;
+
+    [Parameter(
+        "Record the wire baseline for any release tag that has no manifest under build/wire/. Builds "
+        + "each such tagged commit from `git archive`, which is the one expensive thing in this "
+        + "target and is why it is opt-in.")]
+    readonly bool WireRecord;
+
+    AbsolutePath WireDirectory => RootDirectory / "build" / WireContract.ManifestDirectoryName;
+
+    /// <summary>
+    ///     The aliases deliberately taken out of circulation. ⚠ Hand-written and reviewed, unlike the
+    ///     manifests beside it, which are generated — see the file's own header.
+    /// </summary>
+    AbsolutePath BurnedAliasesFile => WireDirectory / "burned.txt";
+
+    AbsolutePath WireManifest(string tag) => WireDirectory / (tag + ".txt");
+
+    /// <summary>
+    ///     docs/plan/23 § The architecture gates, row <b>Wire compatibility</b>: "round-trip every
+    ///     wire type through the last three released contract assemblies."
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>This row reported <see cref="GateStatus.Blocked" /> with the reason "the
+    ///         repository has no release tags … <c>git tag</c> is empty" — and it never ran
+    ///         <c>git tag</c>.</b> The sentence was a string constant. When <c>v0.1.0</c> was created
+    ///         precisely to unblock this row, the row went on printing that the repository had no
+    ///         tags, because the only thing that could have noticed was a human reading the sentence.
+    ///         A status line asserting a condition it does not evaluate is worse than no status line:
+    ///         the roster is the artefact people trust instead of looking.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>What "the released contract assemblies" turned out to mean here.</b> Nothing
+    ///         publishes them: <c>src/CyberCloud.Sdk</c> is the only project in the tree with
+    ///         <c>IsPackable=true</c> (<c>Directory.Build.props</c> § "Nothing is packable unless it
+    ///         opts in"), and it is not a contracts assembly, so there is no NuGet package of
+    ///         <c>CyberCloud.Core.Contracts</c> at <c>v0.1.0</c> or at any other tag to restore. The
+    ///         only artefact a release leaves behind is the tagged commit. So a release's wire surface
+    ///         is recorded by building that commit — <c>--wire-record</c>, about ten seconds a tag —
+    ///         and the result is committed as <c>build/wire/&lt;tag&gt;.txt</c>, the same shape of
+    ///         trust <c>openapi/2026-08-01.json</c> already carries.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The cost, measured, because a target people run constantly is a target people
+    ///         stop running.</b> <c>Architecture</c> was about twelve seconds before this row existed.
+    ///         Building three tagged commits on every invocation would have added about thirty. What
+    ///         this does on every invocation is read the assemblies <see cref="ShippingAssemblies" />
+    ///         has already opened and three text files, and the whole row costs under a second. The
+    ///         thirty seconds is paid once per release, by whoever cuts the tag, and lands in a
+    ///         reviewable diff.
+    ///     </para>
+    /// </remarks>
+    GateOutcome WireCompatibilityGate()
+    {
+        var current = WireContract.Read(ShippingAssemblyPaths.Select(x => x.Assembly));
+        var burned = BurnedAliases();
+        var tags = ReleaseTags();
+        var violations = WireContract.Revived(current, burned);
+
+        // ⚠ The vacuity this row is most likely to be caught by. Not "the gate found nothing wrong"
+        // but "there is nothing yet that this tree could be incompatible with" — the state the old
+        // Blocked row was describing, said by code that actually looked.
+        if (tags.Count == 0)
+        {
+            return new GateOutcome(
+                "Wire compatibility",
+                violations.Count > 0 ? GateStatus.Failed : GateStatus.Vacuous,
+                $"{current.Count} aliased wire type(s) in the tree and 0 release tag(s) — `git tag` "
+                + $"matched no {ReleaseTagPattern}, so nothing has been published for the tree to be "
+                + "incompatible with",
+                violations);
+        }
+
+        var compared = new List<string>();
+
+        foreach (var tag in tags)
+        {
+            var manifest = WireManifest(tag);
+
+            if (!manifest.FileExists() && WireRecord)
+                RecordWireBaseline(tag, manifest);
+
+            if (!manifest.FileExists())
+            {
+                violations.Add(
+                    $"{tag} is a release tag and {RootDirectory.GetRelativePathTo(manifest)} does not "
+                    + $"exist, so nothing in this repository knows what {tag} published on the wire. Run "
+                    + "./build.sh Architecture --wire-record and commit the result — docs/plan/23 § The "
+                    + "architecture gates, row Wire compatibility");
+
+                continue;
+            }
+
+            var (_, recorded, released) = WireContract.Parse(manifest.Name, manifest.ReadAllLines());
+            var actual = TagCommit(tag);
+
+            // A manifest is only worth what its provenance is worth. This is what stops one being
+            // regenerated from a moved tag, or copied from another tag's file and renamed.
+            if (!string.Equals(recorded, actual, StringComparison.Ordinal))
+            {
+                violations.Add(
+                    $"{RootDirectory.GetRelativePathTo(manifest)} records commit {recorded} and {tag} "
+                    + $"points at {actual}. The manifest was not generated from the tag it claims — "
+                    + "regenerate it with ./build.sh Architecture --wire-record");
+
+                continue;
+            }
+
+            violations.AddRange(WireContract.Compare(tag, released, current, burned));
+            compared.Add(tag);
+        }
+
+        var detail =
+            $"{current.Count} aliased wire type(s) over {current.Sum(x => x.Members.Count)} [Id(n)] "
+            + $"member(s) and {current.Sum(x => x.Values.Count)} enum constant(s), against "
+            + $"{compared.Count} of {ReleasesCompared} released baseline(s)"
+            + (compared.Count > 0 ? $" ({string.Join(", ", compared)})" : string.Empty);
+
+        // ⚠ Enforced needs all three, and the shortfall is reported as ○ rather than ✔ on purpose.
+        // One release is a real comparison over real types and it is not the property the row claims:
+        // the hotfix case the doc names is exactly the one a single baseline cannot see. Saying
+        // "1 of 3" under a tick would be the same defect this gate was written to remove, one row
+        // further along.
+        var status = violations.Count > 0 ? GateStatus.Failed
+            : compared.Count >= ReleasesCompared ? GateStatus.Enforced
+            : GateStatus.Vacuous;
+
+        if (status == GateStatus.Vacuous)
+        {
+            detail += $". {ReleasesCompared - compared.Count} more release(s) needed before this row is "
+                + "the guarantee docs/plan/23 words it as — a hotfix branch older than the previous tag "
+                + "is what the other two baselines are for";
+        }
+
+        return new GateOutcome("Wire compatibility", status, detail, violations);
+    }
+
+    /// <summary>
+    ///     ⚠ <c>v</c> and a dotted number, so that a moving pointer like <c>latest</c> or a topic tag
+    ///     cannot silently become one of the three things the platform's wire compatibility is
+    ///     measured against.
+    /// </summary>
+    const string ReleaseTagPattern = "v[0-9]*";
+
+    /// <summary>
+    ///     The last three release tags, newest first. <c>--sort=-v:refname</c> so <c>v0.10.0</c> sorts
+    ///     above <c>v0.9.0</c>, which lexical order gets wrong the first time it matters.
+    /// </summary>
+    // List and HashSet rather than the interfaces: CA1859 is an error here and both are private
+    // helpers — the same reason ShippingProjectFiles above returns a Dictionary.
+    List<string> ReleaseTags() =>
+        GitTasks.Git($"tag --list \"{ReleaseTagPattern}\" --sort=-v:refname", RootDirectory, logOutput: false, logInvocation: false)
+            .Where(x => x.Type == OutputType.Std && !string.IsNullOrWhiteSpace(x.Text))
+            .Select(x => x.Text.Trim())
+            .Take(ReleasesCompared)
+            .ToList();
+
+    /// <summary>The commit a tag resolves to — <c>^{commit}</c> because these tags are annotated.</summary>
+    string TagCommit(string tag) =>
+        GitTasks.Git($"rev-list -n 1 {tag}", RootDirectory, logOutput: false, logInvocation: false)
+            .Where(x => x.Type == OutputType.Std && !string.IsNullOrWhiteSpace(x.Text))
+            .Select(x => x.Text.Trim())
+            .FirstOrDefault() ?? string.Empty;
+
+    /// <summary>
+    ///     The declared burned aliases. Missing file means none, which is the honest reading — the
+    ///     tree has never retired an alias after a release.
+    /// </summary>
+    HashSet<string> BurnedAliases()
+        => !BurnedAliasesFile.FileExists()
+            ? new HashSet<string>(StringComparer.Ordinal)
+            : BurnedAliasesFile.ReadAllLines()
+                .Select(line => line.Split('#')[0].Trim())
+                .Where(line => line.Length > 0)
+                .ToHashSet(StringComparer.Ordinal);
+
+    /// <summary>
+    ///     Builds a tagged commit and records what it published.
+    ///     <para>
+    ///         <c>git archive</c> into <c>artifacts/</c> rather than <c>git worktree add</c>: the
+    ///         second writes into <c>.git</c> and leaves administrative state behind if the build
+    ///         throws, and nothing here needs history. The tree is deleted afterwards — what is kept
+    ///         is the manifest, which is the thing worth reviewing.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ Test assemblies are excluded through <see cref="SuiteOwning" />, the same classifier
+    ///         <see cref="ShippingAssemblyPaths" /> uses, so that "what the release published" means
+    ///         the same set on both sides of the comparison. A fixture in a test assembly carrying an
+    ///         <c>[Alias]</c> would otherwise be recorded as released wire surface and then reported
+    ///         as retired the moment the fixture was renamed.
+    ///     </para>
+    /// </summary>
+    void RecordWireBaseline(string tag, AbsolutePath manifest)
+    {
+        var scratch = ArtifactsDirectory / "wire-record";
+        var tree = scratch / tag;
+        var tar = scratch / (tag + ".tar");
+
+        Log.Information("Wire compatibility: recording {Tag} — building the tagged commit", tag);
+
+        try
+        {
+            tree.CreateOrCleanDirectory();
+            GitTasks.Git($"archive --format=tar --output \"{tar}\" {tag}", RootDirectory, logOutput: false);
+            TarFile.ExtractToDirectory(tar, tree, overwriteFiles: true);
+
+            DotNetTasks.DotNetBuild(s => s
+                .SetProjectFile(tree / SolutionFile.Name)
+                .SetConfiguration(Configuration)
+                .SetProcessWorkingDirectory(tree));
+
+            var released = (tree / "artifacts" / "bin")
+                .GlobDirectories("*")
+                .Select(x => x / Configuration.ToLowerInvariant() / (x.Name + ".dll"))
+                .Where(x => x.FileExists() && SuiteOwning(x) is null)
+                .OrderBy(x => x.NameWithoutExtension, StringComparer.Ordinal)
+                .ToList();
+
+            Assert.NotEmpty(
+                released,
+                $"building {tag} produced no shipping assembly under artifacts/bin. A manifest written "
+                + "from an empty set would record that the release published nothing, and every alias "
+                + "in the tree would then look new rather than compatible.");
+
+            manifest.Parent.CreateDirectory();
+            manifest.WriteAllText(WireContract.Write(tag, TagCommit(tag), WireContract.Read(released)));
+
+            Log.Information(
+                "Wire compatibility: {Tag} → {File}, from {Count} shipping assembl{Suffix}. Commit it",
+                tag,
+                RootDirectory.GetRelativePathTo(manifest),
+                released.Count,
+                released.Count == 1 ? "y" : "ies");
+        }
+        finally
+        {
+            tar.DeleteFile();
+            tree.DeleteDirectory();
+        }
     }
 
     // ── Gate: Labels — docs/plan/23 § The architecture gates, row Labels ──────────────────────
