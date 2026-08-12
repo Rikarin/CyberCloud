@@ -40,6 +40,17 @@ namespace CyberCloud.Providers.DBforMySQL;
 ///         the second data-carrying provider to report the same gap, which is what turns the
 ///         PostgreSQL row's observation into a measurement — docs/plan/25 § R1.
 ///     </para>
+///     <para>
+///         ⚠ <b>That reasoning has since been read back and endorsed rather than overruled, which is
+///         worth knowing before "fixing" it.</b> docs/plan/08 § Soft delete now records that all the
+///         providers before this one declined for the same stated reason, calls the instinct right,
+///         and ends: <i>"No provider should declare <c>SupportsSoftDelete</c> until the above is
+///         built. The five stated reasons in the tree are correct and stay correct; the declaration is
+///         the last step, not the first."</i> So this absence is a sixth instance of a decision, not a
+///         sixth oversight — and what it now waits on is a named design (a deleted resource moving to
+///         a different address, a separate purge permission, retention immutable after create) rather
+///         than on nobody having got round to it.
+///     </para>
 /// </remarks>
 public sealed class MariaDbProvider : IResourceProvider {
     /// <summary>

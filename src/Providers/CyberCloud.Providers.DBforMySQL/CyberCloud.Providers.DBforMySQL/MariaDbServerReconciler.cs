@@ -186,7 +186,10 @@ public sealed class MariaDbServerReconciler(IClock clock) : IResourceReconciler 
             // rendered, so what happens to three data PVCs is the StatefulSet's default rather than a
             // choice this platform made. That is recorded in conformance.yaml § owed as
             // `volumes-outlive-the-resource` rather than settled here, because the answer belongs with
-            // SoftDeleteDays — which nothing reads — and picking one now would be picking it blind.
+            // soft delete — which docs/plan/08 § Soft delete designs and nothing yet implements, and
+            // whose own text says the declaration "is the last step, not the first". Picking a
+            // retention policy before there is a restore path to read a retained volume back through
+            // would be picking it blind.
             .DeleteAsync(CascadePolicy.Foreground, cancellationToken);
 
         if (deleted.TryGetError(out var deleteError) && deleteError.Code != ErrorCode.ResourceNotFound) {
