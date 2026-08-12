@@ -342,8 +342,51 @@ public sealed class TestingProvider : IResourceProvider {
             .Meter(QuotaMeter.StorageGb, MeterDerivation.Quantity(DiskPointer, QuantityUnit.Gibibytes))
             .Meters(QuotaMeter.Resources)
             .Permissions("read", "write", "delete")
-            .Display("Sized widget", "Sized widgets", shortName: "swidget");
+            .Display("Sized widget", "Sized widgets", shortName: "swidget")
+            // ── The third type: a CHILD, and the only nested type in the codebase ────────────────
+            //
+            // ⚠ NO PROVIDER IN THE CATALOGUE DECLARES A NESTED TYPE YET. docs/plan/12 § The
+            // catalogue names `servers/databases`, `servers/roles` and `servers/firewallRules` as
+            // owed and src/Providers/README § What the third provider measured records why none has
+            // shipped — so without this fixture the parent check would be code nothing can run.
+            //
+            // ⚠ IT DECLARES NOTHING ABOUT ITS PARENT, AND THAT IS THE POINT. docs/plan/12 § Child
+            // resources interleaves the address — `/widgets/{widgetName}/gadgets/{gadgetName}` — so
+            // the parent is a pure function of the id and there is nothing for a provider to declare,
+            // get wrong, or forget. `ResourceId.Parent` is the whole mechanism.
+            .ResourceType(ChildType)
+            .ApiVersion(V2026, ChildSchema)
+            .Meters(QuotaMeter.Resources)
+            .Permissions("read", "write", "delete")
+            .Display("Gadget", "Gadgets", shortName: "gadget");
     }
+
+    // ── The third type: a child of `widgets` ───────────────────────────────────────────────────
+
+    /// <summary>The nested type's path. Its parent type is <c>widgets</c>.</summary>
+    public const string ChildType = "widgets/gadgets";
+
+    /// <summary>The nested type's name.</summary>
+    public static ResourceTypeName ChildTypeName { get; } = new("CyberCloud.Testing", ChildType);
+
+    /// <summary>The child's shape. Nothing in it names the parent — the address does.</summary>
+    public static ResourceSchema ChildSchema { get; } =
+        ResourceSchema.Of(
+            [
+                new("/location", SchemaKind.Text, Required: true),
+                new("/properties", SchemaKind.Nested),
+                new("/properties/label", SchemaKind.Text)
+            ]
+        );
+
+    /// <summary>A body that satisfies <see cref="ChildSchema" />.</summary>
+    public static string ChildBody(string label = "first") =>
+        JsonSerializer.Serialize(
+            new JsonObject {
+                ["location"] = "eu-central",
+                ["properties"] = new JsonObject { ["label"] = label }
+            }
+        );
 
     /// <summary>The pointer <see cref="SizedSchema" /> puts the disk quantity at.</summary>
     public const string DiskPointer = "/properties/disk";
