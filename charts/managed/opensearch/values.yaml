@@ -1,0 +1,87 @@
+# Managed search — the configuration surface, once.
+#
+# ⚠ EVERY NON-`@internal` BLOCK BELOW IS GENERATED from OpenSearchServices.Schema2026 by
+# `./build.sh Charts`, and so is values.schema.json. ADR-010 § Which end authors the schema: "The C#
+# ResourceSchema is authored. The chart's @param annotations are generated from it and diffed."
+# Editing a generated row here is undone on the next run and fails the build in between; add the
+# field in C# instead.
+#
+# The `@internal` rows at the end of each level are the ones that are NOT generated. They are
+# carried through as bytes and must sit after every generated key at their own level, so that each
+# level's generated keys are one contiguous run — charts/README.md § What a chart cannot say.
+
+## @param version {string} OpenSearch version. ⚠ OpenSearch is a fork of Elasticsearch 7.10 (ADR-011 — Elasticsearch is SSPL and is not available to us) and the two have diverged since, so an Elasticsearch 8 client is not promised anything here. Upgrades between the values below are online and in the maintenance window; a third value is a new api-version.
+## @required
+## @enum 2.19.0 | 3.1.0
+version: "3.1.0"
+
+## @param dataNodes {integer} Number of data nodes. This is the capacity axis: total raw capacity is this count times the disk size below, before replicas. Every data node also carries the ingest role, so an indexing pipeline needs no separate pool.
+## @required
+## @range 1..20
+dataNodes: 3
+
+## @param masterNodes {integer} Number of dedicated cluster-manager nodes. They hold the cluster state in a quorum, so three is the smallest count that survives losing one. One is offered for development and has no quorum at all. An even count is worse than the odd count below it and the API cannot say so — see the service's own documentation.
+## @required
+## @range 1..5
+masterNodes: 3
+
+## @param coordinatingNodes {integer} Number of coordinating-only nodes — nodes that hold no data and no cluster state and exist to fan a search out and merge the results. Zero is the default and is right until a query pattern makes one data node the bottleneck for every search. They are sized by the same preset as the data nodes.
+## @required
+## @range 0..10
+coordinatingNodes: 0
+
+## @param sizing {object} CPU and memory per data node and per coordinating node, either by preset or explicitly. The cluster-manager nodes are sized by the platform and are not affected.
+sizing:
+  ## @param preset {string} A sizing preset from docs/plan/12. Search nodes use the m1 family, which is 1 vCPU to 8 GiB, because OpenSearch is bound by heap and by the filesystem cache rather than by CPU. The m1 rungs below m1.small are deliberately not offered: OpenSearch derives its JVM heap from the container limit and a node under 4 GiB fails a bootstrap check after passing its readiness probe.
+  ## @enum m1.2xlarge | m1.4xlarge | m1.large | m1.medium | m1.small | m1.xlarge
+  ## @widget cozy-preset
+  preset: m1.medium
+  ## @param cpu {string} Explicit vCPU quantity in Kubernetes form, for example 500m or 2. Empty means take it from the preset.
+  ## @pattern (\d+(\.\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)?
+  cpu: ""
+  ## @param memory {string} Explicit memory quantity in Kubernetes form, for example 8Gi. Empty means take it from the preset.
+  ## @pattern (\d+(\.\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)?
+  memory: ""
+
+## @param storage {object} The data volume, per data node.
+storage:
+  ## @param size {string} Disk size per data node, in Kubernetes quantity form. Grows online; never shrinks. The cluster-manager and coordinating nodes get a fixed 10Gi that is not configurable and is counted against the storage quota anyway.
+  ## @required
+  ## @pattern \d+(\.\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?
+  ## @example "100Gi"
+  size: "100Gi"
+  ## @param class {string} StorageClass name for every node pool. Empty means the cluster default.
+  ## @immutable
+  ## @widget storageclass
+  class: ""
+
+## @param monitoring {object} What the platform scrapes.
+monitoring:
+  ## @param enabled {boolean} Whether the operator is asked for a ServiceMonitor. On by default — docs/plan/12: "a managed service the tenant cannot see the health of is a black box they will not trust with production". ⚠ The metrics themselves come from the prometheus-exporter plugin, which the operator installs into every node on the first reconcile after this is turned on — so turning it on restarts the pods and turning it off does not remove the plugin.
+  enabled: true
+
+## @param platform {object} Resource identity injected by the reconciler. Not a tenant-facing setting.
+## @internal Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.
+platform:
+  ## @param tenantId {string} Tenant GUID, rendered into the cybercloud.io/tenant-id label.
+  tenantId: ""
+  ## @param subscriptionId {string} Subscription GUID, rendered into the cybercloud.io/subscription-id label.
+  subscriptionId: ""
+  ## @param resourceGroup {string} Resource group name, rendered into the cybercloud.io/resource-group label.
+  resourceGroup: ""
+  ## @param resourceId {string} Resource GUID, rendered into the cybercloud.io/resource-id label.
+  resourceId: ""
+  ## @param resourceType {string} Fully qualified resource type, rendered into the cybercloud.io/resource-type label.
+  resourceType: CyberCloud.Search/services
+  ## @param apiVersion {string} The api-version the resource was last written at, rendered into the cybercloud.io/api-version label.
+  apiVersion: "2026-08-01"
+  ## @param managedBy {string} Value of the cybercloud.io/managed-by label. Constant, and the selector every informer filters on.
+  managedBy: cybercloud
+
+## @param imageName {string} Override the full image reference, tag included. Empty means the operator composes it from `version`, which is what keeps version upgrades a property rather than an escape hatch.
+## @internal Unlike charts/managed/seaweedfs, the operator DOES compose an image from spec.general.version, so this is a genuine escape hatch rather than a field that must always be written. A pinned reference here defeats the version property, so it is not a tenant setting.
+imageName: ""
+
+## @param nameOverride {string} Replace the generated object-name stem. Empty means derive it from the release name.
+## @internal Helm plumbing. Nothing about it belongs in a resource body.
+nameOverride: ""
