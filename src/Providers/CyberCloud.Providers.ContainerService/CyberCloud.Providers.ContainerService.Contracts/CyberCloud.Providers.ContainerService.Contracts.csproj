@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      docs/plan/03 § Providers — the first of the five projects: "grain interfaces, resource models,
+      the JSON Schemas". Here that is two schemas — a cluster and a node pool — and the Cluster API
+      projection they render into.
+
+      ⚠ NO GRAIN INTERFACES, AND THIS IS THE TENTH NAMESPACE TO REPORT THAT. It is worth one more
+      sentence here than elsewhere, because this is the type most likely to want one: a managed
+      Kubernetes cluster has an endpoint, a CA bundle and a kubeconfig, all of which look like state
+      to hold. None of them is: the endpoint and the CA are written by Cluster API into objects in
+      the management cluster and are read back from there, and the kubeconfig is a Secret whose name
+      is a pure function of the cluster's own name. What a grain would hold is a CACHE of somebody
+      else's status, which is the shape ADR-001 refuses.
+
+      ⚠ IT REFERENCES ONLY CyberCloud.ResourceManager.Contracts AND CyberCloud.Kubernetes.Contracts —
+      the whole reference set docs/plan/03 § The .Contracts split allows a provider, and rule 2 of
+      § Assembly graph rules forbids the rest.
+    -->
+
+    <ItemGroup>
+        <ProjectReference Include="../../../CyberCloud.ResourceManager.Contracts/CyberCloud.ResourceManager.Contracts.csproj"/>
+        <ProjectReference Include="../../../CyberCloud.Kubernetes.Contracts/CyberCloud.Kubernetes.Contracts.csproj"/>
+    </ItemGroup>
+
+    <ItemGroup Label="CyberCloud.Analyzers — see CyberCloud.Core.csproj for why this is not a reference">
+        <ProjectReference Include="../../../CyberCloud.Analyzers/CyberCloud.Analyzers.csproj"
+                          OutputItemType="Analyzer"
+                          ReferenceOutputAssembly="false"/>
+    </ItemGroup>
+
+</Project>

@@ -1,0 +1,322 @@
+# Conformance manifest — docs/plan/12 § The pattern, once, piece 8.
+#
+# What the conformance suite asserts about CyberCloud.ContainerService/managedClusters. This file is
+# data: `Build.Charts` checks that it is present, non-empty, and names the same resource type as
+# Chart.yaml. The suite that reads the rest of it lives in test/ and does not exist yet, and the
+# target says so in its own log rather than implying otherwise.
+#
+# ⚠ THIS IS THE FIRST MANIFEST IN THE TREE FOR A TYPE WHOSE PRODUCT IS A KUBERNETES API SERVER, and
+# almost every item below is a consequence of that. docs/plan/13 § Managed Kubernetes is the row;
+# docs/plan/09 § Kubernetes in Kubernetes is the substrate; ADR-009 is the decision.
+
+resourceType: CyberCloud.ContainerService/managedClusters
+apiVersion: "2026-08-01"
+chart: kubernetes
+
+# Objects the reconciler must have applied once the resource reports Succeeded.
+#
+# ⚠ THREE, IN THREE API GROUPS, FROM THREE SEPARATE UPSTREAM PROJECTS. charts/managed/clickhouse was
+# the first to render two custom resources in two groups and they came from ONE operator binary. Here
+# the three are Cluster API core, the Kamaji control-plane provider and the KubeVirt infrastructure
+# provider, and what binds them is Cluster API's provider contract rather than a shared controller.
+#
+# ⚠ AND THE COUNT SAYS NOTHING ABOUT WHAT EXISTS AFTERWARDS. Three objects become an etcd schema, a
+# control-plane Deployment, a Service, certificates, a kubeconfig Secret and — once a node pool
+# exists — virtual machines, none of which this platform applies or reads.
+renders:
+  - group: infrastructure.cluster.x-k8s.io
+    version: v1alpha1
+    kind: KubevirtCluster
+    count: 1
+  - group: controlplane.cluster.x-k8s.io
+    version: v1alpha2
+    kind: KamajiControlPlane
+    count: 1
+  - group: cluster.x-k8s.io
+    version: v1beta2
+    kind: Cluster
+    count: 1
+
+# ⚠ THERE IS NO `requiredCrds:` BLOCK, AND THAT IS CORRECT RATHER THAN AN OMISSION.
+# `ProviderConformanceCase` has no `RequiredCrds` member and never had one — the harness DERIVES the
+# definitions from the case's own `Objects`, which already carries group, version, kind and plural.
+
+# ADR-013 — every rendered object carries all seven labels.
+labels:
+  required:
+    - cybercloud.io/tenant-id
+    - cybercloud.io/subscription-id
+    - cybercloud.io/resource-group
+    - cybercloud.io/resource-id
+    - cybercloud.io/resource-type
+    - cybercloud.io/api-version
+    - cybercloud.io/managed-by
+  values:
+    cybercloud.io/resource-type: cybercloud.containerservice_managedclusters
+    cybercloud.io/managed-by: cybercloud
+
+# Behaviour a tenant is entitled to. Each is a statement the suite can fail on, not a feature list.
+assertions:
+  - id: creation-shows-its-steps
+    says: >
+      A create reports named phases as it goes, and the phases are the ones docs/plan/09 § Kubernetes
+      in Kubernetes tabulates rather than a spinner: applying the infrastructure, applying the control
+      plane, applying the Cluster, then Cluster API's own condition messages until the control plane is
+      ready. ⚠ THE SIX-TO-NINE MINUTES IS THE HONEST NUMBER and every surface must be designed for it.
+      The reconciler reports through IReconcileLog, which docs/plan/08 says is "what turns a
+      four-minute cluster creation from a spinner into a story".
+  - id: a-cluster-with-no-pools-has-no-nodes
+    says: >
+      A managed cluster with no agentPools converges, reports Succeeded, and has zero worker nodes.
+      That is correct rather than a bug: node pools are a separate resource with a separate lifetime,
+      and nothing in docs/plan/08 lets a parent's create depend on a child the caller has not made yet.
+      ⚠ It is also the state a portal has to explain, because a cluster you cannot schedule anything on
+      looks broken.
+  - id: the-control-plane-is-not-reachable-from-outside
+    says: >
+      The API server's Service is ClusterIP, so the cluster is reachable from inside the management
+      cluster and from nowhere else. ⚠ THIS IS A DECISION, NOT A DEFECT — see § owed,
+      `api-server-has-no-restrictable-exposure` — and it is the deliberate half of a trade whose other
+      half is that a publicly reachable Kubernetes API server with no allow-list is the worst object
+      this platform could hand out.
+  - id: two-tenants-name-a-cluster-the-same-thing
+    says: >
+      Two tenants each create a cluster called `prod` and get two clusters. The namespace is
+      `{subscriptionId:N}-{resourceGroup}` and the tenant id is not in it, so this is a statement about
+      subscriptions rather than about tenants — which is why ManagedClusterReconcilerTests gives each
+      tenant its own subscription.
+  - id: deleting-a-cluster-destroys-everything-in-it
+    says: >
+      Deleting the resource deletes the Cluster, which Cluster API cascades into every Machine, every
+      virtual machine and every volume the tenant's workloads were using. ⚠ THIS IS THE LARGEST BLAST
+      RADIUS OF ANY DELETE IN THE CATALOGUE and there is no recovery window — see § owed,
+      `no-soft-delete-and-this-is-the-worst-type-to-lack-one`.
+  - id: quota-refuses-the-sixth-cluster
+    says: >
+      QuotaMeter.Clusters defaults to five per subscription, so a sixth create is refused with an error
+      naming the meter, the request and the remainder. ⚠ This type is the FIRST to draw that meter,
+      which has existed since the quota grain was written and which MeterCatalog already bills
+      BillingMeter.ClusterHours off.
+
+# Meters the type must emit.
+#
+# ⚠ QuotaMeter.Clusters IS THE POINT OF THIS BLOCK. Nine provider families shipped without declaring
+# it because none of them is a cluster; MeterCatalog describes BillingMeter.ClusterHours as "Managed
+# Kubernetes clusters × hours" and this is the type it was written for.
+#
+# ⚠ NO storageGb, AND THAT IS A CONSEQUENCE OF THE SHARED DATASTORE. A Kamaji control plane keeps no
+# volume of its own; its state is in a DataStore this platform names rather than creates. The day
+# ADR-009's dedicated-etcd-per-tenant is honoured, this type gains a storage meter — and that meter is
+# the evidence the change landed.
+meters:
+  - meter: clusters
+    amount: 1
+  - meter: resources
+    amount: 1
+  - meter: vcpu
+    amount: controlPlane.replicas × 3 containers × 500m
+  - meter: memoryGb
+    amount: controlPlane.replicas × 3 containers × 1Gi
+
+# ── owed ──────────────────────────────────────────────────────────────────────────────────────
+#
+# Named here rather than left to be discovered, because an absent capability that nobody wrote down
+# is indistinguishable from one nobody thought of.
+owed:
+  - id: converged-is-not-ready
+    says: >
+      ⚠ THE FIRST THING TO READ ON THIS ROW. `Converged` means the three objects read back carrying the
+      spec this platform rendered. It does NOT mean the tenant has a Kubernetes cluster: the thing that
+      turns those objects into one is three controllers this platform does not run, and docs/plan/09
+      budgets six to nine minutes between the two states. ManagedClusterReconciler therefore also reads
+      the Cluster's own status — the only reconciler in the tree that does — and reports Cluster API's
+      condition messages as progress while it is not ready. ⚠ THE HOLE IS THE THIRD ANSWER:
+      ManagedClusters.Readiness returns NotReported for an object with no `status` at all, and the
+      reconciler CONVERGES on it. In a management cluster with Cluster API installed that state lasts
+      seconds; where the CRDs exist and the controller is dead it lasts forever, and the platform
+      cannot tell the two apart from the object. The case where the CRDs are ABSENT is caught one layer
+      earlier, by the apply, which is what keeps the hole to "installed but not running". ⚠ IT IS ALSO
+      NOT REACHABLE BY EITHER CONFORMANCE SUITE: FakeKubeCluster echoes an apply back with no status,
+      and the k3s harness installs a schema-less CRD stub with no controller behind it — so the branch
+      that converges without evidence is the ONLY branch those suites take. What would close it is a
+      `status` hook on ProviderConformanceCase, which is a change to every provider's case file and is
+      therefore recorded here rather than made unilaterally.
+      ManagedClusterReconcilerTests.AClusterWhoseStatusNobodyEverWroteConvergesAndThatIsTheHoleThisTypeHas
+      pins the behaviour against the counter-example so it cannot change unnoticed.
+  - id: the-cluster-this-creates-is-not-connectable
+    says: >
+      ⚠ THIS IS THE M1 EXIT STORY'S FOURTH STEP AND IT IS BLOCKED BY A MISSING WRITE. docs/plan/24's
+      story is "create an in-house Kubernetes cluster (~8 min, with visible steps) → create a VPC and a
+      Postgres server IN IT". A Postgres server is placed by clusterId, a clusterId resolves through
+      IClusterConnectionFactory, and a connection exists once somebody calls
+      IClusterConnectionGrain.AttachAsync — which, grepped across the whole tree, is called by tests
+      and by nothing else. The seam is otherwise complete: ClusterConnectionKind.InHouse exists,
+      IKubeApiClientFactory has a case for it, and it resolves a kubeconfig through a CredentialRef.
+      What is missing is (a) something that attaches a descriptor when a managed cluster converges, and
+      (b) a resolver that reads Cluster API's `{cluster}-kubeconfig` Secret out of the MANAGEMENT
+      cluster rather than out of a Vault that does not exist. ⚠ Neither belongs in a reconciler: a
+      reconciler may not reference CyberCloud.Kubernetes' implementation assembly (docs/plan/03 § The
+      .Contracts split), and attaching a connection is a resource-manager concern. module-layering.txt
+      records the refusal and the alternative in the same place.
+  - id: listcredentials-has-no-handler
+    says: >
+      IProviderBuilder.Action takes a name, a kind, a permission, a request shape and a response shape,
+      and NO HANDLER DELEGATE — so no action on any type in this platform can run. Ten types now
+      declare one. ⚠ On this type there is a second gap behind the first: docs/plan/13 requires "a
+      short-lived, scoped kubeconfig — never the admin one", and what Cluster API writes into
+      {cluster}-kubeconfig IS the admin one, signed by the cluster CA with no expiry a client can see.
+      Narrowing it means a CertificateSigningRequest against the produced cluster, which needs the
+      connection the item above is about. So the response schema declares an `expiresAt` that nothing
+      can currently populate honestly, and that is deliberate: an undeclared response is the one part
+      of an API surface with no contract, and what leaves through this action is cluster-admin on a
+      whole cluster.
+  - id: api-server-has-no-restrictable-exposure
+    says: >
+      ⚠ THE PRODUCT IS UNREACHABLE FROM OUTSIDE THE MANAGEMENT CLUSTER, ON PURPOSE. docs/plan/12
+      § Cross-cutting decisions requires an explicit CIDR allow-list on any exposure. There is nowhere
+      to render one: the KubeVirt provider's ServiceSpecTemplate has exactly ONE field, `type`, and
+      Kamaji's NetworkComponent offers serviceAnnotations and serviceLabels but no
+      loadBalancerSourceRanges. So `serviceType: ClusterIP` is rendered — overriding a CRD default of
+      LoadBalancer, which is the line that would otherwise publish every tenant's API server. ⚠ SECOND
+      SIGHTING of an upstream ServiceSpec with nowhere to put a firewall; charts/managed/seaweedfs
+      found the first and declared the whole exposure axis absent over it. What closes this one is an
+      upstream field, an ingress the platform owns, or the WireGuard path docs/plan/14 describes — not
+      a property here, because a property that renders nothing is worse than the absence.
+  - id: capk-crd-carries-the-v1beta1-contract-label
+    says: >
+      ⚠ THE ONE UPSTREAM FACT MOST LIKELY TO BREAK THIS ROW, AND IT IS NOT OURS. Cluster API v1beta2's
+      ContractVersionedObjectReference carries no apiVersion; CAPI resolves the version from a label on
+      the provider's CRD, keyed `cluster.x-k8s.io/<contract>`. The Kamaji control-plane provider is
+      labelled `cluster.x-k8s.io/v1beta2: v1alpha2` and is fine. THE KUBEVIRT PROVIDER IS NOT: at
+      v0.11.2 its kustomization stops at `cluster.x-k8s.io/v1beta1: v1alpha1`, even though its
+      metadata.yaml claims the v1beta2 contract. It works today only because CAPI's
+      GetCompatibleVersions inserts v1beta1 as compatible with v1beta2 — a shim its own comment
+      schedules for removal in CAPI v1.16. So this platform's management cluster must pin Cluster API
+      below v1.16 until the KubeVirt provider relabels, and the failure when it does not is a Cluster
+      whose infrastructureRef cannot be resolved at all.
+  - id: datastore-is-shared-and-adr-009-says-it-should-not-be
+    says: >
+      ADR-009 specifies "a dedicated etcd per tenant from etcd-operator". This platform names ONE
+      shared, platform-owned Kamaji DataStore instead, and the reason is structural: a DataStore is
+      CLUSTER-SCOPED (kamaji.clastix.io_datastores.yaml, scope: Cluster). Every object this platform
+      applies is namespaced, carries ADR-013's seven labels and lives inside
+      {subscriptionId:N}-{resourceGroup}; a cluster-scoped object has no namespace to be isolated by,
+      so two tenants would compete for one name in one flat space and the tenancy story would rest on a
+      naming convention. ⚠ WHAT IT COSTS: tenant control planes share an etcd. Kamaji separates them
+      inside it, so this is not a data-visibility boundary being crossed — it is a blast-radius and
+      noisy-neighbour boundary being given up. One tenant's write storm is every tenant's control-plane
+      latency; one etcd's corruption is every tenant's cluster. Closing it needs something
+      cluster-scoped and platform-owned that creates a DataStore per tenant cluster, which is the same
+      shape of problem as `instancetypes-are-the-bundles` below and probably has the same answer.
+  - id: pinned-patches-are-unreviewed
+    says: >
+      ⚠ THE ONE THING IN THIS ROW A REVIEWER MUST CHECK BEFORE IT SHIPS. The API offers a Kubernetes
+      MINOR and Kamaji's version webhook parses a SEMANTIC VERSION, so the platform pins the patch —
+      ManagedClusters.PinnedPatch, and the same table in _helpers.tpl. Those two strings were NOT read
+      off a Kubernetes release page on the date this landed. A patch that does not exist is a control
+      plane that never starts; a patch newer than the Kamaji install's bundled kubeadm is refused at
+      admission with a message about a version nobody typed. Moving one is a chart version bump rather
+      than a new api-version, because a patch is not an API change and no stored body carries one.
+  - id: version-skew-is-not-enforced
+    says: >
+      ⚠ docs/plan/13 SAYS "the API enforces it with a clear error, rather than letting a tenant break
+      their cluster and open a ticket", AND THE API CANNOT. A node pool's version is in a DIFFERENT
+      RESOURCE from its cluster's, and ResourceSchema validates one body against constants — it never
+      sees another resource. ManagedClusters.SkewIsLegal (kubelet may lag three minors, never lead) and
+      ManagedClusters.UpgradeIsLegal (one minor forward, never back) both exist, are tested, and are
+      called by NOTHING on the write path — deliberately, so that closing the seam is wiring an
+      existing function rather than writing one. ⚠ SECOND SIGHTING of the shape
+      charts/managed/seaweedfs-bucket records as `bucket-cluster-may-differ-from-its-accounts`, and the
+      first where the consequence is a broken cluster rather than an unreconciled object. Upstream does
+      refuse the worst of it — Kamaji's tcp_version.go rejects downgrades and two-minor jumps — but at
+      admission on an object the tenant never sees, long after the create was accepted.
+  - id: connected-clusters-is-a-second-type
+    says: >
+      docs/plan/13 puts BYO clusters behind this same resource type with a `kind` discriminator;
+      docs/plan/09 § Cluster connections spells them as two paths, "managedClusters for ours,
+      /connectedClusters for theirs". This takes docs/plan/09's side, and the reasons are platform
+      facts rather than preference: ResourceSchema has no conditional, so a discriminated body would
+      make network.podCidr required for one flavour and meaningless for the other; every derived meter
+      would be zero for a Connected cluster, and QuotaGrain.TryReserveAsync refuses a non-positive
+      amount (FOURTH sighting of that blocker); and "returns null for node-pool operations" has nowhere
+      to live, because a node pool is a child resource TYPE and a PUT to one either creates a resource
+      or answers 404. So `connectedClusters` is a type nobody has built, and it needs the
+      AgentInitiated tunnel docs/plan/09 budgets at 1.5 EM in M2 before it would be worth much.
+  - id: addons-need-a-connection-to-the-new-cluster
+    says: >
+      docs/plan/13's sub-resources include "addons (ingress, cert-manager, monitoring agents, GPU
+      operator — each a bundle chart the tenant opts into)". An addon is a chart installed INSIDE the
+      cluster this resource creates, and the platform has no connection to that cluster — see
+      `the-cluster-this-creates-is-not-connectable`. A switch that turned nothing on would be worse
+      than the absence. ⚠ It also blocks something less obvious: docs/plan/09's provisioning table ends
+      with "Bundle installed and healthy · 90 s", so the last two minutes of the M1 story's eight are
+      work nothing in this tree can do yet.
+  - id: no-vpc-placement
+    says: >
+      docs/plan/09's provisioning table OPENS with "Allocate VPC, subnet, API VIP · 10 s · Address pool
+      exhausted → fail fast with the pool name". This type declares no subnetId. That is
+      CyberCloud.Network/virtualNetworks, a different provider, reached by resource id through
+      CyberCloud.ResourceManager (rule 2) — and declaring a required property pointing at a type that
+      may not be in the registry the silo built is a body no tenant can fill. It is a new api-version
+      when that provider ships, which is the ordinary cost of the ordering.
+  - id: no-soft-delete-and-this-is-the-worst-type-to-lack-one
+    says: >
+      No SupportsSoftDelete, for the reason all nine providers before this give: nothing in
+      CyberCloud.ResourceManager reads SoftDeleteDays. ⚠ IT IS A STRANGER ABSENCE HERE THAN ANYWHERE
+      ELSE, in both directions. docs/plan/06 § Tags, locks gives seven days to "types carrying data",
+      and a cluster carries every workload a tenant has put in it — but a soft-deleted cluster whose
+      Machines, VMs and volumes are already gone is not a cluster anybody can be handed back, so the
+      window would have to suspend the delete rather than defer it, which is a mechanism the platform
+      has no shape for at all. What partly stands in is that a delete is a slow cascade a tenant can
+      watch; what does not stand in is anything at all if they were not watching.
+  - id: parent-delete-orphans-pools
+    says: >
+      docs/plan/08 § Deleting a parent resource that has children: "a delete is refused while the
+      resource still has children — 409, not a cascade, and not a silent orphan". NOT IMPLEMENTED —
+      the platform cannot enumerate children. ⚠ SECOND SIGHTING (charts/managed/seaweedfs-bucket
+      recorded the first) AND THE CONSEQUENCE IS WORSE. Deleting a cluster tears down its Cluster with
+      a Background cascade, which Cluster API turns into the deletion of every Machine it owns —
+      INCLUDING the ones a surviving agentPool resource still describes. So the pool resource remains
+      addressable, still writable (docs/plan/08 forbids re-checking the parent on a write), still
+      drawing vCPU, memory and storage quota for machines that no longer exist, and its
+      MachineDeployment names a Cluster that is gone. The fix docs/plan/08 names is a per-parent child
+      counter maintained where the index claim and release already happen.
+  - id: a-clusters-lock-is-not-its-pools
+    says: >
+      docs/plan/06 § Tags, locks says CanNotDelete and ReadOnly are "inherited down the hierarchy", and
+      ResourceScopeLockResolver walks resource → resource GROUP → subscription. It does not walk the
+      parent RESOURCE. So a CanNotDelete on a cluster does not protect its node pools. ⚠ Second
+      sighting of charts/managed/seaweedfs-bucket's item of the same name; at two of two shipping child
+      types it is a property of nesting rather than of either service.
+  - id: cidrs-are-not-checked-against-the-management-cluster
+    says: >
+      /properties/network/podCidr and serviceCidr are shape-checked and nothing else. An overlap with
+      the MANAGEMENT cluster's own pod or service range produces a tenant cluster whose nodes route the
+      platform's addresses to themselves — which is a cross-tenant reachability failure, not a
+      misconfiguration. ⚠ It is the same shape as charts/managed/seaweedfs'
+      `replication-versus-topology`: the fact needed is about the cluster and no body contains it.
+      Closing it needs a validation hook that can read the placement cluster's own network
+      configuration, which nothing in ReconcileContext offers.
+  - id: a-green-cluster-suite-proves-the-apply-path-only
+    says: >
+      ⚠ SAID OUT LOUD SO A GREEN RUN DOES NOT IMPLY IT. The k3s container
+      CyberCloud.Providers.ContainerService.Cluster.Conformance starts has no Cluster API, no Kamaji
+      and no KubeVirt. ClusterConformanceHarness derives a minimal CRD stub per custom kind from the
+      case's own Objects — six kinds across four API groups for this family — and waits for
+      Established. A derived stub has an OPEN schema: no required fields, no enums, no
+      +kubebuilder:default. So a KamajiControlPlane missing spec.version, a MachineDeployment with its
+      rollout policy at the v1beta1 path, or a KubevirtMachineTemplate whose seven-level spec is nested
+      wrongly would all apply, read back and go green. What the suite DOES prove is the apply path
+      against a real API server, ADR-013 label injection under real admission, drift correction after a
+      real kubectl delete, a real 409 becoming a named drift event, and the refusal a missing CRD
+      produces. docs/plan/09 § Testing the fabric already names what would close the rest: "a kind
+      cluster with CAPI + Kamaji + KubeVirt in the nightly e2e … the single most valuable test in the
+      suite".
+  - id: grafana-dashboard
+    says: >
+      docs/plan/12 § The pattern, once, piece 6 keeps the dashboard chart-side. FOURTH SIGHTING of
+      charts/managed/nats' item of the same name. ⚠ On this type the gap is two-layered rather than
+      one: the control plane runs in the management cluster and could be scraped there, and everything
+      a tenant actually wants to see — node pressure, pod scheduling, workload health — is inside the
+      cluster this platform cannot reach, which needs the monitoring agent that
+      `addons-need-a-connection-to-the-new-cluster` blocks.

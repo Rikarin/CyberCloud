@@ -125,7 +125,7 @@ CyberCloud.Vault -> CyberCloud.ResourceManager
 # cannot grant what rule 2 refuses: cross-provider traffic goes through CyberCloud.ResourceManager
 # by resource id. A line here would fail rule 2 and be deleted, not honoured.
 #
-# ⚠ THE NINE FAMILIES BELOW HAVE IDENTICAL COLUMNS, AND THAT IS THE MEASUREMENT RATHER THAN A
+# ⚠ THE TEN FAMILIES BELOW HAVE IDENTICAL COLUMNS, AND THAT IS THE MEASUREMENT RATHER THAN A
 # COINCIDENCE. docs/plan/25 § R1 asks what a provider costs the platform; four edges, the same four
 # every time, is the answer for a trivial provider, for one with backup and pooling and extensions,
 # for one that does quantity arithmetic and talks to a third operator, for one with two resource
@@ -149,11 +149,28 @@ CyberCloud.Vault -> CyberCloud.ResourceManager
 # resource; charts/managed/clickhouse/conformance.yaml § owed, `s3-cold-tier`. Two families now want
 # the SAME line for two different features, which is what turns "a provider might reach for this" into
 # evidence that the sanctioned route needs a reader a reconciler can actually call. The line stays out.
+#
+# ⚠ AND CyberCloud.Providers.ContainerService IS THE FAMILY THAT WAS EXPECTED TO NEED A FIFTH EDGE AND
+# DOES NOT. It is the first whose PRODUCT is a Kubernetes cluster: the kubeconfig it causes to exist is
+# what would let the platform reach that cluster, and CyberCloud.Kubernetes is where
+# IClusterConnectionGrain.AttachAsync lives. A line to that IMPLEMENTATION assembly would be the
+# obvious way to register the new cluster as a connection, and it is not here — a provider may
+# reference CyberCloud.Kubernetes.Contracts only (docs/plan/03 § The .Contracts split), and attaching
+# a connection is the resource manager's job rather than a reconciler's. The consequence is written
+# down rather than worked around: a cluster this provider creates is NOT reachable as a clusterId
+# afterwards, and nothing in the whole tree calls AttachAsync outside a test.
+# See charts/managed/kubernetes/conformance.yaml § owed, `the-cluster-this-creates-is-not-connectable`.
+# ⚠ That is the M1 exit story's FOURTH step — "create a VPC and a Postgres server in it" — and it is
+# blocked by a missing WRITE, not by a missing edge.
 CyberCloud.Providers.Analytics -> CyberCloud.Core
 CyberCloud.Providers.Analytics -> CyberCloud.Kubernetes
 CyberCloud.Providers.Analytics -> CyberCloud.ResourceManager
 CyberCloud.Providers.Analytics -> CyberCloud.Tenancy
 CyberCloud.Providers.Cache -> CyberCloud.Core
+CyberCloud.Providers.ContainerService -> CyberCloud.Core
+CyberCloud.Providers.ContainerService -> CyberCloud.Kubernetes
+CyberCloud.Providers.ContainerService -> CyberCloud.ResourceManager
+CyberCloud.Providers.ContainerService -> CyberCloud.Tenancy
 CyberCloud.Providers.Cache -> CyberCloud.Kubernetes
 CyberCloud.Providers.Cache -> CyberCloud.ResourceManager
 CyberCloud.Providers.Cache -> CyberCloud.Tenancy

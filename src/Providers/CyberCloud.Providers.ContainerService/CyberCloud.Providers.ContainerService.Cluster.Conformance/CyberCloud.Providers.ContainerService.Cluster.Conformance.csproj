@@ -1,0 +1,50 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      The cluster-backed half of the shared provider conformance suite, run against the managed
+      Kubernetes provider.
+
+      ⚠ IT CONTAINS NO ASSERTIONS AND NO INFRASTRUCTURE. Everything it runs comes from
+      test/CyberCloud.Cluster.Conformance; what lives here is class declarations over the SAME
+      ProviderConformanceCase objects the Docker-free suite already uses.
+
+      ⚠ WHAT THE k3s IT STARTS DOES NOT HAVE, SAID BEFORE ANY GREEN RUN IS READ: Cluster API, Kamaji
+      and the KubeVirt infrastructure provider. ClusterConformanceHarness derives a minimal CRD stub
+      per custom kind from the case's own Objects and waits for Established, which makes the REST
+      path exist and nothing else. No Cluster in this suite has ever had a control plane provisioned,
+      no KubevirtMachineTemplate has ever produced a VM, and no kubeconfig Secret has ever been
+      written. What the suite proves is the apply path, ADR-013 label injection under real admission,
+      and the refusal a missing CRD produces — see ContainerServiceClusterBackedConformance.
+
+      ⚠ IT IS A SEPARATE PROJECT FROM CyberCloud.Providers.ContainerService.Conformance, AND THAT IS
+      THE WHOLE SPLIT. That project must keep running on a machine with no Docker — it is the per-PR
+      gate for every provider change.
+
+      ⚠ IT IS NOT NAMED `.Conformance.Cluster`. Directory.Build.props § Project role detection and
+      build/Build.Test.cs § SuiteOwning both classify by the SUFFIX of the project name; a name ending
+      in `.Cluster` is claimed by neither, so the project would build as a library rather than as a
+      test host. `.Cluster.Conformance` is claimed by both with no edit to either file.
+    -->
+
+    <ItemGroup>
+        <PackageReference Include="xunit.v3"/>
+        <PackageReference Include="Shouldly"/>
+    </ItemGroup>
+
+    <ItemGroup Label="Global usings">
+        <Using Include="Xunit"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <!--
+          ⚠ The CASES come from the provider's Docker-free conformance project rather than being
+          declared again here. One resource type, one ProviderConformanceCase: a second copy would be
+          a second description of the same type, and the two would disagree the first time either
+          changed.
+        -->
+        <ProjectReference
+            Include="../CyberCloud.Providers.ContainerService.Conformance/CyberCloud.Providers.ContainerService.Conformance.csproj"/>
+        <ProjectReference Include="../../../../test/CyberCloud.Cluster.Conformance/CyberCloud.Cluster.Conformance.csproj"/>
+    </ItemGroup>
+
+</Project>

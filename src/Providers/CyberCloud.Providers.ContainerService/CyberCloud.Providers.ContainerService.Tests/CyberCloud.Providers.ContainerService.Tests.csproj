@@ -1,0 +1,42 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      docs/plan/03 § Providers — the fourth project: "TestCluster + k3s".
+
+      ⚠ NEITHER, HERE. The TestCluster half is test/CyberCloud.Conformance's, because a provider's
+      lifecycle is the SHARED suite's assertion, and the k3s half is
+      CyberCloud.Providers.ContainerService.Cluster.Conformance's. What is left is what only THIS
+      provider can be wrong about: its schemas' casing against the emitted document, its sizing table
+      against the charts', the Cluster API projection, the version-skew rule the API is supposed to
+      enforce, and the two properties of a reconciler that a shared suite driving one tenant cannot
+      see.
+
+      ⚠ IT EMBEDS ONE FILE FROM EACH OF THE TWO CHARTS. A Helm template is not a schema and nothing
+      generates it — ChartSurfaces filters templates/ out of the chart tree on purpose — so each fact
+      the chart and the reconciler both spell is two hand-maintained copies of one thing, and
+      ManagedClusterSizingTests is what stops them drifting.
+    -->
+
+    <ItemGroup>
+        <PackageReference Include="xunit.v3"/>
+        <PackageReference Include="Shouldly"/>
+    </ItemGroup>
+
+    <ItemGroup Label="Global usings">
+        <Using Include="Xunit"/>
+    </ItemGroup>
+
+    <ItemGroup Label="The half generation does not reach — see the header">
+        <EmbeddedResource Include="../../../../charts/managed/kubernetes/templates/_helpers.tpl"
+                          LogicalName="kubernetes.helpers.tpl"/>
+        <EmbeddedResource Include="../../../../charts/managed/kubernetes-agentpool/templates/_helpers.tpl"
+                          LogicalName="kubernetes-agentpool.helpers.tpl"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../CyberCloud.Providers.ContainerService/CyberCloud.Providers.ContainerService.csproj"/>
+        <!-- ProviderRegistry.Build, so the declaration is checked the way a silo checks it at start. -->
+        <ProjectReference Include="../../../CyberCloud.ResourceManager/CyberCloud.ResourceManager.csproj"/>
+    </ItemGroup>
+
+</Project>

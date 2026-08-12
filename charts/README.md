@@ -5,8 +5,17 @@ charts/
 ├── platform/         # Cyber Cloud itself: silo, gateway, identity, ingest, worker, portal
 ├── bundle/           # what we install into a managed cluster: operators, CNI, CSI, monitoring
 ├── managed/          # one chart per managed service — the catalogue
-└── tenant-cluster/   # Cluster API + Kamaji + KubeVirt templates for an in-house cluster
+└── tenant-cluster/   # ⚠ CORRECTED — see below; these live in managed/ instead
 ```
+
+> ⚠ **CORRECTED 2026-08-13 by `CyberCloud.ContainerService/managedClusters`.** The Cluster API +
+> Kamaji + KubeVirt templates are `charts/managed/kubernetes` and `charts/managed/kubernetes-agentpool`,
+> not a `tenant-cluster/` of their own. `Build.Charts` requires `SOURCE`, `conformance.yaml` and both
+> `cybercloud.io/*` annotations **only for a chart under `charts/managed/`** — so a chart outside it is
+> a managed service that quietly owes no conformance manifest, which is
+> [docs/plan/12 § The pattern, once](../docs/plan/12-managed-data-services.md)'s eighth piece dropped
+> by a directory name. A managed Kubernetes cluster is a catalogue row like every other. `bundle/` is
+> unaffected and is still what gets installed *into* a cluster once one exists.
 
 ## A managed-service chart
 
@@ -26,7 +35,7 @@ block from the provider registry and then generates `values.schema.json` from th
 whose block or whose schema differs from the checked-in one fails CI. The `@internal` rows are
 carried through as bytes — **at every depth**, which is a correction: see § What a chart cannot say.
 
-Five charts are paired today, and the split is worth reading as a ratio rather than as five numbers:
+Nine charts are paired today, and the split is worth reading as a ratio rather than as nine numbers:
 
 | Chart | Rows | Generated | `@internal` |
 |---|---|---|---|
@@ -37,6 +46,8 @@ Five charts are paired today, and the split is worth reading as a ratio rather t
 | `managed/seaweedfs` | 25 | 15 | 10 |
 | `managed/clickhouse` | 25 | 13 | 12 |
 | `managed/mariadb` | 27 | 14 | 13 |
+| `managed/kubernetes` | 21 | 8 | 13 |
+| `managed/kubernetes-agentpool` | 21 | 11 | 10 |
 
 ⚠ **The `@internal` count barely moves and the generated count varies by a factor of two**, which is
 the shape to expect for the rest: the hand-written tail is the platform's identity block (eight rows),
@@ -60,6 +71,16 @@ them — see § What a chart cannot say for why they are not in any `ResourceSch
 > `@internal` because it reaches the **tenant's SQL** (`ON CLUSTER`, `Distributed()`) and so is a
 > constant with consequences rather than a setting. The prediction's shape holds: the hand-written
 > tail is still the identity block plus plumbing, and it grew by exactly the number of extra objects.
+
+> ⚠ **`managed/kubernetes` is the first chart whose API surface is SMALLER than its `@internal`
+> tail, and the reason is the row rather than the shape.** Eight API rows against thirteen
+> hand-written ones. Three of the eight rows a reader would expect are deliberately absent —
+> there is no exposure setting (nowhere upstream to attach a CIDR allow-list), no `addons` (the
+> platform cannot reach the cluster it creates) and no `subnetId` (another provider's resource) —
+> and three of the thirteen are constants with consequences rather than plumbing: the shared
+> `dataStoreName`, the frozen `serviceDomain`, and the control-plane sizing the quota meters reserve
+> against. The prediction's shape still holds at ten for its child chart, which has a real
+> configuration surface and nothing unusual in its tail.
 
 > ⚠ **CORRECTED 2026-08-12.** This paragraph read: "`Build.Generate` turns that into the resource
 > type's OpenAPI body, the CLI flags, the SDK model and the portal form" — the chart authoring the
