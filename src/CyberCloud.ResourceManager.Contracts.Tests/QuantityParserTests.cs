@@ -65,18 +65,26 @@ public sealed class QuantityParserTests {
     ///     Every copy of the quantity grammar in the tree is the same string as the parser's.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>Three copies are still out there</b> — <c>PostgresServers</c>, <c>KafkaClusters</c> and
-    ///     the resource manager's own <c>TestProvider</c> — and they are what the second parser grew
-    ///     beside, so leaving them undetected would leave the mechanism intact. They are in assemblies
-    ///     the consolidation did not own, so this asserts the property that actually matters until they
-    ///     are pointed at <see cref="KubeQuantity.Pattern" />: a copy that drifts is a schema validating
-    ///     something the parser does not read, or refusing something it does.
+    ///     ⚠ <b>There are no copies left, and that is exactly why this scan stays.</b>
+    ///     <c>ValkeyCaches</c>, <c>PostgresServers</c>, <c>KafkaClusters</c> and the resource manager's
+    ///     own <c>TestProvider</c> now alias <see cref="KubeQuantity.Pattern" />, so the only text this
+    ///     finds today is the declaration itself. The scan is not thereby vacuous: it is what notices
+    ///     the <i>next</i> copy, and a new resource type is the moment one appears, because writing the
+    ///     grammar out is easier than knowing the constant exists.
     ///     <para>
-    ///         The copies are found by their text rather than by referencing three provider assemblies
-    ///         this project cannot see — and referencing them to compare two <see langword="const" />
-    ///         strings would not work anyway, because a <see langword="const" /> is inlined and leaves
-    ///         no binding reference. That is the same blind spot
-    ///         <c>CyberCloud.Providers.DBforPostgreSQL.Contracts.csproj</c> records against rule 2.
+    ///         ⚠ <c>KubeQuantity.cs</c> is deliberately NOT excluded. It is what keeps
+    ///         <c>ShouldNotBeEmpty</c> below meaningful — a scan that matched nothing would pass just as
+    ///         happily if the search were pointed at the wrong directory, which is the failure a
+    ///         drift guard cannot afford.
+    ///     </para>
+    ///     <para>
+    ///         Copies are found by their text rather than by referencing the provider assemblies this
+    ///         project cannot see — and referencing them to compare two <see langword="const" /> strings
+    ///         would not work anyway, because a <see langword="const" /> is inlined and leaves no
+    ///         binding reference. That is the same blind spot
+    ///         <c>CyberCloud.Providers.DBforPostgreSQL.Contracts.csproj</c> records against rule 2, and
+    ///         it is why aliasing the constant does not make this test redundant: the aliases are
+    ///         invisible to the assembly graph, so text is still the only evidence.
     ///     </para>
     /// </remarks>
     [Fact]
