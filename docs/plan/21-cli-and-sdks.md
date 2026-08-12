@@ -51,12 +51,21 @@ blocker.
 
 ### Extensions
 
-~~`cyc extension add <name>` loads a NuGet-packaged command group into an `AssemblyLoadContext`.~~ This
-is how a provider ships CLI verbs that are not schema-shaped (`cyc shell`, `cyc postgres connect` which
-actually spawns `psql`), and how third parties extend the CLI without a fork.
+**`cyc extension add` installs an executable; `cyc <name>` runs it as a child process.** The `git-*` /
+`kubectl-*` shape, with the discovery half narrowed — see § The trust boundary. This is how a provider
+ships CLI verbs that are not schema-shaped (`cyc postgres connect`, which actually spawns `psql`) and
+how third parties extend the CLI without a fork.
 
-⚠ **DEFECT 2026-08-12 — the mechanism above contradicts § `cyc` above it, and the goal survives while
-the mechanism does not. Needs a decision; nothing is built.**
+```
+cyc extension add --source ./cyc-mytool     # copies into ~/.cyc/extensions, hashes it, warns once
+cyc extension list                          # name, state, path, sha256 — the only discovery surface
+cyc extension remove mytool
+cyc mytool --whatever                       # runs ~/.cyc/extensions/cyc-mytool as a child process
+```
+
+~~`cyc extension add <name>` loads a NuGet-packaged command group into an `AssemblyLoadContext`.~~
+**DECIDED 2026-08-12: out of process. AOT stays.** The struck-through mechanism contradicted § `cyc`
+above it, forty-six lines away, and the two could not both be true.
 
 § `cyc` requires `cyc` to be **single-file AOT-published per RID**, and `cli/cyc/cyc.csproj` implements
 that with `IsAotCompatible` and `EnableAotAnalyzer`. A NativeAOT binary has no JIT and cannot load a
@@ -71,50 +80,105 @@ managed assembly at run time. Measured on osx-arm64, SDK 10.0.302, rather than r
 | invoking a method on the loaded type | the plugin's code runs | `PlatformNotSupportedException` |
 
 The plugin file was present on disk in every AOT case, so this is a refusal and not a missing file. It
-throws — it does not degrade, and there is no narrow case that works.
-
-⚠ **It fails earlier than run time.** `TreatWarningsAsErrors` (Directory.Build.props) plus
-`EnableAotAnalyzer` means the call does not compile: adding one `LoadFromAssemblyPath` to `cli/cyc`
-fails an ordinary `dotnet build` with `error IL2026`. The mechanism cannot be written down in this
-project, let alone shipped.
+throws — it does not degrade, and there is no narrow case that works. ⚠ **It fails earlier than run
+time.** `TreatWarningsAsErrors` plus `EnableAotAnalyzer` means the call does not compile: adding one
+`LoadFromAssemblyPath` to `cli/cyc` fails an ordinary `dotnet build` with `error IL2026`.
 
 **Where the mistake came from.** `az` is the model for this CLI (§ `cyc`, first line), and an `az`
 extension *is* loaded in-process — `pip install` into `~/.azure/cliextensions`, then a Python `import`
 that merges commands into the host's command table. That works because `az`'s host is already an
 interpreter, so it gets dynamic loading for free. `AssemblyLoadContext` is that model transliterated
-into .NET, and the transliteration is what breaks: an AOT-compiled host does not get it for free, and
-cannot get it at all. `git`, `kubectl` and `gh` all use out-of-process executables instead — and
-`kubectl` *abandoned* a manifest-based in-process design for that convention.
+into .NET, and the transliteration is what breaks. `git`, `kubectl` and `gh` all use out-of-process
+executables instead — and `kubectl` *abandoned* a manifest-based in-process design for that convention.
 
-**Two resolutions, and this is a user decision:**
+⚠ **What the decision costs, in the plan's own terms.** An extension can add a new group and nothing
+else: it cannot add a flag to an existing generated verb, because the generated verb is compiled into
+a binary that will not load its code. No out-of-process model can do that. `cyc shell` is unaffected —
+it spawns a terminal either way, and is unbuilt for its own reasons
+([19](19-cloud-terminal-and-virtual-desktop.md)).
 
-| | Keeps | Costs |
-|---|---|---|
-| **(a) Out-of-process**, `git-*` / `kubectl-*` style: `cyc-<name>` executables discovered by naming convention, invoked as child processes | Single-file AOT, the whole § `cyc` publish model, and the `Azure.Core` decision that depends on it | Rewrites this section. Extensions cannot add flags to *existing* generated verbs, only new groups. `cyc shell` is unaffected — it spawns a terminal either way |
-| **(b) Revisit AOT** | This section verbatim | Reopens a decision taken deliberately on 2026-08-11 ([25](25-risks-and-open-questions.md) open question 5), whose stated justification *was* single-file AOT. Costs the no-runtime-prerequisite property |
+#### The trust boundary
 
-(a) is the cheaper half to give up and the one the precedents converged on, but it is still a change to
-a written plan and it is not the CLI's to make unilaterally.
+**Only what `cyc extension add` installed into `~/.cyc/extensions` runs. `PATH` is never searched.**
 
-⚠ **Two decisions downstream of this one, recorded so they are not made by accident if (a) is taken:**
+This is the one place `cyc` departs from the convention it otherwise copies, and the reason is the
+credential. `git` and `kubectl` run anything named `git-foo` / `kubectl-foo` that turns up anywhere on
+`PATH`. Under that rule the set of programs that can spend the user's cloud budget equals the set of
+programs in *any* writable directory on `PATH` — a set the user never chose, cannot enumerate and
+cannot revoke. `gh` is the precedent taken instead: an owned install directory, an explicit install
+step.
 
-1. **The trust boundary.** Any `PATH`-discovered `cyc-foo` runs with the user's credentials. The
-   precedents differ and none of them sandboxes: `kubectl`/`krew` verifies a sha256 from a manifest and
-   prints "not audited for security"; `gh` says extensions are "not verified, signed, or endorsed by
-   GitHub"; `az` verifies a digest for indexed installs, **no** digest for `--source`, and uniquely
-   lets an extension *replace a built-in* behind a runtime warning. `cyc`'s reserved-group list
-   (`CommandTree.ReservedGroups`) already refuses a *generated* group that shadows a host command; an
-   extension model needs the same rule and it does not have it yet.
-2. **Credentials.** ⚠ Do not pass a raw token in the child's environment — it lands in `ps` output and
-   in shell history via `env`. `gh`'s design is the one to copy: the token stays in the host's keychain
-   and the extension shells back out to `gh auth token`. `cyc` already has the pieces — the SDK owns
-   the credential and `cyc account` already exists.
+The precedents differ and **none of them sandboxes**: `kubectl`/`krew` verifies a sha256 from a
+manifest and prints "not audited for security"; `gh` says extensions are "not verified, signed, or
+endorsed by GitHub"; `az` verifies a digest for indexed installs, **no** digest for `--source`, and
+uniquely lets an extension *replace a built-in* behind a runtime warning.
 
-**The unimplemented half is load-bearing on documentation elsewhere.** `VerbTree/VerbTreeCatalog.cs`
-gives "`cyc extension add` loads a command group out of an `AssemblyLoadContext`" as the *third* of
-three reasons the verb tree is built at run time rather than compiled to C#. The other two reasons —
-the emitter/host split, and `--api-version` selecting between trees — are unaffected and still carry
-the decision, but that third reason is void and should not be cited again.
+What the choice costs, stated rather than glossed:
+
+| Cost | |
+|---|---|
+| **No zero-install extensions** | Dropping `cyc-foo` on `PATH` does nothing at all. Every extension is an explicit `cyc extension add`, and a distribution that wants one installed has to say so |
+| **Install is the trust decision, and there is no second one** | An installed extension is an ordinary child process running as the user. It can read the keychain by running `cyc account get-access-token`, exactly as the user can. `cyc extension add` says so once, where it is actionable, and names the specific thing being handed over |
+| **The recorded hash catches an accident, not an adversary** | The sha256 is re-verified on every invocation, which catches a binary replaced without the index being rewritten. It does **not** stop somebody who can write the directory, because they can rewrite `index.json` in the same breath |
+| **Permissions are checked on Unix and not on Windows** | A group- or world-writable `~/.cyc` or `~/.cyc/extensions` is refused — that is the `PATH` model wearing a different hat. `FileSystemInfo.UnixFileMode` says nothing about a Windows ACL, so on Windows the model rests on the profile directory's default ACL and this check does not run |
+| **The index is the authority, not the directory listing** | A `cyc-foo` copied into the install directory by hand is refused *and reported*, rather than run or silently ignored |
+
+#### Credentials across the process boundary
+
+⚠ **No token is put in the child's environment.** It would land in `/proc/<pid>/environ`, in every
+grandchild the extension spawns, in a crash dump, and in any CI step that prints its environment.
+`gh`'s design is the one copied: the token stays in the OS keychain and the extension asks for one.
+
+`cyc` passes **context** — `CYC_PROFILE`, `CYC_ENDPOINT`, `CYC_SUBSCRIPTION`, `CYC_TENANT`,
+`CYC_API_VERSION`, `CYC_OUTPUT`, `CYC_EXTENSION` — and `CYC_EXECUTABLE`, the **absolute path** of the
+running `cyc` rather than the word `cyc`, so the extension cannot be steered to a different binary
+through `PATH`. The extension re-authenticates by running `$CYC_EXECUTABLE account get-access-token
+--output json`.
+
+⚠ **That contract already existed.** `CyberCloudCliCredential` issues exactly that command and
+branches on exit code 3 (§ The .NET SDK; `cli/cyc.Tests/SdkContractTests.cs` holds both ends), so a
+.NET extension writes `new CyberCloudCliCredential()` and is done. The CLI grows no credential
+mechanism of its own — the SDK still owns HTTP and OAuth.
+
+⚠ **The rest of the environment is inherited, deliberately.** A `CYC_CLIENT_SECRET` that CI exported
+is visible to the child, and stripping it would be theatre: the extension already runs as the user,
+with the user's files and the user's keychain. The narrower rule that *is* kept: `cyc` never
+materializes fresh credential material into a place it was not already. Inheriting an exposure is not
+the same as creating one.
+
+#### Shadowing, and why it is not `ReservedGroups`
+
+An extension is looked for **only after `System.CommandLine` has already failed to match the verb**.
+`cyc login`, `cyc rest` and every generated group reach their own code first, so an extension named
+`login` is unreachable rather than dangerous — the property is structural, not a check that could be
+got wrong. `cyc extension add` refuses such a name anyway, and `cyc extension list` reports one that
+arrived some other way as `shadowed`.
+
+⚠ **The check deliberately does not live where `CommandTree.ReservedGroups` lives.** That one
+*throws*, while the root command is built, so a colliding group takes down `cyc --help` along with
+everything else (`ReservedGroupTests.RefusingATreeCostsTheWholeCli` pins that blast radius). That is
+the right cost for a generated tree, which is ours and whose collision is a build defect. It is the
+wrong cost entirely for a name that came out of a directory a user can write: **a file called
+`cyc-login` must not be able to disable the CLI.** So the generated tree fails loudly and an extension
+is refused quietly.
+
+The reservation is also no longer holding a name open for nothing: `extension` now has a command
+behind it.
+
+#### What is deliberately not built
+
+| | Why |
+|---|---|
+| **No registry, no `--source <url>`** | No document names an extension feed, and a downloader would put a general-purpose HTTP client into a CLI whose stated position is that `CyberCloud.Sdk` owns HTTP. `--source` is a local path; fetching is `curl`'s job. The refusal says so rather than failing with a file-not-found |
+| **Extensions are absent from `cyc --help` and from completion** | Listing them would mean an index read on every invocation, including the `cyc account get-access-token` the SDK runs for every uncached token. `cyc extension list` is the discovery surface, as `kubectl plugin list` is |
+| **An extension's exit code is passed through unchanged** | § Decisions' six codes are a contract for `cyc`'s own commands. There is no mapping from an arbitrary program's codes onto that table that does not throw information away, so an extension owns its codes the way a `git-` subcommand does. Everything that fails *before* the child starts still uses the table |
+
+**The unimplemented half was load-bearing on documentation elsewhere, and that is now cleared.**
+`VerbTree/VerbTreeCatalog.cs` gave "`cyc extension add` loads a command group out of an
+`AssemblyLoadContext`" as the *third* of three reasons the verb tree is built at run time rather than
+compiled to C#. The other two — the emitter/host split, and `--api-version` selecting between trees —
+were always sufficient, and out-of-process extensions add nothing to any tree, so that third reason
+stays void and should not be cited again.
 
 ## The .NET SDK
 

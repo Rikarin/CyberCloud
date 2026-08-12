@@ -90,6 +90,31 @@ sealed class CycHost {
     public TimeProvider Time { get; init; } = TimeProvider.System;
 
     /// <summary>
+    ///     Runs an installed extension as a child process.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>A seam for the same reason <see cref="CreateClient" /> is one.</b> The suite drives
+    ///     the whole dispatch path — the name resolution, the integrity check, the argument split and
+    ///     the environment — without starting a process, so it can assert what <i>would</i> have been
+    ///     launched and, in particular, that no access token is in it. One test replaces this with the
+    ///     real <see cref="Extensions.ExtensionLauncher.StartAsync" /> and runs a script end to end,
+    ///     because a seam nothing ever exercises for real is a seam that stops matching reality.
+    /// </remarks>
+    public Func<Extensions.ExtensionLaunch, CancellationToken, Task<int>> LaunchExtension { get; init; } =
+        Extensions.ExtensionLauncher.StartAsync;
+
+    /// <summary>
+    ///     This <c>cyc</c>'s own path, handed to an extension so it can ask <i>this</i> build for a
+    ///     token. <c>null</c> when the runtime cannot say.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <see cref="System.Environment.ProcessPath" /> rather than the word <c>cyc</c>: an
+    ///     extension that re-resolved the name through <c>PATH</c> would hand the token question to
+    ///     whichever binary happened to answer. See <see cref="Extensions.ExtensionLauncher" />.
+    /// </remarks>
+    public string? ExecutablePath { get; init; } = System.Environment.ProcessPath;
+
+    /// <summary>
     ///     Where <c>~/.cyc</c> is, so a test does not write into the developer's own.
     /// </summary>
     public string StateDirectory { get; init; } = CycConfigFile.DirectoryPath;

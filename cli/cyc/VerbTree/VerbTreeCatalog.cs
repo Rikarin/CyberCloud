@@ -22,10 +22,12 @@ namespace CyberCloud.Cli.VerbTree;
 ///         tree has to be constructible at run time whatever this file does". That mechanism cannot
 ///         exist in a single-file AOT <c>cyc</c> — measured, every managed load path throws
 ///         <c>PlatformNotSupportedException</c> under NativeAOT, and writing the call fails an
-///         ordinary build with <c>error IL2026</c>. Recorded as a defect in docs/plan/21 § Extensions.
-///         ⚠ The decision this file describes is unchanged: the two reasons above were always
-///         sufficient, and an out-of-process extension model — the resolution the precedents favour —
-///         would not need a compiled tree either. Do not cite the third reason again.
+///         ordinary build with <c>error IL2026</c>. docs/plan/21 § Extensions has since been decided
+///         the other way — extensions are separate executables, dispatched by
+///         <c>CyberCloud.Cli.Extensions.ExtensionDispatch</c> after this tree's parse has already
+///         failed — so they add nothing to any tree and could not have justified this design even if
+///         they had worked. ⚠ The decision this file describes is unchanged: the two reasons above
+///         were always sufficient. Do not cite the third reason again.
 ///     </para>
 ///     <para>
 ///         ⚠ <b>Embedded rather than read from <c>generated/cli/</c> beside the executable.</b>

@@ -48,6 +48,34 @@ of the CLI's surface"*; that is no longer true — the registry carries `shortNa
 it in the tree, and `CommandTree` adds it. There is no alias list in this directory and
 `GeneratedSurfaceTests` checks there is not.
 
+## Extensions run out of process, and only from `~/.cyc/extensions`
+
+`cyc extension add --source ./cyc-mytool` copies an executable into `~/.cyc/extensions`, records its
+sha256, and warns once. `cyc mytool …` then runs it as a child process. See
+[docs/plan/21](../docs/plan/21-cli-and-sdks.md) § Extensions for the decision and the AOT measurements
+behind it.
+
+⚠ **`PATH` is never searched, and that is the whole trust boundary.** `git` and `kubectl` run anything
+named `git-foo` / `kubectl-foo` that turns up on `PATH`. `cyc` holds a cloud credential, so under that
+rule any writable directory on `PATH` becomes arbitrary code execution against the user's
+subscriptions. `gh`'s model is taken instead: an owned install directory and an explicit install step,
+so the set of programs that can spend the user's budget is one the user chose and can list.
+
+It does **not** sandbox. An installed extension is an ordinary child process with the user's identity;
+`cyc extension add` says so at the moment the decision is made.
+
+⚠ **No token crosses the boundary.** The child gets context — `CYC_PROFILE`, `CYC_ENDPOINT`,
+`CYC_SUBSCRIPTION`, `CYC_TENANT`, `CYC_API_VERSION`, `CYC_OUTPUT`, `CYC_EXTENSION` — plus
+`CYC_EXECUTABLE`, the absolute path of the running `cyc`. It re-authenticates with
+`$CYC_EXECUTABLE account get-access-token --output json`, which is the contract
+`CyberCloudCliCredential` already speaks.
+
+⚠ **An extension cannot shadow a built-in, structurally.** Dispatch runs only after
+`System.CommandLine` has failed to match the verb, so `cyc login` reaches `LoginCommand` whatever is
+installed. Unlike `CommandTree.ReservedGroups` — which throws while the root command is built and
+takes `cyc --help` down with it — a colliding extension is refused quietly, because a file in a
+directory must not be able to disable the CLI.
+
 ## It owns no HTTP and no OAuth
 
 Every request `cyc` makes — including `cyc rest` — goes through `CyberCloudPipeline`, so it is
