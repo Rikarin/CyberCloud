@@ -10,7 +10,7 @@
       CloudNativePG projection, and its reconciler's behaviour against a connection it does not
       control.
 
-      ⚠ IT EMBEDS TWO FILES FROM charts/managed/postgres/, AND THAT IS THE POINT OF THE PROJECT.
+      ⚠ IT EMBEDS THREE FILES FROM charts/managed/postgres/, AND THAT IS THE POINT OF THE PROJECT.
       ADR-012's fifth surface — "the non-@internal block of a managed chart's values.yaml, rewritten
       in place and diffed" — is marked "Not built", and ADR-010 § Which end authors the schema says
       the overlap "becomes 26 rows wide the moment the Postgres provider lands". It has landed and the
@@ -35,6 +35,18 @@
                           LogicalName="postgres.values.schema.json"/>
         <EmbeddedResource Include="../../../../charts/managed/postgres/templates/_helpers.tpl"
                           LogicalName="postgres.helpers.tpl"/>
+        <!--
+          ⚠ The THIRD file, and the only one that is a rendered object rather than a schema or a
+          lookup table. templates/cluster.yaml and PostgresServers.ClusterJson are two spellings of
+          one CloudNativePG Cluster, and NOTHING in ./build.sh compares them: ChartSurfaces filters
+          `templates/` out of the chart tree on purpose and Build.Charts.cs line-filters the same
+          directory, so no emitter has ever read a Helm template. Embedding it is how
+          ChartRegistryPairTests can assert that the two agree about where
+          `shared_preload_libraries` sits — the one placement CloudNativePG's validating webhook
+          refuses, and a fix applied to one spelling and not the other would reintroduce.
+        -->
+        <EmbeddedResource Include="../../../../charts/managed/postgres/templates/cluster.yaml"
+                          LogicalName="postgres.cluster.yaml"/>
     </ItemGroup>
 
     <ItemGroup>

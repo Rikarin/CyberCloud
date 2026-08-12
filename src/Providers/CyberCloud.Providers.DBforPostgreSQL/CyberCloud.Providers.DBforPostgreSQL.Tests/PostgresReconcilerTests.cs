@@ -294,8 +294,96 @@ public sealed class PostgresReconcilerTests {
 
         spec["resources"]!["requests"]!["cpu"]!.GetValue<string>().ShouldBe("2");
         spec["resources"]!["limits"]!["memory"]!.GetValue<string>().ShouldBe("8Gi");
-        spec["postgresql"]!["parameters"]!["shared_preload_libraries"]!.GetValue<string>().ShouldBe("pgvector");
         spec["bootstrap"]!["initdb"]!["postInitApplicationSQL"]!.AsArray().Count.ShouldBe(1);
+
+        // ⚠ Beside `parameters`, as a list. See ThePreloadLibrariesAreASiblingOfParametersInBothSpellings
+        // for why the other placement is a 422 rather than a style difference.
+        spec["postgresql"]!["shared_preload_libraries"]!.AsArray()
+            .Select(x => x!.GetValue<string>())
+            .ShouldBe(["pgvector"]);
+    }
+
+    [Fact]
+    public void ThePreloadLibrariesAreASiblingOfParametersInBothSpellings() {
+        // ⚠ THE DEFAULT IS `[]`, WHICH IS WHY THIS WENT UNNOTICED FOR MONTHS. Every test and every
+        // manual run that used the default body rendered no `shared_preload_libraries` at all, so the
+        // one placement that is refused was the one nothing exercised. This body names two extensions
+        // on purpose.
+        //
+        // CloudNativePG declares the key as `AdditionalLibraries []string` on PostgresConfiguration —
+        // a SIBLING of `parameters` (api/v1/cluster_types.go) — lists it in
+        // FixedConfigurationParameters (pkg/postgres/configuration.go), and its validating webhook
+        // answers any fixed key found under spec.postgresql.parameters with "Can't set fixed
+        // configuration parameter" (internal/webhook/v1/cluster_webhook.go). The webhook builds its
+        // ConfigurationInfo without IncludingSharedPreloadLibraries, so the sanitized value it would
+        // compare against stays at the default settings' empty string and no non-empty list can equal
+        // it. Every server created with pgvector, postgis, pg_stat_statements or timescaledb was
+        // rejected at admission after the caller had been told 202.
+        //
+        // ⚠ NOTHING IN ./build.sh COMPARES THIS PAIR. ChartSurfaces filters `templates/` out of the
+        // chart tree on purpose — build/Build.Charts.cs line-filters the same directory — so no
+        // emitter has ever read a Helm template and the two spellings are held together by this test
+        // and nothing else. Fixing one and not the other is exactly the drift ADR-012 exists to
+        // prevent, so both halves are asserted here rather than in two places.
+        var body = JsonNode.Parse(PostgresServers.Body(ClusterId))!.AsObject();
+        body["properties"]!.AsObject()["extensions"] = new JsonArray("pgvector", "timescaledb");
+
+        using var desired = JsonDocument.Parse(body.ToJsonString());
+
+        var postgresql = JsonNode.Parse(PostgresServers.ClusterJson("orders", desired.RootElement))!
+            ["spec"]!["postgresql"]!.AsObject();
+
+        postgresql["shared_preload_libraries"]!.AsArray()
+            .Select(x => x!.GetValue<string>())
+            .ShouldBe(["pgvector", "timescaledb"]);
+
+        postgresql["parameters"]!.AsObject().ContainsKey("shared_preload_libraries").ShouldBeFalse(
+            "shared_preload_libraries was written under spec.postgresql.parameters, where "
+            + "CloudNativePG's validating webhook refuses it as a fixed configuration parameter. The "
+            + "Cluster is rejected at admission and the caller has already been told 202."
+        );
+
+        // ⚠ The one key that IS a parameter stays one. Checked so that a fix which moved the whole
+        // block out of `parameters` would fail here rather than silently drop max_connections.
+        postgresql["parameters"]!["max_connections"]!.GetValue<string>().ShouldBe("200");
+    }
+
+    [Fact]
+    public void NoOtherFixedConfigurationParameterIsWrittenUnderParameters() {
+        // ⚠ FixedConfigurationParameters IS A LIST, NOT ONE ENTRY. Having found one key in the wrong
+        // block, the question is whether the renderer writes any OTHER key the webhook refuses. It
+        // writes exactly one parameter today and that one is free, but the check is cheap and the
+        // failure it catches — a second key added later that is fixed or blocked upstream — has the
+        // same signature: a 202 followed by an admission rejection nothing local reproduces.
+        //
+        // The list is pkg/postgres/configuration.go's FixedConfigurationParameters, read on
+        // 2026-08-12. Only the entries a PostgreSQL provider might plausibly reach for are named
+        // here; a full transcription would be a second copy of upstream's map that nothing updates.
+        string[] refused = [
+            "shared_preload_libraries", "archive_mode", "archive_command", "cluster_name", "port",
+            "listen_addresses", "hot_standby", "restore_command", "temp_tablespaces", "ssl",
+            "ssl_cert_file", "ssl_key_file", "synchronous_standby_names", "logging_collector",
+            "log_destination", "log_directory", "log_filename", "data_directory", "hba_file",
+            "primary_conninfo", "primary_slot_name", "restart_after_crash"
+        ];
+
+        var body = JsonNode.Parse(PostgresServers.Body(ClusterId))!.AsObject();
+        body["properties"]!.AsObject()["extensions"] = new JsonArray("pgvector");
+        body["properties"]!.AsObject()["synchronousReplication"] = true;
+
+        using var desired = JsonDocument.Parse(body.ToJsonString());
+
+        var parameters = JsonNode.Parse(PostgresServers.ClusterJson("orders", desired.RootElement))!
+            ["spec"]!["postgresql"]!["parameters"]!.AsObject();
+
+        parameters.ShouldNotBeEmpty("the renderer wrote no `parameters` block, so this checks nothing");
+
+        foreach (var key in refused) {
+            parameters.ContainsKey(key).ShouldBeFalse(
+                $"'{key}' is in CloudNativePG's FixedConfigurationParameters and reached "
+                + "spec.postgresql.parameters, where its validating webhook refuses it."
+            );
+        }
     }
 
     [Fact]
