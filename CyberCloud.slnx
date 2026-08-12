@@ -213,12 +213,15 @@
         <Project Path="src/Providers/CyberCloud.Providers.Cache/CyberCloud.Providers.Cache.Cluster.Conformance/CyberCloud.Providers.Cache.Cluster.Conformance.csproj"/>
 
         <!--
-          The fourth provider family — CyberCloud.Messaging/kafkaClusters on Strimzi and
-          CyberCloud.Messaging/natsClusters, docs/plan/12 § The catalogue.
+          The fourth provider family — CyberCloud.Messaging/kafkaClusters on Strimzi,
+          CyberCloud.Messaging/natsClusters, and CyberCloud.Messaging/rabbitmqClusters on the RabbitMQ
+          Cluster Operator, docs/plan/12 § The catalogue.
 
-          ⚠ IT IS THE FIRST NAMESPACE WITH TWO RESOURCE TYPES IN IT, and the second type cost two case
-          objects and four class declarations and no new project — which is what established that
-          docs/plan/03's five-project shape is per NAMESPACE rather than per TYPE.
+          ⚠ IT IS THE ONLY NAMESPACE WITH MORE THAN ONE RESOURCE TYPE IN IT, and the second type cost
+          two case objects and four class declarations and no new project — which is what established
+          that docs/plan/03's five-project shape is per NAMESPACE rather than per TYPE. ⚠ THE THIRD
+          COST THE SAME AGAIN AND ADDED NO ROW BELOW, which is what makes that cost flat rather than
+          merely small once: this comment is the only line in this file the third type changed.
         -->
         <Project Path="src/Providers/CyberCloud.Providers.Messaging/CyberCloud.Providers.Messaging.Contracts/CyberCloud.Providers.Messaging.Contracts.csproj"/>
         <Project Path="src/Providers/CyberCloud.Providers.Messaging/CyberCloud.Providers.Messaging/CyberCloud.Providers.Messaging.csproj"/>

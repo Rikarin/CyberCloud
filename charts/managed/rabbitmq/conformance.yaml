@@ -1,0 +1,245 @@
+# Conformance manifest — docs/plan/12 § The pattern, once, piece 8.
+#
+# What the conformance suite asserts about CyberCloud.Messaging/rabbitmqClusters. This file is data:
+# `Build.Charts` checks that it is present, non-empty, and names the same resource type as
+# Chart.yaml. The suite that reads the rest of it lives in test/ and does not exist yet, and the
+# target says so in its own log rather than implying otherwise.
+
+resourceType: CyberCloud.Messaging/rabbitmqClusters
+apiVersion: "2026-08-01"
+chart: rabbitmq
+
+# Objects the reconciler must have applied once the resource reports Succeeded.
+#
+# ⚠ ONE, WHERE THE OTHER TWO TYPES IN THIS NAMESPACE RENDER TWO AND FIVE — and the spread is the
+# measurement rather than the number. charts/managed/nats renders five because nats-operator was
+# archived on 2025-04-10 and the workload is hand-written; charts/managed/kafka renders two because
+# KRaft node pools split topology out of the Kafka. This row renders one because the RabbitMQ Cluster
+# Operator is alive, official and owns everything else. docs/plan/12 costs the NATS row and this one
+# at 0.8 EM each.
+renders:
+  - group: rabbitmq.com
+    version: v1beta1
+    kind: RabbitmqCluster
+    count: 1
+
+# ⚠ THERE IS NO `requiredCrds:` BLOCK HERE, AND ITS ABSENCE IS CORRECT.
+# `ProviderConformanceCase` has no `RequiredCrds` member and never had one — the harness DERIVES the
+# definitions from the case's own `Objects`, which already carries group, version, kind and plural.
+# That decision is recorded at ProviderConformanceCase.cs's long comment.
+#
+# ⚠ WHAT THE DERIVED STUB CANNOT CARRY MATTERS MORE ON THIS ROW THAN ON THE OTHER TWO, and it is in
+# § owed below as `defaults-are-untested-against-the-real-crd`. A definition derived from group,
+# version, kind and plural has no schema, no `default:` values and no admission webhook. The real
+# rabbitmq.com_rabbitmqclusters.yaml has all three.
+
+# ADR-013 — every rendered object carries all seven labels. Asserted against real rendered output,
+# which is what the Labels architecture gate in docs/plan/23 § The architecture gates requires.
+labels:
+  required:
+    - cybercloud.io/tenant-id
+    - cybercloud.io/subscription-id
+    - cybercloud.io/resource-group
+    - cybercloud.io/resource-id
+    - cybercloud.io/resource-type
+    - cybercloud.io/api-version
+    - cybercloud.io/managed-by
+  # ⚠ Not the resource type verbatim. A `/` is not a legal label value character, so the value is
+  # lower-cased with `/` replaced by `_` — KubeLabels.ResourceTypeValue.
+  values:
+    cybercloud.io/resource-type: cybercloud.messaging_rabbitmqclusters
+    cybercloud.io/managed-by: cybercloud
+  # ⚠ NO `additional:` BLOCK, AND THE CONTRAST WITH BOTH SIBLINGS IS THE POINT. The Kafka manifest
+  # carries `strimzi.io/cluster`, which BINDS one object to another and which the operator silently
+  # ignores a pool without. The NATS manifest carries four app.kubernetes.io/* keys, which bind
+  # Services and a PodMonitor to PODS through an immutable StatefulSet selector. This row needs
+  # neither: it applies one object that references nothing, and every pod label a Service or a
+  # monitor would select on is written by the operator onto pods this provider never names.
+
+# Behaviour a tenant is entitled to. Each is a statement the suite can fail on, not a feature list.
+assertions:
+  - id: publish-and-consume
+    says: A client resolves the URL from listKeys, publishes to a queue and receives what it published.
+  - id: the-default-queue-type-is-quorum
+    says: >
+      A queue declared with no x-queue-type argument on a cluster created with default settings comes
+      back from the management API as type `quorum`. ⚠ THIS IS THE ONE ASSERTION THE ROW EXISTS FOR
+      AND IT IS THE ONE MOST LIKELY TO PASS FOR THE WRONG REASON. `default_queue_type` reaches the
+      broker as a line inside a free-text string, and neither the CRD nor the API server validates
+      the KEY — a misspelling is logged by the broker and the cluster starts. So an assertion that
+      merely read spec.rabbitmq.additionalConfig back would prove the string was stored, not that the
+      broker read it. It has to declare a queue.
+  - id: quorum-queue-survives-one-node
+    says: >
+      Deleting one node pod of a three-node cluster leaves a quorum queue writable throughout, and
+      every acknowledged message is still readable afterwards. On 4.x this is the only replication
+      RabbitMQ offers — classic mirroring was removed in 4.0 — so this assertion and the one above it
+      are the same fact seen from two sides.
+  - id: guest-does-not-exist
+    says: >
+      The cluster has no user named `guest`, and the one user it does have is not one the platform
+      chose. The operator generates `default_user_<random>` and a 24-byte password into the Secret
+      `<name>-default-user` and seeds the broker from it on first boot. ⚠ Asserted rather than
+      assumed, because "RabbitMQ ships with guest/guest" is true of RabbitMQ and false of a cluster
+      this operator creates, and the difference is what makes this row's listKeys gap survivable —
+      see § owed.
+  - id: management-is-never-public
+    says: >
+      Port 15672 appears on no Service with an external address, for any body this type accepts.
+      Because this type declares no external listener at all the assertion is currently vacuous, and
+      it is written down anyway: it is the assertion that would go red the moment somebody closes
+      `external-exposure-moves-three-ports` by the wrong route.
+  - id: storage-grows-never-shrinks
+    says: >
+      Increasing storage.size resizes online; decreasing it is refused. ⚠ Refused by the OPERATOR
+      rather than by the API server — internal/scaling/scaling.go, "shrinking persistent volumes is
+      not supported" — so the write succeeds and the refusal is a status condition. And growing it
+      orphan-deletes the StatefulSet before resizing the PVCs, so the assertion has to tolerate the
+      pods going away and coming back.
+  - id: secrets-never-round-trip
+    says: A GET of the resource never returns broker credentials in any form. The only path out is the listKeys action.
+
+# Meters the type must emit — docs/plan/12 § The pattern, once, piece 3.
+meters:
+  - rabbitmq.node.hours
+  - rabbitmq.storage.gib.hours
+  - rabbitmq.egress.gib
+
+# ── owed ──────────────────────────────────────────────────────────────────────────────────────
+#
+# Named here rather than left to be discovered, because an absent capability that nobody wrote down
+# is indistinguishable from one nobody thought of.
+owed:
+  - id: external-exposure-moves-three-ports
+    says: >
+      THIS TYPE DECLARES NO EXTERNAL LISTENER, AND IT IS THE ONLY ROW IN docs/plan/12 THAT DECLINES
+      THE CROSS-CUTTING DECISION IN WRITING. That section gives every service "optional external
+      exposure via a Kube-OVN floating IP plus a firewall allow-list". The RabbitMQ row four pages
+      earlier says the management UI is "exposed through the portal's authenticated proxy rather than
+      a public route". Those two sentences are in conflict for THIS operator and for no other,
+      because its client Service carries AMQP 5672, management 15672 and Prometheus 15692 together
+      and `spec.service.type` is one enum over the whole Service — there is no per-port switch, and
+      `loadBalancerSourceRanges` is not on spec.service at all. So `external.enabled: true` would put
+      a RabbitMQ management UI and a metrics endpoint on a public IP as a SIDE EFFECT of a tenant
+      asking for AMQP, which is docs/plan/12's own "most common cloud breach" sentence about a
+      different port from the one they chose. A CIDR allow-list narrows who reaches it and does not
+      change what is there. Two routes out, neither a provider's to take alone: (1) render a
+      platform-owned LoadBalancer Service carrying only 5672 and selecting the operator's pods —
+      which hard-codes upstream's labels, the same hazard piece 6 warns about for scrape objects, and
+      it is worth noting the failure mode here is LOUD (a load balancer with no endpoints) rather
+      than silent; (2) `spec.override.service.spec.ports` with `$patch: delete` entries, which is
+      legal strategic-merge and which nothing has verified survives the CRD's structural schema.
+      ⚠ The general finding is bigger than this row: docs/plan/12 § Cross-cutting decisions assumes
+      every service's external listener is ONE PORT ON ONE SERVICE, and this is the first row where
+      it is not.
+  - id: listkeys-has-no-handler
+    says: >
+      docs/plan/12 § The pattern, once, piece 5 — credential provisioning into the tenant's Vault —
+      needs an OpenBao integration that does not exist, so listKeys has a declared response shape and
+      nothing that serves it. ISecretResolver has only a refusing implementation and CyberCloud.Vault
+      does not exist. ⚠ WHAT THIS ROW SPECIFICALLY LOSES IS SMALLER THAN WHAT THE NATS ROW LOSES, AND
+      THE DIFFERENCE IS THE OPERATOR. charts/managed/nats/conformance.yaml records that nats-server
+      with no authorization block accepts every connection in the namespace, so that service comes up
+      OPEN and the gap is a security hole. This one comes up AUTHENTICATED: the operator generates a
+      random user and a 24-byte password into <name>-default-user before the cluster boots, RabbitMQ's
+      guest/guest account is never created, and ANONYMOUS SASL is disabled by the operator's own
+      auth_mechanisms block. So what is lost is USABILITY — every field ListKeysResponse declares
+      already exists in a Secret in the namespace and the platform cannot read it out — rather than
+      safety. Closing it is a Secret read plus ISecretResolver, not a provisioning flow, which makes
+      it the cheapest listKeys in the catalogue to finish.
+  - id: scale-down-is-accepted-and-ignored
+    says: >
+      LOWERING `nodes` SUCCEEDS AT THE API SERVER, IS REFUSED BY THE OPERATOR, AND READS BACK AS
+      CONVERGED. internal/controller/reconcile_scale_down.go logs, emits an UnsupportedOperation
+      Warning event and sets status.conditions[ReconcileSuccess] to False — but the write itself is
+      accepted, so spec.replicas holds the new value while the StatefulSet keeps the old one and
+      RabbitmqClusters.Matches, which compares spec, reports the resource as desired. ⚠ THIS IS THE
+      ONE PLACE ON THIS ROW WHERE "the custom resource reads back as desired" IS A WEAKER STATEMENT
+      THAN IT IS ON THE OTHER TWO TYPES IN THIS NAMESPACE. The honest check is the status condition,
+      and it cannot be made here: no harness in this repository runs the RabbitMQ cluster operator, so
+      nothing ever sets it and a gate written against it would hang every test. Related and separate:
+      scaling to zero is supported and remembers the previous count, and scaling back up to any other
+      number is refused the same way.
+  - id: defaults-are-untested-against-the-real-crd
+    says: >
+      RabbitmqClusters.Matches is containment BECAUSE the CRD declares defaults and a mutating webhook
+      writes spec.image — spec.replicas 1, spec.persistence {storage: 10Gi}, spec.service
+      {type: ClusterIP}, spec.resources, spec.terminationGracePeriodSeconds 604800,
+      spec.delayStartSeconds 30, two of them OBJECT-level. None of that is exercised by any suite
+      here. ClusterConformanceHarness derives a definition from group/version/kind/plural, which has
+      no schema and therefore no defaulting, so the cluster-backed suite proves the object is
+      accepted, labelled and readable back and cannot prove the comparison survives the very
+      behaviour it was written for. Closing it means installing the real CRD YAML rather than a
+      derived stub, which is a change to the harness.
+  - id: child-types
+    says: >
+      A `rabbitmqClusters/vhosts` child — and `users`, `queues`, `policies`, `permissions` behind it —
+      is not declared, and unlike the Kafka and NATS rows the CRDs genuinely exist: the operator's
+      companion, rabbitmq/messaging-topology-operator, ships Vhost, User, Queue, Exchange, Binding,
+      Policy, Permission and SchemaReplication under rabbitmq.com/v1beta1, each mapping to a resource
+      type close to one to one. The blockers are the three charts/managed/nats/conformance.yaml lists
+      — ProviderConformanceCase is single-type so a depth-2 address throws before any test runs,
+      CliEmitter.Address emits a hard-coded four-flag list, and SdkEmitter.AppendCollection emits no
+      ancestor parameters — and none is a provider's to fix.
+      ⚠ THE ABSENCE COSTS THIS ROW SOMETHING SPECIFIC THAT IT COSTS NEITHER SIBLING.
+      `default_queue_type` in rabbitmq.conf is a NODE-WIDE FALLBACK and a per-vhost default queue
+      type OVERRIDES it. With no vhost type, this row guarantees the DEFAULT vhost's queues are
+      quorum and cannot guarantee it for a vhost a tenant creates by hand through the management UI.
+      The product page has to say that, for the same reason docs/plan/12 makes FerretDB's row carry a
+      supported-subset table.
+  - id: scrape-object
+    says: >
+      rabbitmq_prometheus is in the operator's requiredPlugins and serves /metrics on 15692 on every
+      cluster, and NOTHING SCRAPES IT. docs/plan/12 § The pattern, once, piece 6 as corrected reads
+      "ask the operator for the scrape object wherever the operator accepts the request, and
+      hand-write one into the chart only when there is no operator to ask" — and this operator emits
+      neither a PodMonitor nor a ServiceMonitor and offers no field that asks it to. So this row is
+      back in Strimzi's position rather than NATS': the labels a hand-written selector would match
+      are the OPERATOR'S, which upstream can move in a minor release, and the failure mode is a
+      scrape that goes quiet without going red. charts/managed/nats DISCHARGED the second branch
+      safely only because it owns the pod labels it selects — which is now confirmed to be the
+      condition rather than the exception, on the third service to meet the branch. Upstream ships
+      examples under observability/prometheus/monitors/ and Grafana dashboards beside them; adopting
+      one is a decision about pinning somebody else's label set, not a copy.
+      ⚠ THIS IS ALSO WHY THIS TYPE DECLARES NO `monitoring.enabled`. A switch whose false branch the
+      platform cannot honour is worse than no switch: the plugin cannot be disabled through the CRD.
+  - id: tls
+    says: >
+      spec.tls.secretName names a Secret holding a certificate and nothing in this platform writes
+      one, so no TLS block is rendered and the AMQP listener is plaintext on the pod network. This is
+      the spotahome trade made the OTHER way from ValkeyCaches: there, omitting the auth block would
+      have produced an unauthenticated cache, so the reference was rendered and the resource visibly
+      does not finish. Here the credential exists without us and the missing piece is transport
+      encryption inside a namespace, so rendering a reference to an absent Secret would trade a
+      working cluster for a stalled one and buy nothing. It becomes urgent the day
+      `external-exposure-moves-three-ports` is closed.
+  - id: odd-node-count-is-unenforced
+    says: >
+      A quorum queue is a Raft group, so `nodes` wants to be odd and at least three, and
+      /properties/nodes can only say 1..7. SchemaProperty.AllowedValues is Text-only by construction
+      and Minimum/Maximum cannot say "odd", so the constraint is in the property's description and in
+      nothing that enforces it. THIRD SIGHTING — charts/managed/kafka carries it for a KRaft quorum
+      and charts/managed/nats for a JetStream one. Three consensus protocols asking the same
+      unexpressible thing is what makes it a registry gap rather than a quirk of any one of them.
+      Neither the operator nor RabbitMQ corrects an even count: grepping the operator source for an
+      even/odd check finds none, and it will run spec.replicas: 2 without comment.
+  - id: config-keys-are-unvalidated
+    says: >
+      Everything values.yaml exposes under `queues` and `limits` reaches the broker through
+      spec.rabbitmq.additionalConfig, a free-text INI string whose only CRD constraint is
+      maxLength: 100000. The VALUES are constrained by the registry's @enum and @range; the KEYS are
+      constrained by nothing, so a future property spelled `default_queue_typ` would be stored,
+      applied, read back and silently ignored by the broker. The only thing that would catch it is
+      the `the-default-queue-type-is-quorum` assertion above, which needs a running broker. This is
+      the price of a setting the operator gives no field for, and it is a different shape of gap from
+      an unenforced pattern: there the value is wrong, here the setting does not exist.
+  - id: backup
+    says: >
+      Piece 7, declined with a reason — the shape docs/plan/12 § piece 7 settles on. A quorum queue's
+      messages are the data and they live in the Raft logs on the volumes; what RabbitMQ offers is
+      `rabbitmqctl export_definitions`, which captures vhosts, users, queues, exchanges, bindings and
+      policies and NOT the messages. So the mechanism that exists backs up the TOPOLOGY, and the
+      topology is exactly what this row does not manage yet (see `child-types`). Backing up
+      definitions the platform cannot restore into typed resources would be a tarball nobody could
+      use. It is a real gap and it is a third distinct one after charts/managed/nats' (no operator to
+      ask) and charts/managed/valkey's (nothing worth backing up).

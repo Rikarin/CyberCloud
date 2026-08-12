@@ -1,0 +1,277 @@
+{
+  "$id": "https://schema.cybercloud.io/charts/rabbitmq/values.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "The configuration surface of the rabbitmq chart. GENERATED from values.yaml by `./build.sh Charts` and diffed in CI — docs/plan/03 § charts/. Edit values.yaml, never this file. Members carrying `x-cybercloud-api: false` are chart or platform plumbing and are not part of the resource body.",
+  "properties": {
+    "imageName": {
+      "default": "",
+      "description": "Override the broker image. Empty means rabbitmq:{version}-management, which is what keeps minor upgrades automatic.",
+      "type": "string",
+      "x-cybercloud-api": false,
+      "x-cybercloud-internal-reason": "A pinned image defeats automatic minor upgrades, so it is a platform escape hatch rather than a tenant setting. ⚠ It is NOT the same thing as leaving spec.image unset — the operator's MUTATING WEBHOOK fills spec.image from its own build-time default when the field is absent, so \"no image\" is the operator's RabbitMQ rather than the tenant's version. Both this row and RabbitmqClusters.Image exist so that /properties/version means what it says.",
+      "x-cybercloud-order": 8,
+      "x-cybercloud-pointer": "/properties/imageName"
+    },
+    "limits": {
+      "additionalProperties": false,
+      "description": "Broker limits a client can run into.",
+      "properties": {
+        "maxMessageSize": {
+          "default": 134217728,
+          "description": "Largest message a client may publish, in bytes. Raising it costs memory on every node that holds a copy, which for a quorum queue is all of them.",
+          "maximum": 536870912,
+          "minimum": 65536,
+          "type": "integer",
+          "x-cybercloud-order": 0,
+          "x-cybercloud-pointer": "/properties/limits/maxMessageSize"
+        }
+      },
+      "type": "object",
+      "x-cybercloud-order": 5,
+      "x-cybercloud-pointer": "/properties/limits"
+    },
+    "nameOverride": {
+      "default": "",
+      "description": "Replace the generated object-name stem. Empty means derive it from the release name.",
+      "type": "string",
+      "x-cybercloud-api": false,
+      "x-cybercloud-internal-reason": "Helm plumbing. Nothing about it belongs in a resource body.",
+      "x-cybercloud-order": 9,
+      "x-cybercloud-pointer": "/properties/nameOverride"
+    },
+    "nodes": {
+      "default": 3,
+      "description": "Number of RabbitMQ nodes. Use an odd number of at least three: a quorum queue is a Raft group, so a group of two tolerates no failures and an even count buys nothing over the odd count below it. One is offered for development only and replicates nothing.",
+      "maximum": 7,
+      "minimum": 1,
+      "type": "integer",
+      "x-cybercloud-order": 1,
+      "x-cybercloud-pointer": "/properties/nodes"
+    },
+    "platform": {
+      "additionalProperties": false,
+      "description": "Resource identity injected by the reconciler. Not a tenant-facing setting.",
+      "properties": {
+        "apiVersion": {
+          "default": "2026-08-01",
+          "description": "The api-version the resource was last written at, rendered into the cybercloud.io/api-version label.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 5,
+          "x-cybercloud-pointer": "/properties/platform/apiVersion"
+        },
+        "managedBy": {
+          "default": "cybercloud",
+          "description": "Value of the cybercloud.io/managed-by label. Constant, and the selector every informer filters on.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 6,
+          "x-cybercloud-pointer": "/properties/platform/managedBy"
+        },
+        "resourceGroup": {
+          "default": "",
+          "description": "Resource group name, rendered into the cybercloud.io/resource-group label.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 2,
+          "x-cybercloud-pointer": "/properties/platform/resourceGroup"
+        },
+        "resourceId": {
+          "default": "",
+          "description": "Resource GUID, rendered into the cybercloud.io/resource-id label.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 3,
+          "x-cybercloud-pointer": "/properties/platform/resourceId"
+        },
+        "resourceType": {
+          "default": "CyberCloud.Messaging/rabbitmqClusters",
+          "description": "Fully qualified resource type, rendered into the cybercloud.io/resource-type label.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 4,
+          "x-cybercloud-pointer": "/properties/platform/resourceType"
+        },
+        "subscriptionId": {
+          "default": "",
+          "description": "Subscription GUID, rendered into the cybercloud.io/subscription-id label.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 1,
+          "x-cybercloud-pointer": "/properties/platform/subscriptionId"
+        },
+        "tenantId": {
+          "default": "",
+          "description": "Tenant GUID, rendered into the cybercloud.io/tenant-id label.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 0,
+          "x-cybercloud-pointer": "/properties/platform/tenantId"
+        }
+      },
+      "type": "object",
+      "x-cybercloud-api": false,
+      "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+      "x-cybercloud-order": 7,
+      "x-cybercloud-pointer": "/properties/platform"
+    },
+    "plugins": {
+      "additionalProperties": false,
+      "description": "Protocols and features beyond AMQP.",
+      "properties": {
+        "additional": {
+          "default": [],
+          "description": "Plugins to enable on top of the three the operator always enables — peer discovery, the management UI and the Prometheus endpoint. Each recognised plugin adds its own port to the cluster's in-cluster Service.",
+          "examples": [
+            [
+              "rabbitmq_stream"
+            ]
+          ],
+          "items": {
+            "enum": [
+              "rabbitmq_federation",
+              "rabbitmq_mqtt",
+              "rabbitmq_shovel",
+              "rabbitmq_stomp",
+              "rabbitmq_stream",
+              "rabbitmq_web_mqtt",
+              "rabbitmq_web_stomp"
+            ],
+            "type": "string"
+          },
+          "type": "array",
+          "x-cybercloud-order": 0,
+          "x-cybercloud-pointer": "/properties/plugins/additional"
+        }
+      },
+      "type": "object",
+      "x-cybercloud-order": 6,
+      "x-cybercloud-pointer": "/properties/plugins"
+    },
+    "queues": {
+      "additionalProperties": false,
+      "description": "How queues behave when a client does not say.",
+      "properties": {
+        "defaultType": {
+          "default": "quorum",
+          "description": "The queue type a client gets when it declares a queue without asking for one. Quorum by default — docs/plan/12: a quorum queue is replicated through Raft across the nodes above, and on 4.x a classic queue is not replicated at all, so leaving this unset would put a single-node queue on a cluster the tenant paid three nodes for. This is a node-wide fallback: a vhost created with its own default queue type overrides it.",
+          "enum": [
+            "classic",
+            "quorum",
+            "stream"
+          ],
+          "type": "string",
+          "x-cybercloud-order": 0,
+          "x-cybercloud-pointer": "/properties/queues/defaultType"
+        }
+      },
+      "type": "object",
+      "x-cybercloud-order": 4,
+      "x-cybercloud-pointer": "/properties/queues"
+    },
+    "sizing": {
+      "additionalProperties": false,
+      "description": "CPU and memory per node, either by preset or explicitly.",
+      "properties": {
+        "cpu": {
+          "default": "",
+          "description": "Explicit vCPU quantity in Kubernetes form, for example 500m or 2. Empty means take it from the preset.",
+          "pattern": "^(?:(\\d+(\\.\\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)?)$",
+          "type": "string",
+          "x-cybercloud-order": 1,
+          "x-cybercloud-pointer": "/properties/sizing/cpu"
+        },
+        "memory": {
+          "default": "",
+          "description": "Explicit memory quantity in Kubernetes form, for example 4Gi. Empty means take it from the preset.",
+          "pattern": "^(?:(\\d+(\\.\\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)?)$",
+          "type": "string",
+          "x-cybercloud-order": 2,
+          "x-cybercloud-pointer": "/properties/sizing/memory"
+        },
+        "preset": {
+          "default": "c1.small",
+          "description": "A sizing preset from docs/plan/12. Brokers use the c1 family, which is 1 vCPU to 2 GiB and guaranteed rather than burstable.",
+          "enum": [
+            "c1.2xlarge",
+            "c1.4xlarge",
+            "c1.large",
+            "c1.medium",
+            "c1.micro",
+            "c1.nano",
+            "c1.small",
+            "c1.xlarge"
+          ],
+          "type": "string",
+          "x-cybercloud-order": 0,
+          "x-cybercloud-pointer": "/properties/sizing/preset",
+          "x-cybercloud-widget": "cozy-preset"
+        }
+      },
+      "type": "object",
+      "x-cybercloud-order": 2,
+      "x-cybercloud-pointer": "/properties/sizing"
+    },
+    "storage": {
+      "additionalProperties": false,
+      "description": "The message store, per node.",
+      "properties": {
+        "class": {
+          "default": "",
+          "description": "StorageClass name. Empty means the cluster default.",
+          "type": "string",
+          "x-cybercloud-immutable": true,
+          "x-cybercloud-order": 1,
+          "x-cybercloud-pointer": "/properties/storage/class",
+          "x-cybercloud-widget": "storageclass"
+        },
+        "size": {
+          "default": "20Gi",
+          "description": "Message-store volume size per node, in Kubernetes quantity form. Grows online; never shrinks. A quorum queue keeps its whole Raft log on every member, so this is the same figure on every node rather than a share of one.",
+          "examples": [
+            "20Gi"
+          ],
+          "pattern": "^(?:\\d+(\\.\\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)$",
+          "type": "string",
+          "x-cybercloud-order": 0,
+          "x-cybercloud-pointer": "/properties/storage/size"
+        }
+      },
+      "required": [
+        "size"
+      ],
+      "type": "object",
+      "x-cybercloud-order": 3,
+      "x-cybercloud-pointer": "/properties/storage"
+    },
+    "version": {
+      "default": "4.1",
+      "description": "RabbitMQ version. Minor upgrades are applied automatically in the maintenance window; a major upgrade is an explicit update to this field. Only 4.x is offered: classic queue mirroring was removed in 4.0, so on every version here the replicated queue type is the quorum queue.",
+      "enum": [
+        "4.0",
+        "4.1"
+      ],
+      "type": "string",
+      "x-cybercloud-order": 0,
+      "x-cybercloud-pointer": "/properties/version"
+    }
+  },
+  "required": [
+    "nodes",
+    "version"
+  ],
+  "title": "rabbitmq chart values",
+  "type": "object",
+  "x-cybercloud-api-version": "2026-08-01",
+  "x-cybercloud-chart": "rabbitmq",
+  "x-cybercloud-chart-version": "0.1.0",
+  "x-cybercloud-resource-type": "CyberCloud.Messaging/rabbitmqClusters"
+}

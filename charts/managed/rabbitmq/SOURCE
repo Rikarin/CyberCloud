@@ -1,0 +1,165 @@
+# Provenance — charts/README.md § `SOURCE` is required, including when nothing was forked.
+#
+# ADR-010: "Their charts are a starting point, not a dependency. Where a chart is close, fork it into
+# charts/ with the upstream commit recorded in a SOURCE file." Nothing was forked here, and
+# `vendored: none` is an answer to "where did this come from" where a missing file is not.
+
+vendored: none
+upstream: https://github.com/rabbitmq/cluster-operator
+
+# The CRD contract these templates and CyberCloud.Providers.Messaging.Contracts render against.
+# ⚠ Must agree with RabbitmqClusters.ClusterKind, including the plural — `rabbitmqclusters` is what
+# addresses a REST path and it is not derivable from the kind. ⚠ The KIND IS `RabbitmqCluster`:
+# capital R, lower-case `mq`, which is not how the product is spelled anywhere else including this
+# type's own display name. A kind the API server does not know is a 404 at apply time, per object.
+upstream-api: rabbitmq.com/v1beta1
+upstream-version: 2.22.4
+upstream-checked: 2026-08-12
+
+# ⚠ THERE IS EXACTLY ONE SERVED VERSION AND IT IS THE STORED ONE. `v1beta1`, `served: true`,
+# `storage: true`, no `deprecated` flag. So unlike a CRD mid-migration there is no second version a
+# read-back could arrive in, and `Matches` does not have to tolerate two shapes.
+
+# ⚠ THE CRD DECLARES `default:` VALUES, WHICH IS THE OPPOSITE OF WHAT charts/managed/kafka/SOURCE
+# RECORDS ABOUT STRIMZI, AND IT IS THE FACT `RabbitmqClusters.Matches` IS BUILT ON. Read out of
+# config/crd/bases/rabbitmq.com_rabbitmqclusters.yaml rather than out of the operator's README, which
+# does not mention them. At depth ≤ 4, outside the embedded corev1 subtrees:
+#
+#   spec.replicas                        1
+#   spec.persistence                     {"storage": "10Gi"}        ← an OBJECT-level default
+#   spec.persistence.storage             "10Gi"
+#   spec.service                         {"type": "ClusterIP"}      ← an OBJECT-level default
+#   spec.service.type                    "ClusterIP"
+#   spec.resources                       {"limits":{"cpu":"2000m","memory":"2Gi"},
+#                                         "requests":{"cpu":"1000m","memory":"2Gi"}}
+#   spec.terminationGracePeriodSeconds   604800
+#   spec.delayStartSeconds               30
+#   spec.imagePullSecrets[].name         ""
+#   spec.secretBackend.externalSecret.name  ""
+#
+# ⚠ THE TWO OBJECT-LEVEL ONES ARE THE DANGEROUS SHAPE: omitting `spec.persistence` entirely still
+# materialises `{storage: 10Gi}`, so "we did not ask for a volume" and "we asked for 10Gi" are the
+# same request.
+#
+# ⚠ AND `spec.resources` IS BURSTABLE. requests (1000m) sit below limits (2000m), which is
+# Kubernetes' Burstable QoS class, while docs/plan/12 § Sizing vocabulary defines the c1 family as
+# GUARANTEED. So a rendered object that omitted `resources` would not get "no resources" — it would
+# get a different QoS class from the one the preset name promises, silently, from the API server.
+# RabbitmqClusters.ClusterJson writes the block for that reason.
+#
+# ⚠ THERE IS NO DEFAULT ON `spec.image`, AND IT STILL ARRIVES. See the webhook note below.
+
+# ⚠ THE OPERATOR EDITS `spec`, THROUGH A MUTATING ADMISSION WEBHOOK — which no other operator in
+# charts/managed/ does, and which is a second and independent reason `Matches` must be containment.
+#
+#   * MutatingWebhookConfiguration at /mutate-rabbitmq-com-v1beta1-rabbitmqcluster, CREATE+UPDATE,
+#     failurePolicy: Fail. Registered in cmd/main.go unless ENABLE_WEBHOOKS=false, so it is ON in the
+#     released bundle. It writes spec.image, spec.imagePullSecrets and — under Vault —
+#     spec.secretBackend.vault.defaultUserUpdaterImage when each is unset.
+#   * ValidatingWebhookConfiguration at /validate-rabbitmq-com-v1beta1-rabbitmqcluster, same policy.
+#     It refuses hostPID / hostNetwork / hostIPC / serviceAccountName / hostPath volumes and a list of
+#     container security-context escalations under spec.override.statefulSet.
+#   * ⚠ BOTH NEED CERT-MANAGER. config/default/kustomization.yaml includes ../webhook and
+#     ../certmanager. A cluster with the CRD installed and no webhook certificate refuses EVERY
+#     create and update — which is a different failure from a missing CRD and needs to be readable as
+#     one. Since 2026-08-12 an unmapped 4xx comes back naming the API server's own message.
+#   * The controller also writes back onto metadata: the annotations rabbitmq.com/version,
+#     rabbitmq.com/erlang-version and rabbitmq.com/queueRebalanceNeededAt, plus the finalizer
+#     deletion.finalizers.rabbitmqclusters.rabbitmq.com.
+#
+# ⚠ WHAT IT DOES *NOT* DO IS PREPEND TO THE TENANT'S CONFIG, and that was checked because it is
+# exactly the hazard ValkeyCaches found in spotahome's validator. The operator writes its own
+# defaults to /etc/rabbitmq/conf.d/10-operatorDefaults.conf and the value of
+# spec.rabbitmq.additionalConfig to 90-userDefinedConfiguration.conf — two files RabbitMQ merges by
+# filename order. So the string round-trips through spec verbatim, and 90 winning over 10 is what
+# makes `default_queue_type = quorum` take effect over the operator's own block.
+#
+# The operator's own 10-operatorDefaults.conf, for the record, is:
+#
+#   log.console = true
+#   queue_master_locator = min-masters
+#   disk_free_limit.absolute = 2GB
+#   cluster_partition_handling = pause_minority
+#   cluster_formation.peer_discovery_backend = rabbit_peer_discovery_k8s
+#   cluster_formation.k8s.host = kubernetes.default
+#   cluster_formation.k8s.address_type = hostname
+#   cluster_formation.target_cluster_size_hint = <spec.replicas>
+#   cluster_name = <metadata.name>
+#   auth_mechanisms.1 = PLAIN
+#   auth_mechanisms.2 = AMQPLAIN          ← ANONYMOUS is deliberately absent
+
+# ⚠ THE `guest` USER, WHICH IS THE FIRST THING ANYONE ASKS ABOUT RABBITMQ AND IS NOT A PROBLEM HERE.
+# RabbitMQ ships with guest/guest. A cluster this operator creates never has a `guest` user at all:
+# internal/resource/default_user_secret.go generates a username of `default_user_` + 24 random bytes
+# and a 24-byte random password, writes them into the Secret `<name>-default-user`, and mounts them
+# as /etc/rabbitmq/conf.d/11-default_user.conf — which the broker reads on FIRST BOOT to seed its one
+# user. Because that user is not named `guest`, RabbitMQ's own `loopback_users.guest = true` never
+# applies to it and `guest` is never created to be restricted. The operator does not touch
+# `loopback_users` at all; grepping the repository for it returns nothing.
+#
+# ⚠ SO THIS ROW'S `listKeys` GAP IS KAFKA-SHAPED RATHER THAN NATS-SHAPED, and the distinction is what
+# charts/managed/nats/conformance.yaml § owed asks to be made. That file records that nats-server
+# with no authorization block accepts every connection in the namespace — a service that comes up
+# OPEN. This one comes up AUTHENTICATED with a credential the platform did not choose and cannot yet
+# read. See conformance.yaml § owed, `listkeys-has-no-handler`.
+#
+# The Secret's keys are: username, password, default_user.conf, provider, type, host, port and
+# connection_string, plus one port key per protocol plugin enabled. It implements the Service Binding
+# "Provisioned Service" spec, which is why `connection_string` is there without anyone asking.
+
+# ⚠ THE CONFIGURATION SURFACE THAT MATTERS TO THIS ROW IS A STRING, NOT A FIELD.
+# `default_queue_type` — the setting docs/plan/12's RabbitMQ row is entirely about — has no member on
+# this CRD. The only route to it is spec.rabbitmq.additionalConfig, a free-text INI string constrained
+# by `maxLength: 100000` and nothing else. Sibling fields, with their limits:
+#
+#   spec.rabbitmq.additionalConfig    string, maxLength 100000
+#   spec.rabbitmq.additionalPlugins   array of string, MaxItems 100
+#   spec.rabbitmq.advancedConfig      string, maxLength 100000
+#   spec.rabbitmq.envConfig           string, maxLength 100000, and the CRD's ONLY CEL rule:
+#                                     !self.contains('$(') && !self.contains('`')
+#   spec.rabbitmq.erlangInetConfig    string, maxLength 2000
+#
+# `default_queue_type` is node-wide in rabbitmq.conf since 3.13.3 and a per-vhost setting overrides
+# it (per-vhost DQT since 3.11). This row manages no vhosts, so what it guarantees is the default
+# vhost's queues rather than every queue in the cluster — conformance.yaml § owed, `child-types`.
+
+# ⚠ PLUGINS THE OPERATOR ALWAYS ENABLES AND THE CRD CANNOT DISABLE — internal/resource/rabbitmq_plugins.go
+# `requiredPlugins`: rabbitmq_peer_discovery_k8s, rabbitmq_prometheus, rabbitmq_management.
+# `spec.rabbitmq.additionalPlugins` is APPENDED to them. This is why values.yaml declares no
+# `monitoring` block: rabbitmq_prometheus cannot be turned off, so a property whose false branch the
+# platform could not honour would be a lie in the API rather than a setting.
+
+# ⚠ THE CLIENT SERVICE CARRIES THREE PORTS AND `spec.service.type` IS ONE ENUM OVER ALL OF THEM.
+# internal/resource/service.go: amqp 5672, management 15672 and prometheus 15692 are unconditional,
+# plus one port per recognised protocol plugin. `spec.service` has exactly four members —
+# annotations, ipFamilyPolicy, labels, type — and `loadBalancerSourceRanges` is NOT among them; it
+# lives only under spec.override.service.spec, which the operator applies as a STRATEGIC MERGE PATCH
+# against corev1.ServiceSpec. That single fact is why this row declares no external listener: see
+# conformance.yaml § owed, `external-exposure-moves-three-ports`.
+#
+# Service names, read off the operator rather than guessed: ServiceSuffix is the empty string and
+# ChildResourceName trims the trailing hyphen, so the client Service is named exactly like the custom
+# resource, and the headless one is `<name>-nodes` carrying 4369 (epmd) and 25672 (cluster rpc).
+
+# ⚠ FOUR THINGS THE OPERATOR REFUSES OR PERFORMS DESTRUCTIVELY, none of which is visible from the CRD
+# schema and all of which change what a reconciler may promise:
+#
+#   * A SCALE-DOWN IS ACCEPTED AT THE API SERVER AND THEN REFUSED. internal/controller/reconcile_scale_down.go
+#     logs, emits an UnsupportedOperation Warning event and sets status.conditions[ReconcileSuccess]
+#     to False — the write itself SUCCEEDS. So spec and the live StatefulSet diverge permanently and
+#     a read-back of spec.replicas reports the new value. conformance.yaml § owed carries this.
+#   * Scaling to zero is supported and remembers the previous count; scaling back up to any other
+#     number is refused.
+#   * `spec.persistence.storage` cannot be SHRUNK — internal/scaling/scaling.go, "shrinking persistent
+#     volumes is not supported" — and GROWING it deletes the StatefulSet (orphan delete) before
+#     resizing the PVCs.
+#   * `spec.persistence.storage` is x-kubernetes-int-or-string, so `20` and `"20Gi"` are both valid
+#     and mean different things. RabbitmqClusters.ClusterJson writes a string for that reason.
+
+# ⚠ NEITHER A PodMonitor NOR A ServiceMonitor IS EMITTED BY THE OPERATOR — grepping internal/, api/
+# and cmd/ finds only a comment. This is docs/plan/12 § The pattern, once, piece 6's SECOND branch
+# again, and the third service to reach it: CloudNativePG answered the first branch with
+# spec.monitoring.enablePodMonitor, Strimzi reached the second and left the object owed, and NATS
+# reached it and DISCHARGED it because it owns its own pod labels. This row is back in Strimzi's
+# position — the labels a selector would match are the operator's — so the object is owed rather than
+# hand-written over somebody else's labels. Upstream ships examples under observability/prometheus/monitors/.
