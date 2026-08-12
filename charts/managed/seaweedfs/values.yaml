@@ -1,0 +1,95 @@
+# Managed object storage — the configuration surface, once.
+#
+# ⚠ EVERY NON-`@internal` BLOCK BELOW IS GENERATED from StorageAccounts.Schema2026 by
+# `./build.sh Charts`, and so is values.schema.json. ADR-010 § Which end authors the schema: "The C#
+# ResourceSchema is authored. The chart's @param annotations are generated from it and diffed."
+# Editing a generated row here is undone on the next run and fails the build in between; add the
+# field in C# instead.
+#
+# The `@internal` rows at the end of each level are the ones that are NOT generated. They are
+# carried through as bytes and must sit after every generated key at their own level, so that each
+# level's generated keys are one contiguous run — charts/README.md § What a chart cannot say.
+
+## @param version {string} SeaweedFS version. ⚠ SeaweedFS ships a release roughly weekly and maintains no long-term branch, so docs/plan/12's "supported major versions" is a shape this project does not have; the two values here are the two most recent releases and a new api-version is what adds a third.
+## @required
+## @enum 4.40 | 4.41
+version: "4.41"
+
+## @param replication {string} Where the second copy of every object is placed. None keeps one copy and is for scratch data only. A placement the cluster's topology cannot satisfy leaves volumes read-only rather than failing the create. Immutable, because SeaweedFS applies this to volumes as they are created and never rewrites the ones that already exist — a change would split the account into two durability promises with no way to tell which object got which.
+## @required
+## @immutable
+## @enum DifferentDataCenter | DifferentRack | None | SameRack
+replication: SameRack
+
+## @param masters {integer} Number of master servers. The masters hold the volume topology in a Raft group, so three is the smallest count that survives losing one. One is offered for development and has no quorum at all.
+## @required
+## @range 1..5
+masters: 3
+
+## @param volumeServers {integer} Number of volume servers. This is the capacity axis: total raw capacity is this count times the volume size below, before replication.
+## @required
+## @range 1..16
+volumeServers: 3
+
+## @param sizing {object} CPU and memory per volume server, either by preset or explicitly. The masters, the filer and the S3 gateway are sized by the platform and are not affected.
+sizing:
+  ## @param preset {string} A sizing preset from docs/plan/12. Volume servers use the s1 family, which is 1 vCPU to 4 GiB.
+  ## @enum s1.2xlarge | s1.4xlarge | s1.large | s1.medium | s1.micro | s1.nano | s1.small | s1.xlarge
+  ## @widget cozy-preset
+  preset: s1.small
+  ## @param cpu {string} Explicit vCPU quantity in Kubernetes form, for example 500m or 2. Empty means take it from the preset.
+  ## @pattern (\d+(\.\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)?
+  cpu: ""
+  ## @param memory {string} Explicit memory quantity in Kubernetes form, for example 4Gi. Empty means take it from the preset.
+  ## @pattern (\d+(\.\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)?
+  memory: ""
+
+## @param storage {object} The data volume, per volume server.
+storage:
+  ## @param size {string} Data volume size per volume server, in Kubernetes quantity form. Grows online; never shrinks.
+  ## @required
+  ## @pattern \d+(\.\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?
+  ## @example "100Gi"
+  size: "100Gi"
+  ## @param class {string} StorageClass name for the volume servers. Empty means the cluster default.
+  ## @immutable
+  ## @widget storageclass
+  class: ""
+
+## @param gateway {object} The S3 gateway — docs/plan/15's ADR-008: "the API is S3".
+gateway:
+  ## @param replicas {integer} Number of S3 gateway pods. The gateway is stateless, so this is a throughput and availability setting rather than a topology one.
+  ## @required
+  ## @range 1..10
+  replicas: 2
+
+## @param monitoring {object} What the platform scrapes.
+monitoring:
+  ## @param enabled {boolean} Whether the operator is asked for a ServiceMonitor per component. On by default — docs/plan/12: "a managed service the tenant cannot see the health of is a black box they will not trust with production". Turning it off removes the metrics port as well as the scrape, which is the operator's own behaviour rather than this provider's.
+  enabled: true
+
+## @param platform {object} Resource identity injected by the reconciler. Not a tenant-facing setting.
+## @internal Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.
+platform:
+  ## @param tenantId {string} Tenant GUID, rendered into the cybercloud.io/tenant-id label.
+  tenantId: ""
+  ## @param subscriptionId {string} Subscription GUID, rendered into the cybercloud.io/subscription-id label.
+  subscriptionId: ""
+  ## @param resourceGroup {string} Resource group name, rendered into the cybercloud.io/resource-group label.
+  resourceGroup: ""
+  ## @param resourceId {string} Resource GUID, rendered into the cybercloud.io/resource-id label.
+  resourceId: ""
+  ## @param resourceType {string} Fully qualified resource type, rendered into the cybercloud.io/resource-type label.
+  resourceType: CyberCloud.Storage/accounts
+  ## @param apiVersion {string} The api-version the resource was last written at, rendered into the cybercloud.io/api-version label.
+  apiVersion: "2026-08-01"
+  ## @param managedBy {string} Value of the cybercloud.io/managed-by label. Constant, and the selector every informer filters on.
+  managedBy: cybercloud
+
+## @param imageName {string} Override the full image reference, tag included. Empty means chrislusf/seaweedfs:{version}, which is what keeps version upgrades a property rather than an escape hatch.
+## @internal The operator supplies NO default image at all — api/v1/image.go returns an empty image unchanged — so spec.image is always written. A pinned reference here defeats the version property, so it is a platform escape hatch rather than a tenant setting.
+imageName: ""
+
+## @param nameOverride {string} Replace the generated object-name stem. Empty means derive it from the release name.
+## @internal Helm plumbing. Nothing about it belongs in a resource body.
+nameOverride: ""

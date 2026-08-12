@@ -1772,6 +1772,369 @@
       },
       "x-cybercloud-resource-type": "CyberCloud.Sample/widgets",
       "x-cybercloud-action": "ping"
+    },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Storage/accounts/{resourceName}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "get": {
+        "operationId": "CyberCloud_Storage_accounts_Get",
+        "summary": "Read a CyberCloud.Storage/accounts.",
+        "description": "The body is this api-version's projection of the resource: docs/plan/08 § The provider registry keeps grain state as a superset and a read at an older version drops what that version did not declare.",
+        "responses": {
+          "200": {
+            "description": "The resource.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Storage.accounts"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "read"
+      },
+      "put": {
+        "operationId": "CyberCloud_Storage_accounts_CreateOrUpdate",
+        "summary": "Create or replace a CyberCloud.Storage/accounts.",
+        "description": "A full replacement. Every property the schema marks required must be present; a read-only property is refused rather than ignored — docs/plan/08 § The write path, end to end.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CyberCloud.Storage.accounts"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "headers": {
+              "Azure-AsyncOperation": {
+                "description": "The absolute URL of the operation to poll.",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "Retry-After": {
+                "description": "Seconds to wait before the first poll.",
+                "required": true,
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "write"
+      },
+      "patch": {
+        "operationId": "CyberCloud_Storage_accounts_Update",
+        "summary": "Merge-patch a CyberCloud.Storage/accounts.",
+        "description": "A merge patch. The patch itself may omit required properties; the merged result is what is validated — see ResourceSchema.Validate.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CyberCloud.Storage.accounts"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "headers": {
+              "Azure-AsyncOperation": {
+                "description": "The absolute URL of the operation to poll.",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "Retry-After": {
+                "description": "Seconds to wait before the first poll.",
+                "required": true,
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "write"
+      },
+      "delete": {
+        "operationId": "CyberCloud_Storage_accounts_Delete",
+        "summary": "Delete a CyberCloud.Storage/accounts.",
+        "description": "The delete is permanent: this type declares no soft-delete window.",
+        "responses": {
+          "202": {
+            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "headers": {
+              "Azure-AsyncOperation": {
+                "description": "The absolute URL of the operation to poll.",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "Retry-After": {
+                "description": "Seconds to wait before the first poll.",
+                "required": true,
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "delete",
+        "x-cybercloud-soft-delete-days": 0
+      },
+      "x-cybercloud-resource-type": "CyberCloud.Storage/accounts",
+      "x-cybercloud-display": {
+        "name": "Storage account",
+        "plural": "Storage accounts",
+        "alias": "objectstore",
+        "summary": "A managed S3-compatible object store on SeaweedFS, with replicated volume servers, a filer and a scalable S3 gateway.",
+        "declared": true
+      },
+      "x-cybercloud-supports-tags": true,
+      "x-cybercloud-requires-cluster": true,
+      "x-cybercloud-cluster-id-pointer": "/properties/clusterId",
+      "x-cybercloud-soft-delete-days": 0,
+      "x-cybercloud-meters": [
+        {
+          "meter": "MemoryGb",
+          "amountPointer": "",
+          "fallback": null,
+          "expression": "volumeServers × sizing.memory (from sizing.preset when unset) + (masters + 1 + gateway.replicas) × 512Mi, in GiB",
+          "reads": [
+            "/properties/volumeServers",
+            "/properties/sizing/preset",
+            "/properties/sizing/memory",
+            "/properties/masters",
+            "/properties/gateway/replicas"
+          ]
+        },
+        {
+          "meter": "Resources",
+          "amountPointer": "",
+          "fallback": 1,
+          "expression": "1",
+          "reads": []
+        },
+        {
+          "meter": "StorageGb",
+          "amountPointer": "",
+          "fallback": null,
+          "expression": "volumeServers × storage.size + 10Gi for the filer, in GiB",
+          "reads": [
+            "/properties/volumeServers",
+            "/properties/storage/size"
+          ]
+        },
+        {
+          "meter": "Vcpu",
+          "amountPointer": "",
+          "fallback": null,
+          "expression": "volumeServers × sizing.cpu (from sizing.preset when unset) + (masters + 1 + gateway.replicas) × 250m, in cores",
+          "reads": [
+            "/properties/volumeServers",
+            "/properties/sizing/preset",
+            "/properties/sizing/cpu",
+            "/properties/masters",
+            "/properties/gateway/replicas"
+          ]
+        }
+      ]
+    },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Storage/accounts/{resourceName}/listKeys": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "post": {
+        "operationId": "CyberCloud_Storage_accounts_ListKeys",
+        "summary": "listKeys a CyberCloud.Storage/accounts.",
+        "description": "An action never creates: a POST to a name that does not exist is a 404 — docs/plan/08 § The write path, end to end. ⚠ The response carries secret material. It is always audited and is never cached — docs/plan/08 § The provider registry.",
+        "responses": {
+          "200": {
+            "description": "The action's result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Storage.accounts.ListKeysResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "listKeys",
+        "x-cybercloud-secret": true,
+        "x-cybercloud-long-running": false
+      },
+      "x-cybercloud-resource-type": "CyberCloud.Storage/accounts",
+      "x-cybercloud-action": "listKeys"
     }
   },
   "components": {
@@ -3086,6 +3449,211 @@
         "title": "CyberCloud.Sample.widgets.PingResponse",
         "type": "object"
       },
+      "CyberCloud.Storage.accounts": {
+        "additionalProperties": false,
+        "description": "The body of a CyberCloud.Storage/accounts. Generated from the provider registry's schema, which is the same object the write path validates against — docs/plan/08 § The provider registry.",
+        "properties": {
+          "location": {
+            "description": "The region the account is billed in.",
+            "example": "eu-central",
+            "format": "cybercloud-region",
+            "type": "string",
+            "x-cybercloud-immutable": true,
+            "x-cybercloud-widget": "region"
+          },
+          "properties": {
+            "additionalProperties": false,
+            "description": "The account's own settings.",
+            "properties": {
+              "clusterId": {
+                "description": "The cluster whose namespace holds the object store.",
+                "format": "uuid",
+                "type": "string",
+                "x-cybercloud-immutable": true,
+                "x-cybercloud-widget": "cluster"
+              },
+              "gateway": {
+                "additionalProperties": false,
+                "description": "The S3 gateway — docs/plan/15's ADR-008: \"the API is S3\".",
+                "properties": {
+                  "replicas": {
+                    "default": 2,
+                    "description": "Number of S3 gateway pods. The gateway is stateless, so this is a throughput and availability setting rather than a topology one.",
+                    "maximum": 10,
+                    "minimum": 1,
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "replicas"
+                ],
+                "type": "object"
+              },
+              "masters": {
+                "default": 3,
+                "description": "Number of master servers. The masters hold the volume topology in a Raft group, so three is the smallest count that survives losing one. One is offered for development and has no quorum at all.",
+                "maximum": 5,
+                "minimum": 1,
+                "type": "integer"
+              },
+              "monitoring": {
+                "additionalProperties": false,
+                "description": "What the platform scrapes.",
+                "properties": {
+                  "enabled": {
+                    "default": true,
+                    "description": "Whether the operator is asked for a ServiceMonitor per component. On by default — docs/plan/12: \"a managed service the tenant cannot see the health of is a black box they will not trust with production\". Turning it off removes the metrics port as well as the scrape, which is the operator's own behaviour rather than this provider's.",
+                    "type": "boolean"
+                  }
+                },
+                "type": "object"
+              },
+              "replication": {
+                "default": "SameRack",
+                "description": "Where the second copy of every object is placed. None keeps one copy and is for scratch data only. A placement the cluster's topology cannot satisfy leaves volumes read-only rather than failing the create. Immutable, because SeaweedFS applies this to volumes as they are created and never rewrites the ones that already exist — a change would split the account into two durability promises with no way to tell which object got which.",
+                "enum": [
+                  "DifferentDataCenter",
+                  "DifferentRack",
+                  "None",
+                  "SameRack"
+                ],
+                "type": "string",
+                "x-cybercloud-immutable": true
+              },
+              "sizing": {
+                "additionalProperties": false,
+                "description": "CPU and memory per volume server, either by preset or explicitly. The masters, the filer and the S3 gateway are sized by the platform and are not affected.",
+                "properties": {
+                  "cpu": {
+                    "default": "",
+                    "description": "Explicit vCPU quantity in Kubernetes form, for example 500m or 2. Empty means take it from the preset.",
+                    "pattern": "^(?:(\\d+(\\.\\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)?)$",
+                    "type": "string"
+                  },
+                  "memory": {
+                    "default": "",
+                    "description": "Explicit memory quantity in Kubernetes form, for example 4Gi. Empty means take it from the preset.",
+                    "pattern": "^(?:(\\d+(\\.\\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)?)$",
+                    "type": "string"
+                  },
+                  "preset": {
+                    "default": "s1.small",
+                    "description": "A sizing preset from docs/plan/12. Volume servers use the s1 family, which is 1 vCPU to 4 GiB.",
+                    "enum": [
+                      "s1.2xlarge",
+                      "s1.4xlarge",
+                      "s1.large",
+                      "s1.medium",
+                      "s1.micro",
+                      "s1.nano",
+                      "s1.small",
+                      "s1.xlarge"
+                    ],
+                    "type": "string",
+                    "x-cybercloud-widget": "cozy-preset"
+                  }
+                },
+                "type": "object"
+              },
+              "storage": {
+                "additionalProperties": false,
+                "description": "The data volume, per volume server.",
+                "properties": {
+                  "class": {
+                    "default": "",
+                    "description": "StorageClass name for the volume servers. Empty means the cluster default.",
+                    "type": "string",
+                    "x-cybercloud-immutable": true,
+                    "x-cybercloud-widget": "storageclass"
+                  },
+                  "size": {
+                    "default": "100Gi",
+                    "description": "Data volume size per volume server, in Kubernetes quantity form. Grows online; never shrinks.",
+                    "example": "100Gi",
+                    "pattern": "^(?:\\d+(\\.\\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)$",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "size"
+                ],
+                "type": "object"
+              },
+              "version": {
+                "default": "4.41",
+                "description": "SeaweedFS version. ⚠ SeaweedFS ships a release roughly weekly and maintains no long-term branch, so docs/plan/12's \"supported major versions\" is a shape this project does not have; the two values here are the two most recent releases and a new api-version is what adds a third.",
+                "enum": [
+                  "4.40",
+                  "4.41"
+                ],
+                "type": "string"
+              },
+              "volumeServers": {
+                "default": 3,
+                "description": "Number of volume servers. This is the capacity axis: total raw capacity is this count times the volume size below, before replication.",
+                "maximum": 16,
+                "minimum": 1,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "clusterId",
+              "masters",
+              "replication",
+              "version",
+              "volumeServers"
+            ],
+            "type": "object"
+          },
+          "tags": {
+            "type": "object",
+            "description": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "maxProperties": 50,
+            "x-cybercloud-widget": "tag-input"
+          }
+        },
+        "required": [
+          "location"
+        ],
+        "title": "CyberCloud.Storage/accounts",
+        "type": "object"
+      },
+      "CyberCloud.Storage.accounts.ListKeysResponse": {
+        "additionalProperties": false,
+        "description": "What CyberCloud.Storage/accounts/listKeys returns. ⚠ Secret material. docs/plan/08 § The provider registry makes a secret action the only path a secret value leaves by; this schema is therefore the complete list of what does.",
+        "properties": {
+          "accessKeyId": {
+            "description": "The access key id. Not secret on its own; useless without the pair below.",
+            "type": "string"
+          },
+          "endpoint": {
+            "description": "The in-cluster S3 endpoint, http://host:port. ⚠ No external address is returned, because there is none — see the account's own documentation on exposure.",
+            "type": "string"
+          },
+          "region": {
+            "description": "The region name an S3 client signs with. SeaweedFS does not route on it, and SigV4 refuses to sign without one, so it is returned rather than left for the caller to guess.",
+            "type": "string"
+          },
+          "secretAccessKey": {
+            "description": "The secret access key, read from the tenant's Vault for this call only.",
+            "format": "password",
+            "type": "string",
+            "writeOnly": true,
+            "x-cybercloud-secret": true
+          }
+        },
+        "required": [
+          "accessKeyId",
+          "endpoint",
+          "region",
+          "secretAccessKey"
+        ],
+        "title": "CyberCloud.Storage.accounts.ListKeysResponse",
+        "type": "object"
+      },
       "Error": {
         "type": "object",
         "description": "One error. docs/plan/08 § Errors.",
@@ -3252,5 +3820,5 @@
       }
     }
   },
-  "x-cybercloud-resource-type-count": 5
+  "x-cybercloud-resource-type-count": 6
 }

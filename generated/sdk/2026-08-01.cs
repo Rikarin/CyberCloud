@@ -1211,3 +1211,228 @@ public sealed partial class WidgetCollection {
     /// <summary>The Widgets in this group, paged.</summary>
     public partial AsyncPageable<WidgetResource> GetAllAsync(CancellationToken cancellationToken = default);
 }
+
+/// <summary>The values /properties/replication accepts. ⚠ Closed: the write path refuses anything else.</summary>
+public enum StorageAccountReplication {
+    /// <summary>Never assigned. Not a value the API accepts.</summary>
+    Unknown = 0,
+
+    /// <summary>DifferentDataCenter</summary>
+    [JsonStringEnumMemberName("DifferentDataCenter")]
+    DifferentDataCenter = 1,
+
+    /// <summary>DifferentRack</summary>
+    [JsonStringEnumMemberName("DifferentRack")]
+    DifferentRack = 2,
+
+    /// <summary>None</summary>
+    [JsonStringEnumMemberName("None")]
+    None = 3,
+
+    /// <summary>SameRack</summary>
+    [JsonStringEnumMemberName("SameRack")]
+    SameRack = 4
+}
+
+/// <summary>The values /properties/sizing/preset accepts. ⚠ Closed: the write path refuses anything else.</summary>
+public enum StorageAccountPreset {
+    /// <summary>Never assigned. Not a value the API accepts.</summary>
+    Unknown = 0,
+
+    /// <summary>s1.2xlarge</summary>
+    [JsonStringEnumMemberName("s1.2xlarge")]
+    S12xlarge = 1,
+
+    /// <summary>s1.4xlarge</summary>
+    [JsonStringEnumMemberName("s1.4xlarge")]
+    S14xlarge = 2,
+
+    /// <summary>s1.large</summary>
+    [JsonStringEnumMemberName("s1.large")]
+    S1Large = 3,
+
+    /// <summary>s1.medium</summary>
+    [JsonStringEnumMemberName("s1.medium")]
+    S1Medium = 4,
+
+    /// <summary>s1.micro</summary>
+    [JsonStringEnumMemberName("s1.micro")]
+    S1Micro = 5,
+
+    /// <summary>s1.nano</summary>
+    [JsonStringEnumMemberName("s1.nano")]
+    S1Nano = 6,
+
+    /// <summary>s1.small</summary>
+    [JsonStringEnumMemberName("s1.small")]
+    S1Small = 7,
+
+    /// <summary>s1.xlarge</summary>
+    [JsonStringEnumMemberName("s1.xlarge")]
+    S1Xlarge = 8
+}
+
+/// <summary>The values /properties/version accepts. ⚠ Closed: the write path refuses anything else.</summary>
+public enum StorageAccountVersion {
+    /// <summary>Never assigned. Not a value the API accepts.</summary>
+    Unknown = 0,
+
+    /// <summary>4.40</summary>
+    [JsonStringEnumMemberName("4.40")]
+    N440 = 1,
+
+    /// <summary>4.41</summary>
+    [JsonStringEnumMemberName("4.41")]
+    N441 = 2
+}
+
+/// <summary>The body of a CyberCloud.Storage/accounts.</summary>
+/// <remarks>A managed S3-compatible object store on SeaweedFS, with replicated volume servers, a filer and a scalable S3 gateway.</remarks>
+public sealed partial class StorageAccountData {
+
+    /// <summary>The region the account is billed in.</summary>
+    /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+    [JsonPropertyName("location")]
+    public required string Location { get; set; }
+
+    /// <summary>The cluster whose namespace holds the object store.</summary>
+    /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+    [JsonPropertyName("clusterId")]
+    public required Guid ClusterId { get; set; }
+
+    /// <summary>Number of S3 gateway pods. The gateway is stateless, so this is a throughput and availability setting rather than a topology one.</summary>
+    /// <remarks>Required on a create. Defaults to 2 when left unset.</remarks>
+    [JsonPropertyName("replicas")]
+    public required long Replicas { get; set; }
+
+    /// <summary>Number of master servers. The masters hold the volume topology in a Raft group, so three is the smallest count that survives losing one. One is offered for development and has no quorum at all.</summary>
+    /// <remarks>Required on a create. Defaults to 3 when left unset.</remarks>
+    [JsonPropertyName("masters")]
+    public required long Masters { get; set; }
+
+    /// <summary>Whether the operator is asked for a ServiceMonitor per component. On by default — docs/plan/12: "a managed service the tenant cannot see the health of is a black box they will not trust with production". Turning it off removes the metrics port as well as the scrape, which is the operator's own behaviour rather than this provider's.</summary>
+    /// <remarks>Defaults to true when left unset.</remarks>
+    [JsonPropertyName("enabled")]
+    public bool? Enabled { get; set; }
+
+    /// <summary>Where the second copy of every object is placed. None keeps one copy and is for scratch data only. A placement the cluster's topology cannot satisfy leaves volumes read-only rather than failing the create. Immutable, because SeaweedFS applies this to volumes as they are created and never rewrites the ones that already exist — a change would split the account into two durability promises with no way to tell which object got which.</summary>
+    /// <remarks>Required on a create. ⚠ Cannot change after create. Defaults to "SameRack" when left unset.</remarks>
+    [JsonPropertyName("replication")]
+    public required StorageAccountReplication Replication { get; set; }
+
+    /// <summary>Explicit vCPU quantity in Kubernetes form, for example 500m or 2. Empty means take it from the preset.</summary>
+    /// <remarks>Defaults to "" when left unset.</remarks>
+    [JsonPropertyName("cpu")]
+    public string? Cpu { get; set; }
+
+    /// <summary>Explicit memory quantity in Kubernetes form, for example 4Gi. Empty means take it from the preset.</summary>
+    /// <remarks>Defaults to "" when left unset.</remarks>
+    [JsonPropertyName("memory")]
+    public string? Memory { get; set; }
+
+    /// <summary>A sizing preset from docs/plan/12. Volume servers use the s1 family, which is 1 vCPU to 4 GiB.</summary>
+    /// <remarks>Defaults to "s1.small" when left unset.</remarks>
+    [JsonPropertyName("preset")]
+    public StorageAccountPreset? Preset { get; set; }
+
+    /// <summary>StorageClass name for the volume servers. Empty means the cluster default.</summary>
+    /// <remarks>⚠ Cannot change after create. Defaults to "" when left unset.</remarks>
+    [JsonPropertyName("class")]
+    public string? Class { get; set; }
+
+    /// <summary>Data volume size per volume server, in Kubernetes quantity form. Grows online; never shrinks.</summary>
+    /// <remarks>Required on a create. Defaults to "100Gi" when left unset.</remarks>
+    [JsonPropertyName("size")]
+    public required string Size { get; set; }
+
+    /// <summary>SeaweedFS version. ⚠ SeaweedFS ships a release roughly weekly and maintains no long-term branch, so docs/plan/12's "supported major versions" is a shape this project does not have; the two values here are the two most recent releases and a new api-version is what adds a third.</summary>
+    /// <remarks>Required on a create. Defaults to "4.41" when left unset.</remarks>
+    [JsonPropertyName("version")]
+    public required StorageAccountVersion Version { get; set; }
+
+    /// <summary>Number of volume servers. This is the capacity axis: total raw capacity is this count times the volume size below, before replication.</summary>
+    /// <remarks>Required on a create. Defaults to 3 when left unset.</remarks>
+    [JsonPropertyName("volumeServers")]
+    public required long VolumeServers { get; set; }
+
+    /// <summary>Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.</summary>
+    [JsonPropertyName("tags")]
+    public IDictionary<string, string> Tags { get; set; } = new Dictionary<string, string>(StringComparer.Ordinal);
+}
+
+/// <summary>One Storage account, and the operations on it.</summary>
+public sealed partial class StorageAccountResource {
+    /// <summary>The resource's fully qualified id.</summary>
+    public string Id { get; init; } = string.Empty;
+
+    /// <summary>The body, projected at this api-version.</summary>
+    public StorageAccountData Data { get; init; } = new();
+
+    /// <summary>Re-reads the resource.</summary>
+    public partial Task<Response<StorageAccountResource>> GetAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Amends the resource. A merge patch: what is not set is not changed.</summary>
+    public partial Task<Operation<StorageAccountResource>> UpdateAsync(
+        WaitUntil waitUntil,
+        StorageAccountData data,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Deletes the resource. ⚠ Permanent: this type declares no soft-delete window.</summary>
+    public partial Task<Operation> DeleteAsync(
+        WaitUntil waitUntil,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>What listKeys returns. ⚠ Secret material: never log or cache this.</summary>
+    public sealed partial class ListKeysResult {
+
+        /// <summary>The access key id. Not secret on its own; useless without the pair below.</summary>
+        [JsonPropertyName("accessKeyId")]
+        public required string AccessKeyId { get; set; }
+
+        /// <summary>The in-cluster S3 endpoint, http://host:port. ⚠ No external address is returned, because there is none — see the account's own documentation on exposure.</summary>
+        [JsonPropertyName("endpoint")]
+        public required string Endpoint { get; set; }
+
+        /// <summary>The region name an S3 client signs with. SeaweedFS does not route on it, and SigV4 refuses to sign without one, so it is returned rather than left for the caller to guess.</summary>
+        [JsonPropertyName("region")]
+        public required string Region { get; set; }
+
+        /// <summary>The secret access key, read from the tenant's Vault for this call only.</summary>
+        [JsonPropertyName("secretAccessKey")]
+        public required string SecretAccessKey { get; set; }
+    }
+
+    /// <summary>ListKeys. ⚠ An action never creates — a POST to a name that does not exist is a 404. ⚠ The response carries secret material and is always audited.</summary>
+    public partial Task<Response<ListKeysResult>> ListKeysAsync(
+        CancellationToken cancellationToken = default);
+}
+
+/// <summary>The Storage accounts in one resource group.</summary>
+/// <remarks>⚠ Every write is long-running: docs/plan/08 § The write path, end to end
+/// ends in a 202 for every verb, so there is no synchronous overload to offer.</remarks>
+public sealed partial class StorageAccountCollection {
+    /// <summary>The resource type these address.</summary>
+    public const string ResourceType = "CyberCloud.Storage/accounts";
+
+    /// <summary>The URL template, with the api-version this file was generated at.</summary>
+    public const string PathTemplate = "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Storage/accounts/{resourceName}";
+
+    /// <inheritdoc cref="GeneratedApiVersion.Value" />
+    public const string ApiVersion = "2026-08-01";
+
+    /// <summary>Creates or replaces one Storage account.</summary>
+    /// <remarks>⚠ Poll with GetProgressAsync() rather than only WaitForCompletionAsync():
+    /// docs/plan/21 § The .NET SDK — "Azure's LROs expose no progress; ours do and the
+    /// SDK should not hide it".</remarks>
+    public partial Task<Operation<StorageAccountResource>> CreateOrUpdateAsync(
+        WaitUntil waitUntil,
+        string name,
+        StorageAccountData data,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Reads one Storage account by name.</summary>
+    public partial Task<Response<StorageAccountResource>> GetAsync(string name, CancellationToken cancellationToken = default);
+
+    /// <summary>The Storage accounts in this group, paged.</summary>
+    public partial AsyncPageable<StorageAccountResource> GetAllAsync(CancellationToken cancellationToken = default);
+}

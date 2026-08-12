@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      docs/plan/03 § Providers — the first of the five projects: "grain interfaces, resource models,
+      the JSON Schemas". This one is the schema and the SeaweedFS projection.
+
+      ⚠ NO GRAIN INTERFACES, AND THIS IS THE FOURTH NAMESPACE TO REPORT THAT. The sample had none and
+      could be dismissed as trivial; CyberCloud.Providers.DBforPostgreSQL called that "evidence about
+      the manager rather than about the resource"; CyberCloud.Providers.Messaging said three was no
+      longer an observation about any one of them. An object-storage account is the type with the
+      strongest claim to needing state of its own — it hands out credentials, it has a data plane the
+      control plane never sees, and docs/plan/15 gives it four kinds of child resource — and it still
+      holds none: everything a reconcile needs is in the desired body ResourceGrain already stores,
+      and the credential the account WOULD hold is exactly the thing docs/plan/05 forbids grain state
+      from carrying.
+
+      ⚠ IT REFERENCES ONLY CyberCloud.ResourceManager.Contracts AND CyberCloud.Kubernetes.Contracts —
+      the whole reference set docs/plan/03 § The .Contracts split allows a provider, and rule 2 of
+      § Assembly graph rules forbids the rest.
+    -->
+
+    <ItemGroup>
+        <ProjectReference Include="../../../CyberCloud.ResourceManager.Contracts/CyberCloud.ResourceManager.Contracts.csproj"/>
+        <ProjectReference Include="../../../CyberCloud.Kubernetes.Contracts/CyberCloud.Kubernetes.Contracts.csproj"/>
+    </ItemGroup>
+
+    <ItemGroup Label="CyberCloud.Analyzers — see CyberCloud.Core.csproj for why this is not a reference">
+        <ProjectReference Include="../../../CyberCloud.Analyzers/CyberCloud.Analyzers.csproj"
+                          OutputItemType="Analyzer"
+                          ReferenceOutputAssembly="false"/>
+    </ItemGroup>
+
+</Project>

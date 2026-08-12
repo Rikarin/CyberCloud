@@ -1,0 +1,135 @@
+{{/*
+seaweedfs-operator `Seaweed` — docs/plan/15 § The three kinds, Object.
+
+⚠ This renders a custom resource; it does not install the operator. The operator is
+charts/bundle/'s job, which is why this chart has no CRD directory and no operator Deployment.
+
+⚠ ONE custom resource and no Services, no StatefulSets and no ServiceMonitors. A Seaweed expands
+into master, volume, filer and S3 workloads, their Services, and — when a component carries a
+metricsPort — a ServiceMonitor apiece, all of them the operator's. Writing any of them here would be
+this chart competing with the controller that owns them.
+*/}}
+apiVersion: seaweed.seaweedfs.com/v1
+kind: Seaweed
+metadata:
+  name: {{ include "seaweedfs.name" . }}
+  labels:
+    {{- include "seaweedfs.platformLabels" . | nindent 4 }}
+spec:
+  {{/*
+    ⚠ spec.image carries the tag and spec.version is NOT set. api/v1/image.go's applyVersion would
+    rewrite the tag from spec.version if both were present, so two spellings of one fact would be one
+    fact and one silent override. See templates/_helpers.tpl for why an unset image is worse still.
+  */}}
+  image: {{ include "seaweedfs.image" . | quote }}
+
+  master:
+    replicas: {{ .Values.masters }}
+    {{/*
+      ⚠ defaultReplication is set on the MASTER and applies to volumes as they are created. It is
+      not retroactive, which is why `replication` is @immutable in values.yaml: changing it would
+      leave the account holding objects under two different durability promises with nothing that
+      says which is which.
+    */}}
+    defaultReplication: {{ include "seaweedfs.replication" . | quote }}
+    {{- include "seaweedfs.controlPlaneResources" . | nindent 4 }}
+    {{- if .Values.monitoring.enabled }}
+    metricsPort: 9327
+    {{- end }}
+
+  volume:
+    replicas: {{ .Values.volumeServers }}
+    {{/*
+      ⚠ `requests` here is ONE map with TWO destinations, decided by key. VolumeSpec inlines
+      corev1.ResourceRequirements, and controller_volume_statefulset.go lifts requests[storage] into
+      the StatefulSet's volumeClaimTemplates while filterContainerResources sends the rest to the
+      container. A `storage:` block of our own would render nothing the operator reads.
+    */}}
+    requests:
+      storage: {{ .Values.storage.size | quote }}
+      {{- $cpu := include "seaweedfs.cpu" . }}
+      {{- $memory := include "seaweedfs.memory" . }}
+      {{- if and $cpu $memory }}
+      cpu: {{ $cpu | quote }}
+      memory: {{ $memory | quote }}
+      {{- end }}
+    {{- if and $cpu $memory }}
+    limits:
+      cpu: {{ $cpu | quote }}
+      memory: {{ $memory | quote }}
+    {{- end }}
+    {{- if .Values.storage.class }}
+    storageClassName: {{ .Values.storage.class | quote }}
+    {{- end }}
+    {{- if .Values.monitoring.enabled }}
+    metricsPort: 9327
+    {{- end }}
+
+  {{/*
+    ⚠ ONE filer, and it is not a values key. With no spec.filer.config the operator mounts no
+    filer.toml at all — deliberately, see controller_filer_configmap.go — so the filer runs its
+    EMBEDDED, PER-POD leveldb2 store. Two replicas would be two divergent object namespaces behind
+    one Service, and neither would report an error. See conformance.yaml § owed.
+
+    ⚠ mountPath is written out rather than inherited. The store lands in the container's working
+    directory (weed/command/filer.go defaults -defaultStoreDir to "."), the upstream image says
+    WORKDIR /data, and PersistenceSpec.MountPath happens to default to "/data" as well. The filer's
+    metadata surviving a restart currently depends on two unrelated defaults agreeing; stating it
+    here makes it a line in this file instead.
+  */}}
+  filer:
+    replicas: 1
+    {{- include "seaweedfs.controlPlaneResources" . | nindent 4 }}
+    persistence:
+      enabled: true
+      mountPath: /data
+      accessModes:
+        - ReadWriteOnce
+      resources:
+        requests:
+          storage: 10Gi
+    {{- if .Values.monitoring.enabled }}
+    metricsPort: 9327
+    {{- end }}
+
+  {{/*
+    ⚠ spec.s3 — the STANDALONE gateway — and never spec.filer.s3. controller_s3.go: the standalone
+    path "is the preferred way to expose S3", the embedded one "is retained for backward
+    compatibility but is deprecated", and "when both are set the webhook rejects the CR". The
+    standalone gateway also requires spec.filer above, or the operator tears it down again.
+
+    ⚠ NO `service:` BLOCK, so the gateway is ClusterIP. The operator's ServiceSpec is
+    {type, annotations, loadBalancerIP, clusterIP} with NO loadBalancerSourceRanges, and docs/plan/12
+    § Cross-cutting decisions requires an explicit CIDR allow-list on any external exposure. An
+    exposure this chart cannot firewall is the one thing that paragraph forbids in as many words.
+  */}}
+  s3:
+    replicas: {{ .Values.gateway.replicas }}
+    {{- include "seaweedfs.controlPlaneResources" . | nindent 4 }}
+    {{/*
+      ⚠ A Secret NAME AND KEY, never a value — docs/plan/12 § The pattern, once, piece 5. The Secret
+      it names is written by nothing, so the gateway pod cannot mount its volume and the account
+      visibly does not finish.
+
+      ⚠ AND THE ALTERNATIVE IS THE WORST ONE IN THE CATALOGUE. weed/s3api/auth_credentials.go sets
+      `isAuthEnabled = len(identities) > 0`, and AuthenticateRequest returns an ADMIN identity when it
+      is false. A gateway with no identities file does not skip authentication — it answers every
+      anonymous request as an administrator. CloudNativePG generates its own password when the Secret
+      is absent and spotahome refuses to start; this is spotahome's case with a public protocol
+      behind it.
+    */}}
+    configSecret:
+      name: {{ printf "%s-s3-config" (include "seaweedfs.name" .) }}
+      key: s3.json
+    {{- if .Values.monitoring.enabled }}
+    {{/*
+      ⚠ docs/plan/12 § The pattern, once, piece 6's FIRST branch, second sighting. controller_s3.go:
+      `if m.Spec.S3.MetricsPort != nil { ensureS3ServiceMonitor(m) }`, with an else branch that
+      DELETES the ServiceMonitor when the port is taken away. So the scrape object, and the selector
+      it matches, belong to the party that owns the pods.
+
+      ⚠ It is not spec.metricsAddress, which is the other thing in this CRD with "metrics" in its
+      name and is a PUSH gateway address. Setting that one produces metrics nothing scrapes.
+    */}}
+    metricsPort: 9327
+    {{- end }}

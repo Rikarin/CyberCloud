@@ -1,0 +1,43 @@
+# Managed object storage — docs/plan/15 § The three kinds, "Object · CyberCloud.Storage/accounts +
+# /buckets · SeaweedFS + S3 gateway · HTTPS, S3 API", and § Object storage, "M1 · 2.0 EM".
+#
+# ⚠ THIS IS THE FIRST CHART UNDER charts/managed/ WHOSE RESOURCE TYPE IS NOT A ROW OF docs/plan/12.
+# That document's catalogue is "databases, caches, brokers, search"; object storage is docs/plan/15's,
+# and docs/plan/12 refers to it only as something it consumes — CloudNativePG's "declarative backup to
+# S3 (which we have — [15])". The eight pieces of docs/plan/12 § The pattern, once still apply, and
+# this chart is built to them.
+apiVersion: v2
+name: seaweedfs
+description: Managed S3-compatible object storage on SeaweedFS — replicated volume servers, a filer and a scalable S3 gateway.
+type: application
+
+# The chart's own version. Bumped on every change to this directory.
+version: 0.1.0
+
+# The default SeaweedFS version, matching values.yaml `version`.
+appVersion: "4.41"
+
+kubeVersion: ">=1.31.0-0"
+
+keywords:
+  - seaweedfs
+  - s3
+  - object-storage
+  - bucket
+
+home: https://seaweedfs.com
+sources:
+  - https://github.com/seaweedfs/seaweedfs
+  - https://github.com/seaweedfs/seaweedfs-operator
+
+maintainers:
+  - name: Cyber Cloud Platform
+
+# ⚠ These three are read by `Build.Charts` and written into `values.schema.json` as
+# `x-cybercloud-*`. They are what makes the generated schema addressable as a resource type's
+# body rather than as an anonymous blob of Helm values — docs/plan/12 § The pattern, once, piece 2.
+# A chart under charts/managed/ without them fails the build.
+annotations:
+  cybercloud.io/resource-type: CyberCloud.Storage/accounts
+  cybercloud.io/api-version: "2026-08-01"
+  cybercloud.io/operator: seaweedfs-operator
