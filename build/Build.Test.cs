@@ -344,9 +344,22 @@ partial class Build
 
         // ⚠ Every suite runs before any failure is reported — the same reasoning as
         // Build.Architecture.cs § Report, and the reason the old call passed completeOnFailure.
+        //
+        // ⚠ THE NAMES GO IN THE MESSAGE, NOT ONLY IN THE COLLECTION. They were in the collection
+        // argument for a while, which reads as sufficient and is not: Nuke prints the message
+        // prominently and the collection is easy to lose in several thousand lines of suite output.
+        // A suite that exits non-zero WITHOUT a failing test — a container that could not bind its
+        // port, a host process that would not shut down — writes no row to its .trx either, so the
+        // message was the only place the name could have come from. That combination went unattributed
+        // four times before anyone noticed the name had been captured all along.
+        var named = failures.OrderBy(x => x, StringComparer.Ordinal).ToList();
+
         Assert.Empty(
-            failures.OrderBy(x => x, StringComparer.Ordinal).ToList(),
-            $"{failures.Count} of {projects.Count} {target} suite(s) failed. Their output is above.");
+            named,
+            $"{failures.Count} of {projects.Count} {target} suite(s) failed: {string.Join(", ", named)}. "
+            + "Their output is above. ⚠ A suite named here with no failing test in its .trx did not "
+            + "fail an assertion — it exited non-zero, and build/README.md § failed to bind host port "
+            + "covers the commonest cause on this platform.");
     }
 
     /// <summary>
