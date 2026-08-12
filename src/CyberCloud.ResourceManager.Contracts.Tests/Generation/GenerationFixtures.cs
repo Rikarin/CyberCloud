@@ -94,8 +94,9 @@ static class Fixtures {
                 },
                 new ResourceTypeRegistration {
                     // ⚠ A nested type, so the emitted path exercises the platform's own id grammar —
-                    // /servers/databases/{resourceName}, one name at the end, which is what
-                    // ResourceId.Path renders and is not Azure's interleaved shape.
+                    // /servers/{serversName}/databases/{resourceName}, interleaved exactly as Azure
+                    // spells it and exactly as ResourceId.Path renders it. docs/plan/12 § Child
+                    // resources records why that is the shape.
                     Type = new(Namespace, "servers/databases"),
                     ApiVersions = [new(ApiVersion.Parse(FirstVersion), DatabaseSchema())]
                 }

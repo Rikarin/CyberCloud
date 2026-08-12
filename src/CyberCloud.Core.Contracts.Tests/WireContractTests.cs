@@ -67,6 +67,11 @@ public sealed class WireContractTests {
         ("ResourceIdSurrogate", 3, "Type"),
         ("ResourceIdSurrogate", 4, "Name"),
         ("ResourceIdSurrogate", 5, "Id"),
+        // ⚠ Appended at the next unused number, never inserted among the six above. A child
+        // resource's ancestors — docs/plan/12 § Child resources. An old payload has no member 6 and
+        // Orleans leaves it null, which ResourceId normalises to "": correct for every id written
+        // before this existed, because every registered type then was top-level.
+        ("ResourceIdSurrogate", 6, "ParentNames"),
 
         // ⚠ APPENDED BY A MOVE, NOT BY A NEW TYPE. SecretRef came here from
         // CyberCloud.ResourceManager.Contracts with its [Id(n)] numbers and its [Alias] untouched —

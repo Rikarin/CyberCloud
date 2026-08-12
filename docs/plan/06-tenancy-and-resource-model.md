@@ -38,6 +38,14 @@ Every addressable thing *also* has a **resource ID**, an Azure-shaped path:
   /providers/{providerNamespace}/{resourceType}/{resourceName}
 ```
 
+A **nested** type interleaves with its parents' names, exactly as Azure spells it — the type and name
+segments alternate, one pair per level. [12](12-managed-data-services.md) § Child resources records
+the decision and its reasons:
+
+```
+  …/providers/CyberCloud.DBforPostgreSQL/servers/{serverName}/databases/{databaseName}
+```
+
 Both exist and they answer different questions. The GUID is the identity — stable across renames,
 used in tuples, in metering records, in grain keys. The path is the *address* — human-readable,
 hierarchical, what appears in a URL, what a role assignment scopes to, and what a support engineer
@@ -47,16 +55,29 @@ renamed and the GUID does not.
 ```csharp
 readonly record struct ResourceId(
     Guid TenantId, Guid SubscriptionId, string ResourceGroup,
-    ResourceTypeName Type, string Name, Guid Id)
+    ResourceTypeName Type, string Name, Guid Id, string ParentNames = "")
 {
-    public string Path => $"/tenants/{TenantId:D}/subscriptions/{SubscriptionId:D}" +
-                          $"/resourceGroups/{ResourceGroup}/providers/{Type.Namespace}/{Type.Type}/{Name}";
+    /// The ancestors' names, outermost first, '/'-separated; empty for a top-level type.
+    /// ⚠ Invariant: one name per level above this one — `Count == Type.Depth - 1`.
+    public string ParentNames { get; init; }
 
-    /// ⚠ Recovers five of the six fields. `Id` comes back `Guid.Empty` — see below.
+    /// Interleaves the type segments with `ParentNames`, ending on `Name`.
+    public string Path => …;
+
+    /// ⚠ Recovers six of the seven fields. `Id` comes back `Guid.Empty` — see below.
     public static bool TryParsePath(string path, out ResourceId id) { … }
 
     /// Resolves the parsed address to an identity, once the index has been consulted.
     public ResourceId WithId(Guid id) => this with { Id = id };
+
+    /// ⚠ Sets `Type` and `ParentNames` together — an invariant over two members cannot be
+    /// checked by a `with` expression, which only ever holds one of them at a time.
+    public ResourceId WithType(ResourceTypeName type, string parentNames = "") => …;
+
+    /// This resource's parent RESOURCE, or null for a top-level type (whose parent is the
+    /// resource group). A pure function of the address — which is the whole reason the
+    /// grammar interleaves. See [12](12-managed-data-services.md) § Child resources.
+    public ResourceId? Parent => …;
 
     /// Lower-cases the structural segments. Hash THIS for the index key, never `Path`.
     public string CanonicalPath => …;
@@ -77,12 +98,16 @@ case-preserving on the wire (`CyberCloud.Cache` reads better than `cybercloud.ca
 [§ Two-phase create](#two-phase-create) — the one place a duplicate claim is a correctness bug
 rather than a cosmetic one.
 
-⚠ **The path grammar is ambiguous on its own, and the naming rule is what saves it.** Because
-resource types nest (`servers/databases`), type `servers` with name `databases/orders` and type
-`servers/databases` with name `orders` serialise to the *same* string. The naming rule below forbids
-`/` in a name, which is what makes the parse unique. That rule is therefore load-bearing for
-identifier integrity, not merely the ergonomics decision it is presented as — and the nesting depth
-needs a cap, or a greedy read of the type path is unbounded.
+⚠ **The grammar used to be ambiguous on its own; interleaving is what removed the ambiguity, and the
+naming rule is the second defence rather than the only one.** Under a flattened shape — the type path
+whole in the middle, one name at the end — type `servers` with name `databases/orders` and type
+`servers/databases` with name `orders` serialised to the *same* string, and only the naming rule's
+ban on `/` in a name kept the second reading out. Interleaved, the segments after the namespace
+alternate type, name, type, name: their number is always even, the depth is exactly half of it, and
+there is no pair of distinct ids that renders one string. The naming rule stays load-bearing — a name
+containing `/` would still shift the alternation — but it is no longer carrying identifier integrity
+by itself. The nesting depth still needs a cap (`ResourceTypeName.MaxDepth`), because a *type path*
+read on its own has no alternation to disambiguate it.
 
 **Naming rules**, decided once so every provider does not re-litigate them: resource group and
 resource names are 1–63 characters, `[a-z0-9]([-a-z0-9]*[a-z0-9])?`, case-insensitive-unique within

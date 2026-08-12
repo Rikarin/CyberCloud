@@ -61,6 +61,90 @@ The **2 engineer-weeks per service** target from [00](00-vision-and-principles.m
 this list. It is measured: the roadmap tracks actual elapsed time per service and treats a miss as a
 platform defect to be investigated, not as an estimate that was optimistic.
 
+## Child resources
+
+Six services in this document have sub-resources — `servers/databases`, `servers/roles`,
+`servers/firewallRules`, NATS accounts and users, Kafka topics and users — and until now nothing said
+what a child's *address* is. Two shapes were possible and the platform half-carried both.
+
+**Decided: a child interleaves with its parent's name, exactly as Azure spells it.**
+
+```
+/tenants/{t}/subscriptions/{s}/resourceGroups/{rg}
+  /providers/CyberCloud.DBforPostgreSQL/servers/{serverName}/databases/{databaseName}
+```
+
+and *not* the flattened alternative, which ran the type path whole and put one name at the end:
+
+```
+  …/providers/CyberCloud.DBforPostgreSQL/servers/databases/{databaseName}
+```
+
+`ResourceId` gains `ParentNames` — the ancestors' names, `/`-separated, empty for a top-level type —
+with the invariant `ParentNames.Count == Type.Depth - 1`. A top-level resource's address is
+unchanged, character for character.
+
+### Why, in the order the reasons actually weigh
+
+**1. The flattened shape cannot express the parent at all, and ReBAC needs it.**
+`IResourceRelationWriter.LinkToParentAsync` takes a `ResourceId` and nothing else — no body, no
+registration, no grain call. Under the flattened shape `…/servers/databases/orders` does not say
+*which* server, so the `parent` edge could only ever point at the resource group, which is exactly
+what `ReBacResourceRelationWriter` writes today for every resource regardless of depth. Granting
+somebody a Postgres server would grant nothing on its databases, and deleting the server would leave
+its databases' tuples pointing at a resource group that never knew about them. Interleaved,
+`ResourceId.Parent` is a pure function of the address: drop the last type segment and the last name.
+This is the reason that decides it, and it is an argument from a method signature rather than from
+parity.
+
+**2. Names would otherwise be unique per resource group rather than per parent.** The path index is
+keyed on `sha256(CanonicalPath)` and the flattened canonical path contains no parent name, so two
+Kafka clusters in one resource group could not both have a topic called `events`. That is a
+functional limitation users hit on day one, not a difference of taste.
+
+**3. The ambiguity in the old grammar is removed rather than capped.**
+[06](06-tenancy-and-resource-model.md) § Identifiers used to say the grammar "is ambiguous on its own,
+and the naming rule is what saves it" — `servers` + name `databases/orders` and `servers/databases` +
+name `orders` rendered the same string, and only the ban on `/` in a name kept the second
+reading out. Interleaved, type segments sit at even offsets after the namespace and names at odd
+ones, so the tail length is always even and the depth is half of it. There is no collision left to
+close. The naming rule stays load-bearing as the *second* of two independent defences rather than the
+only one, and `ResourceTypeName.MaxDepth` stays because a type path read on its own still has no such
+structure.
+
+**4. [14](14-networking.md) § DNS already assumed this shape.** It specifies record sets as
+`dnsZones/{zone}/A/{name}` — interleaved — which the `ResourceId` sketched in
+[06](06-tenancy-and-resource-model.md) § Identifiers could not express, because that record has one
+`Type` and one `Name`. One of the two documents was going to be corrected either way; this decision
+corrects 06 and leaves 14 standing.
+
+**5. Azure parity.** Real, and the weakest of the five. A child that does not address like Azure's is
+a surprise where users have the strongest priors — but parity is the reason to prefer this shape, not
+the reason it is correct.
+
+### What it cost
+
+Nearly nothing, because it was made before the first child shipped. No provider registers a nested
+type today, `openapi/2026-08-01.json` contains no nested path, and the two shapes are identical at
+depth 1 — so no published URL moved, the OpenAPI compatibility gate had nothing to report, and the
+generated CLI, SDK and forms did not churn. The same decision taken after Provider 4 ships topics
+would have been a breaking change to a published api-version.
+
+### What is still owed
+
+The grammar is in place and the parent is derivable; two consequences are not yet built and belong
+with whoever adds the first child type.
+
+- **`ReBacResourceRelationWriter` still points every `parent` edge at the resource group.** It should
+  use `ResourceId.Parent` and fall back to the resource group only when that is `null`.
+  [07](07-rebac-authorization.md) § The model describes the resource → resourceGroup →
+  subscription → tenant chain; a child adds a hop and the schema's `From("parent", …)` rewrites
+  already handle it.
+- **Nothing checks that a parent exists at create.** `ResourceManagerService.ResolveAsync` validates
+  the tenant, the subscription, the registry and the index, and never looks for the parent. A topic
+  can be created naming a cluster that does not exist. The check belongs next to the subscription
+  check and must answer the same 404, for the same enumeration-oracle reason.
+
 ## Sizing vocabulary
 
 One table, defined once, used by every service and every VM ([13](13-compute-vm-containers.md)).

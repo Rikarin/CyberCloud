@@ -1,6 +1,7 @@
 using CyberCloud.ResourceManager.Contracts.Registry;
 using System.Collections.Immutable;
 using System.Globalization;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
@@ -330,20 +331,61 @@ public static class OpenApiEmitter {
     ///     The URL template for a resource of one type.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>Nested types are <i>not</i> interleaved with their parents' names, and that is this
-    ///     platform's grammar rather than an omission here.</b> Azure spells a nested type
-    ///     <c>/servers/{serverName}/databases/{databaseName}</c>;
-    ///     <see cref="CyberCloud.Core.Resources.ResourceId" /> spells it
-    ///     <c>/servers/databases/{name}</c> — one name, at the end, with the type path whole in the
-    ///     middle. That is what <c>ResourceId.Path</c> renders and what <c>TryParsePath</c> parses
-    ///     (its comment reads <c>8..^1:{type…} ^1:{name}</c>), so the generated document says the same
-    ///     thing the id grammar says. Emitting Azure's shape would produce URLs that
-    ///     <c>ResourceId.TryParsePath</c> rejects — a generated surface disagreeing with the runtime,
-    ///     which is the one failure ADR-012 exists to make impossible.
+    ///     <para>
+    ///         <b>Nested types interleave with their parents' names, exactly as Azure spells them</b>
+    ///         — <c>/servers/{serversName}/databases/{resourceName}</c> — because that is what
+    ///         <c>ResourceId.Path</c> renders and what <c>TryParsePath</c> parses. The generated
+    ///         document says the same thing the id grammar says, which is the one property ADR-012
+    ///         exists to hold. docs/plan/12 § Child resources records why the grammar is that shape.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>A top-level type's template is byte-identical to what this emitted before the
+    ///         grammar changed</b>, and that is deliberate rather than lucky: the two shapes differ
+    ///         only from depth 2, the resource's own name keeps the parameter name
+    ///         <c>resourceName</c> at every depth, and the ancestors are appended rather than
+    ///         renaming anything. So no published path in <c>openapi/</c> moves and the
+    ///         <see cref="OpenApiCompatibility" /> gate has nothing to report — see that type's
+    ///         remarks on why a changed published path would be breaking.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>An ancestor's parameter is the type segment verbatim plus <c>Name</c>
+    ///         (<c>{serversName}</c>), not a singularised <c>{serverName}</c>.</b> English
+    ///         pluralisation is not computable — <see cref="SdkEmitter" />'s model naming carries the
+    ///         same warning and <c>GroupVersionKind.Plural</c> is carried rather than derived for the
+    ///         same reason — so singularising is a guess that works until <c>addresses</c>. Ugly and
+    ///         right beats pretty and wrong in a generated URL template.
+    ///     </para>
     /// </remarks>
-    static string PathOf(ResourceTypeName type) =>
-        "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}"
-        + "/providers/" + type.Namespace + "/" + type.Type + "/{resourceName}";
+    static string PathOf(ResourceTypeName type) {
+        var built = new StringBuilder(
+            "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}"
+            + "/providers/"
+        ).Append(type.Namespace);
+
+        var segments = type.Type.Split('/');
+
+        for (var i = 0; i < segments.Length; i++) {
+            built.Append('/').Append(segments[i])
+                .Append(i == segments.Length - 1 ? "/{resourceName}" : "/{" + segments[i] + "Name}");
+        }
+
+        return built.ToString();
+    }
+
+    /// <summary>The <c>{…Name}</c> placeholders an ancestor of <paramref name="type" /> contributes.</summary>
+    static ImmutableArray<string> AncestorParametersOf(ResourceTypeName type) {
+        var segments = type.Type.Split('/');
+        if (segments.Length == 1) {
+            return [];
+        }
+
+        var built = ImmutableArray.CreateBuilder<string>(segments.Length - 1);
+        for (var i = 0; i < segments.Length - 1; i++) {
+            built.Add(segments[i] + "Name");
+        }
+
+        return built.ToImmutable();
+    }
 
     /// <summary>The component key for a resource type — <c>/</c> is not legal in one.</summary>
     /// <remarks>
@@ -366,7 +408,7 @@ public static class OpenApiEmitter {
         };
 
         var item = new JsonObject {
-            ["parameters"] = ResourceParameters(),
+            ["parameters"] = ResourceParameters(type.Type),
             // A fixed member order rather than a sorted one: this is the order the four verbs are
             // read in, and sorting would put `delete` first in every path item in the document.
             ["get"] = new JsonObject {
@@ -608,7 +650,7 @@ public static class OpenApiEmitter {
         post["x-cybercloud-long-running"] = action.LongRunning;
 
         var item = new JsonObject {
-            ["parameters"] = ResourceParameters(),
+            ["parameters"] = ResourceParameters(type.Type),
             ["post"] = post,
             ["x-cybercloud-resource-type"] = type.Type.ToString(),
             ["x-cybercloud-action"] = action.Name
@@ -647,14 +689,49 @@ public static class OpenApiEmitter {
             }
         };
 
-    static JsonArray ResourceParameters() =>
-        new() {
+    /// <summary>
+    ///     The five shared parameters, plus one inline parameter per ancestor of a nested type.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>The ancestors are inline rather than <c>$ref</c>s to <c>/components/parameters</c>,
+    ///     and they have to be:</b> their names come from the type path, so a shared component would
+    ///     need one entry per distinct ancestor segment across every provider — a component set that
+    ///     grows with the registry and collides the moment two providers both nest under
+    ///     <c>servers</c> with different descriptions. <see cref="OpenApiStructure" /> checks that
+    ///     what is declared here and what appears in the template agree in both directions, so a
+    ///     mismatch between this and <see cref="PathOf" /> fails <c>Generate</c> rather than shipping.
+    /// </remarks>
+    static JsonArray ResourceParameters(ResourceTypeName type) {
+        var parameters = new JsonArray {
             Ref("parameters", "TenantId"),
             Ref("parameters", "SubscriptionId"),
-            Ref("parameters", "ResourceGroupName"),
-            Ref("parameters", "ResourceName"),
-            Ref("parameters", "ApiVersion")
+            Ref("parameters", "ResourceGroupName")
         };
+
+        foreach (var ancestor in AncestorParametersOf(type)) {
+            parameters.Add(
+                new JsonObject {
+                    ["name"] = ancestor,
+                    ["in"] = "path",
+                    ["required"] = true,
+                    ["description"] =
+                        "The name of the parent resource this one lives inside. A child is addressed "
+                        + "through its parent — docs/plan/12 § Child resources.",
+                    ["schema"] = new JsonObject {
+                        ["type"] = "string",
+                        ["pattern"] = "^" + ResourceNaming.Pattern + "$",
+                        ["minLength"] = ResourceNaming.MinLength,
+                        ["maxLength"] = ResourceNaming.MaxLength
+                    }
+                }
+            );
+        }
+
+        parameters.Add(Ref("parameters", "ResourceName"));
+        parameters.Add(Ref("parameters", "ApiVersion"));
+
+        return parameters;
+    }
 
     /// <summary>
     ///     The <c>202</c> every write returns, with the two headers docs/plan/10 requires.

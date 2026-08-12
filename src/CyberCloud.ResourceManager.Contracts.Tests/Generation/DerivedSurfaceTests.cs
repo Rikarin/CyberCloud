@@ -335,4 +335,91 @@ public sealed class DerivedSurfaceTests {
         DeterministicJson.ToText(Cli).ShouldNotContain("ı");
         Sdk.ShouldNotContain("İ");
     }
+
+    // ── Colliding names, on the two surfaces that derive one from a type path ──────────────────
+    //
+    // ⚠ Both of these were found by reading rather than by a red test, and both fail the same way:
+    // the surface silently drops a resource type and nothing says so. A flat `kafkaClustersTopics`
+    // and a nested `kafkaClusters/topics` are the pair that does it — they kebab and Pascal to the
+    // same thing — and they are legal registrations that no gate refused.
+
+    /// <summary>
+    ///     A registry with two types whose CLI command names and SDK model names both collide.
+    /// </summary>
+    static FakeRegistry Colliding(DisplayMetadata? nestedDisplay = null) =>
+        new FakeRegistry {
+            Namespaces = ["CyberCloud.Streaming"],
+            Types = [
+                new ResourceTypeRegistration {
+                    Type = new("CyberCloud.Streaming", "kafkaClustersTopics"),
+                    ApiVersions = [new(ApiVersion.Parse(Fixtures.FirstVersion), ResourceSchema.Of([]))],
+                    Display = new("Topic", "Topics", "topic", "A topic.")
+                },
+                new ResourceTypeRegistration {
+                    Type = new("CyberCloud.Streaming", "kafkaClusters/topics"),
+                    ApiVersions = [new(ApiVersion.Parse(Fixtures.FirstVersion), ResourceSchema.Of([]))],
+                    Display = nestedDisplay ?? default
+                }
+            ]
+        };
+
+    [Fact]
+    public void TwoTypesThatKebabToOneCommandNameFailRatherThanOneVanishing() {
+        // ⚠ `commands[name] = …` is an indexer that REPLACES. Before this guard the second type
+        // overwrote the first and the verb tree shipped one command where two belonged — a resource
+        // type absent from the CLI, with a green build.
+        var document = OpenApiEmitter.Emit(Colliding(), ApiVersion.Parse(Fixtures.FirstVersion));
+
+        var thrown = Should.Throw<InvalidOperationException>(() => CliEmitter.Emit(document));
+
+        thrown.Message.ShouldContain("kafka-clusters-topics");
+        thrown.Message.ShouldContain("vanish");
+    }
+
+    [Fact]
+    public void TwoTypesInOneNamespaceCannotShareAnSdkModelName() {
+        // ⚠ The provider prefix cannot separate these: the namespace is the same, so both resolve to
+        // `StreamingTopic` and the generated file declares one class name twice. The fallback is the
+        // type path, which the registry already keys on.
+        var document = OpenApiEmitter.Emit(
+            Colliding(new DisplayMetadata("Topic", "Topics", "topic", "A topic.")),
+            ApiVersion.Parse(Fixtures.FirstVersion)
+        );
+
+        var sdk = SdkEmitter.Emit(document);
+
+        sdk.ShouldContain("StreamingKafkaClustersTopics");
+
+        // …and the two are genuinely distinct rather than one having replaced the other.
+        var classes = sdk.Split("public sealed partial class ", StringSplitOptions.None).Length - 1;
+        classes.ShouldBeGreaterThan(1);
+    }
+
+    /// <summary>
+    ///     ⚠ <b>The count check in <c>DerivedSurfaces.CliProblems</c> must not fire on a healthy
+    ///     registry</b> — it runs on every <c>Generate</c>, so a miscounted check would fail every
+    ///     build rather than none. It is the backstop for the collision above, catching a type lost
+    ///     for any future reason; the emitter's throw is the primary guard, and a hand-edited tree is
+    ///     already caught by the byte comparison.
+    /// </summary>
+    [Fact]
+    public void TheVerbTreeHasExactlyOneCommandPerResourceTypeAndTheCheckAgrees() {
+        var document = OpenApiEmitter.Emit(Fixtures.Postgres(), ApiVersion.Parse(Fixtures.FirstVersion));
+        var tree = CliEmitter.Emit(document);
+
+        var commands = tree["groups"]!.AsObject()
+            .Sum(group => group.Value!["commands"]!.AsObject().Count);
+
+        commands.ShouldBe(DocumentReader.TypesOf(document).Length);
+
+        // …including the nested one, which is the type the collision would have eaten.
+        tree["groups"]!["dbforpostgresql"]!["commands"]!.AsObject()
+            .ContainsKey("servers-databases").ShouldBeTrue();
+
+        DerivedSurfaces.Generate(
+            new Dictionary<string, JsonObject> { [Fixtures.FirstVersion] = document },
+            Path.Combine(Path.GetTempPath(), Path.GetRandomFileName()),
+            write: false
+        ).Documents.SelectMany(x => x.Problems).ShouldBeEmpty();
+    }
 }

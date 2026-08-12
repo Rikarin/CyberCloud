@@ -131,7 +131,10 @@ static class Corpus {
     /// <summary>Generates <paramref name="count" /> fully populated resource ids.</summary>
     public static IEnumerable<ResourceId> ResourceIds(int count, int seed) {
         var random = new Random(seed);
-        using var names = ValidNames(count * 2, seed + 1).GetEnumerator();
+
+        // ⚠ Four names per id, not two: the group, the resource's own, and up to two ancestors —
+        // ValidTypePaths cycles depth 1, 2, 3, and a nested type carries one name per level above it.
+        using var names = ValidNames(count * 4, seed + 1).GetEnumerator();
         using var namespaces = ValidNamespaces(count, seed + 2).GetEnumerator();
         using var typePaths = ValidTypePaths(count, seed + 3).GetEnumerator();
 
@@ -143,13 +146,22 @@ static class Corpus {
             namespaces.MoveNext();
             typePaths.MoveNext();
 
+            var type = new ResourceTypeName(namespaces.Current, typePaths.Current);
+            var ancestors = new string[type.Depth - 1];
+
+            for (var j = 0; j < ancestors.Length; j++) {
+                names.MoveNext();
+                ancestors[j] = names.Current;
+            }
+
             yield return new(
                 NextGuid(random),
                 NextGuid(random),
                 group,
-                new(namespaces.Current, typePaths.Current),
+                type,
                 name,
-                NextGuid(random)
+                NextGuid(random),
+                string.Join('/', ancestors)
             );
         }
     }

@@ -98,10 +98,19 @@ public sealed class IdentifierSerializationTests(OrleansSerializerFixture orlean
             "prod",
             new("CyberCloud.DBforPostgreSQL", "servers/databases"),
             "orders",
-            ResourceGuid
+            ResourceGuid,
+            "pg-main"
         );
 
-        orleans.RoundTrip(original).Path.ShouldBe(original.Path);
+        var round = orleans.RoundTrip(original);
+
+        round.Path.ShouldBe(original.Path);
+
+        // ⚠ The parent name is its own surrogate member, so assert it survives rather than trusting
+        // the path comparison — a Path that dropped it would still be a legal path, one level
+        // shallower, for a different resource.
+        round.ParentNames.ShouldBe("pg-main");
+        round.Parent.ShouldNotBeNull().Name.ShouldBe("pg-main");
     }
 
     [Fact]

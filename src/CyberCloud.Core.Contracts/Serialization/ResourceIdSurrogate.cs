@@ -52,6 +52,21 @@ public struct ResourceIdSurrogate {
     /// <summary>The resource's GUID, or <see cref="Guid.Empty" /> for an unresolved address.</summary>
     [Id(5)]
     public Guid Id { get; set; }
+
+    /// <summary>
+    ///     The ancestors' names, <c>/</c>-separated — empty for a top-level type.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>A new member at a new <c>[Id]</c>, which is what makes an old payload still read.</b>
+    ///     Orleans leaves an absent member at its default, and <see cref="string" />'s default is
+    ///     <see langword="null" /> — which <see cref="ResourceId" /> normalises to <c>""</c>, the
+    ///     correct value for every id written before this member existed, because every type in the
+    ///     registry then was top-level. A depth-2 id sent to a silo that predates this member would
+    ///     lose its parent rather than fail, so the two halves of a rolling upgrade must not straddle
+    ///     the first nested type — docs/plan/12 § Child resources.
+    /// </remarks>
+    [Id(6)]
+    public string? ParentNames { get; set; }
 }
 
 /// <summary>The <see cref="ResourceId" /> ↔ <see cref="ResourceIdSurrogate" /> converter.</summary>
@@ -67,7 +82,8 @@ public sealed class ResourceIdSurrogateConverter : IConverter<ResourceId, Resour
                 surrogate.ResourceGroup,
                 surrogate.Type,
                 surrogate.Name,
-                surrogate.Id
+                surrogate.Id,
+                surrogate.ParentNames ?? ""
             );
 
     /// <inheritdoc />
@@ -80,6 +96,7 @@ public sealed class ResourceIdSurrogateConverter : IConverter<ResourceId, Resour
                 ResourceGroup = value.ResourceGroup,
                 Type = value.Type,
                 Name = value.Name,
-                Id = value.Id
+                Id = value.Id,
+                ParentNames = value.ParentNames
             };
 }
