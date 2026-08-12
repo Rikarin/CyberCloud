@@ -110,6 +110,22 @@ sealed class RecordingResourceManager : IResourceManager {
         Record(request, OnWrite);
 
     /// <inheritdoc />
+    /// <remarks>
+    ///     ⚠ Answers from <see cref="OnRead" /> rather than <see cref="OnWrite" />, because a restore
+    ///     returns a snapshot and not a <c>202</c> — docs/plan/08 § Soft delete makes it the one write
+    ///     verb that is not long-running, since it moves two records and touches no data plane.
+    /// </remarks>
+    public Task<Result<ResourceSnapshot>> RestoreAsync(
+        WriteRequest request,
+        CancellationToken cancellationToken = default
+    ) =>
+        Record(request, OnRead);
+
+    /// <inheritdoc />
+    public Task<Result<WriteAccepted>> PurgeAsync(WriteRequest request, CancellationToken cancellationToken = default) =>
+        Record(request, OnWrite);
+
+    /// <inheritdoc />
     public Task<Result<WriteAccepted>> ActionAsync(WriteRequest request, CancellationToken cancellationToken = default) =>
         Record(request, OnWrite);
 

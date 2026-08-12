@@ -89,6 +89,8 @@ static class Fixtures {
                     ],
                     Chart = "managed/postgres",
                     SoftDeleteDays = 7,
+                    PurgePermission = "purge",
+                    PurgeProtectionPointer = "/properties/enablePurgeProtection",
                     SupportsTags = true,
                     RequiresCluster = true
                 },

@@ -75,12 +75,62 @@ public interface IResourceIndexGrain : IGrainWithStringKey {
     /// </summary>
     /// <param name="resourceId">The bound GUID. A mismatch is a <c>Conflict</c>.</param>
     /// <remarks>
-    ///     ⚠ <b>The child counts go with it.</b> See <see cref="ChildrenAsync" />: the counts belong to
-    ///     the <i>resource</i> at this address, and once the name is free the next create at the same
-    ///     address is a different resource with a different GUID. Carrying a count across that boundary
-    ///     would make a brand-new resource undeletable over children it never had.
+    ///     <para>
+    ///         ⚠ <b>The child counts go with it.</b> See <see cref="ChildrenAsync" />: the counts belong
+    ///         to the <i>resource</i> at this address, and once the name is free the next create at the
+    ///         same address is a different resource with a different GUID. Carrying a count across that
+    ///         boundary would make a brand-new resource undeletable over children it never had.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>This is also the purge.</b> A <see cref="IndexEntryState.SoftDeleted" /> binding is
+    ///         released by this same call, which is what makes a purge the delete a soft-deletable type
+    ///         did not do at the accept — docs/plan/08 § Soft delete. What separates the two is the
+    ///         permission the manager checks, not the transition.
+    ///     </para>
     /// </remarks>
     Task<Result> ReleaseAsync(Guid resourceId);
+
+    /// <summary>
+    ///     Parks the binding for a soft-deleted resource, holding the name for its recovery window.
+    /// </summary>
+    /// <param name="resourceId">The bound GUID. A mismatch is a <c>Conflict</c>.</param>
+    /// <param name="retention">
+    ///     How long the window lasts, from the type's declared <c>SoftDeleteDays</c>.
+    ///     <para>
+    ///         ⚠ <b>A duration rather than a deadline, and the grain's own clock stamps it.</b> A
+    ///         caller-computed deadline would be stamped from the gateway's clock and read back against
+    ///         the silo's, so a skew of minutes between them would shorten or lengthen every window by
+    ///         that much — and a recovery window that is shorter than it says is the failure mode that
+    ///         matters. The grain owns the only clock that also decides whether a restore is still in
+    ///         time.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Not restamped by a second call.</b> The delete path is re-drivable and a re-drive
+    ///         an hour later must not extend the window it is re-driving.
+    ///     </para>
+    /// </param>
+    /// <returns>The parked entry, or the conflict.</returns>
+    /// <remarks>
+    ///     ⚠ <b>The counts stay.</b> Unlike <see cref="ReleaseAsync" />, this keeps
+    ///     <see cref="ChildrenAsync" />'s counts, because the resource is coming back and its identity
+    ///     does not change while it is away. In practice they are already zero — the manager refuses a
+    ///     delete while the resource has children (docs/plan/08 § Deleting a parent resource that has
+    ///     children), which is exactly what makes <i>"a soft-deleted parent with live children"</i>
+    ///     unreachable rather than a case anything here has to answer.
+    /// </remarks>
+    Task<Result<IndexEntry>> SoftDeleteAsync(Guid resourceId, TimeSpan retention);
+
+    /// <summary>
+    ///     Brings a soft-deleted binding back to <see cref="IndexEntryState.Confirmed" />, so the
+    ///     resource is addressable at its old name again.
+    /// </summary>
+    /// <param name="resourceId">The bound GUID. A mismatch is a <c>Conflict</c>.</param>
+    /// <returns>
+    ///     The restored entry, or <c>ResourceNotFound</c> for a name that holds
+    ///     nothing to restore and for one whose window has passed — the same answer for both, because
+    ///     a caller who may not know a name was ever taken must not learn it from a restore either.
+    /// </returns>
+    Task<Result<IndexEntry>> RestoreAsync(Guid resourceId);
 
     /// <summary>
     ///     Records that a child of <paramref name="childType" /> now hangs off this address —
@@ -138,11 +188,44 @@ public interface IResourceIndexGrain : IGrainWithStringKey {
 
     /// <summary>Resolves the address to its GUID, or <c>ResourceNotFound</c>.</summary>
     /// <remarks>
-    ///     ⚠ Only a <see cref="IndexEntryState.Confirmed" /> binding resolves. A claim under lease is
-    ///     not yet a resource, and returning its GUID would let a caller address a resource that may
-    ///     never exist.
+    ///     <para>
+    ///         ⚠ Only a <see cref="IndexEntryState.Confirmed" /> binding resolves. A claim under lease
+    ///         is not yet a resource, and returning its GUID would let a caller address a resource that
+    ///         may never exist.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>A <see cref="IndexEntryState.SoftDeleted" /> binding does not resolve either, and
+    ///         that single fact is what makes soft delete's <c>404</c> free.</b> docs/plan/08 § Soft
+    ///         delete: the resource leaves its resource group, its old address answers the
+    ///         <i>canonical</i> absence, and a <c>410 Gone</c> is forbidden because it would tell an
+    ///         unauthorized caller the name was taken — the enumeration oracle docs/plan/07 § The
+    ///         enforcement seam exists to close. Every caller of this method inherits that answer
+    ///         without knowing soft delete exists.
+    ///     </para>
     /// </remarks>
     Task<Result<Guid>> ResolveAsync();
+
+    /// <summary>
+    ///     Resolves the address to the GUID of the <b>soft-deleted</b> resource holding it, or
+    ///     <c>ResourceNotFound</c>.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>A separate method rather than a flag on <see cref="ResolveAsync" />, because the
+    ///         two questions have different answers on purpose.</b> "What resource is at this address"
+    ///         must stay <see cref="IndexEntryState.Confirmed" />-only for every ordinary caller — the
+    ///         paragraph above is the whole reason — and a boolean parameter would put the decision at
+    ///         each of that method's many call sites. Restore and purge are the only callers who are
+    ///         entitled to see through the absence, and they name that entitlement by calling a
+    ///         different method.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ It resolves a binding whose window has already passed. Refusing there would leave an
+    ///         expired resource unpurgeable, which is the one direction that cannot be recovered from.
+    ///         Whether a <i>restore</i> is still allowed is <see cref="RestoreAsync" />'s answer.
+    ///     </para>
+    /// </remarks>
+    Task<Result<Guid>> ResolveSoftDeletedAsync();
 
     /// <summary>Drops this activation — see <c>ITenantGrain.DeactivateAsync</c>.</summary>
     Task DeactivateAsync();

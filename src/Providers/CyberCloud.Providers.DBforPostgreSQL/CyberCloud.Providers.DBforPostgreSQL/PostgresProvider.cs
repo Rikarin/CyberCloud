@@ -37,14 +37,21 @@ namespace CyberCloud.Providers.DBforPostgreSQL;
 ///     </para>
 ///     <para>
 ///         ⚠ <b><c>SupportsSoftDelete</c> is exactly what docs/plan/06 § Tags, locks asks for on a type
-///         carrying data</b> — <i>"a dropped production database is not a support ticket you want to
-///         have to say no to"</i>, with 7 days named. It is not declared because nothing in the
-///         manager reads <c>SoftDeleteDays</c>: <c>DeleteTearsDownTheDataPlaneAndTheResourceIsGone</c>
-///         asserts the objects are gone and the name is released, and no recovery path exists to
-///         restore them from. Declaring a recovery window the platform does not honour would be a
-///         promise made to the one type whose users would test it. This is a
-///         <c>CyberCloud.ResourceManager</c> gap that the first data-carrying provider surfaces, which
-///         is the measurement docs/plan/25 § R1 asks a provider to produce.
+///         carrying data</b> — <i>"a dropped production database is not a support ticket you want to have
+///         to say no to"</i>, with 7 days named. It is not declared because the manager did not read
+///         <c>SoftDeleteDays</c>: <c>DeleteTearsDownTheDataPlaneAndTheResourceIsGone</c> asserts the
+///         objects are gone and the name is released, and no recovery path exists to restore them from.
+///         Declaring a recovery window the platform does not honour would be a promise made to the one type
+///         whose users would test it. This is a <c>CyberCloud.ResourceManager</c> gap that the first
+///         data-carrying provider surfaces, which is the measurement docs/plan/25 § R1 asks a provider to
+///         produce. ⚠ <b>THAT REASON HAS EXPIRED AND THE DECLARATION IS NOW A ONE-LINE DECISION RATHER THAN
+///         A BLOCKED ONE.</b> docs/plan/08 § Soft delete is built: a <c>DELETE</c> of a type declaring a
+///         window parks the resource at <c>IndexEntryState.SoftDeleted</c> so its old address answers the
+///         canonical <c>404</c>, holds its name, keeps its committed quota, moves its ReBAC parent edge to
+///         the subscription and drops its direct role assignments; a restore reverses it and a purge —
+///         under its own permission — ends it. So the question this type still owes an answer to is the
+///         provider's own: <i>does the data this type carries deserve a recovery window, and how long</i>,
+///         which is a claim about the data and not about the platform.
 ///     </para>
 /// </remarks>
 public sealed class PostgresProvider : IResourceProvider {

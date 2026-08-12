@@ -138,3 +138,28 @@ public static class ClusterPlacement {
     /// <summary>The pointer a type gets when it declares <c>RequiresCluster()</c> with no argument.</summary>
     public const string DefaultPointer = "/properties/clusterId";
 }
+
+/// <summary>
+///     The vocabulary of soft delete — docs/plan/08 § Soft delete.
+/// </summary>
+/// <remarks>
+///     ⚠ <b>The purge permission has a default and the recovery window does not, which is the right way
+///     round.</b> A window is a promise about a specific type's data and only its provider can say how
+///     long — <c>SupportsSoftDelete(7)</c> is a claim, not a formality. Who may end that window early is
+///     the same question for every type that has one, so a default here means the nine providers that
+///     eventually declare a window do not each invent a permission name, and the one that genuinely
+///     needs a different one still says so.
+/// </remarks>
+public static class SoftDeletePolicy {
+    /// <summary>
+    ///     The permission a purge needs when a type declares a window and names none.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Deliberately not <c>delete</c>.</b> docs/plan/08 § Soft delete: Azure keeps
+    ///     <c>deletedVaults/purge/action</c> out of Key Vault Contributor, so a role can hold "may
+    ///     delete" without "may destroy permanently". Defaulting this to the delete permission would
+    ///     collapse the two rights and make the recovery window worthless against exactly the caller it
+    ///     protects against — the one who could already delete.
+    /// </remarks>
+    public const string DefaultPurgePermission = "purge";
+}

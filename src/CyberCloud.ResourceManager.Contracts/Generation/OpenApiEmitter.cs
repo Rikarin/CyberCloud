@@ -454,18 +454,37 @@ public static class OpenApiEmitter {
             ["delete"] = new JsonObject {
                 ["operationId"] = OperationIdOf(type.Type, "Delete"),
                 ["summary"] = "Delete a " + type.Type + ".",
+                // ⚠ THIS SENTENCE USED TO SAY THE WINDOW WAS NOT HONOURED, AND IT WAS TELLING THE
+                // TRUTH — WHICH IS WHY IT HAD TO CHANGE WITH THE CODE AND NOT AFTER IT.
+                //
+                // While nothing in the resource manager read SoftDeleteDays, a type declaring seven
+                // days published a recovery window the platform could not deliver, and the honest
+                // thing the emitter could do was say so in the document. docs/plan/08 § Soft delete is
+                // built now: the DELETE parks the resource, the name is held, the quota stays
+                // committed and a purge ends it. So the description states what happens, and a
+                // document that still carried the disclaimer would be the same defect with the sign
+                // flipped — understating a guarantee callers can now rely on.
                 ["description"] = type.SoftDeleteDays > 0
                     ? "A deleted "
                     + type.Type
                     + " is recoverable for "
                     + type.SoftDeleteDays.ToString(CultureInfo.InvariantCulture)
-                    + " day(s) — docs/plan/06 § Tags, locks. ⚠ The recovery verb is not in this "
-                    + "document: nothing in the resource manager reads SoftDeleteDays yet, so this "
-                    + "is the window the platform promises and not a window it currently honours."
+                    + " day(s) — docs/plan/06 § Tags, locks. It leaves its resource group and its old "
+                    + "address answers 404; its name is held and its quota stays committed for the "
+                    + "whole window. Restore it, or purge it to end the window early — a purge needs "
+                    + "'"
+                    + type.PurgePermission
+                    + "', which is a separate right from '"
+                    + type.DeletePermission
+                    + "'."
                     : "The delete is permanent: this type declares no soft-delete window.",
                 ["responses"] = Accepted(),
                 ["x-cybercloud-permission"] = type.DeletePermission,
-                ["x-cybercloud-soft-delete-days"] = type.SoftDeleteDays
+                ["x-cybercloud-soft-delete-days"] = type.SoftDeleteDays,
+                // ⚠ Empty for a type with no window, which is what makes "does this type have a purge"
+                // and "does this type have a window" one question in the document as well as in the
+                // registry.
+                ["x-cybercloud-purge-permission"] = type.PurgePermission
             },
             // Registry facts with no representation in a body. They are here rather than dropped
             // because the CLI and the portal-form emitters need them and this document is what
@@ -481,6 +500,11 @@ public static class OpenApiEmitter {
             // also the fact ProviderBuilder now checks the schema against.
             ["x-cybercloud-cluster-id-pointer"] = type.ClusterIdPointer,
             ["x-cybercloud-soft-delete-days"] = type.SoftDeleteDays,
+            ["x-cybercloud-purge-permission"] = type.PurgePermission,
+            // ⚠ The pointer, not just "this type has purge protection", for the reason
+            // x-cybercloud-cluster-id-pointer above is a pointer: a CLI cannot offer a flag and a form
+            // cannot put a toggle on the right control from a boolean that names no field.
+            ["x-cybercloud-purge-protection-pointer"] = type.PurgeProtectionPointer,
             // The quota meters a write draws against. A caller who is about to be told
             // QuotaExceeded (docs/plan/08 § Errors) can see which limit before sending.
             ["x-cybercloud-meters"] = Meters(type)

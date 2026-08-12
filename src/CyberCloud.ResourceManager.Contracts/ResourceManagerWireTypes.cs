@@ -527,6 +527,47 @@ public sealed record OperationSpec {
     /// </remarks>
     [Id(14)]
     public Guid ParentResourceId { get; init; }
+
+    /// <summary>
+    ///     For a <see cref="OperationKind.Delete" />: whether this delete <b>parks</b> the resource for
+    ///     a recovery window rather than tearing it down.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>This is the flag that moves the committed-quota return from the delete to the
+    ///         purge, and moving it is docs/plan/08 § Soft delete's third decision.</b> A soft-deleted
+    ///         resource still holds everything it reserved — <i>"handing the data back is the entire
+    ///         feature: the volumes, the PVCs and the memory are all still allocated"</i> — so its quota
+    ///         stays committed. <c>OperationGrain</c> reads this and skips
+    ///         <c>ReturnCommittedQuotaAsync</c>; the <see cref="OperationKind.Purge" /> that ends the
+    ///         window runs it instead, from a spec carrying the same
+    ///         <see cref="CommittedQuota" /> amounts.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>It moves the WHOLE of it, <c>QuotaMeter.Resources</c> included</b>, even though a
+    ///         soft-deleted resource is not one anybody can use. The document is explicit that a
+    ///         per-meter split reintroduces the partial restore: a restore that had to re-reserve
+    ///         <i>anything</i> can fail against an allowance the tenant has spent in the meantime, which
+    ///         is a restore that works only when it is not needed.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>On the SPEC rather than re-read from the registry at convergence.</b> The operation
+    ///         grain is re-driven from a reminder after the resource is gone, and docs/plan/08 § Long-
+    ///         running operations requires the state to include everything needed to re-drive. A
+    ///         registry lookup at that point would also make the answer depend on what the type declares
+    ///         *now* — so a provider that removed <c>SupportsSoftDelete</c> between the accept and the
+    ///         convergence would turn a parked resource into one whose quota came back twice.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b><see langword="false" /> means "as before", which is what makes appending it
+    ///         safe</b> — docs/plan/05 § Serialization and schema evolution. Every operation started by
+    ///         a peer that predates this member is a hard delete, which is what every delete was.
+    ///         ⚠ Numbered 15, never by renumbering, and the durable tier is JSON so the property NAME is
+    ///         the persisted contract.
+    ///     </para>
+    /// </remarks>
+    [Id(15)]
+    public bool SoftDelete { get; init; }
 }
 
 /// <summary>

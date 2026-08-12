@@ -72,15 +72,22 @@ namespace CyberCloud.Providers.Storage;
 ///         identities from.
 ///     </para>
 ///     <para>
-///         ⚠ <b>No <c>SupportsSoftDelete</c>, for the reason the three providers before this one
-///         give</b>: nothing in the manager reads <c>SoftDeleteDays</c>, and declaring a recovery
-///         window the platform does not honour would be a promise made to the users most likely to
-///         test it. ⚠ <b>It is a worse absence here than on any of them</b> — docs/plan/06 § Tags,
-///         locks gives 7 days to <i>"types carrying data"</i>, and an object-storage account is the
-///         type that carries the most of it. What partly stands in is the volume servers' PVCs, which
-///         a <c>Background</c> cascade leaves behind unless the StorageClass reclaims them; that is a
-///         property of somebody else's configuration rather than a promise this type makes, so it is
-///         not offered as one.
+///         ⚠ <b>No <c>SupportsSoftDelete</c>, for the reason the three providers before this one give</b>:
+///         the manager did not read <c>SoftDeleteDays</c>, and declaring a recovery window the platform
+///         does not honour would be a promise made to the users most likely to test it. ⚠ <b>It is a worse
+///         absence here than on any of them</b> — docs/plan/06 § Tags, locks gives 7 days to <i>"types
+///         carrying data"</i>, and an object-storage account is the type that carries the most of it. What
+///         partly stands in is the volume servers' PVCs, which a <c>Background</c> cascade leaves behind
+///         unless the StorageClass reclaims them; that is a property of somebody else's configuration
+///         rather than a promise this type makes, so it is not offered as one. ⚠ <b>THAT REASON HAS EXPIRED
+///         AND THE DECLARATION IS NOW A ONE-LINE DECISION RATHER THAN A BLOCKED ONE.</b> docs/plan/08 §
+///         Soft delete is built: a <c>DELETE</c> of a type declaring a window parks the resource at
+///         <c>IndexEntryState.SoftDeleted</c> so its old address answers the canonical <c>404</c>, holds
+///         its name, keeps its committed quota, moves its ReBAC parent edge to the subscription and drops
+///         its direct role assignments; a restore reverses it and a purge — under its own permission — ends
+///         it. So the question this type still owes an answer to is the provider's own: <i>does the data
+///         this type carries deserve a recovery window, and how long</i>, which is a claim about the data
+///         and not about the platform.
 ///     </para>
 /// </remarks>
 public sealed class StorageProvider : IResourceProvider {

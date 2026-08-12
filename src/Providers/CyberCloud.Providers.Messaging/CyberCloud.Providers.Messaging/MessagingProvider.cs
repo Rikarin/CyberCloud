@@ -100,12 +100,19 @@ namespace CyberCloud.Providers.Messaging;
 ///         of the corrected piece 6 has had a service to be true of.
 ///     </para>
 ///     <para>
-///         ⚠ <b>No <c>SupportsSoftDelete</c>, for the reason
-///         <c>CyberCloud.DBforPostgreSQL/servers</c> gives</b>: nothing in the manager reads
-///         <c>SoftDeleteDays</c>, and declaring a recovery window the platform does not honour would
-///         be a promise made to the users most likely to test it. <c>/properties/storage/deleteClaim</c>
-///         defaulting to <see langword="false" /> is the honest partial answer — the volumes outlive a
-///         mistaken delete even though the resource does not.
+///         ⚠ <b>No <c>SupportsSoftDelete</c>, for the reason <c>CyberCloud.DBforPostgreSQL/servers</c>
+///         gives</b>: the manager did not read <c>SoftDeleteDays</c>, and declaring a recovery window the
+///         platform does not honour would be a promise made to the users most likely to test it.
+///         <c>/properties/storage/deleteClaim</c> defaulting to <see langword="false" /> is the honest
+///         partial answer — the volumes outlive a mistaken delete even though the resource does not. ⚠
+///         <b>THAT REASON HAS EXPIRED AND THE DECLARATION IS NOW A ONE-LINE DECISION RATHER THAN A BLOCKED
+///         ONE.</b> docs/plan/08 § Soft delete is built: a <c>DELETE</c> of a type declaring a window parks
+///         the resource at <c>IndexEntryState.SoftDeleted</c> so its old address answers the canonical
+///         <c>404</c>, holds its name, keeps its committed quota, moves its ReBAC parent edge to the
+///         subscription and drops its direct role assignments; a restore reverses it and a purge — under
+///         its own permission — ends it. So the question this type still owes an answer to is the
+///         provider's own: <i>does the data this type carries deserve a recovery window, and how long</i>,
+///         which is a claim about the data and not about the platform.
 ///     </para>
 /// </remarks>
 public sealed class MessagingProvider : IResourceProvider {

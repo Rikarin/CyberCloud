@@ -297,13 +297,38 @@ public sealed class EmittedExpressivenessTests {
 
     // ── Soft delete ────────────────────────────────────────────────────────────────────────────
 
+    /// <summary>
+    ///     ⚠ <b>The published window is one the platform delivers, and the disclaimer that said
+    ///     otherwise is gone with the defect it described.</b>
+    /// </summary>
+    /// <remarks>
+    ///     This test used to be called
+    ///     <c>ASoftDeleteWindowReachesTheDeleteOperationAndSaysItIsNotHonouredYet</c> and asserted the
+    ///     description contained <i>"not a window it currently honours"</i>. That was honest while
+    ///     nothing in the resource manager read <c>SoftDeleteDays</c> — the platform was advertising a
+    ///     recovery window it could not deliver, and naming it as a promise was the least bad thing the
+    ///     emitter could do. docs/plan/08 § Soft delete is built now, so the document states the
+    ///     behaviour; leaving the disclaimer would understate a guarantee callers can rely on, which is
+    ///     the same drift with the sign flipped.
+    /// </remarks>
     [Fact]
-    public void ASoftDeleteWindowReachesTheDeleteOperationAndSaysItIsNotHonouredYet() {
+    public void ASoftDeleteWindowReachesTheDeleteOperationWithThePurgePermissionBesideIt() {
         var delete = PathItem["delete"]!;
 
         delete["x-cybercloud-soft-delete-days"]!.GetValue<int>().ShouldBe(7);
-        // ⚠ Honest rather than flattering: nothing in the resource manager reads SoftDeleteDays, so
-        // the document publishes the promise and names it as one.
-        delete["description"]!.GetValue<string>().ShouldContain("not a window it currently honours");
+
+        // ⚠ The purge permission is published beside the delete permission, and they differ. A
+        // generated SDK or a role designer reading this document has to be able to see that "may
+        // delete" and "may destroy permanently" are two rights — docs/plan/08 § Soft delete.
+        delete["x-cybercloud-purge-permission"]!.GetValue<string>().ShouldBe("purge");
+        delete["x-cybercloud-purge-permission"]!.GetValue<string>()
+            .ShouldNotBe(delete["x-cybercloud-permission"]!.GetValue<string>());
+
+        delete["description"]!.GetValue<string>().ShouldNotContain("not a window it currently honours");
+        delete["description"]!.GetValue<string>().ShouldContain("its old address answers 404");
+
+        // And the pointer a portal needs in order to render the purge-protection toggle at all.
+        PathItem["x-cybercloud-purge-protection-pointer"]!.GetValue<string>()
+            .ShouldBe("/properties/enablePurgeProtection");
     }
 }

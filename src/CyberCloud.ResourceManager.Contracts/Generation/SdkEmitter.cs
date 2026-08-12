@@ -437,7 +437,10 @@ public static class SdkEmitter {
                 type.SoftDeleteDays > 0
                     ? " ⚠ Recoverable for "
                       + DocumentReader.Count(type.SoftDeleteDays)
-                      + " day(s) — docs/plan/06 § Tags, locks."
+                      + " day(s): the resource keeps its quota and its data, and its name is held. "
+                      + "Purge to end that window early — a separate permission, '"
+                      + type.PurgePermission
+                      + "'."
                     : " ⚠ Permanent: this type declares no soft-delete window."
             )
             .Append("</summary>\n")

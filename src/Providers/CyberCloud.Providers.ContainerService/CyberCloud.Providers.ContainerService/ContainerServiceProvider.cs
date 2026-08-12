@@ -46,10 +46,19 @@ namespace CyberCloud.Providers.ContainerService;
 ///     </para>
 ///     <para>
 ///         ⚠ <b>No <c>SupportsSoftDelete</c>, for the reason the nine providers before this one give</b>:
-///         nothing in the manager reads <c>SoftDeleteDays</c>, and declaring a recovery window the
+///         the manager did not read <c>SoftDeleteDays</c>, and declaring a recovery window the
 ///         platform does not honour would be a promise made to the users most likely to test it.
-///         ⚠ It would be a strange promise on this type anyway — a soft-deleted cluster whose worker
-///         VMs are gone is not a cluster anybody can be handed back.
+///         ⚠ <b>THAT REASON HAS EXPIRED</b> — docs/plan/08 § Soft delete is built and the manager
+///         honours the declaration: a <c>DELETE</c> of a type declaring a window parks the resource at
+///         <c>IndexEntryState.SoftDeleted</c> so its old address answers the canonical <c>404</c>,
+///         holds its name, keeps its committed quota, moves its ReBAC parent edge to the subscription
+///         and drops its direct role assignments; a restore reverses it and a purge, under its own
+///         permission, ends it. ⚠ <b>And the second sentence below is the one that still decides
+///         it, which is the only kind of reason this line should ever carry.</b> It would be a
+///         strange promise on this type anyway — a soft-deleted cluster whose worker VMs are gone is
+///         not a cluster anybody can be handed back, so the window would hold capacity for a recovery
+///         that cannot be delivered. That is a judgement about this type rather than about the
+///         platform, and unlike the platform's it has not changed.
 ///     </para>
 /// </remarks>
 public sealed class ContainerServiceProvider : IResourceProvider {

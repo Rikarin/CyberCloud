@@ -330,6 +330,28 @@ public sealed record IndexEntry {
     /// <summary>When the entry last changed.</summary>
     [Id(4)]
     public DateTimeOffset ModifiedAt { get; init; }
+
+    /// <summary>
+    ///     The end of the recovery window. Meaningless unless
+    ///     <see cref="IndexEntryState.SoftDeleted" />.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>Deliberately not <see cref="LeaseExpiresAt" /> under a second name.</b> A lease
+    ///         expiring frees the name; this expiring does not — see
+    ///         <see cref="IndexEntryState.SoftDeleted" />. Two deadlines with opposite consequences
+    ///         sharing one member is how a restore past its window would silently become a name
+    ///         released to whoever asked next.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Stamped from the type's declared retention at the moment of the delete and never
+    ///         rewritten.</b> docs/plan/08 § Soft delete: <i>"retention is set at creation and
+    ///         immutable afterwards — a window a caller can shorten under their own resource is not a
+    ///         recovery window."</i>
+    ///     </para>
+    /// </remarks>
+    [Id(5)]
+    public DateTimeOffset RecoverableUntil { get; init; }
 }
 
 /// <summary>

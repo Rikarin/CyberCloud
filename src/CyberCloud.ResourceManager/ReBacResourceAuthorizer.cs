@@ -80,6 +80,21 @@ public sealed class ReBacResourceAuthorizer(IGrainFactory grains, ILogger<ReBacR
     /// </remarks>
     public const string ResourceGroupObjectType = ObjectTypes.ResourceGroup;
 
+    /// <summary>
+    ///     The ReBAC object type of a subscription — what a soft-deleted resource hangs off.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Nothing wrote a <c>subscription:</c> tuple before soft delete, and that is why the id
+    ///     form is named here rather than spelled at the call site.</b> docs/plan/08 § Soft delete moves
+    ///     a deleted resource's parent edge to <c>#parent@subscription:{sub}</c> so that
+    ///     <i>"the people who can see a deleted resource become the people who hold subscription-scoped
+    ///     rights, which is exactly who Azure gives <c>deletedVaults/read</c> and <c>purge/action</c>
+    ///     to"</i>. <c>CyberCloudSchema</c> already defines the type with the same
+    ///     <c>owner</c>/<c>contributor</c>/<c>reader</c> rewrites a resource group has, so the walk
+    ///     composes with no schema change and no <c>SchemaVersion</c> bump.
+    /// </remarks>
+    public const string SubscriptionObjectType = ObjectTypes.Subscription;
+
     /// <inheritdoc />
     public async Task<Result> AuthorizeAsync(
         ResourceId id,
@@ -201,6 +216,24 @@ public sealed class ReBacResourceAuthorizer(IGrainFactory grains, ILogger<ReBacR
     /// </remarks>
     public static string GroupObjectId(ResourceId id) =>
         id.SubscriptionId.ToString("N", CultureInfo.InvariantCulture) + "-" + id.ResourceGroup;
+
+    /// <summary>A subscription's ReBAC object id: the subscription GUID in the <c>N</c> form.</summary>
+    /// <remarks>
+    ///     ⚠ <b>The bare GUID, with no tenant prefix, and unlike <see cref="GroupObjectId" /> it needs
+    ///     none.</b> A resource group's name is unique only within its subscription, which is why that
+    ///     id is a pair; a subscription id is a GUID and is unique on its own. The tenant is already in
+    ///     the grain key — every store this reaches is resolved through <c>ForTenant</c> — so putting it
+    ///     in the object id as well would be a second tenant boundary that can disagree with the first.
+    ///     <para>
+    ///         ⚠ <b>The <c>N</c> form, matching <see cref="CheckedObject" />'s resource id.</b>
+    ///         <c>RelationNaming.IsId</c> accepts both forms, so a <c>D</c> here would be legal and
+    ///         would silently make <c>subscription:{guid:D}</c> a different object from the one anything
+    ///         else writes — one of those permanent, invisible mismatches the resource-group casing bug
+    ///         above is the cautionary tale for.
+    ///     </para>
+    /// </remarks>
+    public static string SubscriptionObjectId(ResourceId id) =>
+        id.SubscriptionId.ToString("N", CultureInfo.InvariantCulture);
 
     static Result NotFound(ResourceId id) =>
         Result.Failure(

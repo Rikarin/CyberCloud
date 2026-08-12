@@ -93,6 +93,11 @@ public static class FormsEmitter {
             ["requiresCluster"] = type.RequiresCluster,
             ["clusterIdPointer"] = type.ClusterIdPointer,
             ["softDeleteDays"] = type.SoftDeleteDays,
+            // ⚠ The pointer as well as the window, because a portal that knows a type is recoverable
+            // and not which field turns purge protection on cannot render the toggle — the same gap
+            // `requiresCluster` without `clusterIdPointer` had.
+            ["purgePermission"] = type.PurgePermission,
+            ["purgeProtectionPointer"] = type.PurgeProtectionPointer,
             ["fields"] = fields,
             ["actions"] = actions
         };

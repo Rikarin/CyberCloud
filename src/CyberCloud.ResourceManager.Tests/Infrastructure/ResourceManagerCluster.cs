@@ -155,11 +155,27 @@ public sealed class RecordingRelationWriter : IResourceRelationWriter {
     /// <summary>Whether linking fails, so the write path's rollback can be driven.</summary>
     public static bool FailLink { get; set; }
 
+    /// <summary>
+    ///     The direct role assignments each resource carries, as <c>{role}@{subject}</c>.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Seeded by a test and dropped by the double, because docs/plan/08 § Soft delete asks for
+    ///     a test that a grant written directly on a resource is <i>absent</i> after a restore.</b> A
+    ///     double with no assignments at all could not tell "the drop ran" from "there was nothing to
+    ///     drop", which is the shape of a test that passes for the wrong reason.
+    /// </remarks>
+    public static ConcurrentDictionary<Guid, List<string>> Assignments { get; } = new();
+
+    /// <summary>Whether re-parenting and assignment drops fail, so the retry can be driven.</summary>
+    public static bool FailReparent { get; set; }
+
     /// <summary>Forgets everything.</summary>
     public static void Reset() {
         Edges.Clear();
         Calls.Clear();
+        Assignments.Clear();
         FailLink = false;
+        FailReparent = false;
     }
 
     /// <inheritdoc />
@@ -185,19 +201,119 @@ public sealed class RecordingRelationWriter : IResourceRelationWriter {
         CancellationToken cancellationToken = default
     ) {
         Calls.Enqueue("unlink");
-        Edges.TryRemove(id.Id, out _);
+
+        // ⚠ REMOVES THE EDGE ONLY WHEN IT IS THE ONE THIS CALL NAMES, WHICH THIS DOUBLE DID NOT USED
+        // TO DO — AND THE OMISSION HID A REAL DEFECT.
+        //
+        // The real writer builds a tuple and deletes THAT tuple: called against a resource whose edge
+        // names something else, it removes nothing and reports success. A double that removed
+        // unconditionally agrees with a correct writer and with a writer that unlinks the wrong
+        // subject, so the purge path — which must unlink `subscription:` and not the resource group —
+        // could aim at either and no test could tell. Measured, not predicted: sabotaging the purge to
+        // call this method instead of UnlinkFromSubscriptionAsync left the whole suite green.
+        if (Edges.TryGetValue(id.Id, out var subject)
+            && string.Equals(subject, SubjectOf(id, parentId), StringComparison.Ordinal)) {
+            Edges.TryRemove(id.Id, out _);
+        }
+
         return Task.FromResult(Result.Success);
     }
 
+    /// <inheritdoc />
+    public Task<Result> ReparentToSubscriptionAsync(
+        ResourceId id,
+        Guid parentId,
+        CancellationToken cancellationToken = default
+    ) {
+        Calls.Enqueue("reparent-to-subscription");
+
+        if (FailReparent) {
+            return Task.FromResult(Result.Failure(ErrorCode.InternalError, "the tuple store is down"));
+        }
+
+        // ⚠ ONE ASSIGNMENT, NOT AN ADD-THEN-REMOVE PAIR, WHICH IS WHAT MAKES "never parentless"
+        // ASSERTABLE. The real writer writes the new edge and then deletes the old one, so the
+        // resource holds one parent before and one after; a double that removed first would let a
+        // test pass over an implementation that leaves the resource unreachable in between.
+        Edges[id.Id] = SubscriptionSubject(id);
+        return Task.FromResult(Result.Success);
+    }
+
+    /// <inheritdoc />
+    public Task<Result> ReparentFromSubscriptionAsync(
+        ResourceId id,
+        Guid parentId,
+        CancellationToken cancellationToken = default
+    ) {
+        Calls.Enqueue("reparent-from-subscription");
+
+        if (FailReparent) {
+            return Task.FromResult(Result.Failure(ErrorCode.InternalError, "the tuple store is down"));
+        }
+
+        Edges[id.Id] = SubjectOf(id, parentId);
+        return Task.FromResult(Result.Success);
+    }
+
+    /// <inheritdoc />
+    public Task<Result> UnlinkFromSubscriptionAsync(ResourceId id, CancellationToken cancellationToken = default) {
+        Calls.Enqueue("unlink-subscription");
+
+        // ⚠ Removes the edge ONLY when it actually names the subscription. The real writer deletes a
+        // specific tuple, so calling this on a resource whose edge names its group is a no-op there —
+        // and a double that removed unconditionally would hide a purge that unlinked the wrong one.
+        if (Edges.TryGetValue(id.Id, out var subject)
+            && string.Equals(subject, SubscriptionSubject(id), StringComparison.Ordinal)) {
+            Edges.TryRemove(id.Id, out _);
+        }
+
+        return Task.FromResult(Result.Success);
+    }
+
+    /// <inheritdoc />
+    public Task<Result<int>> DropDirectRoleAssignmentsAsync(
+        ResourceId id,
+        CancellationToken cancellationToken = default
+    ) {
+        Calls.Enqueue("drop-assignments");
+
+        if (FailReparent) {
+            return Task.FromResult(Result<int>.Failure(ErrorCode.InternalError, "the tuple store is down"));
+        }
+
+        return Task.FromResult(
+            Result<int>.Success(Assignments.TryRemove(id.Id, out var held) ? held.Count : 0)
+        );
+    }
+
     /// <summary>
-    ///     What the real writer would aim the edge at. ⚠ A double that always recorded the group would
-    ///     agree with a writer that always wrote the group, which is the bug this pair exists to
-    ///     surface — so the branch is mirrored here even though this class writes no tuples.
+    ///     The subject the real writer would aim the edge at, <b>with its object type</b>.
     /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>A double that always recorded the group would agree with a writer that always wrote
+    ///         the group, which is the bug this pair exists to surface</b> — so the branch is mirrored
+    ///         here even though this class writes no tuples.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The type prefix is what makes soft delete's re-parent assertable at all.</b> A
+    ///         soft-deleted resource's edge names <c>subscription:{sub:N}</c> and a child's names
+    ///         <c>resource:{parent:N}</c>; recorded as bare GUIDs the two are indistinguishable strings,
+    ///         so a re-parent that aimed at the wrong object type would keep every existing assertion
+    ///         green while meaning something else. docs/plan/08 § Soft delete.
+    ///     </para>
+    /// </remarks>
     static string SubjectOf(ResourceId id, Guid parentId) =>
         id.Parent is null
-            ? id.SubscriptionId.ToString("N", CultureInfo.InvariantCulture) + "-" + id.ResourceGroup
-            : parentId.ToString("N", CultureInfo.InvariantCulture);
+            ? "resourceGroup:"
+            + id.SubscriptionId.ToString("N", CultureInfo.InvariantCulture)
+            + "-"
+            + id.ResourceGroup
+            : "resource:" + parentId.ToString("N", CultureInfo.InvariantCulture);
+
+    /// <summary>The subject a soft-deleted resource's edge names.</summary>
+    static string SubscriptionSubject(ResourceId id) =>
+        "subscription:" + id.SubscriptionId.ToString("N", CultureInfo.InvariantCulture);
 }
 
 /// <summary>Records every <c>resource-changed</c> event step 11 emitted.</summary>
@@ -403,6 +519,18 @@ public sealed class ResourceManagerCluster : IAsyncLifetime {
     public static ResourceId Address(string name, string group = "prod", Guid? tenant = null) =>
         new(tenant ?? Tenant, Subscription, group, ConformingReconciler.TypeName, name, Guid.Empty);
 
+    /// <summary>Builds an address of the <b>soft-deletable</b> type.</summary>
+    /// <param name="name">The resource name.</param>
+    /// <param name="group">The resource group.</param>
+    /// <param name="tenant">The tenant, defaulting to <see cref="Tenant" />.</param>
+    /// <remarks>
+    ///     ⚠ A separate helper rather than a parameter on <see cref="Address" />, so that a soft-delete
+    ///     test cannot be written against the hard-delete type by forgetting an argument — which is a
+    ///     test that passes for the wrong reason, and the failure this whole area is most prone to.
+    /// </remarks>
+    public static ResourceId VaultAddress(string name, string group = "prod", Guid? tenant = null) =>
+        new(tenant ?? Tenant, Subscription, group, TestingProvider.VaultTypeName, name, Guid.Empty);
+
     /// <summary>A caller in the test tenant.</summary>
     /// <param name="tenant">The tenant, defaulting to <see cref="Tenant" />.</param>
     /// <param name="subject">The subject id.</param>
@@ -513,6 +641,14 @@ public sealed class ResourceManagerCluster : IAsyncLifetime {
                     services.AddSingleton(new ConnectionLimits { StreamsPerConnection = 2 });
 
                     services.AddSingleton<ConformingReconciler>();
+
+                    // ⚠ Registered by hand beside its sibling, because this harness does not run
+                    // DiscoveringProviderBuilder. A reconciler the container cannot resolve does not
+                    // fail at silo start — the driver reports the pass InProgress forever, so the
+                    // create never converges, the quota is never committed and every downstream
+                    // assertion fails somewhere else entirely. Adding a type here is adding a line
+                    // here.
+                    services.AddSingleton<SoftDeletableReconciler>();
                     services.AddSingleton<IResourceProvider, TestingProvider>();
                     services.TryAddSingleton<ILoggerFactory>(_ => NullLoggerFactory.Instance);
                 }

@@ -88,6 +88,11 @@ public sealed class TenancyWireContractTests {
         ("IndexEntry", 2, "IndexedValue"),
         ("IndexEntry", 3, "LeaseExpiresAt"),
         ("IndexEntry", 4, "ModifiedAt"),
+        // ⚠ Appended at 5 rather than slotted in beside LeaseExpiresAt, which is where it belongs by
+        // meaning. docs/plan/05 § Serialization: numbers are never reused and never reordered, and a
+        // recovery window's deadline reading as a lease's expiry — or the reverse — is a name that
+        // comes back for a resource that is still recoverable. Soft delete, docs/plan/08.
+        ("IndexEntry", 5, "RecoverableUntil"),
 
         // What IResourceIndexGrain.ChildrenAsync answers with — docs/plan/08 § Deleting a parent
         // resource that has children.

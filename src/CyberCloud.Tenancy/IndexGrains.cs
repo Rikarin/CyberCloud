@@ -104,6 +104,28 @@ public sealed class ResourceIndexGrain(
     }
 
     /// <inheritdoc />
+    public async Task<Result<IndexEntry>> SoftDeleteAsync(Guid resourceId, TimeSpan retention) =>
+        // ⚠ NOTHING IS CLEARED HERE, WHICH IS THE WHOLE DIFFERENCE FROM ReleaseAsync ABOVE.
+        //
+        // That method drops the child counts because the name becomes free and the next create at this
+        // address is a different resource. This one holds the name for the same resource, which is
+        // coming back with the same GUID — so the counts stay true and clearing them would leave a
+        // restored parent deletable over children it still has.
+        await PersistAsync(
+            IndexClaimMachine.SoftDelete(
+                state.State.Entry,
+                resourceId,
+                clock.UtcNow + retention,
+                clock.UtcNow,
+                Describe()
+            )
+        );
+
+    /// <inheritdoc />
+    public async Task<Result<IndexEntry>> RestoreAsync(Guid resourceId) =>
+        await PersistAsync(IndexClaimMachine.Restore(state.State.Entry, resourceId, clock.UtcNow, Describe()));
+
+    /// <inheritdoc />
     public async Task<Result<int>> AddChildAsync(ResourceTypeName childType) {
         if (childType.IsEmpty) {
             return Result<int>.Failure(
@@ -187,8 +209,30 @@ public sealed class ResourceIndexGrain(
                 ? Result<Guid>.Success(entry.BoundTo)
                 : Result<Guid>.Failure(
                     ErrorCode.ResourceNotFound,
+                    // ⚠ ONE MESSAGE FOR EVERY NON-CONFIRMED STATE, SOFT-DELETED INCLUDED, AND THE
+                    // STATE NAME IN IT IS NOT AN ORACLE BECAUSE NOTHING PROJECTS IT TO A CALLER.
+                    // ResourceManagerService turns any failure from here into `'{path}' does not
+                    // exist.` from its own NotFound helper — byte for byte the message a name that was
+                    // never taken gets — so this text reaches a log and never a response body.
+                    // docs/plan/08 § Soft delete forbids a 410 for exactly the reason that matters
+                    // here: the caller must not be able to tell a held name from a free one.
                     $"{Describe()} resolves to nothing: it is {entry.State}. Only a confirmed binding "
-                    + "is a resource — a claim under lease may never become one."
+                    + "is a resource — a claim under lease may never become one, and a soft-deleted "
+                    + "one is recoverable rather than addressable."
+                )
+        );
+    }
+
+    /// <inheritdoc />
+    public Task<Result<Guid>> ResolveSoftDeletedAsync() {
+        var entry = IndexClaimMachine.Effective(state.State.Entry, clock.UtcNow);
+
+        return Task.FromResult(
+            entry.State == IndexEntryState.SoftDeleted
+                ? Result<Guid>.Success(entry.BoundTo)
+                : Result<Guid>.Failure(
+                    ErrorCode.ResourceNotFound,
+                    $"{Describe()} holds no soft-deleted resource: it is {entry.State}."
                 )
         );
     }

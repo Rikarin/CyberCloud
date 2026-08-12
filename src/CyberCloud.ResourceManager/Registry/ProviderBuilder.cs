@@ -208,9 +208,28 @@ sealed class ProviderBuilder(string providerNamespace) : IResourceTypeBuilder {
     }
 
     /// <inheritdoc />
-    public IResourceTypeBuilder SupportsSoftDelete(int days) {
+    public IResourceTypeBuilder SupportsSoftDelete(
+        int days,
+        string purgePermission = SoftDeletePolicy.DefaultPurgePermission,
+        string purgeProtectionPointer = ""
+    ) {
         ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(days, 0);
-        Open(nameof(SupportsSoftDelete)).SoftDeleteDays = days;
+        ArgumentException.ThrowIfNullOrWhiteSpace(purgePermission);
+        ArgumentNullException.ThrowIfNull(purgeProtectionPointer);
+
+        if (purgeProtectionPointer.Length > 0 && purgeProtectionPointer[0] != '/') {
+            throw new ArgumentException(
+                $"'{purgeProtectionPointer}' is not an RFC 6901 pointer: it must start with '/'. "
+                + "Purge protection is read out of the resource's own body, so the registry has to be "
+                + "told where — see IResourceTypeBuilder.SupportsSoftDelete.",
+                nameof(purgeProtectionPointer)
+            );
+        }
+
+        var draft = Open(nameof(SupportsSoftDelete));
+        draft.SoftDeleteDays = days;
+        draft.PurgePermission = purgePermission;
+        draft.PurgeProtectionPointer = purgeProtectionPointer;
         return this;
     }
 
@@ -256,6 +275,7 @@ sealed class ProviderBuilder(string providerNamespace) : IResourceTypeBuilder {
             }
 
             CheckClusterPlacement(draft);
+            CheckPurgeProtection(draft);
 
             built.Add(
                 new() {
@@ -271,6 +291,14 @@ sealed class ProviderBuilder(string providerNamespace) : IResourceTypeBuilder {
                     DeletePermission = draft.DeletePermission,
                     Chart = draft.Chart,
                     SoftDeleteDays = draft.SoftDeleteDays,
+                    // ⚠ Both are zeroed for a type with no window, which is the same shape
+                    // ClusterIdPointer takes one line down: a fact that only means something
+                    // alongside its flag is not carried when the flag is off. It keeps "does this
+                    // type have a purge permission" and "does this type have a recovery window" from
+                    // being two questions that can disagree.
+                    PurgePermission = draft.SoftDeleteDays > 0 ? draft.PurgePermission : string.Empty,
+                    PurgeProtectionPointer =
+                        draft.SoftDeleteDays > 0 ? draft.PurgeProtectionPointer : string.Empty,
                     SupportsTags = draft.SupportsTags,
                     RequiresCluster = draft.RequiresCluster,
                     ClusterIdPointer = draft.RequiresCluster ? draft.ClusterIdPointer : string.Empty,
@@ -280,6 +308,77 @@ sealed class ProviderBuilder(string providerNamespace) : IResourceTypeBuilder {
         }
 
         return built.DrainToImmutable();
+    }
+
+    /// <summary>
+    ///     Gives the purge-protection pointer its schema consequence: every api-version must declare
+    ///     it, as a boolean.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>The same check <see cref="CheckClusterPlacement" /> is, for the same reason, and the
+    ///         failure it prevents is quieter.</b> A cluster pointer that names nothing fails every
+    ///         reconcile, loudly, one resource at a time. A purge-protection pointer that names nothing
+    ///         reads as <see langword="false" /> forever: the flag can never be set, so protection never
+    ///         engages, so nothing ever fails — the resource is simply purgeable when its owner believes
+    ///         it is not. A protection that silently does not exist is worse than one that is absent,
+    ///         because only the second is visible in the generated document.
+    ///     </para>
+    ///     <para>
+    ///         <b>Every version, not just the newest</b>, because an api-version is served forever
+    ///         (docs/plan/08 § The provider registry) and the manager reads one pointer for all of them.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Optional rather than required, which is the opposite of the cluster id.</b> A
+    ///         cluster id has no sensible default and a body without one cannot be placed. Purge
+    ///         protection defaults to off — that is what "opt-in" means — so requiring every caller to
+    ///         send <c>false</c> would be a required field whose only honest value is the default.
+    ///     </para>
+    /// </remarks>
+    static void CheckPurgeProtection(TypeDraft draft) {
+        if (draft.PurgeProtectionPointer.Length == 0) {
+            return;
+        }
+
+        if (draft.SoftDeleteDays <= 0) {
+            throw new InvalidOperationException(
+                $"'{draft.Type}' declares a purge-protection pointer and no recovery window. Purge "
+                + "protection refuses a purge, a purge ends a recovery window, and a type with no "
+                + "window has neither — so the flag would be a property callers can set and nothing "
+                + "reads. docs/plan/08 § Soft delete."
+            );
+        }
+
+        foreach (var version in draft.ApiVersions) {
+            SchemaProperty? declared = null;
+
+            foreach (var property in version.Schema.Properties) {
+                if (string.Equals(property.JsonPointer, draft.PurgeProtectionPointer, StringComparison.Ordinal)) {
+                    declared = property;
+                    break;
+                }
+            }
+
+            if (declared is not { } flag) {
+                throw new InvalidOperationException(
+                    $"'{draft.Type}' declares SupportsSoftDelete(purgeProtectionPointer: "
+                    + $"'{draft.PurgeProtectionPointer}') and its api-version '{version.Version}' does "
+                    + "not declare that property. Nothing could ever set it, so the platform would read "
+                    + "protection as off for every resource of this type and purge them all — a "
+                    + "protection that fails silently open. docs/plan/08 § Soft delete."
+                );
+            }
+
+            if (flag.Kind != SchemaKind.Boolean) {
+                throw new InvalidOperationException(
+                    $"'{draft.Type}' declares SupportsSoftDelete(purgeProtectionPointer: "
+                    + $"'{draft.PurgeProtectionPointer}') and its api-version '{version.Version}' "
+                    + $"declares that property as SchemaKind.{flag.Kind}. Purge protection is on or "
+                    + "off; anything else is a value the write path would have to interpret, and an "
+                    + "interpretation that got it wrong would fail open."
+                );
+            }
+        }
     }
 
     /// <summary>
@@ -413,6 +512,10 @@ sealed class ProviderBuilder(string providerNamespace) : IResourceTypeBuilder {
         public string Chart { get; set; } = string.Empty;
 
         public int SoftDeleteDays { get; set; }
+
+        public string PurgePermission { get; set; } = SoftDeletePolicy.DefaultPurgePermission;
+
+        public string PurgeProtectionPointer { get; set; } = string.Empty;
 
         public bool SupportsTags { get; set; }
 

@@ -256,8 +256,57 @@ public interface IResourceTypeBuilder : IProviderBuilder {
     ///     For how long. docs/plan/06 § Tags, locks gives 7 for types carrying data — <i>"a dropped
     ///     production database is not a support ticket you want to have to say no to"</i>.
     /// </param>
+    /// <param name="purgePermission">
+    ///     The ReBAC permission a <b>purge</b> needs — destroying the resource before its window is
+    ///     out, irreversibly.
+    /// </param>
+    /// <param name="purgeProtectionPointer">
+    ///     An RFC 6901 pointer to a boolean in the body that, once <see langword="true" />, refuses
+    ///     every purge of that resource for the rest of its window. Empty for a type that offers no
+    ///     such flag.
+    /// </param>
     /// <returns>The same builder.</returns>
-    IResourceTypeBuilder SupportsSoftDelete(int days);
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b><paramref name="purgePermission" /> is a fourth permission and not
+    ///         <see cref="Permissions" />'s third under another name.</b> docs/plan/08 § Soft delete:
+    ///         Azure puts <c>Microsoft.KeyVault/locations/deletedVaults/purge/action</c> in Key Vault
+    ///         Contributor's <c>notActions</c>, <i>"so 'may delete' and 'may destroy permanently' are
+    ///         genuinely separable rights and a role can hold the first without the second"</i>. A
+    ///         delete that a recovery window makes reversible and a purge that ends the recovery are
+    ///         not the same authority, and a platform that checked one permission for both would make
+    ///         the window worth nothing to anybody who could already delete.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>It rides on this method rather than on <see cref="Permissions" />, and that is the
+    ///         shape <see cref="RequiresCluster" /> already uses.</b> A purge permission on a type with
+    ///         no recovery window names a right nothing can exercise; making every provider declare one
+    ///         to say "not applicable" would put the cost of the first soft-deletable type on the nine
+    ///         that are not. <c>Build</c> drops it for a type that declares no window, exactly as it
+    ///         drops <c>ClusterIdPointer</c> for one that needs no cluster.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b><paramref name="purgeProtectionPointer" /> must be a declared boolean in every
+    ///         api-version, and the builder refuses the type otherwise</b> — the lesson
+    ///         <see cref="RequiresCluster" />'s own check records. A flag the platform enforces against
+    ///         a property no schema declares is a flag no caller can set and the platform reads as
+    ///         absent, which is a protection that silently never engages.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Retention is declared here, on the type, and is therefore immutable by
+    ///         construction.</b> docs/plan/08 § Soft delete asks that it be <i>"set at creation and
+    ///         immutable afterwards — a window a caller can shorten under their own resource is not a
+    ///         recovery window"</i>. A type-level window is the stronger form of that: there is no
+    ///         per-resource retention property, so there is nothing for a caller to set at creation or
+    ///         to shorten later, and the delete path stamps
+    ///         <see cref="IndexEntry.RecoverableUntil" /> from this number and never from the body.
+    ///     </para>
+    /// </remarks>
+    IResourceTypeBuilder SupportsSoftDelete(
+        int days,
+        string purgePermission = SoftDeletePolicy.DefaultPurgePermission,
+        string purgeProtectionPointer = ""
+    );
 
     /// <summary>Declares that this type carries tags.</summary>
     /// <returns>The same builder.</returns>

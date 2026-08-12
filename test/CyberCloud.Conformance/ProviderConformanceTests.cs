@@ -3,6 +3,7 @@ using CyberCloud.ResourceManager;
 using CyberCloud.ResourceManager.Conformance;
 using CyberCloud.ResourceManager.Reconcile;
 using System.Collections.Immutable;
+using System.Globalization;
 using System.Text.Json;
 
 namespace CyberCloud.Conformance;
@@ -284,9 +285,60 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
 
     // ── delete → gone ───────────────────────────────────────────────────────────────────────────
 
+    /// <summary>
+    ///     <c>delete → gone</c>, in whichever of its two forms this provider declared.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>THREE OF THE ASSERTIONS BELOW ARE CORRECT FOR A HARD-DELETE TYPE AND WRONG FOR A
+    ///         SOFT-DELETABLE ONE</b>, and the branch is what reconciles them. The cluster objects being
+    ///         gone, the index entry going back to <c>Free</c> — <i>"the name comes back"</i> — and the
+    ///         ReBAC parent tuple being removed are all things a <c>DELETE</c> deliberately does
+    ///         <b>not</b> do when the type declares a recovery window (docs/plan/08 § Soft delete): the
+    ///         volumes are still allocated because handing the data back is the whole feature, the name
+    ///         is held so a restore has somewhere to go, and the edge moves to the subscription rather
+    ///         than being dropped so the resource is never invisible.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>THE BRANCH IS TAKEN FROM THE REGISTRY AND NOT FROM
+    ///         <see cref="ProviderConformanceCase" />, and that distinction is the whole design.</b>
+    ///         That record's own remarks forbid a case supplying anything the suite decides with —
+    ///         <i>"a case that could supply an assertion would be a provider grading its own
+    ///         homework"</i> — and "which of these two contracts do I have to satisfy" is exactly such
+    ///         a decision. The registry is not the provider's answer to the suite; it is the platform's
+    ///         own description of the type, built from <c>Describe</c> and read by the write path, the
+    ///         OpenAPI emitter and the four generated surfaces alike. A provider declares
+    ///         <c>SupportsSoftDelete</c> once, in public, where it reaches the published document; the
+    ///         suite <i>derives</i> which contract that declaration signs it up to. Nothing is
+    ///         optional and nothing is skipped: both arms assert, and a provider cannot decline either
+    ///         by omission the way a nullable case member would let it.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Why not a <c>static virtual</c> on <see cref="IProviderCaseSource" />, which is the
+    ///         one accepted way to add an optional member.</b> <c>Ancestors</c> earns that shape
+    ///         because its value is <i>not derivable</i> — a parent's api-version and a body its schema
+    ///         accepts exist nowhere else — and because omitting it is refused by name rather than
+    ///         silently running a smaller suite. Neither applies here: the window is already a registry
+    ///         fact, so a case member would be a <b>second</b> declaration of it, and two descriptions
+    ///         of one thing is the drift ADR-012 exists to remove. Worse, the two could disagree — a
+    ///         case saying "hard delete" over a type declaring seven days would run the wrong contract
+    ///         and pass.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The soft arm is unexercised today and that is stated rather than hidden.</b> No
+    ///         provider in the catalogue declares a window yet — docs/plan/08 § Soft delete requires
+    ///         that they do not until the whole of it is built — so every provider currently takes the
+    ///         hard arm. The soft arm is driven by
+    ///         <c>CyberCloud.ResourceManager.Tests.SoftDeletePathTests</c> against a fixture type that
+    ///         does declare one, which is where its own sabotage results were taken.
+    ///     </para>
+    /// </remarks>
     [Fact]
     public async Task DeleteTearsDownTheDataPlaneAndTheResourceIsGone() {
         ProviderTestCluster<TSource>.Reset();
+
+        Cluster.Registry.TryGetType(Case.Type, out var registration).ShouldBeTrue();
+        var recoverable = registration.SoftDeleteDays > 0;
 
         var accepted = (await CreateAsync("goodbye")).GetValueOrThrow();
         await ConvergeAsync(accepted);
@@ -303,6 +355,48 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
             $"the teardown ended {status.State}: {status.Error?.Message}"
         );
 
+        // ── What BOTH contracts promise: the old address stops answering ────────────────────────
+        //
+        // ⚠ This is the one assertion that does not branch, and for a soft-deletable type it is the
+        // sharpest thing the suite says. docs/plan/08 § Soft delete moved the resource out of its
+        // resource group rather than flagging it in place precisely so that "a soft-deleted resource
+        // that is still readable at its old address" is unreachable by construction — and the 404 is
+        // the canonical one, never a 410, because a 410 would tell an unauthorized caller the name was
+        // taken.
+        var read = await ReadAsync("goodbye");
+        read.IsFailure.ShouldBeTrue();
+        read.Error!.Code.ShouldBe(ErrorCode.ResourceNotFound);
+
+        var entry = await Cluster.Index(ProviderTestCluster<TSource>.Address("goodbye")).GetAsync();
+
+        if (recoverable) {
+            // ── The recovery window's contract ──────────────────────────────────────────────────
+            foreach (var target in objects) {
+                Cluster.World.Holds(target).ShouldBeTrue(
+                    $"'{target}' is gone, and this type declares a "
+                    + $"{registration.SoftDeleteDays.ToString(CultureInfo.InvariantCulture)}-day "
+                    + "recovery window — handing the data back is the entire feature, so the volumes "
+                    + "and the PVCs stay allocated until a purge. docs/plan/08 § Soft delete"
+                );
+            }
+
+            entry.GetValueOrThrow().State.ShouldBe(
+                IndexEntryState.SoftDeleted,
+                "the name is held for the whole window — a name taken by somebody else leaves a "
+                + "restore with nowhere to go"
+            );
+
+            Cluster.Relations.Edges.ShouldContainKey(
+                accepted.Resource.Id,
+                "the resource is never parentless: the edge moves to the subscription while deleted "
+                + "rather than being dropped, so a resource nobody can see cannot happen during the "
+                + "recovery window either"
+            );
+
+            return;
+        }
+
+        // ── The hard delete's contract ──────────────────────────────────────────────────────────
         foreach (var target in objects) {
             Cluster.World.Holds(target).ShouldBeFalse(
                 $"'{target}' is still in the cluster after a converged teardown — docs/plan/06 "
@@ -311,11 +405,6 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
             );
         }
 
-        var read = await ReadAsync("goodbye");
-        read.IsFailure.ShouldBeTrue();
-        read.Error!.Code.ShouldBe(ErrorCode.ResourceNotFound);
-
-        var entry = await Cluster.Index(ProviderTestCluster<TSource>.Address("goodbye")).GetAsync();
         entry.GetValueOrThrow().State.ShouldBe(IndexEntryState.Free, "the name comes back");
 
         // ⚠ AND THE AUTHORIZATION EDGE COMES BACK TOO. docs/plan/08 § The write path, end to end's

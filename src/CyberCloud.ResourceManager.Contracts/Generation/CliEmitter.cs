@@ -168,9 +168,12 @@ public static class CliEmitter {
 
         verbs["delete"] = Verb(
             "delete",
+            // ⚠ "Recoverable for N day(s)" is now a statement about what the platform does rather
+            // than about what it intends to do — docs/plan/08 § Soft delete is built, so the verb
+            // parks the resource and `purge` is what ends the window.
             type.SoftDeleteDays > 0
                 ? "Delete a " + type.DisplayName + ". Recoverable for "
-                + DocumentReader.Count(type.SoftDeleteDays) + " day(s)."
+                + DocumentReader.Count(type.SoftDeleteDays) + " day(s); purge to end that early."
                 : "Delete a " + type.DisplayName + ". Permanent.",
             "DELETE",
             type,

@@ -76,7 +76,12 @@ sealed class DiscoveringProviderBuilder : IResourceTypeBuilder {
     public IResourceTypeBuilder Chart(string chart) => this;
 
     /// <inheritdoc />
-    public IResourceTypeBuilder SupportsSoftDelete(int days) => this;
+    public IResourceTypeBuilder SupportsSoftDelete(
+        int days,
+        string purgePermission = SoftDeletePolicy.DefaultPurgePermission,
+        string purgeProtectionPointer = ""
+    ) =>
+        this;
 
     /// <inheritdoc />
     public IResourceTypeBuilder SupportsTags() => this;

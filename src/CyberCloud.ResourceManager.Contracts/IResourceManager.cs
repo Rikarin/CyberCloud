@@ -82,6 +82,55 @@ public interface IResourceManager {
     Task<Result<WriteAccepted>> ActionAsync(WriteRequest request, CancellationToken cancellationToken = default);
 
     /// <summary>
+    ///     Brings a soft-deleted resource back to its old address — docs/plan/08 § Soft delete.
+    /// </summary>
+    /// <param name="request">The request. <see cref="WriteRequest.Body" /> is ignored.</param>
+    /// <param name="cancellationToken">Cancels the request.</param>
+    /// <returns>
+    ///     The restored snapshot, or <see cref="ErrorCode.ResourceNotFound" /> — for a name that holds
+    ///     no soft-deleted resource, for one whose recovery window has passed, and for one the caller
+    ///     may not see, which are the same answer on purpose.
+    /// </returns>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>Not a long-running operation, and it is the one write verb that is not.</b> A
+    ///         restore does no data-plane work at all: the volumes, the PVCs and the memory were never
+    ///         released, which is the whole reason the quota stayed committed. What it changes is two
+    ///         records — the index entry and the <c>parent</c> tuple — so answering <c>202</c> and an
+    ///         operation to poll would be a poll that is finished before the caller reads the response.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Direct role assignments do not come back</b>, and that is the decision rather than a
+    ///         limitation — see <see cref="IResourceRelationWriter.DropDirectRoleAssignmentsAsync" />.
+    ///     </para>
+    /// </remarks>
+    Task<Result<ResourceSnapshot>> RestoreAsync(WriteRequest request, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Ends a recovery window early: tears the resource down, releases its name and returns its
+    ///     committed quota. Irreversible.
+    /// </summary>
+    /// <param name="request">The request. <see cref="WriteRequest.Body" /> is ignored.</param>
+    /// <param name="cancellationToken">Cancels the request.</param>
+    /// <returns>The accepted operation, or the refusal.</returns>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>It checks <c>ResourceTypeRegistration.PurgePermission</c> and not the delete
+    ///         permission.</b> docs/plan/08 § Soft delete: Azure puts
+    ///         <c>deletedVaults/purge/action</c> in Key Vault Contributor's <c>notActions</c>, so "may
+    ///         delete" and "may destroy permanently" are separable rights. Checking the delete
+    ///         permission here would mean the window protected against nobody who could already delete
+    ///         — which is everybody it exists to protect against.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>This is the half of the delete that a soft-deletable type deferred</b>: the
+    ///         data-plane teardown, the index release and the committed-quota return all happen here
+    ///         and none of them happened at the <c>DELETE</c>.
+    ///     </para>
+    /// </remarks>
+    Task<Result<WriteAccepted>> PurgeAsync(WriteRequest request, CancellationToken cancellationToken = default);
+
+    /// <summary>
     ///     Reads a long-running operation's status. The <c>GET /operations/{opId}</c> of
     ///     docs/plan/10 § Long-running operations and docs/plan/08 § Long-running operations.
     /// </summary>
@@ -301,12 +350,21 @@ public interface IResourceAuthorizer {
 ///         read them.
 ///     </para>
 ///     <para>
-///         ⚠ <b>The parent is the resource GROUP and not the subscription, and
+///         ⚠ <b>For a LIVE resource the parent is the resource GROUP and not the subscription, and
 ///         <c>CyberCloudSchema</c> is what decides that.</b> Its rewrite chain is
-///         resource → resourceGroup → subscription → tenant: pointing a resource's <c>parent</c> at
-///         the subscription would skip the group, and every <c>resourceGroup:…#contributor</c>
+///         resource → resourceGroup → subscription → tenant: pointing a live resource's <c>parent</c>
+///         at the subscription would skip the group, and every <c>resourceGroup:…#contributor</c>
 ///         assignment — the second row of docs/plan/07 § Azure RBAC, expressed in it — would grant
 ///         nothing on the resources inside it.
+///     </para>
+///     <para>
+///         ⚠ <b>A SOFT-DELETED resource is the one exception, and it is an exception because it is no
+///         longer in the group.</b> docs/plan/08 § Soft delete: a soft-deleted resource leaves its
+///         resource group, so <i>"a tuple naming the resource group as its parent asserts a containment
+///         that is no longer true. Preserving it is not the conservative choice, it is the wrong
+///         one."</i> The edge moves to <c>#parent@subscription:{sub}</c> and back on restore — see
+///         <see cref="ReparentToSubscriptionAsync" />. The paragraph above is unaffected: skipping the
+///         group is precisely the intent while the resource is not in one.
 ///     </para>
 /// </remarks>
 public interface IResourceRelationWriter {
@@ -367,6 +425,109 @@ public interface IResourceRelationWriter {
     ///     at an object that no longer exists is a slow leak in the tenant's tuple store.
     /// </remarks>
     Task<Result> UnlinkFromParentAsync(ResourceId id, Guid parentId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Moves the <c>parent</c> edge to <c>subscription:{sub}</c> — the resource has been
+    ///     soft-deleted and has left its resource group. Idempotent.
+    /// </summary>
+    /// <param name="id">The resource, with <see cref="ResourceId.Id" /> set.</param>
+    /// <param name="parentId">
+    ///     The GUID of the parent this resource is leaving, so the old tuple can be removed. Same value
+    ///     <see cref="LinkToParentAsync" /> was given, and <see cref="Guid.Empty" /> for a top-level
+    ///     resource whose old parent is its group.
+    /// </param>
+    /// <param name="cancellationToken">Cancels the write.</param>
+    /// <returns>Success, or the failure that stopped it.</returns>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>Re-parented rather than preserved and rather than dropped, and the two rejected
+    ///         options fail differently.</b> docs/plan/08 § Soft delete: preserving the group edge
+    ///         asserts a containment that is no longer true; dropping it leaves the resource
+    ///         <i>parentless</i>, which is the failure that made this seam necessary in the first place
+    ///         — a resource nobody can see, and a silo lost in that window leaving it that way. Moving
+    ///         it means the window has no such state at all.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Who can see a deleted resource becomes who holds subscription-scoped rights</b>,
+    ///         which is deliberate rather than incidental: <i>"exactly who Azure gives
+    ///         <c>deletedVaults/read</c> and <c>purge/action</c> to. A restore is a subscription-scoped
+    ///         operation; the visibility should match."</i>
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>This does not drop direct role assignments</b> — that is
+    ///         <see cref="DropDirectRoleAssignmentsAsync" />, and the two are separate calls because
+    ///         docs/plan/08 makes them separate decisions with different reasons: this one is a
+    ///         modelling answer, that one is a security answer, and <i>"running them together is how
+    ///         this gets decided wrongly"</i>.
+    ///     </para>
+    /// </remarks>
+    Task<Result> ReparentToSubscriptionAsync(
+        ResourceId id,
+        Guid parentId,
+        CancellationToken cancellationToken = default
+    );
+
+    /// <summary>
+    ///     Moves the <c>parent</c> edge back off the subscription and onto the resource's ordinary
+    ///     parent — the restore. Idempotent.
+    /// </summary>
+    /// <param name="id">The resource, with <see cref="ResourceId.Id" /> set.</param>
+    /// <param name="parentId">
+    ///     The GUID of the parent resource the address names, or <see cref="Guid.Empty" /> for a
+    ///     top-level resource going back to its group.
+    /// </param>
+    /// <param name="cancellationToken">Cancels the write.</param>
+    /// <returns>Success, or the failure that stopped it.</returns>
+    Task<Result> ReparentFromSubscriptionAsync(
+        ResourceId id,
+        Guid parentId,
+        CancellationToken cancellationToken = default
+    );
+
+    /// <summary>
+    ///     Removes every role assignment written <b>directly</b> on this resource, leaving its
+    ///     <c>parent</c> edge and everything it inherits untouched.
+    /// </summary>
+    /// <param name="id">The resource, with <see cref="ResourceId.Id" /> set.</param>
+    /// <param name="cancellationToken">Cancels the writes.</param>
+    /// <returns>How many assignments were dropped, or the failure that stopped it.</returns>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>A security answer and not a modelling one, and Azure's behaviour is the right one
+    ///         to copy: assignments go with the resource and <i>"must be recreated"</i> on
+    ///         recovery.</b> docs/plan/08 § Soft delete: <i>"The recovery window is used after a
+    ///         compromise or after a decommission somebody wants to undo, and those are the cases that
+    ///         decide it. Silently restoring a grant an administrator deliberately removed is an error
+    ///         nobody observes. Making somebody re-grant after a restore is an error everybody observes
+    ///         and can fix in a minute. Take the visible failure."</i>
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>There is no inverse, and there deliberately is not one.</b> A restore does not put
+    ///         these back — that is the decision, not an omission — so nothing persists them and nothing
+    ///         could. An implementation that stashed them somewhere recoverable would be building the
+    ///         option the document rejected.
+    ///     </para>
+    /// </remarks>
+    Task<Result<int>> DropDirectRoleAssignmentsAsync(
+        ResourceId id,
+        CancellationToken cancellationToken = default
+    );
+
+    /// <summary>
+    ///     Removes the <c>parent</c> tuple a soft-deleted resource holds on its subscription. The purge
+    ///     counterpart of <see cref="UnlinkFromParentAsync" />. Idempotent.
+    /// </summary>
+    /// <param name="id">The resource, with <see cref="ResourceId.Id" /> set.</param>
+    /// <param name="cancellationToken">Cancels the write.</param>
+    /// <remarks>
+    ///     ⚠ <b>A separate method because a purge must delete the edge the resource ACTUALLY holds, and
+    ///     by then that is the subscription one.</b> Calling <see cref="UnlinkFromParentAsync" /> would
+    ///     build the ordinary subject — the resource group, or the parent resource — delete a tuple that
+    ///     is not there, report success, and leave the real edge behind: one row per purged resource,
+    ///     forever, pointing at a GUID that names nothing. The failure is silent in both directions,
+    ///     which is why it is a different call rather than a parameter.
+    /// </remarks>
+    Task<Result> UnlinkFromSubscriptionAsync(ResourceId id, CancellationToken cancellationToken = default);
 }
 
 /// <summary>

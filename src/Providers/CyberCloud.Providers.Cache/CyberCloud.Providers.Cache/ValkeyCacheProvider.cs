@@ -36,11 +36,17 @@ namespace CyberCloud.Providers.Cache;
 ///     </para>
 ///     <para>
 ///         ⚠ <b>What is deliberately not declared besides:</b> no <c>regenerateKeys</c>, for the
-///         reason on <c>ValkeyCaches.ListKeysAction</c>; no <c>SupportsSoftDelete</c>, because nothing
-///         in the manager reads <c>SoftDeleteDays</c> and a recovery window the platform does not
+///         reason on <c>ValkeyCaches.ListKeysAction</c>; no <c>SupportsSoftDelete</c>, because the
+///         manager did not read <c>SoftDeleteDays</c> and a recovery window the platform does not
 ///         honour is a promise made to the users who would test it — the same finding
 ///         <c>PostgresProvider</c> recorded, now with a second instance, which is what docs/plan/25
-///         § R1 asks a provider to produce.
+///         § R1 asks a provider to produce. ⚠ <b>THAT REASON HAS EXPIRED</b> — docs/plan/08 § Soft
+///         delete is built and the manager honours the declaration — <b>and for a CACHE the answer is
+///         still probably no.</b> The window's whole argument is the data, and a Valkey cache's data is
+///         by definition reconstructible from its source of truth; holding its memory allocated for
+///         seven days after a delete would charge a tenant for a recovery nobody asked for. That is a
+///         judgement about this type rather than about the platform, which is the only kind of reason
+///         this line should ever carry.
 ///     </para>
 /// </remarks>
 public sealed class ValkeyCacheProvider : IResourceProvider {
