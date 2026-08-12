@@ -39,4 +39,23 @@ static class OutputFormats {
             _ => throw new CycUsageException(
                 $"'{value}' is not an output format. Available: {string.Join(", ", Names)}."),
         };
+
+    /// <summary>
+    ///     The name <c>--output</c> spells a format with — the inverse of <see cref="Parse" />.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ A switch rather than an index into <see cref="Names" />. The two lists happen to be in
+    ///     the same order and nothing enforces that; an index would turn reordering the enum into a
+    ///     CLI that tells an extension the wrong format. <c>OutputFormatTests</c> round-trips every
+    ///     value through <see cref="Parse" />.
+    /// </remarks>
+    /// <param name="format">The format.</param>
+    public static string NameOf(OutputFormat format)
+        => format switch {
+            OutputFormat.Json => "json",
+            OutputFormat.Yaml => "yaml",
+            OutputFormat.Tsv => "tsv",
+            OutputFormat.None => "none",
+            _ => "table",
+        };
 }

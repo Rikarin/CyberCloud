@@ -110,4 +110,20 @@ public sealed class OutputFormatTests {
 
         host.Stdout.Trim().ShouldBe("w2");
     }
+
+    /// <summary>
+    ///     ⚠ <c>OutputFormats.NameOf</c> is what tells an extension which format <c>cyc</c> settled
+    ///     on (docs/plan/21 § Credentials across the process boundary), so a name that does not parse
+    ///     back is a child told to render something the parent cannot read. The round trip is the
+    ///     cheapest way to keep the two halves honest.
+    /// </summary>
+    [Fact]
+    public void EveryFormatsNameParsesBackToIt() {
+        foreach (var format in Enum.GetValues<OutputFormat>())
+            OutputFormats.Parse(OutputFormats.NameOf(format)).ShouldBe(format);
+
+        // And the names are exactly the ones --output advertises, so help text and the value an
+        // extension receives cannot drift apart.
+        Enum.GetValues<OutputFormat>().Select(OutputFormats.NameOf).ShouldBe(OutputFormats.Names, ignoreOrder: true);
+    }
 }
