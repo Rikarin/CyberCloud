@@ -87,6 +87,54 @@ namespace CyberCloud.Providers.Search;
 ///         name, and the first to have <b>two</b> short names to keep clear of it and of each other.
 ///         <c>OpenSearchDeclarationTests</c> asserts both halves against literals.
 ///     </para>
+///     <para>
+///         ⚠ <b>THIS NAMESPACE IS DESIGNED FOR TWO TYPES AND SHIPS ONE.</b> docs/plan/12 § The
+///         catalogue's other row here is <i>"Qdrant — <c>CyberCloud.Search/vectorStores</c> · M3 ·
+///         0.6 EM. Not an Azure row. A 2026 catalogue without a vector store is dated on arrival, and
+///         Qdrant's operator model is simple enough that this is the cheapest M3 item."</i> It is not
+///         declared, and what a second type in an existing namespace costs is already measured —
+///         <c>CyberCloud.Messaging/natsClusters</c> put it at <i>"two case objects and four class
+///         declarations, and no new project"</i>. So the reason is scope and not structure, and the
+///         one thing a future author should not have to rediscover is this:
+///     </para>
+///     <list type="bullet">
+///         <item>
+///             ⚠ <b>THERE IS NO PUBLIC QDRANT OPERATOR, AND THAT SENTENCE IN docs/plan/12 IS THE ONE
+///             CLAIM IN THAT ROW THAT DOES NOT HOLD.</b> <c>github.com/qdrant/qdrant-operator</c>
+///             answers <c>404</c>. The operator that exists is the one Qdrant Managed Cloud, Hybrid
+///             Cloud and Private Cloud run, and Qdrant's own Private Cloud documentation describes it
+///             as sitting <i>"on top of the open source Qdrant database"</i> — the database is
+///             Apache-2.0, the operator is not distributed. ⚠ <b>ADR-010 clause 1's survey is
+///             consistent with this and reads differently once it is known:</b> that list names an
+///             <i>operator</i> for most rows — <i>"CloudNativePG", "Altinity", "Strimzi",
+///             "spotahome", "mariadb-operator", "RabbitMQ Cluster Operator", "OpenSearch
+///             operator"</i> — and for this one it names only <i>"Qdrant"</i>.
+///         </item>
+///         <item>
+///             So <c>vectorStores</c> is the <b>operator-less</b> shape, which is
+///             <c>CyberCloud.Messaging/natsClusters</c>' and its second sighting. The public path is
+///             <c>qdrant/qdrant-helm</c> (Apache-2.0, active), which renders a <c>StatefulSet</c>, a
+///             headless and a client <c>Service</c>, and a <c>ConfigMap</c> — four objects, against
+///             this type's one. Everything a controller would have defaulted becomes a decision, and
+///             the cluster-backed suite needs <b>no</b> CRD stub at all, where this type needs one.
+///         </item>
+///         <item>
+///             ⚠ <b>Its credential story is the third of the three this catalogue now has, and it is
+///             the dangerous one.</b> This type's operator <i>generates</i> a password;
+///             <c>CyberCloud.Storage/accounts</c> has no credential at all and visibly does not
+///             converge. Qdrant's chart leaves <c>service.api_key</c> <b>unset by default</b>, and a
+///             Qdrant with no API key serves every request on port 6333 unauthenticated. That is the
+///             SeaweedFS hazard reached through a chart default rather than through an engine's
+///             fallback, and it means <c>vectorStores</c> cannot ship an honest default until piece 5
+///             lands — which is a harder constraint than this type had, and is the thing to settle
+///             before writing any of it.
+///         </item>
+///         <item>
+///             The short name is free: <c>qdrant</c> collides with no CLI group key and with no
+///             existing alias. <c>OpenSearchDeclarationTests.TheShortNameCollidesWithNoGroupKeyThatAlreadyExists</c>
+///             carries the literal list to check a second one against.
+///         </item>
+///     </list>
 /// </remarks>
 public sealed class SearchProvider : IResourceProvider {
     /// <inheritdoc />

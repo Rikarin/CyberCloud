@@ -347,6 +347,101 @@ into the tenant's bucket"*. None of that had a provider.
   nothing in the gate set reads it. Both are resolved as the union, which is what the working tree
   already contained.
 
+`CyberCloud.Providers.Search` — `CyberCloud.Search/services` on the OpenSearch operator,
+[12 § The catalogue](../../docs/plan/12-managed-data-services.md). **The first `M3` row**, and the
+first provider whose engine choice and operator choice come from two different ADRs.
+
+### What the sixth provider measured
+
+⚠ **The milestone is a scheduling fact and not a shape.** Four module edges, six projects, one
+`ProviderConformanceCase`, one chart, one `conformance.yaml` — the same shape `M1` and `M2` rows
+produced, and the same shape docs/plan/15's row produced. Five families had shown the columns were
+identical; this is the first evidence that they are identical *across a milestone boundary* as well.
+
+- **⚠ The hazard this row was expected to have is refuted, and the refutation is the finding.**
+  docs/plan/12 warns that a managed service reachable with a weak password is the most common cloud
+  breach, and OpenSearch ships the security plugin on by default — so the expectation, from
+  `charts/managed/seaweedfs`, was an engine that reads "no credentials configured" as "authenticate
+  nobody". It does not. `opensearch-operator/pkg/helpers/helpers.go`'s
+  `EnsureAdminCredentialsSecret` returns the tenant's secret when
+  `spec.security.config.adminCredentialsSecret.Name != ""` and otherwise does
+  `randomPassword := GenerateSecurePassword()` into a generated Secret. So the catalogue now has
+  **three** credential outcomes without piece 5, not two: a working service whose password the
+  platform cannot hand out (`CyberCloud.DBforPostgreSQL/servers`, and now this one), a service that
+  visibly never converges (`CyberCloud.Storage/accounts`), and a service that comes up open
+  (`CyberCloud.Messaging/natsClusters`). **They are indistinguishable from the resource's status**,
+  which is why each provider states which one it is.
+
+  > ⚠ The operator's own **documentation contradicts its own code** — `docs/userguide/main.md` says
+  > *"By default the operator will use the included demo securityconfig with default users"* and
+  > names `admin / admin`. Both can be true at once (demo roles, generated password) and which one a
+  > release does is the difference between a cluster nobody can log into and one everybody can.
+  > Recorded at `charts/managed/opensearch/conformance.yaml § owed`, `demo-securityconfig`, as the
+  > one item that should be checked against a running operator before the row is called done.
+
+- **⚠ What the operator will *not* do unasked is the thing that breaks silently.**
+  `pkg/reconcilers/tls.go` returns immediately when `spec.security.tls` is nil — *"No security
+  specified. Not doing anything"* — generating no certificates at all, and OpenSearch's security
+  plugin needs transport TLS to form a cluster. The symptom is a set of pods that all pass their
+  readiness probes and never discover each other. It is written unconditionally and is not a values
+  key, because "turn off TLS between the nodes of your search cluster" is not a setting.
+
+- **⚠ Containment-not-equality is settled by the CRD, and the conformance suite is *blind* to it.**
+  `api/v1/opensearch_types.go` puts `+kubebuilder:default=true` **and**
+  `+kubebuilder:validation:Required` on `ConfMgmt.SmartScaler`, so a real API server writes a field
+  back on every apply, on the first create. `ClusterConformanceHarness` derives a CRD stub with an
+  *open* schema, which has no defaults — so the read-back there echoes the apply and an equality
+  comparison passes. **Measured rather than argued**: the equality mistake was run against both, and
+  `CyberCloud.Providers.Search.Conformance` was **27 of 27 green** while
+  `OpenSearchMatchesTests.AnObjectCarryingTheCrdsOwnDefaultsStillMatches` was the only red thing in
+  the tree. Every provider whose operator's CRD carries defaults has this hole.
+
+- **⚠ The quota meters are a sum over heterogeneous components — second sighting — and they add a
+  distinction the first one could not.** `CyberCloud.Storage/accounts` established the shape;
+  `charts/managed/nats/conformance.yaml` established that `QuotaGrain.TryReserveAsync` refuses a
+  non-positive amount, so a *conditional meter* is undeclarable. That conclusion is about a whole
+  **meter** and not about a **term**, and nothing had tested the difference because no earlier type
+  had an optional population. `/properties/coordinatingNodes` defaults to `0`, so that term derives
+  nothing on every ordinary create while the total keeps a floor. **A term may be zero; a meter may
+  not.**
+  <br>⚠ This type also needs *three* derivations rather than one parameterised one, because the
+  populations split differently per meter: a coordinating node is sized like a **data** node for CPU
+  and memory and like a **cluster-manager** node for disk.
+
+- **⚠ The shared conformance harness has a budget nobody had spent.** It creates against **one**
+  subscription and nothing releases the committed amounts between assertions, so a provider's
+  assertion count is `QuotaGrain.Defaults[MemoryGb] / its own memory draw`. This type's schema
+  default draws **30 GiB** — twice `CyberCloud.Storage/accounts`' 15 — and four assertions failed
+  with *"300 committed + 90 reserved + 30 requested > 400"*. ⚠ **The failure names quota and not the
+  provider**, so an author meeting it has no reason to connect it to their own sizing table. The
+  case now uses the smallest legal service; the diagnostic is owed at
+  `charts/managed/opensearch/conformance.yaml § owed`, `conformance-quota-is-a-budget-per-provider`.
+
+- **The chart-annotation emitter's output is predictable by hand — a fourth sighting.** This chart's
+  `@param` block was written to match what `ChartAnnotationEmitter` would produce and came back
+  **unchanged on the first `./build.sh Charts` run**, exactly as `charts/managed/valkey`'s,
+  `charts/managed/nats`' and `charts/managed/seaweedfs`' did. Only `values.schema.json` had to be
+  generated.
+
+- **⚠ The structural statelessness check's blind spot, confirmed a fourth time.** A `readonly`
+  `Dictionary` cache added to `OpenSearchServiceReconciler` left
+  `ReconcilerConformance.CheckNoHiddenState` **green** and failed only
+  `OneReconcilerInstanceServesTwoTenantsWithoutMixingThem`. Both halves are in
+  `OpenSearchReconcilerTests` and both were run red against the counter-example.
+
+- **⚠ `CyberCloud.Search/vectorStores` is not declared, and the reason is one line of docs/plan/12
+  that does not hold.** That row says *"Qdrant's operator model is simple enough that this is the
+  cheapest M3 item"*. `github.com/qdrant/qdrant-operator` answers **404** — the operator that exists
+  is the one Qdrant Managed, Hybrid and Private Cloud run, and is not distributed. ⚠ ADR-010
+  clause 1's survey turns out to agree once that is known: it names an *operator* for most rows and
+  for this one names only *"Qdrant"*. So the type is the **operator-less** shape,
+  `CyberCloud.Messaging/natsClusters`' and its second sighting — four objects over
+  `qdrant/qdrant-helm` (Apache-2.0) rather than one custom resource, and **no** CRD stub in the
+  cluster-backed suite where this type needs one. Its blocker is credentials: Qdrant's chart leaves
+  `service.api_key` unset by default and a Qdrant with no API key serves every request
+  unauthenticated, which is the SeaweedFS hazard reached through a chart default. The full account
+  is at `SearchProvider`'s remarks.
+
 ## Planned namespaces
 
 `Platform`, `Identity`, `ContainerService`, `Compute`, `ContainerInstance`, `ContainerRegistry`,
