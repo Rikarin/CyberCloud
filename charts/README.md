@@ -26,19 +26,29 @@ block from the provider registry and then generates `values.schema.json` from th
 whose block or whose schema differs from the checked-in one fails CI. The `@internal` rows are
 carried through as bytes — **at every depth**, which is a correction: see § What a chart cannot say.
 
-Two charts are paired today, and the split is worth reading as a ratio rather than as two numbers:
+Five charts are paired today, and the split is worth reading as a ratio rather than as five numbers:
 
 | Chart | Rows | Generated | `@internal` |
 |---|---|---|---|
 | `managed/postgres` | 36 | 25 | 11 |
 | `managed/valkey` | 27 | 15 | 12 |
+| `managed/kafka` | 36 | 26 | 10 |
+| `managed/nats` | 31 | 21 | 10 |
+| `managed/seaweedfs` | 25 | 15 | 10 |
 
-⚠ **The `@internal` count barely moves and the generated count nearly halves**, which is the shape to
-expect for the remaining eight: the hand-written tail is the platform's identity block (eight rows),
+⚠ **The `@internal` count barely moves and the generated count varies by a factor of two**, which is
+the shape to expect for the rest: the hand-written tail is the platform's identity block (eight rows),
 Helm plumbing and a credential reference, and it is the same for every managed service. What varies is
 the configuration surface. So the marginal cost of a chart is its API rows, and the `@internal` rows
 are a fixed cost the platform pays once per service and could stop paying if a renderer ever injected
 them — see § What a chart cannot say for why they are not in any `ResourceSchema`.
+
+> ⚠ **CORRECTED 2026-08-12.** This paragraph read "Two charts are paired today" and predicted a tail
+> of ten for "the remaining eight". Both numbers were stale and the second was also the wrong shape:
+> `charts/managed/seaweedfs` is **not** one of docs/plan/12's ten — it is
+> [docs/plan/15 § The three kinds](../docs/plan/15-storage-blob-file.md)' object-storage row, and that
+> document contributes a `fileShares` chart as well. The `@internal` prediction held on the nose at
+> **ten** for the three charts that landed after it, which is the half worth keeping.
 
 > ⚠ **CORRECTED 2026-08-12.** This paragraph read: "`Build.Generate` turns that into the resource
 > type's OpenAPI body, the CLI flags, the SDK model and the portal form" — the chart authoring the

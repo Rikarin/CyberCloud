@@ -1,0 +1,41 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      docs/plan/03 § Providers — the fourth project: "TestCluster + k3s".
+
+      ⚠ NEITHER, HERE. The TestCluster half is test/CyberCloud.Conformance's, because a provider's
+      lifecycle is the SHARED suite's assertion, and the k3s half is
+      CyberCloud.Providers.Storage.Cluster.Conformance's. What is left is what only THIS provider can
+      be wrong about: its schema's casing against the emitted document, its sizing table against the
+      chart's, the SeaweedFS projection, and the two properties of a reconciler that a shared suite
+      driving one tenant cannot see.
+
+      ⚠ IT EMBEDS ONE FILE FROM charts/managed/seaweedfs/, AND NOT TWO. Earlier providers embedded
+      their chart's values.schema.json as well, from a time when nothing compared the chart to the
+      registry; ADR-012's fifth surface exists now and `./build.sh Charts` does that comparison by
+      GENERATING the block, so a test asserting the same thing would be a second, weaker copy of a
+      gate. `templates/_helpers.tpl` is the half generation does not reach — a Helm template is not a
+      schema, and ChartSurfaces filters templates/ out of the chart tree on purpose.
+    -->
+
+    <ItemGroup>
+        <PackageReference Include="xunit.v3"/>
+        <PackageReference Include="Shouldly"/>
+    </ItemGroup>
+
+    <ItemGroup Label="Global usings">
+        <Using Include="Xunit"/>
+    </ItemGroup>
+
+    <ItemGroup Label="The half generation does not reach — see the header">
+        <EmbeddedResource Include="../../../../charts/managed/seaweedfs/templates/_helpers.tpl"
+                          LogicalName="seaweedfs.helpers.tpl"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../CyberCloud.Providers.Storage/CyberCloud.Providers.Storage.csproj"/>
+        <!-- ProviderRegistry.Build, so the declaration is checked the way a silo checks it at start. -->
+        <ProjectReference Include="../../../CyberCloud.ResourceManager/CyberCloud.ResourceManager.csproj"/>
+    </ItemGroup>
+
+</Project>

@@ -257,6 +257,89 @@ nothing had exercised.
   `@param` block was written to match what `ChartAnnotationEmitter` would produce and came back
   **unchanged on the first `./build.sh Charts` run**, exactly as `charts/managed/valkey`'s did.
 
+`CyberCloud.Providers.Storage` — `CyberCloud.Storage/accounts` on SeaweedFS,
+[15 § The three kinds](../../docs/plan/15-storage-blob-file.md). **The first provider whose row is not
+in docs/plan/12 at all.**
+
+### What the fifth provider measured
+
+⚠ **docs/plan/12 is not the authority for this row and does not contain it.** That document's subject
+is *"databases, caches, brokers, search"* and its catalogue has ten rows, none of them storage.
+[15 § The three kinds](../../docs/plan/15-storage-blob-file.md) is the authority — *"Object ·
+`CyberCloud.Storage/accounts` + `/buckets` · SeaweedFS + S3 gateway · HTTPS, S3 API"* — and
+§ Object storage costs it at **M1 · 2.0 EM**. What docs/plan/12 *does* own is ADR-010 clause 1's
+operator survey, which names SeaweedFS, and § The pattern, once's eight pieces, which this provider is
+built to. **It closes an assumption three other documents were already making**: CloudNativePG's row
+promises *"declarative backup to S3 (which we have — [15])"*, `charts/managed/postgres` renders a
+destination of `s3://tenant-bucket/postgres`, and the OpenSearch row wants a *"snapshot repository
+into the tenant's bucket"*. None of that had a provider.
+
+- **The pattern survives a document boundary unchanged, which is the measurement.** Four edges in
+  `module-layering.txt`, six projects, one `ProviderConformanceCase`, one chart, one
+  `conformance.yaml` — the same shape docs/plan/12's four rows produced. A catalogue row from another
+  document needing a fifth module edge or a sixth project would have been the finding; needing
+  neither is the stronger one, because it says the shape is a property of *a managed service* rather
+  than of *that table*.
+- **⚠ Object count is not a measure of a service's size, and the range is now bracketed at both
+  ends.** `CyberCloud.Messaging/natsClusters` renders **five** objects because there is no operator;
+  this renders **one** — a `Seaweed` — that expands into masters, volume servers, a filer, an S3
+  gateway, their Services and four `ServiceMonitor`s. The cluster-backed suite needs exactly one CRD
+  stub, derived.
+- **⚠ docs/plan/12 § The pattern, once, piece 6's FIRST branch is now the ordinary case.** The
+  corrected piece 6 says *"ask the operator for the scrape object wherever the operator accepts the
+  request"*. CloudNativePG answered with `spec.monitoring.enablePodMonitor`; this operator answers
+  with `metricsPort` per component — `internal/controller/controller_s3.go`,
+  `if m.Spec.S3.MetricsPort != nil { ensureS3ServiceMonitor(m) }`, with an `else` branch that deletes
+  the object again. Two of five services ask rather than hand-write, and both of the two that
+  hand-wrote had no operator at all.
+- **⚠ The quota meters are the first that are a SUM OVER HETEROGENEOUS COMPONENTS**, which is a third
+  shape after the two `MeterDerivation` already answers.
+  `CyberCloud.DBforPostgreSQL/servers` found that an amount is a quantity *string* rather than a
+  number; `CyberCloud.Messaging/natsClusters` added that it is a *product* of a replica count and one
+  per-replica figure. Here it is `volumeServers × preset + (masters + 1 filer + gateway.replicas) ×
+  250m` — two populations, only one of which the tenant sizes. A derivation copied from either
+  earlier provider would be right about the volume servers and would miss **six pods** on the default
+  body. `StorageQuotaTests.ChangingOnlyTheMasterCountStillMovesTheAmounts` is the one that fails on
+  the copy.
+- **⚠ `publicIps` is undeclared for a reason that is NOT the one the two providers before it record,
+  and the two look identical from the meter.** Their blocker is `QuotaGrain.TryReserveAsync` refusing
+  a non-positive amount, so a conditional external listener derives zero on the default path. This
+  type has no external listener to condition on: the operator's `ServiceSpec` is a four-field subset
+  — `type`, `annotations`, `loadBalancerIP`, `clusterIP` — with **no `loadBalancerSourceRanges`**, and
+  docs/plan/12 § Cross-cutting decisions requires an explicit CIDR list on any exposure. Closing this
+  one is an upstream field, not a *skip-when-zero* on `MeterRegistration`.
+- **⚠ The first row where a child type is blocked ONLY by this platform.**
+  `charts/managed/kafka` could not address one; `charts/managed/nats` found that a NATS account is
+  not a CRD anybody offers. The seaweedfs-operator ships `Bucket`, `S3Identity`, `S3Credentials`,
+  `S3Policy`, `S3PolicyBinding` and `BucketLifecyclePolicy`, and `BucketSpec` is docs/plan/15's
+  *"globally-unique-per-account name, quota, versioning, lifecycle"* almost line for line. The
+  remaining blocker is `ProviderConformanceCase` being single-type, which throws in `ResourceId`'s
+  constructor for a depth-2 `Type` — third sighting, and the first where nothing upstream is in the
+  way.
+- **⚠ Piece 5's absence is worse here than anywhere else in the catalogue, and the answer to "is the
+  service usable anyway" flips.** `CyberCloud.DBforPostgreSQL/servers` has a working database because
+  CloudNativePG generates its own password. An S3 endpoint is reachable *only* with an access-key
+  pair. And SeaweedFS with no identities file does not merely skip authentication —
+  `weed/s3api/auth_credentials.go` sets `isAuthEnabled = len(identities) > 0` and
+  `AuthenticateRequest` then returns an **admin** identity — so the reference is rendered against a
+  `Secret` nothing writes and the account visibly does not finish. Checked in that file rather than
+  in a README. `charts/managed/seaweedfs/conformance.yaml § owed` says exactly what closes it.
+- **⚠ The structural statelessness check's blind spot, confirmed a third time.** A `readonly`
+  `Dictionary` cache added to `StorageAccountReconciler` left
+  `ReconcilerConformance.CheckNoHiddenState` **green** and failed only
+  `OneReconcilerInstanceServesTwoTenantsWithoutMixingThem`. Both halves are in
+  `StorageReconcilerTests` and both were run red against the counter-example.
+- **The chart-annotation emitter's output is predictable by hand — a third sighting.** This chart's
+  `@param` block was written to match what `ChartAnnotationEmitter` would produce and came back
+  **unchanged on the first `./build.sh Charts` run**, exactly as `charts/managed/valkey`'s and
+  `charts/managed/nats`' did. Only `values.schema.json` had to be generated.
+- **⚠ `CyberCloud.slnx` and `CyberCloud.Providers.slnf` carried unresolved merge-conflict markers and
+  every gate was green over them.** In the `.slnx` the markers happen to be well-formed XML —
+  `<<<<<<< HEAD` sat inside a comment and `=======` / `>>>>>>> …` as character data — so the solution
+  parsed and both provider families were listed. The `.slnf` is JSON and was **not** well-formed;
+  nothing in the gate set reads it. Both are resolved as the union, which is what the working tree
+  already contained.
+
 ## Planned namespaces
 
 `Platform`, `Identity`, `ContainerService`, `Compute`, `ContainerInstance`, `ContainerRegistry`,

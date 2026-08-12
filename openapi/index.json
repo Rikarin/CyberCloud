@@ -178,7 +178,8 @@
     "CyberCloud.Cache",
     "CyberCloud.DBforPostgreSQL",
     "CyberCloud.Messaging",
-    "CyberCloud.Sample"
+    "CyberCloud.Sample",
+    "CyberCloud.Storage"
   ],
   "x-cybercloud-resource-types": [
     {
@@ -243,6 +244,19 @@
         "plural": "Widgets",
         "alias": "widget",
         "summary": "A ConfigMap with two fields in it.",
+        "declared": true
+      }
+    },
+    {
+      "type": "CyberCloud.Storage/accounts",
+      "apiVersions": [
+        "2026-08-01"
+      ],
+      "display": {
+        "name": "Storage account",
+        "plural": "Storage accounts",
+        "alias": "storage",
+        "summary": "A managed S3-compatible object store on SeaweedFS, with replicated volume servers, a filer and a scalable S3 gateway.",
         "declared": true
       }
     }

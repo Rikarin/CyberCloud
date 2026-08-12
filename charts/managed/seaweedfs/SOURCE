@@ -1,0 +1,88 @@
+# Provenance — charts/README.md § `SOURCE` is required, including when nothing was forked.
+#
+# ADR-010: "Their charts are a starting point, not a dependency. Where a chart is close, fork it into
+# charts/ with the upstream commit recorded in a SOURCE file." Nothing was forked here, and
+# `vendored: none` is an answer to "where did this come from" where a missing file is not.
+
+vendored: none
+upstream: https://github.com/seaweedfs/seaweedfs-operator
+
+# The upstream API this chart's templates target. ⚠ An API group/version, not a commit: nothing is
+# vendored, so there is no upstream tree to pin. If a template is ever copied from upstream, replace
+# this with `upstream-commit:` and the full 40-character SHA, and say which files.
+upstream-api: seaweed.seaweedfs.com/v1
+
+# The engine the operator runs. ADR-011: SeaweedFS is Apache-2.0, which is why docs/plan/15 chose it
+# over MinIO (AGPL since the licence change) and over Ceph RGW ("an order of magnitude more
+# operational work").
+engine: https://github.com/seaweedfs/seaweedfs
+
+# Reviewed against the upstream sources on this date — the operator's Go types and controllers, and
+# SeaweedFS' own S3 server. A bare date rather than a SHA is a weaker claim and is labelled as one.
+#
+# ⚠ WHAT THIS REVIEW ESTABLISHED, because five of the seven are things a README does not carry and
+# two of them changed what this provider renders:
+#
+#   * `api/v1/seaweed_types.go` — ONE cluster CRD, `Seaweed`, plus twelve others in the same group:
+#     Bucket, BucketLifecyclePolicy, S3Identity, S3Credentials, S3Policy, S3PolicyBinding,
+#     S3OIDCProvider, ResourceReferenceGrant, SeaweedBackup, SeaweedRestore, SeaweedCSIDriver,
+#     AdminScript. The first four are docs/plan/15 § The resource model's child types almost one to
+#     one, which is why conformance.yaml § owed can name a real object rather than a shape.
+#
+#   * `api/v1/seaweed_types.go` — `ServiceSpec` is a FOUR-FIELD SUBSET: type, annotations,
+#     loadBalancerIP, clusterIP. THERE IS NO `loadBalancerSourceRanges`. docs/plan/12
+#     § Cross-cutting decisions requires an explicit CIDR allow-list on any external exposure, so this
+#     type declares no exposure at all rather than one it cannot firewall. See conformance.yaml
+#     § owed, `external-exposure`.
+#
+#   * `api/v1/image.go` — `applyVersion(image, version)` returns `image` unchanged when it is empty,
+#     and every component's `Image()` goes through it. THE OPERATOR HAS NO DEFAULT IMAGE: a `Seaweed`
+#     with no `spec.image` renders pods with an empty image. `spec.image` is written on every apply
+#     and `spec.version` is deliberately left unset, so the tag is stated once.
+#
+#   * `internal/controller/controller_s3.go` — the ServiceMonitor is the OPERATOR'S and its switch is
+#     `spec.s3.metricsPort` (`if m.Spec.S3.MetricsPort != nil { ensureS3ServiceMonitor(m) }`, with an
+#     else branch that deletes it). That is docs/plan/12 § The pattern, once, piece 6's FIRST branch —
+#     "ask the operator for the scrape object wherever the operator accepts the request" — and its
+#     second sighting after CloudNativePG's `spec.monitoring.enablePodMonitor`. Same file: the
+#     standalone `spec.s3` gateway is preferred, `spec.filer.s3` is deprecated, "when both are set the
+#     webhook rejects the CR", and the gateway requires `spec.filer` to be present or the operator
+#     tears it down.
+#
+#   * `internal/controller/controller_filer_configmap.go` — with no `spec.filer.config` the operator
+#     mounts NO filer.toml at all, deliberately: "mounting an empty filer.toml causes SeaweedFS to
+#     treat the config as loaded and skip its default leveldb2 store initialization". So the filer
+#     runs an EMBEDDED, PER-POD leveldb2 store, and more than one filer replica would be more than one
+#     object namespace. `spec.filer.replicas` is pinned at 1 here; conformance.yaml § owed,
+#     `filer-is-a-single-point-of-failure`.
+#
+#   * `weed/command/filer.go` — `-defaultStoreDir` defaults to `"."` and the operator never sets it,
+#     so the embedded store lands in the container's WORKING DIRECTORY. The upstream image says
+#     `WORKDIR /data` and the operator's `PersistenceSpec.MountPath` defaults to `/data`; the filer's
+#     metadata survives a restart because two independently defaulted values in two repositories
+#     agree, and neither states the dependency. templates/seaweed.yaml writes the mount path out.
+#
+#   * `weed/s3api/auth_credentials.go` — THE FACT THAT DECIDES WHAT THIS CHART RENDERS FOR
+#     CREDENTIALS. `iam.isAuthEnabled = len(iam.identities) > 0`, and `AuthenticateRequest` begins
+#     `if !iam.isAuthEnabled { return &Identity{Name: "admin", Account: &AccountAdmin, Actions:
+#     []Action{ACTION_ADMIN}} }`. A gateway with no identities file does not merely skip
+#     authentication — it answers every anonymous request AS AN ADMINISTRATOR. `spec.s3.configSecret`
+#     is therefore rendered unconditionally against a Secret nothing writes, so the gateway does not
+#     come up. See conformance.yaml § owed, `listkeys-has-no-handler`.
+
+reviewed: 2026-08-12
+
+# ⚠ THE MUTATING WEBHOOK IS A SCAFFOLD TODAY AND IS RECORDED ANYWAY. `api/v1/seaweed_webhook.go`
+# registers /mutate-seaweed-seaweedfs-com-v1-seaweed on create;update, and the body of
+# `SeaweedCustomDefaulter.Default` is a log line and `// TODO(user): fill in your defaulting logic.`
+# It mutates nothing at this commit. That is the reason it is written down: an equality comparison in
+# `StorageAccounts.Matches` would pass against this operator and break silently against whichever
+# release fills the TODO in. The CRD's own `+kubebuilder:default` markers already force containment —
+# s3.replicas=1, s3.iam=true, filer.iam=true, volume.kind=StatefulSet, persistence.enabled=false,
+# persistence.mountPath="/data", persistence.subPath="", worker.jobType="all" — so the webhook is the
+# second reason rather than the first.
+upstream-webhook: mutating, defaulter unimplemented as of 2026-08-12
+
+# ⚠ Cozystack (docs/plan/02 § ADR-010) contributed the OPERATOR CHOICE — clause 1's survey names
+# SeaweedFS — and the annotated-values pipeline shape, and no code. It is deliberately not listed as
+# `upstream`, because `upstream` means "there is a tree we could diff against" and here there is not.

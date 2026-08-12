@@ -15,6 +15,44 @@ inapplicable.
 
 ## Object storage — M1 · 2.0 EM
 
+> ⚠ **BUILT 2026-08-12, as `CyberCloud.Storage/accounts` — and the first thing the build found was
+> about this document rather than about SeaweedFS.** Every provider before it took its row from
+> [12 § The catalogue](12-managed-data-services.md), and that table has no storage row at all: its
+> subject is *"databases, caches, brokers, search"*. So the authority for the fifth provider is
+> **this** document's § The three kinds, and what 12 contributes is ADR-010 clause 1's operator survey
+> and § The pattern, once's eight pieces — both of which applied unchanged. `charts/managed/seaweedfs`
+> and `src/Providers/CyberCloud.Providers.Storage` are the result, and
+> `charts/managed/seaweedfs/conformance.yaml § owed` carries eleven named debts. The four below are
+> the ones that are this document's to answer rather than a provider's.
+>
+> * **`buckets` did not ship, and for the first time nothing upstream is in the way.** The
+>   seaweedfs-operator ships `Bucket`, `S3Identity`, `S3Credentials`, `S3Policy`, `S3PolicyBinding`
+>   and `BucketLifecyclePolicy` under `seaweed.seaweedfs.com/v1`, and `BucketSpec` is
+>   `(name, clusterRef, reclaimPolicy, adoptExisting, versioning, objectLock, quota, owner, access,
+>   placement, anonymousRead)` — § The resource model's list almost line for line. What blocks it is
+>   `ProviderConformanceCase` being single-type, which is the platform's own.
+> * **⚠ "Consumed as HTTPS" is not met and the account is in-cluster only.** § Cross-cutting
+>   decisions in [12](12-managed-data-services.md) requires an explicit CIDR allow-list on any
+>   external exposure; the operator's `ServiceSpec` is `{type, annotations, loadBalancerIP,
+>   clusterIP}` with **no `loadBalancerSourceRanges`**, so a `LoadBalancer` is renderable and a
+>   *firewalled* one is not. Shipping the unfirewalled half is the one thing that paragraph forbids in
+>   as many words, so no exposure property is declared at all. That still closes the gap this row was
+>   most urgently needed for — `charts/managed/postgres`'s `s3://tenant-bucket/postgres` is an
+>   in-cluster address.
+> * **⚠ "Encryption at rest is on by default" is not true and no property claims it is.** SeaweedFS
+>   encrypts behind `weed volume -encryptVolumeData`, and the operator's `VolumeServerConfig` has no
+>   field for it — the only route is a free-form `extraArgs` list. A security guarantee carried by an
+>   escape hatch that accepts any string is not a guarantee, and this document should either say so or
+>   the operator should grow the field.
+> * **⚠ The credential is what makes this row unusable, and its shape is worse than any earlier
+>   service's.** `weed/s3api/auth_credentials.go` sets `isAuthEnabled = len(identities) > 0` and
+>   `AuthenticateRequest` returns an **admin** identity when that is false — so a gateway with no
+>   identities file answers every anonymous request as an administrator, over HTTP, on a protocol
+>   every tool already speaks. The provider therefore renders `spec.s3.configSecret` against a
+>   `Secret` nothing writes, and the account does not come up. [12](12-managed-data-services.md)'s
+>   piece 5 is the blocker and the answer to *"is it usable meanwhile"* is **no** — unlike PostgreSQL,
+>   whose operator generates its own password.
+
 **ADR-008: the API is S3.** Not the Azure Blob dialect. Every SDK, backup tool, CI runner and framework
 already speaks S3; a second dialect buys migration-from-Azure and costs a permanent second surface.
 

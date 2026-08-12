@@ -104,12 +104,21 @@ CyberCloud.ResourceManager -> CyberCloud.Tenancy
 # cannot grant what rule 2 refuses: cross-provider traffic goes through CyberCloud.ResourceManager
 # by resource id. A line here would fail rule 2 and be deleted, not honoured.
 #
-# ⚠ THE THREE FAMILIES BELOW HAVE IDENTICAL COLUMNS, AND THAT IS THE MEASUREMENT RATHER THAN A
+# ⚠ THE FIVE FAMILIES BELOW HAVE IDENTICAL COLUMNS, AND THAT IS THE MEASUREMENT RATHER THAN A
 # COINCIDENCE. docs/plan/25 § R1 asks what a provider costs the platform; four edges, the same four
 # every time, is the answer for a trivial provider, for one with backup and pooling and extensions,
-# and for one that does quantity arithmetic and talks to a third operator. A fourth family arriving
-# with a FIFTH edge is the signal that something has been reached for that a provider should have
-# gone through CyberCloud.ResourceManager to get.
+# for one that does quantity arithmetic and talks to a third operator, for one with two resource
+# types in it, and — since 2026-08-12 — for one whose row is not even in docs/plan/12.
+# CyberCloud.Providers.Storage is the first family from another catalogue document and it needed the
+# same four. A family arriving with a FIFTH edge is the signal that something has been reached for
+# that a provider should have gone through CyberCloud.ResourceManager to get.
+#
+# ⚠ AND CyberCloud.Providers.Storage IS THE FIRST FAMILY WITH A REASON TO WANT A FIFTH. An HA
+# SeaweedFS filer needs a shared metadata store, and this platform runs a managed PostgreSQL one
+# namespace away — see charts/managed/seaweedfs/conformance.yaml § owed,
+# `filer-is-a-single-point-of-failure`. The line is NOT here, because rule 2 forbids it and the
+# sanctioned route is a resource id through CyberCloud.ResourceManager. Recorded so that the first
+# author who wants the edge finds the refusal and the alternative in the same place.
 CyberCloud.Providers.Cache -> CyberCloud.Core
 CyberCloud.Providers.Cache -> CyberCloud.Kubernetes
 CyberCloud.Providers.Cache -> CyberCloud.ResourceManager
@@ -126,3 +135,7 @@ CyberCloud.Providers.Sample -> CyberCloud.Core
 CyberCloud.Providers.Sample -> CyberCloud.Kubernetes
 CyberCloud.Providers.Sample -> CyberCloud.ResourceManager
 CyberCloud.Providers.Sample -> CyberCloud.Tenancy
+CyberCloud.Providers.Storage -> CyberCloud.Core
+CyberCloud.Providers.Storage -> CyberCloud.Kubernetes
+CyberCloud.Providers.Storage -> CyberCloud.ResourceManager
+CyberCloud.Providers.Storage -> CyberCloud.Tenancy

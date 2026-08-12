@@ -2749,6 +2749,500 @@
           "alias": "widget"
         }
       }
+    },
+    "storage": {
+      "name": "storage",
+      "summary": "Commands for the CyberCloud.Storage provider.",
+      "commands": {
+        "accounts": {
+          "name": "accounts",
+          "resourceType": "CyberCloud.Storage/accounts",
+          "title": "Storage account",
+          "plural": "Storage accounts",
+          "summary": "A managed S3-compatible object store on SeaweedFS, with replicated volume servers, a filer and a scalable S3 gateway.",
+          "verbs": {
+            "create": {
+              "name": "create",
+              "summary": "Create or replace a Storage account.",
+              "method": "PUT",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Storage/accounts/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": true,
+              "flags": [
+                {
+                  "name": "--class",
+                  "type": "string",
+                  "required": false,
+                  "summary": "StorageClass name for the volume servers. Empty means the cluster default.",
+                  "jsonPointer": "/properties/storage/class",
+                  "immutable": true,
+                  "widget": "storageclass",
+                  "default": ""
+                },
+                {
+                  "name": "--cluster-id",
+                  "type": "string",
+                  "required": true,
+                  "alias": "--cluster",
+                  "summary": "The cluster whose namespace holds the object store.",
+                  "jsonPointer": "/properties/clusterId",
+                  "immutable": true,
+                  "widget": "cluster"
+                },
+                {
+                  "name": "--cpu",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Explicit vCPU quantity in Kubernetes form, for example 500m or 2. Empty means take it from the preset.",
+                  "jsonPointer": "/properties/sizing/cpu",
+                  "default": ""
+                },
+                {
+                  "name": "--enabled",
+                  "type": "switch",
+                  "required": false,
+                  "summary": "Whether the operator is asked for a ServiceMonitor per component. On by default — docs/plan/12: \"a managed service the tenant cannot see the health of is a black box they will not trust with production\". Turning it off removes the metrics port as well as the scrape, which is the operator's own behaviour rather than this provider's.",
+                  "jsonPointer": "/properties/monitoring/enabled",
+                  "default": true
+                },
+                {
+                  "name": "--location",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The region the account is billed in.",
+                  "jsonPointer": "/location",
+                  "immutable": true,
+                  "widget": "region",
+                  "example": "eu-central"
+                },
+                {
+                  "name": "--masters",
+                  "type": "integer",
+                  "required": true,
+                  "summary": "Number of master servers. The masters hold the volume topology in a Raft group, so three is the smallest count that survives losing one. One is offered for development and has no quorum at all.",
+                  "jsonPointer": "/properties/masters",
+                  "default": 3
+                },
+                {
+                  "name": "--memory",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Explicit memory quantity in Kubernetes form, for example 4Gi. Empty means take it from the preset.",
+                  "jsonPointer": "/properties/sizing/memory",
+                  "default": ""
+                },
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group."
+                },
+                {
+                  "name": "--preset",
+                  "type": "string",
+                  "required": false,
+                  "summary": "A sizing preset from docs/plan/12. Volume servers use the s1 family, which is 1 vCPU to 4 GiB.",
+                  "jsonPointer": "/properties/sizing/preset",
+                  "choices": [
+                    "s1.2xlarge",
+                    "s1.4xlarge",
+                    "s1.large",
+                    "s1.medium",
+                    "s1.micro",
+                    "s1.nano",
+                    "s1.small",
+                    "s1.xlarge"
+                  ],
+                  "widget": "cozy-preset",
+                  "default": "s1.small"
+                },
+                {
+                  "name": "--replicas",
+                  "type": "integer",
+                  "required": true,
+                  "summary": "Number of S3 gateway pods. The gateway is stateless, so this is a throughput and availability setting rather than a topology one.",
+                  "jsonPointer": "/properties/gateway/replicas",
+                  "default": 2
+                },
+                {
+                  "name": "--replication",
+                  "type": "string",
+                  "required": true,
+                  "summary": "Where the second copy of every object is placed. None keeps one copy and is for scratch data only. A placement the cluster's topology cannot satisfy leaves volumes read-only rather than failing the create. Immutable, because SeaweedFS applies this to volumes as they are created and never rewrites the ones that already exist — a change would split the account into two durability promises with no way to tell which object got which.",
+                  "jsonPointer": "/properties/replication",
+                  "choices": [
+                    "DifferentDataCenter",
+                    "DifferentRack",
+                    "None",
+                    "SameRack"
+                  ],
+                  "immutable": true,
+                  "default": "SameRack"
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy."
+                },
+                {
+                  "name": "--size",
+                  "type": "string",
+                  "required": true,
+                  "summary": "Data volume size per volume server, in Kubernetes quantity form. Grows online; never shrinks.",
+                  "jsonPointer": "/properties/storage/size",
+                  "default": "100Gi",
+                  "example": "100Gi"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tags",
+                  "type": "keyValue",
+                  "required": false,
+                  "summary": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+                  "jsonPointer": "/tags",
+                  "widget": "tag-input"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--version",
+                  "type": "string",
+                  "required": true,
+                  "summary": "SeaweedFS version. ⚠ SeaweedFS ships a release roughly weekly and maintains no long-term branch, so docs/plan/12's \"supported major versions\" is a shape this project does not have; the two values here are the two most recent releases and a new api-version is what adds a third.",
+                  "jsonPointer": "/properties/version",
+                  "choices": [
+                    "4.40",
+                    "4.41"
+                  ],
+                  "default": "4.41"
+                },
+                {
+                  "name": "--volume-servers",
+                  "type": "integer",
+                  "required": true,
+                  "summary": "Number of volume servers. This is the capacity axis: total raw capacity is this count times the volume size below, before replication.",
+                  "jsonPointer": "/properties/volumeServers",
+                  "default": 3
+                }
+              ],
+              "waitFlags": [
+                "--wait",
+                "--no-wait"
+              ]
+            },
+            "delete": {
+              "name": "delete",
+              "summary": "Delete a Storage account. Permanent.",
+              "method": "DELETE",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Storage/accounts/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": true,
+              "flags": [
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group."
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy."
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "env": "CYC_TENANT"
+                }
+              ],
+              "waitFlags": [
+                "--wait",
+                "--no-wait"
+              ]
+            },
+            "list-keys": {
+              "name": "list-keys",
+              "summary": "listKeys a Storage account. ⚠ The response carries secret material — it is always audited and must not be written to a log or a shell history.",
+              "method": "POST",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Storage/accounts/{resourceName}/listKeys",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group."
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy."
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "env": "CYC_TENANT"
+                }
+              ],
+              "action": "listKeys",
+              "permission": "listKeys",
+              "secret": true,
+              "rawBody": true
+            },
+            "show": {
+              "name": "show",
+              "summary": "Read a Storage account.",
+              "method": "GET",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Storage/accounts/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group."
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy."
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "env": "CYC_TENANT"
+                }
+              ]
+            },
+            "update": {
+              "name": "update",
+              "summary": "Amend a Storage account. Only the flags given are changed.",
+              "method": "PATCH",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Storage/accounts/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": true,
+              "flags": [
+                {
+                  "name": "--class",
+                  "type": "string",
+                  "required": false,
+                  "summary": "StorageClass name for the volume servers. Empty means the cluster default.",
+                  "jsonPointer": "/properties/storage/class",
+                  "immutable": true,
+                  "widget": "storageclass",
+                  "default": ""
+                },
+                {
+                  "name": "--cluster-id",
+                  "type": "string",
+                  "required": false,
+                  "alias": "--cluster",
+                  "summary": "The cluster whose namespace holds the object store.",
+                  "jsonPointer": "/properties/clusterId",
+                  "immutable": true,
+                  "widget": "cluster"
+                },
+                {
+                  "name": "--cpu",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Explicit vCPU quantity in Kubernetes form, for example 500m or 2. Empty means take it from the preset.",
+                  "jsonPointer": "/properties/sizing/cpu",
+                  "default": ""
+                },
+                {
+                  "name": "--enabled",
+                  "type": "switch",
+                  "required": false,
+                  "summary": "Whether the operator is asked for a ServiceMonitor per component. On by default — docs/plan/12: \"a managed service the tenant cannot see the health of is a black box they will not trust with production\". Turning it off removes the metrics port as well as the scrape, which is the operator's own behaviour rather than this provider's.",
+                  "jsonPointer": "/properties/monitoring/enabled",
+                  "default": true
+                },
+                {
+                  "name": "--location",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The region the account is billed in.",
+                  "jsonPointer": "/location",
+                  "immutable": true,
+                  "widget": "region",
+                  "example": "eu-central"
+                },
+                {
+                  "name": "--masters",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "Number of master servers. The masters hold the volume topology in a Raft group, so three is the smallest count that survives losing one. One is offered for development and has no quorum at all.",
+                  "jsonPointer": "/properties/masters",
+                  "default": 3
+                },
+                {
+                  "name": "--memory",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Explicit memory quantity in Kubernetes form, for example 4Gi. Empty means take it from the preset.",
+                  "jsonPointer": "/properties/sizing/memory",
+                  "default": ""
+                },
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group."
+                },
+                {
+                  "name": "--preset",
+                  "type": "string",
+                  "required": false,
+                  "summary": "A sizing preset from docs/plan/12. Volume servers use the s1 family, which is 1 vCPU to 4 GiB.",
+                  "jsonPointer": "/properties/sizing/preset",
+                  "choices": [
+                    "s1.2xlarge",
+                    "s1.4xlarge",
+                    "s1.large",
+                    "s1.medium",
+                    "s1.micro",
+                    "s1.nano",
+                    "s1.small",
+                    "s1.xlarge"
+                  ],
+                  "widget": "cozy-preset",
+                  "default": "s1.small"
+                },
+                {
+                  "name": "--replicas",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "Number of S3 gateway pods. The gateway is stateless, so this is a throughput and availability setting rather than a topology one.",
+                  "jsonPointer": "/properties/gateway/replicas",
+                  "default": 2
+                },
+                {
+                  "name": "--replication",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Where the second copy of every object is placed. None keeps one copy and is for scratch data only. A placement the cluster's topology cannot satisfy leaves volumes read-only rather than failing the create. Immutable, because SeaweedFS applies this to volumes as they are created and never rewrites the ones that already exist — a change would split the account into two durability promises with no way to tell which object got which.",
+                  "jsonPointer": "/properties/replication",
+                  "choices": [
+                    "DifferentDataCenter",
+                    "DifferentRack",
+                    "None",
+                    "SameRack"
+                  ],
+                  "immutable": true,
+                  "default": "SameRack"
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy."
+                },
+                {
+                  "name": "--size",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Data volume size per volume server, in Kubernetes quantity form. Grows online; never shrinks.",
+                  "jsonPointer": "/properties/storage/size",
+                  "default": "100Gi",
+                  "example": "100Gi"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tags",
+                  "type": "keyValue",
+                  "required": false,
+                  "summary": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+                  "jsonPointer": "/tags",
+                  "widget": "tag-input"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--version",
+                  "type": "string",
+                  "required": false,
+                  "summary": "SeaweedFS version. ⚠ SeaweedFS ships a release roughly weekly and maintains no long-term branch, so docs/plan/12's \"supported major versions\" is a shape this project does not have; the two values here are the two most recent releases and a new api-version is what adds a third.",
+                  "jsonPointer": "/properties/version",
+                  "choices": [
+                    "4.40",
+                    "4.41"
+                  ],
+                  "default": "4.41"
+                },
+                {
+                  "name": "--volume-servers",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "Number of volume servers. This is the capacity axis: total raw capacity is this count times the volume size below, before replication.",
+                  "jsonPointer": "/properties/volumeServers",
+                  "default": 3
+                }
+              ],
+              "waitFlags": [
+                "--wait",
+                "--no-wait"
+              ]
+            }
+          },
+          "alias": "storage"
+        }
+      }
     }
   }
 }

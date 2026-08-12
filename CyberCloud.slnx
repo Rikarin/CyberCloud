@@ -176,7 +176,15 @@
         <Project Path="src/Providers/CyberCloud.Providers.DBforPostgreSQL/CyberCloud.Providers.DBforPostgreSQL.Conformance/CyberCloud.Providers.DBforPostgreSQL.Conformance.csproj"/>
 
         <!--
-<<<<<<< HEAD
+          ⚠ THIS BLOCK CARRIED UNRESOLVED CONFLICT MARKERS UNTIL 2026-08-12, AND NOTHING NOTICED.
+          `<<<<<<< HEAD` sat inside an XML comment and `=======` / `>>>>>>> …` sat as character data
+          between two `<Project/>` elements, all of which is well-formed XML — so the solution parsed,
+          both provider families were listed, and every gate stayed green over a file that says a
+          merge is in progress. The sibling `CyberCloud.Providers.slnf` carried the same markers and
+          was NOT well-formed, because it is JSON; nothing in the gate set reads it, which is why that
+          one survived too. Both are resolved as the union, which is what the working tree already
+          contained.
+
           The third provider family — CyberCloud.Cache/redis, docs/plan/12's second M1 row. Valkey
           rather than Redis (ADR-011), on spotahome/redis-operator (ADR-010 clause 1).
 
@@ -192,16 +200,14 @@
         <Project Path="src/Providers/CyberCloud.Providers.Cache/CyberCloud.Providers.Cache.Tests/CyberCloud.Providers.Cache.Tests.csproj"/>
         <Project Path="src/Providers/CyberCloud.Providers.Cache/CyberCloud.Providers.Cache.Conformance/CyberCloud.Providers.Cache.Conformance.csproj"/>
         <Project Path="src/Providers/CyberCloud.Providers.Cache/CyberCloud.Providers.Cache.Cluster.Conformance/CyberCloud.Providers.Cache.Cluster.Conformance.csproj"/>
-=======
-          The third provider family — CyberCloud.Messaging/kafkaClusters on Strimzi, docs/plan/12
-          § The catalogue.
 
-          ⚠ IT IS THE FIRST PROVIDER WITH A *.Cluster.Conformance SIBLING OTHER THAN THE SAMPLE'S,
-          and the first whose objects are CUSTOM RESOURCES rather than a core-group ConfigMap. That
-          combination is what turned ProviderConformanceCase.RequiredCrds from an idea into a
-          required member: a bare k3s serves no REST path for a Strimzi Kafka, so five of the six
-          cluster-backed assertions failed against it — as an HttpOperationException carrying no
-          status code, which names neither the CRD nor the provider.
+        <!--
+          The fourth provider family — CyberCloud.Messaging/kafkaClusters on Strimzi and
+          CyberCloud.Messaging/natsClusters, docs/plan/12 § The catalogue.
+
+          ⚠ IT IS THE FIRST NAMESPACE WITH TWO RESOURCE TYPES IN IT, and the second type cost two case
+          objects and four class declarations and no new project — which is what established that
+          docs/plan/03's five-project shape is per NAMESPACE rather than per TYPE.
         -->
         <Project Path="src/Providers/CyberCloud.Providers.Messaging/CyberCloud.Providers.Messaging.Contracts/CyberCloud.Providers.Messaging.Contracts.csproj"/>
         <Project Path="src/Providers/CyberCloud.Providers.Messaging/CyberCloud.Providers.Messaging/CyberCloud.Providers.Messaging.csproj"/>
@@ -209,7 +215,25 @@
         <Project Path="src/Providers/CyberCloud.Providers.Messaging/CyberCloud.Providers.Messaging.Tests/CyberCloud.Providers.Messaging.Tests.csproj"/>
         <Project Path="src/Providers/CyberCloud.Providers.Messaging/CyberCloud.Providers.Messaging.Conformance/CyberCloud.Providers.Messaging.Conformance.csproj"/>
         <Project Path="src/Providers/CyberCloud.Providers.Messaging/CyberCloud.Providers.Messaging.Cluster.Conformance/CyberCloud.Providers.Messaging.Cluster.Conformance.csproj"/>
->>>>>>> worktree-agent-ab2b59424b4e1d048
+
+        <!--
+          The fifth provider family — CyberCloud.Storage/accounts on SeaweedFS.
+
+          ⚠ IT IS THE FIRST PROVIDER WHOSE ROW IS NOT IN docs/plan/12. That document's catalogue is
+          "databases, caches, brokers, search"; this one is
+          docs/plan/15 § The three kinds — "Object · CyberCloud.Storage/accounts + /buckets ·
+          SeaweedFS + S3 gateway" — and § Object storage, "M1 · 2.0 EM". docs/plan/12 owns the
+          operator, through ADR-010 clause 1, and the eight pieces of § The pattern, once.
+
+          ⚠ It closes the assumption charts/managed/postgres was already making: that chart renders a
+          backup destination of s3://tenant-bucket/postgres against a provider that did not exist.
+        -->
+        <Project Path="src/Providers/CyberCloud.Providers.Storage/CyberCloud.Providers.Storage.Contracts/CyberCloud.Providers.Storage.Contracts.csproj"/>
+        <Project Path="src/Providers/CyberCloud.Providers.Storage/CyberCloud.Providers.Storage/CyberCloud.Providers.Storage.csproj"/>
+        <Project Path="src/Providers/CyberCloud.Providers.Storage/CyberCloud.Providers.Storage.Application/CyberCloud.Providers.Storage.Application.csproj"/>
+        <Project Path="src/Providers/CyberCloud.Providers.Storage/CyberCloud.Providers.Storage.Tests/CyberCloud.Providers.Storage.Tests.csproj"/>
+        <Project Path="src/Providers/CyberCloud.Providers.Storage/CyberCloud.Providers.Storage.Conformance/CyberCloud.Providers.Storage.Conformance.csproj"/>
+        <Project Path="src/Providers/CyberCloud.Providers.Storage/CyberCloud.Providers.Storage.Cluster.Conformance/CyberCloud.Providers.Storage.Cluster.Conformance.csproj"/>
     </Folder>
     <Folder Name="/src/Hosts/">
         <Project Path="src/Hosts/CyberCloud.Gateway.Host/CyberCloud.Gateway.Host.csproj"/>

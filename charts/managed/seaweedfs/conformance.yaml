@@ -1,0 +1,232 @@
+# Conformance manifest — docs/plan/12 § The pattern, once, piece 8.
+#
+# What the conformance suite asserts about CyberCloud.Storage/accounts. This file is data:
+# `Build.Charts` checks that it is present, non-empty, and names the same resource type as
+# Chart.yaml. The suite that reads the rest of it lives in test/ and does not exist yet, and the
+# target says so in its own log rather than implying otherwise.
+#
+# ⚠ THE TYPE IS docs/plan/15's, NOT docs/plan/12's. Every other manifest in this directory names a
+# row of docs/plan/12 § The catalogue; that document covers "databases, caches, brokers, search" and
+# has no storage row at all. The authority for this one is
+# docs/plan/15 § The three kinds — "Object · CyberCloud.Storage/accounts + /buckets · SeaweedFS +
+# S3 gateway" — and § Object storage, "M1 · 2.0 EM". docs/plan/12 owns the OPERATOR, through ADR-010
+# clause 1, and owns the eight pieces this file is the eighth of.
+
+resourceType: CyberCloud.Storage/accounts
+apiVersion: "2026-08-01"
+chart: seaweedfs
+
+# Objects the reconciler must have applied once the resource reports Succeeded.
+#
+# ⚠ ONE, WHERE THE FOUR SERVICES BEFORE THIS HAVE ONE, TWO, TWO AND FIVE — and it is the largest
+# workload in the catalogue. A Seaweed expands into master, volume, filer and S3 workloads, their
+# Services, and one ServiceMonitor per component that carries a metricsPort. None of that is listed
+# here, because this block is what the RECONCILER applied and those are the OPERATOR'S. Listing them
+# would make the suite fail on every cluster with no SeaweedFS operator installed, which is every
+# cluster the Docker-free half of the suite runs against.
+#
+# ⚠ So object count is not a measure of a service's size. charts/managed/nats' five-for-no-operator
+# and this one's one-for-everything bracket that from both ends.
+renders:
+  - group: seaweed.seaweedfs.com
+    version: v1
+    kind: Seaweed
+    count: 1
+
+# ⚠ THERE IS NO `requiredCrds:` BLOCK, AND THAT IS CORRECT RATHER THAN AN OMISSION.
+# `ProviderConformanceCase` has no `RequiredCrds` member and never had one — the harness DERIVES the
+# definitions from the case's own `Objects`, which already carries group, version, kind and plural.
+# See ProviderConformanceCase.cs's long comment for why deriving beats declaring.
+
+# ADR-013 — every rendered object carries all seven labels. Asserted against real rendered output,
+# which is what the Labels architecture gate in docs/plan/23 § The architecture gates requires. This
+# provider's *.Conformance project is the fifth suite that gate counts.
+labels:
+  required:
+    - cybercloud.io/tenant-id
+    - cybercloud.io/subscription-id
+    - cybercloud.io/resource-group
+    - cybercloud.io/resource-id
+    - cybercloud.io/resource-type
+    - cybercloud.io/api-version
+    - cybercloud.io/managed-by
+  # ⚠ Not the resource type verbatim. A `/` is not a legal label value character, so the value is
+  # lower-cased with `/` replaced by `_` — KubeLabels.ResourceTypeValue.
+  values:
+    cybercloud.io/resource-type: cybercloud.storage_accounts
+    cybercloud.io/managed-by: cybercloud
+
+# Behaviour a tenant is entitled to. Each is a statement the suite can fail on, not a feature list.
+assertions:
+  - id: put-and-get-an-object
+    says: An S3 client configured from listKeys puts an object into a bucket and gets the same bytes back.
+  - id: anonymous-access-is-refused
+    says: >
+      A request carrying no credentials is refused. ⚠ THIS IS THE ASSERTION THIS SERVICE MOST NEEDS
+      AND THE ONE IT CANNOT PASS TODAY. SeaweedFS sets isAuthEnabled = len(identities) > 0 and
+      returns an ADMIN identity when it is false, so a gateway with no identities file answers every
+      anonymous request as an administrator. The account does not currently come up at all, which is
+      why the platform is not shipping that — see `listkeys-has-no-handler` below.
+  - id: survives-one-volume-server
+    says: Deleting one volume-server pod of a three-server account with replication other than None leaves every previously written object readable throughout.
+  - id: replication-is-the-declared-placement
+    says: A bucket created under DifferentRack has its replicas on volume servers in different racks, and one created under None has one copy. The account's own replication is what a new volume inherits; changing it is refused at the API.
+  - id: storage-grows-never-shrinks
+    says: Increasing storage.size resizes online; decreasing it is refused at the API.
+  - id: the-gateway-is-not-the-filer
+    says: The S3 endpoint is served by the standalone gateway Deployment rather than by a filer pod, so gateway.replicas changes throughput without touching the metadata store.
+  - id: secrets-never-round-trip
+    says: A GET of the resource never returns an access key or a secret key in any form. The only path out is the listKeys action.
+
+# Meters the type must emit — docs/plan/12 § The pattern, once, piece 3, and docs/plan/15 § Metering
+# for the units. Listed here so the conformance suite and the provider's Describe can be diffed
+# against one file rather than agreeing by coincidence.
+#
+# ⚠ THE EGRESS METER IS NOT IN THIS LIST AND docs/plan/15 § Metering CALLS IT "the meter customers
+# care most about". It is measured "at the gateway, per bucket", which is a data-plane counter rather
+# than anything derivable from a resource body — see `egress-is-not-derivable` below.
+meters:
+  - storage.object.gb_month
+  - storage.object.requests
+
+# ── owed ──────────────────────────────────────────────────────────────────────────────────────
+#
+# Named here rather than left to be discovered, because an absent capability that nobody wrote down
+# is indistinguishable from one nobody thought of.
+owed:
+  - id: listkeys-has-no-handler
+    says: >
+      docs/plan/12 § The pattern, once, piece 5 — credential provisioning into the tenant's Vault —
+      needs an OpenBao integration that does not exist, so listKeys has a declared response shape and
+      nothing that serves it. ⚠ AND THE ANSWER TO "IS THE SERVICE USABLE ANYWAY" IS **NO**, WHICH IS
+      A DIFFERENT ANSWER FROM THE ONE EVERY EARLIER SERVICE GIVES. CyberCloud.DBforPostgreSQL/servers
+      has a working database because CloudNativePG generates its own password; the platform merely
+      cannot hand it out. An S3 endpoint is reachable ONLY with an access-key pair, and the pair is
+      exactly what does not exist — there is no in-band equivalent of "the operator filled it in".
+      ⚠ The gap is also more dangerous here than on CyberCloud.Cache/redis. Checked in
+      weed/s3api/auth_credentials.go rather than assumed: `iam.isAuthEnabled = len(iam.identities) >
+      0`, and AuthenticateRequest opens `if !iam.isAuthEnabled { return &Identity{Name: "admin",
+      Account: &AccountAdmin, Actions: []Action{ACTION_ADMIN}} }`. A gateway with no identities does
+      not skip authentication — it grants ADMIN to every anonymous caller, over HTTP, on a protocol
+      every tool in the industry already speaks. So spec.s3.configSecret is rendered unconditionally
+      against a Secret nothing writes: the gateway pod cannot mount its volume, the account stays in
+      InProgress, and a resource that visibly has not finished beats one that quietly came up open.
+      WHAT CLOSES IT, exactly: an ISecretResolver implementation backed by OpenBao; a step in
+      ResourceManagerService (or a provider seam) that writes one Secret per account holding the JSON
+      form of iam_pb.S3ApiConfiguration with one identity; and a listKeys handler that reads it back
+      through the same resolver. The operator offers a second route that is NOT a substitute for the
+      first — an `S3Credentials` CR whose controller generates a key pair and writes it to a Secret,
+      with status.accessKey published and the secret key "never written to status" — but that is a
+      child resource type (see `bucket-child-type`) and the platform would still need a resolver to
+      read the Secret it produces. Neither route is a provider's to build alone.
+  - id: bucket-child-type
+    says: >
+      docs/plan/15 § The resource model gives an account four kinds of child — buckets, accessKeys,
+      lifecyclePolicies, and per-bucket properties — and NONE IS DECLARED. ⚠ Unlike
+      charts/managed/nats' `accounts-are-not-a-crd`, the objects exist: the operator ships `Bucket`,
+      `S3Identity`, `S3Credentials`, `S3Policy`, `S3PolicyBinding` and `BucketLifecyclePolicy` under
+      seaweed.seaweedfs.com/v1, and BucketSpec is (name, clusterRef, reclaimPolicy, adoptExisting,
+      versioning, objectLock, quota, owner, access, placement, anonymousRead) — which is
+      docs/plan/15's "globally-unique-per-account name, quota, versioning, lifecycle" almost line for
+      line. So this is the first row in the tree where the CHILD TYPE IS BLOCKED ONLY BY THE PLATFORM.
+      The blocker is the conformance harness: ProviderConformanceCase is single-type and both
+      ProviderTestCluster.Address and ClusterConformanceHarness.Address construct a ResourceId with no
+      ParentNames, so a depth-2 Case.Type THROWS in the constructor and every test in the suite fails
+      before it runs — and src/Providers/README.md's rule is that a provider is not registered until
+      it passes conformance. Two smaller ones stand: CliEmitter.Address emits a hard-coded four-flag
+      list, and SdkEmitter.AppendCollection emits no ancestor parameters. THIRD SIGHTING of the same
+      three, after charts/managed/kafka and charts/managed/nats; what this one adds is that the
+      remaining obstacle is now entirely ours.
+  - id: external-exposure
+    says: >
+      docs/plan/15 § The three kinds says object storage is "Consumed as HTTPS, S3 API" and
+      docs/plan/12 § Cross-cutting decisions gives every service an optional external listener behind
+      "an explicit CIDR list". NEITHER IS OFFERED, and the reason is one struct.
+      api/v1/seaweed_types.go's ServiceSpec is a four-field subset — type, annotations,
+      loadBalancerIP, clusterIP — with NO loadBalancerSourceRanges, and controller_s3.go's
+      buildS3Service copies exactly those four. So a LoadBalancer Service is renderable and a
+      FIREWALLED one is not, and docs/plan/12's own sentence about the most common cloud breach makes
+      the unfirewalled one the wrong half to ship. ⚠ THIS IS A DIFFERENT GAP FROM THE ONE
+      charts/managed/kafka AND charts/managed/nats REPORT AS `cidr-shape-is-unenforced`. Theirs is a
+      registry-to-chart surface gap — the constraint exists and `@pattern` on a `{array}` will not
+      carry it. This one is upstream of that: there is no field to put a range in at all. Two routes
+      close it: an `IngressSpec` (spec.s3.ingress) plus a controller-specific allow-list annotation,
+      which is a platform decision about which ingress controller the bundle standardises on rather
+      than a provider's; or a loadBalancerSourceRanges field upstream. ⚠ It also means the `https` in
+      docs/plan/15's own table is unmet — StorageAccounts.Endpoint returns `http://` because nothing
+      terminates TLS on the S3 port.
+  - id: filer-is-a-single-point-of-failure
+    says: >
+      spec.filer.replicas is pinned at 1 and is not a property. With no spec.filer.config the
+      operator mounts no filer.toml at all — controller_filer_configmap.go says so in as many words,
+      because "mounting an empty filer.toml causes SeaweedFS to treat the config as loaded and skip
+      its default leveldb2 store initialization" — so the filer runs an EMBEDDED, PER-POD leveldb2
+      store. Two replicas would be two divergent object namespaces behind one Service, with no error
+      anywhere. ⚠ CLOSING IT IS A DEPENDENCY THE PLATFORM CANNOT EXPRESS, WHICH IS THE FINDING RATHER
+      THAN THE FILER. A shared metadata store means filer.toml pointing at Postgres, Redis or etcd —
+      and this platform runs a managed Postgres one provider namespace away. src/Providers/README.md
+      § Hard rule forbids a Providers.* assembly referencing another, deliberately, and the sanctioned
+      route is "through CyberCloud.ResourceManager by resource id" — which today means a body property
+      holding a resource id and a reconciler that resolves it, and no provider has ever done that. So
+      the first service that needs another service is this one, and the seam it needs is untested.
+      Until then an account survives a filer POD restart (the metadata volume is persistent) and not
+      a filer NODE loss.
+  - id: encryption-at-rest
+    says: >
+      docs/plan/15 § The resource model: "Encryption at rest is on by default with a platform-managed
+      key". IT IS NOT ON AND NO PROPERTY CLAIMS IT IS. SeaweedFS encrypts volume data behind
+      `weed volume -encryptVolumeData`, and the operator's VolumeServerConfig carries no field for it
+      — the only route is ComponentSpec.ExtraArgs, a free-form []string appended to the command line.
+      Rendering a security guarantee through an escape hatch that takes any string is not a guarantee:
+      nothing validates it, nothing reads it back, and `Matches` could not tell an account with
+      encryption from one whose arg was dropped. Customer-managed keys are M2 in that document anyway.
+      Closing it is a first-class field upstream, or a decision that extraArgs is an acceptable
+      transport for a promise the product page makes.
+  - id: public-access-is-not-a-property
+    says: >
+      docs/plan/15: "Public access is off by default at the account level and requires an explicit
+      two-step opt-in", and calls a publicly readable bucket "the most-reported cloud
+      misconfiguration in existence". The default is honoured — nothing here turns anonymous read on —
+      but the ACCOUNT-LEVEL SWITCH does not exist, because the thing it would gate is BucketSpec's
+      `anonymousRead`, which lives on the child type this file already owes. A two-step opt-in whose
+      first step has no second step would be a property that does nothing; it waits for
+      `bucket-child-type`.
+  - id: egress-is-not-derivable
+    says: >
+      docs/plan/15 § Metering makes storage.egress.gb "the meter customers care most about and the one
+      most easily wrong", measured "at the gateway, per bucket". No quota meter is declared for it and
+      none can be: MeterDerivation.Amount is a pure function of the RESOURCE BODY, and egress is a
+      counter that only exists once traffic has flowed. ⚠ This is a different shape from every
+      undeclarable meter reported so far — charts/managed/kafka's was a string where a number was
+      wanted, charts/managed/nats' was a conditional that derives zero — and it is the first that is
+      not a registry gap at all. It belongs to docs/plan/22's usage pipeline (UsageEvent.Quantity),
+      which reads meters emitted by a running workload rather than reserved at write time. The same is
+      true of storage.object.requests. Recording it here so the next author does not go looking for a
+      derivation seam that would be the wrong answer.
+  - id: replication-versus-topology
+    says: >
+      A replication of DifferentDataCenter on a single-zone cluster is accepted by the API and never
+      satisfied by the cluster: SeaweedFS leaves the volume read-only rather than refusing the write.
+      That is a relation between a property and the CLUSTER'S OWN TOPOLOGY, which ResourceSchema
+      validates nothing about — it checks each property against constants. SECOND SIGHTING of
+      charts/managed/kafka's `replication-factor-versus-node-count`, and the shape is worse: that one
+      compares two properties of the same body, so a cross-property validation seam would close it.
+      This one needs a fact the body does not contain.
+  - id: backup
+    says: >
+      Piece 7, and this row is the first that can neither implement it nor decline it cleanly. The
+      operator ships `SeaweedBackup` and `SeaweedRestore` CRDs and a `spec.backup` block with named
+      destinations, cron metadata snapshots and continuous data mirrors — so unlike
+      charts/managed/nats there IS an operator to ask. What is missing is the destination: every
+      route backs an object store up INTO another object store, and the only one this platform has is
+      this type. An account backing itself up is not a backup. docs/plan/15 § Backup as a service
+      makes `CyberCloud.RecoveryServices/vaults` the M2 answer and puts "bucket replication for
+      object" in it by name, so piece 7 for this row is that resource's, and declaring a half of it
+      here would be the promise docs/plan/12 warns produces "a support incident waiting to happen".
+  - id: grafana-dashboard
+    says: >
+      The operator emits a ServiceMonitor per component and docs/plan/12 § The pattern, once, piece 6
+      keeps the dashboard chart-side either way. The scrape is here; the dashboard is not. SECOND
+      SIGHTING of charts/managed/nats' item of the same name, and no service in the catalogue has
+      delivered that half yet — which at two of five is now a property of the pattern rather than of
+      either service.
