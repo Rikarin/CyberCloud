@@ -1,0 +1,50 @@
+# A subnet inside a tenant's virtual network — docs/plan/14 § Virtual networks,
+# "subnets/{name} → prefix, gateway, DHCP, NAT flag".
+#
+# ⚠ A directory of its own rather than a second block in charts/managed/kube-ovn-vpc. `Build.Charts`
+# pairs a chart with a resource type through ONE `cybercloud.io/resource-type` annotation per
+# Chart.yaml, so one directory cannot be the configuration surface of two types — and it should not
+# be: a Subnet is a different object with a different lifetime from the Vpc it binds to.
+#
+# ⚠ CLUSTER-SCOPED, LIKE ITS PARENT, AND THE NAME CARRIES THREE THINGS RATHER THAN TWO.
+# `NetworkSubnets.ObjectNameOf` is `{namespace}-{network}-{name}`: the namespace because two
+# subscriptions must not collide, and the network's name because two networks in ONE resource group
+# may each hold a subnet called `web`.
+apiVersion: v2
+name: kube-ovn-subnet
+description: A range inside a virtual network that workloads are given addresses from, with optional outbound NAT and optional isolation from other subnets.
+type: application
+
+# The chart's own version. Bumped on every change to this directory.
+version: 0.1.0
+
+# ⚠ The Kube-OVN version this chart's object shape was reviewed against — the same release
+# charts/managed/kube-ovn-vpc pins, because a Subnet is reconciled by the same controller.
+appVersion: "1.16.2"
+
+kubeVersion: ">=1.31.0-0"
+
+keywords:
+  - kube-ovn
+  - subnet
+  - networking
+  - dual-stack
+
+home: https://kubeovn.github.io/docs/
+sources:
+  - https://github.com/kubeovn/kube-ovn
+
+maintainers:
+  - name: Cyber Cloud Platform
+
+# ⚠ The resource type carries BOTH segments — a child's type path is `virtualNetworks/subnets`,
+# interleaved, and a chart annotated with the flattened `subnets` would pair with a type no provider
+# declares.
+#
+# ⚠ The api-version is the NETWORK'S, deliberately. A parent and a child served at different dates
+# would make `…/virtualNetworks/{n}/subnets/{s}?api-version=…` a request whose single version
+# parameter has to mean two things.
+annotations:
+  cybercloud.io/resource-type: CyberCloud.Network/virtualNetworks/subnets
+  cybercloud.io/api-version: "2026-08-01"
+  cybercloud.io/operator: kube-ovn

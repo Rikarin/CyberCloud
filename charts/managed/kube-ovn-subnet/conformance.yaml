@@ -1,0 +1,167 @@
+# Conformance manifest — docs/plan/12 § The pattern, once, piece 8.
+#
+# What the conformance suite asserts about CyberCloud.Network/virtualNetworks/subnets. This file is
+# data: `Build.Charts` checks that it is present, non-empty, and names the same resource type as
+# Chart.yaml.
+#
+# ⚠ THE SECOND CHILD-TYPE MANIFEST IN THE TREE, AND THE FIRST WHOSE PARENT'S OBJECT IS ALSO
+# CLUSTER-SCOPED. charts/managed/seaweedfs-bucket was the first child; there the namespace still
+# separated two accounts and only the parent's NAME had to be folded in. Here neither is provided, so
+# the object name carries the namespace AND the parent.
+
+resourceType: CyberCloud.Network/virtualNetworks/subnets
+apiVersion: "2026-08-01"
+chart: kube-ovn-subnet
+
+renders:
+  - group: kubeovn.io
+    version: v1
+    kind: Subnet
+    count: 1
+    clusterScoped: true
+
+labels:
+  required:
+    - cybercloud.io/tenant-id
+    - cybercloud.io/subscription-id
+    - cybercloud.io/resource-group
+    - cybercloud.io/resource-id
+    - cybercloud.io/resource-type
+    - cybercloud.io/api-version
+    - cybercloud.io/managed-by
+  # ⚠ TWO underscores, not one — a `/` is not a legal label VALUE character and a child type path has
+  # two of them, so KubeLabels.ResourceTypeValue replaces both.
+  values:
+    cybercloud.io/resource-type: cybercloud.network_virtualnetworks_subnets
+    cybercloud.io/managed-by: cybercloud
+
+assertions:
+  - id: two-networks-may-hold-the-same-subnet-name
+    says: >
+      Two virtual networks in ONE resource group each hold a subnet named `web`, and the two are
+      different ranges in different routing domains. ⚠ THIS IS THE ASSERTION A CHILD TYPE EXISTS FOR,
+      and on this family it has one more level than it had on buckets: a Subnet is CLUSTER-SCOPED, so
+      the object name must fold in the namespace AND the parent's name. Dropping either is a different
+      silent collision. NetworkReconcilerTests asserts it, including the two-networks-one-resource-group
+      case the shared harness cannot build.
+  - id: creating-under-an-absent-network-is-the-same-404
+    says: >
+      A create under a virtual network that does not exist is refused with the same status, the same
+      target and the same message as a GET of a subnet that was never created. ⚠ A distinct
+      ParentNotFound would be an existence oracle: the check runs BEFORE the enforcement seam, so a
+      caller who may write in a resource group but may not read a particular network would learn which
+      network names are live, one probe at a time. ⚠ On THIS type the assertion guards something
+      sharper than it did on buckets: a Subnet whose `spec.vpc` names a Vpc that does not exist is not
+      inert — formatSubnet assigns it to the CLUSTER ROUTER, the platform's own default VPC.
+  - id: a-subnet-binds-to-its-own-networks-vpc
+    says: >
+      The rendered Subnet's `spec.vpc` is its OWN network's Vpc object name and no other's. ⚠ THE
+      SHARED SUITE CANNOT CHECK THIS — see § owed, `object-matches-desired-cannot-see-an-address` —
+      and it is the field whose wrong value hands a tenant's address range out inside ANOTHER TENANT'S
+      routing domain, with nothing anywhere reporting it. NetworkSubnetReconcilerTests asserts it
+      against real addresses.
+  - id: a-canonicalized-cidr-is-not-drift
+    says: >
+      A subnet created with 10.20.1.7/24 reaches Succeeded, and stays there. ⚠ THE SINGLE MOST LIKELY
+      BUG IN THIS FAMILY. pkg/controller/subnet.go's formatCIDR runs each element of spec.cidrBlock
+      through net.ParseCIDR and writes back ipNet.String(), so the object carries 10.20.1.0/24 one pass
+      after the apply. A string comparison reports drift on a perfectly converged subnet FOREVER: the
+      reconciler answers InProgress every pass and the message says "does not yet carry the desired
+      spec" while the cluster is exactly right. NetworkMatchesTests runs the string-comparison mistake
+      red.
+  - id: nat-is-off-until-asked-for
+    says: >
+      A subnet created with no `natOutgoing` does not egress to the internet. ⚠ This is the OPPOSITE
+      of Kube-OVN's own default for its cluster subnet, deliberately — docs/plan/12 § Cross-cutting
+      decisions defaults external exposure to off across the platform, and a subnet that silently
+      egresses is the same class of surprise as a publicly readable bucket. It is the only field in
+      this family where this provider's default and the substrate's convention disagree.
+  - id: dual-stack-works-in-both-families
+    says: >
+      A subnet carrying both a v4 and a v6 prefix allocates an address of each family to a workload's
+      port, and `listAddressUsage` reports the two separately. docs/plan/14 § IPv6: "dual-stack from
+      day one, not retrofitted". ⚠ The rendered `cidrBlock` is IPv4 FIRST and comma-separated, because
+      util.CheckProtocol returns Dual only when exactly two entries parse as one v4 and one v6.
+
+# ⚠ `Resources` AND NOT AN ADDRESS COUNT, WHICH IS THE TEMPTING WRONG ANSWER. A /16 holds 65 534
+# addresses and a /24 holds 254, so a meter over "addresses this subnet contains" would make one
+# create consume a tenant's entire allowance while provisioning nothing scarce — a PRIVATE address is
+# not scarce, which is the whole reason RFC 1918 space is reusable and the whole reason overlapping
+# VPCs are allowed. What IS scarce is public IPv4, and docs/plan/14 puts that on publicIpAddresses.
+meters:
+  - resources
+
+# ── owed ──────────────────────────────────────────────────────────────────────────────────────────
+owed:
+  - id: object-matches-desired-cannot-see-an-address
+    says: >
+      ⚠ SECOND SIGHTING OF charts/managed/seaweedfs-bucket'S FINDING, AND THE FIRST TIME IT WAS
+      PREDICTED RATHER THAN DISCOVERED BY A RED SUITE. ProviderConformanceCase.ObjectMatchesDesired is
+      `(objectJson, desiredJson) => bool` and carries NO ADDRESS, which is exactly right for the
+      top-level types whose whole rendered spec is a function of the body. A subnet's is not:
+      `spec.vpc` is its PARENT'S object name and lives only in the address. So the predicate the shared
+      suite evaluates (NetworkSubnets.MatchesBody — the CIDR, natOutgoing, private, enableDHCP) is
+      strictly smaller than the one the reconciler evaluates (NetworkSubnets.Matches, which adds
+      spec.vpc), and the same five assertions the bucket names check less for a subnet than they would
+      for a network. ⚠ WHAT STANDS IN: NetworkReconcilerTests asserts spec.vpc against real addresses,
+      including two networks in ONE resource group each holding a subnet called `web`. Closing it is an
+      ObjectMatchesDesired overload taking the ResourceId — a change to ProviderConformanceCase and
+      therefore to every provider's case file, so it is recorded rather than made unilaterally by the
+      second type that wanted it. ⚠ Two sightings now; the third should probably just make the change.
+  - id: subnets-are-not-checked-against-the-address-space
+    says: >
+      Nothing compares this subnet's `addressPrefix` to its parent's declared `addressSpace`, so a
+      subnet may legally sit outside the network that contains it. Full argument at
+      charts/managed/kube-ovn-vpc/conformance.yaml § owed under the same id.
+  - id: private-has-no-exceptions
+    says: >
+      `private: true` isolates the subnet from every other subnet and there is no exception list.
+      Kube-OVN's `spec.allowSubnets` is the exception list, and it names OTHER SUBNETS' CIDRs — a
+      cross-resource reference with no reader (rule 2), and an array whose per-element pattern
+      ADR-012's fifth surface refuses (`cidr-shape-is-unenforced`). So the isolation switch ships and
+      the exception list does not, and the honest reading of `private: true` in this api-version is "no
+      traffic from any other subnet at all". ⚠ A tenant who needs three tiers that talk to each other
+      but not to a fourth cannot express it, and the workaround — leave `private` off and rely on
+      securityGroups — is blocked on `security-group-rules-are-arrays-of-objects`.
+  - id: gateway-is-not-selectable
+    says: >
+      docs/plan/14's tree lists `gateway` as a subnet attribute and this schema does not carry it. The
+      controller derives it from the CIDR when empty (formatGateway) and the first address of the range
+      is right for effectively every subnet; a tenant-set gateway whose value is wrong produces a
+      subnet that allocates addresses nobody can route from. ⚠ A REAL OMISSION rather than an
+      impossible one — unlike routeTables, nothing in the substrate or the registry blocks it — and it
+      is recorded as one.
+  - id: address-usage-has-no-handler
+    says: >
+      POST …/listAddressUsage is declared with nothing serving it. ⚠ IT IS THE FIRST ACTION IN THE
+      CATALOGUE WHOSE NUMBERS ARE ALREADY ON THE OBJECT, which is a materially better place to be than
+      every other declared-and-unserved action in the tree: listKeys waits on a Vault that is not
+      wired, `stats` waits on docs/plan/22's usage pipeline, and both are DATA gaps. Kube-OVN's Subnet
+      writes status.v4availableIPs, status.v4usingIPs and their v6 counterparts itself, and this
+      reconciler already reads the object that holds them. What is missing is only the HANDLER SEAM: no
+      provider in the tree has one, actions are declared into the registry and routed by the gateway,
+      and there is nowhere to put the code. ⚠ It is also the number a tenant most needs and cannot
+      otherwise get — "why did my workload fail to schedule" is answered by "this subnet has no
+      addresses left", and without this the only way to learn that is to read a Kubernetes object the
+      tenant has no access to.
+  - id: an-orphaned-subnet-joins-the-platforms-vpc
+    says: >
+      See charts/managed/kube-ovn-vpc/conformance.yaml § owed,
+      `parent-delete-strands-subnets-into-the-platforms-vpc`. Recorded on both sides because the cost
+      lands on this type and the fix belongs to the parent's delete path.
+  - id: a-subnets-lock-is-not-its-networks
+    says: >
+      docs/plan/06 § Tags, locks says CanNotDelete and ReadOnly are "inherited down the hierarchy", and
+      ResourceScopeLockResolver walks resource → resource GROUP → subscription. IT DOES NOT WALK THE
+      PARENT RESOURCE. So a CanNotDelete on a virtual network does not protect the subnets inside it.
+      SECOND SIGHTING of charts/managed/seaweedfs-bucket's item of the same name — a
+      CyberCloud.ResourceManager change, not a provider's, and at two sightings it is now a property of
+      child types rather than of either family.
+  - id: security-groups-are-not-attachable-to-a-subnet
+    says: >
+      Kube-OVN attaches a SecurityGroup to a PORT, not to a subnet, so even once
+      `security-group-rules-are-arrays-of-objects` is closed the attachment point is a workload's
+      network interface — which is docs/plan/13's resource and does not exist. ⚠ Worth recording
+      because the obvious design, a `securityGroups: []` property on this type, would be a list of
+      resource names (cross-resource, rule 2) AND would describe an attachment the substrate does not
+      make at this level. The subnet-level control that DOES exist is `private`, above.

@@ -278,8 +278,18 @@ public abstract class SiloKillConformanceTests<TSource>
         CancellationToken cancellationToken
     ) {
         try {
-            using var response = await harness.Raw.CustomObjects
-                .GetNamespacedCustomObjectWithHttpMessagesAsync(
+            // ⚠ The scope branch — see ClusterConformanceTests.ReadFromClusterAsync. Without it this
+            // suite reports "the operation says Succeeded and 'Vpc/…' is not in the real cluster",
+            // which reads as a platform durability failure and is a 404 from the wrong REST path.
+            using var response = target.IsClusterScoped
+                ? await harness.Raw.CustomObjects.GetClusterCustomObjectWithHttpMessagesAsync(
+                    target.Kind.Group,
+                    target.Kind.Version,
+                    target.Kind.Plural,
+                    target.Name,
+                    cancellationToken: cancellationToken
+                )
+                : await harness.Raw.CustomObjects.GetNamespacedCustomObjectWithHttpMessagesAsync(
                     target.Kind.Group,
                     target.Kind.Version,
                     target.Namespace,

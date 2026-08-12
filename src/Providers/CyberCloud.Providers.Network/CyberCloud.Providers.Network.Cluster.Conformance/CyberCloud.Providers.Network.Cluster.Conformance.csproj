@@ -1,0 +1,43 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      The cluster-backed half of the shared provider conformance suite, run against the tenant
+      networking provider.
+
+      ⚠ WHAT THIS SUITE PROVES AND WHAT IT DOES NOT, SAID OUT LOUD BECAUSE ON THIS FAMILY THE GAP IS
+      WIDER THAN ON ANY BEFORE IT. The k3s the harness starts has NO Kube-OVN in it and no CRDs for
+      it. ClusterConformanceHarness derives a minimal definition per custom kind from the case's own
+      Objects and installs it, so what the suite exercises is the APPLY PATH, ADR-013's label
+      injection under real admission, and the refusal a missing CRD produces. It does NOT prove that
+      the manifests this provider renders satisfy Kube-OVN's own schema: the derived stub has an OPEN
+      schema, so a field Kube-OVN would refuse is accepted here, and a `+kubebuilder:default` the real
+      CRD carries is ABSENT here — which is why every Matches in this family is containment and why
+      NetworkMatchesTests hand-writes the defaulted-object case the suite cannot reach.
+
+      ⚠ IT CONTAINS NO ASSERTIONS AND NO INFRASTRUCTURE — five class declarations over the SAME
+      ProviderConformanceCase objects the Docker-free suite uses.
+
+      ⚠ IT IS NOT NAMED `.Conformance.Cluster`. Directory.Build.props § Project role detection and
+      build/Build.Test.cs § SuiteOwning both classify by the SUFFIX of the project name.
+    -->
+
+    <ItemGroup>
+        <PackageReference Include="xunit.v3"/>
+        <PackageReference Include="Shouldly"/>
+    </ItemGroup>
+
+    <ItemGroup Label="Global usings">
+        <Using Include="Xunit"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <!--
+          ⚠ The CASES come from the provider's Docker-free conformance project rather than being
+          declared again here. One provider, one set of ProviderConformanceCase objects.
+        -->
+        <ProjectReference
+            Include="../CyberCloud.Providers.Network.Conformance/CyberCloud.Providers.Network.Conformance.csproj"/>
+        <ProjectReference Include="../../../../test/CyberCloud.Cluster.Conformance/CyberCloud.Cluster.Conformance.csproj"/>
+    </ItemGroup>
+
+</Project>

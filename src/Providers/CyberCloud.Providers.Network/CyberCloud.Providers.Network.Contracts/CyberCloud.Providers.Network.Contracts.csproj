@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      docs/plan/03 § Providers — the first of the five projects: "grain interfaces, resource models,
+      the JSON Schemas". Here it is five schemas and the Kube-OVN projection.
+
+      ⚠ NO GRAIN INTERFACES, AND THIS IS THE TENTH NAMESPACE TO REPORT THAT. What is new is the
+      reason it was in doubt: docs/plan/14 makes address space "the tenant's problem and the
+      platform's constraint", and an allocator is the one thing in this platform that looks like it
+      must hold state. It does not, and the argument is at VirtualNetworks.ReservedRanges: the
+      platform's reserved list is CONFIGURATION, identical in every silo, and the check against it is
+      a pure function of a body and a region. What a grain would add is a place for two concurrent
+      creates to agree — which is the IResourceIndexGrain claim the write path already runs, on the
+      name, and which this type deliberately does not extend to the CIDR. See § owed,
+      `overlap-is-checked-per-request-not-per-region`.
+
+      ⚠ IT REFERENCES ONLY CyberCloud.ResourceManager.Contracts AND CyberCloud.Kubernetes.Contracts —
+      the whole reference set docs/plan/03 § The .Contracts split allows a provider, and rule 2 of
+      § Assembly graph rules forbids the rest. In particular there is NO reference to
+      CyberCloud.Providers.Compute or any other family, even though docs/plan/14's whole subject is
+      resources that sit INSIDE these ones.
+    -->
+
+    <ItemGroup>
+        <ProjectReference Include="../../../CyberCloud.ResourceManager.Contracts/CyberCloud.ResourceManager.Contracts.csproj"/>
+        <ProjectReference Include="../../../CyberCloud.Kubernetes.Contracts/CyberCloud.Kubernetes.Contracts.csproj"/>
+    </ItemGroup>
+
+    <ItemGroup Label="CyberCloud.Analyzers — see CyberCloud.Core.csproj for why this is not a reference">
+        <ProjectReference Include="../../../CyberCloud.Analyzers/CyberCloud.Analyzers.csproj"
+                          OutputItemType="Analyzer"
+                          ReferenceOutputAssembly="false"/>
+    </ItemGroup>
+
+</Project>

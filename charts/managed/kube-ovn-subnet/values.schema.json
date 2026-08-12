@@ -1,0 +1,163 @@
+{
+  "$id": "https://schema.cybercloud.io/charts/kube-ovn-subnet/values.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "The configuration surface of the kube-ovn-subnet chart. GENERATED from values.yaml by `./build.sh Charts` and diffed in CI — docs/plan/03 § charts/. Edit values.yaml, never this file. Members carrying `x-cybercloud-api: false` are chart or platform plumbing and are not part of the resource body.",
+  "properties": {
+    "addressPrefix": {
+      "additionalProperties": false,
+      "description": "The range addresses are allocated from.",
+      "properties": {
+        "v4": {
+          "default": "10.20.1.0/24",
+          "description": "The IPv4 prefix, in CIDR form. ⚠ Host bits are cleared by the fabric, so 10.20.1.7/24 is stored as 10.20.1.0/24 and both name the same network. It may not overlap a range the platform reserves, which is refused with the conflicting range named.",
+          "examples": [
+            "10.20.1.0/24"
+          ],
+          "pattern": "^(?:(\\d{1,3}\\.){3}\\d{1,3}/\\d{1,2})$",
+          "type": "string",
+          "x-cybercloud-immutable": true,
+          "x-cybercloud-order": 0,
+          "x-cybercloud-pointer": "/properties/addressPrefix/v4"
+        },
+        "v6": {
+          "default": "",
+          "description": "The IPv6 prefix, or empty for an IPv4-only subnet. Setting both makes the subnet dual-stack — docs/plan/14 § IPv6.",
+          "examples": [
+            "fd00:20:1::/64"
+          ],
+          "pattern": "^(?:([0-9A-Fa-f:.]+/[0-9]{1,3})?)$",
+          "type": "string",
+          "x-cybercloud-immutable": true,
+          "x-cybercloud-order": 1,
+          "x-cybercloud-pointer": "/properties/addressPrefix/v6"
+        }
+      },
+      "required": [
+        "v4"
+      ],
+      "type": "object",
+      "x-cybercloud-order": 0,
+      "x-cybercloud-pointer": "/properties/addressPrefix"
+    },
+    "enableDhcp": {
+      "default": false,
+      "description": "Whether the fabric answers DHCP in this subnet. Off by default: an address is assigned to a workload's port when the port is created, and DHCP is for guests that insist on asking — a virtual machine rather than a container.",
+      "type": "boolean",
+      "x-cybercloud-order": 3,
+      "x-cybercloud-pointer": "/properties/enableDhcp"
+    },
+    "nameOverride": {
+      "default": "",
+      "description": "Replace the generated object-name stem. Empty means derive it from the release name.",
+      "type": "string",
+      "x-cybercloud-api": false,
+      "x-cybercloud-internal-reason": "Helm plumbing. Nothing about it belongs in a resource body.",
+      "x-cybercloud-order": 5,
+      "x-cybercloud-pointer": "/properties/nameOverride"
+    },
+    "natOutgoing": {
+      "default": false,
+      "description": "Whether workloads in this subnet reach the internet through source NAT. Off by default. ⚠ This is the opposite of Kube-OVN's own default for its cluster subnet, deliberately: a tenant subnet that silently egresses is a surprise, and docs/plan/12 § Cross-cutting decisions defaults external exposure to off. It also requires the network's enableExternal to be on; without it the flag is accepted and nothing egresses.",
+      "type": "boolean",
+      "x-cybercloud-order": 1,
+      "x-cybercloud-pointer": "/properties/natOutgoing"
+    },
+    "platform": {
+      "additionalProperties": false,
+      "description": "Resource identity injected by the reconciler. Not a tenant-facing setting.",
+      "properties": {
+        "apiVersion": {
+          "default": "2026-08-01",
+          "description": "The api-version the resource was last written at, rendered into the cybercloud.io/api-version label.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 5,
+          "x-cybercloud-pointer": "/properties/platform/apiVersion"
+        },
+        "managedBy": {
+          "default": "cybercloud",
+          "description": "Value of the cybercloud.io/managed-by label. Constant, and the selector every informer filters on.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 6,
+          "x-cybercloud-pointer": "/properties/platform/managedBy"
+        },
+        "parentName": {
+          "default": "",
+          "description": "The Vpc object name this subnet binds to. Rendered into spec.vpc. ⚠ Already qualified by the reconciler — it is VirtualNetworks.ObjectNameOf's output, not the tenant's network name.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 7,
+          "x-cybercloud-pointer": "/properties/platform/parentName"
+        },
+        "resourceGroup": {
+          "default": "",
+          "description": "Resource group name, rendered into the cybercloud.io/resource-group label.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 2,
+          "x-cybercloud-pointer": "/properties/platform/resourceGroup"
+        },
+        "resourceId": {
+          "default": "",
+          "description": "Resource GUID, rendered into the cybercloud.io/resource-id label.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 3,
+          "x-cybercloud-pointer": "/properties/platform/resourceId"
+        },
+        "resourceType": {
+          "default": "CyberCloud.Network/virtualNetworks/subnets",
+          "description": "Fully qualified resource type, rendered into the cybercloud.io/resource-type label.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 4,
+          "x-cybercloud-pointer": "/properties/platform/resourceType"
+        },
+        "subscriptionId": {
+          "default": "",
+          "description": "Subscription GUID, rendered into the cybercloud.io/subscription-id label.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 1,
+          "x-cybercloud-pointer": "/properties/platform/subscriptionId"
+        },
+        "tenantId": {
+          "default": "",
+          "description": "Tenant GUID, rendered into the cybercloud.io/tenant-id label.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 0,
+          "x-cybercloud-pointer": "/properties/platform/tenantId"
+        }
+      },
+      "type": "object",
+      "x-cybercloud-api": false,
+      "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+      "x-cybercloud-order": 4,
+      "x-cybercloud-pointer": "/properties/platform"
+    },
+    "private": {
+      "default": false,
+      "description": "Whether the subnet refuses traffic from other subnets. Off by default. ⚠ In this api-version it has no exception list, so on means no traffic from any other subnet in the network at all.",
+      "type": "boolean",
+      "x-cybercloud-order": 2,
+      "x-cybercloud-pointer": "/properties/private"
+    }
+  },
+  "title": "kube-ovn-subnet chart values",
+  "type": "object",
+  "x-cybercloud-api-version": "2026-08-01",
+  "x-cybercloud-chart": "kube-ovn-subnet",
+  "x-cybercloud-chart-version": "0.1.0",
+  "x-cybercloud-resource-type": "CyberCloud.Network/virtualNetworks/subnets"
+}

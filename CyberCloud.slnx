@@ -367,6 +367,31 @@
         <Project Path="src/Providers/CyberCloud.Providers.ContainerService/CyberCloud.Providers.ContainerService.Tests/CyberCloud.Providers.ContainerService.Tests.csproj"/>
         <Project Path="src/Providers/CyberCloud.Providers.ContainerService/CyberCloud.Providers.ContainerService.Conformance/CyberCloud.Providers.ContainerService.Conformance.csproj"/>
         <Project Path="src/Providers/CyberCloud.Providers.ContainerService/CyberCloud.Providers.ContainerService.Cluster.Conformance/CyberCloud.Providers.ContainerService.Cluster.Conformance.csproj"/>
+
+        <!--
+          The eleventh provider family — CyberCloud.Network/virtualNetworks and its children, on
+          Kube-OVN.
+
+          docs/plan/14 § Virtual networks: "A tenant's VPC is a Kube-OVN Vpc; subnets are Subnets
+          bound to it", M1 · 2.5 EM. ADR-019 puts Kube-OVN alongside Cilium with ENABLE_LB=false and
+          ENABLE_NP=false — it provides TENANT networking, not cluster networking, and the family is
+          named for that boundary rather than for the CNI.
+
+          ⚠ IT IS THE FIRST FAMILY WHOSE RESOURCES OTHER RESOURCES WILL SIT INSIDE. Nothing in this
+          tree consumes a virtual network yet; docs/plan/13's VMs and containers are the customers,
+          and what this family owes them is recorded at
+          charts/managed/kube-ovn-vpc/conformance.yaml § owed, `nothing-can-join-a-network-yet`.
+
+          ⚠ IT IS ALSO THE FIRST FAMILY WITH FOUR TYPES IN ONE TREE — a parent and three children —
+          where the tree before it had one parent and one child. What that cost is recorded in
+          src/Providers/README.md § What the tenth provider measured.
+        -->
+        <Project Path="src/Providers/CyberCloud.Providers.Network/CyberCloud.Providers.Network.Contracts/CyberCloud.Providers.Network.Contracts.csproj"/>
+        <Project Path="src/Providers/CyberCloud.Providers.Network/CyberCloud.Providers.Network/CyberCloud.Providers.Network.csproj"/>
+        <Project Path="src/Providers/CyberCloud.Providers.Network/CyberCloud.Providers.Network.Application/CyberCloud.Providers.Network.Application.csproj"/>
+        <Project Path="src/Providers/CyberCloud.Providers.Network/CyberCloud.Providers.Network.Tests/CyberCloud.Providers.Network.Tests.csproj"/>
+        <Project Path="src/Providers/CyberCloud.Providers.Network/CyberCloud.Providers.Network.Conformance/CyberCloud.Providers.Network.Conformance.csproj"/>
+        <Project Path="src/Providers/CyberCloud.Providers.Network/CyberCloud.Providers.Network.Cluster.Conformance/CyberCloud.Providers.Network.Cluster.Conformance.csproj"/>
     </Folder>
     <Folder Name="/src/Hosts/">
         <Project Path="src/Hosts/CyberCloud.Gateway.Host/CyberCloud.Gateway.Host.csproj"/>

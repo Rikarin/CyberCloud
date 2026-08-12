@@ -1,0 +1,73 @@
+{{/*
+Kube-OVN `Vpc` — docs/plan/14 § Virtual networks, "A tenant's VPC is a Kube-OVN Vpc".
+
+⚠ This renders a custom resource; it does not install Kube-OVN. ADR-019 puts Kube-OVN on the cluster
+alongside Cilium as platform infrastructure — ENABLE_LB=false, ENABLE_NP=false — and a tenant's Vpc
+is a row in that installation.
+
+⚠ NO `namespace:` IN metadata, AND THAT IS NOT AN OVERSIGHT. `Vpc` is
+`+kubebuilder:resource:scope="Cluster"`, checked in pkg/apis/kubeovn/v1/vpc.go rather than in a
+README. The separation a namespace would have provided is in the object's NAME instead — see
+`kube-ovn-vpc.objectName`.
+
+⚠ ONE object, and no Service, no Secret and no ServiceMonitor. A VPC is a logical router in OVN's
+southbound database and a set of flows on nodes that already exist: there is no pod, so there is
+nothing to scrape and nothing to connect to. That is also why VirtualNetworks declares only
+QuotaMeter.Resources and none of vcpu, memoryGb or storageGb — it is the first type in the tree that
+provisions no compute at all.
+*/}}
+apiVersion: kubeovn.io/v1
+kind: Vpc
+metadata:
+  name: {{ include "kube-ovn-vpc.objectName" . }}
+  labels:
+    {{- include "kube-ovn-vpc.platformLabels" . | nindent 4 }}
+spec:
+  {{/*
+    ⚠ WHERE `addressSpace` WOULD GO, AND WHY IT IS NOT HERE. A Kube-OVN Vpc carries NO CIDR — the
+    address space lives on its Subnets, which are charts/managed/kube-ovn-subnet. The tenant's
+    declared `addressSpace` is checked against the region's reserved ranges
+    (NetworkAddressing.ProblemWith) and drawn by the portal, and it reaches no field on this object.
+    Stated here because its absence from a resource whose whole subject is address space is the first
+    thing a reader will look for.
+  */}}
+
+  {{/*
+    ⚠ OFF BY DEFAULT. Attaching the VPC's router to the external network is what makes a NAT gateway
+    or a floating IP possible, and a network that reaches the outside without being asked is a network
+    whose owner did not choose that — docs/plan/12 § Cross-cutting decisions defaults external
+    exposure to off across the platform.
+  */}}
+  enableExternal: {{ .Values.enableExternal }}
+
+  {{/*
+    ⚠ NO `namespaces`, AND IT IS THE MOST DANGEROUS FIELD ON THIS CRD. `spec.namespaces` binds the
+    VPC to Kubernetes namespaces, which is how Kube-OVN's own multi-tenancy is usually driven. This
+    platform's tenancy is docs/plan/06's and its namespace is ReconcileDriver.NamespaceFor's, so a
+    tenant body naming namespaces could bind ANOTHER TENANT'S namespace into their own router. It is
+    unreachable from the API on purpose.
+
+    ⚠ NO `staticRoutes` AND NO `policyRoutes`, WHICH IS ALSO WHY THERE IS NO `routeTables` RESOURCE
+    TYPE. docs/plan/14's tree asks for `routeTables/{name}` as a child of a virtual network. Kube-OVN
+    has no route-table OBJECT: the CRD file defines 25 kubeovn.io/v1 kinds and none of them is one — a
+    "route table" there is a bare string name referenced from `staticRoutes[].routeTable`. So a
+    routeTables resource would have to write into THIS array, which carries no
+    `x-kubernetes-list-type` and is therefore ATOMIC under server-side apply: two route tables in one
+    VPC would each converge by erasing the other. And a static route is `{cidr, nextHop, policy}`,
+    which SchemaProperty.ElementKind refuses outright — "an array element is a scalar" — so the body
+    shape has nowhere to put one either.
+
+    ⚠ NO `vpcPeerings` — docs/plan/14 puts peerings at M3, and a peering names another VPC, which is a
+    cross-resource reference this provider has no reader for (rule 2).
+
+    ⚠ NO `enableBfd`, `bfdPort`, `extraExternalSubnets` OR `defaultSubnet`. Each is a property of how
+    the PLATFORM wires a region's fabric rather than something a tenant chooses; `defaultSubnet` in
+    particular would let a body elect one child subnet as the VPC's default, which is a second and
+    conflicting spelling of a fact that subnet's own resource already owns.
+
+    ⚠ `bfdPort.enabled` is the ONE `+kubebuilder:default` in the whole Kube-OVN CRD set, so the API
+    server writes a `bfdPort` block onto this object that this chart never sent. That is why
+    VirtualNetworks.Matches is CONTAINMENT, and why the case is hand-written in NetworkMatchesTests:
+    the conformance harness derives a CRD stub with an open schema and no defaults, so it would never
+    produce it and an equality comparison would stay green there and fail in production.
+  */}}

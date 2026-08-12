@@ -162,6 +162,18 @@ CyberCloud.Vault -> CyberCloud.ResourceManager
 # See charts/managed/kubernetes/conformance.yaml § owed, `the-cluster-this-creates-is-not-connectable`.
 # ⚠ That is the M1 exit story's FOURTH step — "create a VPC and a Postgres server in it" — and it is
 # blocked by a missing WRITE, not by a missing edge.
+# ⚠ AND CyberCloud.Providers.Network IS THE FIRST FAMILY THAT OTHER FAMILIES WILL WANT A LINE **TO**,
+# WHICH IS THE OTHER DIRECTION AND THE SAME REFUSAL. Every family above wants a fifth line to reach
+# something it needs; this one is the thing docs/plan/13's VMs and containers, docs/plan/14's own load
+# balancers and docs/plan/12's private endpoints will each want to reach, because a workload that joins
+# a tenant's VPC has to name one. Rule 2 forbids that line as firmly as it forbids the others, and the
+# sanctioned route is the same: a resource id through CyberCloud.ResourceManager. Recorded BEFORE the
+# first consumer exists, so that the author of the first VM provider finds the refusal and the
+# alternative already written down rather than discovering the edge is easy and taking it.
+#
+# ⚠ FOUR EDGES, THE SAME FOUR, FOR THE TENTH FAMILY — over a family with FIVE resource types, three of
+# them children, rendering four Kube-OVN kinds across one API group. The fifth-edge signal has still
+# not fired from any provider's own needs.
 CyberCloud.Providers.Analytics -> CyberCloud.Core
 CyberCloud.Providers.Analytics -> CyberCloud.Kubernetes
 CyberCloud.Providers.Analytics -> CyberCloud.ResourceManager
@@ -190,6 +202,10 @@ CyberCloud.Providers.Messaging -> CyberCloud.Core
 CyberCloud.Providers.Messaging -> CyberCloud.Kubernetes
 CyberCloud.Providers.Messaging -> CyberCloud.ResourceManager
 CyberCloud.Providers.Messaging -> CyberCloud.Tenancy
+CyberCloud.Providers.Network -> CyberCloud.Core
+CyberCloud.Providers.Network -> CyberCloud.Kubernetes
+CyberCloud.Providers.Network -> CyberCloud.ResourceManager
+CyberCloud.Providers.Network -> CyberCloud.Tenancy
 CyberCloud.Providers.Sample -> CyberCloud.Core
 CyberCloud.Providers.Sample -> CyberCloud.Kubernetes
 CyberCloud.Providers.Sample -> CyberCloud.ResourceManager

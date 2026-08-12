@@ -592,10 +592,26 @@ public sealed class ClusterConformanceHarness<TSource> : IAsyncDisposable
                 Case.Objects(Address("crd-discovery").WithId(Guid.NewGuid()), Namespace).AsEnumerable(),
                 (all, next) => all.Concat(next)
             )
-            .Select(x => x.Kind)
+            // ⚠ THE SCOPE COMES ALONG WITH THE KIND, AND IT IS DERIVED FOR THE REASON THIS METHOD
+            // DERIVES EVERYTHING ELSE. Until CyberCloud.Network/virtualNetworks there was no
+            // cluster-scoped object in the tree and this projection was `.Select(x => x.Kind)` with a
+            // hard-coded `Scope = "Namespaced"` below. A Kube-OVN Vpc is
+            // `+kubebuilder:resource:scope="Cluster"`, and a cluster-scoped apply goes to
+            // /apis/{group}/{version}/{plural}/{name} — which a Namespaced definition does not serve,
+            // so every cluster-facing assertion failed with a 404 that named nothing.
+            //
+            // ObjectRef already answers the question: IsClusterScoped is `Namespace.Length == 0`, the
+            // same property KubeApiClient branches on to pick the REST path. So the stub's scope is
+            // read off the case's own Objects exactly as its group, version, kind and plural are, and
+            // there is no member for a provider author to get wrong by omission — which is the design
+            // rule the `RequiredCrds` discussion above settles.
+            //
+            // ⚠ It changes nothing for the nine families that predate it: every ObjectRef they render
+            // carries a namespace, so every one still derives "Namespaced".
+            .Select(x => (x.Kind, x.IsClusterScoped))
             // The core group has no CRD and needs none — its REST paths are built in.
-            .Where(x => !string.IsNullOrEmpty(x.Group))
-            .DistinctBy(x => x.Group + "/" + x.Plural, StringComparer.Ordinal);
+            .Where(x => !string.IsNullOrEmpty(x.Kind.Group))
+            .DistinctBy(x => x.Kind.Group + "/" + x.Kind.Plural, StringComparer.Ordinal);
 
         // ⚠ AND NEITHER DOES ANY OTHER GROUP THE API SERVER ALREADY SERVES, WHICH THE FILTER ABOVE
         // CANNOT SEE. "Not the core group" is not the same question as "not built in": `apps`,
@@ -615,21 +631,26 @@ public sealed class ClusterConformanceHarness<TSource> : IAsyncDisposable
         // nameless failure again. Listing the plural is the same REST path the provider's own apply
         // will use, so a group that answers here is a group the apply can reach — which is the only
         // property this method exists to establish.
-        var kinds = new List<GroupVersionKind>();
+        var kinds = new List<(GroupVersionKind Kind, bool IsClusterScoped)>();
         foreach (var candidate in candidates) {
-            if (!await IsServedAsync(raw, candidate, cancellationToken).ConfigureAwait(false)) {
+            if (!await IsServedAsync(
+                    raw,
+                    candidate.Kind,
+                    candidate.IsClusterScoped,
+                    cancellationToken
+                ).ConfigureAwait(false)) {
                 kinds.Add(candidate);
             }
         }
 
-        foreach (var kind in kinds) {
+        foreach (var (kind, isClusterScoped) in kinds) {
             var definition = new V1CustomResourceDefinition {
                 ApiVersion = "apiextensions.k8s.io/v1",
                 Kind = "CustomResourceDefinition",
                 Metadata = new() { Name = kind.Plural + "." + kind.Group },
                 Spec = new() {
                     Group = kind.Group,
-                    Scope = "Namespaced",
+                    Scope = isClusterScoped ? "Cluster" : "Namespaced",
                     Names = new() {
                         Kind = kind.Kind,
                         ListKind = kind.Kind + "List",
@@ -671,7 +692,7 @@ public sealed class ClusterConformanceHarness<TSource> : IAsyncDisposable
         // apiextensions controller sets after the create returns, and an apply issued before it is
         // the same nameless 404 this whole method exists to remove. Polling the condition is what
         // makes the wait a fact rather than a sleep.
-        foreach (var kind in kinds) {
+        foreach (var (kind, _) in kinds) {
             await WaitUntilEstablishedAsync(raw, kind.Plural + "." + kind.Group, cancellationToken)
                 .ConfigureAwait(false);
         }
@@ -702,9 +723,29 @@ public sealed class ClusterConformanceHarness<TSource> : IAsyncDisposable
     static async Task<bool> IsServedAsync(
         IKubernetes raw,
         GroupVersionKind kind,
+        bool isClusterScoped,
         CancellationToken cancellationToken
     ) {
         try {
+            // ⚠ The scope branch. A namespaced LIST against a cluster-scoped kind answers 404, which
+            // this method reads as "not served" — the safe direction, and it happens to have produced
+            // the right ANSWER for the wrong REASON before the branch existed. It is spelled out
+            // anyway, because the next kind to reach here might already be installed cluster-scoped by
+            // another harness and would then be created twice.
+            if (isClusterScoped) {
+                await raw.CustomObjects
+                    .ListClusterCustomObjectAsync(
+                        kind.Group,
+                        kind.Version,
+                        kind.Plural,
+                        limit: 1,
+                        cancellationToken: cancellationToken
+                    )
+                    .ConfigureAwait(false);
+
+                return true;
+            }
+
             await raw.CustomObjects
                 .ListNamespacedCustomObjectAsync(
                     kind.Group,
