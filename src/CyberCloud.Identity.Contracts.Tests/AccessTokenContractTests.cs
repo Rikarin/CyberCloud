@@ -1,3 +1,10 @@
+// ⚠ SubjectTypes is in CyberCloud.Authorization.Contracts now, not in the assembly under test —
+// see AuthorizationVocabulary.cs. The assertions below stayed here on purpose: what they check is a
+// property of the TOKEN contract (which spellings a `sub_typ` claim may carry), and moving them to
+// the authorization suite would file them under the wrong question. The byte-for-byte pinning of the
+// whole vocabulary, including these three, is AuthorizationVocabularyTests.
+using CyberCloud.Authorization.Contracts;
+
 namespace CyberCloud.Identity.Contracts.Tests;
 
 /// <summary>

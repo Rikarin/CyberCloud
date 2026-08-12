@@ -99,10 +99,23 @@ public sealed class SignInApi(
     ///         <b>Why these two and not the other six.</b> Passkey and password are the credentials
     ///         that <i>start</i> a sign-in; <see cref="CredentialKind.Totp" /> and
     ///         <see cref="CredentialKind.RecoveryCode" /> are second factors, offered by
-    ///         <c>/api/signin/totp</c> once a first factor has been presented. The three OTP kinds
-    ///         cannot work at all — <c>IOtpDeliverySeam</c> is <c>UnavailableOtpDelivery</c> in every
-    ///         host in this repository — and offering a credential that always fails is worse than
-    ///         not offering it. <see cref="CredentialKind.Certificate" /> is M2.
+    ///         <c>/api/signin/totp</c> once a first factor has been presented.
+    ///         <see cref="CredentialKind.Certificate" /> is M2.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The three OTP kinds cannot work at all, and this used to say
+    ///         <c>IOtpDeliverySeam</c> is <c>UnavailableOtpDelivery</c> "in every host in this
+    ///         repository", which is not the state of the tree.</b> No host registers an
+    ///         <c>IOtpDeliverySeam</c> of any kind: <c>AddIdentityHostApi</c> does not, because this
+    ///         host is an Orleans client and the refusing default is registered by
+    ///         <c>AddCyberCloudIdentity</c>, which takes an <c>ISiloBuilder</c>; and
+    ///         <c>CyberCloud.Silo.Host</c> — the only silo in <c>src/Hosts</c> — does not compose the
+    ///         identity module. Nothing calls the seam either. So the difference is not academic: the
+    ///         sentence <c>UnavailableOtpDelivery</c> exists to hand an operator at 03:00 is not what
+    ///         a caller would meet, because that type is not in any host's container. Offering a
+    ///         credential with nothing at all behind it is worse still than offering one that fails
+    ///         loudly. <c>SignInEndpointContractTests.BeginOffersNoCredentialThatCannotWork</c> holds
+    ///         this list to it and names what has to land first.
     ///     </para>
     ///     <para>
     ///         ⚠ Passkey first, and the order is read by the page rather than sorted by it —
@@ -170,8 +183,10 @@ public sealed class SignInApi(
     ///         verify → create tenant → create default subscription and resource group → seed ReBAC →
     ///         optionally provision an in-house cluster", explicitly "a long-running operation with a
     ///         step list". None of that is built, and the step that gates all of it — mailing the
-    ///         address to verify it — cannot run either, because <c>IOtpDeliverySeam</c> is
-    ///         <c>UnavailableOtpDelivery</c>.
+    ///         address to verify it — cannot run either: nothing in the tree calls
+    ///         <c>IOtpDeliverySeam.DeliverAsync</c>, and no host registers an implementation of it.
+    ///         See <see cref="Offered" /> for the precise state of that seam, which is emptier than
+    ///         "the refusing default is in place".
     ///     </para>
     ///     <para>
     ///         What <i>is</i> built here is the shape, and the shape is the part with a security

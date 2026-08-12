@@ -1,3 +1,4 @@
+using CyberCloud.Authorization.Contracts;
 using CyberCloud.Identity.Contracts;
 using CyberCloud.Identity.Host.Tokens;
 using System.Security.Claims;

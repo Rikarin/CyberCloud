@@ -197,13 +197,13 @@ public sealed class OracleTests(IsolationCluster cluster) {
         await cluster.WriteTupleAsync(
             IsolationCluster.Victim,
             Authorization.Contracts.ObjectRef.Of(
-                Authorization.ObjectTypes.ResourceGroup,
+                Authorization.Contracts.ObjectTypes.ResourceGroup,
                 IsolationCluster.VictimSubscription.ToString("N", CultureInfo.InvariantCulture)
                 + "-"
                 + IsolationCluster.Group
             ),
-            Authorization.Relations.Reader,
-            Authorization.Contracts.SubjectRef.Of(Authorization.ObjectTypes.User, reader)
+            Authorization.Contracts.Relations.Reader,
+            Authorization.Contracts.SubjectRef.Of(Authorization.Contracts.ObjectTypes.User, reader)
         );
 
         var address = IsolationCluster
@@ -248,8 +248,8 @@ public sealed class OracleTests(IsolationCluster cluster) {
         // It survived because no test had ever driven a create through the real authorizer. The two
         // constants still live in two assemblies that cannot share one, so this asserts the strings
         // agree rather than trusting that they do.
-        ReBacResourceAuthorizer.ResourceGroupObjectType.ShouldBe(Authorization.ObjectTypes.ResourceGroup);
-        ReBacResourceAuthorizer.ResourceObjectType.ShouldBe(Authorization.ObjectTypes.Resource);
+        ReBacResourceAuthorizer.ResourceGroupObjectType.ShouldBe(Authorization.Contracts.ObjectTypes.ResourceGroup);
+        ReBacResourceAuthorizer.ResourceObjectType.ShouldBe(Authorization.Contracts.ObjectTypes.Resource);
 
         Authorization.CyberCloudSchema.Instance.HasType(ReBacResourceAuthorizer.ResourceGroupObjectType)
             .ShouldBeTrue();

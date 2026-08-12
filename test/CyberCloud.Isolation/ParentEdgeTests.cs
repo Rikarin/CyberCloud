@@ -1,4 +1,9 @@
 using CyberCloud.Authorization;
+// ⚠ ObjectTypes and Relations moved here from the implementation assembly — see
+// CyberCloud.Authorization.Contracts/AuthorizationVocabulary.cs. `using CyberCloud.Authorization`
+// above is still needed, for CyberCloudSchema. Safe to import unqualified in this one file because
+// nothing in it names ObjectRef, which GlobalUsings.cs pins to the Kubernetes spelling.
+using CyberCloud.Authorization.Contracts;
 using CyberCloud.ResourceManager;
 using System.Globalization;
 
