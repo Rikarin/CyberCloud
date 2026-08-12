@@ -302,6 +302,26 @@ public sealed class ResourceManagerCluster : IAsyncLifetime {
     /// <summary>The subscription every test writes into.</summary>
     public static Guid Subscription { get; } = Guid.Parse("33333333-3333-4333-8333-333333333333");
 
+    /// <summary>
+    ///     A second subscription in <see cref="Tenant" />, with a quota budget of its own.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b><see cref="Subscription" /> is shared by every class in the collection and its Vcpu
+    ///     quota is a finite, cumulative budget that nothing gives back.</b> A converged create
+    ///     commits its lease for the rest of the run, so the suite's committed total only ever climbs
+    ///     — it sat at 99 of 100 before this existed. That makes the budget a hidden coupling between
+    ///     unrelated classes: a class that adds a couple of creates pushes a class that runs after it
+    ///     into <c>QuotaExceeded</c>, and the failure lands in whichever test happened to be last
+    ///     rather than in the one that spent the quota. <c>ParentExistenceTests</c> did exactly that
+    ///     to <c>InheritedLockTests</c>.
+    ///     <para>
+    ///         A class whose fixtures create resources it does not need counted should address this
+    ///         one instead. It is a real subscription in the same tenant with the same
+    ///         <c>prod</c> resource group, so nothing else about the write path changes.
+    ///     </para>
+    /// </remarks>
+    public static Guid IsolatedSubscription { get; } = Guid.Parse("44444444-4444-4444-8444-444444444444");
+
     /// <summary>The cluster's grain factory. ⚠ Tenant-unaware — a client, in the filter's terms.</summary>
     public IGrainFactory Grains => cluster.GrainFactory;
 
@@ -402,8 +422,9 @@ public sealed class ResourceManagerCluster : IAsyncLifetime {
         // written into them. OtherTenant gets one too — the cross-tenant tests must be refused by the
         // TENANT comparison, and a subscription that did not exist would refuse them one line earlier
         // for the wrong reason.
-        await CreateSubscriptionAsync(Tenant);
-        await CreateSubscriptionAsync(OtherTenant);
+        await CreateSubscriptionAsync(Tenant, Subscription);
+        await CreateSubscriptionAsync(Tenant, IsolatedSubscription);
+        await CreateSubscriptionAsync(OtherTenant, Subscription);
 
         Manager = new ResourceManagerService(
             Registry,
@@ -422,15 +443,16 @@ public sealed class ResourceManagerCluster : IAsyncLifetime {
     ///     find them and so the lock walk has scopes above the resource to read.
     /// </summary>
     /// <param name="tenant">The tenant.</param>
-    async Task CreateSubscriptionAsync(Guid tenant) {
+    /// <param name="subscription">Which subscription — see <see cref="IsolatedSubscription" />.</param>
+    async Task CreateSubscriptionAsync(Guid tenant, Guid subscription) {
         var created = await For(tenant)
-            .GetGrain<ISubscriptionGrain>(GrainKeys.Subscription(Subscription))
+            .GetGrain<ISubscriptionGrain>(GrainKeys.Subscription(subscription))
             .CreateAsync("tests");
 
         created.IsSuccess.ShouldBeTrue(created.Error?.Message);
 
         var made = await For(tenant)
-            .GetGrain<IResourceGroupGrain>(GrainKeys.ResourceGroup(Subscription, "prod"))
+            .GetGrain<IResourceGroupGrain>(GrainKeys.ResourceGroup(subscription, "prod"))
             .CreateAsync(tenant, "eu-west-1");
 
         made.IsSuccess.ShouldBeTrue(made.Error?.Message);

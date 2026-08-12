@@ -33,16 +33,37 @@ namespace CyberCloud.ResourceManager.Tests;
 /// </remarks>
 [Collection(ResourceManagerSuite.Name)]
 public sealed class ParentExistenceTests(ResourceManagerCluster cluster) {
+    /// <summary>
+    ///     ⚠ This suite addresses <see cref="ResourceManagerCluster.IsolatedSubscription" /> and not
+    ///     the shared one, because every case here needs a real parent and each parent is a converged
+    ///     create whose Vcpu lease is committed for the rest of the run. On the shared subscription
+    ///     those six creates took the collection's cumulative budget from 99 of 100 to over it, and
+    ///     <c>InheritedLockTests</c> — which runs later and had nothing to do with any of it — failed
+    ///     with <c>QuotaExceeded</c>.
+    /// </summary>
+    static Guid Subscription => ResourceManagerCluster.IsolatedSubscription;
+
     /// <summary>The address of a gadget under a widget — the interleaved shape, in one place.</summary>
     static ResourceId Child(string parentName, string name) =>
         new(
             ResourceManagerCluster.Tenant,
-            ResourceManagerCluster.Subscription,
+            Subscription,
             "prod",
             TestingProvider.ChildTypeName,
             name,
             Guid.Empty,
             parentName
+        );
+
+    /// <summary>A widget's address in this suite's own subscription.</summary>
+    static ResourceId Parent(string name) =>
+        new(
+            ResourceManagerCluster.Tenant,
+            Subscription,
+            "prod",
+            ConformingReconciler.TypeName,
+            name,
+            Guid.Empty
         );
 
     /// <summary>
@@ -64,7 +85,7 @@ public sealed class ParentExistenceTests(ResourceManagerCluster cluster) {
 
     /// <summary>Creates a widget and drives it to terminal, so it can be deleted afterwards.</summary>
     async Task<ResourceId> CreateParentAsync(string name) {
-        var address = ResourceManagerCluster.Address(name);
+        var address = Parent(name);
 
         var created = await cluster.Manager.WriteAsync(
             new() {
@@ -139,7 +160,7 @@ public sealed class ParentExistenceTests(ResourceManagerCluster cluster) {
         // off one would outlive its parent's failure to exist.
         ResourceManagerCluster.ResetDoubles();
 
-        var claimed = ResourceManagerCluster.Address("claimed-widget");
+        var claimed = Parent("claimed-widget");
 
         // The claim, without the confirm — step 1 of two-phase create and no step 3.
         var claim = await cluster.Index(claimed).TryClaimAsync(claimed, Guid.NewGuid());
@@ -312,7 +333,7 @@ public sealed class ParentExistenceTests(ResourceManagerCluster cluster) {
 
         var accepted = await cluster.Manager.WriteAsync(
             new() {
-                Path = ResourceManagerCluster.Address("unparented").Path,
+                Path = Parent("unparented").Path,
                 ApiVersion = TestingProvider.V2026,
                 Verb = WriteVerb.Put,
                 Body = TestingProvider.Body(),
