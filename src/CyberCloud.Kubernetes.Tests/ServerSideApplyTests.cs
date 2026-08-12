@@ -82,6 +82,96 @@ public sealed class ServerSideApplyTests(K3sFixture k3s) {
     }
 
     [Fact]
+    public async Task AControllersWriteIsNotAChangeToAFieldWeOwn() {
+        // ⚠ THE DEFECT ReApplyingTheSameBodyIsAnUnchangedNoOp USED TO FLAKE ON, pinned without a
+        // race. That test creates a Deployment and re-applies the identical body, and it reported
+        // Updated in 4 runs out of 20 against this fixture — because the client compared
+        // metadata.resourceVersion across its own read-then-write window, and the k3s deployment
+        // controller writes .status inside that window. resourceVersion is shared by every writer,
+        // so a status write moves it.
+        //
+        // Provoking the window on demand is not possible from out here, so this asserts the property
+        // the window exposed instead: a real controller write against a real API server moves the
+        // shared cursor and leaves the fields we own alone. Both halves are asserted, so the test
+        // fails loudly rather than passing vacuously if the controller never writes.
+        var token = TestContext.Current.CancellationToken;
+        const string name = "ssa-controller-write";
+
+        (await k3s.Api.ApplyAsync(Command(name, 1), token)).GetValueOrThrow()
+            .Result.ShouldBe(ApplyResult.Created);
+
+        var target = new ObjectRef { Kind = Deployments, Namespace = K3sFixture.Namespace, Name = name };
+        var before = (await k3s.Api.GetAsync(target, token)).GetValueOrThrow();
+        var after = await WaitForAnotherWriterAsync(target, before.ResourceVersion);
+
+        OwnedFieldSnapshot.TryCapture(before.Json, OurManager, out var was).ShouldBeTrue();
+        OwnedFieldSnapshot.TryCapture(after.Json, OurManager, out var now).ShouldBeTrue();
+
+        now.ShouldBe(
+            was,
+            "the deployment controller writes .status and the deployment.kubernetes.io/revision "
+            + "annotation. Neither is ours, so neither is an Updated."
+        );
+    }
+
+    [Fact]
+    public async Task ALabelOnlyChangeIsAnUpdateEvenThoughGenerationDoesNotMove() {
+        // ⚠ The trap in the cheapest fix for the test above. metadata.generation ignores status
+        // writes, which is the half that looks right — and it tracks .spec only, so a relabel we
+        // genuinely made would report Unchanged. Both assertions here are needed: the second is what
+        // says the first was not free.
+        var token = TestContext.Current.CancellationToken;
+        const string name = "ssa-label-only";
+
+        (await k3s.Api.ApplyAsync(Command(name, 1, extraLabels: [("tier", "bronze")]), token))
+            .GetValueOrThrow()
+            .Result.ShouldBe(ApplyResult.Created);
+
+        var generation = await k3s.ReadAppsFieldAsync("deployments", name, "metadata", "generation");
+
+        (await k3s.Api.ApplyAsync(Command(name, 1, extraLabels: [("tier", "silver")]), token))
+            .GetValueOrThrow()
+            .Result.ShouldBe(ApplyResult.Updated, "a label is a field we own, and it changed.");
+
+        (await k3s.ReadAppsFieldAsync("deployments", name, "metadata", "labels", "tier")).ShouldBe("silver");
+
+        (await k3s.ReadAppsFieldAsync("deployments", name, "metadata", "generation")).ShouldBe(
+            generation,
+            "generation tracks .spec only, which is exactly why it cannot be the signal."
+        );
+    }
+
+    [Fact]
+    public async Task ARivalsWriteToAFieldWeDoNotOwnIsNotAnUpdate() {
+        // The other side of the same contract, and the case a ConfigMap can't show: another manager
+        // adds an annotation of its own, which bumps resourceVersion and leaves our fields alone.
+        var token = TestContext.Current.CancellationToken;
+        const string name = "ssa-rival-annotation";
+
+        (await k3s.Api.ApplyAsync(Command(name, 1), token)).GetValueOrThrow()
+            .Result.ShouldBe(ApplyResult.Created);
+
+        await k3s.RivalApplyAsync(
+            RivalManager,
+            "deployments",
+            name,
+            $$"""
+              { "apiVersion": "apps/v1", "kind": "Deployment",
+                "metadata": { "name": "{{name}}", "annotations": { "tenant.example/note": "mine" } } }
+              """
+        );
+
+        (await k3s.Api.ApplyAsync(Command(name, 1), token)).GetValueOrThrow()
+            .Result.ShouldBe(
+                ApplyResult.Unchanged,
+                "the annotation belongs to the rival's field set, so the object changed and our part of it did not."
+            );
+
+        (await k3s.ReadAppsFieldAsync("deployments", name, "metadata", "annotations", "tenant.example/note"))
+            .ShouldBe("mine", "and an apply that owns nothing there must not remove it.");
+    }
+
+    [Fact]
     public async Task ChangingAFieldWeOwnIsAnUpdate() {
         var token = TestContext.Current.CancellationToken;
 
@@ -464,16 +554,54 @@ public sealed class ServerSideApplyTests(K3sFixture k3s) {
           }
           """;
 
-    KubeCommand Command(string name, int replicas, GroupVersionKind? kind = null, string? json = null) {
+    KubeCommand Command(
+        string name,
+        int replicas,
+        GroupVersionKind? kind = null,
+        string? json = null,
+        (string Key, string Value)[]? extraLabels = null
+    ) {
         var id = Resource(name);
 
-        return KubeCommand.For(new UnusedConnection())
+        var builder = KubeCommand.For(new UnusedConnection())
             .WithTenantId(id.TenantId)
             .WithResourceId(id)
             .WithKind(kind ?? Deployments)
             .InNamespace(K3sFixture.Namespace)
             .WithFieldManager(OurManager)
-            .ObjectJson(json ?? DeploymentJson(name, replicas))
-            .Build();
+            .ObjectJson(json ?? DeploymentJson(name, replicas));
+
+        return (extraLabels is null ? builder : builder.WithLabels(extraLabels)).Build();
+    }
+
+    /// <summary>
+    ///     Waits until somebody other than us has written to the object, and returns it as it stands.
+    /// </summary>
+    /// <param name="target">The object to watch.</param>
+    /// <param name="knownVersion">The <c>resourceVersion</c> we last saw. The wait ends when it moves.</param>
+    /// <remarks>
+    ///     The writer is the k3s deployment controller, and it arrives within a second or so of the
+    ///     create. The generous ceiling is for a loaded CI box; running out of it fails the test with
+    ///     what it was waiting for, because a controller that never wrote would make the caller's
+    ///     assertion pass for the wrong reason.
+    /// </remarks>
+    async Task<KubeObject> WaitForAnotherWriterAsync(ObjectRef target, string knownVersion) {
+        var token = TestContext.Current.CancellationToken;
+        var deadline = DateTimeOffset.UtcNow.AddSeconds(60);
+
+        while (DateTimeOffset.UtcNow < deadline) {
+            var current = (await k3s.Api.GetAsync(target, token)).GetValueOrThrow();
+
+            if (!string.Equals(current.ResourceVersion, knownVersion, StringComparison.Ordinal)) {
+                return current;
+            }
+
+            await Task.Delay(TimeSpan.FromMilliseconds(200), token);
+        }
+
+        throw new InvalidOperationException(
+            $"{target} stayed at resourceVersion {knownVersion} for 60 s — the deployment controller "
+            + "never wrote, so this test cannot say anything about a controller's write."
+        );
     }
 }

@@ -129,9 +129,9 @@ public sealed class KubeApiClient(IKubernetes client, Guid clusterId, IClock clo
         // ⚠ A read before the write, and it buys the Created/Updated/Unchanged distinction.
         //
         // An apply PATCH returns 200 whether it created or updated, and it returns the object
-        // WITHOUT telling you what the resourceVersion was beforehand — so "did anything actually
-        // change" is not answerable from the response alone. Reading first gives the prior cursor;
-        // an unchanged resourceVersion afterwards is the API server saying the apply was a no-op.
+        // WITHOUT telling you what it looked like beforehand — so "did anything actually change" is
+        // not answerable from the response alone. Reading first gives the before picture, and
+        // OurFieldsChanged diffs it against the after through metadata.managedFields.
         //
         // The obvious saving — skip the apply entirely when the object's cybercloud.io/reconcile-hash
         // already matches ours — is deliberately NOT taken, and the reason is worth stating because
@@ -150,6 +150,7 @@ public sealed class KubeApiClient(IKubernetes client, Guid clusterId, IClock clo
 
         var existedBefore = existing.IsSuccess;
         var priorVersion = existing.ValueOrDefault?.ResourceVersion ?? string.Empty;
+        var priorJson = existing.ValueOrDefault?.Json;
 
         object body;
         try {
@@ -195,9 +196,9 @@ public sealed class KubeApiClient(IKubernetes client, Guid clusterId, IClock clo
 
             var result = !existedBefore
                 ? ApplyResult.Created
-                : string.Equals(newVersion, priorVersion, StringComparison.Ordinal)
-                    ? ApplyResult.Unchanged
-                    : ApplyResult.Updated;
+                : OurFieldsChanged(priorJson, json, command.FieldManager, priorVersion, newVersion)
+                    ? ApplyResult.Updated
+                    : ApplyResult.Unchanged;
 
             return Result<ApplyOutcome>.Success(
                 new() {
@@ -412,6 +413,48 @@ public sealed class KubeApiClient(IKubernetes client, Guid clusterId, IClock clo
             client.Dispose();
         }
     }
+
+    /// <summary>
+    ///     Whether the apply changed a field we own — the question
+    ///     <see cref="ApplyResult.Updated" /> is defined by.
+    /// </summary>
+    /// <param name="before">The object as it was read, or <see langword="null" /> if it was absent.</param>
+    /// <param name="after">The object the apply returned.</param>
+    /// <param name="fieldManager">Our manager, whose <c>managedFields</c> entry says what "we own" means.</param>
+    /// <param name="priorVersion">The <c>resourceVersion</c> before the apply, for the fallback.</param>
+    /// <param name="newVersion">The <c>resourceVersion</c> after it.</param>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>The <c>resourceVersion</c> comparison this replaced answered a different
+    ///         question</b> — "did anyone write between our read and our write" — and any other
+    ///         writer inside that window made it wrong. Against a real k3s on an idle machine,
+    ///         creating a <c>Deployment</c> and immediately re-applying the identical body reported
+    ///         <see cref="ApplyResult.Updated" /> 4 times in 20, because the deployment controller
+    ///         writes <c>status</c> in the window and a status write bumps the object's single shared
+    ///         <c>resourceVersion</c>. The same body re-applied after a settle was
+    ///         <see cref="ApplyResult.Unchanged" />, so the apply itself was always a genuine no-op.
+    ///         <see cref="OwnedFieldSnapshot" /> carries the reasoning and the traps in the two
+    ///         narrower fixes.
+    ///     </para>
+    ///     <para>
+    ///         <b>The fallback is still <c>resourceVersion</c></b>, for the case where field
+    ///         management cannot be read off either body. That is the old behaviour, flakiness
+    ///         included, and it is the right floor: it over-reports
+    ///         <see cref="ApplyResult.Updated" />, never under-reports it, so a consumer counting
+    ///         convergence retries rather than declaring victory early.
+    ///     </para>
+    /// </remarks>
+    static bool OurFieldsChanged(
+        string? before,
+        string after,
+        string fieldManager,
+        string priorVersion,
+        string newVersion
+    ) =>
+        OwnedFieldSnapshot.TryCapture(before, fieldManager, out var was)
+        && OwnedFieldSnapshot.TryCapture(after, fieldManager, out var now)
+            ? !string.Equals(was, now, StringComparison.Ordinal)
+            : !string.Equals(newVersion, priorVersion, StringComparison.Ordinal);
 
     static KubeWatchEvent? ReadFrame(string line) {
         try {
