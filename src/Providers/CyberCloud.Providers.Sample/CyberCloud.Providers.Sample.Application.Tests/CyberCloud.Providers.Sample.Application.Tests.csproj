@@ -1,0 +1,59 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      The sample provider's application layer, which is one ABP module and no application service.
+
+      ⚠ THERE IS DELIBERATELY LITTLE HERE, AND PADDING IT WOULD DEFEAT THE PROJECT IT TESTS.
+      docs/plan/24 § Phase 1 exit criterion 1 and docs/plan/25 § R1 make CyberCloud.Providers.Sample
+      the instrument that measures whether the resource manager is finished — its leading indicator is
+      "the number of commits to CyberCloud.ResourceManager made by a provider PR". A suite that grew
+      assertions about invented services would be measuring itself. So there are three tests, each
+      about something a host or a gate would otherwise discover the hard way:
+
+        1. the module actually loads in an ABP application, which is the only way to find out that a
+           [DependsOn] graph resolves and that Volo.Abp.Ddd.Application is really in the closure;
+        2. the application layer is still empty, which is the measurement's own tripwire;
+        3. the assembly binds nothing from the provider implementation, Orleans or the resource
+           manager — an edge no assembly-graph rule covers, and the one that would drag the
+           reconciler's whole dependency closure into whatever host loads this module.
+
+      ⚠ THIS SUITE CANNOT PUT CyberCloud.Providers.Sample.Application ABOVE THE COVERAGE FLOOR, AND
+      NO SUITE CAN. Measured on 2026-08-12: `dotnet-coverage instrument` refuses the assembly with
+      "Module was not instrumented. Reason: optimized_or_instrumented", so it produces no package
+      element, and build/CoverageReport.cs § Violations reads a missing package as 0 % — the rule that
+      stops a project with no tests from passing by producing no data. The cause is not the tests: the
+      assembly's only type is a body-less class declaration, whose implicit constructor carries no
+      sequence points, so there is nothing to instrument. Verified by adding one method with a body
+      and re-running the instrumenter, which then succeeded, and reverting it.
+
+      That leaves three honest options, none of which is "write more tests here":
+        1. Have the floor distinguish "no package because nothing tested it" from "no package because
+           there is nothing to instrument". That is a change to build/Build.Test.cs, which this
+           project must not make on its own.
+        2. Let the project gain real code, which docs/plan/24 § Phase 1 says it should not.
+        3. Record it as a known exemption, which build/Build.Test.cs's own failure message argues
+           against: "a floor with a list of exemptions is a floor shaped like whatever the tree
+           happened to be on the day it was added."
+
+      ⚠ docs/plan/03 § Assembly graph rules, rule 4 — "nothing references a *.Application assembly
+      except its own host" — is not violated by this project, and not by an exemption. Rule 4 is
+      evaluated over build/Build.Architecture.cs § ShippingAssemblies, which is built from projects
+      where SuiteOwning(project) is null; every *.Tests project is claimed by a suite and is therefore
+      not a candidate for any of the six rules. The exemption is real, implicit, and stated here
+      because nothing in that file says a test project is out of scope for rule 4 specifically.
+    -->
+
+    <ItemGroup>
+        <PackageReference Include="xunit.v3"/>
+        <PackageReference Include="Shouldly"/>
+    </ItemGroup>
+
+    <ItemGroup Label="Global usings">
+        <Using Include="Xunit"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../CyberCloud.Providers.Sample.Application/CyberCloud.Providers.Sample.Application.csproj"/>
+    </ItemGroup>
+
+</Project>

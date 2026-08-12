@@ -23,7 +23,7 @@ static class Program {
     ///     agreeing on facts and disagreeing on consequences is only possible if the facts come back
     ///     as data. A non-zero exit here means the run itself could not happen.
     /// </summary>
-    static int Main(string[] arguments) {
+    internal static int Main(string[] arguments) {
         string? output = null;
         string? derived = null;
         string? charts = null;
