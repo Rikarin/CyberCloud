@@ -128,7 +128,7 @@ public sealed class NetworkSubnetCase : IProviderCaseSource {
             // ⚠ WHAT THE SUITE THEREFORE DOES NOT CHECK FOR A SUBNET, said out loud so nobody has to
             // infer it: that the rendered object binds to the right Vpc. That is the single most
             // consequential field on the object — a Subnet bound to the wrong Vpc hands out addresses
-            // inside another tenant's routing domain — and NetworkSubnetReconcilerTests asserts it
+            // inside another tenant's routing domain — and NetworkReconcilerTests asserts it
             // against real addresses, including the case this harness cannot build: two networks in
             // ONE resource group each holding a subnet called `web`.
             // charts/managed/kube-ovn-subnet/conformance.yaml § owed,

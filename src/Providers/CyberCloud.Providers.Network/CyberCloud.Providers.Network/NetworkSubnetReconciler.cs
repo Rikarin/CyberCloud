@@ -35,7 +35,7 @@ namespace CyberCloud.Providers.Network;
 ///         <item>
 ///             <b>No hidden state.</b> The only field is the primary constructor's
 ///             <see cref="IClock" />. Both halves are asserted in
-///             <c>NetworkSubnetReconcilerTests</c>, because
+///             <c>NetworkReconcilerTests</c>, because
 ///             <c>ReconcilerConformance.CheckNoHiddenState</c> is structurally blind to a
 ///             <c>readonly</c> field of a mutable collection type — confirmed five times in five
 ///             families.

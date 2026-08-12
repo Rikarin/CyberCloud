@@ -592,7 +592,7 @@ public static class NetworkSubnets {
     ///         <c>(objectJson, desiredJson) =&gt; bool</c> and carries <b>no address</b>, so the
     ///         predicate the shared suite can evaluate for a child is strictly smaller than the one the
     ///         reconciler evaluates. What the suite therefore does not check for a subnet: that the
-    ///         rendered object binds to the right <c>Vpc</c>. <c>NetworkSubnetReconcilerTests</c>
+    ///         rendered object binds to the right <c>Vpc</c>. <c>NetworkReconcilerTests</c>
     ///         asserts it against real addresses, including the case the harness cannot build — two
     ///         networks in ONE resource group each holding a subnet called <c>web</c>.
     ///     </para>

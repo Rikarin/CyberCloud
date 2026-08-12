@@ -26,7 +26,7 @@ namespace CyberCloud.Providers.Network.Contracts;
 ///         <i>"the marketing must not claim more than the substrate delivers"</i>. The
 ///         <c>Display</c> summary this type registers with, the chart's description and the
 ///         portal copy all derive from <see cref="IsolationClaim" /> rather than restating it, and
-///         <c>NetworkIsolationTests</c> is what stops the three from drifting apart. The precedent is
+///         <c>NetworkDeclarationTests</c> is what stops the three from drifting apart. The precedent is
 ///         <c>MariaDbServers.CompatibilityClaim</c> and its <c>SupportedSubset</c>: a claim that is
 ///         data is a claim a test can fail on, and a claim that is prose is a claim that gets
 ///         optimistic in a release note.
@@ -185,7 +185,7 @@ public static class VirtualNetworks {
     ///     substrate delivers"</i>.</b> The word doing the work is <i>network-layer</i>. It is not
     ///     "isolated", not "private" and not "secure", each of which a reader completes with a
     ///     stronger guarantee than OVS provides. <see cref="IsolationLimits" /> carries what is
-    ///     explicitly <b>not</b> claimed, and <c>NetworkIsolationTests</c> asserts that this string
+    ///     explicitly <b>not</b> claimed, and <c>NetworkDeclarationTests</c> asserts that this string
     ///     reaches the registered summary and the chart description unchanged and that neither adds a
     ///     word from the forbidden list.
     /// </remarks>
