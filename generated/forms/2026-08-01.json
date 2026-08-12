@@ -4,6 +4,294 @@
   "generatedFrom": "openapi/2026-08-01.json",
   "description": "Portal form schemas at api-version 2026-08-01. Generated from the OpenAPI document — docs/plan/21 § Generation — and consumed by libs/resource-forms' schema-renderer (docs/plan/20).",
   "forms": {
+    "CyberCloud.Analytics/clickhouseClusters": {
+      "resourceType": "CyberCloud.Analytics/clickhouseClusters",
+      "apiVersion": "2026-08-01",
+      "title": "ClickHouse cluster",
+      "plural": "ClickHouse clusters",
+      "summary": "A managed ClickHouse cluster on the Altinity operator, with declared shards and replicas and a ClickHouse Keeper quorum. The schema is the tenant's.",
+      "overrideKey": "CyberCloud.Analytics/clickhouseClusters@2026-08-01",
+      "coveredPointers": [
+        "/location",
+        "/properties",
+        "/properties/clusterId",
+        "/properties/keeperNodes",
+        "/properties/monitoring",
+        "/properties/monitoring/enabled",
+        "/properties/replicas",
+        "/properties/shards",
+        "/properties/sizing",
+        "/properties/sizing/cpu",
+        "/properties/sizing/memory",
+        "/properties/sizing/preset",
+        "/properties/storage",
+        "/properties/storage/class",
+        "/properties/storage/size",
+        "/properties/version",
+        "/tags"
+      ],
+      "supportsTags": true,
+      "requiresCluster": true,
+      "clusterIdPointer": "/properties/clusterId",
+      "softDeleteDays": 0,
+      "fields": [
+        {
+          "jsonPointer": "/location",
+          "name": "location",
+          "label": "Location",
+          "control": "xui-region",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "The region the cluster is billed in.",
+          "format": "cybercloud-region",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new ClickHouse cluster to change it.",
+          "placeholder": "eu-central"
+        },
+        {
+          "jsonPointer": "/properties",
+          "name": "properties",
+          "label": "Properties",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "The cluster's own settings."
+        },
+        {
+          "jsonPointer": "/properties/clusterId",
+          "name": "clusterId",
+          "label": "Cluster id",
+          "control": "xui-cluster",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "The cluster whose namespace holds the ClickHouse cluster.",
+          "format": "uuid",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new ClickHouse cluster to change it."
+        },
+        {
+          "jsonPointer": "/properties/keeperNodes",
+          "name": "keeperNodes",
+          "label": "Keeper nodes",
+          "control": "xui-slider",
+          "type": "integer",
+          "required": true,
+          "section": "general",
+          "hint": "Number of ClickHouse Keeper nodes. Keeper is a Raft quorum, so three is the smallest count that survives losing one and an even count tolerates no more failures than the odd count below it. One is offered for development and has no quorum at all.",
+          "minimum": 1,
+          "maximum": 5,
+          "default": 3
+        },
+        {
+          "jsonPointer": "/properties/monitoring",
+          "name": "monitoring",
+          "label": "Monitoring",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "What the platform scrapes."
+        },
+        {
+          "jsonPointer": "/properties/monitoring/enabled",
+          "name": "enabled",
+          "label": "Enabled",
+          "control": "xui-switch",
+          "type": "boolean",
+          "required": false,
+          "section": "monitoring",
+          "hint": "Whether ClickHouse's own Prometheus endpoint is served on port 9363. On by default — docs/plan/12: \"a managed service the tenant cannot see the health of is a black box they will not trust with production\". ⚠ It makes the metrics exist; the object that scrapes them is not built — see conformance.yaml § owed.",
+          "default": true
+        },
+        {
+          "jsonPointer": "/properties/replicas",
+          "name": "replicas",
+          "label": "Replicas",
+          "control": "xui-slider",
+          "type": "integer",
+          "required": true,
+          "section": "general",
+          "hint": "Number of replicas per shard. This is the availability axis, and it only applies to tables the tenant creates as Replicated — the resource does not manage tables. Total server count is shards times replicas.",
+          "minimum": 1,
+          "maximum": 5,
+          "default": 2
+        },
+        {
+          "jsonPointer": "/properties/shards",
+          "name": "shards",
+          "label": "Shards",
+          "control": "xui-slider",
+          "type": "integer",
+          "required": true,
+          "section": "general",
+          "hint": "Number of shards. This is the capacity and parallelism axis: a table's data is split across shards and a query fans out to all of them. ⚠ Resharding an existing table is not something the operator or this resource does, so growing this moves new data only.",
+          "minimum": 1,
+          "maximum": 10,
+          "default": 1
+        },
+        {
+          "jsonPointer": "/properties/sizing",
+          "name": "sizing",
+          "label": "Sizing",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "CPU and memory per ClickHouse server, either by preset or explicitly. The Keeper nodes are sized by the platform and are not affected."
+        },
+        {
+          "jsonPointer": "/properties/sizing/cpu",
+          "name": "cpu",
+          "label": "Cpu",
+          "control": "xui-input",
+          "type": "string",
+          "required": false,
+          "section": "sizing",
+          "hint": "Explicit vCPU quantity in Kubernetes form, for example 500m or 2. Empty means take it from the preset.",
+          "pattern": "^(?:(\\d+(\\.\\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)?)$",
+          "default": ""
+        },
+        {
+          "jsonPointer": "/properties/sizing/memory",
+          "name": "memory",
+          "label": "Memory",
+          "control": "xui-input",
+          "type": "string",
+          "required": false,
+          "section": "sizing",
+          "hint": "Explicit memory quantity in Kubernetes form, for example 8Gi. Empty means take it from the preset.",
+          "pattern": "^(?:(\\d+(\\.\\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)?)$",
+          "default": ""
+        },
+        {
+          "jsonPointer": "/properties/sizing/preset",
+          "name": "preset",
+          "label": "Preset",
+          "control": "xui-cozy-preset",
+          "type": "string",
+          "required": false,
+          "section": "sizing",
+          "hint": "A sizing preset from docs/plan/12. Analytics uses the m1 family, which is 1 vCPU to 8 GiB.",
+          "choices": [
+            {
+              "value": "m1.2xlarge",
+              "label": "M1 2xlarge"
+            },
+            {
+              "value": "m1.4xlarge",
+              "label": "M1 4xlarge"
+            },
+            {
+              "value": "m1.large",
+              "label": "M1 large"
+            },
+            {
+              "value": "m1.medium",
+              "label": "M1 medium"
+            },
+            {
+              "value": "m1.micro",
+              "label": "M1 micro"
+            },
+            {
+              "value": "m1.nano",
+              "label": "M1 nano"
+            },
+            {
+              "value": "m1.small",
+              "label": "M1 small"
+            },
+            {
+              "value": "m1.xlarge",
+              "label": "M1 xlarge"
+            }
+          ],
+          "default": "m1.small"
+        },
+        {
+          "jsonPointer": "/properties/storage",
+          "name": "storage",
+          "label": "Storage",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "The data volume, per ClickHouse server."
+        },
+        {
+          "jsonPointer": "/properties/storage/class",
+          "name": "class",
+          "label": "Class",
+          "control": "xui-storageclass",
+          "type": "string",
+          "required": false,
+          "section": "storage",
+          "hint": "StorageClass name for the ClickHouse servers and the Keeper nodes. Empty means the cluster default.",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new ClickHouse cluster to change it.",
+          "default": ""
+        },
+        {
+          "jsonPointer": "/properties/storage/size",
+          "name": "size",
+          "label": "Size",
+          "control": "xui-input",
+          "type": "string",
+          "required": true,
+          "section": "storage",
+          "hint": "Data volume size per ClickHouse server, in Kubernetes quantity form. Grows online; never shrinks.",
+          "pattern": "^(?:\\d+(\\.\\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)$",
+          "default": "100Gi",
+          "placeholder": "100Gi"
+        },
+        {
+          "jsonPointer": "/properties/version",
+          "name": "version",
+          "label": "Version",
+          "control": "xui-select",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "ClickHouse version, which is also the ClickHouse Keeper version — the two share a release train and a wire protocol. Only long-term-support lines are offered; a new api-version is what adds a third.",
+          "choices": [
+            {
+              "value": "24.8",
+              "label": "24 8"
+            },
+            {
+              "value": "25.3",
+              "label": "25 3"
+            }
+          ],
+          "default": "25.3"
+        },
+        {
+          "jsonPointer": "/tags",
+          "name": "tags",
+          "label": "Tags",
+          "control": "xui-tag-input",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+          "maxProperties": 50
+        }
+      ],
+      "actions": [
+        {
+          "name": "listKeys",
+          "label": "List keys",
+          "permission": "listKeys",
+          "longRunning": false,
+          "secret": true,
+          "fields": [],
+          "confirmOnly": true
+        }
+      ]
+    },
     "CyberCloud.Cache/redis": {
       "resourceType": "CyberCloud.Cache/redis",
       "apiVersion": "2026-08-01",
@@ -859,6 +1147,353 @@
         }
       ]
     },
+    "CyberCloud.DocumentDB/accounts": {
+      "resourceType": "CyberCloud.DocumentDB/accounts",
+      "apiVersion": "2026-08-01",
+      "title": "Document database account",
+      "plural": "Document database accounts",
+      "summary": "MongoDB-compatible, not MongoDB: FerretDB over PostgreSQL, covering CRUD, indexes and the wire protocol. Multi-document transactions are not supported. Runs on a CloudNativePG cluster, so failover, backup and point-in-time recovery are the operator's.",
+      "overrideKey": "CyberCloud.DocumentDB/accounts@2026-08-01",
+      "coveredPointers": [
+        "/location",
+        "/properties",
+        "/properties/backup",
+        "/properties/backup/destinationPath",
+        "/properties/backup/enabled",
+        "/properties/backup/retentionDays",
+        "/properties/clusterId",
+        "/properties/gateway",
+        "/properties/gateway/replicas",
+        "/properties/monitoring",
+        "/properties/monitoring/enabled",
+        "/properties/postgres",
+        "/properties/postgres/instances",
+        "/properties/sizing",
+        "/properties/sizing/cpu",
+        "/properties/sizing/memory",
+        "/properties/sizing/preset",
+        "/properties/storage",
+        "/properties/storage/class",
+        "/properties/storage/size",
+        "/properties/version",
+        "/tags"
+      ],
+      "supportsTags": true,
+      "requiresCluster": true,
+      "clusterIdPointer": "/properties/clusterId",
+      "softDeleteDays": 0,
+      "fields": [
+        {
+          "jsonPointer": "/location",
+          "name": "location",
+          "label": "Location",
+          "control": "xui-region",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "The region the account is billed in.",
+          "format": "cybercloud-region",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new Document database account to change it.",
+          "placeholder": "eu-central"
+        },
+        {
+          "jsonPointer": "/properties",
+          "name": "properties",
+          "label": "Properties",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "The account's own settings."
+        },
+        {
+          "jsonPointer": "/properties/backup",
+          "name": "backup",
+          "label": "Backup",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "Backup to an object store, using CloudNativePG's barman-cloud. docs/plan/12: because it is PostgreSQL underneath, backup and point-in-time recovery are the operator's."
+        },
+        {
+          "jsonPointer": "/properties/backup/destinationPath",
+          "name": "destinationPath",
+          "label": "Destination path",
+          "control": "xui-input",
+          "type": "string",
+          "required": false,
+          "section": "backup",
+          "hint": "Object-store URL for base backups and WAL, for example s3://tenant-bucket/documentdb. Empty means no backup configuration is rendered, whatever enabled says.",
+          "pattern": "^(?:(s3://[a-z0-9][a-z0-9.\\-]*[a-z0-9](/[^\\s]*)?)?)$",
+          "default": "",
+          "placeholder": "s3://tenant-bucket/documentdb"
+        },
+        {
+          "jsonPointer": "/properties/backup/enabled",
+          "name": "enabled",
+          "label": "Enabled",
+          "control": "xui-switch",
+          "type": "boolean",
+          "required": false,
+          "section": "backup",
+          "hint": "Whether continuous backup and WAL archiving run. ⚠ Off by default, and only because there is no destination to default to: turning it on without a destinationPath below renders no backup configuration at all rather than an empty one, so the two properties have to be set together.",
+          "default": false
+        },
+        {
+          "jsonPointer": "/properties/backup/retentionDays",
+          "name": "retentionDays",
+          "label": "Retention days",
+          "control": "xui-slider",
+          "type": "integer",
+          "required": false,
+          "section": "backup",
+          "hint": "How long base backups and WAL are kept. The point-in-time-recovery window is this number of days.",
+          "minimum": 1,
+          "maximum": 365,
+          "default": 14
+        },
+        {
+          "jsonPointer": "/properties/clusterId",
+          "name": "clusterId",
+          "label": "Cluster id",
+          "control": "xui-cluster",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "The cluster whose namespace holds the PostgreSQL cluster and the FerretDB gateway.",
+          "format": "uuid",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new Document database account to change it."
+        },
+        {
+          "jsonPointer": "/properties/gateway",
+          "name": "gateway",
+          "label": "Gateway",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "The FerretDB gateway — what speaks the MongoDB wire protocol."
+        },
+        {
+          "jsonPointer": "/properties/gateway/replicas",
+          "name": "replicas",
+          "label": "Replicas",
+          "control": "xui-slider",
+          "type": "integer",
+          "required": true,
+          "section": "gateway",
+          "hint": "Number of FerretDB pods. The gateway is stateless — it translates and forwards, and every byte is in PostgreSQL — so this is a throughput and availability setting rather than a topology one.",
+          "minimum": 1,
+          "maximum": 10,
+          "default": 2
+        },
+        {
+          "jsonPointer": "/properties/monitoring",
+          "name": "monitoring",
+          "label": "Monitoring",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "What the platform scrapes."
+        },
+        {
+          "jsonPointer": "/properties/monitoring/enabled",
+          "name": "enabled",
+          "label": "Enabled",
+          "control": "xui-switch",
+          "type": "boolean",
+          "required": false,
+          "section": "monitoring",
+          "hint": "Whether both halves of this service are scraped: CloudNativePG is asked for a PodMonitor over the PostgreSQL pods, and the platform writes one over the FerretDB pods because FerretDB has no operator to ask. On by default — docs/plan/12: \"a managed service the tenant cannot see the health of is a black box they will not trust with production\".",
+          "default": true
+        },
+        {
+          "jsonPointer": "/properties/postgres",
+          "name": "postgres",
+          "label": "Postgres",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "The CloudNativePG cluster the documents actually live in."
+        },
+        {
+          "jsonPointer": "/properties/postgres/instances",
+          "name": "instances",
+          "label": "Instances",
+          "control": "xui-slider",
+          "type": "integer",
+          "required": true,
+          "section": "postgres",
+          "hint": "Number of PostgreSQL instances, including the primary. One is a single point of failure and is offered for development only. Failover, replication and point-in-time recovery are CloudNativePG's, which is why this row costs 1.2 engineer-months rather than a rebuild of them.",
+          "minimum": 1,
+          "maximum": 5,
+          "default": 2
+        },
+        {
+          "jsonPointer": "/properties/sizing",
+          "name": "sizing",
+          "label": "Sizing",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "CPU and memory per PostgreSQL instance, either by preset or explicitly. The FerretDB gateway pods are sized by the platform and are not affected."
+        },
+        {
+          "jsonPointer": "/properties/sizing/cpu",
+          "name": "cpu",
+          "label": "Cpu",
+          "control": "xui-input",
+          "type": "string",
+          "required": false,
+          "section": "sizing",
+          "hint": "Explicit vCPU quantity in Kubernetes form, for example 500m or 2. Empty means take it from the preset.",
+          "pattern": "^(?:(\\d+(\\.\\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)?)$",
+          "default": ""
+        },
+        {
+          "jsonPointer": "/properties/sizing/memory",
+          "name": "memory",
+          "label": "Memory",
+          "control": "xui-input",
+          "type": "string",
+          "required": false,
+          "section": "sizing",
+          "hint": "Explicit memory quantity in Kubernetes form, for example 4Gi. Empty means take it from the preset.",
+          "pattern": "^(?:(\\d+(\\.\\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)?)$",
+          "default": ""
+        },
+        {
+          "jsonPointer": "/properties/sizing/preset",
+          "name": "preset",
+          "label": "Preset",
+          "control": "xui-cozy-preset",
+          "type": "string",
+          "required": false,
+          "section": "sizing",
+          "hint": "A sizing preset from docs/plan/12. Databases use the s1 family, which is 1 vCPU to 4 GiB.",
+          "choices": [
+            {
+              "value": "s1.2xlarge",
+              "label": "S1 2xlarge"
+            },
+            {
+              "value": "s1.4xlarge",
+              "label": "S1 4xlarge"
+            },
+            {
+              "value": "s1.large",
+              "label": "S1 large"
+            },
+            {
+              "value": "s1.medium",
+              "label": "S1 medium"
+            },
+            {
+              "value": "s1.micro",
+              "label": "S1 micro"
+            },
+            {
+              "value": "s1.nano",
+              "label": "S1 nano"
+            },
+            {
+              "value": "s1.small",
+              "label": "S1 small"
+            },
+            {
+              "value": "s1.xlarge",
+              "label": "S1 xlarge"
+            }
+          ],
+          "default": "s1.small"
+        },
+        {
+          "jsonPointer": "/properties/storage",
+          "name": "storage",
+          "label": "Storage",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "The data volume, per PostgreSQL instance."
+        },
+        {
+          "jsonPointer": "/properties/storage/class",
+          "name": "class",
+          "label": "Class",
+          "control": "xui-storageclass",
+          "type": "string",
+          "required": false,
+          "section": "storage",
+          "hint": "StorageClass name for the PostgreSQL volumes. Empty means the cluster default.",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new Document database account to change it.",
+          "default": ""
+        },
+        {
+          "jsonPointer": "/properties/storage/size",
+          "name": "size",
+          "label": "Size",
+          "control": "xui-input",
+          "type": "string",
+          "required": true,
+          "section": "storage",
+          "hint": "Data volume size per PostgreSQL instance, in Kubernetes quantity form. Every instance carries a full copy, so raw consumption is this times the instance count. Grows online; never shrinks.",
+          "pattern": "^(?:\\d+(\\.\\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)$",
+          "default": "20Gi",
+          "placeholder": "20Gi"
+        },
+        {
+          "jsonPointer": "/properties/version",
+          "name": "version",
+          "label": "Version",
+          "control": "xui-select",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "FerretDB minor version. ⚠ One property moves two images: the DocumentDB PostgreSQL extension and the FerretDB gateway are released as a matched pair and a mismatched pair is a proxy talking to an extension it does not know. FerretDB maintains no long-term branch, so the two values here are the two most recent releases and a third is a new api-version.",
+          "choices": [
+            {
+              "value": "2.5",
+              "label": "2 5"
+            },
+            {
+              "value": "2.7",
+              "label": "2 7"
+            }
+          ],
+          "default": "2.7"
+        },
+        {
+          "jsonPointer": "/tags",
+          "name": "tags",
+          "label": "Tags",
+          "control": "xui-tag-input",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+          "maxProperties": 50
+        }
+      ],
+      "actions": [
+        {
+          "name": "listKeys",
+          "label": "List keys",
+          "permission": "listKeys",
+          "longRunning": false,
+          "secret": true,
+          "fields": [],
+          "confirmOnly": true
+        }
+      ]
+    },
     "CyberCloud.Messaging/kafkaClusters": {
       "resourceType": "CyberCloud.Messaging/kafkaClusters",
       "apiVersion": "2026-08-01",
@@ -1667,6 +2302,361 @@
             }
           ],
           "default": "2.11"
+        },
+        {
+          "jsonPointer": "/tags",
+          "name": "tags",
+          "label": "Tags",
+          "control": "xui-tag-input",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+          "maxProperties": 50
+        }
+      ],
+      "actions": [
+        {
+          "name": "listKeys",
+          "label": "List keys",
+          "permission": "listKeys",
+          "longRunning": false,
+          "secret": true,
+          "fields": [],
+          "confirmOnly": true
+        }
+      ]
+    },
+    "CyberCloud.Messaging/rabbitmqClusters": {
+      "resourceType": "CyberCloud.Messaging/rabbitmqClusters",
+      "apiVersion": "2026-08-01",
+      "title": "RabbitMQ cluster",
+      "plural": "RabbitMQ clusters",
+      "summary": "A managed RabbitMQ cluster on the RabbitMQ Cluster Operator, with quorum queues as the default queue type and the management UI reachable only in-cluster.",
+      "overrideKey": "CyberCloud.Messaging/rabbitmqClusters@2026-08-01",
+      "coveredPointers": [
+        "/location",
+        "/properties",
+        "/properties/clusterId",
+        "/properties/limits",
+        "/properties/limits/maxMessageSize",
+        "/properties/nodes",
+        "/properties/plugins",
+        "/properties/plugins/additional",
+        "/properties/queues",
+        "/properties/queues/defaultType",
+        "/properties/sizing",
+        "/properties/sizing/cpu",
+        "/properties/sizing/memory",
+        "/properties/sizing/preset",
+        "/properties/storage",
+        "/properties/storage/class",
+        "/properties/storage/size",
+        "/properties/version",
+        "/tags"
+      ],
+      "supportsTags": true,
+      "requiresCluster": true,
+      "clusterIdPointer": "/properties/clusterId",
+      "softDeleteDays": 0,
+      "fields": [
+        {
+          "jsonPointer": "/location",
+          "name": "location",
+          "label": "Location",
+          "control": "xui-region",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "The region the cluster is billed in.",
+          "format": "cybercloud-region",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new RabbitMQ cluster to change it.",
+          "placeholder": "eu-central"
+        },
+        {
+          "jsonPointer": "/properties",
+          "name": "properties",
+          "label": "Properties",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "The cluster's own settings."
+        },
+        {
+          "jsonPointer": "/properties/clusterId",
+          "name": "clusterId",
+          "label": "Cluster id",
+          "control": "xui-cluster",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "The cluster whose namespace holds the RabbitmqCluster.",
+          "format": "uuid",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new RabbitMQ cluster to change it."
+        },
+        {
+          "jsonPointer": "/properties/limits",
+          "name": "limits",
+          "label": "Limits",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "Broker limits a client can run into."
+        },
+        {
+          "jsonPointer": "/properties/limits/maxMessageSize",
+          "name": "maxMessageSize",
+          "label": "Max message size",
+          "control": "xui-slider",
+          "type": "integer",
+          "required": false,
+          "section": "limits",
+          "hint": "Largest message a client may publish, in bytes. Raising it costs memory on every node that holds a copy, which for a quorum queue is all of them.",
+          "minimum": 65536,
+          "maximum": 536870912,
+          "default": 134217728
+        },
+        {
+          "jsonPointer": "/properties/nodes",
+          "name": "nodes",
+          "label": "Nodes",
+          "control": "xui-slider",
+          "type": "integer",
+          "required": true,
+          "section": "general",
+          "hint": "Number of RabbitMQ nodes. Use an odd number of at least three: a quorum queue is a Raft group, so a group of two tolerates no failures and an even count buys nothing over the odd count below it. One is offered for development only and replicates nothing.",
+          "minimum": 1,
+          "maximum": 7,
+          "default": 3
+        },
+        {
+          "jsonPointer": "/properties/plugins",
+          "name": "plugins",
+          "label": "Plugins",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "Protocols and features beyond AMQP."
+        },
+        {
+          "jsonPointer": "/properties/plugins/additional",
+          "name": "additional",
+          "label": "Additional",
+          "control": "xui-select",
+          "type": "array",
+          "required": false,
+          "section": "plugins",
+          "hint": "Plugins to enable on top of the three the operator always enables — peer discovery, the management UI and the Prometheus endpoint. Each recognised plugin adds its own port to the cluster's in-cluster Service.",
+          "choices": [
+            {
+              "value": "rabbitmq_federation",
+              "label": "Rabbitmq federation"
+            },
+            {
+              "value": "rabbitmq_mqtt",
+              "label": "Rabbitmq mqtt"
+            },
+            {
+              "value": "rabbitmq_shovel",
+              "label": "Rabbitmq shovel"
+            },
+            {
+              "value": "rabbitmq_stomp",
+              "label": "Rabbitmq stomp"
+            },
+            {
+              "value": "rabbitmq_stream",
+              "label": "Rabbitmq stream"
+            },
+            {
+              "value": "rabbitmq_web_mqtt",
+              "label": "Rabbitmq web mqtt"
+            },
+            {
+              "value": "rabbitmq_web_stomp",
+              "label": "Rabbitmq web stomp"
+            }
+          ],
+          "default": [],
+          "placeholder": [
+            "rabbitmq_stream"
+          ]
+        },
+        {
+          "jsonPointer": "/properties/queues",
+          "name": "queues",
+          "label": "Queues",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "How queues behave when a client does not say."
+        },
+        {
+          "jsonPointer": "/properties/queues/defaultType",
+          "name": "defaultType",
+          "label": "Default type",
+          "control": "xui-select",
+          "type": "string",
+          "required": false,
+          "section": "queues",
+          "hint": "The queue type a client gets when it declares a queue without asking for one. Quorum by default — docs/plan/12: a quorum queue is replicated through Raft across the nodes above, and on 4.x a classic queue is not replicated at all, so leaving this unset would put a single-node queue on a cluster the tenant paid three nodes for. This is a node-wide fallback: a vhost created with its own default queue type overrides it.",
+          "choices": [
+            {
+              "value": "classic",
+              "label": "Classic"
+            },
+            {
+              "value": "quorum",
+              "label": "Quorum"
+            },
+            {
+              "value": "stream",
+              "label": "Stream"
+            }
+          ],
+          "default": "quorum"
+        },
+        {
+          "jsonPointer": "/properties/sizing",
+          "name": "sizing",
+          "label": "Sizing",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "CPU and memory per node, either by preset or explicitly."
+        },
+        {
+          "jsonPointer": "/properties/sizing/cpu",
+          "name": "cpu",
+          "label": "Cpu",
+          "control": "xui-input",
+          "type": "string",
+          "required": false,
+          "section": "sizing",
+          "hint": "Explicit vCPU quantity in Kubernetes form, for example 500m or 2. Empty means take it from the preset.",
+          "pattern": "^(?:(\\d+(\\.\\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)?)$",
+          "default": ""
+        },
+        {
+          "jsonPointer": "/properties/sizing/memory",
+          "name": "memory",
+          "label": "Memory",
+          "control": "xui-input",
+          "type": "string",
+          "required": false,
+          "section": "sizing",
+          "hint": "Explicit memory quantity in Kubernetes form, for example 4Gi. Empty means take it from the preset.",
+          "pattern": "^(?:(\\d+(\\.\\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)?)$",
+          "default": ""
+        },
+        {
+          "jsonPointer": "/properties/sizing/preset",
+          "name": "preset",
+          "label": "Preset",
+          "control": "xui-cozy-preset",
+          "type": "string",
+          "required": false,
+          "section": "sizing",
+          "hint": "A sizing preset from docs/plan/12. Brokers use the c1 family, which is 1 vCPU to 2 GiB and guaranteed rather than burstable.",
+          "choices": [
+            {
+              "value": "c1.2xlarge",
+              "label": "C1 2xlarge"
+            },
+            {
+              "value": "c1.4xlarge",
+              "label": "C1 4xlarge"
+            },
+            {
+              "value": "c1.large",
+              "label": "C1 large"
+            },
+            {
+              "value": "c1.medium",
+              "label": "C1 medium"
+            },
+            {
+              "value": "c1.micro",
+              "label": "C1 micro"
+            },
+            {
+              "value": "c1.nano",
+              "label": "C1 nano"
+            },
+            {
+              "value": "c1.small",
+              "label": "C1 small"
+            },
+            {
+              "value": "c1.xlarge",
+              "label": "C1 xlarge"
+            }
+          ],
+          "default": "c1.small"
+        },
+        {
+          "jsonPointer": "/properties/storage",
+          "name": "storage",
+          "label": "Storage",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "The message store, per node."
+        },
+        {
+          "jsonPointer": "/properties/storage/class",
+          "name": "class",
+          "label": "Class",
+          "control": "xui-storageclass",
+          "type": "string",
+          "required": false,
+          "section": "storage",
+          "hint": "StorageClass name. Empty means the cluster default.",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new RabbitMQ cluster to change it.",
+          "default": ""
+        },
+        {
+          "jsonPointer": "/properties/storage/size",
+          "name": "size",
+          "label": "Size",
+          "control": "xui-input",
+          "type": "string",
+          "required": true,
+          "section": "storage",
+          "hint": "Message-store volume size per node, in Kubernetes quantity form. Grows online; never shrinks. A quorum queue keeps its whole Raft log on every member, so this is the same figure on every node rather than a share of one.",
+          "pattern": "^(?:\\d+(\\.\\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)$",
+          "default": "20Gi",
+          "placeholder": "20Gi"
+        },
+        {
+          "jsonPointer": "/properties/version",
+          "name": "version",
+          "label": "Version",
+          "control": "xui-select",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "RabbitMQ version. Minor upgrades are applied automatically in the maintenance window; a major upgrade is an explicit update to this field. Only 4.x is offered: classic queue mirroring was removed in 4.0, so on every version here the replicated queue type is the quorum queue.",
+          "choices": [
+            {
+              "value": "4.0",
+              "label": "4 0"
+            },
+            {
+              "value": "4.1",
+              "label": "4 1"
+            }
+          ],
+          "default": "4.1"
         },
         {
           "jsonPointer": "/tags",

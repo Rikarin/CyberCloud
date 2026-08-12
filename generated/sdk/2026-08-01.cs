@@ -26,6 +26,208 @@ public static class GeneratedApiVersion {
     public const string Value = "2026-08-01";
 }
 
+/// <summary>The values /properties/sizing/preset accepts. ⚠ Closed: the write path refuses anything else.</summary>
+public enum ClickHouseClusterPreset {
+    /// <summary>Never assigned. Not a value the API accepts.</summary>
+    Unknown = 0,
+
+    /// <summary>m1.2xlarge</summary>
+    [JsonStringEnumMemberName("m1.2xlarge")]
+    M12xlarge = 1,
+
+    /// <summary>m1.4xlarge</summary>
+    [JsonStringEnumMemberName("m1.4xlarge")]
+    M14xlarge = 2,
+
+    /// <summary>m1.large</summary>
+    [JsonStringEnumMemberName("m1.large")]
+    M1Large = 3,
+
+    /// <summary>m1.medium</summary>
+    [JsonStringEnumMemberName("m1.medium")]
+    M1Medium = 4,
+
+    /// <summary>m1.micro</summary>
+    [JsonStringEnumMemberName("m1.micro")]
+    M1Micro = 5,
+
+    /// <summary>m1.nano</summary>
+    [JsonStringEnumMemberName("m1.nano")]
+    M1Nano = 6,
+
+    /// <summary>m1.small</summary>
+    [JsonStringEnumMemberName("m1.small")]
+    M1Small = 7,
+
+    /// <summary>m1.xlarge</summary>
+    [JsonStringEnumMemberName("m1.xlarge")]
+    M1Xlarge = 8
+}
+
+/// <summary>The values /properties/version accepts. ⚠ Closed: the write path refuses anything else.</summary>
+public enum ClickHouseClusterVersion {
+    /// <summary>Never assigned. Not a value the API accepts.</summary>
+    Unknown = 0,
+
+    /// <summary>24.8</summary>
+    [JsonStringEnumMemberName("24.8")]
+    N248 = 1,
+
+    /// <summary>25.3</summary>
+    [JsonStringEnumMemberName("25.3")]
+    N253 = 2
+}
+
+/// <summary>The body of a CyberCloud.Analytics/clickhouseClusters.</summary>
+/// <remarks>A managed ClickHouse cluster on the Altinity operator, with declared shards and replicas and a ClickHouse Keeper quorum. The schema is the tenant's.</remarks>
+public sealed partial class ClickHouseClusterData {
+
+    /// <summary>The region the cluster is billed in.</summary>
+    /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+    [JsonPropertyName("location")]
+    public required string Location { get; set; }
+
+    /// <summary>The cluster whose namespace holds the ClickHouse cluster.</summary>
+    /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+    [JsonPropertyName("clusterId")]
+    public required Guid ClusterId { get; set; }
+
+    /// <summary>Number of ClickHouse Keeper nodes. Keeper is a Raft quorum, so three is the smallest count that survives losing one and an even count tolerates no more failures than the odd count below it. One is offered for development and has no quorum at all.</summary>
+    /// <remarks>Required on a create. Defaults to 3 when left unset.</remarks>
+    [JsonPropertyName("keeperNodes")]
+    public required long KeeperNodes { get; set; }
+
+    /// <summary>Whether ClickHouse's own Prometheus endpoint is served on port 9363. On by default — docs/plan/12: "a managed service the tenant cannot see the health of is a black box they will not trust with production". ⚠ It makes the metrics exist; the object that scrapes them is not built — see conformance.yaml § owed.</summary>
+    /// <remarks>Defaults to true when left unset.</remarks>
+    [JsonPropertyName("enabled")]
+    public bool? Enabled { get; set; }
+
+    /// <summary>Number of replicas per shard. This is the availability axis, and it only applies to tables the tenant creates as Replicated — the resource does not manage tables. Total server count is shards times replicas.</summary>
+    /// <remarks>Required on a create. Defaults to 2 when left unset.</remarks>
+    [JsonPropertyName("replicas")]
+    public required long Replicas { get; set; }
+
+    /// <summary>Number of shards. This is the capacity and parallelism axis: a table's data is split across shards and a query fans out to all of them. ⚠ Resharding an existing table is not something the operator or this resource does, so growing this moves new data only.</summary>
+    /// <remarks>Required on a create. Defaults to 1 when left unset.</remarks>
+    [JsonPropertyName("shards")]
+    public required long Shards { get; set; }
+
+    /// <summary>Explicit vCPU quantity in Kubernetes form, for example 500m or 2. Empty means take it from the preset.</summary>
+    /// <remarks>Defaults to "" when left unset.</remarks>
+    [JsonPropertyName("cpu")]
+    public string? Cpu { get; set; }
+
+    /// <summary>Explicit memory quantity in Kubernetes form, for example 8Gi. Empty means take it from the preset.</summary>
+    /// <remarks>Defaults to "" when left unset.</remarks>
+    [JsonPropertyName("memory")]
+    public string? Memory { get; set; }
+
+    /// <summary>A sizing preset from docs/plan/12. Analytics uses the m1 family, which is 1 vCPU to 8 GiB.</summary>
+    /// <remarks>Defaults to "m1.small" when left unset.</remarks>
+    [JsonPropertyName("preset")]
+    public ClickHouseClusterPreset? Preset { get; set; }
+
+    /// <summary>StorageClass name for the ClickHouse servers and the Keeper nodes. Empty means the cluster default.</summary>
+    /// <remarks>⚠ Cannot change after create. Defaults to "" when left unset.</remarks>
+    [JsonPropertyName("class")]
+    public string? Class { get; set; }
+
+    /// <summary>Data volume size per ClickHouse server, in Kubernetes quantity form. Grows online; never shrinks.</summary>
+    /// <remarks>Required on a create. Defaults to "100Gi" when left unset.</remarks>
+    [JsonPropertyName("size")]
+    public required string Size { get; set; }
+
+    /// <summary>ClickHouse version, which is also the ClickHouse Keeper version — the two share a release train and a wire protocol. Only long-term-support lines are offered; a new api-version is what adds a third.</summary>
+    /// <remarks>Required on a create. Defaults to "25.3" when left unset.</remarks>
+    [JsonPropertyName("version")]
+    public required ClickHouseClusterVersion Version { get; set; }
+
+    /// <summary>Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.</summary>
+    [JsonPropertyName("tags")]
+    public IDictionary<string, string> Tags { get; set; } = new Dictionary<string, string>(StringComparer.Ordinal);
+}
+
+/// <summary>One ClickHouse cluster, and the operations on it.</summary>
+public sealed partial class ClickHouseClusterResource {
+    /// <summary>The resource's fully qualified id.</summary>
+    public string Id { get; init; } = string.Empty;
+
+    /// <summary>The body, projected at this api-version.</summary>
+    public ClickHouseClusterData Data { get; init; } = new();
+
+    /// <summary>Re-reads the resource.</summary>
+    public partial Task<Response<ClickHouseClusterResource>> GetAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Amends the resource. A merge patch: what is not set is not changed.</summary>
+    public partial Task<Operation<ClickHouseClusterResource>> UpdateAsync(
+        WaitUntil waitUntil,
+        ClickHouseClusterData data,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Deletes the resource. ⚠ Permanent: this type declares no soft-delete window.</summary>
+    public partial Task<Operation> DeleteAsync(
+        WaitUntil waitUntil,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>What listKeys returns. ⚠ Secret material: never log or cache this.</summary>
+    public sealed partial class ListKeysResult {
+
+        /// <summary>The name to write in ON CLUSTER and in a Distributed table's first argument. Returned rather than left for the caller to guess, because it is the one platform-chosen string that reaches the tenant's SQL.</summary>
+        [JsonPropertyName("clusterName")]
+        public required string ClusterName { get; set; }
+
+        /// <summary>The in-cluster HTTP endpoint, http://host:port. ⚠ No external address is returned, because there is none — see the cluster's own documentation on exposure.</summary>
+        [JsonPropertyName("httpEndpoint")]
+        public required string HttpEndpoint { get; set; }
+
+        /// <summary>The in-cluster native-protocol endpoint, host:port, for clickhouse-client and every driver that speaks the binary protocol.</summary>
+        [JsonPropertyName("nativeEndpoint")]
+        public required string NativeEndpoint { get; set; }
+
+        /// <summary>The password, read from the tenant's Vault for this call only.</summary>
+        [JsonPropertyName("password")]
+        public required string Password { get; set; }
+
+        /// <summary>The user the credential below belongs to.</summary>
+        [JsonPropertyName("username")]
+        public required string Username { get; set; }
+    }
+
+    /// <summary>ListKeys. ⚠ An action never creates — a POST to a name that does not exist is a 404. ⚠ The response carries secret material and is always audited.</summary>
+    public partial Task<Response<ListKeysResult>> ListKeysAsync(
+        CancellationToken cancellationToken = default);
+}
+
+/// <summary>The ClickHouse clusters in one resource group.</summary>
+/// <remarks>⚠ Every write is long-running: docs/plan/08 § The write path, end to end
+/// ends in a 202 for every verb, so there is no synchronous overload to offer.</remarks>
+public sealed partial class ClickHouseClusterCollection {
+    /// <summary>The resource type these address.</summary>
+    public const string ResourceType = "CyberCloud.Analytics/clickhouseClusters";
+
+    /// <summary>The URL template, with the api-version this file was generated at.</summary>
+    public const string PathTemplate = "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Analytics/clickhouseClusters/{resourceName}";
+
+    /// <inheritdoc cref="GeneratedApiVersion.Value" />
+    public const string ApiVersion = "2026-08-01";
+
+    /// <summary>Creates or replaces one ClickHouse cluster.</summary>
+    /// <remarks>⚠ Poll with GetProgressAsync() rather than only WaitForCompletionAsync():
+    /// docs/plan/21 § The .NET SDK — "Azure's LROs expose no progress; ours do and the
+    /// SDK should not hide it".</remarks>
+    public partial Task<Operation<ClickHouseClusterResource>> CreateOrUpdateAsync(
+        WaitUntil waitUntil,
+        string name,
+        ClickHouseClusterData data,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Reads one ClickHouse cluster by name.</summary>
+    public partial Task<Response<ClickHouseClusterResource>> GetAsync(string name, CancellationToken cancellationToken = default);
+
+    /// <summary>The ClickHouse clusters in this group, paged.</summary>
+    public partial AsyncPageable<ClickHouseClusterResource> GetAllAsync(CancellationToken cancellationToken = default);
+}
+
 /// <summary>The values /properties/maxmemoryPolicy accepts. ⚠ Closed: the write path refuses anything else.</summary>
 public enum ValkeyCacheMaxmemoryPolicy {
     /// <summary>Never assigned. Not a value the API accepts.</summary>
@@ -610,6 +812,214 @@ public sealed partial class PostgreSQLServerCollection {
 }
 
 /// <summary>The values /properties/sizing/preset accepts. ⚠ Closed: the write path refuses anything else.</summary>
+public enum DocumentDatabaseAccountPreset {
+    /// <summary>Never assigned. Not a value the API accepts.</summary>
+    Unknown = 0,
+
+    /// <summary>s1.2xlarge</summary>
+    [JsonStringEnumMemberName("s1.2xlarge")]
+    S12xlarge = 1,
+
+    /// <summary>s1.4xlarge</summary>
+    [JsonStringEnumMemberName("s1.4xlarge")]
+    S14xlarge = 2,
+
+    /// <summary>s1.large</summary>
+    [JsonStringEnumMemberName("s1.large")]
+    S1Large = 3,
+
+    /// <summary>s1.medium</summary>
+    [JsonStringEnumMemberName("s1.medium")]
+    S1Medium = 4,
+
+    /// <summary>s1.micro</summary>
+    [JsonStringEnumMemberName("s1.micro")]
+    S1Micro = 5,
+
+    /// <summary>s1.nano</summary>
+    [JsonStringEnumMemberName("s1.nano")]
+    S1Nano = 6,
+
+    /// <summary>s1.small</summary>
+    [JsonStringEnumMemberName("s1.small")]
+    S1Small = 7,
+
+    /// <summary>s1.xlarge</summary>
+    [JsonStringEnumMemberName("s1.xlarge")]
+    S1Xlarge = 8
+}
+
+/// <summary>The values /properties/version accepts. ⚠ Closed: the write path refuses anything else.</summary>
+public enum DocumentDatabaseAccountVersion {
+    /// <summary>Never assigned. Not a value the API accepts.</summary>
+    Unknown = 0,
+
+    /// <summary>2.5</summary>
+    [JsonStringEnumMemberName("2.5")]
+    N25 = 1,
+
+    /// <summary>2.7</summary>
+    [JsonStringEnumMemberName("2.7")]
+    N27 = 2
+}
+
+/// <summary>The body of a CyberCloud.DocumentDB/accounts.</summary>
+/// <remarks>MongoDB-compatible, not MongoDB: FerretDB over PostgreSQL, covering CRUD, indexes and the wire protocol. Multi-document transactions are not supported. Runs on a CloudNativePG cluster, so failover, backup and point-in-time recovery are the operator's.</remarks>
+public sealed partial class DocumentDatabaseAccountData {
+
+    /// <summary>The region the account is billed in.</summary>
+    /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+    [JsonPropertyName("location")]
+    public required string Location { get; set; }
+
+    /// <summary>Object-store URL for base backups and WAL, for example s3://tenant-bucket/documentdb. Empty means no backup configuration is rendered, whatever enabled says.</summary>
+    /// <remarks>Defaults to "" when left unset.</remarks>
+    [JsonPropertyName("destinationPath")]
+    public string? DestinationPath { get; set; }
+
+    /// <summary>Whether continuous backup and WAL archiving run. ⚠ Off by default, and only because there is no destination to default to: turning it on without a destinationPath below renders no backup configuration at all rather than an empty one, so the two properties have to be set together.</summary>
+    /// <remarks>Defaults to false when left unset.</remarks>
+    [JsonPropertyName("enabled")]
+    public bool? Enabled { get; set; }
+
+    /// <summary>How long base backups and WAL are kept. The point-in-time-recovery window is this number of days.</summary>
+    /// <remarks>Defaults to 14 when left unset.</remarks>
+    [JsonPropertyName("retentionDays")]
+    public long? RetentionDays { get; set; }
+
+    /// <summary>The cluster whose namespace holds the PostgreSQL cluster and the FerretDB gateway.</summary>
+    /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+    [JsonPropertyName("clusterId")]
+    public required Guid ClusterId { get; set; }
+
+    /// <summary>Number of FerretDB pods. The gateway is stateless — it translates and forwards, and every byte is in PostgreSQL — so this is a throughput and availability setting rather than a topology one.</summary>
+    /// <remarks>Required on a create. Defaults to 2 when left unset.</remarks>
+    [JsonPropertyName("replicas")]
+    public required long Replicas { get; set; }
+
+    /// <summary>Whether both halves of this service are scraped: CloudNativePG is asked for a PodMonitor over the PostgreSQL pods, and the platform writes one over the FerretDB pods because FerretDB has no operator to ask. On by default — docs/plan/12: "a managed service the tenant cannot see the health of is a black box they will not trust with production".</summary>
+    /// <remarks>Defaults to true when left unset.</remarks>
+    [JsonPropertyName("enabled")]
+    public bool? Enabled { get; set; }
+
+    /// <summary>Number of PostgreSQL instances, including the primary. One is a single point of failure and is offered for development only. Failover, replication and point-in-time recovery are CloudNativePG's, which is why this row costs 1.2 engineer-months rather than a rebuild of them.</summary>
+    /// <remarks>Required on a create. Defaults to 2 when left unset.</remarks>
+    [JsonPropertyName("instances")]
+    public required long Instances { get; set; }
+
+    /// <summary>Explicit vCPU quantity in Kubernetes form, for example 500m or 2. Empty means take it from the preset.</summary>
+    /// <remarks>Defaults to "" when left unset.</remarks>
+    [JsonPropertyName("cpu")]
+    public string? Cpu { get; set; }
+
+    /// <summary>Explicit memory quantity in Kubernetes form, for example 4Gi. Empty means take it from the preset.</summary>
+    /// <remarks>Defaults to "" when left unset.</remarks>
+    [JsonPropertyName("memory")]
+    public string? Memory { get; set; }
+
+    /// <summary>A sizing preset from docs/plan/12. Databases use the s1 family, which is 1 vCPU to 4 GiB.</summary>
+    /// <remarks>Defaults to "s1.small" when left unset.</remarks>
+    [JsonPropertyName("preset")]
+    public DocumentDatabaseAccountPreset? Preset { get; set; }
+
+    /// <summary>StorageClass name for the PostgreSQL volumes. Empty means the cluster default.</summary>
+    /// <remarks>⚠ Cannot change after create. Defaults to "" when left unset.</remarks>
+    [JsonPropertyName("class")]
+    public string? Class { get; set; }
+
+    /// <summary>Data volume size per PostgreSQL instance, in Kubernetes quantity form. Every instance carries a full copy, so raw consumption is this times the instance count. Grows online; never shrinks.</summary>
+    /// <remarks>Required on a create. Defaults to "20Gi" when left unset.</remarks>
+    [JsonPropertyName("size")]
+    public required string Size { get; set; }
+
+    /// <summary>FerretDB minor version. ⚠ One property moves two images: the DocumentDB PostgreSQL extension and the FerretDB gateway are released as a matched pair and a mismatched pair is a proxy talking to an extension it does not know. FerretDB maintains no long-term branch, so the two values here are the two most recent releases and a third is a new api-version.</summary>
+    /// <remarks>Required on a create. Defaults to "2.7" when left unset.</remarks>
+    [JsonPropertyName("version")]
+    public required DocumentDatabaseAccountVersion Version { get; set; }
+
+    /// <summary>Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.</summary>
+    [JsonPropertyName("tags")]
+    public IDictionary<string, string> Tags { get; set; } = new Dictionary<string, string>(StringComparer.Ordinal);
+}
+
+/// <summary>One Document database account, and the operations on it.</summary>
+public sealed partial class DocumentDatabaseAccountResource {
+    /// <summary>The resource's fully qualified id.</summary>
+    public string Id { get; init; } = string.Empty;
+
+    /// <summary>The body, projected at this api-version.</summary>
+    public DocumentDatabaseAccountData Data { get; init; } = new();
+
+    /// <summary>Re-reads the resource.</summary>
+    public partial Task<Response<DocumentDatabaseAccountResource>> GetAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Amends the resource. A merge patch: what is not set is not changed.</summary>
+    public partial Task<Operation<DocumentDatabaseAccountResource>> UpdateAsync(
+        WaitUntil waitUntil,
+        DocumentDatabaseAccountData data,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Deletes the resource. ⚠ Permanent: this type declares no soft-delete window.</summary>
+    public partial Task<Operation> DeleteAsync(
+        WaitUntil waitUntil,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>What listKeys returns. ⚠ Secret material: never log or cache this.</summary>
+    public sealed partial class ListKeysResult {
+
+        /// <summary>The database the DocumentDB extension is installed in, which is the one a driver authenticates against.</summary>
+        [JsonPropertyName("database")]
+        public required string Database { get; set; }
+
+        /// <summary>The in-cluster MongoDB endpoint, mongodb://host:port/. ⚠ No external address is returned, because there is none — see the account's own documentation on exposure.</summary>
+        [JsonPropertyName("endpoint")]
+        public required string Endpoint { get; set; }
+
+        /// <summary>That role's password, read from the tenant's Vault for this call only.</summary>
+        [JsonPropertyName("password")]
+        public required string Password { get; set; }
+
+        /// <summary>The PostgreSQL role a client authenticates as. Not secret on its own; useless without the password below.</summary>
+        [JsonPropertyName("username")]
+        public required string Username { get; set; }
+    }
+
+    /// <summary>ListKeys. ⚠ An action never creates — a POST to a name that does not exist is a 404. ⚠ The response carries secret material and is always audited.</summary>
+    public partial Task<Response<ListKeysResult>> ListKeysAsync(
+        CancellationToken cancellationToken = default);
+}
+
+/// <summary>The Document database accounts in one resource group.</summary>
+/// <remarks>⚠ Every write is long-running: docs/plan/08 § The write path, end to end
+/// ends in a 202 for every verb, so there is no synchronous overload to offer.</remarks>
+public sealed partial class DocumentDatabaseAccountCollection {
+    /// <summary>The resource type these address.</summary>
+    public const string ResourceType = "CyberCloud.DocumentDB/accounts";
+
+    /// <summary>The URL template, with the api-version this file was generated at.</summary>
+    public const string PathTemplate = "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.DocumentDB/accounts/{resourceName}";
+
+    /// <inheritdoc cref="GeneratedApiVersion.Value" />
+    public const string ApiVersion = "2026-08-01";
+
+    /// <summary>Creates or replaces one Document database account.</summary>
+    /// <remarks>⚠ Poll with GetProgressAsync() rather than only WaitForCompletionAsync():
+    /// docs/plan/21 § The .NET SDK — "Azure's LROs expose no progress; ours do and the
+    /// SDK should not hide it".</remarks>
+    public partial Task<Operation<DocumentDatabaseAccountResource>> CreateOrUpdateAsync(
+        WaitUntil waitUntil,
+        string name,
+        DocumentDatabaseAccountData data,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Reads one Document database account by name.</summary>
+    public partial Task<Response<DocumentDatabaseAccountResource>> GetAsync(string name, CancellationToken cancellationToken = default);
+
+    /// <summary>The Document database accounts in this group, paged.</summary>
+    public partial AsyncPageable<DocumentDatabaseAccountResource> GetAllAsync(CancellationToken cancellationToken = default);
+}
+
+/// <summary>The values /properties/sizing/preset accepts. ⚠ Closed: the write path refuses anything else.</summary>
 public enum KafkaClusterPreset {
     /// <summary>Never assigned. Not a value the API accepts.</summary>
     Unknown = 0,
@@ -1063,6 +1473,256 @@ public sealed partial class NATSClusterCollection {
 
     /// <summary>The NATS clusters in this group, paged.</summary>
     public partial AsyncPageable<NATSClusterResource> GetAllAsync(CancellationToken cancellationToken = default);
+}
+
+/// <summary>The values /properties/plugins/additional accepts. ⚠ Closed: the write path refuses anything else.</summary>
+public enum RabbitMQClusterAdditional {
+    /// <summary>Never assigned. Not a value the API accepts.</summary>
+    Unknown = 0,
+
+    /// <summary>rabbitmq_federation</summary>
+    [JsonStringEnumMemberName("rabbitmq_federation")]
+    RabbitmqFederation = 1,
+
+    /// <summary>rabbitmq_mqtt</summary>
+    [JsonStringEnumMemberName("rabbitmq_mqtt")]
+    RabbitmqMqtt = 2,
+
+    /// <summary>rabbitmq_shovel</summary>
+    [JsonStringEnumMemberName("rabbitmq_shovel")]
+    RabbitmqShovel = 3,
+
+    /// <summary>rabbitmq_stomp</summary>
+    [JsonStringEnumMemberName("rabbitmq_stomp")]
+    RabbitmqStomp = 4,
+
+    /// <summary>rabbitmq_stream</summary>
+    [JsonStringEnumMemberName("rabbitmq_stream")]
+    RabbitmqStream = 5,
+
+    /// <summary>rabbitmq_web_mqtt</summary>
+    [JsonStringEnumMemberName("rabbitmq_web_mqtt")]
+    RabbitmqWebMqtt = 6,
+
+    /// <summary>rabbitmq_web_stomp</summary>
+    [JsonStringEnumMemberName("rabbitmq_web_stomp")]
+    RabbitmqWebStomp = 7
+}
+
+/// <summary>The values /properties/queues/defaultType accepts. ⚠ Closed: the write path refuses anything else.</summary>
+public enum RabbitMQClusterDefaultType {
+    /// <summary>Never assigned. Not a value the API accepts.</summary>
+    Unknown = 0,
+
+    /// <summary>classic</summary>
+    [JsonStringEnumMemberName("classic")]
+    Classic = 1,
+
+    /// <summary>quorum</summary>
+    [JsonStringEnumMemberName("quorum")]
+    Quorum = 2,
+
+    /// <summary>stream</summary>
+    [JsonStringEnumMemberName("stream")]
+    Stream = 3
+}
+
+/// <summary>The values /properties/sizing/preset accepts. ⚠ Closed: the write path refuses anything else.</summary>
+public enum RabbitMQClusterPreset {
+    /// <summary>Never assigned. Not a value the API accepts.</summary>
+    Unknown = 0,
+
+    /// <summary>c1.2xlarge</summary>
+    [JsonStringEnumMemberName("c1.2xlarge")]
+    C12xlarge = 1,
+
+    /// <summary>c1.4xlarge</summary>
+    [JsonStringEnumMemberName("c1.4xlarge")]
+    C14xlarge = 2,
+
+    /// <summary>c1.large</summary>
+    [JsonStringEnumMemberName("c1.large")]
+    C1Large = 3,
+
+    /// <summary>c1.medium</summary>
+    [JsonStringEnumMemberName("c1.medium")]
+    C1Medium = 4,
+
+    /// <summary>c1.micro</summary>
+    [JsonStringEnumMemberName("c1.micro")]
+    C1Micro = 5,
+
+    /// <summary>c1.nano</summary>
+    [JsonStringEnumMemberName("c1.nano")]
+    C1Nano = 6,
+
+    /// <summary>c1.small</summary>
+    [JsonStringEnumMemberName("c1.small")]
+    C1Small = 7,
+
+    /// <summary>c1.xlarge</summary>
+    [JsonStringEnumMemberName("c1.xlarge")]
+    C1Xlarge = 8
+}
+
+/// <summary>The values /properties/version accepts. ⚠ Closed: the write path refuses anything else.</summary>
+public enum RabbitMQClusterVersion {
+    /// <summary>Never assigned. Not a value the API accepts.</summary>
+    Unknown = 0,
+
+    /// <summary>4.0</summary>
+    [JsonStringEnumMemberName("4.0")]
+    N40 = 1,
+
+    /// <summary>4.1</summary>
+    [JsonStringEnumMemberName("4.1")]
+    N41 = 2
+}
+
+/// <summary>The body of a CyberCloud.Messaging/rabbitmqClusters.</summary>
+/// <remarks>A managed RabbitMQ cluster on the RabbitMQ Cluster Operator, with quorum queues as the default queue type and the management UI reachable only in-cluster.</remarks>
+public sealed partial class RabbitMQClusterData {
+
+    /// <summary>The region the cluster is billed in.</summary>
+    /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+    [JsonPropertyName("location")]
+    public required string Location { get; set; }
+
+    /// <summary>The cluster whose namespace holds the RabbitmqCluster.</summary>
+    /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+    [JsonPropertyName("clusterId")]
+    public required Guid ClusterId { get; set; }
+
+    /// <summary>Largest message a client may publish, in bytes. Raising it costs memory on every node that holds a copy, which for a quorum queue is all of them.</summary>
+    /// <remarks>Defaults to 134217728 when left unset.</remarks>
+    [JsonPropertyName("maxMessageSize")]
+    public long? MaxMessageSize { get; set; }
+
+    /// <summary>Number of RabbitMQ nodes. Use an odd number of at least three: a quorum queue is a Raft group, so a group of two tolerates no failures and an even count buys nothing over the odd count below it. One is offered for development only and replicates nothing.</summary>
+    /// <remarks>Required on a create. Defaults to 3 when left unset.</remarks>
+    [JsonPropertyName("nodes")]
+    public required long Nodes { get; set; }
+
+    /// <summary>Plugins to enable on top of the three the operator always enables — peer discovery, the management UI and the Prometheus endpoint. Each recognised plugin adds its own port to the cluster's in-cluster Service.</summary>
+    /// <remarks>Defaults to [] when left unset.</remarks>
+    [JsonPropertyName("additional")]
+    public IList<RabbitMQClusterAdditional> Additional { get; set; } = new List<RabbitMQClusterAdditional>();
+
+    /// <summary>The queue type a client gets when it declares a queue without asking for one. Quorum by default — docs/plan/12: a quorum queue is replicated through Raft across the nodes above, and on 4.x a classic queue is not replicated at all, so leaving this unset would put a single-node queue on a cluster the tenant paid three nodes for. This is a node-wide fallback: a vhost created with its own default queue type overrides it.</summary>
+    /// <remarks>Defaults to "quorum" when left unset.</remarks>
+    [JsonPropertyName("defaultType")]
+    public RabbitMQClusterDefaultType? DefaultType { get; set; }
+
+    /// <summary>Explicit vCPU quantity in Kubernetes form, for example 500m or 2. Empty means take it from the preset.</summary>
+    /// <remarks>Defaults to "" when left unset.</remarks>
+    [JsonPropertyName("cpu")]
+    public string? Cpu { get; set; }
+
+    /// <summary>Explicit memory quantity in Kubernetes form, for example 4Gi. Empty means take it from the preset.</summary>
+    /// <remarks>Defaults to "" when left unset.</remarks>
+    [JsonPropertyName("memory")]
+    public string? Memory { get; set; }
+
+    /// <summary>A sizing preset from docs/plan/12. Brokers use the c1 family, which is 1 vCPU to 2 GiB and guaranteed rather than burstable.</summary>
+    /// <remarks>Defaults to "c1.small" when left unset.</remarks>
+    [JsonPropertyName("preset")]
+    public RabbitMQClusterPreset? Preset { get; set; }
+
+    /// <summary>StorageClass name. Empty means the cluster default.</summary>
+    /// <remarks>⚠ Cannot change after create. Defaults to "" when left unset.</remarks>
+    [JsonPropertyName("class")]
+    public string? Class { get; set; }
+
+    /// <summary>Message-store volume size per node, in Kubernetes quantity form. Grows online; never shrinks. A quorum queue keeps its whole Raft log on every member, so this is the same figure on every node rather than a share of one.</summary>
+    /// <remarks>Required on a create. Defaults to "20Gi" when left unset.</remarks>
+    [JsonPropertyName("size")]
+    public required string Size { get; set; }
+
+    /// <summary>RabbitMQ version. Minor upgrades are applied automatically in the maintenance window; a major upgrade is an explicit update to this field. Only 4.x is offered: classic queue mirroring was removed in 4.0, so on every version here the replicated queue type is the quorum queue.</summary>
+    /// <remarks>Required on a create. Defaults to "4.1" when left unset.</remarks>
+    [JsonPropertyName("version")]
+    public required RabbitMQClusterVersion Version { get; set; }
+
+    /// <summary>Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.</summary>
+    [JsonPropertyName("tags")]
+    public IDictionary<string, string> Tags { get; set; } = new Dictionary<string, string>(StringComparer.Ordinal);
+}
+
+/// <summary>One RabbitMQ cluster, and the operations on it.</summary>
+public sealed partial class RabbitMQClusterResource {
+    /// <summary>The resource's fully qualified id.</summary>
+    public string Id { get; init; } = string.Empty;
+
+    /// <summary>The body, projected at this api-version.</summary>
+    public RabbitMQClusterData Data { get; init; } = new();
+
+    /// <summary>Re-reads the resource.</summary>
+    public partial Task<Response<RabbitMQClusterResource>> GetAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Amends the resource. A merge patch: what is not set is not changed.</summary>
+    public partial Task<Operation<RabbitMQClusterResource>> UpdateAsync(
+        WaitUntil waitUntil,
+        RabbitMQClusterData data,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Deletes the resource. ⚠ Permanent: this type declares no soft-delete window.</summary>
+    public partial Task<Operation> DeleteAsync(
+        WaitUntil waitUntil,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>What listKeys returns. ⚠ Secret material: never log or cache this.</summary>
+    public sealed partial class ListKeysResult {
+
+        /// <summary>The in-cluster management UI and HTTP API, http://host:port. docs/plan/12 fronts this with the portal's authenticated proxy; it is never a public route.</summary>
+        [JsonPropertyName("managementUrl")]
+        public required string ManagementUrl { get; set; }
+
+        /// <summary>The generated user's password, read from the cluster's default-user Secret for this call only. ⚠ Neither this value nor the user name is chosen by the platform: the operator generates both at first boot and RabbitMQ's own guest/guest account is never created.</summary>
+        [JsonPropertyName("password")]
+        public required string Password { get; set; }
+
+        /// <summary>The in-cluster AMQP URL, amqp://host:port. ⚠ There is no external address to return — this type declares no external listener at all, for the reason its schema gives.</summary>
+        [JsonPropertyName("url")]
+        public required string Url { get; set; }
+
+        /// <summary>The generated broker user.</summary>
+        [JsonPropertyName("user")]
+        public required string User { get; set; }
+    }
+
+    /// <summary>ListKeys. ⚠ An action never creates — a POST to a name that does not exist is a 404. ⚠ The response carries secret material and is always audited.</summary>
+    public partial Task<Response<ListKeysResult>> ListKeysAsync(
+        CancellationToken cancellationToken = default);
+}
+
+/// <summary>The RabbitMQ clusters in one resource group.</summary>
+/// <remarks>⚠ Every write is long-running: docs/plan/08 § The write path, end to end
+/// ends in a 202 for every verb, so there is no synchronous overload to offer.</remarks>
+public sealed partial class RabbitMQClusterCollection {
+    /// <summary>The resource type these address.</summary>
+    public const string ResourceType = "CyberCloud.Messaging/rabbitmqClusters";
+
+    /// <summary>The URL template, with the api-version this file was generated at.</summary>
+    public const string PathTemplate = "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Messaging/rabbitmqClusters/{resourceName}";
+
+    /// <inheritdoc cref="GeneratedApiVersion.Value" />
+    public const string ApiVersion = "2026-08-01";
+
+    /// <summary>Creates or replaces one RabbitMQ cluster.</summary>
+    /// <remarks>⚠ Poll with GetProgressAsync() rather than only WaitForCompletionAsync():
+    /// docs/plan/21 § The .NET SDK — "Azure's LROs expose no progress; ours do and the
+    /// SDK should not hide it".</remarks>
+    public partial Task<Operation<RabbitMQClusterResource>> CreateOrUpdateAsync(
+        WaitUntil waitUntil,
+        string name,
+        RabbitMQClusterData data,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Reads one RabbitMQ cluster by name.</summary>
+    public partial Task<Response<RabbitMQClusterResource>> GetAsync(string name, CancellationToken cancellationToken = default);
+
+    /// <summary>The RabbitMQ clusters in this group, paged.</summary>
+    public partial AsyncPageable<RabbitMQClusterResource> GetAllAsync(CancellationToken cancellationToken = default);
 }
 
 /// <summary>The values /properties/tier accepts. ⚠ Closed: the write path refuses anything else.</summary>

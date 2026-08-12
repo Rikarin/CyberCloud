@@ -509,6 +509,107 @@ operator's CRD.
   four objects across four API groups and reaches two upstream projects. A fifth edge remains the
   signal.
 
+  > ⚠ **And the eighth family is the first to ask for one.** `CyberCloud.Analytics` wants an S3 cold
+  > tier, which needs `CyberCloud.Storage/accounts`, and `ReconcileContext` has no resolver for
+  > another provider's resource. `module-layering.txt` now records **two** families wanting the same
+  > fifth line, which is the signal this bullet has been waiting for since the third provider.
+
+`CyberCloud.Providers.Analytics` — `CyberCloud.Analytics/clickhouseClusters` on the Altinity operator,
+[12 § The catalogue](../../docs/plan/12-managed-data-services.md). **The eighth family, and the first
+that renders two custom resources in two API groups**, and the first whose row the platform is
+already a customer of.
+
+### What the eighth provider measured
+
+- **⚠ The platform runs ClickHouse and the platform's ClickHouse is NOT this resource type, and that
+  was the first question this row had to answer.** docs/plan/12 says *"We run ClickHouse for telemetry
+  and metering"* and cites [16](../../docs/plan/16-observability.md) and
+  [22](../../docs/plan/22-billing-metering-and-quota.md) — both of which describe a **per-region,
+  database-per-tenant, platform-schema** store on the ingest write path
+  ([05 § Every store](../../docs/plan/05-state-and-storage.md) gives it one row). This type is a
+  **single-tenant cluster in a tenant namespace whose schema the tenant owns**. Four things separate
+  them and only the fourth is about parity: the tenancy shape is opposite; the schema owner is opposite
+  and is this row's own scope boundary (*"the resource does not manage tables"*); making the telemetry
+  store a resource of this type would be a **dependency cycle**, since `CyberCloud.Ingest.Host` is
+  deliberately not an Orleans client precisely so telemetry never runs through the control plane; and
+  the tenant-facing observability resource already exists and is `CyberCloud.Monitor/workspaces`. What
+  docs/plan/12's sentence actually claims is narrower and is true — *"the operational knowledge is not
+  incremental"*, i.e. the **engine** gets built either way, not the **resource type**.
+- **⚠ docs/plan/12's *"ZooKeeper/ClickHouse Keeper managed by the operator"* is half true, and the
+  other half is an object.** The Altinity operator does serve a Keeper CRD — but a
+  `ClickHouseInstallation` does not create one for itself, it **names** one, by Service, in
+  `spec.configuration.zookeeper.nodes`. Upstream's own `docs/chk-examples/01-chi-simple-with-keeper.yaml`
+  is two documents, and the comment on the host line reads *"This is a service name of chk/simple-1"*.
+  So this type renders two objects in **two API groups** — `clickhouse.altinity.com` and
+  `clickhouse-keeper.altinity.com`, one operator binary — and the string that binds them is a Service
+  **neither object creates**. Nothing in an apply, a read-back or an admission check would notice it
+  being wrong; a tenant's first `ReplicatedMergeTree` would.
+- **⚠ One `Matches` over two kinds forces a rendered document to name its own kind, and that is new.**
+  The five providers before this accept `null or "<TheirKind>"`, which is right for a type that owns one
+  kind and is a guess for a type that owns two. `KubeCommandBuilder` injects `kind` on the apply path,
+  so the renders write it themselves — from the **same** `GroupVersionKind` constant the builder is
+  handed, so the two cannot disagree, and `EachRenderedBodyNamesTheSameKindTheCommandTargets` is what
+  says so rather than the comment.
+- **⚠ The quota meters are a PRODUCT and a SUM at once — a fourth shape — and the product has two
+  factors the tenant sets separately.** `CyberCloud.DBforPostgreSQL/servers` found that an amount is a
+  quantity *string*; `CyberCloud.Messaging/natsClusters` that it is a *product* of a replica count and
+  one figure; `CyberCloud.Storage/accounts` that it is a *sum* over heterogeneous components. Here it
+  is `shards × replicas × preset + keeperNodes × 250m`. **A derivation copied from `natsClusters` is
+  exactly right on the default body — one shard — and reserves a third of a three-shard cluster**;
+  `ClickHouseQuotaTests.ShardsAndReplicasBothMoveTheAmounts` is the one that fails on the copy, and it
+  was run red against it.
+- **⚠ `Matches` is containment, and NOT for the reason three of the five before it give.** Their
+  argument is structural defaulting. Checked in the CRDs rather than in a README: **neither Altinity
+  CRD declares a single `default:`**, and this operator ships **no admission webhook** — third sighting
+  of `KafkaClusters.Matches`' finding, and it makes the usual argument *false* here. The reasons that
+  are real are two: `spec.templating.policy: auto` merges a `ClickHouseInstallationTemplate` into this
+  spec at the request of a cluster operator who is not this platform (`status.usedTemplates` exists to
+  record it), and half of what this provider writes lands under
+  `x-kubernetes-preserve-unknown-fields: true`, which the API server does not prune.
+- **⚠ docs/plan/12 § The pattern, once, piece 6 reaches an answer NEITHER of its two branches
+  describes.** That piece says *"ask the operator … and hand-write one into the chart only when there
+  is no operator to ask."* There **is** an operator here and it does not accept the request: Altinity
+  exports metrics for every installation through **one cluster-wide exporter on its own pod**, and the
+  CHI carries no per-installation `ServiceMonitor` switch at all — so the first branch has nothing to
+  ask for and the second branch's precondition is false. What the CHI accepts is
+  `configuration.settings` turning on **ClickHouse's own** Prometheus endpoint, which this chart writes;
+  the object that scrapes it is owed, because the selector upstream pairs with those settings is the
+  *operator's* pod label, which is the hazard piece 6's correction names.
+- **⚠ Piece 5's absence produces the best failure mode in the catalogue, and that is worth as much as
+  the gap.** `charts/managed/seaweedfs` found it producing an **anonymous administrator**;
+  `charts/managed/nats`, servers that accept every connection in the namespace;
+  `charts/managed/postgres`, a working database whose password cannot be handed out. The operator's own
+  hardening guide says a CHI with no `configuration.users` gets `default` with an empty password behind
+  a `host_regexp` **and** an explicit pod-IP allow-list covering *this cluster's own pods*. So the
+  cluster comes up **secure and unreachable**. Four services in, the answer to *"is it usable without
+  piece 5"* is a property of the **engine**, not of the platform, and the spread now runs from
+  administrable-by-anyone to reachable-by-nobody.
+- **⚠ The first row whose missing feature is blocked by the CROSS-PROVIDER seam.** docs/plan/12's third
+  bullet is *"S3-backed disks for cold storage tiers"*, whose endpoint and access-key pair belong to a
+  `CyberCloud.Storage/accounts` resource. Rule 2 forbids the assembly edge and the sanctioned route — a
+  resource id through `CyberCloud.ResourceManager` — has **no reader a reconciler can call**:
+  `ReconcileContext` carries a cluster connection and an `ISecretResolver` and nothing that resolves
+  another resource. `module-layering.txt` now records **two** families wanting the same fifth line for
+  two different features, which is what turns "a provider might reach for this" into evidence.
+- **⚠ The structural statelessness check's blind spot, confirmed a fourth time.** A `readonly`
+  `Dictionary` cache added to `ClickHouseClusterReconciler` left `ReconcilerConformance.CheckNoHiddenState`
+  **green** and failed only `OneReconcilerInstanceServesTwoTenantsWithoutMixingThem` (and the
+  Keeper-name test). Both halves are in `ClickHouseReconcilerTests` and both were run red against the
+  counter-example.
+- **⚠ The first row whose child types are refused by the CATALOGUE rather than by the platform.** Every
+  blocker the four earlier providers recorded is closed and `CyberCloud.Storage/accounts/buckets` ships
+  through that door. The obvious children here are databases and tables, and docs/plan/12 forbids them
+  in as many words. That is a different kind of absence from the other four and is recorded as one.
+- **The chart-annotation emitter's output is predictable by hand — a fourth sighting.** This chart's
+  `@param` block was written to match what `ChartAnnotationEmitter` would produce and came back
+  **unchanged on the first `./build.sh Charts` run** — *"unchanged, 0 problem(s)"* — exactly as
+  `charts/managed/valkey`'s, `charts/managed/nats`' and `charts/managed/seaweedfs`' did. Only
+  `values.schema.json` had to be generated.
+- **Four module edges, six projects, one `ProviderConformanceCase` — an eighth family with identical
+  columns.** A type rendering two custom resources across two API groups, wiring one to the other,
+  needed no fifth edge and no seventh project. ⚠ It *wants* a fifth edge for the S3 cold tier and
+  did not take one; that is the open request recorded above, not a satisfied dependency.
+
 ## Planned namespaces
 
 `Platform`, `Identity`, `ContainerService`, `Compute`, `ContainerInstance`, `ContainerRegistry`,
