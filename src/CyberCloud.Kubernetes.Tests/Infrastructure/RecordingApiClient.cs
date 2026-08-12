@@ -57,9 +57,25 @@ public sealed class RecordingApiClient : IKubeApiClient {
     /// </remarks>
     public Result<ApplyOutcome>? NextApply { get; set; }
 
+    /// <summary>
+    ///     Thrown from <see cref="ApplyAsync" /> instead of answering, or <see langword="null" /> to
+    ///     answer normally.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ There to demonstrate the symptom the failure mapping exists to remove, and for nothing
+    ///     else. An exception that escapes <c>KubeApiClient</c> escapes a grain call, and what the
+    ///     caller sees is not the exception — see
+    ///     <c>SuspendedReconcileTests.AnUnmappedClientExceptionReachesTheCallerAsACodecNotFoundException</c>.
+    /// </remarks>
+    public Exception? ThrowOnApply { get; set; }
+
     /// <inheritdoc />
     public Task<Result<ApplyOutcome>> ApplyAsync(KubeCommand command, CancellationToken cancellationToken = default) {
         ArgumentNullException.ThrowIfNull(command);
+
+        if (ThrowOnApply is not null) {
+            throw ThrowOnApply;
+        }
 
         return Task.FromResult(
             NextApply

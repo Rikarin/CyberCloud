@@ -1,7 +1,11 @@
 using CyberCloud.Core.Resources;
 using CyberCloud.Kubernetes.Health;
 using CyberCloud.Kubernetes.Tests.Infrastructure;
+using k8s.Autorest;
+using Orleans.Serialization;
 using Shouldly;
+using System.Net;
+using System.Net.Http;
 
 namespace CyberCloud.Kubernetes.Tests;
 
@@ -209,6 +213,52 @@ public sealed class SuspendedReconcileTests(KubeTestCluster cluster) {
             );
         } finally {
             FakeApiClientFactory.Client.NextApply = null;
+        }
+    }
+
+    [Fact]
+    public async Task AnUnmappedClientExceptionReachesTheCallerAsACodecNotFoundException() {
+        // ⚠ THE SYMPTOM, MEASURED, and the reason KubeFailures has to be exhaustive rather than
+        // best-effort.
+        //
+        // k8s.Autorest.HttpOperationException carries no Orleans codec, so an exception that escapes
+        // KubeApiClient does not reach the caller as itself — Orleans fails to serialise it and the
+        // caller gets this instead, naming a type and nothing else. No status code, no reason, no
+        // object: a provider's suite going red this way has no thread to pull.
+        //
+        // This is a characterisation test, not a wish. Nothing here catches exceptions on purpose:
+        // docs/plan/00 § Coding standards keeps exceptions for bugs and infrastructure, so a grain
+        // -level catch-all would bury real faults. The guarantee is that KubeApiClient maps every
+        // answer the API server can give, which KubeFailureMappingTests asserts against a real k3s;
+        // this test says what it costs when something slips through.
+        var clusterId = NewClusterId();
+        var reacher = cluster.Reacher(Tenant);
+
+        await reacher.ReachAttachAsync(Descriptor(clusterId));
+        await reacher.ReachPingAsync(clusterId);
+
+        FakeApiClientFactory.Client.ThrowOnApply = new HttpOperationException(
+            "Operation returned an invalid status code 'Forbidden'"
+        ) {
+            Response = new HttpResponseMessageWrapper(
+                new HttpResponseMessage(HttpStatusCode.Forbidden),
+                """{"kind":"Status","code":403,"reason":"Forbidden","message":"admission webhook denied the request"}"""
+            )
+        };
+
+        try {
+            var thrown = await Record.ExceptionAsync(() => reacher.ReachApplyAsync(clusterId, Command()));
+
+            thrown.ShouldBeOfType<CodecNotFoundException>();
+            thrown.Message.ShouldBe("Could not find a codec for type k8s.Autorest.HttpOperationException.");
+
+            // And there is the whole problem: the 403, the reason and the webhook's own message are
+            // all in the exception that was thrown, and none of them survive the grain call.
+            thrown.Message.ShouldNotContain("403");
+            thrown.Message.ShouldNotContain("Forbidden");
+            thrown.Message.ShouldNotContain("webhook");
+        } finally {
+            FakeApiClientFactory.Client.ThrowOnApply = null;
         }
     }
 
