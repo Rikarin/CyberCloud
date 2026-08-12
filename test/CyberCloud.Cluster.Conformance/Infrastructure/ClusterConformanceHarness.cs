@@ -158,6 +158,14 @@ public sealed class ClusterConformanceHarness<TSource> : IAsyncDisposable
 
     /// <summary>Builds an address for the type under test.</summary>
     /// <param name="name">The resource name. DNS-1123, per docs/plan/06 § Identifiers.</param>
+    /// <remarks>
+    ///     ⚠ <b>The ancestors are interleaved here for the same reason
+    ///     <c>ProviderTestCluster.Address</c> does it:</b> this is the one method every assertion in
+    ///     the container-backed suite addresses through, so a depth-2 case runs the same four criteria
+    ///     against <c>…/probes/ancestor-0/samples/{name}</c> rather than against a copy of them. The
+    ///     count check and its message live on <c>ProviderTestCluster.Ancestors</c> and are shared —
+    ///     two guards would be two messages to keep in step.
+    /// </remarks>
     public static ResourceId Address(string name) =>
         new(
             ConformanceIds.Tenant,
@@ -165,7 +173,8 @@ public sealed class ClusterConformanceHarness<TSource> : IAsyncDisposable
             ConformanceIds.ResourceGroup,
             Case.Type,
             name,
-            Guid.Empty
+            Guid.Empty,
+            ProviderTestCluster<TSource>.AncestorPath
         );
 
     /// <summary>A caller.</summary>
@@ -256,7 +265,83 @@ public sealed class ClusterConformanceHarness<TSource> : IAsyncDisposable
             NullLogger<ResourceManagerService>.Instance
         );
 
+        // ⚠ AND THE ANCESTORS, WITHOUT WHICH A DEPTH-2 CASE'S EVERY CREATE IS A 404. The write path
+        // resolves the parent's index binding on every create; here the ancestors are created against
+        // the SAME real API server the child's assertions read around, so a parent that fails to
+        // converge fails loudly with the cluster's own message rather than as a child that will not
+        // create.
+        await harness.CreateAncestorsAsync(cancellationToken).ConfigureAwait(false);
+
         return harness;
+    }
+
+    /// <summary>Creates the ancestors the type under test hangs off, outermost first.</summary>
+    /// <param name="cancellationToken">The harness's token.</param>
+    /// <remarks>
+    ///     ⚠ Idempotent by way of the index: two harnesses share one PostgreSQL under the same Orleans
+    ///     service id — the lifecycle fixture's and the silo-kill test's — and the second one finds the
+    ///     first one's parent already bound. Re-creating it would be a PUT with the same body, which
+    ///     is a no-op, but the check keeps the second harness from waiting on an operation that was
+    ///     never started.
+    /// </remarks>
+    async Task CreateAncestorsAsync(CancellationToken cancellationToken) {
+        var ancestors = ProviderTestCluster<TSource>.Ancestors;
+
+        for (var level = 0; level < ancestors.Length; level++) {
+            var ancestor = ancestors[level];
+
+            var address = new ResourceId(
+                ConformanceIds.Tenant,
+                ConformanceIds.Subscription,
+                ConformanceIds.ResourceGroup,
+                ancestor.Type,
+                ConformanceIds.AncestorName(level),
+                Guid.Empty,
+                string.Join('/', Enumerable.Range(0, level).Select(ConformanceIds.AncestorName))
+            );
+
+            var index = For(ConformanceIds.Tenant)
+                .GetGrain<IResourceIndexGrain>(GrainKeys.PathIndex(address));
+
+            if ((await index.ResolveAsync().ConfigureAwait(false)).IsSuccess) {
+                continue;
+            }
+
+            var accepted = await Manager.WriteAsync(
+                new() {
+                    Path = address.Path,
+                    ApiVersion = ancestor.ApiVersion,
+                    Verb = WriteVerb.Put,
+                    Body = ancestor.Body(ClusterId),
+                    Caller = Caller()
+                },
+                cancellationToken
+            ).ConfigureAwait(false);
+
+            if (accepted.TryGetError(out var error)) {
+                throw new InvalidOperationException(
+                    $"the harness could not create '{address.Path}', which is the parent every "
+                    + $"assertion about '{Case.Type}' hangs off: {error.Message}"
+                );
+            }
+
+            var operation = Operation(ConformanceIds.Tenant, accepted.GetValueOrThrow().OperationId);
+
+            for (var drive = 0; drive < 40; drive++) {
+                if ((await operation.DriveAsync().ConfigureAwait(false)).GetValueOrThrow().IsTerminal) {
+                    break;
+                }
+
+                await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken).ConfigureAwait(false);
+            }
+
+            if ((await index.ResolveAsync().ConfigureAwait(false)).IsFailure) {
+                throw new InvalidOperationException(
+                    $"'{address.Path}' never reached a confirmed binding against the real API server, "
+                    + $"so every create under it answers the parent-not-found 404 for '{Case.Type}'."
+                );
+            }
+        }
     }
 
     /// <summary>
@@ -425,8 +510,27 @@ public sealed class ClusterConformanceHarness<TSource> : IAsyncDisposable
         IKubernetes raw,
         CancellationToken cancellationToken
     ) {
-        var candidates = Case
-            .Objects(Address("crd-discovery").WithId(Guid.NewGuid()), Namespace)
+        // ⚠ THE ANCESTORS' KINDS TOO, AND THEY ARE NOT IMPLIED BY THE CASE'S OWN. The harness creates
+        // the parent before the child's first assertion, so a parent rendering a custom kind the
+        // child does not would fail the nameless HttpOperationException this whole method exists to
+        // remove — and it would fail during setup, where the message names nothing at all.
+        var candidates = ProviderTestCluster<TSource>.Ancestors
+            .Select((ancestor, level) => ancestor.Objects(
+                new ResourceId(
+                    ConformanceIds.Tenant,
+                    ConformanceIds.Subscription,
+                    ConformanceIds.ResourceGroup,
+                    ancestor.Type,
+                    ConformanceIds.AncestorName(level),
+                    Guid.NewGuid(),
+                    string.Join('/', Enumerable.Range(0, level).Select(ConformanceIds.AncestorName))
+                ),
+                Namespace
+            ))
+            .Aggregate(
+                Case.Objects(Address("crd-discovery").WithId(Guid.NewGuid()), Namespace).AsEnumerable(),
+                (all, next) => all.Concat(next)
+            )
             .Select(x => x.Kind)
             // The core group has no CRD and needs none — its REST paths are built in.
             .Where(x => !string.IsNullOrEmpty(x.Group))
@@ -646,6 +750,16 @@ public sealed class ClusterConformanceHarness<TSource> : IAsyncDisposable
 
                     services.AddSingleton<IResourceProvider>(_ => TSource.ProviderCase.CreateProvider());
                     services.AddSingleton(TSource.ProviderCase.ReconcilerType);
+
+                    // ⚠ AND EVERY ANCESTOR'S RECONCILER — ReconcileDriver resolves each type's from
+                    // this container by the concrete type the registry stores, so a parent whose
+                    // reconciler is missing fails inside the silo rather than on the request path.
+                    foreach (var reconciler in TSource.Ancestors
+                        .Select(x => x.ReconcilerType)
+                        .Where(x => x != TSource.ProviderCase.ReconcilerType)
+                        .Distinct()) {
+                        services.AddSingleton(reconciler);
+                    }
 
                     services.TryAddSingleton<ILoggerFactory>(_ => NullLoggerFactory.Instance);
                 }

@@ -81,6 +81,16 @@ public sealed class ParentEdgeTests(IsolationCluster cluster) {
         // above would pass — while every `resourceGroup:…#contributor` assignment, which is the
         // second row of docs/plan/07 § Azure RBAC, expressed in it, would grant nothing. That is a
         // defect no read-back test can see, so the tuple itself is read.
+        //
+        // ⚠ AND "WHICH PARENT" NOW DEPENDS ON THE TARGET'S DEPTH, WHICH IS WHY THIS SWEEP BRANCHES.
+        // A top-level resource's parent is its resource group; a child's is its parent RESOURCE.
+        // Asserting the group for every target would have made the child row fail on a correct
+        // implementation, and asserting whichever one happened to be there would have asserted
+        // nothing. The branch is on the address's own depth — the same pure function
+        // ReBacResourceRelationWriter reads — so a writer that stopped distinguishing them fails one
+        // row of this theory whichever way it stopped.
+        ArgumentNullException.ThrowIfNull(target);
+
         var name = "edge-shape-" + target.Name.GetHashCode(StringComparison.Ordinal).ToString("x8", CultureInfo.InvariantCulture);
 
         var id = await cluster.CreateAsync(
@@ -91,9 +101,31 @@ public sealed class ParentEdgeTests(IsolationCluster cluster) {
             IsolationCluster.VictimUser
         );
 
+        var address = IsolationCluster.Address(
+            target,
+            name,
+            IsolationCluster.Victim,
+            IsolationCluster.VictimSubscription
+        );
+
         var parents = await cluster.ParentsOfAsync(IsolationCluster.Victim, id);
 
         parents.Count.ShouldBe(1, "a resource has exactly one parent scope");
+        parents[0].Relation.ShouldBeNullOrEmpty("the parent's subject is an object, not a userset");
+
+        if (address.Parent is { } parentAddress) {
+            var parentId = await cluster.ResolveAsync(IsolationCluster.Victim, parentAddress);
+
+            parents[0].Type.ShouldBe(
+                ObjectTypes.Resource,
+                "a child's parent edge names an object type other than `resource`, so granting a role "
+                + "on the parent grants nothing on its children"
+            );
+
+            parents[0].Id.ShouldBe(parentId.ToString("N", CultureInfo.InvariantCulture));
+            return;
+        }
+
         parents[0].Type.ShouldBe(ObjectTypes.ResourceGroup);
         parents[0].Id.ShouldBe(
             IsolationCluster.VictimSubscription.ToString("N", CultureInfo.InvariantCulture)
@@ -105,7 +137,6 @@ public sealed class ParentEdgeTests(IsolationCluster cluster) {
         // subscriptions are two authorization objects rather than one — the cross-subscription hole
         // that ReBacResourceAuthorizer.GroupObjectId's remarks describe.
         parents[0].Id.ShouldNotBe(IsolationCluster.Group);
-        parents[0].Relation.ShouldBeNullOrEmpty("the parent's subject is an object, not a userset");
     }
 
     [Fact]
@@ -149,7 +180,7 @@ public sealed class ParentEdgeTests(IsolationCluster cluster) {
                 Path = childAddress.Path,
                 ApiVersion = Conformance.Reference.Probes.V2026,
                 Verb = WriteVerb.Put,
-                Body = Conformance.Reference.Probes.ChildBody(),
+                Body = Conformance.Reference.Probes.ChildBody(IsolationCluster.ClusterId),
                 Caller = IsolationCluster.Caller(IsolationCluster.Victim, IsolationCluster.VictimUser)
             },
             TestContext.Current.CancellationToken
@@ -183,6 +214,96 @@ public sealed class ParentEdgeTests(IsolationCluster cluster) {
 
         parents[0].Relation.ShouldBeNullOrEmpty("the parent's subject is an object, not a userset");
     }
+
+    [Fact]
+    public async Task AChildCannotBeHungOffAnotherTenantsParentAndTheRefusalIsTheSame404() {
+        // ⚠ THE HOLE THE PARENT HOP OPENED, AND IT IS NEW AS OF 2026-08-12.
+        //
+        // Before the hop, a resource's `parent` edge named its resource GROUP, and a group's object
+        // id is {subscriptionId:N}-{name} — so the only cross-boundary question was whether a
+        // subscription id could be borrowed, which BelowTheManagerTests already covers. A child's
+        // edge now names its PARENT RESOURCE, whose GUID the write path resolves out of an index the
+        // path itself points at. That is a second thing an attacker can aim: guess the victim's
+        // parent NAME and the child hangs off it.
+        //
+        // It does not, and the reason is worth pinning rather than assuming: every grain on the
+        // resolve path is reached through ForTenant(caller's tenant) — ADR-002 puts the tenant in the
+        // key — so the victim's parent is not addressable from the attacker's tenant and reads as
+        // absent. The refusal must therefore be indistinguishable from the one for a parent name
+        // that was never used anywhere, or the attacker has an oracle for the victim's parent names:
+        // one probe per guess, from inside their own tenant, with no access to the victim's at all.
+        var parentName = "cross-tenant-parent";
+
+        var victimParentId = await cluster.CreateAsync(
+            Probes,
+            parentName,
+            IsolationCluster.Victim,
+            IsolationCluster.VictimSubscription,
+            IsolationCluster.VictimUser
+        );
+
+        victimParentId.ShouldNotBe(Guid.Empty);
+
+        // The attacker, inside their OWN tenant and their OWN subscription, names the victim's parent.
+        var borrowed = new ResourceId(
+            IsolationCluster.Attacker,
+            IsolationCluster.AttackerSubscription,
+            IsolationCluster.Group,
+            Conformance.Reference.Probes.ChildType,
+            "borrowed",
+            Guid.Empty,
+            parentName
+        );
+
+        // …and, for comparison, a parent name that exists in neither tenant.
+        var invented = borrowed with { Name = "invented", ParentNames = "no-such-parent-anywhere" };
+
+        cluster.World.Reset();
+
+        var onBorrowed = await WriteChildAsync(borrowed);
+        var onInvented = await WriteChildAsync(invented);
+
+        onBorrowed.IsFailure.ShouldBeTrue(
+            "a child was created in the attacker's tenant under the victim's parent name. Its ReBAC "
+            + "parent edge names a resource GUID resolved from an index the attacker does not own"
+        );
+
+        onBorrowed.Error!.Code.ShouldBe(ErrorCode.ResourceNotFound);
+
+        onBorrowed.Error.Code.ShouldNotBe(
+            ErrorCode.AuthorizationFailed,
+            "403 here confirms the victim's parent exists — docs/plan/07 § The enforcement seam"
+        );
+
+        onInvented.IsFailure.ShouldBeTrue();
+
+        // ⚠ IDENTICAL, MODULO THE PATH THE CALLER THEMSELVES SUPPLIED. Two 404s whose wording differs
+        // are still a way to ask "is this a real parent over there".
+        onBorrowed.Error.Code.ShouldBe(onInvented.Error!.Code);
+        onBorrowed.Error.Target.ShouldBe(onInvented.Error.Target);
+
+        onBorrowed.Error.Message.Replace(borrowed.Path, "PATH", StringComparison.Ordinal)
+            .ShouldBe(onInvented.Error.Message.Replace(invented.Path, "PATH", StringComparison.Ordinal));
+
+        // And nothing reached a provider, and no tuple was written against the victim's parent.
+        cluster.World.Applied.ShouldBeEmpty("a refused cross-tenant child create reached a provider");
+
+        (await cluster.ParentsOfAsync(IsolationCluster.Attacker, victimParentId)).ShouldBeEmpty();
+    }
+
+    /// <summary>Writes a child as the attacker, at an address the attacker supplied.</summary>
+    /// <param name="address">Where.</param>
+    async Task<Result<WriteAccepted>> WriteChildAsync(ResourceId address) =>
+        await cluster.Manager.WriteAsync(
+            new() {
+                Path = address.Path,
+                ApiVersion = Conformance.Reference.Probes.V2026,
+                Verb = WriteVerb.Put,
+                Body = Conformance.Reference.Probes.ChildBody(IsolationCluster.ClusterId),
+                Caller = IsolationCluster.Caller(IsolationCluster.Attacker, IsolationCluster.AttackerUser)
+            },
+            TestContext.Current.CancellationToken
+        );
 
     [Fact]
     public void TheRelationTheWriterNamesIsTheOneTheSchemaRewritesThrough() {

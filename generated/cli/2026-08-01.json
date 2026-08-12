@@ -158,7 +158,8 @@
                   "name": "--name",
                   "type": "string",
                   "required": true,
-                  "summary": "The resource's name within its group."
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
                 },
                 {
                   "name": "--persistence-mode",
@@ -204,7 +205,8 @@
                   "name": "--resource-group",
                   "type": "string",
                   "required": true,
-                  "summary": "The resource group. docs/plan/06 § The hierarchy."
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
                 },
                 {
                   "name": "--size",
@@ -220,6 +222,7 @@
                   "type": "string",
                   "required": false,
                   "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
                   "env": "CYC_SUBSCRIPTION"
                 },
                 {
@@ -235,6 +238,7 @@
                   "type": "string",
                   "required": false,
                   "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
                   "env": "CYC_TENANT"
                 },
                 {
@@ -267,19 +271,22 @@
                   "name": "--name",
                   "type": "string",
                   "required": true,
-                  "summary": "The resource's name within its group."
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
                 },
                 {
                   "name": "--resource-group",
                   "type": "string",
                   "required": true,
-                  "summary": "The resource group. docs/plan/06 § The hierarchy."
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
                 },
                 {
                   "name": "--subscription",
                   "type": "string",
                   "required": false,
                   "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
                   "env": "CYC_SUBSCRIPTION"
                 },
                 {
@@ -287,6 +294,7 @@
                   "type": "string",
                   "required": false,
                   "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
                   "env": "CYC_TENANT"
                 }
               ],
@@ -307,19 +315,22 @@
                   "name": "--name",
                   "type": "string",
                   "required": true,
-                  "summary": "The resource's name within its group."
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
                 },
                 {
                   "name": "--resource-group",
                   "type": "string",
                   "required": true,
-                  "summary": "The resource group. docs/plan/06 § The hierarchy."
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
                 },
                 {
                   "name": "--subscription",
                   "type": "string",
                   "required": false,
                   "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
                   "env": "CYC_SUBSCRIPTION"
                 },
                 {
@@ -327,6 +338,7 @@
                   "type": "string",
                   "required": false,
                   "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
                   "env": "CYC_TENANT"
                 }
               ],
@@ -347,19 +359,22 @@
                   "name": "--name",
                   "type": "string",
                   "required": true,
-                  "summary": "The resource's name within its group."
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
                 },
                 {
                   "name": "--resource-group",
                   "type": "string",
                   "required": true,
-                  "summary": "The resource group. docs/plan/06 § The hierarchy."
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
                 },
                 {
                   "name": "--subscription",
                   "type": "string",
                   "required": false,
                   "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
                   "env": "CYC_SUBSCRIPTION"
                 },
                 {
@@ -367,6 +382,7 @@
                   "type": "string",
                   "required": false,
                   "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
                   "env": "CYC_TENANT"
                 }
               ]
@@ -480,7 +496,8 @@
                   "name": "--name",
                   "type": "string",
                   "required": true,
-                  "summary": "The resource's name within its group."
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
                 },
                 {
                   "name": "--persistence-mode",
@@ -526,7 +543,8 @@
                   "name": "--resource-group",
                   "type": "string",
                   "required": true,
-                  "summary": "The resource group. docs/plan/06 § The hierarchy."
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
                 },
                 {
                   "name": "--size",
@@ -542,6 +560,7 @@
                   "type": "string",
                   "required": false,
                   "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
                   "env": "CYC_SUBSCRIPTION"
                 },
                 {
@@ -557,6 +576,7 @@
                   "type": "string",
                   "required": false,
                   "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
                   "env": "CYC_TENANT"
                 },
                 {
@@ -723,7 +743,8 @@
                   "name": "--name",
                   "type": "string",
                   "required": true,
-                  "summary": "The resource's name within its group."
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
                 },
                 {
                   "name": "--owner",
@@ -772,7 +793,8 @@
                   "name": "--resource-group",
                   "type": "string",
                   "required": true,
-                  "summary": "The resource group. docs/plan/06 § The hierarchy."
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
                 },
                 {
                   "name": "--retention-days",
@@ -796,6 +818,7 @@
                   "type": "string",
                   "required": false,
                   "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
                   "env": "CYC_SUBSCRIPTION"
                 },
                 {
@@ -819,6 +842,7 @@
                   "type": "string",
                   "required": false,
                   "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
                   "env": "CYC_TENANT"
                 },
                 {
@@ -860,19 +884,22 @@
                   "name": "--name",
                   "type": "string",
                   "required": true,
-                  "summary": "The resource's name within its group."
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
                 },
                 {
                   "name": "--resource-group",
                   "type": "string",
                   "required": true,
-                  "summary": "The resource group. docs/plan/06 § The hierarchy."
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
                 },
                 {
                   "name": "--subscription",
                   "type": "string",
                   "required": false,
                   "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
                   "env": "CYC_SUBSCRIPTION"
                 },
                 {
@@ -880,6 +907,7 @@
                   "type": "string",
                   "required": false,
                   "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
                   "env": "CYC_TENANT"
                 }
               ],
@@ -900,19 +928,22 @@
                   "name": "--name",
                   "type": "string",
                   "required": true,
-                  "summary": "The resource's name within its group."
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
                 },
                 {
                   "name": "--resource-group",
                   "type": "string",
                   "required": true,
-                  "summary": "The resource group. docs/plan/06 § The hierarchy."
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
                 },
                 {
                   "name": "--subscription",
                   "type": "string",
                   "required": false,
                   "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
                   "env": "CYC_SUBSCRIPTION"
                 },
                 {
@@ -920,6 +951,7 @@
                   "type": "string",
                   "required": false,
                   "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
                   "env": "CYC_TENANT"
                 }
               ],
@@ -940,19 +972,22 @@
                   "name": "--name",
                   "type": "string",
                   "required": true,
-                  "summary": "The resource's name within its group."
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
                 },
                 {
                   "name": "--resource-group",
                   "type": "string",
                   "required": true,
-                  "summary": "The resource group. docs/plan/06 § The hierarchy."
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
                 },
                 {
                   "name": "--subscription",
                   "type": "string",
                   "required": false,
                   "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
                   "env": "CYC_SUBSCRIPTION"
                 },
                 {
@@ -960,6 +995,7 @@
                   "type": "string",
                   "required": false,
                   "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
                   "env": "CYC_TENANT"
                 }
               ]
@@ -1094,7 +1130,8 @@
                   "name": "--name",
                   "type": "string",
                   "required": true,
-                  "summary": "The resource's name within its group."
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
                 },
                 {
                   "name": "--owner",
@@ -1143,7 +1180,8 @@
                   "name": "--resource-group",
                   "type": "string",
                   "required": true,
-                  "summary": "The resource group. docs/plan/06 § The hierarchy."
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
                 },
                 {
                   "name": "--retention-days",
@@ -1167,6 +1205,7 @@
                   "type": "string",
                   "required": false,
                   "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
                   "env": "CYC_SUBSCRIPTION"
                 },
                 {
@@ -1190,6 +1229,7 @@
                   "type": "string",
                   "required": false,
                   "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
                   "env": "CYC_TENANT"
                 },
                 {
@@ -1353,7 +1393,8 @@
                   "name": "--name",
                   "type": "string",
                   "required": true,
-                  "summary": "The resource's name within its group."
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
                 },
                 {
                   "name": "--nodes",
@@ -1402,7 +1443,8 @@
                   "name": "--resource-group",
                   "type": "string",
                   "required": true,
-                  "summary": "The resource group. docs/plan/06 § The hierarchy."
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
                 },
                 {
                   "name": "--retention-size",
@@ -1427,6 +1469,7 @@
                   "type": "string",
                   "required": false,
                   "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
                   "env": "CYC_SUBSCRIPTION"
                 },
                 {
@@ -1442,6 +1485,7 @@
                   "type": "string",
                   "required": false,
                   "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
                   "env": "CYC_TENANT"
                 },
                 {
@@ -1482,19 +1526,22 @@
                   "name": "--name",
                   "type": "string",
                   "required": true,
-                  "summary": "The resource's name within its group."
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
                 },
                 {
                   "name": "--resource-group",
                   "type": "string",
                   "required": true,
-                  "summary": "The resource group. docs/plan/06 § The hierarchy."
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
                 },
                 {
                   "name": "--subscription",
                   "type": "string",
                   "required": false,
                   "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
                   "env": "CYC_SUBSCRIPTION"
                 },
                 {
@@ -1502,6 +1549,7 @@
                   "type": "string",
                   "required": false,
                   "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
                   "env": "CYC_TENANT"
                 }
               ],
@@ -1522,19 +1570,22 @@
                   "name": "--name",
                   "type": "string",
                   "required": true,
-                  "summary": "The resource's name within its group."
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
                 },
                 {
                   "name": "--resource-group",
                   "type": "string",
                   "required": true,
-                  "summary": "The resource group. docs/plan/06 § The hierarchy."
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
                 },
                 {
                   "name": "--subscription",
                   "type": "string",
                   "required": false,
                   "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
                   "env": "CYC_SUBSCRIPTION"
                 },
                 {
@@ -1542,6 +1593,7 @@
                   "type": "string",
                   "required": false,
                   "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
                   "env": "CYC_TENANT"
                 }
               ],
@@ -1562,19 +1614,22 @@
                   "name": "--name",
                   "type": "string",
                   "required": true,
-                  "summary": "The resource's name within its group."
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
                 },
                 {
                   "name": "--resource-group",
                   "type": "string",
                   "required": true,
-                  "summary": "The resource group. docs/plan/06 § The hierarchy."
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
                 },
                 {
                   "name": "--subscription",
                   "type": "string",
                   "required": false,
                   "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
                   "env": "CYC_SUBSCRIPTION"
                 },
                 {
@@ -1582,6 +1637,7 @@
                   "type": "string",
                   "required": false,
                   "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
                   "env": "CYC_TENANT"
                 }
               ]
@@ -1704,7 +1760,8 @@
                   "name": "--name",
                   "type": "string",
                   "required": true,
-                  "summary": "The resource's name within its group."
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
                 },
                 {
                   "name": "--nodes",
@@ -1753,7 +1810,8 @@
                   "name": "--resource-group",
                   "type": "string",
                   "required": true,
-                  "summary": "The resource group. docs/plan/06 § The hierarchy."
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
                 },
                 {
                   "name": "--retention-size",
@@ -1778,6 +1836,7 @@
                   "type": "string",
                   "required": false,
                   "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
                   "env": "CYC_SUBSCRIPTION"
                 },
                 {
@@ -1793,6 +1852,7 @@
                   "type": "string",
                   "required": false,
                   "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
                   "env": "CYC_TENANT"
                 },
                 {
@@ -1950,7 +2010,8 @@
                   "name": "--name",
                   "type": "string",
                   "required": true,
-                  "summary": "The resource's name within its group."
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
                 },
                 {
                   "name": "--preset",
@@ -1975,7 +2036,8 @@
                   "name": "--resource-group",
                   "type": "string",
                   "required": true,
-                  "summary": "The resource group. docs/plan/06 § The hierarchy."
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
                 },
                 {
                   "name": "--servers",
@@ -1999,6 +2061,7 @@
                   "type": "string",
                   "required": false,
                   "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
                   "env": "CYC_SUBSCRIPTION"
                 },
                 {
@@ -2014,6 +2077,7 @@
                   "type": "string",
                   "required": false,
                   "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
                   "env": "CYC_TENANT"
                 },
                 {
@@ -2046,19 +2110,22 @@
                   "name": "--name",
                   "type": "string",
                   "required": true,
-                  "summary": "The resource's name within its group."
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
                 },
                 {
                   "name": "--resource-group",
                   "type": "string",
                   "required": true,
-                  "summary": "The resource group. docs/plan/06 § The hierarchy."
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
                 },
                 {
                   "name": "--subscription",
                   "type": "string",
                   "required": false,
                   "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
                   "env": "CYC_SUBSCRIPTION"
                 },
                 {
@@ -2066,6 +2133,7 @@
                   "type": "string",
                   "required": false,
                   "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
                   "env": "CYC_TENANT"
                 }
               ],
@@ -2086,19 +2154,22 @@
                   "name": "--name",
                   "type": "string",
                   "required": true,
-                  "summary": "The resource's name within its group."
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
                 },
                 {
                   "name": "--resource-group",
                   "type": "string",
                   "required": true,
-                  "summary": "The resource group. docs/plan/06 § The hierarchy."
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
                 },
                 {
                   "name": "--subscription",
                   "type": "string",
                   "required": false,
                   "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
                   "env": "CYC_SUBSCRIPTION"
                 },
                 {
@@ -2106,6 +2177,7 @@
                   "type": "string",
                   "required": false,
                   "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
                   "env": "CYC_TENANT"
                 }
               ],
@@ -2126,19 +2198,22 @@
                   "name": "--name",
                   "type": "string",
                   "required": true,
-                  "summary": "The resource's name within its group."
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
                 },
                 {
                   "name": "--resource-group",
                   "type": "string",
                   "required": true,
-                  "summary": "The resource group. docs/plan/06 § The hierarchy."
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
                 },
                 {
                   "name": "--subscription",
                   "type": "string",
                   "required": false,
                   "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
                   "env": "CYC_SUBSCRIPTION"
                 },
                 {
@@ -2146,6 +2221,7 @@
                   "type": "string",
                   "required": false,
                   "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
                   "env": "CYC_TENANT"
                 }
               ]
@@ -2269,7 +2345,8 @@
                   "name": "--name",
                   "type": "string",
                   "required": true,
-                  "summary": "The resource's name within its group."
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
                 },
                 {
                   "name": "--preset",
@@ -2294,7 +2371,8 @@
                   "name": "--resource-group",
                   "type": "string",
                   "required": true,
-                  "summary": "The resource group. docs/plan/06 § The hierarchy."
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
                 },
                 {
                   "name": "--servers",
@@ -2318,6 +2396,7 @@
                   "type": "string",
                   "required": false,
                   "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
                   "env": "CYC_SUBSCRIPTION"
                 },
                 {
@@ -2333,6 +2412,7 @@
                   "type": "string",
                   "required": false,
                   "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
                   "env": "CYC_TENANT"
                 },
                 {
@@ -2429,7 +2509,8 @@
                   "name": "--name",
                   "type": "string",
                   "required": true,
-                  "summary": "The resource's name within its group."
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
                 },
                 {
                   "name": "--replicas",
@@ -2443,7 +2524,8 @@
                   "name": "--resource-group",
                   "type": "string",
                   "required": true,
-                  "summary": "The resource group. docs/plan/06 § The hierarchy."
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
                 },
                 {
                   "name": "--retired-on",
@@ -2458,6 +2540,7 @@
                   "type": "string",
                   "required": false,
                   "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
                   "env": "CYC_SUBSCRIPTION"
                 },
                 {
@@ -2473,6 +2556,7 @@
                   "type": "string",
                   "required": false,
                   "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
                   "env": "CYC_TENANT"
                 },
                 {
@@ -2508,19 +2592,22 @@
                   "name": "--name",
                   "type": "string",
                   "required": true,
-                  "summary": "The resource's name within its group."
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
                 },
                 {
                   "name": "--resource-group",
                   "type": "string",
                   "required": true,
-                  "summary": "The resource group. docs/plan/06 § The hierarchy."
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
                 },
                 {
                   "name": "--subscription",
                   "type": "string",
                   "required": false,
                   "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
                   "env": "CYC_SUBSCRIPTION"
                 },
                 {
@@ -2528,6 +2615,7 @@
                   "type": "string",
                   "required": false,
                   "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
                   "env": "CYC_TENANT"
                 }
               ],
@@ -2556,19 +2644,22 @@
                   "name": "--name",
                   "type": "string",
                   "required": true,
-                  "summary": "The resource's name within its group."
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
                 },
                 {
                   "name": "--resource-group",
                   "type": "string",
                   "required": true,
-                  "summary": "The resource group. docs/plan/06 § The hierarchy."
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
                 },
                 {
                   "name": "--subscription",
                   "type": "string",
                   "required": false,
                   "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
                   "env": "CYC_SUBSCRIPTION"
                 },
                 {
@@ -2576,6 +2667,7 @@
                   "type": "string",
                   "required": false,
                   "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
                   "env": "CYC_TENANT"
                 }
               ],
@@ -2594,19 +2686,22 @@
                   "name": "--name",
                   "type": "string",
                   "required": true,
-                  "summary": "The resource's name within its group."
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
                 },
                 {
                   "name": "--resource-group",
                   "type": "string",
                   "required": true,
-                  "summary": "The resource group. docs/plan/06 § The hierarchy."
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
                 },
                 {
                   "name": "--subscription",
                   "type": "string",
                   "required": false,
                   "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
                   "env": "CYC_SUBSCRIPTION"
                 },
                 {
@@ -2614,6 +2709,7 @@
                   "type": "string",
                   "required": false,
                   "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
                   "env": "CYC_TENANT"
                 }
               ]
@@ -2678,7 +2774,8 @@
                   "name": "--name",
                   "type": "string",
                   "required": true,
-                  "summary": "The resource's name within its group."
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
                 },
                 {
                   "name": "--replicas",
@@ -2692,7 +2789,8 @@
                   "name": "--resource-group",
                   "type": "string",
                   "required": true,
-                  "summary": "The resource group. docs/plan/06 § The hierarchy."
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
                 },
                 {
                   "name": "--retired-on",
@@ -2707,6 +2805,7 @@
                   "type": "string",
                   "required": false,
                   "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
                   "env": "CYC_SUBSCRIPTION"
                 },
                 {
@@ -2722,6 +2821,7 @@
                   "type": "string",
                   "required": false,
                   "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
                   "env": "CYC_TENANT"
                 },
                 {

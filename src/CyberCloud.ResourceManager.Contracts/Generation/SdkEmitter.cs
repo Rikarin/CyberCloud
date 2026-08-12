@@ -537,12 +537,81 @@ public static class SdkEmitter {
         built.Append("    }\n");
     }
 
+    /// <summary>
+    ///     The ancestor parameters a nested type's collection takes, as C# parameter declarations.
+    /// </summary>
+    /// <param name="type">The resource type.</param>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>Until 2026-08-12 this was nothing, and the loss was silent in exactly the way the
+    ///         CLI's was.</b> A collection for <c>servers/databases</c> emitted
+    ///         <c>CreateOrUpdateAsync(WaitUntil, string name, Data, CancellationToken)</c> — a
+    ///         signature that compiles, reads perfectly, and cannot build the URL its own
+    ///         <c>PathTemplate</c> declares, because <c>{serversName}</c> has no argument. Nothing
+    ///         complained: an absent parameter is not a diagnostic anywhere, and the hand-written half
+    ///         of the SDK is <c>partial</c>, so the missing piece looked like something a human was
+    ///         going to supply.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Ancestors come FIRST, outermost first, which is the order the URL reads in.</b> A
+    ///         caller writing <c>GetAsync(serversName, name)</c> is writing the path left to right;
+    ///         any other order makes two strings of the same type swappable at the call site with no
+    ///         compile error and a 404 at run time.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ Named for the placeholder rather than singularised, for
+    ///         <c>CliEmitter.AncestorFlagName</c>'s reason: nothing here knows the singular of a
+    ///         provider's own segment.
+    ///     </para>
+    /// </remarks>
+    static ImmutableArray<string> AncestorParametersOf(DocumentType type) {
+        var placeholders = DocumentReader.AncestorPlaceholdersOf(type.Path);
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var placeholder in placeholders) {
+            // ⚠ A type path whose segments repeat — `a/a/b` — would emit `string aName, string aName`,
+            // which is CS0100 in a file nothing compiles until a consumer does. Thrown here so the
+            // failure names the type rather than arriving as a compiler error in generated code.
+            if (!seen.Add(Camel(placeholder))) {
+                throw new InvalidOperationException(
+                    $"'{type.ResourceType}' has two ancestors whose placeholder is '{placeholder}', so "
+                    + "the generated collection would declare one parameter name twice and the SDK "
+                    + "would not compile. Give the type path distinct segments — docs/plan/12 "
+                    + "§ Child resources."
+                );
+            }
+        }
+
+        return [.. placeholders.Select(x => "string " + Camel(x))];
+    }
+
+    /// <summary>An identifier as <c>camelCase</c>, invariantly.</summary>
+    static string Camel(string value) {
+        var pascal = Pascal(value);
+        return char.ToLowerInvariant(pascal[0]) + pascal[1..];
+    }
+
     static void AppendCollection(StringBuilder built, DocumentType type, string model, string version) {
+        var ancestors = AncestorParametersOf(type);
+        var leading = ancestors.IsEmpty ? string.Empty : string.Join(", ", ancestors) + ", ";
+
         built.Append("\n/// <summary>The ")
             .Append(Escape(type.DisplayPlural))
-            .Append(" in one resource group.</summary>\n")
+            .Append(
+                ancestors.IsEmpty
+                    ? " in one resource group.</summary>\n"
+                    : " in one parent.</summary>\n"
+            )
             .Append("/// <remarks>⚠ Every write is long-running: docs/plan/08 § The write path, end to end\n")
-            .Append("/// ends in a 202 for every verb, so there is no synchronous overload to offer.</remarks>\n")
+            .Append("/// ends in a 202 for every verb, so there is no synchronous overload to offer.")
+            .Append(
+                ancestors.IsEmpty
+                    ? "</remarks>\n"
+                    : "\n/// ⚠ The leading parameter(s) name the ancestors this type nests inside —\n"
+                    + "/// docs/plan/12 § Child resources addresses a child\n"
+                    + "/// '…/{parentType}/{parentName}/{childType}/{childName}', so the parent's name is\n"
+                    + "/// part of the address rather than part of the body.</remarks>\n"
+            )
             .Append("public sealed partial class ")
             .Append(model)
             .Append("Collection {\n")
@@ -566,7 +635,9 @@ public static class SdkEmitter {
             .Append("    /// SDK should not hide it\".</remarks>\n")
             .Append("    public partial Task<Operation<")
             .Append(model)
-            .Append("Resource>> CreateOrUpdateAsync(\n        WaitUntil waitUntil,\n        string name,\n        ")
+            .Append("Resource>> CreateOrUpdateAsync(\n        WaitUntil waitUntil,\n        ")
+            .Append(leading)
+            .Append("string name,\n        ")
             .Append(model)
             .Append("Data data,\n        CancellationToken cancellationToken = default);\n")
             .Append("\n    /// <summary>Reads one ")
@@ -574,13 +645,20 @@ public static class SdkEmitter {
             .Append(" by name.</summary>\n")
             .Append("    public partial Task<Response<")
             .Append(model)
-            .Append("Resource>> GetAsync(string name, CancellationToken cancellationToken = default);\n")
+            .Append("Resource>> GetAsync(")
+            .Append(leading)
+            .Append("string name, CancellationToken cancellationToken = default);\n")
             .Append("\n    /// <summary>The ")
             .Append(Escape(type.DisplayPlural))
-            .Append(" in this group, paged.</summary>\n")
+            .Append(ancestors.IsEmpty ? " in this group, paged.</summary>\n" : " in one parent, paged.</summary>\n")
             .Append("    public partial AsyncPageable<")
             .Append(model)
-            .Append("Resource> GetAllAsync(CancellationToken cancellationToken = default);\n")
+            .Append("Resource> GetAllAsync(")
+            // ⚠ The listing takes the ancestors too. A child collection with no ancestor parameter
+            // could only list "every database in the group", which is not a scope the API serves —
+            // the URL it would GET is the interleaved one with a placeholder left in it.
+            .Append(ancestors.IsEmpty ? string.Empty : string.Join(", ", ancestors) + ", ")
+            .Append("CancellationToken cancellationToken = default);\n")
             .Append("}\n");
     }
 

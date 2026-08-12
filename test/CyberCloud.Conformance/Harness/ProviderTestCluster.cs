@@ -9,6 +9,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Orleans.Multitenant;
 using Orleans.TestingHost;
+using System.Collections.Immutable;
 using System.Globalization;
 
 namespace CyberCloud.Conformance;
@@ -36,6 +37,19 @@ public static class ConformanceIds {
 
     /// <summary>The resource group everything lands in.</summary>
     public const string ResourceGroup = "prod";
+
+    /// <summary>
+    ///     The name the harness gives the ancestor at <paramref name="level" />, outermost being 0.
+    /// </summary>
+    /// <param name="level">The nesting level, outermost first.</param>
+    /// <remarks>
+    ///     ⚠ Fixed rather than random, for the reason the GUIDs above are: a failure message names the
+    ///     same path every time. It is also why every test in a child's run shares <i>one</i> parent —
+    ///     the suite is about the child, and a parent per test would spend a create per assertion to
+    ///     prove nothing the parent's own run does not already prove.
+    /// </remarks>
+    public static string AncestorName(int level) =>
+        "ancestor-" + level.ToString(CultureInfo.InvariantCulture);
 }
 
 /// <summary>
@@ -178,10 +192,79 @@ public class ProviderTestCluster<TSource> : IAsyncLifetime
     public IResourceIndexGrain Index(ResourceId address) =>
         For(address.TenantId).GetGrain<IResourceIndexGrain>(GrainKeys.PathIndex(address));
 
+    /// <summary>
+    ///     The ancestor cases, checked against the depth the type under test declares.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">
+    ///     The source describes a different number of ancestors than its type nests, or one of them is
+    ///     not the type's own ancestor.
+    /// </exception>
+    /// <remarks>
+    ///     ⚠ <b>This is what makes <see cref="IProviderCaseSource.Ancestors" />' default safe, and it
+    ///     is deliberately the FIRST thing anything touching an address goes through.</b> Without it a
+    ///     depth-2 source that left the member empty fails inside <c>ResourceId</c>'s constructor —
+    ///     an <c>ArgumentException</c> about parent-name counts, raised from a static helper, on
+    ///     <i>every</i> test in the class at once, naming neither the case nor the member that is
+    ///     missing. That is the failure the whole suite was unrunnable behind; the message below is
+    ///     the difference between a provider author reading it once and bisecting for an afternoon.
+    /// </remarks>
+    public static ImmutableArray<ProviderConformanceCase> Ancestors {
+        get {
+            var declared = TSource.Ancestors;
+            var expected = Case.Type.Depth - 1;
+
+            if (declared.Length != expected) {
+                throw new InvalidOperationException(
+                    $"'{Case.DisplayName}' is registered for '{Case.Type}', which nests "
+                    + (expected + 1).ToString(CultureInfo.InvariantCulture)
+                    + " level(s) deep, so the suite must create "
+                    + expected.ToString(CultureInfo.InvariantCulture)
+                    + " ancestor(s) before it can address one — a child cannot be created until its "
+                    + "parent exists, and the create answers 404 when it does not. "
+                    + typeof(TSource).Name
+                    + ".Ancestors describes "
+                    + declared.Length.ToString(CultureInfo.InvariantCulture)
+                    + ". Set it to the parent type's own ProviderConformanceCase, outermost first — "
+                    + "see IProviderCaseSource.Ancestors."
+                );
+            }
+
+            for (var i = 0; i < declared.Length; i++) {
+                var ancestor = declared[i];
+                var expectedType = AncestorTypeAt(Case.Type, i);
+
+                if (ancestor.Type != expectedType) {
+                    throw new InvalidOperationException(
+                        $"'{Case.DisplayName}' declares '{ancestor.Type}' as ancestor "
+                        + i.ToString(CultureInfo.InvariantCulture)
+                        + $" of '{Case.Type}', and that ancestor is '{expectedType}'. The suite "
+                        + "registers ONE provider — a nested type and its parent are the same "
+                        + "provider by construction — so a case naming somebody else's type would "
+                        + "create a resource this run's registry cannot address."
+                    );
+                }
+            }
+
+            return declared;
+        }
+    }
+
+    /// <summary>The <c>/</c>-separated ancestor names an address for the type under test carries.</summary>
+    public static string AncestorPath =>
+        string.Join('/', Ancestors.Select((_, level) => ConformanceIds.AncestorName(level)));
+
     /// <summary>Builds an address for the type under test.</summary>
     /// <param name="name">The resource name. DNS-1123, per docs/plan/06 § Identifiers.</param>
     /// <param name="tenant">The tenant, defaulting to <see cref="ConformanceIds.Tenant" />.</param>
     /// <param name="subscription">The subscription, defaulting to <see cref="ConformanceIds.Subscription" />.</param>
+    /// <remarks>
+    ///     ⚠ <b>The ancestor names come from the harness, not from the case, and that is why a child's
+    ///     run is the same suite rather than a copy of it.</b> Every assertion in
+    ///     <c>ProviderConformanceTests</c> addresses through this one method, so making it interleave
+    ///     the ancestors it created is the whole of what a depth-2 type needed: the 27 assertions run
+    ///     unchanged, against <c>…/probes/ancestor-0/samples/{name}</c> instead of
+    ///     <c>…/probes/{name}</c>.
+    /// </remarks>
     public static ResourceId Address(string name, Guid? tenant = null, Guid? subscription = null) =>
         new(
             tenant ?? ConformanceIds.Tenant,
@@ -189,8 +272,15 @@ public class ProviderTestCluster<TSource> : IAsyncLifetime
             ConformanceIds.ResourceGroup,
             Case.Type,
             name,
-            Guid.Empty
+            Guid.Empty,
+            AncestorPath
         );
+
+    /// <summary>The type of the ancestor at <paramref name="level" />, outermost being 0.</summary>
+    /// <param name="type">The nested type.</param>
+    /// <param name="level">The nesting level.</param>
+    static ResourceTypeName AncestorTypeAt(ResourceTypeName type, int level) =>
+        new(type.Namespace, string.Join('/', type.Type.Split('/').Take(level + 1)));
 
     /// <summary>A caller.</summary>
     /// <param name="tenant">The tenant the request is for.</param>
@@ -250,6 +340,78 @@ public class ProviderTestCluster<TSource> : IAsyncLifetime
             cluster.GrainFactory,
             NullLogger<ResourceManagerService>.Instance
         );
+
+        // ⚠ AND THE ANCESTORS, WHICH IS THE OTHER THING A DEPTH-2 CASE CANNOT RUN WITHOUT. The create
+        // path resolves the parent's index binding and refuses with the same 404 as "no such
+        // resource" when it is absent, so a child's every assertion would fail as a 404 that named
+        // the child's own path. Created through the Manager rather than by writing an index entry:
+        // the parent is a real resource, and a harness that faked one would be asserting against a
+        // binding the platform did not make.
+        await CreateAncestorsAsync(ConformanceIds.Tenant, ConformanceIds.Subscription);
+
+        // ⚠ IN THE OTHER TENANT TOO, AND THAT ONE IS NOT SYMMETRY FOR ITS OWN SAKE.
+        // CreatingWithAnotherTenantsIdsIs404AndNothingIsApplied writes at the other tenant's address
+        // and asserts a 404. Without a parent over there the answer would still be 404 — from the
+        // parent check, before the caller's tenant is ever compared — so the test would pass while
+        // testing nothing. This is what keeps the assertion about the tenant boundary.
+        await CreateAncestorsAsync(ConformanceIds.OtherTenant, ConformanceIds.OtherSubscription);
+    }
+
+    /// <summary>Creates the ancestors the type under test hangs off, outermost first.</summary>
+    /// <param name="tenant">The tenant.</param>
+    /// <param name="subscription">The subscription.</param>
+    /// <remarks>
+    ///     Each is driven to a terminal state before the next is written, because the next one's own
+    ///     create reads its parent's <b>confirmed</b> binding — a name under an unexpired two-phase
+    ///     claim resolves as absent, which is <c>IResourceIndexGrain.ResolveAsync</c> working.
+    /// </remarks>
+    async Task CreateAncestorsAsync(Guid tenant, Guid subscription) {
+        for (var level = 0; level < Ancestors.Length; level++) {
+            var ancestor = Ancestors[level];
+
+            var address = new ResourceId(
+                tenant,
+                subscription,
+                ConformanceIds.ResourceGroup,
+                ancestor.Type,
+                ConformanceIds.AncestorName(level),
+                Guid.Empty,
+                string.Join('/', Enumerable.Range(0, level).Select(ConformanceIds.AncestorName))
+            );
+
+            var accepted = await Manager.WriteAsync(
+                new() {
+                    Path = address.Path,
+                    ApiVersion = ancestor.ApiVersion,
+                    Verb = WriteVerb.Put,
+                    Body = ancestor.Body(ConformanceIds.Cluster),
+                    Caller = Caller(tenant)
+                },
+                CancellationToken.None
+            );
+
+            accepted.IsSuccess.ShouldBeTrue(
+                $"the harness could not create '{address.Path}', which is the parent every assertion "
+                + $"about '{Case.Type}' hangs off: {accepted.Error?.Message}"
+            );
+
+            var operation = Operation(tenant, accepted.GetValueOrThrow().OperationId);
+
+            for (var drive = 0; drive < 8; drive++) {
+                var status = await operation.DriveAsync();
+                if (status.GetValueOrThrow().IsTerminal) {
+                    break;
+                }
+            }
+
+            var bound = await Index(address).GetAsync();
+
+            bound.GetValueOrThrow().State.ShouldBe(
+                IndexEntryState.Confirmed,
+                $"'{address.Path}' did not reach a confirmed binding, so every create under it will "
+                + "answer the parent-not-found 404 and the failure will name the CHILD's path"
+            );
+        }
     }
 
     /// <inheritdoc />
@@ -291,6 +453,19 @@ public class ProviderTestCluster<TSource> : IAsyncLifetime
                     // that is what ReconcileDriver resolves.
                     services.AddSingleton<IResourceProvider>(_ => TSource.ProviderCase.CreateProvider());
                     services.AddSingleton(TSource.ProviderCase.ReconcilerType);
+
+                    // ⚠ AND EVERY ANCESTOR'S RECONCILER, because the harness creates the ancestors
+                    // and ReconcileDriver resolves each type's reconciler FROM THIS CONTAINER by the
+                    // concrete type the registry stores. One provider declares both a child and its
+                    // parent, so registering only the case's own reconciler leaves the parent's
+                    // create failing inside the silo — as a resolution error nothing on the request
+                    // path can attribute to the harness.
+                    foreach (var reconciler in TSource.Ancestors
+                        .Select(x => x.ReconcilerType)
+                        .Where(x => x != TSource.ProviderCase.ReconcilerType)
+                        .Distinct()) {
+                        services.AddSingleton(reconciler);
+                    }
 
                     services.TryAddSingleton<ILoggerFactory>(_ => NullLoggerFactory.Instance);
                 }

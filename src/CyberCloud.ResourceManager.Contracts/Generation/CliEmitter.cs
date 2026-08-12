@@ -215,8 +215,30 @@ public static class CliEmitter {
         bool longRunning
     ) {
         var flags = new JsonArray();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
 
-        foreach (var flag in Address().AddRange(body).OrderBy(x => x.Name, StringComparer.Ordinal)) {
+        foreach (var flag in Address(type).AddRange(body).OrderBy(x => x.Name, StringComparer.Ordinal)) {
+            // ⚠ THE SIBLING OF THE `commands[name] = …` BUG, AND IT FAILS THE OTHER WAY ROUND. A
+            // JsonObject indexer REPLACES, so a colliding command name left one type out of the tree
+            // and the loss was invisible because an object cannot hold one key twice. A JsonArray
+            // ADDS, so a colliding FLAG name leaves both in — and the loss is equally invisible,
+            // because the host binds by name and whichever it resolves first silently wins.
+            //
+            // FlagsOf folds a colliding body leaf into its dotted path, and that fold is what can
+            // land here: `/properties/servers/name` folds to `--servers-name`, which is exactly the
+            // ancestor flag a `servers/databases` command now carries. The rename is checked against
+            // the address list and the RESULT of the rename is not, so a body that names its parent
+            // type reintroduces the collision the fold exists to remove.
+            if (!seen.Add(flag.Name)) {
+                throw new InvalidOperationException(
+                    $"'{flag.Name}' is the name of two flags on '{CommandOf(type)} {name}'. A verb's "
+                    + "flags are a JSON array, so both would be emitted and the host would bind one "
+                    + "of them — a body property or an ancestor silently unreachable from the "
+                    + "command line. Rename the body property, or give the type a path segment whose "
+                    + "kebab form differs — docs/plan/21 § Grammar."
+                );
+            }
+
             flags.Add(flag.ToJson());
         }
 
@@ -240,7 +262,9 @@ public static class CliEmitter {
     }
 
     static JsonObject ActionVerb(DocumentType type, DocumentAction action, string version) {
-        var body = action.Request is null ? [] : FlagsOf(action.Request, string.Empty);
+        var body = action.Request is null
+            ? []
+            : FlagsOf(action.Request, string.Empty, Address(type));
 
         var verb = Verb(
             Kebab(action.Name),
@@ -278,25 +302,95 @@ public static class CliEmitter {
     /// <summary>
     ///     The flags that address a resource. Every verb takes them and none of them is in the body.
     /// </summary>
+    /// <param name="type">The resource type, whose path template supplies the placeholders.</param>
     /// <remarks>
-    ///     ⚠ Read off the path template's own placeholders rather than listed, so a change to
-    ///     <c>ResourceId</c>'s grammar reaches the CLI without anybody editing this method. The two
-    ///     that are not flags are <c>tenantId</c> and <c>subscriptionId</c> when a profile supplies
-    ///     them — docs/plan/21 § Decisions gives every setting an env var for CI, so they are marked
-    ///     as profile-backed rather than omitted.
+    ///     <para>
+    ///         ⚠ <b>Read off the path template's own placeholders rather than listed, and until
+    ///         2026-08-12 that sentence was in these remarks and was not true.</b> The method returned
+    ///         a hard-coded four — <c>--name</c>, <c>--resource-group</c>, <c>--subscription</c>,
+    ///         <c>--tenant</c> — so a command for a nested type could name the database and never the
+    ///         server. That is a URL the CLI cannot build at all, and nothing said so: the flag list
+    ///         was simply four long for every type, and a reader comparing it against the emitted
+    ///         <c>path</c> on the same verb would have had to notice a placeholder with no flag.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Each address flag now names the placeholder it fills.</b> Without it the binding
+    ///         from <c>--servers-name</c> to <c>{serversName}</c> is a naming convention the host has
+    ///         to re-derive, and a convention shared across a generator and a hand-written host is a
+    ///         convention that drifts. <c>jsonPointer</c> answers the same question for body flags;
+    ///         <c>pathPlaceholder</c> is its address-side twin.
+    ///     </para>
+    ///     <para>
+    ///         The two that are not required are <c>--tenant</c> and <c>--subscription</c> when a
+    ///         profile supplies them — docs/plan/21 § Decisions gives every setting an env var for CI,
+    ///         so they are marked as profile-backed rather than omitted. ⚠ An <i>ancestor</i> flag is
+    ///         required, and cannot be profile-backed: a profile names where you are working, and
+    ///         which server a database is in is part of the address rather than part of the context.
+    ///     </para>
     /// </remarks>
-    static ImmutableArray<CliFlag> Address() => [
-        new("--name", "string", "The resource's name within its group.", Required: true),
-        new("--resource-group", "string", "The resource group. docs/plan/06 § The hierarchy.", Required: true),
-        new("--subscription", "string", "The subscription. Defaults to the current profile.", Required: false) {
-            Environment = "CYC_SUBSCRIPTION"
-        },
-        new("--tenant", "string", "The tenant. Defaults to the current profile.", Required: false) {
-            Environment = "CYC_TENANT"
-        }
-    ];
+    static ImmutableArray<CliFlag> Address(DocumentType type) {
+        var flags = ImmutableArray.CreateBuilder<CliFlag>();
 
-    static ImmutableArray<CliFlag> BodyFlags(DocumentType type) => FlagsOf(type.Body, type.ClusterIdPointer);
+        flags.Add(
+            new("--name", "string", "The resource's name within its group.", Required: true) {
+                PathPlaceholder = DocumentReader.ResourceNamePlaceholder
+            }
+        );
+
+        flags.Add(
+            new(
+                "--resource-group",
+                "string",
+                "The resource group. docs/plan/06 § The hierarchy.",
+                Required: true
+            ) { PathPlaceholder = DocumentReader.ResourceGroupPlaceholder }
+        );
+
+        flags.Add(
+            new(
+                "--subscription",
+                "string",
+                "The subscription. Defaults to the current profile.",
+                Required: false
+            ) {
+                Environment = "CYC_SUBSCRIPTION", PathPlaceholder = DocumentReader.SubscriptionPlaceholder
+            }
+        );
+
+        flags.Add(
+            new("--tenant", "string", "The tenant. Defaults to the current profile.", Required: false) {
+                Environment = "CYC_TENANT", PathPlaceholder = DocumentReader.TenantPlaceholder
+            }
+        );
+
+        foreach (var placeholder in DocumentReader.AncestorPlaceholdersOf(type.Path)) {
+            flags.Add(
+                new(
+                    "--" + AncestorFlagName(placeholder),
+                    "string",
+                    "The name of the parent this "
+                    + type.DisplayName
+                    + " lives inside. docs/plan/12 § Child resources: a child is addressed "
+                    + "'…/{parentType}/{parentName}/{childType}/{childName}', so the parent's name is "
+                    + "part of the address rather than part of the body.",
+                    Required: true
+                ) { PathPlaceholder = placeholder }
+            );
+        }
+
+        return flags.ToImmutable();
+    }
+
+    /// <summary>The flag name an ancestor placeholder takes — <c>{serversName}</c> is <c>servers-name</c>.</summary>
+    /// <remarks>
+    ///     ⚠ The placeholder's own text, kebab-cased, and not a singularised or prettified form of it.
+    ///     Nothing here knows that the singular of <c>servers</c> is <c>server</c>, and a guess that
+    ///     was wrong for one provider would be a flag whose name did not match the URL it fills.
+    /// </remarks>
+    static string AncestorFlagName(string placeholder) => Kebab(placeholder);
+
+    static ImmutableArray<CliFlag> BodyFlags(DocumentType type) =>
+        FlagsOf(type.Body, type.ClusterIdPointer, Address(type));
 
     /// <summary>
     ///     One flag per value leaf of a body schema.
@@ -315,7 +409,11 @@ public static class CliEmitter {
     ///         no value; their leaves do.
     ///     </para>
     /// </remarks>
-    static ImmutableArray<CliFlag> FlagsOf(JsonObject body, string clusterIdPointer) {
+    static ImmutableArray<CliFlag> FlagsOf(
+        JsonObject body,
+        string clusterIdPointer,
+        ImmutableArray<CliFlag> address
+    ) {
         var leaves = DocumentReader.LeavesOf(body).Where(x => !x.IsObject).ToList();
         var taken = new Dictionary<string, int>(StringComparer.Ordinal);
 
@@ -327,9 +425,10 @@ public static class CliEmitter {
 
         foreach (var leaf in leaves) {
             // ⚠ Reserved by the address flags above. A body property called `name` is not the
-            // resource's name and must not share its flag.
+            // resource's name and must not share its flag — and for a nested type the reserved set is
+            // longer than four, which is why the list is passed in rather than rebuilt from nothing.
             var collides = taken[leaf.Name] > 1
-                           || Address().Any(x => string.Equals(
+                           || address.Any(x => string.Equals(
                                x.Name,
                                "--" + Kebab(leaf.Name),
                                StringComparison.Ordinal
@@ -499,6 +598,20 @@ public readonly record struct CliFlag(string Name, string Type, string Summary, 
     /// <summary>The body pointer this flag sets, or <c>""</c> for an address flag.</summary>
     public string JsonPointer { get; init; } = string.Empty;
 
+    /// <summary>
+    ///     The <c>{…}</c> placeholder in the verb's <c>path</c> this flag fills, or <c>""</c> for a
+    ///     body flag.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b><see cref="JsonPointer" />'s address-side twin, and a nested type is what made it
+    ///     necessary.</b> With four fixed address flags the host could hard-code which placeholder
+    ///     each one filled. A child's ancestors are per-type — <c>{serversName}</c> for one, a
+    ///     different segment for the next — so a host inferring them from the flag NAME would be
+    ///     re-deriving a convention this emitter owns, and the two would drift the first time either
+    ///     side changed how a segment is kebab-cased.
+    /// </remarks>
+    public string PathPlaceholder { get; init; } = string.Empty;
+
     /// <summary>A second name for the same flag, or <c>""</c>.</summary>
     public string Alias { get; init; } = string.Empty;
 
@@ -567,6 +680,12 @@ public readonly record struct CliFlag(string Name, string Type, string Summary, 
             // ⚠ The pointer, not a dotted path: it is what the host builds the request body at and
             // what an error's `target` comes back as, so a failed flag highlights itself.
             node["jsonPointer"] = JsonPointer;
+        }
+
+        if (PathPlaceholder.Length > 0) {
+            // ⚠ Which `{…}` in the verb's own `path` this flag fills. The host substitutes rather
+            // than guessing from the flag's name — see the member's remarks.
+            node["pathPlaceholder"] = PathPlaceholder;
         }
 
         if (Environment.Length > 0) {

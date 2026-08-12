@@ -155,4 +155,55 @@ public interface IProviderCaseSource {
     ///     will ever implement this one outside C#.
     /// </remarks>
     static abstract ProviderConformanceCase ProviderCase { get; }
+
+    /// <summary>
+    ///     The cases of <see cref="ProviderCase" />'s ancestors, <b>outermost first</b>. Empty for a
+    ///     top-level type; one entry for a <c>servers/databases</c>; two at depth 3.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>A child cannot be created until its parent exists</b> —
+    ///         <c>ResourceManagerService.ResolveAsync</c> reads the parent's index binding on every
+    ///         create and answers the same 404 as "no such resource" when it is absent. So a
+    ///         conformance run for a child type has to bring a parent into being before its first
+    ///         assertion, and the harness needs three things to do that: the parent's type, its
+    ///         api-version and a body its schema accepts. The first is a pure function of
+    ///         <see cref="ProviderConformanceCase.Type" />; the other two are not derivable from
+    ///         anything, and a body synthesised from the parent's <c>ResourceSchema</c> would be the
+    ///         harness guessing at a provider's own validation rules.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>It is here, on the source, rather than a member of
+    ///         <see cref="ProviderConformanceCase" />, and that is the whole design.</b> Every member
+    ///         of that record is <c>required</c> on purpose and
+    ///         <c>SuiteRejectionTests.EveryCaseFieldIsRequiredSoAPartialRegistrationDoesNotCompile</c>
+    ///         enforces it — <i>"an optional member is an assertion the suite quietly stops making for
+    ///         the provider that leaves it out"</i>, which a nullable <c>ParentCase</c> would be
+    ///         exactly. A <c>required</c> one would be no better from the other side: the four
+    ///         providers that ship today have no child, and making them each write
+    ///         <c>Ancestors = []</c> would put the cost of the first child type on every provider that
+    ///         does not have one.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>A <c>static virtual</c> with a default is an optional member, and the reason it is
+    ///         not the failure that rule describes is that omitting it is not silent.</b> The rule's
+    ///         objection is to an assertion that <i>stops being made</i>. Nothing stops here: a
+    ///         depth-1 case has no ancestors to describe, and a depth-2 case that leaves this empty
+    ///         does not run a smaller suite — it runs no suite at all.
+    ///         <c>ProviderTestCluster.AncestorsOf</c> refuses the mismatch by name before a single
+    ///         test does anything, and <c>SuiteRejectionTests.ADepthTwoSourceWithNoAncestorsIsRefused</c>
+    ///         is the calibration that says so. The count is checked against
+    ///         <c>ResourceTypeName.Depth</c>, which is derived from the type path and cannot be
+    ///         under-declared any more than <see cref="ProviderConformanceCase.Objects" /> can.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Composed rather than restated.</b> A provider that ships <c>servers/databases</c>
+    ///         must also ship <c>servers</c>, and <c>src/Providers/README.md</c> makes <c>servers</c>
+    ///         unregisterable until it has a conformance case of its own — so the object this member
+    ///         wants already exists in that provider's <c>.Conformance</c> project and is reused. A
+    ///         second description of the parent, written for the child's benefit, would be a second
+    ///         thing to keep in step with the parent's schema.
+    ///     </para>
+    /// </remarks>
+    static virtual ImmutableArray<ProviderConformanceCase> Ancestors => [];
 }
