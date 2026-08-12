@@ -143,4 +143,92 @@ public static partial class IdentityLog {
         Message = "A request named an address with no account: identifier {IdentifierDigest} in tenant {TenantId}. The caller was told nothing."
     )]
     public static partial void UnknownAddressProbed(ILogger logger, Guid tenantId, string identifierDigest);
+
+    /// <summary>A self-serve sign-up was requested. ⚠ No address, and no answer about one.</summary>
+    /// <param name="logger">The sink.</param>
+    /// <param name="tenantId">Which tenant.</param>
+    /// <remarks>
+    ///     Deliberately carries neither the address nor whether it was free.
+    ///     <see cref="UnknownAddressProbed" /> is the line that records the distinction, and it
+    ///     records it as a digest — so the two together let an operator see enumeration pressure
+    ///     without either line holding an address.
+    /// </remarks>
+    [LoggerMessage(
+        EventId = 1106,
+        Level = LogLevel.Information,
+        Message = "A self-serve sign-up was requested in tenant {TenantId}. The caller was told nothing about the address."
+    )]
+    public static partial void SignUpRequested(ILogger logger, Guid tenantId);
+
+    /// <summary>A passkey assertion challenge could not be built.</summary>
+    /// <param name="logger">The sink.</param>
+    /// <param name="tenantId">Which tenant.</param>
+    /// <param name="reason">The library's reason, which never reaches the caller.</param>
+    /// <remarks>
+    ///     ⚠ Not the same thing as "that address has no passkey", which is not an error and must not
+    ///     be logged as one — an address with no account gets a real discoverable-credential
+    ///     challenge. Reaching this line means the WebAuthn library itself refused, which is a
+    ///     configuration fault (a relying-party id that does not match the origin, most often).
+    /// </remarks>
+    [LoggerMessage(
+        EventId = 1107,
+        Level = LogLevel.Warning,
+        Message = "A passkey assertion challenge could not be built in tenant {TenantId}: {Reason}."
+    )]
+    public static partial void PasskeyChallengeRefused(ILogger logger, Guid tenantId, string reason);
+
+    /// <summary>A passkey assertion was refused.</summary>
+    /// <param name="logger">The sink.</param>
+    /// <param name="tenantId">Which tenant.</param>
+    /// <param name="reason">
+    ///     The internal reason, which never reaches the caller. ⚠ Includes the WebAuthn library's own
+    ///     message, which distinguishes a wrong origin from a bad signature — useful here and an
+    ///     oracle in a response body.
+    /// </param>
+    [LoggerMessage(
+        EventId = 1108,
+        Level = LogLevel.Information,
+        Message = "A passkey assertion was refused in tenant {TenantId}: {Reason}."
+    )]
+    public static partial void PasskeyAssertionRefused(ILogger logger, Guid tenantId, string reason);
+
+    /// <summary>A second factor was refused, so the session stays unusable.</summary>
+    /// <param name="logger">The sink.</param>
+    /// <param name="tenantId">Which tenant.</param>
+    /// <param name="userId">Whose session. ⚠ Known here — the first factor already verified.</param>
+    /// <param name="reason">The internal reason, which never reaches the caller.</param>
+    /// <remarks>
+    ///     ⚠ <c>totp-replayed</c> is the one value here worth an alert. It means a code was valid
+    ///     <i>and</i> already spent, which is either a double-submitted form or somebody replaying a
+    ///     code they observed — and the two are indistinguishable at this endpoint.
+    /// </remarks>
+    [LoggerMessage(
+        EventId = 1109,
+        Level = LogLevel.Information,
+        Message = "A second factor was refused for user {UserId} in tenant {TenantId}: {Reason}."
+    )]
+    public static partial void SecondFactorRefused(
+        ILogger logger,
+        Guid tenantId,
+        Guid userId,
+        string reason
+    );
+
+    /// <summary>A recovery code was redeemed and is now spent.</summary>
+    /// <param name="logger">The sink.</param>
+    /// <param name="tenantId">Which tenant.</param>
+    /// <param name="userId">Whose code.</param>
+    /// <remarks>
+    ///     ⚠ Warning rather than Information, and it is the only second-factor success that is. A
+    ///     recovery code is the break-glass credential — docs/plan/11 § Credentials, "the thing that
+    ///     prevents 'I lost my phone' tickets" — so one being burnt is either a user who genuinely
+    ///     lost their authenticator or an attacker who obtained the printed sheet. It is worth
+    ///     surfacing either way, and it is rare enough that the volume costs nothing.
+    /// </remarks>
+    [LoggerMessage(
+        EventId = 1110,
+        Level = LogLevel.Warning,
+        Message = "A recovery code was burnt for user {UserId} in tenant {TenantId}. The session is now fully authenticated."
+    )]
+    public static partial void RecoveryCodeBurnt(ILogger logger, Guid tenantId, Guid userId);
 }

@@ -42,6 +42,15 @@
     </ItemGroup>
 
     <ItemGroup>
+        <!--
+          ⚠ IGrainFactory.ForTenant. Every grain reference in this assembly goes through it, because
+          this host is an Orleans CLIENT and Orleans.Multitenant's TenantSeparatingCallFilter never
+          runs for a client — docs/plan/00 § The tenant-separation row, corrected. The gateway
+          carries the identical line for the identical reason.
+        -->
+        <PackageReference Include="Orleans.Multitenant"/>
+        <!-- OrleansApplication.CreateClient calls UseAutofac, so a module graph is mandatory. -->
+        <PackageReference Include="Volo.Abp.Autofac"/>
         <!-- ADR-015. ⚠ 7.6.0, not docs/plan/02's 7.3.0 — see Directory.Packages.props § Identity. -->
         <PackageReference Include="OpenIddict.AspNetCore"/>
         <PackageReference Include="OpenIddict.Server.AspNetCore"/>
@@ -56,6 +65,13 @@
     </ItemGroup>
 
     <ItemGroup>
+        <!--
+          ⚠ ServiceDefaults is what makes this an Orleans client rather than a bare web app.
+          OrleansApplication.CreateClient lives here, and without it there is no IGrainFactory in the
+          container — so SignInService cannot be resolved, and the sign-in endpoints cannot exist.
+          It is the same reference the gateway takes for the same call.
+        -->
+        <ProjectReference Include="../../CyberCloud.ServiceDefaults/CyberCloud.ServiceDefaults.csproj"/>
         <ProjectReference Include="../../CyberCloud.Identity/CyberCloud.Identity.csproj"/>
         <ProjectReference Include="../../CyberCloud.Identity.Contracts/CyberCloud.Identity.Contracts.csproj"/>
     </ItemGroup>

@@ -3,12 +3,22 @@ import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
 import { XuiButton } from '@xui/button';
 import { XuiInput } from '@xui/input';
-import { IdentityApi } from '../identity-api';
-import { passkeyUnavailableReason } from '../passkey';
+import { IdentityApi, SignInResultResponse } from '../identity-api';
+import { NAVIGATE } from '../navigate';
+import { assertPasskey, passkeyUnavailableReason } from '../passkey';
 import { sanitizeReturnUrl } from '../return-url';
 
-/** Which half of the two-step form is showing. */
-type Step = 'address' | 'credential';
+/**
+ * Which step of the form is showing.
+ *
+ * ⚠ `second-factor` is reached only from a server response that set `secondFactorRequired`, never
+ * from anything this page decides. A page that could put itself into this step would be a page that
+ * could skip the first factor.
+ */
+type Step = 'address' | 'credential' | 'second-factor';
+
+/** Which second factor the user is presenting. */
+type SecondFactor = 'totp' | 'recoveryCode';
 
 /**
  * The sign-in page.
@@ -76,7 +86,7 @@ type Step = 'address' | 'credential';
             autocomplete="username"
             inputmode="email"
             required
-            [disabled]="step() === 'credential'"
+            [disabled]="step() !== 'address'"
             [(ngModel)]="email"
             [attr.aria-describedby]="step() === 'credential' ? 'cc-email-hint' : null"
           />
@@ -159,6 +169,51 @@ type Step = 'address' | 'credential';
           }
         }
 
+        @if (step() === 'second-factor') {
+          <div class="flex flex-col gap-1.5">
+            <label class="text-sm font-medium" for="cc-code">
+              @if (factor() === 'totp') {
+                <span i18n="@@identity.signIn.totpLabel">Authenticator code</span>
+              } @else {
+                <span i18n="@@identity.signIn.recoveryCodeLabel">Recovery code</span>
+              }
+            </label>
+            <!--
+              ⚠ 'autocomplete="one-time-code"' is what lets a phone offer the code from its
+              keyboard, and 'inputmode="numeric"' gives a digit pad. Neither is cosmetic: a
+              six-digit code typed on a full keyboard under time pressure is where people fail.
+
+              ⚠ No 'inputmode' on the recovery-code branch — those are alphanumeric, and forcing a
+              digit pad makes them untypable.
+            -->
+            <input
+              xuiInput
+              id="cc-code"
+              name="code"
+              type="text"
+              autocomplete="one-time-code"
+              [attr.inputmode]="factor() === 'totp' ? 'numeric' : null"
+              required
+              [(ngModel)]="code"
+            />
+            <button
+              xuiButton
+              type="button"
+              variant="link"
+              size="sm"
+              class="self-start px-0"
+              [disabled]="busy()"
+              (click)="onSwitchFactor()"
+            >
+              @if (factor() === 'totp') {
+                <span i18n="@@identity.signIn.useRecoveryCode">Use a recovery code instead</span>
+              } @else {
+                <span i18n="@@identity.signIn.useAuthenticator">Use your authenticator instead</span>
+              }
+            </button>
+          </div>
+        }
+
         <button
           xuiButton
           type="submit"
@@ -166,10 +221,16 @@ type Step = 'address' | 'credential';
           [loading]="busy()"
           [disabled]="busy()"
         >
-          @if (step() === 'address') {
-            <span i18n="@@identity.signIn.continue">Continue</span>
-          } @else {
-            <span i18n="@@identity.signIn.submit">Sign in</span>
+          @switch (step()) {
+            @case ('address') {
+              <span i18n="@@identity.signIn.continue">Continue</span>
+            }
+            @case ('second-factor') {
+              <span i18n="@@identity.signIn.verify">Verify</span>
+            }
+            @default {
+              <span i18n="@@identity.signIn.submit">Sign in</span>
+            }
           }
         </button>
       </form>
@@ -189,6 +250,7 @@ type Step = 'address' | 'credential';
 export class SignInPage {
   readonly #api = inject(IdentityApi);
   readonly #route = inject(ActivatedRoute);
+  readonly #navigate = inject(NAVIGATE);
 
   /**
    * Where to go once the session exists.
@@ -218,8 +280,20 @@ export class SignInPage {
    */
   readonly password = signal('');
 
-  /** Which half of the form is showing. */
+  /** Which step of the form is showing. */
   readonly step = signal<Step>('address');
+
+  /**
+   * The second-factor code, bound to the field.
+   *
+   * ⚠ Cleared on every failure and on every switch between factors, for the same reason
+   * `password` is: a stale value resubmitted against a different account or a different factor is a
+   * failed attempt the user did not make, and failed attempts drive the lockout ladder.
+   */
+  readonly code = signal('');
+
+  /** Which second factor is being presented. */
+  readonly factor = signal<SecondFactor>('totp');
 
   /** Whether a request is in flight. */
   readonly busy = signal(false);
@@ -263,6 +337,18 @@ export class SignInPage {
     // ⚠ Clearing the password is not tidiness. Leaving it set means a user who corrects a typo in
     // their address submits the previous account's password to the new one.
     this.password.set('');
+    // ⚠ And the code, for the same reason one step further along: a stale code submitted against a
+    // freshly-typed address is a failed attempt the user did not make, and failed attempts drive
+    // the lockout ladder.
+    this.code.set('');
+    this.factor.set('totp');
+  }
+
+  /** Switches between the authenticator and a recovery code. */
+  onSwitchFactor(): void {
+    this.factor.set(this.factor() === 'totp' ? 'recoveryCode' : 'totp');
+    this.code.set('');
+    this.error.set(null);
   }
 
   /** Submits whichever step is showing. */
@@ -271,25 +357,66 @@ export class SignInPage {
       return;
     }
 
-    if (this.step() === 'address') {
-      this.#begin();
-      return;
+    switch (this.step()) {
+      case 'address':
+        this.#begin();
+        return;
+      case 'second-factor':
+        this.#verifySecondFactor();
+        return;
+      default:
+        this.#signInWithPassword();
     }
-
-    this.#signInWithPassword();
   }
 
   /**
-   * Starts the WebAuthn ceremony.
+   * Runs the WebAuthn assertion.
    *
-   * ⚠ Not implemented, and it says so rather than pretending. The assertion endpoint
-   * (`/api/signin/passkey/*`) is not built — see the report accompanying this change — and a button
-   * that silently did nothing would read as a broken authenticator.
+   * ⚠ **Three requests' worth of state and none of it is the challenge.** The challenge lives in a
+   * protected HttpOnly cookie the server sets on `begin` and consumes on `complete`, so this page
+   * cannot hold it, cannot forward it, and cannot substitute one. That is deliberate: an assertion
+   * verified against options the client supplied is a signature over data the client chose, which
+   * authenticates nobody.
+   *
+   * ⚠ **A cancelled prompt is not a failure.** `assertPasskey` answers `null` for both "the user
+   * dismissed it" and "the authenticator refused", because WebAuthn does not distinguish them — so
+   * this clears the busy state and says nothing rather than accusing the user's key of failing.
    */
   onUsePasskey(): void {
-    this.error.set(
-      $localize`:@@identity.signIn.passkeyNotWired:Passkey sign-in is not available yet. Use your password.`,
-    );
+    if (this.busy()) {
+      return;
+    }
+
+    this.busy.set(true);
+    this.error.set(null);
+
+    this.#api.beginPasskey(this.email()).subscribe({
+      next: (challenge) => {
+        // An empty options string means the server could not build a challenge — a relying-party
+        // misconfiguration, never an answer about the address. The password field is still there.
+        if (challenge.optionsJson.length === 0) {
+          this.busy.set(false);
+          this.error.set(this.#uniformFailure());
+          return;
+        }
+
+        assertPasskey(challenge.optionsJson).then(
+          (assertion) => {
+            if (assertion === null) {
+              this.busy.set(false);
+              return;
+            }
+
+            this.#api.completePasskey(assertion, this.returnUrl()).subscribe({
+              next: (result) => this.#complete(result),
+              error: () => this.#failed(),
+            });
+          },
+          () => this.#failed(),
+        );
+      },
+      error: () => this.#failed(),
+    });
   }
 
   #begin(): void {
@@ -302,15 +429,7 @@ export class SignInPage {
         this.step.set('credential');
         this.busy.set(false);
       },
-      error: () => {
-        // ⚠ The same message a rejected credential produces. A distinct "something went wrong" for
-        // a transport failure is a side channel: an attacker who can tell a 500 from a rejection
-        // learns which addresses reach a code path that touches a grain.
-        this.error.set(
-          $localize`:@@identity.signIn.uniformFailure:The email address or credential is incorrect, or the account cannot sign in right now.`,
-        );
-        this.busy.set(false);
-      },
+      error: () => this.#failed(),
     });
   }
 
@@ -319,28 +438,76 @@ export class SignInPage {
     this.error.set(null);
 
     this.#api.signInWithPassword(this.email(), this.password(), this.returnUrl()).subscribe({
-      next: (result) => {
-        this.busy.set(false);
-
-        if (!result.succeeded) {
-          this.error.set(result.message);
-          this.password.set('');
-          return;
-        }
-
-        // ⚠ Sanitized again, on a value the server already sanitized. Belt and braces on the
-        // control whose failure mode is a credible phishing page — and the two checks guard
-        // different things, because a compromised or simply wrong server response is exactly the
-        // case where the client-side check is the only one left.
-        window.location.assign(sanitizeReturnUrl(result.returnUrl));
-      },
-      error: () => {
-        this.error.set(
-          $localize`:@@identity.signIn.uniformFailure:The email address or credential is incorrect, or the account cannot sign in right now.`,
-        );
-        this.password.set('');
-        this.busy.set(false);
-      },
+      next: (result) => this.#complete(result),
+      error: () => this.#failed(),
     });
+  }
+
+  #verifySecondFactor(): void {
+    this.busy.set(true);
+    this.error.set(null);
+
+    const request =
+      this.factor() === 'totp'
+        ? this.#api.verifyTotp(this.code(), this.returnUrl())
+        : this.#api.redeemRecoveryCode(this.code(), this.returnUrl());
+
+    request.subscribe({
+      next: (result) => this.#complete(result),
+      error: () => this.#failed(),
+    });
+  }
+
+  /**
+   * Handles a credential response — the one place any of them is interpreted.
+   *
+   * ⚠ **`secondFactorRequired` is checked before the navigation and not after.** A password
+   * sign-in succeeds and still owes a factor; navigating on `succeeded` alone would send the user
+   * to `/authorize` holding a cookie the server marks `2fa=pending`, which bounces them straight
+   * back to this page with no explanation. That is a loop rather than a hole — the server fails
+   * closed — but it is indistinguishable from a broken sign-in to the person in front of it.
+   */
+  #complete(result: SignInResultResponse): void {
+    this.busy.set(false);
+
+    if (!result.succeeded) {
+      this.error.set(result.message);
+      this.password.set('');
+      this.code.set('');
+      return;
+    }
+
+    if (result.secondFactorRequired) {
+      // ⚠ The password is cleared on the way into this step. It is not needed again, and a signal
+      // still holding it while the user types a code is a credential kept alive for no reason.
+      this.password.set('');
+      this.code.set('');
+      this.step.set('second-factor');
+      return;
+    }
+
+    // ⚠ Sanitized again inside NAVIGATE, on a value the server already sanitized. Belt and braces
+    // on the control whose failure mode is a credible phishing page — and the two checks guard
+    // different things, because a compromised or simply wrong server response is exactly the case
+    // where the client-side check is the only one left.
+    this.#navigate(result.returnUrl);
+  }
+
+  /**
+   * The transport-failure branch, shared by every request this page makes.
+   *
+   * ⚠ The same message a rejected credential produces. A distinct "something went wrong" for a
+   * transport failure is a side channel: an attacker who can tell a 500 from a rejection learns
+   * which addresses reach a code path that touches a grain.
+   */
+  #failed(): void {
+    this.error.set(this.#uniformFailure());
+    this.password.set('');
+    this.code.set('');
+    this.busy.set(false);
+  }
+
+  #uniformFailure(): string {
+    return $localize`:@@identity.signIn.uniformFailure:The email address or credential is incorrect, or the account cannot sign in right now.`;
   }
 }

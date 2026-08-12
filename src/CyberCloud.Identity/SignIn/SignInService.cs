@@ -288,6 +288,45 @@ public sealed class SignInService(
         );
     }
 
+    /// <summary>
+    ///     Resolves a normalized address to the user who holds it, or <see langword="null" />.
+    /// </summary>
+    /// <param name="tenantId">Which tenant.</param>
+    /// <param name="email">The address typed. Normalized here.</param>
+    /// <param name="cancellationToken">Cancels the lookup.</param>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>Public for the same reason <see cref="OpenSessionAsync" /> is, and it carries the
+    ///         same warning.</b> A passkey assertion is verified by the host — the host is what holds
+    ///         the WebAuthn challenge — and verifying one means looking up the credential the
+    ///         assertion names, which means resolving the address first. Exposing the lookup here
+    ///         keeps <c>IEmailIndexGrain</c> inside this module: the alternative was the identity
+    ///         host referencing <c>CyberCloud.Tenancy.Contracts</c> so it could name a grain
+    ///         interface, which widens a host's assembly graph for one call.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>THIS IS AN ENUMERATION ORACLE IF IT IS CALLED ON ITS OWN.</b> It answers "does
+    ///         this address have an account", in one grain call, with no lockout gate in front of it
+    ///         and no timing floor around it — every defence
+    ///         <see cref="SignInWithPasswordAsync" /> pays for is in that method rather than in this
+    ///         one. A caller may use it only where the <i>observable</i> answer stays uniform: the
+    ///         passkey path qualifies because a resolved user and an unresolved one both produce a
+    ///         challenge of the same shape, and completion answers
+    ///         <see cref="UniformFailures.SignIn" /> either way.
+    ///     </para>
+    /// </remarks>
+    public async Task<Guid?> ResolveAddressAsync(
+        Guid tenantId,
+        string email,
+        CancellationToken cancellationToken = default
+    ) {
+        var normalized = GrainKeys.NormalizeEmail(email);
+
+        return normalized.TryGetError(out _)
+            ? null
+            : await ResolveAsync(tenantId, normalized.GetValueOrThrow(), cancellationToken);
+    }
+
     async Task<Guid?> ResolveAsync(Guid tenantId, string address, CancellationToken cancellationToken) {
         cancellationToken.ThrowIfCancellationRequested();
 
