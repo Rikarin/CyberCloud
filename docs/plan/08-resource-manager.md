@@ -237,7 +237,7 @@ is holding it" shape — but a caller with no lock anywhere in their hierarchy m
 and find one, and every generated SDK branches on the code. Different recovery, therefore different
 code.
 
-### Soft delete: where a deleted resource lives, what happens to its name, and what happens to its quota
+### Soft delete: where a deleted resource lives, what happens to its name, its quota and its authorization
 
 [06](06-tenancy-and-resource-model.md) § Tags, locks asks for **"7 days for resources carrying data
 (Vault, Storage, databases)"**, and the registry can already say so — `IProviderBuilder`'s
@@ -245,7 +245,7 @@ code.
 `CyberCloud.ResourceManager` reads it**, and all five providers independently declined to declare it
 for the same stated reason: a type advertising `softDeleteDays: 7` through the generated document
 while delete is irreversible is worse than one advertising nothing. **That instinct is right and the
-fix is not to make them declare it.** Honour it first. Three decisions come before any code, and each
+fix is not to make them declare it.** Honour it first. Four decisions come before any code, and each
 one decides the ones after it.
 
 **Decided: a soft-deleted resource moves to a different address, out of its resource group.**
@@ -295,6 +295,40 @@ symmetry; for a soft-deletable type they become tests of the purge, with the ari
 **Billing during retention is [13](13-compute-vm-containers.md)'s to state**, and the same principle
 decides it: charge for capacity that is still allocated, not for a control plane that refuses every
 call.
+
+**Decided: the parent tuple is re-parented, not preserved and not dropped. Direct role assignments on
+the resource are dropped.** These are two answers because they have two different reasons, and
+running them together is how this gets decided wrongly.
+
+The parent edge first. § The write path, end to end's step 8 writes
+`resource:{id}#parent@resourceGroup:{sub}-{rg}` so a new resource is visible to whoever holds a role
+on its group, and `DeleteTearsDownTheDataPlaneAndTheResourceIsGone` asserts that edge is gone after a
+delete. ⚠ **The first decision above already settles what happens to it, and reading the two together
+is what makes this obvious: a soft-deleted resource leaves its resource group.** So the tuple does
+not survive unchanged — while the resource is deleted, a tuple naming the resource group as its
+parent asserts a containment that is no longer true. Preserving it is not the conservative choice, it
+is the wrong one. The edge moves with the resource, to `#parent@subscription:{sub}`, and moves back on
+restore.
+
+Two things fall out, and they are why this beats both alternatives. **The resource is never
+parentless**, so the failure that made the parent tuple necessary in the first place — a resource
+nobody can see, and a silo lost in that window leaving it that way — cannot happen during the
+recovery window either. And the people who can see a deleted resource become the people who hold
+subscription-scoped rights, which is exactly who Azure gives `deletedVaults/read` and
+`purge/action` to. A restore is a subscription-scoped operation; the visibility should match.
+
+Direct role assignments on the resource are a separate question with a security answer rather than a
+modelling one, and Azure's behaviour is the right one to copy: they go with the resource and
+*"must be recreated"* on recovery. ⚠ **The recovery window is used after a compromise or after a
+decommission somebody wants to undo, and those are the cases that decide it.** Silently restoring a
+grant an administrator deliberately removed is an error nobody observes. Making somebody re-grant
+after a restore is an error everybody observes and can fix in a minute. Take the visible failure.
+
+⚠ **Both are data rather than schema, so both are cheap to reverse — but only if a test pins the
+intent now.** Unpinned, the behaviour becomes whatever the implementation happened to do and nobody
+can tell later which way it was decided. Two tests: a restored resource is visible to a subscription
+role holder and to its resource-group role holder, and a role assignment written directly on the
+resource before the delete is absent after the restore.
 
 Three smaller things follow from Azure and are worth taking as they stand. **Purge is a separate
 operation with its own permission** — Azure's `Microsoft.KeyVault/locations/deletedVaults/purge/action`
