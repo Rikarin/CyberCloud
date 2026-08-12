@@ -1,6 +1,7 @@
 using System.CommandLine;
 using CyberCloud.Cli.Commands;
 using CyberCloud.Cli.Configuration;
+using CyberCloud.Cli.Extensions;
 using CyberCloud.Cli.Output;
 
 namespace CyberCloud.Cli;
@@ -37,8 +38,20 @@ static class CycApplication {
 
             var parse = root.Parse(arguments);
 
-            if (parse.Errors.Count > 0)
+            if (parse.Errors.Count > 0) {
+                // ⚠ THE ONE PLACE AN EXTENSION IS EVER CONSULTED, AND ITS POSITION IS THE SECURITY
+                // PROPERTY. Everything cyc owns — `login`, `rest`, `config`, every generated group —
+                // has already matched by the time control reaches here, so no file in any directory
+                // can shadow a built-in verb. docs/plan/21 § Extensions; ExtensionDispatch's remarks
+                // give the full argument, including why this cannot be a check in CommandTree.
+                if (ExtensionDispatch.Resolve(host, globals, tree, globals.Read(parse), arguments) is { } launch) {
+                    using var extensionDeadline = Deadline(host, globals.Read(parse), cancellationToken);
+
+                    return await host.LaunchExtension(launch, extensionDeadline.Token).ConfigureAwait(false);
+                }
+
                 return ErrorWriter.ReportParseErrors(host.Console, format, parse.Errors);
+            }
 
             var values = globals.Read(parse);
 

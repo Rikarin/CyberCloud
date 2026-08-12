@@ -7,13 +7,22 @@ namespace CyberCloud.Cli.Tests;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>The reservation was enforced but untested, and one of the names it protects has
-///         nothing behind it.</b> <c>CommandTree.Build</c> refuses a tree whose group shadows a
-///         host-owned command, but no test exercised that path, so the list could have been reordered
-///         or emptied without a red test. <c>extension</c> is on the list for
-///         <c>cyc extension add</c> (docs/plan/21 § Extensions), which is unimplemented — the
-///         reservation is holding the name open, and that is exactly the kind of guard that rots
-///         quietly.
+///         ⚠ <b>The reservation was enforced but untested.</b> <c>CommandTree.Build</c> refuses a
+///         tree whose group shadows a host-owned command, but no test exercised that path, so the
+///         list could have been reordered or emptied without a red test. <c>extension</c> was on the
+///         list holding a name open for something unimplemented, which is exactly the kind of guard
+///         that rots quietly; <c>cyc extension</c> now exists (docs/plan/21 § Extensions) and every
+///         name on the list has a command behind it.
+///     </para>
+///     <para>
+///         ⚠ <b>This list is not what stops an <i>extension</i> shadowing a built-in, and must not be
+///         made to be.</b> It covers the generated tree, which is ours: a collision there is a build
+///         defect and failing the whole CLI is the right cost. An extension's name comes out of a
+///         directory a user can write, so the same throw would let a file called <c>cyc-login</c>
+///         disable <c>cyc</c> entirely. <c>ExtensionDispatch</c> handles that case instead, by running
+///         only after the parse has already failed — see
+///         <c>ExtensionTests.AShadowingExtensionDoesNotCostTheWholeCli</c>, which is the deliberate
+///         contrast with <see cref="RefusingATreeCostsTheWholeCli" /> below.
 ///     </para>
 ///     <para>
 ///         ⚠ <b>The refusal happens at start-up, not at generation.</b> <c>CliEmitter</c> declares no

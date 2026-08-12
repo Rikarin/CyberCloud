@@ -467,16 +467,22 @@ public sealed class TestingProvider : IResourceProvider {
             ]
         );
 
-    /// <summary>
-    ///     The Kubernetes quantity form, the same one <c>PostgresServers.QuantityPattern</c> declares.
-    /// </summary>
+    /// <inheritdoc cref="KubeQuantity.Pattern" />
     /// <remarks>
-    ///     ⚠ Copied rather than referenced: a test fixture may not take a dependency on a provider, and
-    ///     rule 2 of docs/plan/03 § Assembly graph rules forbids the edge in any case. If the two ever
-    ///     disagree the platform has two quantity grammars, which is the defect
-    ///     <c>KubeQuantity</c>'s remarks are about.
+    ///     ⚠ <b>This was a copy, and the reason it was a copy no longer reaches it.</b> The note here
+    ///     said it was "copied rather than referenced" because a test fixture may not depend on a
+    ///     provider and rule 2 of docs/plan/03 § Assembly graph rules forbids the edge — both still
+    ///     true, and both were arguments against referencing <c>PostgresServers.QuantityPattern</c>
+    ///     specifically. They say nothing about <see cref="KubeQuantity" />, which lives in
+    ///     <c>CyberCloud.ResourceManager.Contracts</c> — the assembly this fixture already builds its
+    ///     <see cref="ResourceSchema" /> from, already imported by <c>GlobalUsings.cs</c>.
+    ///     <para>
+    ///         A fixture's copy is a smaller problem than a shipping assembly's, but it is the same
+    ///         problem: this one described itself as matching a <i>provider's</i> string rather than
+    ///         the parser's, which is the orientation that produced the second parser.
+    ///     </para>
     /// </remarks>
-    public const string QuantityPattern = @"\d+(\.\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?";
+    public const string QuantityPattern = KubeQuantity.Pattern;
 
     /// <summary>A body that satisfies <see cref="SizedSchema" />.</summary>
     /// <param name="replicas">How many instances.</param>

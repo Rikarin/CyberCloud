@@ -22,9 +22,10 @@ namespace CyberCloud.Cli;
 ///         cannot load a managed assembly — measured: every load path throws
 ///         <c>PlatformNotSupportedException</c>, and the call does not even compile in this project,
 ///         because <c>EnableAotAnalyzer</c> plus <c>TreatWarningsAsErrors</c> makes it
-///         <c>error IL2026</c>. Recorded as a defect in docs/plan/21 § Extensions, which needs a
-///         decision before anything is built. The two surviving reasons above still carry this
-///         design on their own.
+///         <c>error IL2026</c>. docs/plan/21 § Extensions now specifies out-of-process extensions
+///         instead (<c>CyberCloud.Cli.Extensions</c>), which add no group to this tree at all: they
+///         are dispatched after the parse fails, so nothing here changes and the third reason stays
+///         void. The two surviving reasons above carry this design on their own.
 ///     </para>
 ///     <para>
 ///         ⚠ <b>The alias table is generated and this file is the proof.</b> docs/plan/21 § Grammar
@@ -49,6 +50,37 @@ static class CommandTree {
     static readonly string[] ReservedGroups = [
         "login", "logout", "account", "rest", "config", "completion", "complete", "extension", "version",
     ];
+
+    /// <summary>
+    ///     Every name the root command answers to for one tree — the host's own, plus the tree's
+    ///     groups.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>The extension model's shadowing check reads this, and it has to include the
+    ///         generated half.</b> <see cref="ReservedGroups" /> is nine fixed names; the groups a
+    ///         release actually carries are whatever the provider registry emitted, and an extension
+    ///         called <c>postgres</c> is exactly as unreachable as one called <c>login</c>. Reading
+    ///         both from one place is what keeps <c>cyc extension add</c>'s refusal in step with the
+    ///         surface it is protecting.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Case-insensitive, unlike <see cref="Group" />'s own check.</b> An extension name
+    ///         is forced lower-case (<c>ExtensionStore.IsLegalName</c>) and a generated group is
+    ///         lower-case in practice, so the comparison only ever differs for a tree that broke that
+    ///         habit — and there the safe answer is to treat the names as colliding.
+    ///     </para>
+    /// </remarks>
+    /// <param name="tree">The verb tree the surface is built from.</param>
+    public static IReadOnlySet<string> TopLevelNames(VerbTreeDocument tree) {
+        ArgumentNullException.ThrowIfNull(tree);
+
+        var names = new HashSet<string>(ReservedGroups, StringComparer.OrdinalIgnoreCase);
+
+        names.UnionWith(tree.Groups.Keys);
+
+        return names;
+    }
 
     /// <summary>Builds the whole command surface.</summary>
     /// <param name="host">The host.</param>

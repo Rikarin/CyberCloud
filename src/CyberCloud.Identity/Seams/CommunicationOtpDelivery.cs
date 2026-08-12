@@ -125,9 +125,21 @@ public sealed record OtpDeliveryRoute {
 ///         days, and the exposure needs log access that this platform treats as privileged.
 ///         <b>The honest follow-up is an HMAC under the same vault-resolved pepper
 ///         <c>AddCyberCloudIdentity</c> already takes for Argon2id</b>, which costs the caller
-///         nothing and makes the digest useless without the vault. It is not done here because
-///         plumbing a second use of the pepper through the host is a change to the host's start-up
-///         contract, and this change is already one.
+///         nothing and makes the digest useless without the vault.
+///     </para>
+///     <para>
+///         ⚠ <b>THAT FOLLOW-UP IS STILL OWED, AND THE REASON IT WAS DEFERRED NO LONGER APPLIES —
+///         which is worth saying plainly rather than leaving the paragraph above to read as though
+///         it did.</b> The deferral was "plumbing a second use of the pepper through the host is a
+///         change to the host's start-up contract". That plumbing now exists:
+///         <c>AddCyberCloudIdentity</c> builds an <c>OtpCodeProtector</c> from the same span and
+///         registers it, because <see cref="OtpPolicy" /> property 4 makes a keyed digest the
+///         condition on storing a six-digit code at all. What remains is a decision about
+///         <i>this</i> key rather than about wiring: the value is a grain key, so changing how it is
+///         derived retires every in-flight deduplication record in the hot tier at once, and a
+///         redeploy mid-window would turn every retry that straddles it into a second message. That
+///         is a one-time cost worth taking deliberately, not as a side effect of an unrelated
+///         change — so it stays here, named, with the mechanism to fix it now in the same assembly.
 ///     </para>
 ///     <para>
 ///         ⚠ <b>Every grain reference is <c>ForTenant</c>-qualified, and none of them is made

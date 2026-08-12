@@ -159,24 +159,23 @@ public static class PostgresServers {
     // exists means editing build/Build.Charts.cs, charts/README.md and ADR-010 for a consumer that
     // has no code.
 
-    /// <summary>
-    ///     A Kubernetes quantity — <c>500m</c>, <c>2</c>, <c>4Gi</c>. Anchored by the validator.
-    /// </summary>
-    /// <remarks>
-    ///     ⚠ Deliberately narrower than apimachinery's: no sign, no exponent, no fractional binary
-    ///     suffix. A negative or exponent-form CPU request is legal to the API server and is never what
-    ///     a tenant meant, and a pattern that accepts everything upstream accepts stops being a check.
-    /// </remarks>
-    public const string QuantityPattern = @"\d+(\.\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?";
+    // ⚠ THE QUANTITY GRAMMAR WAS A LOCAL COPY, AND THE COPY COST THE PLATFORM A SECOND QUANTITY
+    // PARSER. Not here: the author who needed to turn one of these strings into a number was reading
+    // ValkeyCaches' copy, and wrote a `double` parser beside it for a grammar the platform already
+    // parsed exactly in `decimal`. The mechanism was the duplication rather than that provider —
+    // whichever copy an author lands on, the parser is not next to it.
+    //
+    // So these two now alias KubeQuantity's, which is where the parser lives. Rule 2 of
+    // docs/plan/03 § Assembly graph rules is untouched: KubeQuantity is in
+    // CyberCloud.ResourceManager.Contracts, which this project already references and every provider
+    // may — no Providers.* edge is created, and GlobalUsings.cs already imports the namespace, so
+    // reaching the shared constant costs a provider author nothing but the name.
 
-    /// <summary>A quantity or the empty string, for a field whose default is "take it from the preset".</summary>
-    /// <remarks>
-    ///     ⚠ The empty alternative is required rather than cosmetic: <see cref="SchemaProperty" />
-    ///     checks its own <see cref="SchemaProperty.DefaultJson" /> against its own constraints at
-    ///     construction, so a pattern that refused <c>""</c> on a property defaulting to <c>""</c>
-    ///     would throw at silo start.
-    /// </remarks>
-    public const string OptionalQuantityPattern = "(" + QuantityPattern + ")?";
+    /// <inheritdoc cref="KubeQuantity.Pattern" />
+    public const string QuantityPattern = KubeQuantity.Pattern;
+
+    /// <inheritdoc cref="KubeQuantity.OptionalPattern" />
+    public const string OptionalQuantityPattern = KubeQuantity.OptionalPattern;
 
     /// <summary>An unquoted PostgreSQL identifier, lower-case.</summary>
     /// <remarks>

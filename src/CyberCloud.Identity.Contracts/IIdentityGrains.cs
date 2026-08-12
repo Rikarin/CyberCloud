@@ -150,6 +150,65 @@ public interface IUserGrain : IGrainWithStringKey {
     Task<Result<bool>> ClaimTotpCounterAsync(long counter);
 
     /// <summary>
+    ///     Mints a one-time code, records it and hands it to <see cref="IOtpDeliverySeam" />.
+    ///     docs/plan/11 § Credentials' email/SMS/WhatsApp OTP rows.
+    /// </summary>
+    /// <param name="purpose">Why. Each purpose has its own challenge, so a sign-in code and a
+    ///     password-reset code outstanding at once do not overwrite each other.</param>
+    /// <param name="kind">
+    ///     Which channel. ⚠ Only <see cref="CredentialKind.EmailOtp" /> works today —
+    ///     <see cref="OtpPolicy" />'s last ⚠ says why the other two are refused rather than sent to
+    ///     an unproven destination.
+    /// </param>
+    /// <returns>
+    ///     Success once the challenge is recorded <i>and</i> the message accepted. ⚠ <b>It carries
+    ///     no code, no destination and no expiry</b>, because the caller is an Orleans client in
+    ///     another process and none of the three is anything it needs. The failure carries a real
+    ///     sentence for the log; the endpoint above it answers
+    ///     <see cref="UniformFailures.OtpSent" /> regardless.
+    /// </returns>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>THE DESTINATION IS READ FROM THIS GRAIN'S STATE AND IS NOT A PARAMETER.</b> An
+    ///         address on the call would let anything holding a half-authenticated session direct a
+    ///         second factor to a mailbox it owns, which turns the second factor into a formality.
+    ///         The verified address is a fact this grain already holds.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Called twice inside <see cref="OtpPolicy.ResendCooldown" /> this redelivers the
+    ///         same code rather than minting another</b>, so a retried call reaches the carrier once
+    ///         — see that member for why the discriminator is time and why it can only be time.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ The write happens <b>before</b> the send, so a crash between them leaves a code the
+    ///         user never received (they resend) rather than a code they hold and the platform has
+    ///         forgotten (they are locked out and nothing says why).
+    ///     </para>
+    /// </remarks>
+    Task<Result> IssueOtpAsync(OtpPurpose purpose, CredentialKind kind);
+
+    /// <summary>
+    ///     Answers a challenge issued by <see cref="IssueOtpAsync" />, and burns it.
+    /// </summary>
+    /// <param name="purpose">Which challenge.</param>
+    /// <param name="candidate">What was typed.</param>
+    /// <returns>
+    ///     <c>true</c> only when a live challenge for <paramref name="purpose" /> existed, had
+    ///     attempts left, and matched. ⚠ <b>A <c>true</c> is returned at most once per issued
+    ///     code</b>: the challenge is removed before this call's state write completes, and the
+    ///     grain is single-threaded, so a second presentation of a correct code finds nothing.
+    /// </returns>
+    /// <remarks>
+    ///     ⚠ <b>Every failure is the same <c>false</c> and takes the same shape.</b> No live
+    ///     challenge, an expired one, an exhausted one and a wrong code are four different facts and
+    ///     one answer — a caller that could tell them apart could tell whether a code is outstanding
+    ///     for an account, and how many guesses are left. The comparison itself is constant-time
+    ///     over the keyed digests; ordinary string equality on six digits returns as soon as two
+    ///     characters differ, which is a side channel on a value with only a million candidates.
+    /// </remarks>
+    Task<Result<bool>> RedeemOtpAsync(OtpPurpose purpose, string candidate);
+
+    /// <summary>
     ///     Mints a fresh batch of recovery codes, invalidating any previous batch.
     /// </summary>
     /// <returns>The plaintext codes — the only time they exist. The grain keeps hashes.</returns>

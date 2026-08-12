@@ -27,6 +27,7 @@ static class HostCommands {
             AccountCommands.Build(host, globals, tree),
             RestCommand.Build(host, globals, tree),
             ConfigCommands.Build(host, globals, tree),
+            ExtensionCommands.Build(host, globals, tree),
             CompletionCommand.Build(host),
             VersionCommand(host, tree),
         ];

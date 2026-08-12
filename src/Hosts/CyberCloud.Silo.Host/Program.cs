@@ -61,7 +61,22 @@ var builder = OrleansApplication.CreateSilo(
     // CommunicationSiloBuilderExtensions on why the refusing seams are registered rather than
     // omitted. A channel with no provider at all would fail with a wiring error instead, which is
     // the message an operator cannot act on.
-    configureCluster: silo => silo.AddCyberCloudCommunication(),
+    // ── The identity module — docs/plan/11, docs/plan/04 § Silo composition ────────────────────
+    //
+    // ⚠ THIS IS WHAT MAKES A ONE-TIME CODE POSSIBLE ANYWHERE IN THE PLATFORM, AND ITS ABSENCE WAS
+    // NOT A REGISTRATION OVERSIGHT — it was the reason three separate comments in this tree claimed
+    // UnavailableOtpDelivery was "what every host gets" while no host had one at all.
+    //
+    // The ProjectReference in this .csproj is what puts the identity grains in the silo (Orleans
+    // DISCOVERS grains by scanning referenced assemblies); AddSiloIdentity below is what registers
+    // the services their constructors ask for, including the IOtpDeliverySeam that
+    // UserGrain.IssueOtpAsync calls. Either one without the other is a silo that fails at the first
+    // activation rather than at start-up.
+    //
+    // ⚠ It goes BESIDE AddCyberCloudCommunication and not instead of it: the seam adapter resolves
+    // IMessageSender, which that call is what provides. OtpPolicy carries the argument for why the
+    // code is minted, stored and verified here rather than in CyberCloud.Identity.Host.
+    configureCluster: silo => silo.AddCyberCloudCommunication().AddSiloIdentity(),
     configureStorage: (silo, storage) => silo.AddCyberCloudTenancy(storage)
 );
 

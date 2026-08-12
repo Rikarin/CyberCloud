@@ -159,8 +159,12 @@ public static class ValkeyCaches {
     // which this project already references and every provider may. LabelSyntax's neighbourhood was the
     // tidier home and this one is the one that makes the next author land on the parser.
     //
-    // ⚠ PostgresServers and KafkaClusters still declare their own copies. Both are out of this change's
-    // scope; until they follow, the duplication that produced the second parser survives in two places.
+    // ⚠ CORRECTED 2026-08-12. This said "PostgresServers and KafkaClusters still declare their own
+    // copies … the duplication that produced the second parser survives in two places." They followed
+    // the same day, along with TestProvider: all four declarations now alias this constant, and the
+    // four strings were verified byte-identical first, so nothing had drifted and no emitted `pattern`
+    // moved in openapi/, generated/ or values.schema.json. QuantityParserTests fails if a fifth copy
+    // or a second suffix table appears — both halves sabotage-tested against a planted probe.
 
     /// <inheritdoc cref="KubeQuantity.Pattern" />
     public const string QuantityPattern = KubeQuantity.Pattern;

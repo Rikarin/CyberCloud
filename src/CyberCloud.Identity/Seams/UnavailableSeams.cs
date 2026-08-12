@@ -16,6 +16,17 @@ namespace CyberCloud.Identity.Seams;
 ///         did not call <c>AddCommunicationOtpDelivery</c>. An operator reading this at 03:00 needs
 ///         the name of the call that is missing, not an essay about a module.
 ///     </para>
+///     <para>
+///         ⚠ <b>THIS SENTENCE IS REACHABLE, WHICH IT PREVIOUSLY WAS NOT, AND THAT IS WORTH RECORDING
+///         BECAUSE THREE PLACES USED TO CLAIM OTHERWISE.</b> The remarks here, on
+///         <c>SignInApi.Offered</c> and on <c>IdentityEndpoints</c> all said this type was "what
+///         every host gets". The tree said something emptier: no host registered an
+///         <c>IOtpDeliverySeam</c> at all, and nothing called one, so this refusal existed and could
+///         not be produced. Both halves are now true — <c>UserGrain.IssueOtpAsync</c> is the caller
+///         (see <see cref="OtpPolicy" /> for why it is a grain and not the host) and
+///         <c>CyberCloud.Silo.Host</c> composes the identity module, so a silo that does not
+///         configure <c>CyberCloud:Identity:OtpDelivery</c> answers with exactly this.
+///     </para>
 /// </remarks>
 public sealed class UnavailableOtpDelivery : IOtpDeliverySeam {
     /// <inheritdoc />

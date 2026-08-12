@@ -194,5 +194,19 @@ public enum AuthenticationMethod {
     RecoveryCode = 4,
 
     /// <summary>A client secret or certificate — how a service principal authenticates.</summary>
-    ClientCredential = 5
+    ClientCredential = 5,
+
+    /// <summary>
+    ///     A one-time code delivered to a verified address — <see cref="OtpPolicy" />.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Its own member rather than a reuse of <see cref="Totp" />, even though both spell
+    ///     <c>otp</c> in the <c>amr</c> claim.</b> The two are not the same factor: a TOTP secret
+    ///     lives in an authenticator the user holds, and a delivered code lives in whatever can read
+    ///     their mailbox — so an account recovery that accepted either is only as strong as the
+    ///     weaker one. The audit trail is where that difference has to survive, and docs/plan/11
+    ///     § Auditing is what reads it. The <c>amr</c> collision is RFC 8176's, not ours: it
+    ///     registers one value for both, and inventing a second would be a value nobody else reads.
+    /// </remarks>
+    EmailOtp = 6
 }

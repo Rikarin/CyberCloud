@@ -103,19 +103,19 @@ public sealed class SignInApi(
     ///         <see cref="CredentialKind.Certificate" /> is M2.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The three OTP kinds cannot work at all, and this used to say
-    ///         <c>IOtpDeliverySeam</c> is <c>UnavailableOtpDelivery</c> "in every host in this
-    ///         repository", which is not the state of the tree.</b> No host registers an
-    ///         <c>IOtpDeliverySeam</c> of any kind: <c>AddIdentityHostApi</c> does not, because this
-    ///         host is an Orleans client and the refusing default is registered by
-    ///         <c>AddCyberCloudIdentity</c>, which takes an <c>ISiloBuilder</c>; and
-    ///         <c>CyberCloud.Silo.Host</c> — the only silo in <c>src/Hosts</c> — does not compose the
-    ///         identity module. Nothing calls the seam either. So the difference is not academic: the
-    ///         sentence <c>UnavailableOtpDelivery</c> exists to hand an operator at 03:00 is not what
-    ///         a caller would meet, because that type is not in any host's container. Offering a
-    ///         credential with nothing at all behind it is worse still than offering one that fails
-    ///         loudly. <c>SignInEndpointContractTests.BeginOffersNoCredentialThatCannotWork</c> holds
-    ///         this list to it and names what has to land first.
+    ///         ⚠ <b>The three OTP kinds are still absent, and the reason has changed from "nothing
+    ///         can deliver one" to "they are not first factors".</b> This remark used to say the seam
+    ///         was <c>UnavailableOtpDelivery</c> "in every host in this repository", and then that no
+    ///         host registered an <c>IOtpDeliverySeam</c> at all and nothing called one. Both are now
+    ///         out of date: <c>UserGrain.IssueOtpAsync</c> calls the seam, <c>CyberCloud.Silo.Host</c>
+    ///         composes the identity module, and <see cref="CredentialKind.EmailOtp" /> works end to
+    ///         end at <c>/api/signin/otp</c>. It stays out of <i>this</i> list because a delivered
+    ///         code is a <b>second</b> factor: offering it here would let anyone who knows an address
+    ///         make the platform mail that address, unauthenticated and at volume, which is both a
+    ///         carrier bill and an enumeration oracle spelled in somebody's inbox.
+    ///         <see cref="CredentialKind.SmsOtp" /> and <see cref="CredentialKind.WhatsAppOtp" />
+    ///         additionally have no verified destination to go to —
+    ///         <see cref="OtpPolicy" />'s last ⚠.
     ///     </para>
     ///     <para>
     ///         ⚠ Passkey first, and the order is read by the page rather than sorted by it —
@@ -182,11 +182,20 @@ public sealed class SignInApi(
     ///         docs/plan/11 § Sign-up and tenant creation makes self-serve sign-up "email + passkey →
     ///         verify → create tenant → create default subscription and resource group → seed ReBAC →
     ///         optionally provision an in-house cluster", explicitly "a long-running operation with a
-    ///         step list". None of that is built, and the step that gates all of it — mailing the
-    ///         address to verify it — cannot run either: nothing in the tree calls
-    ///         <c>IOtpDeliverySeam.DeliverAsync</c>, and no host registers an implementation of it.
-    ///         See <see cref="Offered" /> for the precise state of that seam, which is emptier than
-    ///         "the refusing default is in place".
+    ///         step list". None of that is built.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The step that gates all of it — mailing the address to verify it — is no longer
+    ///         the blocker, and this paragraph used to say it was.</b> It read that nothing in the
+    ///         tree called <c>IOtpDeliverySeam.DeliverAsync</c> and that no host registered an
+    ///         implementation. Both were true and neither is now: <c>IUserGrain.IssueOtpAsync</c>
+    ///         mints, records and delivers a code, and <see cref="OtpPurpose.Enrolment" /> is the
+    ///         purpose for proving control of an address. What is missing is the <b>user</b> — a
+    ///         code is issued <i>by a user's grain</i>, to an address that grain already holds as
+    ///         verified, and a self-serve sign-up has neither yet. So the verification step needs
+    ///         the two-phase create of docs/plan/06 § Two-phase create in front of it, which is the
+    ///         long-running operation above rather than a mail. <see cref="OtpPolicy" /> is where
+    ///         the destination rule is argued.
     ///     </para>
     ///     <para>
     ///         What <i>is</i> built here is the shape, and the shape is the part with a security
@@ -401,6 +410,111 @@ public sealed class SignInApi(
         }
 
         return Promoted(principal, returnUrl, AuthenticationMethod.Totp);
+    }
+
+    /// <summary>
+    ///     <c>POST /api/signin/otp/send</c> — mails a one-time code to the pending session's user.
+    /// </summary>
+    /// <param name="request">Where to go afterwards. ⚠ No address and no channel; see the remarks.</param>
+    /// <param name="principal">The pending session, from the cookie.</param>
+    /// <param name="cancellationToken">Cancels the call.</param>
+    /// <returns>
+    ///     Always <see cref="UniformFailures.OtpSent" /> with <c>succeeded: false</c> and
+    ///     <c>secondFactorRequired: true</c> — the page renders the message and shows the code field.
+    /// </returns>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>THIS HOST GENERATES NOTHING AND STORES NOTHING.</b> The call below is the whole
+    ///         handler: <c>IUserGrain.IssueOtpAsync</c> mints the code, records a keyed digest of it
+    ///         and hands the plaintext to <c>IOtpDeliverySeam</c>, all inside one grain activation on
+    ///         a silo. <see cref="OtpPolicy" /> carries the four properties that decide it —
+    ///         single-use, restart-survival, a per-user rather than per-replica limit, and a stored
+    ///         value that is useless without the vault — and each of them is a property this process
+    ///         cannot have: it is an Orleans client, it holds no state, and there are N of it.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Neither the address nor the channel is a parameter, on the wire or on the grain
+    ///         call.</b> A caller holding a pending session has proven one factor; letting it name
+    ///         where the second factor is sent would let it send the second factor to itself.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The answer does not depend on whether anything was sent</b>, including when the
+    ///         per-user issue cap was hit and when no delivery seam is wired at all. The reason goes
+    ///         to the log — <c>IdentityLog.OtpNotSent</c> carries the seam's own sentence verbatim,
+    ///         which is what an operator with an unwired silo reads.
+    ///     </para>
+    /// </remarks>
+    public async Task<SignInApiResult> SendEmailOtpAsync(
+        OtpSendRequest? request,
+        ClaimsPrincipal principal,
+        CancellationToken cancellationToken = default
+    ) {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var returnUrl = ReturnUrl.Sanitize(request?.ReturnUrl);
+
+        if (IdentitySessionPrincipal.UserId(principal) is not { } userId) {
+            // No session at all, which .RequireAuthorization() makes unreachable over HTTP. The
+            // uniform sign-in failure rather than OtpSent, because there is nothing to send a code to
+            // and answering "on its way" would be a lie the page would act on.
+            return Reject(returnUrl);
+        }
+
+        var issued = await Tenant()
+            .GetGrain<IUserGrain>(GrainKeys.User(userId))
+            .IssueOtpAsync(OtpPurpose.SignIn, CredentialKind.EmailOtp);
+
+        if (issued.TryGetError(out var refused)) {
+            IdentityLog.OtpNotSent(logger, options.TenantId, userId, refused.Message);
+        } else {
+            IdentityLog.OtpIssued(logger, options.TenantId, userId, OtpPurpose.SignIn, CredentialKind.EmailOtp);
+        }
+
+        return new(new(false, true, returnUrl, UniformFailures.OtpSent));
+    }
+
+    /// <summary>
+    ///     <c>POST /api/signin/otp</c> — the delivered second factor.
+    /// </summary>
+    /// <param name="request">The code typed and where to go afterwards.</param>
+    /// <param name="principal">The pending session, from the cookie. See <see cref="VerifyTotpAsync" />.</param>
+    /// <param name="cancellationToken">Cancels the attempt.</param>
+    /// <remarks>
+    ///     ⚠ <b>One grain call, and the single-use guarantee is inside it rather than here.</b>
+    ///     Unlike <see cref="VerifyTotpAsync" />, which verifies in this process and then claims the
+    ///     counter in a second call, redeeming a delivered code is compare-and-burn in one
+    ///     single-threaded activation — so there is no window between the two halves for a second
+    ///     presentation to slip through. <see cref="OtpPolicy" /> property 1.
+    ///     <para>
+    ///         ⚠ A wrong code, an expired one, one whose five attempts are spent and one for a
+    ///         challenge that was never issued are four facts and one answer here. The grain returns
+    ///         <c>false</c> for all four and this method returns <see cref="Reject" /> — the reason
+    ///         is distinguishable only in the log.
+    ///     </para>
+    /// </remarks>
+    public async Task<SignInApiResult> VerifyEmailOtpAsync(
+        SecondFactorRequest? request,
+        ClaimsPrincipal principal,
+        CancellationToken cancellationToken = default
+    ) {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var returnUrl = ReturnUrl.Sanitize(request?.ReturnUrl);
+
+        if (IdentitySessionPrincipal.UserId(principal) is not { } userId) {
+            return Reject(returnUrl);
+        }
+
+        var redeemed = await Tenant()
+            .GetGrain<IUserGrain>(GrainKeys.User(userId))
+            .RedeemOtpAsync(OtpPurpose.SignIn, request?.Code ?? string.Empty);
+
+        if (redeemed.TryGetError(out _) || !redeemed.GetValueOrThrow()) {
+            IdentityLog.SecondFactorRefused(logger, options.TenantId, userId, "email-otp-rejected");
+            return Reject(returnUrl);
+        }
+
+        return Promoted(principal, returnUrl, AuthenticationMethod.EmailOtp);
     }
 
     /// <summary>

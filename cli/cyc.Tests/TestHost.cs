@@ -1,4 +1,5 @@
 using CyberCloud.Cli.Configuration;
+using CyberCloud.Cli.Extensions;
 using CyberCloud.Cli.VerbTree;
 using CyberCloud.Sdk;
 
@@ -18,12 +19,13 @@ namespace CyberCloud.Cli.Tests;
 sealed class TestHost : IDisposable {
     readonly string stateDirectory;
 
-    TestHost(CycHost host, StringWriter output, StringWriter error, string stateDirectory, List<Uri> browsed) {
+    TestHost(CycHost host, StringWriter output, StringWriter error, string stateDirectory, List<Uri> browsed, List<ExtensionLaunch> launches) {
         Host = host;
         Output = output;
         Error = error;
         this.stateDirectory = stateDirectory;
         Browsed = browsed;
+        Launches = launches;
     }
 
     /// <summary>The host under test.</summary>
@@ -44,8 +46,22 @@ sealed class TestHost : IDisposable {
     /// <summary>Every URL the browser callback was handed.</summary>
     public IReadOnlyList<Uri> Browsed { get; }
 
+    /// <summary>
+    ///     Every extension <c>cyc</c> would have started, in order.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ Recorded rather than started, so a test can read the executable, the arguments and the
+    ///     environment the child would have received — which is the only way to assert that an access
+    ///     token is <i>not</i> in it. <c>ExtensionTests</c> runs one script for real through the
+    ///     unsubstituted launcher, so this seam cannot drift away from what a process actually gets.
+    /// </remarks>
+    public IReadOnlyList<ExtensionLaunch> Launches { get; }
+
     /// <summary>The temporary <c>~/.cyc</c>.</summary>
     public string StateDirectory => stateDirectory;
+
+    /// <summary>The temporary <c>~/.cyc/extensions</c>.</summary>
+    public string ExtensionsDirectory => Path.Combine(stateDirectory, "extensions");
 
     /// <summary>The catalog of trees the CLI assembly carries.</summary>
     public static VerbTreeCatalog Catalog() => VerbTreeCatalog.FromAssembly(typeof(CycApplication).Assembly);
@@ -61,16 +77,25 @@ sealed class TestHost : IDisposable {
     ///     <c>TokenCache.CreateInMemory()</c> in any test that signs in, or the run writes into the
     ///     developer's real keychain.
     /// </param>
+    /// <param name="launchExtension">
+    ///     What to do instead of starting a child process. Defaults to recording the launch in
+    ///     <see cref="Launches" /> and answering <c>0</c>. Pass the real
+    ///     <c>ExtensionLauncher.StartAsync</c> to run one for real.
+    /// </param>
+    /// <param name="executablePath">This <c>cyc</c>'s path, as an extension is told it.</param>
     public static TestHost Create(
         HttpMessageHandler? transport = null,
         IReadOnlyDictionary<string, string>? environment = null,
         string? config = null,
         TokenCredential? credential = null,
         TimeProvider? time = null,
-        Func<CyberCloudCredentialOptions>? credentialOptions = null) {
+        Func<CyberCloudCredentialOptions>? credentialOptions = null,
+        Func<ExtensionLaunch, CancellationToken, Task<int>>? launchExtension = null,
+        string? executablePath = null) {
         var output = new StringWriter();
         var error = new StringWriter();
         var state = Path.Combine(Path.GetTempPath(), "cyc-tests", Guid.NewGuid().ToString("N"));
+        var launches = new List<ExtensionLaunch>();
 
         Directory.CreateDirectory(state);
 
@@ -103,12 +128,21 @@ sealed class TestHost : IDisposable {
             CreateCredentialOptions = credentialOptions ?? (() => new CyberCloudCredentialOptions { TokenCache = TokenCache.CreateInMemory() }),
             StateDirectory = state,
             Time = time ?? TimeProvider.System,
+            ExecutablePath = executablePath ?? FixedExecutablePath,
+            LaunchExtension = launchExtension ?? ((launch, _) => {
+                launches.Add(launch);
+
+                return Task.FromResult(0);
+            }),
         };
 
-        var built = new TestHost(host, output, error, state, browsed);
+        var built = new TestHost(host, output, error, state, browsed, launches);
 
         return built;
     }
+
+    /// <summary>The path an extension is told this <c>cyc</c> lives at, so a test can recognise it.</summary>
+    public const string FixedExecutablePath = "/opt/cyc-tests/cyc";
 
     /// <summary>The access token every test's credential hands out — a sentinel no output may contain.</summary>
     public const string FixedToken = "sentinel-access-token-6f1a9c";

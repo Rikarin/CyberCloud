@@ -152,29 +152,28 @@ public sealed class SignInEndpointContractTests {
     public void BeginOffersNoCredentialThatCannotWork() {
         var offered = SignInApi.Begin(new("someone@example.com")).Offered;
 
-        // ⚠ NO HOST IN THIS REPOSITORY CAN DELIVER AN OTP, AND THE REASON IS WORSE THAN THIS COMMENT
-        // USED TO SAY. It read "IOtpDeliverySeam is UnavailableOtpDelivery in every host", which is
-        // not the state of the tree: no host registers an IOtpDeliverySeam AT ALL. AddIdentityHostApi
-        // does not (this host is an Orleans client and AddCyberCloudIdentity — which is what
-        // registers the refusing default — takes an ISiloBuilder), and CyberCloud.Silo.Host does not
-        // compose the identity module in the first place. Nothing calls the seam either:
-        // IOtpDeliverySeam.DeliverAsync has no production caller anywhere in the tree.
+        // ⚠ THE REASON THIS ROW EXISTS HAS CHANGED, AND THE OLD REASON IS WORTH KEEPING BECAUSE IT
+        // WAS TWICE WRONG. It first read "IOtpDeliverySeam is UnavailableOtpDelivery in every host";
+        // the truth was emptier — no host registered an IOtpDeliverySeam at all and nothing called
+        // one, so the refusal an operator was meant to read did not exist in any container. Both
+        // halves have since landed: UserGrain.IssueOtpAsync calls the seam, CyberCloud.Silo.Host
+        // composes the identity module, and EmailOtp works end to end at /api/signin/otp.
         //
-        // So an OTP kind offered here is not "a button that fails with a good message"; it is a
-        // button with nothing behind it. THREE things have to land before this row should be
-        // revisited, and wiring alone is none of them:
+        // The list still excludes all three, and now for a reason about WHAT A FIRST FACTOR IS. This
+        // endpoint is unauthenticated and reachable at volume by anybody. Offering EmailOtp here
+        // would let a stranger make the platform mail any address they name — a carrier bill, and an
+        // enumeration oracle delivered to somebody's inbox. A delivered code is a SECOND factor,
+        // collected after /api/signin/password or a passkey has already resolved the user, which is
+        // why it lives behind the pending-session cookie instead.
         //
-        //   1. something calls IOtpDeliverySeam — an OTP issuance path, which is a feature;
-        //   2. the process that calls it has one registered — and if that process is this host, then
-        //      AddCommunicationOtpDelivery's ISiloBuilder receiver is the wrong shape for it;
-        //   3. SignInApi.Offered is widened, deliberately, at that point and not before.
-        //
-        // Widening Offered on its own would ship a sign-in page offering a credential that cannot be
-        // sent, which is the failure this row exists to prevent.
+        // SmsOtp and WhatsAppOtp fail an additional test: IUserGrain holds no verified number to send
+        // one to, so IssueOtpAsync refuses them rather than guessing a destination — OtpPolicy's
+        // last ⚠.
         foreach (var kind in new[] { CredentialKind.EmailOtp, CredentialKind.SmsOtp, CredentialKind.WhatsAppOtp }) {
             offered.ShouldNotContain(
                 CredentialKindNames.Of(kind),
-                $"{kind} is offered but cannot be delivered — IOtpDeliverySeam is UnavailableOtpDelivery."
+                $"{kind} is a second factor (and SMS has no verified destination), so it must not be "
+                + "offered as a way to START a sign-in on an unauthenticated endpoint."
             );
         }
     }
@@ -193,7 +192,12 @@ public sealed class SignInEndpointContractTests {
             (Endpoint: "totp (no session)", Result: await api.VerifyTotpAsync(
                 new("000000", "/"), new ClaimsPrincipal(new ClaimsIdentity()), Ct)),
             (Endpoint: "recovery-code (no session)", Result: await api.RedeemRecoveryCodeAsync(
-                new("aaaa-bbbb", "/"), new ClaimsPrincipal(new ClaimsIdentity()), Ct))
+                new("aaaa-bbbb", "/"), new ClaimsPrincipal(new ClaimsIdentity()), Ct)),
+            // ⚠ The delivered code joins the same list rather than getting its own wording. A wrong
+            // code, an expired one, one whose five attempts are spent and one that was never issued
+            // are four facts inside IUserGrain and one string out here.
+            (Endpoint: "otp (no session)", Result: await api.VerifyEmailOtpAsync(
+                new("000000", "/"), new ClaimsPrincipal(new ClaimsIdentity()), Ct))
         };
 
         foreach (var (endpoint, result) in failures) {
@@ -249,6 +253,30 @@ public sealed class SignInEndpointContractTests {
 
         (await api.VerifyTotpAsync(new("000000", "/"), anonymous, Ct)).Principal.ShouldBeNull();
         (await api.RedeemRecoveryCodeAsync(new("code", "/"), anonymous, Ct)).Principal.ShouldBeNull();
+        (await api.VerifyEmailOtpAsync(new("000000", "/"), anonymous, Ct)).Principal.ShouldBeNull();
+
+        // ⚠ And the SEND half, which is the one that would otherwise mail somebody on the say-so of
+        // an anonymous request. The harness's grain factory throws, so a handler that reached for a
+        // grain here fails with a stack trace rather than passing quietly.
+        (await api.SendEmailOtpAsync(new("/"), anonymous, Ct)).Principal.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task SendingACodeNeverTellsTheCallerWhetherOneWentOut() {
+        var api = SignInApiHarness.Build();
+        var anonymous = new ClaimsPrincipal(new ClaimsIdentity());
+
+        // With no session there is nothing to send to, so this is the uniform sign-in refusal rather
+        // than "on its way" — answering OtpSent here would be a lie the page acts on by showing a
+        // code field that can never be satisfied.
+        var noSession = await api.SendEmailOtpAsync(new("/"), anonymous, Ct);
+        noSession.Response.Message.ShouldBe(UniformFailures.SignIn);
+
+        // ⚠ And UniformFailures.OtpSent is deliberately not UniformFailures.SignIn: the two answer
+        // different questions, and a page that could not tell "we tried to send you a code" from
+        // "that did not work" would show the wrong screen. What OtpSent hides is which of sent,
+        // refused-for-quota and no-seam-wired happened — see its own remarks.
+        UniformFailures.OtpSent.ShouldNotBe(UniformFailures.SignIn);
     }
 
     // ── Internals ──────────────────────────────────────────────────────────────────────────────
@@ -259,7 +287,7 @@ public sealed class SignInEndpointContractTests {
     /// </summary>
     /// <remarks>
     ///     ⚠ <b>Every one of them, by construction rather than by a list somebody maintains.</b> The
-    ///     failure this guards against is an eighth endpoint added later whose author sanitizes
+    ///     failure this guards against is a ninth endpoint added later whose author sanitizes
     ///     nothing — so a new handler that is not driven here is the gap, and the only defence is
     ///     that adding one to <see cref="SignInApi" /> without adding it here is visibly incomplete.
     /// </remarks>
@@ -281,7 +309,11 @@ public sealed class SignInEndpointContractTests {
             ("/api/signin/totp", (await api.VerifyTotpAsync(
                 new("000000", candidate), anonymous, Ct)).Response),
             ("/api/signin/recovery-code", (await api.RedeemRecoveryCodeAsync(
-                new("code", candidate), anonymous, Ct)).Response)
+                new("code", candidate), anonymous, Ct)).Response),
+            ("/api/signin/otp", (await api.VerifyEmailOtpAsync(
+                new("000000", candidate), anonymous, Ct)).Response),
+            ("/api/signin/otp/send", (await api.SendEmailOtpAsync(
+                new(candidate), anonymous, Ct)).Response)
         ];
     }
 }

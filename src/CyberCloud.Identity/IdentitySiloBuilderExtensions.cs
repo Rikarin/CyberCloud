@@ -51,8 +51,16 @@ public static class IdentitySiloBuilderExtensions {
 
         var hasher = new Argon2idPasswordHasher(options, pepper);
 
+        // ⚠ THE SAME PEPPER, A SECOND USE, AND IT IS THE ONE CommunicationOtpDelivery'S REMARKS CALL
+        // "the honest follow-up". A one-time code is six digits — a million candidates — so the value
+        // a grain stores has to be a KEYED hash or it is a reversible encoding of the code. See
+        // OtpCodeProtector for what an empty pepper costs, and OtpPolicy property 4 for why this is
+        // the property that decides where issuance lives.
+        var otpCodes = new OtpCodeProtector(pepper);
+
         builder.Services.TryAddSingleton<IClock, SystemClock>();
         builder.Services.TryAddSingleton<IPasswordHasher>(hasher);
+        builder.Services.TryAddSingleton(otpCodes);
         builder.Services.TryAddSingleton<ILockoutCounter, InMemoryLockoutCounter>();
         builder.Services.TryAddSingleton<IOtpDeliverySeam, UnavailableOtpDelivery>();
         builder.Services.TryAddSingleton<ITotpSecretSeam, UnavailableTotpSecrets>();
@@ -122,6 +130,16 @@ public static class IdentitySiloBuilderExtensions {
     ///         exactly one and no order in which a wired host still carries a refusal.
     ///         <c>OtpSeamWiringTests.OptingInLeavesNoRefusingSeamBehindIt</c> is the row that goes
     ///         red if this becomes <c>Add</c> again.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b><c>ISiloBuilder</c> is the right receiver, and that was worth re-deriving rather
+    ///         than assuming.</b> The seam's only caller is <c>UserGrain.IssueOtpAsync</c>, which
+    ///         runs on a silo — so the process that needs an <see cref="IOtpDeliverySeam" /> is
+    ///         exactly the one this extension can be called on. <see cref="OtpPolicy" /> carries the
+    ///         four-property argument for why issuance is a grain's job; the consequence for this
+    ///         method is that no <c>IServiceCollection</c> overload is needed, and adding one would
+    ///         be an overload with no caller. <c>CyberCloud.Identity.Host</c> is an Orleans client
+    ///         and does not want one: it never holds a code.
     ///     </para>
     ///     <para>
     ///         ⚠ <b>The host still owes <c>AddCyberCloudCommunication()</c>.</b> This registers the

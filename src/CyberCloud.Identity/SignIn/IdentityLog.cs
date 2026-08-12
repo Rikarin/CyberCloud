@@ -231,4 +231,48 @@ public static partial class IdentityLog {
         Message = "A recovery code was burnt for user {UserId} in tenant {TenantId}. The session is now fully authenticated."
     )]
     public static partial void RecoveryCodeBurnt(ILogger logger, Guid tenantId, Guid userId);
+
+    /// <summary>A one-time code was issued and handed to <c>CyberCloud.Communication</c>.</summary>
+    /// <param name="logger">The sink.</param>
+    /// <param name="tenantId">Which tenant.</param>
+    /// <param name="userId">Who it was sent to.</param>
+    /// <param name="purpose">Why.</param>
+    /// <param name="kind">Which channel.</param>
+    /// <remarks>
+    ///     ⚠ <b>No code, and no destination.</b> The code is the credential and the destination is an
+    ///     address, which docs/plan/11 § Auditing bans from a log <i>message</i> outright. The four
+    ///     placeholders here are two GUIDs and two enums, which is the invariant
+    ///     <c>PiiNeverReachesALogMessageTests</c> holds this file to — and
+    ///     <c>OtpIssuanceTests.TheCodeNeverReachesALogMessage</c> holds the code to separately,
+    ///     because a code is not PII and would slip past that suite.
+    /// </remarks>
+    [LoggerMessage(
+        EventId = 1111,
+        Level = LogLevel.Information,
+        Message = "A one-time code was issued for user {UserId} in tenant {TenantId}: {Purpose} over {Kind}."
+    )]
+    public static partial void OtpIssued(
+        ILogger logger,
+        Guid tenantId,
+        Guid userId,
+        OtpPurpose purpose,
+        CredentialKind kind
+    );
+
+    /// <summary>A one-time code could not be issued or delivered.</summary>
+    /// <param name="logger">The sink.</param>
+    /// <param name="tenantId">Which tenant.</param>
+    /// <param name="userId">Who it was for.</param>
+    /// <param name="reason">
+    ///     The internal reason, which never reaches the caller — the per-user issue cap, an
+    ///     unenrolled channel, or <c>UnavailableOtpDelivery</c>'s sentence naming the missing
+    ///     <c>AddCommunicationOtpDelivery</c> call. ⚠ <b>This is the one line an operator whose
+    ///     silo is unwired will actually see</b>, so it carries the message verbatim.
+    /// </param>
+    [LoggerMessage(
+        EventId = 1112,
+        Level = LogLevel.Warning,
+        Message = "A one-time code was not sent to user {UserId} in tenant {TenantId}: {Reason}"
+    )]
+    public static partial void OtpNotSent(ILogger logger, Guid tenantId, Guid userId, string reason);
 }
