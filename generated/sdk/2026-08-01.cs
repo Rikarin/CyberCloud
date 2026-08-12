@@ -26,6 +26,297 @@ public static class GeneratedApiVersion {
     public const string Value = "2026-08-01";
 }
 
+/// <summary>The values /properties/extensions accepts. ⚠ Closed: the write path refuses anything else.</summary>
+public enum PostgreSQLServerExtensions {
+    /// <summary>Never assigned. Not a value the API accepts.</summary>
+    Unknown = 0,
+
+    /// <summary>pgvector</summary>
+    [JsonStringEnumMemberName("pgvector")]
+    Pgvector = 1,
+
+    /// <summary>postgis</summary>
+    [JsonStringEnumMemberName("postgis")]
+    Postgis = 2,
+
+    /// <summary>pg_stat_statements</summary>
+    [JsonStringEnumMemberName("pg_stat_statements")]
+    PgStatStatements = 3,
+
+    /// <summary>timescaledb</summary>
+    [JsonStringEnumMemberName("timescaledb")]
+    Timescaledb = 4
+}
+
+/// <summary>The values /properties/pooling/mode accepts. ⚠ Closed: the write path refuses anything else.</summary>
+public enum PostgreSQLServerMode {
+    /// <summary>Never assigned. Not a value the API accepts.</summary>
+    Unknown = 0,
+
+    /// <summary>session</summary>
+    [JsonStringEnumMemberName("session")]
+    Session = 1,
+
+    /// <summary>transaction</summary>
+    [JsonStringEnumMemberName("transaction")]
+    Transaction = 2,
+
+    /// <summary>statement</summary>
+    [JsonStringEnumMemberName("statement")]
+    Statement = 3
+}
+
+/// <summary>The values /properties/sizing/preset accepts. ⚠ Closed: the write path refuses anything else.</summary>
+public enum PostgreSQLServerPreset {
+    /// <summary>Never assigned. Not a value the API accepts.</summary>
+    Unknown = 0,
+
+    /// <summary>s1.nano</summary>
+    [JsonStringEnumMemberName("s1.nano")]
+    S1Nano = 1,
+
+    /// <summary>s1.micro</summary>
+    [JsonStringEnumMemberName("s1.micro")]
+    S1Micro = 2,
+
+    /// <summary>s1.small</summary>
+    [JsonStringEnumMemberName("s1.small")]
+    S1Small = 3,
+
+    /// <summary>s1.medium</summary>
+    [JsonStringEnumMemberName("s1.medium")]
+    S1Medium = 4,
+
+    /// <summary>s1.large</summary>
+    [JsonStringEnumMemberName("s1.large")]
+    S1Large = 5,
+
+    /// <summary>s1.xlarge</summary>
+    [JsonStringEnumMemberName("s1.xlarge")]
+    S1Xlarge = 6,
+
+    /// <summary>s1.2xlarge</summary>
+    [JsonStringEnumMemberName("s1.2xlarge")]
+    S12xlarge = 7,
+
+    /// <summary>s1.4xlarge</summary>
+    [JsonStringEnumMemberName("s1.4xlarge")]
+    S14xlarge = 8
+}
+
+/// <summary>The values /properties/version accepts. ⚠ Closed: the write path refuses anything else.</summary>
+public enum PostgreSQLServerVersion {
+    /// <summary>Never assigned. Not a value the API accepts.</summary>
+    Unknown = 0,
+
+    /// <summary>16</summary>
+    [JsonStringEnumMemberName("16")]
+    N16 = 1,
+
+    /// <summary>17</summary>
+    [JsonStringEnumMemberName("17")]
+    N17 = 2,
+
+    /// <summary>18</summary>
+    [JsonStringEnumMemberName("18")]
+    N18 = 3
+}
+
+/// <summary>The body of a CyberCloud.DBforPostgreSQL/servers.</summary>
+/// <remarks>A managed PostgreSQL cluster on CloudNativePG, with replication, PgBouncer and backup to the tenant's object store.</remarks>
+public sealed partial class PostgreSQLServerData {
+
+    /// <summary>The region the server is billed in.</summary>
+    /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+    [JsonPropertyName("location")]
+    public required string Location { get; set; }
+
+    /// <summary>Object-store URL for base backups and WAL, for example s3://tenant-bucket/postgres. Empty means the platform fills it in from the tenant's default bucket.</summary>
+    /// <remarks>Defaults to "" when left unset.</remarks>
+    [JsonPropertyName("destinationPath")]
+    public string? DestinationPath { get; set; }
+
+    /// <summary>Whether continuous backup and WAL archiving run.</summary>
+    /// <remarks>Defaults to true when left unset.</remarks>
+    [JsonPropertyName("enabled")]
+    public bool? Enabled { get; set; }
+
+    /// <summary>How long base backups and WAL are kept. The point-in-time-recovery window is this number of days.</summary>
+    /// <remarks>Defaults to 14 when left unset.</remarks>
+    [JsonPropertyName("retentionDays")]
+    public long? RetentionDays { get; set; }
+
+    /// <summary>Name of the application database created on first start.</summary>
+    /// <remarks>Defaults to "app" when left unset.</remarks>
+    [JsonPropertyName("database")]
+    public string? Database { get; set; }
+
+    /// <summary>Role that owns the application database.</summary>
+    /// <remarks>Defaults to "app" when left unset.</remarks>
+    [JsonPropertyName("owner")]
+    public string? Owner { get; set; }
+
+    /// <summary>The cluster whose namespace holds the CloudNativePG objects.</summary>
+    /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+    [JsonPropertyName("clusterId")]
+    public required Guid ClusterId { get; set; }
+
+    /// <summary>Extensions to install, from the platform allow-list. An arbitrary-extension escape hatch is a code-execution surface and is not offered.</summary>
+    /// <remarks>Defaults to [] when left unset.</remarks>
+    [JsonPropertyName("extensions")]
+    public IList<PostgreSQLServerExtensions> Extensions { get; set; } = new List<PostgreSQLServerExtensions>();
+
+    /// <summary>Whether CloudNativePG emits a PodMonitor for the platform's metrics stack.</summary>
+    /// <remarks>Defaults to true when left unset.</remarks>
+    [JsonPropertyName("enabled")]
+    public bool? Enabled { get; set; }
+
+    /// <summary>Whether to run a connection pooler. On by default — a managed Postgres without one fails at the first serverless workload, and adding it later changes the connection string.</summary>
+    /// <remarks>Defaults to true when left unset.</remarks>
+    [JsonPropertyName("enabled")]
+    public bool? Enabled { get; set; }
+
+    /// <summary>Number of pooler pods.</summary>
+    /// <remarks>Defaults to 2 when left unset.</remarks>
+    [JsonPropertyName("instances")]
+    public long? Instances { get; set; }
+
+    /// <summary>PgBouncer pooling mode. Transaction pooling is the useful one and breaks session-scoped features such as prepared statements and advisory locks.</summary>
+    /// <remarks>Defaults to "transaction" when left unset.</remarks>
+    [JsonPropertyName("mode")]
+    public PostgreSQLServerMode? Mode { get; set; }
+
+    /// <summary>Number of instances, including the primary. One is a single point of failure and is offered for development only.</summary>
+    /// <remarks>Required on a create. Defaults to 2 when left unset.</remarks>
+    [JsonPropertyName("replicas")]
+    public required long Replicas { get; set; }
+
+    /// <summary>Explicit vCPU quantity in Kubernetes form, for example 500m or 2. Empty means take it from the preset.</summary>
+    /// <remarks>Defaults to "" when left unset.</remarks>
+    [JsonPropertyName("cpu")]
+    public string? Cpu { get; set; }
+
+    /// <summary>Explicit memory quantity in Kubernetes form, for example 4Gi. Empty means take it from the preset.</summary>
+    /// <remarks>Defaults to "" when left unset.</remarks>
+    [JsonPropertyName("memory")]
+    public string? Memory { get; set; }
+
+    /// <summary>A sizing preset from docs/plan/12. Databases use the s1 family, which is 1 vCPU to 4 GiB.</summary>
+    /// <remarks>Defaults to "s1.small" when left unset.</remarks>
+    [JsonPropertyName("preset")]
+    public PostgreSQLServerPreset? Preset { get; set; }
+
+    /// <summary>StorageClass name. Empty means the cluster default.</summary>
+    /// <remarks>⚠ Cannot change after create. Defaults to "" when left unset.</remarks>
+    [JsonPropertyName("class")]
+    public string? Class { get; set; }
+
+    /// <summary>Data volume size in Kubernetes quantity form. Grows online; never shrinks.</summary>
+    /// <remarks>Required on a create. Defaults to "20Gi" when left unset.</remarks>
+    [JsonPropertyName("size")]
+    public required string Size { get; set; }
+
+    /// <summary>Size of the separate write-ahead-log volume. Empty means the WAL shares the data volume.</summary>
+    /// <remarks>Defaults to "" when left unset.</remarks>
+    [JsonPropertyName("walSize")]
+    public string? WalSize { get; set; }
+
+    /// <summary>Whether commits wait for a replica. Costs write latency and removes the window in which a failover loses transactions.</summary>
+    /// <remarks>Defaults to false when left unset.</remarks>
+    [JsonPropertyName("synchronousReplication")]
+    public bool? SynchronousReplication { get; set; }
+
+    /// <summary>Major PostgreSQL version. Minor upgrades are applied automatically in the maintenance window.</summary>
+    /// <remarks>Required on a create. Defaults to "17" when left unset.</remarks>
+    [JsonPropertyName("version")]
+    public required PostgreSQLServerVersion Version { get; set; }
+
+    /// <summary>Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.</summary>
+    [JsonPropertyName("tags")]
+    public IDictionary<string, string> Tags { get; set; } = new Dictionary<string, string>(StringComparer.Ordinal);
+}
+
+/// <summary>One PostgreSQL server, and the operations on it.</summary>
+public sealed partial class PostgreSQLServerResource {
+    /// <summary>The resource's fully qualified id.</summary>
+    public string Id { get; init; } = string.Empty;
+
+    /// <summary>The body, projected at this api-version.</summary>
+    public PostgreSQLServerData Data { get; init; } = new();
+
+    /// <summary>Re-reads the resource.</summary>
+    public partial Task<Response<PostgreSQLServerResource>> GetAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Amends the resource. A merge patch: what is not set is not changed.</summary>
+    public partial Task<Operation<PostgreSQLServerResource>> UpdateAsync(
+        WaitUntil waitUntil,
+        PostgreSQLServerData data,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Deletes the resource. ⚠ Permanent: this type declares no soft-delete window.</summary>
+    public partial Task<Operation> DeleteAsync(
+        WaitUntil waitUntil,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>What listKeys returns. ⚠ Secret material: never log or cache this.</summary>
+    public sealed partial class ListKeysResult {
+
+        /// <summary>The application database.</summary>
+        [JsonPropertyName("database")]
+        public required string Database { get; set; }
+
+        /// <summary>The in-cluster DNS name to connect to. ⚠ The pooler's when pooling is on, so turning pooling off later is a visible change to this value rather than a silent one.</summary>
+        [JsonPropertyName("host")]
+        public required string Host { get; set; }
+
+        /// <summary>The owning role's password, read from the tenant's Vault for this call only.</summary>
+        [JsonPropertyName("password")]
+        public required string Password { get; set; }
+
+        /// <summary>The TCP port.</summary>
+        [JsonPropertyName("port")]
+        public required long Port { get; set; }
+
+        /// <summary>The owning role.</summary>
+        [JsonPropertyName("username")]
+        public required string Username { get; set; }
+    }
+
+    /// <summary>ListKeys. ⚠ An action never creates — a POST to a name that does not exist is a 404. ⚠ The response carries secret material and is always audited.</summary>
+    public partial Task<Response<ListKeysResult>> ListKeysAsync(
+        CancellationToken cancellationToken = default);
+}
+
+/// <summary>The PostgreSQL servers in one resource group.</summary>
+/// <remarks>⚠ Every write is long-running: docs/plan/08 § The write path, end to end
+/// ends in a 202 for every verb, so there is no synchronous overload to offer.</remarks>
+public sealed partial class PostgreSQLServerCollection {
+    /// <summary>The resource type these address.</summary>
+    public const string ResourceType = "CyberCloud.DBforPostgreSQL/servers";
+
+    /// <summary>The URL template, with the api-version this file was generated at.</summary>
+    public const string PathTemplate = "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.DBforPostgreSQL/servers/{resourceName}";
+
+    /// <inheritdoc cref="GeneratedApiVersion.Value" />
+    public const string ApiVersion = "2026-08-01";
+
+    /// <summary>Creates or replaces one PostgreSQL server.</summary>
+    /// <remarks>⚠ Poll with GetProgressAsync() rather than only WaitForCompletionAsync():
+    /// docs/plan/21 § The .NET SDK — "Azure's LROs expose no progress; ours do and the
+    /// SDK should not hide it".</remarks>
+    public partial Task<Operation<PostgreSQLServerResource>> CreateOrUpdateAsync(
+        WaitUntil waitUntil,
+        string name,
+        PostgreSQLServerData data,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Reads one PostgreSQL server by name.</summary>
+    public partial Task<Response<PostgreSQLServerResource>> GetAsync(string name, CancellationToken cancellationToken = default);
+
+    /// <summary>The PostgreSQL servers in this group, paged.</summary>
+    public partial AsyncPageable<PostgreSQLServerResource> GetAllAsync(CancellationToken cancellationToken = default);
+}
+
 /// <summary>The values /properties/tier accepts. ⚠ Closed: the write path refuses anything else.</summary>
 public enum WidgetTier {
     /// <summary>Never assigned. Not a value the API accepts.</summary>

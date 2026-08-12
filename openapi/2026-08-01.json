@@ -63,6 +63,331 @@
         }
       }
     },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.DBforPostgreSQL/servers/{resourceName}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "get": {
+        "operationId": "CyberCloud_DBforPostgreSQL_servers_Get",
+        "summary": "Read a CyberCloud.DBforPostgreSQL/servers.",
+        "description": "The body is this api-version's projection of the resource: docs/plan/08 § The provider registry keeps grain state as a superset and a read at an older version drops what that version did not declare.",
+        "responses": {
+          "200": {
+            "description": "The resource.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.DBforPostgreSQL.servers"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "read"
+      },
+      "put": {
+        "operationId": "CyberCloud_DBforPostgreSQL_servers_CreateOrUpdate",
+        "summary": "Create or replace a CyberCloud.DBforPostgreSQL/servers.",
+        "description": "A full replacement. Every property the schema marks required must be present; a read-only property is refused rather than ignored — docs/plan/08 § The write path, end to end.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CyberCloud.DBforPostgreSQL.servers"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "headers": {
+              "Azure-AsyncOperation": {
+                "description": "The absolute URL of the operation to poll.",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "Retry-After": {
+                "description": "Seconds to wait before the first poll.",
+                "required": true,
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "write"
+      },
+      "patch": {
+        "operationId": "CyberCloud_DBforPostgreSQL_servers_Update",
+        "summary": "Merge-patch a CyberCloud.DBforPostgreSQL/servers.",
+        "description": "A merge patch. The patch itself may omit required properties; the merged result is what is validated — see ResourceSchema.Validate.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CyberCloud.DBforPostgreSQL.servers"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "headers": {
+              "Azure-AsyncOperation": {
+                "description": "The absolute URL of the operation to poll.",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "Retry-After": {
+                "description": "Seconds to wait before the first poll.",
+                "required": true,
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "write"
+      },
+      "delete": {
+        "operationId": "CyberCloud_DBforPostgreSQL_servers_Delete",
+        "summary": "Delete a CyberCloud.DBforPostgreSQL/servers.",
+        "description": "The delete is permanent: this type declares no soft-delete window.",
+        "responses": {
+          "202": {
+            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "headers": {
+              "Azure-AsyncOperation": {
+                "description": "The absolute URL of the operation to poll.",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "Retry-After": {
+                "description": "Seconds to wait before the first poll.",
+                "required": true,
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "delete",
+        "x-cybercloud-soft-delete-days": 0
+      },
+      "x-cybercloud-resource-type": "CyberCloud.DBforPostgreSQL/servers",
+      "x-cybercloud-display": {
+        "name": "PostgreSQL server",
+        "plural": "PostgreSQL servers",
+        "alias": "postgres",
+        "summary": "A managed PostgreSQL cluster on CloudNativePG, with replication, PgBouncer and backup to the tenant's object store.",
+        "declared": true
+      },
+      "x-cybercloud-supports-tags": true,
+      "x-cybercloud-requires-cluster": true,
+      "x-cybercloud-cluster-id-pointer": "/properties/clusterId",
+      "x-cybercloud-soft-delete-days": 0,
+      "x-cybercloud-meters": [
+        {
+          "meter": "Resources",
+          "amountPointer": "",
+          "fallback": 1
+        }
+      ]
+    },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.DBforPostgreSQL/servers/{resourceName}/listKeys": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "post": {
+        "operationId": "CyberCloud_DBforPostgreSQL_servers_ListKeys",
+        "summary": "listKeys a CyberCloud.DBforPostgreSQL/servers.",
+        "description": "An action never creates: a POST to a name that does not exist is a 404 — docs/plan/08 § The write path, end to end. ⚠ The response carries secret material. It is always audited and is never cached — docs/plan/08 § The provider registry.",
+        "responses": {
+          "200": {
+            "description": "The action's result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.DBforPostgreSQL.servers.ListKeysResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "listKeys",
+        "x-cybercloud-secret": true,
+        "x-cybercloud-long-running": false
+      },
+      "x-cybercloud-resource-type": "CyberCloud.DBforPostgreSQL/servers",
+      "x-cybercloud-action": "listKeys"
+    },
     "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Sample/widgets/{resourceName}": {
       "parameters": [
         {
@@ -579,6 +904,287 @@
       }
     },
     "schemas": {
+      "CyberCloud.DBforPostgreSQL.servers": {
+        "additionalProperties": false,
+        "description": "The body of a CyberCloud.DBforPostgreSQL/servers. Generated from the provider registry's schema, which is the same object the write path validates against — docs/plan/08 § The provider registry.",
+        "properties": {
+          "location": {
+            "description": "The region the server is billed in.",
+            "example": "eu-central",
+            "format": "cybercloud-region",
+            "type": "string",
+            "x-cybercloud-immutable": true,
+            "x-cybercloud-widget": "region"
+          },
+          "properties": {
+            "additionalProperties": false,
+            "description": "The server's own settings.",
+            "properties": {
+              "backup": {
+                "additionalProperties": false,
+                "description": "Backup to the tenant's object store, using CloudNativePG's barman-cloud.",
+                "properties": {
+                  "destinationPath": {
+                    "default": "",
+                    "description": "Object-store URL for base backups and WAL, for example s3://tenant-bucket/postgres. Empty means the platform fills it in from the tenant's default bucket.",
+                    "example": "s3://tenant-bucket/postgres",
+                    "pattern": "^(?:(s3://[a-z0-9][a-z0-9.\\-]*[a-z0-9](/[^\\s]*)?)?)$",
+                    "type": "string"
+                  },
+                  "enabled": {
+                    "default": true,
+                    "description": "Whether continuous backup and WAL archiving run.",
+                    "type": "boolean"
+                  },
+                  "retentionDays": {
+                    "default": 14,
+                    "description": "How long base backups and WAL are kept. The point-in-time-recovery window is this number of days.",
+                    "maximum": 365,
+                    "minimum": 1,
+                    "type": "integer"
+                  }
+                },
+                "type": "object"
+              },
+              "bootstrap": {
+                "additionalProperties": false,
+                "description": "What exists in the database the moment it comes up.",
+                "properties": {
+                  "database": {
+                    "default": "app",
+                    "description": "Name of the application database created on first start.",
+                    "maxLength": 63,
+                    "minLength": 1,
+                    "pattern": "^(?:[a-z_][a-z0-9_]*)$",
+                    "type": "string"
+                  },
+                  "owner": {
+                    "default": "app",
+                    "description": "Role that owns the application database.",
+                    "maxLength": 63,
+                    "minLength": 1,
+                    "pattern": "^(?:[a-z_][a-z0-9_]*)$",
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              },
+              "clusterId": {
+                "description": "The cluster whose namespace holds the CloudNativePG objects.",
+                "format": "uuid",
+                "type": "string",
+                "x-cybercloud-immutable": true,
+                "x-cybercloud-widget": "cluster"
+              },
+              "extensions": {
+                "default": [],
+                "description": "Extensions to install, from the platform allow-list. An arbitrary-extension escape hatch is a code-execution surface and is not offered.",
+                "example": [
+                  "pgvector"
+                ],
+                "items": {
+                  "enum": [
+                    "pgvector",
+                    "postgis",
+                    "pg_stat_statements",
+                    "timescaledb"
+                  ],
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "monitoring": {
+                "additionalProperties": false,
+                "description": "What the platform scrapes.",
+                "properties": {
+                  "enabled": {
+                    "default": true,
+                    "description": "Whether CloudNativePG emits a PodMonitor for the platform's metrics stack.",
+                    "type": "boolean"
+                  }
+                },
+                "type": "object"
+              },
+              "pooling": {
+                "additionalProperties": false,
+                "description": "PgBouncer in front of the cluster.",
+                "properties": {
+                  "enabled": {
+                    "default": true,
+                    "description": "Whether to run a connection pooler. On by default — a managed Postgres without one fails at the first serverless workload, and adding it later changes the connection string.",
+                    "type": "boolean"
+                  },
+                  "instances": {
+                    "default": 2,
+                    "description": "Number of pooler pods.",
+                    "maximum": 8,
+                    "minimum": 1,
+                    "type": "integer"
+                  },
+                  "mode": {
+                    "default": "transaction",
+                    "description": "PgBouncer pooling mode. Transaction pooling is the useful one and breaks session-scoped features such as prepared statements and advisory locks.",
+                    "enum": [
+                      "session",
+                      "transaction",
+                      "statement"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              },
+              "replicas": {
+                "default": 2,
+                "description": "Number of instances, including the primary. One is a single point of failure and is offered for development only.",
+                "maximum": 5,
+                "minimum": 1,
+                "type": "integer"
+              },
+              "sizing": {
+                "additionalProperties": false,
+                "description": "CPU and memory, either by preset or explicitly.",
+                "properties": {
+                  "cpu": {
+                    "default": "",
+                    "description": "Explicit vCPU quantity in Kubernetes form, for example 500m or 2. Empty means take it from the preset.",
+                    "pattern": "^(?:(\\d+(\\.\\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)?)$",
+                    "type": "string"
+                  },
+                  "memory": {
+                    "default": "",
+                    "description": "Explicit memory quantity in Kubernetes form, for example 4Gi. Empty means take it from the preset.",
+                    "pattern": "^(?:(\\d+(\\.\\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)?)$",
+                    "type": "string"
+                  },
+                  "preset": {
+                    "default": "s1.small",
+                    "description": "A sizing preset from docs/plan/12. Databases use the s1 family, which is 1 vCPU to 4 GiB.",
+                    "enum": [
+                      "s1.nano",
+                      "s1.micro",
+                      "s1.small",
+                      "s1.medium",
+                      "s1.large",
+                      "s1.xlarge",
+                      "s1.2xlarge",
+                      "s1.4xlarge"
+                    ],
+                    "type": "string",
+                    "x-cybercloud-widget": "cozy-preset"
+                  }
+                },
+                "type": "object"
+              },
+              "storage": {
+                "additionalProperties": false,
+                "description": "The data volume.",
+                "properties": {
+                  "class": {
+                    "default": "",
+                    "description": "StorageClass name. Empty means the cluster default.",
+                    "type": "string",
+                    "x-cybercloud-immutable": true,
+                    "x-cybercloud-widget": "storageclass"
+                  },
+                  "size": {
+                    "default": "20Gi",
+                    "description": "Data volume size in Kubernetes quantity form. Grows online; never shrinks.",
+                    "example": "20Gi",
+                    "pattern": "^(?:\\d+(\\.\\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)$",
+                    "type": "string"
+                  },
+                  "walSize": {
+                    "default": "",
+                    "description": "Size of the separate write-ahead-log volume. Empty means the WAL shares the data volume.",
+                    "pattern": "^(?:(\\d+(\\.\\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)?)$",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "size"
+                ],
+                "type": "object"
+              },
+              "synchronousReplication": {
+                "default": false,
+                "description": "Whether commits wait for a replica. Costs write latency and removes the window in which a failover loses transactions.",
+                "type": "boolean"
+              },
+              "version": {
+                "default": "17",
+                "description": "Major PostgreSQL version. Minor upgrades are applied automatically in the maintenance window.",
+                "enum": [
+                  "16",
+                  "17",
+                  "18"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "clusterId",
+              "replicas",
+              "version"
+            ],
+            "type": "object"
+          },
+          "tags": {
+            "type": "object",
+            "description": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "maxProperties": 50,
+            "x-cybercloud-widget": "tag-input"
+          }
+        },
+        "required": [
+          "location"
+        ],
+        "title": "CyberCloud.DBforPostgreSQL/servers",
+        "type": "object"
+      },
+      "CyberCloud.DBforPostgreSQL.servers.ListKeysResponse": {
+        "additionalProperties": false,
+        "description": "What CyberCloud.DBforPostgreSQL/servers/listKeys returns. ⚠ Secret material. docs/plan/08 § The provider registry makes a secret action the only path a secret value leaves by; this schema is therefore the complete list of what does.",
+        "properties": {
+          "database": {
+            "description": "The application database.",
+            "type": "string"
+          },
+          "host": {
+            "description": "The in-cluster DNS name to connect to. ⚠ The pooler's when pooling is on, so turning pooling off later is a visible change to this value rather than a silent one.",
+            "type": "string"
+          },
+          "password": {
+            "description": "The owning role's password, read from the tenant's Vault for this call only.",
+            "format": "password",
+            "type": "string",
+            "writeOnly": true,
+            "x-cybercloud-secret": true
+          },
+          "port": {
+            "description": "The TCP port.",
+            "maximum": 65535,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "username": {
+            "description": "The owning role.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "database",
+          "host",
+          "password",
+          "port",
+          "username"
+        ],
+        "title": "CyberCloud.DBforPostgreSQL.servers.ListKeysResponse",
+        "type": "object"
+      },
       "CyberCloud.Sample.widgets": {
         "additionalProperties": false,
         "description": "The body of a CyberCloud.Sample/widgets. Generated from the provider registry's schema, which is the same object the write path validates against — docs/plan/08 § The provider registry.",
@@ -877,5 +1483,5 @@
       }
     }
   },
-  "x-cybercloud-resource-type-count": 1
+  "x-cybercloud-resource-type-count": 2
 }

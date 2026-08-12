@@ -477,6 +477,26 @@ escape hatch (`imageName`). Generation covers the other 26; `@internal` rows sta
 chart, because they are rendering inputs and a resource body has no place for them. So the two files
 are sources for **different things** that overlap on 26 rows, not two sources for one thing.
 
+> ⚠ **CORRECTED 2026-08-12, by the provider landing. It is 11 and 25, and there is a third
+> category.**
+>
+> **`bootstrap.password` was in the 26 and should never have been.** Its own `@param` description
+> already said the reconciler supplies it — *"Provisioned into the tenant's Vault and read back by
+> ISecretResolver at render time; it is never written into a values file or into grain state"* —
+> which is the definition of an `@internal` rendering input. Left in the API surface it would have
+> been a body property carrying a plaintext password, and **nothing in the write path replaces a
+> `SchemaProperty.Secret` value with a `SecretRef` before the grain writes desired state**: that
+> substitution is asserted in `SchemaProperty.Secret`'s own remarks and does not exist in
+> `src/CyberCloud.ResourceManager`. All `Secret` does today is make `ResourceSchema.Project` drop the
+> property on a *read*. So the row is now `@internal`, `CyberCloud.DBforPostgreSQL/servers` does not
+> declare it, and the missing substitution is a resource-manager gap rather than a provider's problem.
+>
+> **The third category: rows that are body-only.** This clause assumes every body property has a
+> chart row. Two do not — `/location` and `/properties/clusterId`. A chart is rendered *into* a
+> cluster and has no opinion about which one; a region is a billing fact rather than a rendering
+> input. So the split is 25 shared rows, 11 chart-only `@internal` rows, and 2 body-only properties,
+> and a generator rewriting `values.yaml` from the C# schema has to skip the last group.
+
 **How this went unnoticed.** The overlap is zero resource types wide today.
 `charts/managed/postgres/conformance.yaml` declares `CyberCloud.DBforPostgreSQL/servers` and no C#
 provider declares that type — it appears in `src/` only in test fixtures. `Build.Charts` checks
@@ -484,6 +504,17 @@ provider declares that type — it appears in `src/` only in test fixtures. `Bui
 registry. Its own header comment describes the parse result as "the shape a `ResourceSchema` would be
 built from": the seam was seen and left open. It becomes 26 rows wide the moment the Postgres provider
 lands.
+
+> ⚠ **UPDATED 2026-08-12. The provider has landed and `Build.Charts` still never opens a registry.**
+> The overlap is 25 rows wide and nothing in `./build.sh` compares them — the prediction above was
+> about the *tree*, not about the *gate*, and only the first half happened. `./build.sh Charts` now
+> reports "36 annotated value(s), 25 in the API surface, 11 marked `@internal`" and has no opinion
+> about whether any C# declares them; grep `build/Build.Charts.cs` for `ResourceSchema` and the only
+> two hits are comments. Until the emitter of ADR-012's fifth surface exists, the comparison lives in
+> `CyberCloud.Providers.DBforPostgreSQL.Tests.ChartRegistryPairTests`, which embeds
+> `values.schema.json` and diffs the rows ordinally. That is strictly weaker than generation — two
+> hand-maintained files that agree can both be wrong together — and it is a provider's test rather
+> than a platform gate, so the next nine services will each need their own copy of it or the gate.
 
 ### ADR-011 — The licence audit, done once, written down
 

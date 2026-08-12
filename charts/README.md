@@ -193,6 +193,7 @@ The generated schema is shaped like a `ResourceSchema` — every property carrie
 `SchemaProperty`. Since 2026-08-12 the two are wired together: a chart's root key `version` is the
 registry's `/properties/version`, and `ChartAnnotationEmitter` writes the block from the schema.
 
+<<<<<<< HEAD
 > ⚠ **CORRECTED 2026-08-12.** This section claimed "`ResourceSchema` cannot carry `enum`,
 > `minimum`/`maximum`, `default`, `items`, or any `x-cybercloud-*` hint" and that `SchemaProperty` is
 > "`(pointer, kind, required, readOnly, secret, description)`". **All of that is refuted by the
@@ -228,6 +229,13 @@ The gap runs the other way, and it is where a fact can be lost:
 * **`@secret` is a string's directive and `@widget` renders one scalar field.** `SchemaProperty` does
   not enforce either — `Incoherences` permits a `WidgetHint` on an array — so the emitter refuses
   what the chart reader would.
+
+**The first managed service already needs three of those seven.** `CyberCloud.DBforPostgreSQL/servers`
+declares `Pattern` on five rows (three Kubernetes quantities, a Postgres identifier pair and an
+`s3://` destination) and `MinLength`/`MaxLength` on two. They are declared in C#, where they are
+enforced; the chart does not carry them. So the loss is real, it is on exactly one surface, and
+`@pattern` and `@length` are no longer hypothetical directives waiting for a first user — they have
+one.
 
 ## Forking discipline
 

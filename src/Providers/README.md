@@ -25,16 +25,37 @@ ConfigMap. It is [24 § Phase 1](../../docs/plan/24-roadmap.md)'s exit criterion
 trivial**: its whole job is to make the platform's friction visible. Anything clever added to it is
 measurement lost.
 
-Two things about its shape are worth knowing before writing the second provider:
+`CyberCloud.Providers.DBforPostgreSQL` — `CyberCloud.DBforPostgreSQL/servers` on CloudNativePG,
+[12 § The catalogue](../../docs/plan/12-managed-data-services.md). **The first provider that is a
+feature**, and therefore the first measurement of the platform that means anything: the sample was
+built to be frictionless, so only a real one can report friction.
 
-- **It has no grain and no durable state.** `durable-grains.txt` says why, and treats the absence as
-  a reviewed decision. A provider that needs one is a signal about the resource manager.
-- **Its `.Application` project holds the ABP module and nothing else.** Every widget operation is a
-  generic resource-manager verb the gateway routes from the registry (ADR-012), so there is no
-  application service to write. That will not be true of every provider.
+### What the second provider measured
 
-Its `.Conformance` project is one `ProviderConformanceCase` and two class declarations. That is the
-whole cost of putting a provider under the shared suite, and it is meant to stay that way.
+Two things the sample's shape suggested and could not establish, now established:
+
+- **It has no grain and no durable state either.** A managed PostgreSQL server with backup, pooling,
+  extensions, a sizing preset and a secret-returning action still needs no grain of its own —
+  `ResourceGrain` holds the desired state. The sample's absence of a grain could be read as a
+  consequence of being trivial. This one cannot.
+- **Its `.Application` project also holds the ABP module and nothing else.** Every operation on a
+  server — PUT, GET, DELETE, POST `listKeys` — is a generic resource-manager verb the gateway routes
+  from the registry (ADR-012). That is evidence for the registry-as-routing-source decision rather
+  than a restatement of it.
+
+Two things it found that the sample could not:
+
+- **The chart↔registry pair has no build gate.** ADR-012's fifth surface is marked "Not built" and
+  ADR-010 says the overlap "becomes 26 rows wide the moment the Postgres provider lands". It has;
+  `Build.Charts` still never opens a registry. `ChartRegistryPairTests` compares the rows as a
+  provider test instead, and should be deleted by whoever builds the emitter.
+- **Rule 2 of § Assembly graph rules has a `const` blind spot.** It reads binding references, and a
+  cross-provider dependency using only `const` members emits none. See that provider's
+  `.Contracts.csproj` for the experiment.
+
+Each provider's `.Conformance` project is one `ProviderConformanceCase` and two class declarations.
+The second provider renders two objects rather than one and still needed no change to
+`test/CyberCloud.Conformance`, which is the claim that shape was making.
 
 ## Planned namespaces
 

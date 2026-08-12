@@ -24,6 +24,7 @@ synchronousReplication: false
 sizing:
   ## @param preset {string} A sizing preset from docs/plan/12. Databases use the s1 family, which is 1 vCPU to 4 GiB.
   ## @enum s1.nano | s1.micro | s1.small | s1.medium | s1.large | s1.xlarge | s1.2xlarge | s1.4xlarge
+  ## @widget cozy-preset
   preset: s1.small
   ## @param cpu {string} Explicit vCPU quantity in Kubernetes form, for example 500m or 2. Empty means take it from the preset.
   cpu: ""
@@ -75,6 +76,7 @@ bootstrap:
   owner: app
   ## @param password {string} Password for the owning role. Provisioned into the tenant's Vault and read back by ISecretResolver at render time; it is never written into a values file or into grain state.
   ## @secret
+  ## @internal Its own description already says the reconciler supplies it, so it was never a tenant setting. Left in the API surface it would be a body property the write path stores verbatim — nothing substitutes a SecretRef before the grain writes desired state — which is docs/plan/00 § Non-negotiables, "secrets never reach grain state". The value reaches the Cluster CR as a Secret reference by name; docs/plan/12 § Cross-cutting decisions, Credentials, puts the value itself behind listKeys.
   password: ""
 
 ## @param monitoring {object} What the platform scrapes.

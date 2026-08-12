@@ -1,0 +1,46 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      docs/plan/03 § Providers — the fourth project: "TestCluster + k3s".
+
+      ⚠ NEITHER, HERE, for the reason CyberCloud.Providers.Sample.Tests records: the TestCluster half
+      is test/CyberCloud.Conformance's, because a provider's lifecycle is the SHARED suite's
+      assertion, and the k3s half is a named, loudly-skipped test in ClusterBackedConformanceTests.
+      What is left is what only THIS provider can be wrong about: its schema against the chart, its
+      CloudNativePG projection, and its reconciler's behaviour against a connection it does not
+      control.
+
+      ⚠ IT EMBEDS TWO FILES FROM charts/managed/postgres/, AND THAT IS THE POINT OF THE PROJECT.
+      ADR-012's fifth surface — "the non-@internal block of a managed chart's values.yaml, rewritten
+      in place and diffed" — is marked "Not built", and ADR-010 § Which end authors the schema says
+      the overlap "becomes 26 rows wide the moment the Postgres provider lands". It has landed and the
+      emitter has not, so nothing in ./build.sh compares the two files: Build.Charts.cs never opens a
+      registry (grep it for ResourceSchema — the only hits are two comments). Embedding the generated
+      schema and the sizing helper is how the comparison happens at all until the emitter exists. It
+      is strictly weaker than generation — it checks that two hand-maintained files agree rather than
+      making one of them derived — and it fails on the same diffs.
+    -->
+
+    <ItemGroup>
+        <PackageReference Include="xunit.v3"/>
+        <PackageReference Include="Shouldly"/>
+    </ItemGroup>
+
+    <ItemGroup Label="Global usings">
+        <Using Include="Xunit"/>
+    </ItemGroup>
+
+    <ItemGroup Label="The other half of the pair — see the header">
+        <EmbeddedResource Include="../../../../charts/managed/postgres/values.schema.json"
+                          LogicalName="postgres.values.schema.json"/>
+        <EmbeddedResource Include="../../../../charts/managed/postgres/templates/_helpers.tpl"
+                          LogicalName="postgres.helpers.tpl"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../CyberCloud.Providers.DBforPostgreSQL/CyberCloud.Providers.DBforPostgreSQL.csproj"/>
+        <!-- ProviderRegistry.Build, so the declaration is checked the way a silo checks it at start. -->
+        <ProjectReference Include="../../../CyberCloud.ResourceManager/CyberCloud.ResourceManager.csproj"/>
+    </ItemGroup>
+
+</Project>

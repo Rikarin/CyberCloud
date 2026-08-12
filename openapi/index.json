@@ -175,9 +175,23 @@
     }
   },
   "x-cybercloud-providers": [
+    "CyberCloud.DBforPostgreSQL",
     "CyberCloud.Sample"
   ],
   "x-cybercloud-resource-types": [
+    {
+      "type": "CyberCloud.DBforPostgreSQL/servers",
+      "apiVersions": [
+        "2026-08-01"
+      ],
+      "display": {
+        "name": "PostgreSQL server",
+        "plural": "PostgreSQL servers",
+        "alias": "postgres",
+        "summary": "A managed PostgreSQL cluster on CloudNativePG, with replication, PgBouncer and backup to the tenant's object store.",
+        "declared": true
+      }
+    },
     {
       "type": "CyberCloud.Sample/widgets",
       "apiVersions": [

@@ -16,6 +16,11 @@
       "src/Providers/CyberCloud.Providers.Sample/CyberCloud.Providers.Sample.Application/CyberCloud.Providers.Sample.Application.csproj",
       "src/Providers/CyberCloud.Providers.Sample/CyberCloud.Providers.Sample.Tests/CyberCloud.Providers.Sample.Tests.csproj",
       "src/Providers/CyberCloud.Providers.Sample/CyberCloud.Providers.Sample.Conformance/CyberCloud.Providers.Sample.Conformance.csproj",
+      "src/Providers/CyberCloud.Providers.DBforPostgreSQL/CyberCloud.Providers.DBforPostgreSQL.Contracts/CyberCloud.Providers.DBforPostgreSQL.Contracts.csproj",
+      "src/Providers/CyberCloud.Providers.DBforPostgreSQL/CyberCloud.Providers.DBforPostgreSQL/CyberCloud.Providers.DBforPostgreSQL.csproj",
+      "src/Providers/CyberCloud.Providers.DBforPostgreSQL/CyberCloud.Providers.DBforPostgreSQL.Application/CyberCloud.Providers.DBforPostgreSQL.Application.csproj",
+      "src/Providers/CyberCloud.Providers.DBforPostgreSQL/CyberCloud.Providers.DBforPostgreSQL.Tests/CyberCloud.Providers.DBforPostgreSQL.Tests.csproj",
+      "src/Providers/CyberCloud.Providers.DBforPostgreSQL/CyberCloud.Providers.DBforPostgreSQL.Conformance/CyberCloud.Providers.DBforPostgreSQL.Conformance.csproj",
       "test/CyberCloud.Conformance/CyberCloud.Conformance.csproj"
     ]
   }

@@ -60,6 +60,8 @@
           "format": "password",
           "type": "string",
           "writeOnly": true,
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Its own description already says the reconciler supplies it, so it was never a tenant setting. Left in the API surface it would be a body property the write path stores verbatim — nothing substitutes a SecretRef before the grain writes desired state — which is docs/plan/00 § Non-negotiables, \"secrets never reach grain state\". The value reaches the Cluster CR as a Secret reference by name; docs/plan/12 § Cross-cutting decisions, Credentials, puts the value itself behind listKeys.",
           "x-cybercloud-order": 2,
           "x-cybercloud-pointer": "/properties/bootstrap/password",
           "x-cybercloud-secret": true
@@ -272,7 +274,8 @@
           ],
           "type": "string",
           "x-cybercloud-order": 0,
-          "x-cybercloud-pointer": "/properties/sizing/preset"
+          "x-cybercloud-pointer": "/properties/sizing/preset",
+          "x-cybercloud-widget": "cozy-preset"
         }
       },
       "type": "object",

@@ -124,10 +124,15 @@
       and, per docs/plan/24 § Phase 1's exit criterion 1 and docs/plan/25 § R1, is deliberately
       trivial: it exists to measure the platform, not to be a feature.
 
-      ⚠ Its arrival makes two assembly-graph rules real. Rule 2 ("no Providers.* assembly references
-      another Providers.* assembly") and rule 4 ("nothing references a *.Application assembly except
-      its own host") had zero candidates and passed vacuously; this folder is the first candidate
-      either has ever had.
+      ⚠ Its arrival made two assembly-graph rules non-vacuous. Rule 2 ("no Providers.* assembly
+      references another Providers.* assembly") and rule 4 ("nothing references a *.Application
+      assembly except its own host") had zero candidates and passed vacuously.
+
+      ⚠ CyberCloud.Providers.DBforPostgreSQL is the SECOND FAMILY, and that is what makes rule 2
+      VIOLABLE rather than merely non-vacuous. Rule 2 is read as cross-provider — a provider
+      referencing its OWN .Contracts is its internal seam — so with one family in the tree the rule
+      had three candidates and no constructible violation: there was no second family to reference.
+      There is now, and docs/plan/12 § The catalogue has nine more.
     -->
     <Folder Name="/src/Providers/">
         <Project Path="src/Providers/CyberCloud.Providers.Sample/CyberCloud.Providers.Sample.Contracts/CyberCloud.Providers.Sample.Contracts.csproj"/>
@@ -149,6 +154,21 @@
           above must not. See its .csproj.
         -->
         <Project Path="src/Providers/CyberCloud.Providers.Sample/CyberCloud.Providers.Sample.Cluster.Conformance/CyberCloud.Providers.Sample.Cluster.Conformance.csproj"/>
+
+        <!--
+          The second provider family, and the first one that is a feature rather than a measurement.
+          Its arrival is what made assembly-graph rule 2 non-vacuous: with only Sample in the tree,
+          Sample, Sample.Contracts and Sample.Application were all one family, so the rule had
+          candidates and no constructible violation.
+
+          ⚠ It has no *.Cluster.Conformance sibling yet. That is a gap, not a decision — the two
+          projects are class declarations over one ProviderConformanceCase, so adding it is cheap.
+        -->
+        <Project Path="src/Providers/CyberCloud.Providers.DBforPostgreSQL/CyberCloud.Providers.DBforPostgreSQL.Contracts/CyberCloud.Providers.DBforPostgreSQL.Contracts.csproj"/>
+        <Project Path="src/Providers/CyberCloud.Providers.DBforPostgreSQL/CyberCloud.Providers.DBforPostgreSQL/CyberCloud.Providers.DBforPostgreSQL.csproj"/>
+        <Project Path="src/Providers/CyberCloud.Providers.DBforPostgreSQL/CyberCloud.Providers.DBforPostgreSQL.Application/CyberCloud.Providers.DBforPostgreSQL.Application.csproj"/>
+        <Project Path="src/Providers/CyberCloud.Providers.DBforPostgreSQL/CyberCloud.Providers.DBforPostgreSQL.Tests/CyberCloud.Providers.DBforPostgreSQL.Tests.csproj"/>
+        <Project Path="src/Providers/CyberCloud.Providers.DBforPostgreSQL/CyberCloud.Providers.DBforPostgreSQL.Conformance/CyberCloud.Providers.DBforPostgreSQL.Conformance.csproj"/>
     </Folder>
     <Folder Name="/src/Hosts/">
         <Project Path="src/Hosts/CyberCloud.Gateway.Host/CyberCloud.Gateway.Host.csproj"/>

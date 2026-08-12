@@ -1,0 +1,48 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      docs/plan/03 § Providers — the first of the five projects: "grain interfaces, resource models,
+      the JSON Schemas". This one is the schema and the CloudNativePG projection.
+
+      ⚠ NO GRAIN INTERFACES, AND FOR THE SAME REASON CyberCloud.Providers.Sample.Contracts HAS NONE:
+      a server's desired state is held by CyberCloud.ResourceManager's ResourceGrain, and a grain of
+      our own would be a second copy of state the manager already owns. That is worth restating on
+      the FIRST NON-TRIVIAL PROVIDER, because the sample's absence of a grain could be read as a
+      consequence of the sample being trivial. It is not: a managed PostgreSQL server with backup,
+      pooling, extensions and a sizing preset still needs no grain, which is evidence about the
+      manager rather than about the resource. docs/plan/25 § R1 asks for exactly that evidence.
+
+      ⚠ IT REFERENCES ONLY CyberCloud.ResourceManager.Contracts AND CyberCloud.Kubernetes.Contracts —
+      the whole reference set docs/plan/03 § The .Contracts split allows a provider. It references NO
+      OTHER Providers.* assembly, which is rule 2 of docs/plan/03 § Assembly graph rules; that rule
+      had three candidates in one family before this project existed and now has candidates in two,
+      so a violation of it is constructible for the first time.
+
+      ⚠ RULE 2 HAS A BLIND SPOT AND THIS PROJECT IS WHERE IT BECAME FINDABLE. The gate reads
+      Assembly.ReferencedAssemblies — the BINDING references in the compiled IL — so it fires on
+      "binds types from". A cross-provider dependency that touches only `const` members emits NO
+      reference at all, because the C# compiler inlines a const into the consuming assembly. Verified
+      by adding a real ProjectReference to CyberCloud.Providers.Sample.Contracts here and reading one
+      member: with `SampleWidgets.TypePath` (a const string) rule 2 reported 6 candidates and ZERO
+      violations and the build was green; changing it to `SampleWidgets.Type` (a static property)
+      made the same edit fail with "binds types from CyberCloud.Providers.Sample.Contracts".
+
+      That is not this provider's bug to fix, and it is worth writing down where the next provider
+      author will read it: a Providers.* project may today take a ProjectReference on a sibling and
+      pass the gate, as long as everything it uses is a const or a literal. Closing it means either
+      reading the ProjectReference GRAPH as well as the binding references, or forbidding the
+      ProjectReference at .csproj level. Both are changes to Build.Architecture.cs.
+    -->
+
+    <ItemGroup>
+        <ProjectReference Include="../../../CyberCloud.ResourceManager.Contracts/CyberCloud.ResourceManager.Contracts.csproj"/>
+        <ProjectReference Include="../../../CyberCloud.Kubernetes.Contracts/CyberCloud.Kubernetes.Contracts.csproj"/>
+    </ItemGroup>
+
+    <ItemGroup Label="CyberCloud.Analyzers — see CyberCloud.Core.csproj for why this is not a reference">
+        <ProjectReference Include="../../../CyberCloud.Analyzers/CyberCloud.Analyzers.csproj"
+                          OutputItemType="Analyzer"
+                          ReferenceOutputAssembly="false"/>
+    </ItemGroup>
+
+</Project>
