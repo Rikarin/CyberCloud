@@ -307,9 +307,43 @@ public sealed class ResourceManagerService(
         // ⚠ THE INDEX GOES FIRST, AND THAT IS THE ORDER docs/plan/06 § Two-phase create GIVES:
         // "Deletion is the same in reverse and it is the harder half: release the index first (so the
         // name is immediately reusable), then tear down the data plane, then delete the grain state."
-        var released = await Index(target).ReleaseAsync(target.Id.Id);
-        if (released.TryGetError(out var releaseError)) {
-            return Result<WriteAccepted>.Failure(releaseError);
+        //
+        // ── AND FOR A SOFT-DELETABLE TYPE IT IS PARKED RATHER THAN RELEASED ─────────────────────
+        //
+        // ⚠ THIS ONE BRANCH IS WHY docs/plan/08 § Soft delete NEEDS NO "unless deleted" CLAUSE
+        // ANYWHERE ELSE. The document weighs moving the resource out of the tree against leaving it in
+        // place with a flag, and rejects the flag because it "puts an 'unless deleted' clause on every
+        // read path, every list, every ReBAC check and the index claim, and the feature is then only as
+        // good as the least-remembered of them". IndexEntryState.SoftDeleted is how the move is
+        // spelled: ResolveAsync refuses the entry, so step 1 of every later request reads Exists =
+        // false and answers the CANONICAL 404 — the same bytes from the same NotFound helper that a
+        // name nobody ever claimed gets. Nothing downstream learns that soft delete exists.
+        //
+        // ⚠ AND IT IS A 404 RATHER THAN A 410, WHICH IS THE POINT THE DOCUMENT MAKES TWICE. A 410 Gone
+        // would tell a caller who may not read the resource that the name was taken — the enumeration
+        // oracle docs/plan/07 § The enforcement seam exists to close, handed back by the one status
+        // code that would have felt more informative.
+        //
+        // ⚠ THE RETENTION COMES FROM THE REGISTRY AND NEVER FROM THE BODY, which is how docs/plan/08's
+        // "retention is set at creation and immutable afterwards" is honoured: there is no per-resource
+        // retention property, so there is nothing a caller can shorten under their own resource. The
+        // grain stamps the deadline with its own clock (see IResourceIndexGrain.SoftDeleteAsync) and
+        // does not restamp it on a re-drive.
+        var softDelete = target.Registration.SoftDeleteDays > 0;
+
+        if (softDelete) {
+            var parked = await Index(target)
+                .SoftDeleteAsync(target.Id.Id, TimeSpan.FromDays(target.Registration.SoftDeleteDays));
+
+            if (parked.TryGetError(out var parkError)) {
+                return Result<WriteAccepted>.Failure(parkError);
+            }
+        }
+        else {
+            var released = await Index(target).ReleaseAsync(target.Id.Id);
+            if (released.TryGetError(out var releaseError)) {
+                return Result<WriteAccepted>.Failure(releaseError);
+            }
         }
 
         trace.Enter(WriteStep.SubmitDesired);
@@ -373,9 +407,16 @@ public sealed class ResourceManagerService(
                     // Recorded on the spec because the grain is re-driven from a reminder after
                     // CompleteDeleteAsync has cleared the resource, at which point there is nothing
                     // left to derive it from.
+                    // ⚠ …AND FOR A SOFT-DELETABLE TYPE IT IS NOT GIVEN BACK HERE. The amounts are
+                    // still recorded — the purge that ends the window needs exactly them and by then
+                    // there is nothing to derive them from — but `SoftDelete` below is what stops the
+                    // operation returning them on convergence. docs/plan/08 § Soft delete: a resource
+                    // in its recovery window "consumes plenty, because handing the data back is the
+                    // entire feature: the volumes, the PVCs and the memory are all still allocated".
                     CommittedQuota = CommittedBy(target.Registration, snapshot.Properties),
                     IndexClaimed = false,
                     ParentResourceId = parentResourceId,
+                    SoftDelete = softDelete,
                     Caller = request.Caller
                 }
             );
@@ -398,6 +439,403 @@ public sealed class ResourceManagerService(
                 Trace = trace.Build()
             }
         );
+    }
+
+    /// <inheritdoc />
+    public async Task<Result<ResourceSnapshot>> RestoreAsync(
+        WriteRequest request,
+        CancellationToken cancellationToken = default
+    ) {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var trace = new WriteTraceBuilder();
+        trace.Enter(WriteStep.ResolveRegistration);
+
+        var resolved = await ResolveAsync(request, trace);
+        if (resolved.TryGetError(out var resolveError)) {
+            return Result<ResourceSnapshot>.Failure(resolveError);
+        }
+
+        var target = resolved.GetValueOrThrow();
+
+        // ⚠ THE GUID COMES FROM THE INDEX'S SOFT-DELETED SIDE, AND STEP 1 CANNOT SUPPLY IT.
+        //
+        // ResolveAsync reads IResourceIndexGrain.ResolveAsync, which refuses a soft-deleted binding —
+        // that refusal is the whole of the canonical 404 and must not be relaxed. So `target.Id.Id` is
+        // Guid.Empty here for exactly the resources this method exists to act on, and the entitled
+        // question is asked by a different method: ResolveSoftDeletedAsync. See its remarks for why
+        // that is a second method rather than a flag on the first.
+        var parked = await RestorableAsync(target);
+        if (parked.TryGetError(out var parkedError)) {
+            return Result<ResourceSnapshot>.Failure(parkedError);
+        }
+
+        var addressed = target with { Id = target.Id.WithId(parked.GetValueOrThrow()) };
+
+        trace.Enter(WriteStep.AuthorizationCheck);
+
+        // ⚠ CHECKED AGAINST THE RESOURCE, WHICH BY NOW HANGS OFF THE SUBSCRIPTION — and that is the
+        // visibility docs/plan/08 § Soft delete chose deliberately: "the people who can see a deleted
+        // resource become the people who hold subscription-scoped rights, which is exactly who Azure
+        // gives deletedVaults/read and purge/action to. A restore is a subscription-scoped operation;
+        // the visibility should match."
+        //
+        // ⚠ The GUID above is what makes that true rather than accidental. Authorizing the address
+        // BEFORE resolving it would carry Guid.Empty, and ReBacResourceAuthorizer.CheckedObject reads
+        // that as "check the parent resource group" — the scope the resource has just left, and a
+        // different question with a different answer.
+        //
+        // ⚠ FullyConsistent, for the reason the delete path gives: docs/plan/07 § Consistency puts
+        // deletion in the row where "a stale allow is a real incident", and a restore is the verb that
+        // undoes one.
+        var authorized = await authorizer.AuthorizeAsync(
+            addressed.Id,
+            addressed.Registration.WritePermission,
+            addressed.Registration.ReadPermission,
+            request.Caller,
+            true,
+            cancellationToken
+        );
+
+        if (authorized.TryGetError(out var authError)) {
+            return Result<ResourceSnapshot>.Failure(authError);
+        }
+
+        trace.Enter(WriteStep.Locks);
+
+        var lockLevel = await locks.ResolveAsync(addressed.Id, cancellationToken);
+        if (lockLevel.TryGetError(out var lockError)) {
+            return Result<ResourceSnapshot>.Failure(lockError);
+        }
+
+        if (lockLevel.GetValueOrThrow() == LockLevel.ReadOnly) {
+            return Result<ResourceSnapshot>.Failure(
+                ErrorCode.ScopeLocked,
+                $"'{request.Path}' is covered by a ReadOnly lock, so it cannot be restored — a restore "
+                + "puts a resource back into the scope the lock covers. docs/plan/06 § Tags, locks."
+            );
+        }
+
+        trace.Enter(WriteStep.IndexClaim);
+
+        // ⚠ THE INDEX GOES FIRST HERE TOO, AND FOR THE MIRROR OF THE DELETE'S REASON. The index is
+        // what makes the resource addressable; until it is Confirmed again a caller cannot reach the
+        // resource whatever else has been written, so a failure after this line leaves a resource that
+        // IS reachable and whose parent edge may still name the subscription — visible to a
+        // subscription role holder, which is who asked for the restore. The other order would leave it
+        // addressable to nobody after a partial failure, and nothing would notice.
+        //
+        // ⚠ The window is checked HERE and not above, because the index is what holds it:
+        // RestoreAsync refuses a binding past IndexEntry.RecoverableUntil with the same
+        // ResourceNotFound a name that holds nothing gets. Reading the deadline first and acting on it
+        // second would be two reads of a value that can change between them.
+        var restored = await Index(addressed).RestoreAsync(addressed.Id.Id);
+        if (restored.TryGetError(out var restoreError)) {
+            return Result<ResourceSnapshot>.Failure(restoreError);
+        }
+
+        trace.Enter(WriteStep.LinkParent);
+
+        // ⚠ AND THE PARENT EDGE COMES BACK TO THE RESOURCE GROUP. docs/plan/08 § Soft delete: the
+        // edge "moves with the resource … and moves back on restore". The parent GUID is re-resolved
+        // rather than remembered because a restore runs on the request path with the caller waiting,
+        // which is the same reason the delete resolves it there — and unlike the unlink it is not
+        // driven from a reminder against a resource that is already gone.
+        var reparented = await relations.ReparentFromSubscriptionAsync(
+            addressed.Id,
+            await ParentIdOf(addressed),
+            cancellationToken
+        );
+
+        if (reparented.TryGetError(out var reparentError)) {
+            return Result<ResourceSnapshot>.Failure(reparentError);
+        }
+
+        trace.Enter(WriteStep.SubmitDesired);
+
+        // ⚠ Deleting → Succeeded, and there was never anything to re-apply. The soft delete never
+        // ran a reconcile pass — docs/plan/08 § Soft delete keeps the volumes, the PVCs and the memory
+        // allocated, which is both why the quota stayed committed and why the data plane is already
+        // exactly as the caller left it. This moves the label, and only the label.
+        var live = await Resource(addressed).CompleteAsync(ProvisioningState.Succeeded, null);
+        if (live.TryGetError(out var completeError)) {
+            return Result<ResourceSnapshot>.Failure(completeError);
+        }
+
+        trace.Enter(WriteStep.EmitChanged);
+        await EmitAsync(ResourceChangeKind.Updated, addressed, live.GetValueOrThrow(), cancellationToken);
+
+        return await Resource(addressed).GetAsync(addressed.ApiVersion.Value, ReadablePointers(addressed.Schema));
+    }
+
+    /// <inheritdoc />
+    public async Task<Result<WriteAccepted>> PurgeAsync(
+        WriteRequest request,
+        CancellationToken cancellationToken = default
+    ) {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var trace = new WriteTraceBuilder();
+        trace.Enter(WriteStep.ResolveRegistration);
+
+        var resolved = await ResolveAsync(request, trace);
+        if (resolved.TryGetError(out var resolveError)) {
+            return Result<WriteAccepted>.Failure(resolveError);
+        }
+
+        var target = resolved.GetValueOrThrow();
+
+        var parked = await RestorableAsync(target);
+        if (parked.TryGetError(out var parkedError)) {
+            return Result<WriteAccepted>.Failure(parkedError);
+        }
+
+        var addressed = target with { Id = target.Id.WithId(parked.GetValueOrThrow()) };
+
+        trace.Enter(WriteStep.AuthorizationCheck);
+
+        // ⚠ THE PURGE PERMISSION, NOT THE DELETE PERMISSION, AND THAT IS THE WHOLE SEPARATION.
+        //
+        // docs/plan/08 § Soft delete: Azure's
+        // `Microsoft.KeyVault/locations/deletedVaults/purge/action` is in Key Vault Contributor's
+        // notActions, "so 'may delete' and 'may destroy permanently' are genuinely separable rights and
+        // a role can hold the first without the second". Checking DeletePermission here would make the
+        // recovery window protect against nobody who could already delete — which is precisely the
+        // caller it is there to protect against, because they are the one whose delete put the resource
+        // here.
+        //
+        // ⚠ The read permission is still the second argument, so a caller who cannot see the
+        // resource gets the same 404 as one for whom it does not exist. docs/plan/07 § The enforcement
+        // seam has no third case, and "you may not purge this" would confirm there is something to
+        // purge.
+        var authorized = await authorizer.AuthorizeAsync(
+            addressed.Id,
+            addressed.Registration.PurgePermission,
+            addressed.Registration.ReadPermission,
+            request.Caller,
+            true,
+            cancellationToken
+        );
+
+        if (authorized.TryGetError(out var authError)) {
+            return Result<WriteAccepted>.Failure(authError);
+        }
+
+        trace.Enter(WriteStep.Locks);
+
+        var lockLevel = await locks.ResolveAsync(addressed.Id, cancellationToken);
+        if (lockLevel.TryGetError(out var lockError)) {
+            return Result<WriteAccepted>.Failure(lockError);
+        }
+
+        if (lockLevel.GetValueOrThrow() is LockLevel.CanNotDelete or LockLevel.ReadOnly) {
+            return Result<WriteAccepted>.Failure(
+                ErrorCode.ScopeLocked,
+                $"'{request.Path}' is covered by a {lockLevel.GetValueOrThrow()} lock, so it cannot be "
+                + "purged. A purge destroys more than a delete does, so a lock that refuses the delete "
+                + "refuses this too — docs/plan/06 § Tags, locks."
+            );
+        }
+
+        // The stored superset, which is both what purge protection is read out of and what the quota
+        // return is derived from. Empty pointers is the whole stored shape rather than one
+        // api-version's view of it — see CommittedBy.
+        var stored = await Resource(addressed).GetAsync(addressed.ApiVersion.Value, []);
+        if (stored.TryGetError(out var storedError)) {
+            return Result<WriteAccepted>.Failure(storedError);
+        }
+
+        var snapshot = stored.GetValueOrThrow();
+
+        // ── Purge protection, which is the one refusal that outranks the permission ──────────────
+        //
+        // ⚠ docs/plan/08 § Soft delete: "Purge protection is a further opt-in flag that cannot be
+        // turned off once on, which is the only version of it that is worth anything." A flag whose
+        // holder can clear it and then purge is one round-trip of protection, so the write path refuses
+        // to clear it and this refuses to purge past it. Both halves, or neither is worth having.
+        //
+        // ⚠ It is checked AFTER the enforcement seam, so it tells an unauthorized caller nothing:
+        // they were answered 404 above. To an authorized one it is a 409 that names what to do, which
+        // is nothing — that is what the flag means.
+        if (IsPurgeProtected(addressed.Registration, snapshot.Properties)) {
+            return Result<WriteAccepted>.Failure(
+                ErrorCode.Conflict,
+                $"'{request.Path}' has purge protection enabled, so it cannot be purged before its "
+                + "recovery window ends. The flag cannot be turned off once on — that is what makes it "
+                + "worth anything — so there is no request that changes this answer. docs/plan/08 "
+                + "§ Soft delete."
+            );
+        }
+
+        trace.Enter(WriteStep.IndexClaim);
+
+        // ⚠ THE NAME COMES BACK NOW, WHICH IS THE HARD DELETE'S ORDER AND FOR THE HARD DELETE'S
+        // REASON. docs/plan/06 § Two-phase create: "release the index first (so the name is
+        // immediately reusable), then tear down the data plane, then delete the grain state." A purge
+        // is the delete this type did not do at the accept, so it does it in the same order — a tenant
+        // who purged in order to re-create should not wait for their own teardown, which is the whole
+        // argument for releasing first.
+        var released = await Index(addressed).ReleaseAsync(addressed.Id.Id);
+        if (released.TryGetError(out var releaseError)) {
+            return Result<WriteAccepted>.Failure(releaseError);
+        }
+
+        trace.Enter(WriteStep.StartOperation);
+
+        var operationId = Guid.NewGuid();
+
+        var started = await Operation(addressed, operationId)
+            .StartAsync(
+                new() {
+                    OperationId = operationId,
+                    Kind = OperationKind.Purge,
+                    ResourcePath = addressed.Id.Path,
+                    ResourceId = addressed.Id.Id,
+                    TenantId = addressed.Id.TenantId,
+                    SubscriptionId = addressed.Id.SubscriptionId,
+                    ApiVersion = addressed.ApiVersion.Value,
+                    Desired = "{}",
+                    QuotaLeaseIds = [],
+                    // ⚠ THE AMOUNTS THE DELETE DID NOT GIVE BACK, DERIVED THE WAY IT DERIVED THEM.
+                    // docs/plan/08 § Soft delete moves the return "from the delete's convergence to the
+                    // purge", and it moves the WHOLE of it — QuotaMeter.Resources included — because a
+                    // per-meter split reintroduces the partial restore. Re-derived here rather than
+                    // copied off the delete's spec: that is a different grain which may be long gone,
+                    // and the resource's stored body is still exactly what the create wrote, so the
+                    // same AmountFor over the same JSON gives the same numbers.
+                    CommittedQuota = CommittedBy(addressed.Registration, snapshot.Properties),
+                    IndexClaimed = false,
+                    ParentResourceId = await ParentIdOf(addressed),
+                    Caller = request.Caller
+                }
+            );
+
+        if (started.TryGetError(out var startError)) {
+            return Result<WriteAccepted>.Failure(startError);
+        }
+
+        trace.Enter(WriteStep.EmitChanged);
+        await EmitAsync(ResourceChangeKind.Deleting, addressed, snapshot, cancellationToken);
+
+        trace.Enter(WriteStep.Accepted);
+
+        return Result<WriteAccepted>.Success(
+            new() {
+                OperationId = operationId,
+                OperationUri = OperationUri(operationId),
+                RetryAfterSeconds = ReconcileSchedule.InitialRetryAfterSeconds,
+                Resource = snapshot,
+                Trace = trace.Build()
+            }
+        );
+    }
+
+    /// <summary>
+    ///     The GUID of the soft-deleted resource at this address, or the canonical <c>404</c>.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>The failure is <c>NotFound</c> from the same helper every other absence uses, and
+    ///     that identity is the property.</b> A name that never existed, a live resource, a soft-deleted
+    ///     resource in another tenant and one whose window has passed all answer the same sentence.
+    ///     Anything else here is the enumeration oracle docs/plan/07 § The enforcement seam closes,
+    ///     reopened by the two verbs that know soft delete exists.
+    /// </remarks>
+    async Task<Result<Guid>> RestorableAsync(WriteTarget target) {
+        if (target.Registration.SoftDeleteDays <= 0) {
+            // ⚠ Not "this type has no recovery window". That is a fact a caller can read out of the
+            // generated document, but as an ANSWER HERE it separates "wrong type" from "wrong name" —
+            // and the pair of them is how a name gets enumerated.
+            return NotFound<Guid>(target.Id.Path);
+        }
+
+        var parked = await Index(target).ResolveSoftDeletedAsync();
+
+        return parked.IsSuccess ? parked : NotFound<Guid>(target.Id.Path);
+    }
+
+    /// <summary>
+    ///     The refusal a write gets when it would turn purge protection off, or
+    ///     <see langword="null" />.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Turning it ON is always allowed and turning it off never is</b>, which is what "opt-in,
+    ///     and cannot be turned off once on" means as a state machine: one edge, no inverse. There is
+    ///     deliberately no administrative override — an override is the bypass with a nicer name, and
+    ///     the resource becomes purgeable on its own when the window ends anyway.
+    /// </remarks>
+    async Task<Error?> PurgeProtectionRefusalAsync(WriteRequest request, WriteTarget target, JsonElement body) {
+        var stored = await Resource(target).GetAsync(target.ApiVersion.Value, []);
+
+        if (stored.IsFailure || !IsPurgeProtected(target.Registration, stored.GetValueOrThrow().Properties)) {
+            return null;
+        }
+
+        var incoming = MeterDerivation.Resolve(body, target.Registration.PurgeProtectionPointer);
+
+        var clearing = request.Verb == WriteVerb.Put
+            ? incoming is not { ValueKind: JsonValueKind.True }
+            : incoming is { ValueKind: JsonValueKind.False };
+
+        return clearing
+            ? new Error(
+                ErrorCode.Conflict,
+                $"'{request.Path}' has purge protection enabled and it cannot be turned off — "
+                + "docs/plan/08 § Soft delete: a flag whose holder can clear it and then purge is not a "
+                + "protection. Send it as true, or wait for the recovery window to end.",
+                target.Registration.PurgeProtectionPointer
+            )
+            : null;
+    }
+
+    /// <summary>Whether this resource has purge protection turned on.</summary>
+    /// <remarks>
+    ///     ⚠ <b>Absent, unparseable and non-boolean all read as OFF, and that is the only safe
+    ///     direction even though it is the failing-open one.</b> The failing-closed reading is worse: a
+    ///     type whose pointer named nothing would refuse every purge of every resource forever, and
+    ///     there is no request that clears it. What keeps the fail-open from being silent is
+    ///     <c>ProviderBuilder.CheckPurgeProtection</c>, which refuses at silo start a type whose
+    ///     api-versions do not declare the pointer as a boolean — so a pointer that reads as absent
+    ///     means the caller did not set the flag, which is what off means.
+    /// </remarks>
+    static bool IsPurgeProtected(ResourceTypeRegistration registration, string properties) {
+        if (registration.PurgeProtectionPointer.Length == 0 || properties.Length == 0) {
+            return false;
+        }
+
+        JsonDocument body;
+        try {
+            body = JsonDocument.Parse(properties);
+        }
+        catch (JsonException) {
+            return false;
+        }
+
+        using (body) {
+            return MeterDerivation.Resolve(body.RootElement, registration.PurgeProtectionPointer)
+                is { ValueKind: JsonValueKind.True };
+        }
+    }
+
+    /// <summary>
+    ///     The GUID of the resource this address names as its parent, or <see cref="Guid.Empty" />.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ Resolved on the request path, where somebody is still waiting, for the reason
+    ///     <c>OperationSpec.ParentResourceId</c> gives: the unlink runs from a reminder after the
+    ///     resource is gone, and a lookup there would fail every retry. A parent that no longer resolves
+    ///     leaves this <see cref="Guid.Empty" /> rather than failing the request — the child is an
+    ///     orphan, and refusing would strand it unpurgeable.
+    /// </remarks>
+    async Task<Guid> ParentIdOf(WriteTarget target) {
+        if (target.Id.Parent is not { } parentAddress) {
+            return Guid.Empty;
+        }
+
+        var bound = await Tenant(target)
+            .GetGrain<IResourceIndexGrain>(GrainKeys.PathIndex(parentAddress))
+            .ResolveAsync();
+
+        return bound.IsSuccess ? bound.GetValueOrThrow() : Guid.Empty;
     }
 
     /// <inheritdoc />
@@ -620,6 +1058,30 @@ public sealed class ResourceManagerService(
                 $"'{request.Path}' is covered by a ReadOnly lock, so writes are refused — "
                 + "docs/plan/06 § Tags, locks, and the small stuff that is not small."
             );
+        }
+
+        // ── 4b. Purge protection, once on, may not be turned off ────────────────────────────────
+        //
+        // ⚠ THE OTHER HALF OF THE FLAG, AND WITHOUT IT THE FLAG IS WORTH NOTHING.
+        //
+        // docs/plan/08 § Soft delete: "Purge protection is a further opt-in flag that cannot be turned
+        // off once on, which is the only version of it that is worth anything." PurgeAsync refuses a
+        // protected resource; that refusal is one PATCH away from being bypassed unless this line
+        // exists, and an attacker who can write can already do the delete. One round-trip of protection
+        // is not protection.
+        //
+        // ⚠ AGAINST THE STORED VALUE AND NOT AGAINST THE REQUEST'S OWN PREVIOUS STATE. The question is
+        // "is it on right now", which only the resource grain knows; a caller who sends a full PUT
+        // omitting the flag is asking for it to be cleared just as plainly as one who sends `false`,
+        // which is why a PUT is checked for the presence of `true` rather than the absence of `false`.
+        // A PATCH is the opposite — a merge patch omits everything it is not changing — so only an
+        // explicit `false` is a refusal there. That asymmetry is the whole difference between the
+        // verbs, and it is the same one step 2 makes about requiredness.
+        if (target.Exists && target.Registration.PurgeProtectionPointer.Length > 0) {
+            var refusal = await PurgeProtectionRefusalAsync(request, target, body);
+            if (refusal is { } locked) {
+                return Result<WriteAccepted>.Failure(locked);
+            }
         }
 
         // ── 5. Policy — deny, modify, audit ─────────────────────────────────────────────────────

@@ -145,6 +145,43 @@ public sealed class ConformingReconciler(IClock clock) : IResourceReconciler {
 }
 
 /// <summary>
+///     <see cref="ConformingReconciler" />'s behaviour, declared against the soft-deletable type.
+/// </summary>
+/// <remarks>
+///     ⚠ <b>A second class rather than a second registration, because <see cref="Type" /> is a property
+///     of the reconciler and not of the declaration.</b> <c>ReconcileDriver</c> resolves the registry's
+///     <c>ReconcilerType</c> from the container and the registry pairs it with the type that declared
+///     it, so one instance cannot serve two types. The behaviour is delegated rather than copied —
+///     <see cref="FakeWorld" /> is keyed on the resource GUID and knows nothing about types, so the
+///     whole of clause 4's read-back is shared and a divergence between the two is impossible.
+/// </remarks>
+/// <param name="clock">The harness's clock.</param>
+public sealed class SoftDeletableReconciler(Core.Time.IClock clock) : IResourceReconciler {
+    readonly ConformingReconciler inner = new(clock);
+
+    /// <inheritdoc />
+    public ResourceTypeName Type => TestingProvider.VaultTypeName;
+
+    /// <inheritdoc />
+    public Task<ReconcileOutcome> ReconcileAsync(
+        ReconcileContext context,
+        CancellationToken cancellationToken = default
+    ) =>
+        inner.ReconcileAsync(context, cancellationToken);
+
+    /// <inheritdoc />
+    public Task<ReconcileOutcome> DeleteAsync(
+        ReconcileContext context,
+        CancellationToken cancellationToken = default
+    ) =>
+        inner.DeleteAsync(context, cancellationToken);
+
+    /// <inheritdoc />
+    public Task<ObservedState> ObserveAsync(ObserveContext context, CancellationToken cancellationToken = default) =>
+        inner.ObserveAsync(context, cancellationToken);
+}
+
+/// <summary>
 ///     A reconciler that breaks every clause it can, so the conformance suite can be shown to reject
 ///     one.
 /// </summary>
@@ -321,7 +358,14 @@ public sealed class TestingProvider : IResourceProvider {
                 longRunning: true
             )
             .Display("Testing widget", "Testing widgets", shortName: "twidget")
-            .SupportsSoftDelete(7)
+            // ⚠ NO SupportsSoftDelete, AND IT USED TO DECLARE ONE. While nothing in the manager read
+            // SoftDeleteDays the declaration was inert and this type could carry it for the emitters'
+            // benefit. It is read now — a positive window makes DELETE park the resource instead of
+            // tearing it down — so leaving it here would have turned every hard-delete assertion in
+            // DeletePathTests, ParentEdgeStepTests and MeteredAmountTests into an assertion about soft
+            // delete under the old name, and the hard-delete path would have lost its only type with a
+            // reconciler and FakeWorld choreography behind it. The window moved to `vaults` below,
+            // which exists for it.
             .SupportsTags()
             // ── The second type, and it exists for one reason ───────────────────────────────────
             //
@@ -358,8 +402,91 @@ public sealed class TestingProvider : IResourceProvider {
             .ApiVersion(V2026, ChildSchema)
             .Meters(QuotaMeter.Resources)
             .Permissions("read", "write", "delete")
-            .Display("Gadget", "Gadgets", shortName: "gadget");
+            .Display("Gadget", "Gadgets", shortName: "gadget")
+            // ── The fourth type: the only SOFT-DELETABLE one ─────────────────────────────────────
+            //
+            // ⚠ NO PROVIDER IN THE CATALOGUE DECLARES A RECOVERY WINDOW YET, and docs/plan/08 § Soft
+            // delete is explicit that none should until the whole of it is built — "the five stated
+            // reasons in the tree are correct and stay correct; the declaration is the last step, not
+            // the first". So without this fixture the branch the manager now takes on
+            // SoftDeleteDays > 0 would be code nothing can run.
+            //
+            // ⚠ IT MIRRORS `widgets` DELIBERATELY: same meters, same reconciler behaviour, one extra
+            // property. Every soft-delete test therefore has a hard-delete twin over the same
+            // arithmetic and the same FakeWorld, which is what makes "a delete returns exactly what
+            // the create committed" and "a PURGE returns exactly what the create committed" comparable
+            // rather than two separate claims.
+            //
+            // ⚠ AND IT HAS A RECONCILER, unlike `sizedwidgets`. A purge is the teardown the delete did
+            // not do, so testing that the purge — and only the purge — takes the data plane down needs
+            // a type whose data plane something actually applies.
+            .ResourceType(VaultType)
+            .ApiVersion(V2026, VaultSchema)
+            .Reconciler<SoftDeletableReconciler>()
+            .Meter(QuotaMeter.Vcpu, "/properties/size")
+            .Meters(QuotaMeter.Resources)
+            .Permissions("read", "write", "delete")
+            // ⚠ The purge permission is NOT "delete", and that is the fixture's whole point on this
+            // line. docs/plan/08 § Soft delete keeps "may delete" and "may destroy permanently"
+            // separable, and a fixture that spelled them the same would make every purge-authorization
+            // test pass without the separation existing.
+            .SupportsSoftDelete(7, "purge", PurgeProtectionPointer)
+            .Display("Testing vault", "Testing vaults", shortName: "tvault");
     }
+
+    // ── The fourth type: soft-deletable ────────────────────────────────────────────────────────
+
+    /// <summary>The soft-deletable type's path.</summary>
+    public const string VaultType = "vaults";
+
+    /// <summary>Where <see cref="VaultSchema" /> puts the purge-protection flag.</summary>
+    public const string PurgeProtectionPointer = "/properties/enablePurgeProtection";
+
+    /// <summary>The soft-deletable type's name.</summary>
+    public static ResourceTypeName VaultTypeName { get; } = new("CyberCloud.Testing", VaultType);
+
+    /// <summary>
+    ///     The soft-deletable type's shape: <see cref="Schema2026" />'s metered size, plus the
+    ///     purge-protection flag.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>The flag is OPTIONAL and boolean, and both matter.</b> Optional because purge
+    ///     protection is opt-in — a required flag whose only honest value is <c>false</c> is a required
+    ///     field for nothing. Boolean because <c>ProviderBuilder.CheckPurgeProtection</c> refuses
+    ///     anything else at silo start: a protection the write path had to <i>interpret</i> is one that
+    ///     can fail open, and a protection that fails open is not one.
+    /// </remarks>
+    public static ResourceSchema VaultSchema { get; } =
+        ResourceSchema.Of(
+            [
+                new("/location", SchemaKind.Text, Required: true),
+                new("/properties", SchemaKind.Nested),
+                new("/properties/size", SchemaKind.WholeNumber, Required: true),
+                new(PurgeProtectionPointer, SchemaKind.Boolean)
+            ]
+        );
+
+    /// <summary>A body that satisfies <see cref="VaultSchema" />.</summary>
+    /// <param name="size">The size, which is also the vcpu quota draw.</param>
+    /// <param name="purgeProtection">
+    ///     Whether to send the purge-protection flag, and as what. <see langword="null" /> omits the
+    ///     property entirely, which is the ordinary case and the one that must read as off.
+    /// </param>
+    public static string VaultBody(int size = 2, bool? purgeProtection = null) {
+        var properties = new JsonObject { ["size"] = size };
+
+        if (purgeProtection is { } flag) {
+            properties["enablePurgeProtection"] = flag;
+        }
+
+        return JsonSerializer.Serialize(
+            new JsonObject { ["location"] = "eu-central", ["properties"] = properties }
+        );
+    }
+
+    /// <summary>The declared pointers of <see cref="VaultSchema" />.</summary>
+    public static ImmutableArray<string> VaultPointers =>
+        [.. VaultSchema.Properties.Select(x => x.JsonPointer)];
 
     // ── The third type: a child of `widgets` ───────────────────────────────────────────────────
 

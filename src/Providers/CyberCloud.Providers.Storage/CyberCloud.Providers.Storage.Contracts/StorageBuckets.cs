@@ -281,7 +281,8 @@ public static class StorageBuckets {
     ///             <b><c>reclaimPolicy</c></b> — <c>Retain</c> would leave object data alive in an account
     ///             with no resource addressing it: untracked, unbilled, and removable only by hand. It is
     ///             also the wrong axis for the problem it looks like it solves — a recovery window is
-    ///             docs/plan/06's <c>SupportsSoftDelete</c>, which nothing in the manager reads.
+    ///             docs/plan/06's <c>SupportsSoftDelete</c>, which the manager honours now (docs/plan/08
+    ///             § Soft delete) and which this type has still not declared.
     ///             <c>StorageBucketReconciler</c> renders no <c>reclaimPolicy</c> and takes the CRD's own
     ///             default, so this platform never asks for retention it cannot account for.
     ///         </item>

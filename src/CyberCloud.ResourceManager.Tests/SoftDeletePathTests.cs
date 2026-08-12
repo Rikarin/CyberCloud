@@ -1,0 +1,842 @@
+using CyberCloud.ResourceManager.Tests.Infrastructure;
+
+namespace CyberCloud.ResourceManager.Tests;
+
+/// <summary>
+///     Soft delete — docs/plan/08 § Soft delete, all four decisions.
+/// </summary>
+/// <remarks>
+///     <para>
+///         ⚠ <b>Every case here runs against <c>CyberCloud.Testing/vaults</c> and every case in
+///         <see cref="DeletePathTests" /> runs against <c>widgets</c>, and the pair is the design.</b>
+///         The two types declare the same meters, the same reconciler behaviour and the same body
+///         shape; they differ in one registry fact. So "a delete tears the resource down" and "a delete
+///         parks it" are the same test over the same arithmetic with one declaration changed, which is
+///         what makes the branch the manager takes on <c>SoftDeleteDays</c> observable rather than
+///         assumed.
+///     </para>
+///     <para>
+///         ⚠ <b>The sharpest failure this feature has is a soft-deleted resource that is still readable
+///         at its old address</b>, and docs/plan/08 chose to move the resource out of the tree rather
+///         than flag it in place precisely to make that unreachable by construction.
+///         <see cref="TheOldAddressAnswersTheCanonical404OnReadOnDeleteAndOnTheIndexClaim" /> is the
+///         assertion, and it checks all three doors.
+///     </para>
+/// </remarks>
+[Collection(ResourceManagerSuite.Name)]
+public sealed class SoftDeletePathTests(ResourceManagerCluster cluster) {
+    // ── (a) and (b): the resource leaves, and the 404 is the canonical one ──────────────────────
+
+    /// <summary>
+    ///     ⚠ <b>The old address is gone on every door, and the <c>404</c> is byte for byte the one a
+    ///     name that was never taken gets.</b>
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         docs/plan/08 § Soft delete rejects the "stay in place with a flag" design because it
+    ///         <i>"puts an 'unless deleted' clause on every read path, every list, every ReBAC check
+    ///         and the index claim, and the feature is then only as good as the least-remembered of
+    ///         them"</i>. The three doors below are that list: a read, a second delete, and the index
+    ///         claim a create goes through.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The byte-for-byte comparison is the second half and it is the one worth
+    ///         defending.</b> A <c>404</c> that differed in shape, body or wording from a genuine
+    ///         absence is an oracle just as surely as the <c>410 Gone</c> the document forbids — it
+    ///         would let a caller who may not read the resource tell "this name is held by something I
+    ///         cannot see" from "this name is free". So the message is compared against a real absence
+    ///         at a name nothing ever claimed, rather than merely asserted to be
+    ///         <see cref="ErrorCode.ResourceNotFound" />.
+    ///     </para>
+    /// </remarks>
+    [Fact]
+    public async Task TheOldAddressAnswersTheCanonical404OnReadOnDeleteAndOnTheIndexClaim() {
+        ResourceManagerCluster.ResetDoubles();
+        var address = ResourceManagerCluster.VaultAddress("gone-from-here");
+
+        var created = await Create(address);
+        created.IsSuccess.ShouldBeTrue(created.Error?.Message);
+        await Converge(created.GetValueOrThrow());
+
+        (await Read(address)).IsSuccess.ShouldBeTrue("the resource is readable before the delete");
+
+        var deleted = await Delete(address);
+        deleted.IsSuccess.ShouldBeTrue(deleted.Error?.Message);
+
+        // The 404 a name nothing ever claimed gets, at an address of the same type in the same group.
+        var absent = await Read(ResourceManagerCluster.VaultAddress("never-existed"));
+        absent.IsFailure.ShouldBeTrue();
+
+        // ── Door 1: a read ──────────────────────────────────────────────────────────────────────
+        var read = await Read(address);
+        read.IsFailure.ShouldBeTrue("a soft-deleted resource is not readable at its old address");
+        read.Error!.Code.ShouldBe(ErrorCode.ResourceNotFound);
+
+        read.Error.Message.ShouldBe(
+            absent.Error!.Message.Replace("never-existed", "gone-from-here", StringComparison.Ordinal),
+            "the 404 differs from a genuine absence, which makes it an oracle — docs/plan/08 § Soft "
+            + "delete forbids a 410 Gone for exactly this reason and a distinguishable 404 is the same "
+            + "leak wearing the right status code"
+        );
+
+        read.Error.Target.ShouldBe(absent.Error.Target, "even the target must not differ");
+
+        // ── Door 2: a second delete ─────────────────────────────────────────────────────────────
+        var again = await Delete(address);
+        again.IsFailure.ShouldBeTrue("a soft-deleted resource cannot be deleted again — it is not there");
+        again.Error!.Code.ShouldBe(ErrorCode.ResourceNotFound);
+
+        // ── Door 3: the index claim ─────────────────────────────────────────────────────────────
+        //
+        // ⚠ A create at the held name is refused, and it is refused as a CONFLICT rather than as an
+        // absence — which is not a contradiction of the two doors above. The caller reaching this point
+        // has already passed the enforcement seam on the resource GROUP, and for them a live resource
+        // answers 409 too. What must not differ is the answer a caller who cannot read gets, and that
+        // is what door 1 pins.
+        var recreated = await Create(address);
+        recreated.IsFailure.ShouldBeTrue("the name is held for the whole window");
+        recreated.Error!.Code.ShouldBe(ErrorCode.ResourceAlreadyExists);
+    }
+
+    // ── (e): the name is held, and the entry is not Free ────────────────────────────────────────
+
+    /// <summary>
+    ///     ⚠ <b>The name is held for the whole window, and a restore has somewhere to go because of
+    ///     it.</b>
+    /// </summary>
+    /// <remarks>
+    ///     docs/plan/08 § Soft delete: Azure holds it — <i>"You can't reuse the name of a key vault
+    ///     that was soft-deleted, until the retention period expires"</i> — and <i>"releasing it is the
+    ///     cheaper-sounding option and it breaks restore: a name taken by somebody else leaves a
+    ///     restore with nowhere to go, so it would have to fail or overwrite, and both are worse than
+    ///     making the tenant wait"</i>. This is the exact inverse of
+    ///     <c>DeletePathTests.TheIndexIsReleasedFirstSoTheNameIsImmediatelyReusable</c>, which is
+    ///     correct for the type that declares no window.
+    /// </remarks>
+    [Fact]
+    public async Task TheNameIsHeldForTheWholeWindowAndTheEntryIsNotFree() {
+        ResourceManagerCluster.ResetDoubles();
+        var address = ResourceManagerCluster.VaultAddress("name-held");
+
+        var created = await Create(address);
+        await Converge(created.GetValueOrThrow());
+        await Delete(address);
+
+        var entry = (await cluster.Index(address).GetAsync()).GetValueOrThrow();
+
+        entry.State.ShouldBe(
+            IndexEntryState.SoftDeleted,
+            "the name must not come back — a restore would have nowhere to go"
+        );
+
+        entry.State.ShouldNotBe(IndexEntryState.Free);
+        entry.BoundTo.ShouldBe(created.GetValueOrThrow().Resource.Id);
+
+        // ⚠ Late in the window, not merely immediately after. The claim machine collapses an expired
+        // LEASE to Free on read, and a recovery window that shared that behaviour would hand the name
+        // away at the instant the resource became unrecoverable — see IndexEntryState.SoftDeleted.
+        TestClock.Instance.Advance(TimeSpan.FromDays(6));
+
+        (await cluster.Index(address).GetAsync()).GetValueOrThrow()
+            .State.ShouldBe(IndexEntryState.SoftDeleted, "six days into a seven-day window");
+
+        var stolen = await Create(address);
+        stolen.IsFailure.ShouldBeTrue("somebody else must not be able to take the name mid-window");
+        stolen.Error!.Code.ShouldBe(ErrorCode.ResourceAlreadyExists);
+    }
+
+    // ── (c): the quota moves to the purge, and is returned exactly once ─────────────────────────
+
+    /// <summary>
+    ///     ⚠ <b>A delete of a soft-deletable type returns nothing; the purge returns exactly what the
+    ///     create committed, on every meter.</b>
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         docs/plan/08 § Soft delete's third decision, and the document calls it <i>"the decision
+    ///         most easily got wrong from Azure by analogy"</i>. A soft-deleted Key Vault is free only
+    ///         because a vault reserves no capacity; where the deleted thing does hold capacity Azure
+    ///         holds both — Managed HSM bills <i>"at their full hourly rate until they're purged"</i>.
+    ///         A CyberCloud resource in its window consumes plenty, <i>"because handing the data back
+    ///         is the entire feature: the volumes, the PVCs and the memory are all still
+    ///         allocated"</i>.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Both meters, and <c>QuotaMeter.Resources</c> is the one that matters.</b> The
+    ///         document moves <i>the whole of it</i> — <c>Resources</c> too, "even though a
+    ///         soft-deleted resource is not one anybody can use, because a per-meter split reintroduces
+    ///         the partial restore". A fix that returned the count meter at the delete and the capacity
+    ///         meters at the purge would pass a one-meter test and be exactly the defect.
+    ///     </para>
+    ///     <para>
+    ///         This is <c>DeletePathTests.ADeleteReturnsExactlyWhatTheCreateCommittedOnEveryMeter</c>
+    ///         with the arithmetic unchanged and the moment moved, which is what the document asks for.
+    ///     </para>
+    /// </remarks>
+    [Fact]
+    public async Task ThePurgeReturnsExactlyWhatTheCreateCommittedOnEveryMeterAndTheDeleteReturnsNothing() {
+        ResourceManagerCluster.ResetDoubles();
+        var address = ResourceManagerCluster.VaultAddress("returns-at-purge");
+
+        var quota = cluster.Quota(ResourceManagerCluster.Tenant, ResourceManagerCluster.Subscription);
+        var vcpuBefore = (await quota.GetUsageAsync(QuotaMeter.Vcpu)).GetValueOrThrow().Committed;
+        var countBefore = (await quota.GetUsageAsync(QuotaMeter.Resources)).GetValueOrThrow().Committed;
+
+        var created = await Create(address, size: 5);
+        created.IsSuccess.ShouldBeTrue(created.Error?.Message);
+        await Converge(created.GetValueOrThrow());
+
+        (await quota.GetUsageAsync(QuotaMeter.Vcpu)).GetValueOrThrow().Committed.ShouldBe(vcpuBefore + 5);
+        (await quota.GetUsageAsync(QuotaMeter.Resources)).GetValueOrThrow().Committed.ShouldBe(countBefore + 1);
+
+        var deleted = await Delete(address);
+        await Converge(deleted.GetValueOrThrow());
+
+        // ── The delete gives back NOTHING ───────────────────────────────────────────────────────
+        (await quota.GetUsageAsync(QuotaMeter.Vcpu)).GetValueOrThrow()
+            .Committed.ShouldBe(
+                vcpuBefore + 5,
+                "the volumes, the PVCs and the memory are all still allocated, so the quota stays "
+                + "committed — docs/plan/08 § Soft delete"
+            );
+
+        (await quota.GetUsageAsync(QuotaMeter.Resources)).GetValueOrThrow()
+            .Committed.ShouldBe(
+                countBefore + 1,
+                "QuotaMeter.Resources moves with the rest: a per-meter split reintroduces the partial "
+                + "restore"
+            );
+
+        // ── The purge gives back everything, once ───────────────────────────────────────────────
+        var purged = await Purge(address);
+        purged.IsSuccess.ShouldBeTrue(purged.Error?.Message);
+
+        var operation = cluster.Operation(ResourceManagerCluster.Tenant, purged.GetValueOrThrow().OperationId);
+        (await operation.DriveAsync()).GetValueOrThrow().State.ShouldBe(OperationState.Succeeded);
+
+        (await quota.GetUsageAsync(QuotaMeter.Vcpu)).GetValueOrThrow().Committed.ShouldBe(vcpuBefore);
+        (await quota.GetUsageAsync(QuotaMeter.Resources)).GetValueOrThrow().Committed.ShouldBe(countBefore);
+
+        // ⚠ NOT TWICE. The operation is re-drivable from a reminder and is already terminal.
+        await operation.DriveAsync();
+
+        (await quota.GetUsageAsync(QuotaMeter.Vcpu)).GetValueOrThrow().Committed.ShouldBe(vcpuBefore);
+        (await quota.GetUsageAsync(QuotaMeter.Resources)).GetValueOrThrow().Committed.ShouldBe(countBefore);
+    }
+
+    /// <summary>
+    ///     ⚠ <b>Ten create/soft-delete/purge cycles leave every meter where they started.</b>
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         <c>MeteredAmountTests.TenCreateDeleteCyclesLeaveTheMetersWhereTheyStarted</c> for a
+    ///         soft-deletable type, which is what docs/plan/08 § Soft delete asks for — the arithmetic
+    ///         unchanged, the moment moved.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>It catches the mirror of the bug that test was written for.</b> That one caught
+    ///         quota drifting <i>up</i>, because a delete returned nothing. This catches quota drifting
+    ///         <i>down</i>, because a soft delete that also returned would credit the meter twice — once
+    ///         at the delete and again at the purge — and a single cycle hides it inside the
+    ///         create/return symmetry. Ten cycles of a double credit is ten resources' worth of free
+    ///         allowance, which is the shape a limit fails silently in.
+    ///     </para>
+    /// </remarks>
+    [Fact]
+    public async Task TenCreateSoftDeletePurgeCyclesLeaveTheMetersWhereTheyStarted() {
+        ResourceManagerCluster.ResetDoubles();
+
+        var quota = cluster.Quota(ResourceManagerCluster.Tenant, ResourceManagerCluster.Subscription);
+        var vcpuBefore = (await quota.GetUsageAsync(QuotaMeter.Vcpu)).GetValueOrThrow().Committed;
+        var countBefore = (await quota.GetUsageAsync(QuotaMeter.Resources)).GetValueOrThrow().Committed;
+
+        for (var i = 0; i < 10; i++) {
+            // ⚠ The same NAME every time, which is only possible because the purge released it. A
+            // cycle that had to invent a new name each round would not notice a purge that left the
+            // index parked.
+            var address = ResourceManagerCluster.VaultAddress("cycled");
+
+            var created = await Create(address, size: 3);
+            created.IsSuccess.ShouldBeTrue($"cycle {i}: {created.Error?.Message}");
+            await Converge(created.GetValueOrThrow());
+
+            var deleted = await Delete(address);
+            deleted.IsSuccess.ShouldBeTrue($"cycle {i}: {deleted.Error?.Message}");
+            await Converge(deleted.GetValueOrThrow());
+
+            var purged = await Purge(address);
+            purged.IsSuccess.ShouldBeTrue($"cycle {i}: {purged.Error?.Message}");
+            await Converge(purged.GetValueOrThrow());
+        }
+
+        (await quota.GetUsageAsync(QuotaMeter.Vcpu)).GetValueOrThrow()
+            .Committed.ShouldBe(
+                vcpuBefore,
+                "ten cycles moved the vcpu meter — a soft delete that returned quota AND a purge that "
+                + "returned it again drifts a subscription's allowance downward, which is the mirror "
+                + "of the defect MeteredAmountTests was written for"
+            );
+
+        (await quota.GetUsageAsync(QuotaMeter.Resources)).GetValueOrThrow().Committed.ShouldBe(countBefore);
+    }
+
+    // ── The data plane stays up, which is what the quota is holding ─────────────────────────────
+
+    /// <summary>
+    ///     ⚠ <b>A soft delete tears nothing down, and the purge is what does.</b>
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>This is the assertion the quota decision rests on.</b> docs/plan/08 § Soft delete's
+    ///     rule is that <i>"soft delete is free exactly when the deleted thing consumes no reserved
+    ///     capacity"</i>, and holds the quota because a CyberCloud resource's volumes, PVCs and memory
+    ///     are all still allocated during the window. If a soft delete <i>did</i> tear the data plane
+    ///     down, holding the quota would be charging for nothing and the whole third decision would be
+    ///     wrong. So the two are one fact and are asserted together.
+    /// </remarks>
+    [Fact]
+    public async Task ASoftDeleteLeavesTheDataPlaneUpAndOnlyThePurgeTakesItDown() {
+        ResourceManagerCluster.ResetDoubles();
+        var address = ResourceManagerCluster.VaultAddress("still-running");
+
+        var created = await Create(address);
+        await Converge(created.GetValueOrThrow());
+
+        var resourceId = created.GetValueOrThrow().Resource.Id;
+        FakeWorld.Applied.ShouldContainKey(resourceId);
+
+        var deleted = await Delete(address);
+        await Converge(deleted.GetValueOrThrow());
+
+        FakeWorld.Applied.ShouldContainKey(
+            resourceId,
+            "handing the data back is the entire feature, so the volumes and the PVCs stay allocated "
+            + "for the whole window — docs/plan/08 § Soft delete"
+        );
+
+        // ⚠ And no teardown pass was even attempted. A reconciler that was asked to delete and
+        // declined would leave the objects there too, so "the objects are still there" alone would
+        // pass over an implementation that tried and failed — which would be Deleting-forever rather
+        // than parked.
+        FakeWorld.Deletes.ShouldNotContainKey(
+            resourceId,
+            "a soft delete must run no teardown pass at all"
+        );
+
+        var purged = await Purge(address);
+        await Converge(purged.GetValueOrThrow());
+
+        FakeWorld.Applied.ShouldNotContainKey(resourceId, "the purge is the teardown the delete deferred");
+        FakeWorld.Deletes.ShouldContainKey(resourceId);
+    }
+
+    // ── (d): the resource is never invisible ───────────────────────────────────────────────────
+
+    /// <summary>
+    ///     ⚠ <b>The parent edge moves to the subscription while deleted and back to the resource group
+    ///     on restore, and there is no moment with no edge at all.</b>
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         docs/plan/08 § Soft delete: the group tuple <i>"asserts a containment that is no longer
+    ///         true. Preserving it is not the conservative choice, it is the wrong one."</i> And the
+    ///         reason re-parenting beats dropping: <i>"The resource is never parentless, so the failure
+    ///         that made the parent tuple necessary in the first place — a resource nobody can see, and
+    ///         a silo lost in that window leaving it that way — cannot happen during the recovery
+    ///         window either."</i>
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>This bug already happened once, on create, before the parent tuple was written</b>
+    ///         — see the write path's step 8. Asserting the edge is <i>present and pointing at the
+    ///         subscription</i> rather than merely "still present" is what tells a re-parent from a
+    ///         no-op.
+    ///     </para>
+    /// </remarks>
+    [Fact]
+    public async Task TheParentEdgeMovesToTheSubscriptionWhileDeletedAndBackOnRestore() {
+        ResourceManagerCluster.ResetDoubles();
+        var address = ResourceManagerCluster.VaultAddress("reparented");
+
+        var created = await Create(address);
+        await Converge(created.GetValueOrThrow());
+
+        var resourceId = created.GetValueOrThrow().Resource.Id;
+        var group = "resourceGroup:" + ResourceManagerCluster.Subscription.ToString("N") + "-prod";
+        var subscription = "subscription:" + ResourceManagerCluster.Subscription.ToString("N");
+
+        RecordingRelationWriter.Edges[resourceId].ShouldBe(group, "a live resource hangs off its group");
+
+        var deleted = await Delete(address);
+        await Converge(deleted.GetValueOrThrow());
+
+        RecordingRelationWriter.Edges.ShouldContainKey(
+            resourceId,
+            "the resource is never parentless — dropping the edge is the option docs/plan/08 § Soft "
+            + "delete rejected, because a resource nobody can see is the failure the edge exists to "
+            + "prevent"
+        );
+
+        RecordingRelationWriter.Edges[resourceId].ShouldBe(
+            subscription,
+            "who can see a deleted resource becomes who holds subscription-scoped rights, which is "
+            + "exactly who Azure gives deletedVaults/read and purge/action to"
+        );
+
+        var restored = await Restore(address);
+        restored.IsSuccess.ShouldBeTrue(restored.Error?.Message);
+
+        RecordingRelationWriter.Edges[resourceId].ShouldBe(
+            group,
+            "the edge moves back on restore — the resource is in its group again"
+        );
+
+        // ── And a purge takes the edge with it, whichever one the resource is holding ────────────
+        //
+        // ⚠ THIS THIRD PHASE EXISTS BECAUSE SABOTAGE FOUND NOTHING WITHOUT IT. Making the purge call
+        // UnlinkFromParentAsync — which builds the resource group's subject — instead of
+        // UnlinkFromSubscriptionAsync left every test in this file green, because a soft-deleted
+        // resource's edge names the subscription and the unlink would have deleted a tuple that was
+        // not there, reported success, and left one inert row per purged resource forever with nothing
+        // to notice it.
+        var deletedAgain = await Delete(address);
+        await Converge(deletedAgain.GetValueOrThrow());
+
+        RecordingRelationWriter.Edges[resourceId].ShouldBe(subscription);
+
+        var purged = await Purge(address);
+        purged.IsSuccess.ShouldBeTrue(purged.Error?.Message);
+        await Converge(purged.GetValueOrThrow());
+
+        RecordingRelationWriter.Edges.ShouldNotContainKey(
+            resourceId,
+            "the resource is destroyed and its parent tuple is not — the purge has to unlink the edge "
+            + "the resource ACTUALLY holds, which by then names the subscription and not the group"
+        );
+    }
+
+    /// <summary>
+    ///     ⚠ <b>A role assignment written directly on the resource is absent after a restore.</b>
+    /// </summary>
+    /// <remarks>
+    ///     docs/plan/08 § Soft delete, and it is a security answer rather than a modelling one:
+    ///     <i>"The recovery window is used after a compromise or after a decommission somebody wants to
+    ///     undo, and those are the cases that decide it. Silently restoring a grant an administrator
+    ///     deliberately removed is an error nobody observes. Making somebody re-grant after a restore is
+    ///     an error everybody observes and can fix in a minute. Take the visible failure."</i> Both this
+    ///     and the edge above are data rather than schema and so are cheap to reverse — but only if a
+    ///     test pins the intent now, which is why the document asks for these two by description.
+    /// </remarks>
+    [Fact]
+    public async Task ARoleAssignmentWrittenDirectlyOnTheResourceIsGoneAfterARestore() {
+        ResourceManagerCluster.ResetDoubles();
+        var address = ResourceManagerCluster.VaultAddress("regrant-me");
+
+        var created = await Create(address);
+        await Converge(created.GetValueOrThrow());
+
+        var resourceId = created.GetValueOrThrow().Resource.Id;
+
+        // Somebody was granted a role on this resource specifically, rather than inheriting one.
+        RecordingRelationWriter.Assignments[resourceId] = ["owner@user:bob"];
+
+        var deleted = await Delete(address);
+        await Converge(deleted.GetValueOrThrow());
+
+        RecordingRelationWriter.Assignments.ShouldNotContainKey(
+            resourceId,
+            "direct assignments go with the resource and must be recreated on recovery — Azure's "
+            + "behaviour, and docs/plan/08 § Soft delete takes it"
+        );
+
+        var restored = await Restore(address);
+        restored.IsSuccess.ShouldBeTrue(restored.Error?.Message);
+
+        RecordingRelationWriter.Assignments.ShouldNotContainKey(
+            resourceId,
+            "and the restore does not put them back — a grant an administrator deliberately removed "
+            + "must not come back silently"
+        );
+
+        // ⚠ The INHERITED edge is untouched, which is the other half. A drop that took the parent
+        // tuple with it would leave the restored resource invisible to its group's role holders — the
+        // resource-nobody-can-see failure, arriving through the security fix rather than the modelling
+        // one.
+        RecordingRelationWriter.Edges.ShouldContainKey(resourceId);
+    }
+
+    // ── The restore itself ─────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task ARestoreBringsTheResourceBackAtItsOldAddressWithWhatWasWritten() {
+        ResourceManagerCluster.ResetDoubles();
+        var address = ResourceManagerCluster.VaultAddress("comes-back");
+
+        var created = await Create(address, size: 4);
+        await Converge(created.GetValueOrThrow());
+
+        var deleted = await Delete(address);
+        await Converge(deleted.GetValueOrThrow());
+
+        (await Read(address)).IsFailure.ShouldBeTrue();
+
+        var restored = await Restore(address);
+        restored.IsSuccess.ShouldBeTrue(restored.Error?.Message);
+        restored.GetValueOrThrow().ProvisioningState.ShouldBe(ProvisioningState.Succeeded);
+
+        var read = await Read(address);
+        read.IsSuccess.ShouldBeTrue("the old address answers again");
+        read.GetValueOrThrow().Id.ShouldBe(
+            created.GetValueOrThrow().Resource.Id,
+            "the same resource came back, not a new one — the GUID is the identity"
+        );
+
+        read.GetValueOrThrow().Properties.ShouldContain("\"size\":4");
+
+        (await cluster.Index(address).GetAsync()).GetValueOrThrow()
+            .State.ShouldBe(IndexEntryState.Confirmed);
+    }
+
+    /// <summary>
+    ///     ⚠ <b>Past the window, a restore is refused — and refused with the same <c>404</c> a name
+    ///     that holds nothing gets.</b>
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>A window that can be exceeded and then honoured anyway is not a window.</b> The
+    ///     deadline is stamped on the index entry from the type's declared retention and read back
+    ///     against the grain's own clock, so this is the one assertion that the number in the registry
+    ///     reaches the behaviour at all.
+    /// </remarks>
+    [Fact]
+    public async Task ARestoreAfterTheWindowHasPassedIsRefused() {
+        ResourceManagerCluster.ResetDoubles();
+        var address = ResourceManagerCluster.VaultAddress("too-late");
+
+        var created = await Create(address);
+        await Converge(created.GetValueOrThrow());
+
+        var deleted = await Delete(address);
+        await Converge(deleted.GetValueOrThrow());
+
+        // ⚠ SIX DAYS IN IT STILL WORKS, AND THAT HALF IS WHAT MAKES THE REFUSAL BELOW MEAN THE
+        // DEADLINE RATHER THAN A RESTORE THAT NEVER WORKS.
+        TestClock.Instance.Advance(TimeSpan.FromDays(6));
+        var early = await Restore(address);
+        early.IsSuccess.ShouldBeTrue($"six days into a seven-day window: {early.Error?.Message}");
+
+        // Park it again, and let the whole window pass this time.
+        var reDeleted = await Delete(address);
+        reDeleted.IsSuccess.ShouldBeTrue(reDeleted.Error?.Message);
+        await Converge(reDeleted.GetValueOrThrow());
+
+        TestClock.Instance.Advance(TimeSpan.FromDays(8));
+
+        var late = await Restore(address);
+        late.IsFailure.ShouldBeTrue("eight days into a seven-day window");
+
+        // ⚠ The same ResourceNotFound a name that holds nothing gets, rather than a code that says
+        // "expired". "It was there and you are too late" is still an answer about a name the caller may
+        // not be entitled to know about.
+        late.Error!.Code.ShouldBe(ErrorCode.ResourceNotFound);
+    }
+
+    /// <summary>
+    ///     ⚠ <b>Restoring something that was never soft-deleted is the same <c>404</c> as everything
+    ///     else.</b>
+    /// </summary>
+    /// <remarks>
+    ///     A live resource, a name nobody ever claimed and a type with no recovery window all answer
+    ///     identically. Three different answers would let a caller enumerate names through the verb
+    ///     that knows soft delete exists — which is the oracle every other refusal on this path is
+    ///     shaped to close.
+    /// </remarks>
+    [Fact]
+    public async Task RestoringALiveResourceAnUnknownNameAndAHardDeleteTypeAllAnswerTheSame404() {
+        ResourceManagerCluster.ResetDoubles();
+
+        var live = ResourceManagerCluster.VaultAddress("alive");
+        var created = await Create(live);
+        await Converge(created.GetValueOrThrow());
+
+        var onLive = await Restore(live);
+        var onUnknown = await Restore(ResourceManagerCluster.VaultAddress("no-such-vault"));
+
+        // ⚠ The hard-delete type, soft-deleted-shaped request. `widgets` declares no window, so there
+        // is no recovery to ask about — and the answer must not say so.
+        var hard = ResourceManagerCluster.Address("hard-type");
+        var hardCreated = await cluster.Manager.WriteAsync(
+            new() {
+                Path = hard.Path,
+                ApiVersion = TestingProvider.V2026,
+                Verb = WriteVerb.Put,
+                Body = TestingProvider.Body(),
+                Caller = ResourceManagerCluster.Caller()
+            },
+            TestContext.Current.CancellationToken
+        );
+
+        await Converge(hardCreated.GetValueOrThrow());
+
+        var onHardType = await cluster.Manager.RestoreAsync(
+            new() { Path = hard.Path, ApiVersion = TestingProvider.V2026, Caller = ResourceManagerCluster.Caller() },
+            TestContext.Current.CancellationToken
+        );
+
+        onLive.IsFailure.ShouldBeTrue();
+        onUnknown.IsFailure.ShouldBeTrue();
+        onHardType.IsFailure.ShouldBeTrue();
+
+        onLive.Error!.Code.ShouldBe(ErrorCode.ResourceNotFound);
+        onUnknown.Error!.Code.ShouldBe(ErrorCode.ResourceNotFound);
+
+        onHardType.Error!.Code.ShouldBe(
+            ErrorCode.ResourceNotFound,
+            "a type with no recovery window must not be distinguishable from a name that holds nothing "
+            + "— that pair is how a name gets enumerated"
+        );
+    }
+
+    // ── (f): retention is immutable and purge protection is irreversible ────────────────────────
+
+    /// <summary>
+    ///     ⚠ <b>A re-driven delete does not extend the window it is re-driving.</b>
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         docs/plan/08 § Soft delete: <i>"retention is set at creation and immutable afterwards —
+    ///         a window a caller can shorten under their own resource is not a recovery window"</i>.
+    ///         The platform satisfies that more strongly than the document asks: retention is declared
+    ///         on the <i>type</i>, so there is no per-resource property to set at creation and none to
+    ///         shorten later, and the delete path stamps the deadline from the registration and never
+    ///         from the body.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>What is left to get wrong is the re-stamp</b>, and it is the direction that matters:
+    ///         the delete is re-drivable from a reminder, so a second park an hour later that reset the
+    ///         deadline would silently extend every window that ever failed once — a guarantee that
+    ///         quietly becomes longer is as broken as one that quietly becomes shorter, because neither
+    ///         is the number the platform published.
+    ///     </para>
+    /// </remarks>
+    [Fact]
+    public async Task TheRecoveryWindowIsStampedOnceAndARedrivenDeleteDoesNotExtendIt() {
+        ResourceManagerCluster.ResetDoubles();
+        var address = ResourceManagerCluster.VaultAddress("window-fixed");
+
+        var created = await Create(address);
+        await Converge(created.GetValueOrThrow());
+
+        var resourceId = created.GetValueOrThrow().Resource.Id;
+
+        await Delete(address);
+
+        var stamped = (await cluster.Index(address).GetAsync()).GetValueOrThrow().RecoverableUntil;
+        stamped.ShouldBe(TestClock.Instance.UtcNow + TimeSpan.FromDays(7));
+
+        // Three days pass and the park runs again, exactly as a re-driven delete would.
+        TestClock.Instance.Advance(TimeSpan.FromDays(3));
+        (await cluster.Index(address).SoftDeleteAsync(resourceId, TimeSpan.FromDays(7))).IsSuccess.ShouldBeTrue();
+
+        (await cluster.Index(address).GetAsync()).GetValueOrThrow()
+            .RecoverableUntil.ShouldBe(
+                stamped,
+                "a re-drive must not extend the window it is re-driving — the deadline was promised at "
+                + "the delete"
+            );
+    }
+
+    /// <summary>
+    ///     ⚠ <b>Purge protection cannot be turned off, by <c>PUT</c> or by <c>PATCH</c>, and a
+    ///     protected resource cannot be purged.</b>
+    /// </summary>
+    /// <remarks>
+    ///     docs/plan/08 § Soft delete: <i>"Purge protection is a further opt-in flag that cannot be
+    ///     turned off once on, which is the only version of it that is worth anything."</i> Both halves
+    ///     are asserted here because either alone is worthless: a purge refusal one <c>PATCH</c> away
+    ///     from being bypassed protects against nobody who can write, and a caller who can write is a
+    ///     caller who can delete.
+    /// </remarks>
+    [Fact]
+    public async Task PurgeProtectionCannotBeTurnedOffAndAProtectedResourceCannotBePurged() {
+        ResourceManagerCluster.ResetDoubles();
+        var address = ResourceManagerCluster.VaultAddress("protected");
+
+        var created = await Create(address, purgeProtection: true);
+        created.IsSuccess.ShouldBeTrue(created.Error?.Message);
+        await Converge(created.GetValueOrThrow());
+
+        // ── A PUT that omits the flag is a PUT that clears it ───────────────────────────────────
+        var cleared = await cluster.Manager.WriteAsync(
+            new() {
+                Path = address.Path,
+                ApiVersion = TestingProvider.V2026,
+                Verb = WriteVerb.Put,
+                Body = TestingProvider.VaultBody(),
+                Caller = ResourceManagerCluster.Caller()
+            },
+            TestContext.Current.CancellationToken
+        );
+
+        cleared.IsFailure.ShouldBeTrue("a full PUT omitting the flag asks for it to be cleared");
+        cleared.Error!.Code.ShouldBe(ErrorCode.Conflict);
+
+        // ── And a PATCH that names it false is refused too ──────────────────────────────────────
+        var patched = await cluster.Manager.WriteAsync(
+            new() {
+                Path = address.Path,
+                ApiVersion = TestingProvider.V2026,
+                Verb = WriteVerb.Patch,
+                Body = TestingProvider.VaultBody(purgeProtection: false),
+                Caller = ResourceManagerCluster.Caller()
+            },
+            TestContext.Current.CancellationToken
+        );
+
+        patched.IsFailure.ShouldBeTrue();
+        patched.Error!.Code.ShouldBe(ErrorCode.Conflict);
+
+        // ── The purge itself is refused, which is what the flag is for ──────────────────────────
+        var deleted = await Delete(address);
+        await Converge(deleted.GetValueOrThrow());
+
+        var purged = await Purge(address);
+        purged.IsFailure.ShouldBeTrue("a protected resource cannot be purged before its window ends");
+        purged.Error!.Code.ShouldBe(ErrorCode.Conflict);
+
+        // ⚠ And the refusal left the resource recoverable rather than half-purged. A purge that
+        // released the index before checking protection would leave the name free and the resource
+        // unrestorable, which is the worst of both.
+        (await cluster.Index(address).GetAsync()).GetValueOrThrow().State.ShouldBe(IndexEntryState.SoftDeleted);
+        (await Restore(address)).IsSuccess.ShouldBeTrue("the refused purge changed nothing");
+    }
+
+    /// <summary>
+    ///     ⚠ <b>A resource with purge protection off is purgeable, so the refusal above is the flag and
+    ///     not the verb.</b>
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>This is the calibration for the test above, and without it that test passes for a
+    ///     platform where nothing can ever be purged.</b> Omitting the flag entirely is the case that
+    ///     matters: <c>IsPurgeProtected</c> reads an absent pointer as off, which is the fail-open
+    ///     direction, and the only thing making that safe is that the builder refuses a type whose
+    ///     schema does not declare the property.
+    /// </remarks>
+    [Fact]
+    public async Task AResourceWithoutPurgeProtectionIsPurgeable() {
+        ResourceManagerCluster.ResetDoubles();
+        var address = ResourceManagerCluster.VaultAddress("unprotected");
+
+        var created = await Create(address);
+        await Converge(created.GetValueOrThrow());
+        await Converge((await Delete(address)).GetValueOrThrow());
+
+        var purged = await Purge(address);
+        purged.IsSuccess.ShouldBeTrue(purged.Error?.Message);
+
+        await Converge(purged.GetValueOrThrow());
+
+        (await cluster.Index(address).GetAsync()).GetValueOrThrow()
+            .State.ShouldBe(IndexEntryState.Free, "the purge is what finally releases the name");
+    }
+
+    // ── The purge permission is separable from the delete permission ────────────────────────────
+
+    /// <summary>
+    ///     ⚠ <b>A caller who may delete but may not purge gets a <c>404</c> from the purge and can
+    ///     still delete.</b>
+    /// </summary>
+    /// <remarks>
+    ///     docs/plan/08 § Soft delete: Azure puts
+    ///     <c>Microsoft.KeyVault/locations/deletedVaults/purge/action</c> in Key Vault Contributor's
+    ///     <c>notActions</c>, <i>"so 'may delete' and 'may destroy permanently' are genuinely separable
+    ///     rights and a role can hold the first without the second"</i>. If the purge checked the delete
+    ///     permission the window would protect against nobody who could already delete — which is
+    ///     everybody it exists to protect against, since they are the one whose delete put the resource
+    ///     there.
+    ///     <para>
+    ///         ⚠ <b>The refusal is a <c>404</c> and not a <c>403</c>, because the caller is refused the
+    ///         READ permission's question too</b> — <c>SwitchableAuthorizer</c> denies the named
+    ///         permission and docs/plan/07 § The enforcement seam answers absence when the read is what
+    ///         failed. What matters here is that the purge asked a different question from the delete.
+    ///     </para>
+    /// </remarks>
+    [Fact]
+    public async Task APurgeChecksThePurgePermissionAndNotTheDeletePermission() {
+        ResourceManagerCluster.ResetDoubles();
+        var address = ResourceManagerCluster.VaultAddress("may-delete-only");
+
+        var created = await Create(address);
+        await Converge(created.GetValueOrThrow());
+
+        // The delete still works, so the caller plainly holds "may delete".
+        var deleted = await Delete(address);
+        deleted.IsSuccess.ShouldBeTrue(deleted.Error?.Message);
+        await Converge(deleted.GetValueOrThrow());
+
+        // ⚠ EVERYTHING EXCEPT PURGE. This is Key Vault Contributor: read, write and delete, with
+        // purge/action in notActions.
+        SwitchableAuthorizer.GrantOnly("read", "write", "delete");
+
+        var purged = await Purge(address);
+        purged.IsFailure.ShouldBeTrue(
+            "the purge must consult its own permission — a purge that checked 'delete' would let "
+            + "anybody who could delete also destroy, and the recovery window would protect against "
+            + "nobody"
+        );
+
+        // ⚠ 403 and not 404, and that is the enforcement seam working rather than an inconsistency
+        // with every other refusal in this file. docs/plan/07 § The enforcement seam: "403 is returned
+        // only when the caller can read the object but not perform the action." This caller holds
+        // `read`, so they already know the resource is there; hiding it from them would be the one
+        // case the seam does not ask for.
+        purged.Error!.Code.ShouldBe(ErrorCode.AuthorizationFailed);
+
+        SwitchableAuthorizer.Reset();
+
+        // And with the purge permission it goes through, so the refusal was the permission and not the
+        // verb being broken.
+        (await Purge(address)).IsSuccess.ShouldBeTrue();
+    }
+
+    // ── Helpers ────────────────────────────────────────────────────────────────────────────────
+
+    Task<Result<WriteAccepted>> Create(ResourceId address, int size = 2, bool? purgeProtection = null) =>
+        cluster.Manager.WriteAsync(
+            new() {
+                Path = address.Path,
+                ApiVersion = TestingProvider.V2026,
+                Verb = WriteVerb.Put,
+                Body = TestingProvider.VaultBody(size, purgeProtection),
+                Caller = ResourceManagerCluster.Caller()
+            },
+            TestContext.Current.CancellationToken
+        );
+
+    Task<Result<ResourceSnapshot>> Read(ResourceId address) =>
+        cluster.Manager.ReadAsync(Request(address), TestContext.Current.CancellationToken);
+
+    Task<Result<WriteAccepted>> Delete(ResourceId address) =>
+        cluster.Manager.DeleteAsync(Request(address), TestContext.Current.CancellationToken);
+
+    Task<Result<ResourceSnapshot>> Restore(ResourceId address) =>
+        cluster.Manager.RestoreAsync(Request(address), TestContext.Current.CancellationToken);
+
+    Task<Result<WriteAccepted>> Purge(ResourceId address) =>
+        cluster.Manager.PurgeAsync(Request(address), TestContext.Current.CancellationToken);
+
+    static WriteRequest Request(ResourceId address) =>
+        new() { Path = address.Path, ApiVersion = TestingProvider.V2026, Caller = ResourceManagerCluster.Caller() };
+
+    async Task Converge(WriteAccepted accepted) {
+        if (accepted.OperationId == Guid.Empty) {
+            return;
+        }
+
+        var operation = cluster.Operation(ResourceManagerCluster.Tenant, accepted.OperationId);
+
+        for (var i = 0; i < 5; i++) {
+            var status = await operation.DriveAsync();
+            if (status.GetValueOrThrow().IsTerminal) {
+                return;
+            }
+        }
+    }
+}

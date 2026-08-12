@@ -16,6 +16,8 @@ namespace CyberCloud.ResourceManager.Contracts.Generation;
 /// <param name="RequiresCluster">Whether the type is placed into a cluster.</param>
 /// <param name="ClusterIdPointer">Where the cluster id is, or <c>""</c>.</param>
 /// <param name="SoftDeleteDays">The recovery window, or 0.</param>
+/// <param name="PurgePermission">The permission a purge needs, or <c>""</c> for a type with no window.</param>
+/// <param name="PurgeProtectionPointer">Where the purge-protection flag is, or <c>""</c>.</param>
 /// <param name="Actions">The declared actions.</param>
 /// <param name="Deprecated">Whether this api-version is under a retirement notice.</param>
 public sealed record DocumentType(
@@ -28,6 +30,8 @@ public sealed record DocumentType(
     bool RequiresCluster,
     string ClusterIdPointer,
     int SoftDeleteDays,
+    string PurgePermission,
+    string PurgeProtectionPointer,
     ImmutableArray<DocumentAction> Actions,
     bool Deprecated
 ) {
@@ -140,6 +144,8 @@ public static class DocumentReader {
                 Flag(item["x-cybercloud-requires-cluster"]),
                 Text(item["x-cybercloud-cluster-id-pointer"]),
                 Number(item["x-cybercloud-soft-delete-days"]),
+                Text(item["x-cybercloud-purge-permission"]),
+                Text(item["x-cybercloud-purge-protection-pointer"]),
                 ActionsOf(paths, schemas, path.Key, resourceType),
                 Flag(item["get"]?["deprecated"])
             ));

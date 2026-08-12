@@ -37,9 +37,36 @@ public sealed class ProviderRegistryTests {
         // the expressiveness an action had none of.
         registration.Actions.Length.ShouldBe(3);
         registration.Meters.Length.ShouldBe(2);
-        registration.SoftDeleteDays.ShouldBe(7);
         registration.SupportsTags.ShouldBeTrue();
         registration.ReconcilerType.ShouldBe(typeof(ConformingReconciler));
+
+        // ⚠ THE RECOVERY WINDOW AND ITS THREE DEPENDENT FACTS ARE ON A DIFFERENT TYPE, AND THE PAIR OF
+        // ASSERTIONS IS THE POINT. `widgets` declared SupportsSoftDelete(7) while nothing in the
+        // manager read it; the manager reads it now, so a type that declares one is one whose DELETE
+        // parks the resource rather than tearing it down — and the hard-delete half of the suite needs
+        // a type that does not. Asserting BOTH sides here is what stops the window drifting back onto
+        // `widgets` and quietly rewriting what every DeletePathTests case means.
+        registration.SoftDeleteDays.ShouldBe(
+            0,
+            "widgets is the hard-delete fixture — docs/plan/08 § Soft delete makes a positive window "
+            + "change what DELETE does"
+        );
+
+        registration.PurgePermission.ShouldBeEmpty("a type with no window has no purge to permit");
+
+        var vault = Built.Resolve(TestingProvider.VaultTypeName, TestingProvider.V2026)
+            .GetValueOrThrow()
+            .Registration;
+
+        vault.SoftDeleteDays.ShouldBe(7);
+
+        // ⚠ Not "delete". docs/plan/08 § Soft delete keeps "may delete" and "may destroy permanently"
+        // separable, following Azure's `deletedVaults/purge/action` sitting in Key Vault Contributor's
+        // notActions; a purge permission that equalled the delete permission would be the separation
+        // deleted rather than declared.
+        vault.PurgePermission.ShouldBe("purge");
+        vault.PurgePermission.ShouldNotBe(vault.DeletePermission);
+        vault.PurgeProtectionPointer.ShouldBe(TestingProvider.PurgeProtectionPointer);
 
         // The schema an emitter would walk.
         var schema = resolved.GetValueOrThrow().Schema;

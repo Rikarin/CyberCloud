@@ -18,11 +18,18 @@ namespace CyberCloud.Providers.Sample;
 ///         move is to change <c>CyberCloud.ResourceManager</c> and record why.
 ///     </para>
 ///     <para>
-///         <b>What is deliberately <i>not</i> declared:</b> no
-///         <c>SupportsSoftDelete</c> — nothing in the manager reads <c>SoftDeleteDays</c> yet, and
-///         declaring a recovery window the platform does not honour is worse than declaring none; no
-///         <c>Chart</c> — <c>CyberCloud.Kubernetes.Charts</c> does not exist and a chart name that
-///         renders nothing would fail at apply time rather than at silo start.
+///         <b>What is deliberately <i>not</i> declared:</b> no <c>SupportsSoftDelete</c> — the manager did
+///         not read <c>SoftDeleteDays</c>, and declaring a recovery window the platform does not honour is
+///         worse than declaring none; no <c>Chart</c> — <c>CyberCloud.Kubernetes.Charts</c> does not exist
+///         and a chart name that renders nothing would fail at apply time rather than at silo start. ⚠
+///         <b>THAT REASON HAS EXPIRED AND THE DECLARATION IS NOW A ONE-LINE DECISION RATHER THAN A BLOCKED
+///         ONE.</b> docs/plan/08 § Soft delete is built: a <c>DELETE</c> of a type declaring a window parks
+///         the resource at <c>IndexEntryState.SoftDeleted</c> so its old address answers the canonical
+///         <c>404</c>, holds its name, keeps its committed quota, moves its ReBAC parent edge to the
+///         subscription and drops its direct role assignments; a restore reverses it and a purge — under
+///         its own permission — ends it. So the question this type still owes an answer to is the
+///         provider's own: <i>does the data this type carries deserve a recovery window, and how long</i>,
+///         which is a claim about the data and not about the platform.
 ///     </para>
 /// </remarks>
 public sealed class SampleProvider : IResourceProvider {

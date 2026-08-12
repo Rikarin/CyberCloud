@@ -242,7 +242,48 @@ public sealed record ResourceTypeRegistration {
     public string Chart { get; init; } = string.Empty;
 
     /// <summary>How many days a deleted resource is recoverable, or 0 for no soft delete.</summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>The manager reads this, and the branch it drives is the whole of docs/plan/08
+    ///         § Soft delete.</b> A positive window makes <c>DELETE</c> park the resource instead of
+    ///         tearing it down: the index entry becomes
+    ///         <see cref="IndexEntryState.SoftDeleted" /> so the old address answers the canonical
+    ///         <c>404</c>, the ReBAC parent edge moves to the subscription, and the committed quota
+    ///         stays committed until a purge. Zero is the hard delete every type had before.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>It is the resource's retention and there is no other source of one.</b> The delete
+    ///         path stamps <see cref="IndexEntry.RecoverableUntil" /> from this number and the clock,
+    ///         never from the body — which is how docs/plan/08's <i>"retention is set at creation and
+    ///         immutable afterwards"</i> is satisfied without a property a caller could shorten.
+    ///     </para>
+    /// </remarks>
     public int SoftDeleteDays { get; init; }
+
+    /// <summary>
+    ///     The permission a <b>purge</b> needs. Empty for a type with no recovery window.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>A fourth permission, because "may delete" and "may destroy permanently" are separable
+    ///     rights.</b> docs/plan/08 § Soft delete takes that from Azure, which puts
+    ///     <c>deletedVaults/purge/action</c> in Key Vault Contributor's <c>notActions</c>. Checking
+    ///     <see cref="DeletePermission" /> for a purge would mean anybody who could delete could also
+    ///     destroy, and the window would protect against nothing.
+    /// </remarks>
+    public string PurgePermission { get; init; } = string.Empty;
+
+    /// <summary>
+    ///     Where in the body the purge-protection flag is, for a type that offers one. Empty
+    ///     otherwise.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Once <see langword="true" /> it may not be set back to <see langword="false" />, and
+    ///     the write path enforces that.</b> docs/plan/08 § Soft delete: <i>"Purge protection is a
+    ///     further opt-in flag that cannot be turned off once on, which is the only version of it that
+    ///     is worth anything."</i> A flag an attacker can clear and then purge is one round-trip of
+    ///     protection.
+    /// </remarks>
+    public string PurgeProtectionPointer { get; init; } = string.Empty;
 
     /// <summary>Whether this type carries tags.</summary>
     /// <remarks>

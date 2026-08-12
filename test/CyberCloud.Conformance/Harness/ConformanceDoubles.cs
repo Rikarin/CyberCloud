@@ -98,9 +98,20 @@ public sealed class RecordingRelationWriter : IResourceRelationWriter {
     /// <summary>Whether writes fail, so the write path's rollback can be driven.</summary>
     public bool Fail { get; set; }
 
+    /// <summary>
+    ///     The direct role assignments each resource carries, as <c>{role}@{subject}</c>.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ Seeded by a test so that "the drop ran" can be told from "there was nothing to drop" —
+    ///     docs/plan/08 § Soft delete asks for a test that a grant written directly on a resource is
+    ///     absent after a restore, and a double that never held one could not make it.
+    /// </remarks>
+    public ConcurrentDictionary<Guid, List<string>> Assignments { get; } = new();
+
     /// <summary>Forgets every edge.</summary>
     public void Reset() {
         edges.Clear();
+        Assignments.Clear();
         Fail = false;
     }
 
@@ -116,9 +127,7 @@ public sealed class RecordingRelationWriter : IResourceRelationWriter {
 
         // ⚠ The same branch the real writer takes — a double that always recorded the group would
         // agree with a writer that always wrote it, and agree wrongly.
-        edges[id.Id] = id.Parent is null
-            ? id.SubscriptionId.ToString("N") + "-" + id.ResourceGroup
-            : parentId.ToString("N");
+        edges[id.Id] = SubjectOf(id, parentId);
 
         return Task.FromResult(Result.Success);
     }
@@ -129,9 +138,93 @@ public sealed class RecordingRelationWriter : IResourceRelationWriter {
         Guid parentId,
         CancellationToken cancellationToken = default
     ) {
-        edges.TryRemove(id.Id, out _);
+        // ⚠ Removes the edge only when it is the one this call names — the real writer deletes one
+        // specific tuple, so a double that removed unconditionally would agree with a writer that
+        // unlinked the wrong subject. See the sibling double in CyberCloud.ResourceManager.Tests for
+        // the defect that hid.
+        if (edges.TryGetValue(id.Id, out var subject)
+            && string.Equals(subject, SubjectOf(id, parentId), StringComparison.Ordinal)) {
+            edges.TryRemove(id.Id, out _);
+        }
+
         return Task.FromResult(Result.Success);
     }
+
+    /// <inheritdoc />
+    public Task<Result> ReparentToSubscriptionAsync(
+        ResourceId id,
+        Guid parentId,
+        CancellationToken cancellationToken = default
+    ) {
+        if (Fail) {
+            return Task.FromResult(Result.Failure(ErrorCode.InternalError, "the tuple store is down"));
+        }
+
+        // ⚠ ONE ASSIGNMENT AND NOT A REMOVE-THEN-ADD, which is what makes "the resource is never
+        // parentless" assertable rather than assumed — docs/plan/08 § Soft delete chose re-parenting
+        // over dropping the edge for exactly that property.
+        edges[id.Id] = SubscriptionSubject(id);
+        return Task.FromResult(Result.Success);
+    }
+
+    /// <inheritdoc />
+    public Task<Result> ReparentFromSubscriptionAsync(
+        ResourceId id,
+        Guid parentId,
+        CancellationToken cancellationToken = default
+    ) {
+        if (Fail) {
+            return Task.FromResult(Result.Failure(ErrorCode.InternalError, "the tuple store is down"));
+        }
+
+        edges[id.Id] = SubjectOf(id, parentId);
+        return Task.FromResult(Result.Success);
+    }
+
+    /// <inheritdoc />
+    public Task<Result> UnlinkFromSubscriptionAsync(ResourceId id, CancellationToken cancellationToken = default) {
+        // ⚠ Removes the edge only when it actually names the subscription, because the real writer
+        // deletes one specific tuple. A double that removed unconditionally would let a purge that
+        // unlinked the wrong subject pass.
+        if (edges.TryGetValue(id.Id, out var subject)
+            && string.Equals(subject, SubscriptionSubject(id), StringComparison.Ordinal)) {
+            edges.TryRemove(id.Id, out _);
+        }
+
+        return Task.FromResult(Result.Success);
+    }
+
+    /// <inheritdoc />
+    public Task<Result<int>> DropDirectRoleAssignmentsAsync(
+        ResourceId id,
+        CancellationToken cancellationToken = default
+    ) =>
+        Task.FromResult(Result<int>.Success(Assignments.TryRemove(id.Id, out var held) ? held.Count : 0));
+
+    /// <summary>
+    ///     The subject the real writer would aim the edge at, <b>with its object type</b>.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>A double that always recorded the group would agree with a writer that always wrote
+    ///         the group, which is the bug this pair exists to surface</b> — so the branch is mirrored
+    ///         here even though this class writes no tuples.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The type prefix is what makes soft delete's re-parent assertable at all.</b> A
+    ///         soft-deleted resource's edge names <c>subscription:{sub:N}</c> and a child's names
+    ///         <c>resource:{parent:N}</c>; recorded as bare GUIDs the two are indistinguishable strings,
+    ///         so a re-parent that aimed at the wrong object type would keep every existing assertion
+    ///         green while meaning something else. docs/plan/08 § Soft delete.
+    ///     </para>
+    /// </remarks>
+    static string SubjectOf(ResourceId id, Guid parentId) =>
+        id.Parent is null
+            ? "resourceGroup:" + id.SubscriptionId.ToString("N") + "-" + id.ResourceGroup
+            : "resource:" + parentId.ToString("N");
+
+    /// <summary>The subject a soft-deleted resource's edge names.</summary>
+    static string SubscriptionSubject(ResourceId id) => "subscription:" + id.SubscriptionId.ToString("N");
 }
 
 /// <summary>Records every <c>resource-changed</c> event step 11 emitted.</summary>

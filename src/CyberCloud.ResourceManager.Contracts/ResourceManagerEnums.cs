@@ -158,7 +158,29 @@ public enum OperationKind {
     Delete = 3,
 
     /// <summary>A <c>POST</c> action on an existing resource. ⚠ Never creates.</summary>
-    Action = 4
+    Action = 4,
+
+    /// <summary>
+    ///     The end of a recovery window: a soft-deleted resource is torn down and its name released,
+    ///     irreversibly.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>A separate kind and not a <see cref="Delete" /> with a flag, because it is the
+    ///         half of a delete that a soft-deletable type did not do.</b> docs/plan/08 § Soft delete
+    ///         defers the data-plane teardown, the index release and the committed-quota return to
+    ///         here; a <see cref="Delete" /> on such a type parks the resource and does none of them.
+    ///         Two kinds means the operation record says which of the two happened, and a caller
+    ///         reading an operation history can tell "it was deleted" from "it was destroyed".
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>It carries its own permission</b> —
+    ///         <c>ResourceTypeRegistration.PurgePermission</c>. Azure keeps
+    ///         <c>deletedVaults/purge/action</c> out of Key Vault Contributor, so a role can hold "may
+    ///         delete" without "may destroy permanently".
+    ///     </para>
+    /// </remarks>
+    Purge = 5
 }
 
 /// <summary>

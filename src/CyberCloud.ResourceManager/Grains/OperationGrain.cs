@@ -199,7 +199,26 @@ public sealed class OperationGrain(
         state.State.Status = Contracts.OperationState.Running;
         state.State.Attempts++;
 
-        var tearingDown = spec.Kind == OperationKind.Delete || state.State.CancelRequested;
+        // ── A SOFT DELETE RUNS NO RECONCILE PASS, AND THAT IS THE POINT OF IT ────────────────────
+        //
+        // ⚠ docs/plan/08 § Soft delete: a resource in its recovery window "consumes plenty, because
+        // handing the data back is the entire feature: the volumes, the PVCs and the memory are all
+        // still allocated". So there is nothing to tear down — and running the driver anyway would do
+        // the opposite of nothing in both directions: with tearingDown TRUE it would destroy exactly
+        // the data the window exists to hand back, and with it FALSE it would RE-APPLY the desired
+        // state of a resource the caller has just deleted. Neither is a pass worth taking, so the
+        // teardown-and-return half is skipped and the parking half runs on its own.
+        if (spec.Kind == OperationKind.Delete && spec.SoftDelete) {
+            await ParkAsync(spec);
+            return Result<OperationStatus>.Success(Status());
+        }
+
+        // ⚠ A PURGE TEARS DOWN. It is the half of the delete this type deferred — see
+        // OperationKind.Purge — so it is the one kind other than Delete that drives the reconciler's
+        // DeleteAsync rather than its ReconcileAsync.
+        var tearingDown = spec.Kind is OperationKind.Delete or OperationKind.Purge
+            || state.State.CancelRequested;
+
         var pass = await driver.RunAsync(spec, tearingDown);
 
         foreach (var entry in pass.Progress) {
@@ -262,7 +281,7 @@ public sealed class OperationGrain(
             return;
         }
 
-        if (spec.Kind == OperationKind.Delete) {
+        if (spec.Kind is OperationKind.Delete or OperationKind.Purge) {
             // ⚠ Only now is the grain state removed — the reconciler READ THE OBJECTS BACK AS GONE.
             // docs/plan/06 § Two-phase create's harder half: the index was released first so the name
             // was immediately reusable, the data plane came down second, and the grain goes last.
@@ -302,7 +321,16 @@ public sealed class OperationGrain(
             // carries no GUIDs at all — so the parent's id has to have been written down at create
             // time. See OperationSpec.ParentResourceId: a lookup here would be a lookup made after
             // the resource is gone, on a retry loop, against a parent that may be gone too.
-            var unlinked = await relations.UnlinkFromParentAsync(Address(spec), spec.ParentResourceId);
+            // ⚠ AND A PURGE UNLINKS A DIFFERENT EDGE, BECAUSE BY THEN THE RESOURCE HANGS OFF ITS
+            // SUBSCRIPTION. docs/plan/08 § Soft delete moved it there at the delete —
+            // `#parent@subscription:{sub}` — so building the ordinary subject here would delete a tuple
+            // that is not present, report success, and leave the real edge behind: one inert row per
+            // purged resource, forever, and nothing to notice it. See
+            // IResourceRelationWriter.UnlinkFromSubscriptionAsync.
+            var unlinked = spec.Kind == OperationKind.Purge
+                ? await relations.UnlinkFromSubscriptionAsync(Address(spec))
+                : await relations.UnlinkFromParentAsync(Address(spec), spec.ParentResourceId);
+
             if (unlinked.TryGetError(out var unlinkError)) {
                 await ScheduleAsync(ReconcileOutcome.Failed(unlinkError, true));
                 return;
@@ -346,6 +374,72 @@ public sealed class OperationGrain(
 
         await CommitAsync(spec);
         await FinishResourceAsync(spec, ProvisioningState.Succeeded, null);
+        await TerminateAsync(Contracts.OperationState.Succeeded, null);
+    }
+
+    /// <summary>
+    ///     The soft delete's whole convergence: re-parent the resource, drop its direct role
+    ///     assignments, and stop.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>Here rather than in <c>ResourceManagerService.DeleteAsync</c>, and for the two
+    ///         reasons the unlink beside it lives here.</b> Both writes can fail, and this grain is the
+    ///         durable, reminder-driven machinery that re-drives them; and a delete is accepted long
+    ///         before it settles, so the request path should not be holding a caller while two tuple
+    ///         stores are written. The index park stays on the request path because THAT is what makes
+    ///         the resource stop being addressable, and a caller who is told <c>202</c> must not be able
+    ///         to read the resource a moment later.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Neither call returns quota, and neither clears the resource.</b> docs/plan/08
+    ///         § Soft delete moves the committed-quota return to the purge, whole —
+    ///         <c>QuotaMeter.Resources</c> included, because a per-meter split reintroduces the partial
+    ///         restore — and the resource grain keeps its state because the restore hands it back. A
+    ///         <c>CompleteDeleteAsync</c> here would be the delete this operation deliberately did not
+    ///         do.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The re-parent goes first and the assignment drop second, and both are retried as a
+    ///         unit.</b> The re-parent is what keeps the resource visible to somebody — a subscription
+    ///         role holder — so running it first means the drop can never leave the resource
+    ///         unreachable even for an instant. A failure in either schedules a retry, so the pair
+    ///         converges or the operation fails at <c>ReconcileSchedule</c>'s ceiling with a reason,
+    ///         which is the actionable outcome.
+    ///     </para>
+    /// </remarks>
+    async Task ParkAsync(OperationSpec spec) {
+        var address = Address(spec);
+
+        var reparented = await relations.ReparentToSubscriptionAsync(address, spec.ParentResourceId);
+        if (reparented.TryGetError(out var reparentError)) {
+            await ScheduleAsync(ReconcileOutcome.Failed(reparentError, true));
+            return;
+        }
+
+        // ⚠ THE SECURITY HALF, AND IT IS SEPARATE FROM THE MODELLING HALF ON PURPOSE. docs/plan/08
+        // § Soft delete: the parent edge is a modelling question and direct role assignments are "a
+        // separate question with a security answer rather than a modelling one … running them together
+        // is how this gets decided wrongly". Azure's behaviour is copied: the assignments go with the
+        // resource and must be recreated on recovery. The window is used after a compromise, and
+        // silently restoring a grant an administrator deliberately removed is an error nobody observes.
+        var dropped = await relations.DropDirectRoleAssignmentsAsync(address);
+        if (dropped.TryGetError(out var dropError)) {
+            await ScheduleAsync(ReconcileOutcome.Failed(dropError, true));
+            return;
+        }
+
+        Append(
+            Progress(
+                "parked",
+                $"'{spec.ResourcePath}' is soft-deleted: it is no longer addressable, its name is held "
+                + "for its recovery window, its parent edge names its subscription and "
+                + dropped.GetValueOrThrow().ToString(CultureInfo.InvariantCulture)
+                + " direct role assignment(s) were dropped. Its quota stays committed until it is "
+                + "purged."
+            )
+        );
+
         await TerminateAsync(Contracts.OperationState.Succeeded, null);
     }
 

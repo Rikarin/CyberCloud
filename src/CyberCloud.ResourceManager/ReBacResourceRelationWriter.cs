@@ -1,6 +1,7 @@
 using CyberCloud.Authorization.Contracts;
 using Microsoft.Extensions.Logging;
 using Orleans.Multitenant;
+using System.Collections.Immutable;
 using System.Globalization;
 
 namespace CyberCloud.ResourceManager;
@@ -82,6 +83,170 @@ public sealed class ReBacResourceRelationWriter(IGrainFactory grains, ILogger<Re
     ) =>
         ApplyAsync(id, parentId, link: false);
 
+    /// <inheritdoc />
+    public Task<Result> ReparentToSubscriptionAsync(
+        ResourceId id,
+        Guid parentId,
+        CancellationToken cancellationToken = default
+    ) =>
+        MoveAsync(id, parentId, toSubscription: true);
+
+    /// <inheritdoc />
+    public Task<Result> ReparentFromSubscriptionAsync(
+        ResourceId id,
+        Guid parentId,
+        CancellationToken cancellationToken = default
+    ) =>
+        MoveAsync(id, parentId, toSubscription: false);
+
+    /// <inheritdoc />
+    public Task<Result> UnlinkFromSubscriptionAsync(ResourceId id, CancellationToken cancellationToken = default) =>
+        ApplyTupleAsync(
+            id,
+            SubjectRef.Of(
+                ReBacResourceAuthorizer.SubscriptionObjectType,
+                ReBacResourceAuthorizer.SubscriptionObjectId(id)
+            ),
+            link: false
+        );
+
+    /// <inheritdoc />
+    public async Task<Result<int>> DropDirectRoleAssignmentsAsync(
+        ResourceId id,
+        CancellationToken cancellationToken = default
+    ) {
+        if (id.Id == Guid.Empty) {
+            return Result<int>.Failure(
+                ErrorCode.InvalidResourceId,
+                $"'{id.Path}' has no resource id, so there is no ReBAC object whose assignments could "
+                + "be dropped."
+            );
+        }
+
+        var tenant = grains.ForTenant(id.TenantId.ToString("D", CultureInfo.InvariantCulture));
+
+        var relations = tenant.GetGrain<IObjectRelationsGrain>(
+            GrainKeys.ObjectRelations(
+                ReBacResourceAuthorizer.ResourceObjectType,
+                id.Id.ToString("N", CultureInfo.InvariantCulture)
+            )
+        );
+
+        // ⚠ READ DURABLE. The next thing this method does is delete what it read, and a stale read
+        // leaves an assignment behind — which is a grant surviving a soft delete, the exact failure
+        // docs/plan/08 § Soft delete's security answer is about. The same reason the delete path
+        // authorizes FullyConsistent.
+        var snapshot = await relations.ReadDurableAsync();
+        if (snapshot.TryGetError(out var readError)) {
+            return Result<int>.Failure(readError);
+        }
+
+        var store = tenant.GetGrain<ITupleStoreGrain>(GrainKeys.TupleStore(id.TenantId));
+        var self = CyberCloud.Authorization.Contracts.ObjectRef.Of(
+            ReBacResourceAuthorizer.ResourceObjectType,
+            id.Id
+        );
+
+        var dropped = 0;
+
+        // ⚠ AN EXPLICIT ROLE LIST, NOT "EVERY RELATION ON THIS OBJECT", AND THE DIFFERENCE IS THE
+        // PARENT EDGE. This runs beside a re-parent, so the object is carrying a `parent` tuple that
+        // was written moments ago and must survive — deleting every relation would leave the resource
+        // parentless, which is the one outcome docs/plan/08 § Soft delete re-parents specifically to
+        // avoid ("The resource is never parentless"). `suspended` is left alone too: it is a control
+        // the platform sets, not a grant an administrator made.
+        foreach (var role in DirectRoles) {
+            foreach (var subject in snapshot.GetValueOrThrow().Subjects(role)) {
+                var built = RelationTuple.Create(self, role, subject);
+                if (built.TryGetError(out _)) {
+                    continue;
+                }
+
+                var deleted = await store.DeleteAsync(built.GetValueOrThrow());
+                if (deleted.TryGetError(out var deleteError)) {
+                    // ⚠ FAILS THE CALLER RATHER THAN LOGGING AND MOVING ON. A half-dropped assignment
+                    // set is a grant that survived a soft delete, and the delete path treats this as
+                    // retryable for that reason — docs/plan/08 § Soft delete takes the visible failure
+                    // over the invisible one, and a grant nobody observes is the invisible one.
+                    logger.LogError(
+                        "Dropping the direct '{Role}' assignment on {Path} failed: {Message}.",
+                        role,
+                        id.Path,
+                        deleteError.Message
+                    );
+
+                    return Result<int>.Failure(deleteError);
+                }
+
+                dropped++;
+            }
+        }
+
+        return Result<int>.Success(dropped);
+    }
+
+    /// <summary>
+    ///     The relations a person can be assigned directly on a resource — the ones a soft delete
+    ///     drops.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ Exactly the three <c>CyberCloudSchema</c> marks as roles on
+    ///     <see cref="ReBacResourceAuthorizer.ResourceObjectType" />. It is a list rather than a query
+    ///     because the schema is not addressable from this assembly, and it is short enough that
+    ///     <c>ParentEdgeStepTests</c> can assert it against the schema's own role set rather than
+    ///     trusting it.
+    /// </remarks>
+    public static ImmutableArray<string> DirectRoles { get; } =
+        [Relations.Owner, Relations.Contributor, Relations.Reader];
+
+    /// <summary>
+    ///     Moves the <c>parent</c> edge between the resource's ordinary parent and its subscription.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>THE NEW EDGE IS WRITTEN BEFORE THE OLD ONE IS REMOVED, AND THAT ORDER IS THE WHOLE
+    ///         DESIGN.</b> A silo lost between the two leaves the resource holding <i>two</i> parents
+    ///         for a while; the other order leaves it holding <i>none</i>. docs/plan/08 § Soft delete
+    ///         chose re-parenting over dropping the edge precisely so that <i>"the resource is never
+    ///         parentless … a resource nobody can see, and a silo lost in that window leaving it that
+    ///         way — cannot happen during the recovery window either"</i>, and writing first is the
+    ///         only ordering that keeps that true. It is the same trade the write path's step 8 makes:
+    ///         an inert extra row over an invisible resource, at every fork.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The residual is real and is bounded.</b> <c>CheckGrain.WalkAncestorsAsync</c> takes
+    ///         the first parent it finds when it builds the role-assignment <i>view</i>, so during that
+    ///         window the view may name either scope. A check is unaffected — the rewrite follows every
+    ///         parent tuple, so two parents grant the union and the caller can see the resource through
+    ///         both, which is the direction that is safe to be wrong in. The window closes on the next
+    ///         drive: the delete path re-runs this from the operation grain's reminder and the delete
+    ///         below is idempotent.
+    ///     </para>
+    /// </remarks>
+    async Task<Result> MoveAsync(ResourceId id, Guid parentId, bool toSubscription) {
+        var ordinary = OrdinarySubject(id, parentId);
+        var parked = SubjectRef.Of(
+            ReBacResourceAuthorizer.SubscriptionObjectType,
+            ReBacResourceAuthorizer.SubscriptionObjectId(id)
+        );
+
+        var written = await ApplyTupleAsync(id, toSubscription ? parked : ordinary, link: true);
+        if (written.TryGetError(out var writeError)) {
+            return Result.Failure(writeError);
+        }
+
+        return await ApplyTupleAsync(id, toSubscription ? ordinary : parked, link: false);
+    }
+
+    /// <summary>The parent this resource has when it is not soft-deleted: its group, or its parent resource.</summary>
+    static SubjectRef OrdinarySubject(ResourceId id, Guid parentId) =>
+        id.Parent is null
+            ? SubjectRef.Of(
+                ReBacResourceAuthorizer.ResourceGroupObjectType,
+                ReBacResourceAuthorizer.GroupObjectId(id)
+            )
+            : SubjectRef.Of(ReBacResourceAuthorizer.ResourceObjectType, parentId);
+
     async Task<Result> ApplyAsync(ResourceId id, Guid parentId, bool link) {
         if (id.Id == Guid.Empty) {
             // Not a domain outcome: the caller asked to link an address that has no identity yet.
@@ -151,13 +316,17 @@ public sealed class ReBacResourceRelationWriter(IGrainFactory grains, ILogger<Re
         // the tupleset names without a type check. Four hops against CheckLimits' twelve.
         // SchemaVersion is therefore NOT bumped: no rewrite changed, and the check cache is keyed on
         // it.
-        var subject = id.Parent is null
-            ? SubjectRef.Of(
-                ReBacResourceAuthorizer.ResourceGroupObjectType,
-                ReBacResourceAuthorizer.GroupObjectId(id)
-            )
-            : SubjectRef.Of(ReBacResourceAuthorizer.ResourceObjectType, parentId);
+        return await ApplyTupleAsync(id, OrdinarySubject(id, parentId), link);
+    }
 
+    /// <summary>Writes or deletes one <c>parent</c> tuple aimed at the subject it is handed.</summary>
+    /// <remarks>
+    ///     ⚠ Shared by the link/unlink pair and by <see cref="MoveAsync" />, so a soft delete's edge and
+    ///     a create's edge are the same tuple against the same store through the same code. Two
+    ///     constructions of one relation is two chances for a re-parent to write something a check does
+    ///     not follow — and the symptom of that is a resource nobody can see, with nothing in any log.
+    /// </remarks>
+    async Task<Result> ApplyTupleAsync(ResourceId id, SubjectRef subject, bool link) {
         // ⚠ Spelled out in full. `ObjectRef` is pinned to the Kubernetes one by this assembly's
         // GlobalUsings — see the comment there — and the ReBAC one is a different type entirely.
         var built = RelationTuple.Create(
