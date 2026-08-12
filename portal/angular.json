@@ -102,6 +102,94 @@
           }
         }
       }
+    },
+    "identity": {
+      "projectType": "application",
+      "root": "apps/identity",
+      "sourceRoot": "apps/identity/src",
+      "prefix": "cc",
+      "i18n": {
+        "sourceLocale": "en-US"
+      },
+      "architect": {
+        "build": {
+          "builder": "@angular/build:application",
+          "options": {
+            "outputPath": "dist/identity",
+            "index": "apps/identity/src/index.html",
+            "browser": "apps/identity/src/main.ts",
+            "server": "apps/identity/src/main.server.ts",
+            "ssr": {
+              "entry": "apps/identity/src/server.ts"
+            },
+            "outputMode": "server",
+            "polyfills": ["@angular/localize/init"],
+            "tsConfig": "apps/identity/tsconfig.app.json",
+            "inlineStyleLanguage": "css",
+            "styles": ["apps/identity/src/styles.css"],
+            "localize": false,
+            "security": {
+              "allowedHosts": ["127.0.0.1", "localhost"]
+            },
+            "assets": [
+              {
+                "glob": "**/*",
+                "input": "apps/identity/public"
+              }
+            ]
+          },
+          "configurations": {
+            "production": {
+              "optimization": true,
+              "extractLicenses": true,
+              "sourceMap": false,
+              "namedChunks": false,
+              "outputHashing": "all",
+              "budgets": [
+                {
+                  "type": "initial",
+                  "maximumWarning": "340kB",
+                  "maximumError": "420kB"
+                },
+                {
+                  "type": "anyComponentStyle",
+                  "maximumWarning": "6kB",
+                  "maximumError": "12kB"
+                }
+              ]
+            },
+            "development": {
+              "optimization": false,
+              "sourceMap": true,
+              "extractLicenses": false,
+              "namedChunks": true
+            }
+          },
+          "defaultConfiguration": "production"
+        },
+        "serve": {
+          "builder": "@angular/build:dev-server",
+          "configurations": {
+            "production": { "buildTarget": "identity:build:production" },
+            "development": { "buildTarget": "identity:build:development" }
+          },
+          "defaultConfiguration": "development"
+        },
+        "extract-i18n": {
+          "builder": "@angular/build:extract-i18n",
+          "options": {
+            "buildTarget": "identity:build:development",
+            "format": "xlf2",
+            "outputPath": "apps/identity/src/locale"
+          }
+        },
+        "lint": {
+          "builder": "@angular-eslint/builder:lint",
+          "options": {
+            "lintFilePatterns": ["apps/identity/**/*.ts", "apps/identity/**/*.html"]
+          }
+        }
+      }
     }
   }
 }

@@ -1,0 +1,13 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "../../out-tsc/identity",
+    "types": ["node", "@angular/localize"]
+  },
+  "files": ["src/main.ts", "src/main.server.ts", "src/server.ts"],
+  // ⚠ No `../../libs/**` here, unlike apps/portal. The identity app deliberately shares no library
+  // with the portal — docs/plan/11 § Hosts makes the two origins a security boundary, and a shared
+  // `libs/shell` would be a shared bundle carrying the portal's API client onto the cookie origin.
+  "include": ["src/**/*.d.ts"],
+  "exclude": ["**/*.spec.ts"]
+}

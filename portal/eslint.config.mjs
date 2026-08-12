@@ -16,6 +16,7 @@ export default tseslint.config(
       // The index document is not an Angular template; running the template rules over it flags
       // `<link rel>` and `<meta content>` as untranslated copy.
       'apps/portal/src/index.html',
+      'apps/identity/src/index.html',
     ],
   },
   {
@@ -89,8 +90,8 @@ export default tseslint.config(
     },
   },
   {
-    // The SSR entry legitimately talks to Express and to Node globals.
-    files: ['apps/portal/src/server.ts', 'scripts/**/*.mjs'],
+    // The SSR entries legitimately talk to Express and to Node globals.
+    files: ['apps/portal/src/server.ts', 'apps/identity/src/server.ts', 'scripts/**/*.mjs'],
     rules: { 'no-restricted-syntax': 'off' },
   },
   {
@@ -142,6 +143,11 @@ export default tseslint.config(
             // Structural / non-linguistic HTML.
             'charset', 'class', 'content', 'for', 'href', 'id', 'name', 'rel', 'src', 'style',
             'tabindex', 'target', 'type', 'value',
+            // ⚠ Keyword-valued form attributes, added with the identity app's sign-in form.
+            // `autocomplete="current-password"` and `inputmode="email"` are vocabulary the browser
+            // and the password manager read, not copy a translator should touch — translating
+            // either breaks autofill rather than localising anything.
+            'autocomplete', 'inputmode',
             // ARIA whose value is a keyword, not prose.
             'aria-hidden', 'aria-live', 'aria-atomic', 'role',
             // xUI component configuration.

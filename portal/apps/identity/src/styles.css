@@ -1,0 +1,52 @@
+@import 'tailwindcss';
+
+/*
+  The same token layer as the portal — ADR-017, docs/plan/20 § Accessibility, i18n, theming:
+  "Theming is tokens, not `dark:` classes. Light and dark both work by construction."
+
+  ⚠ Sharing the token layer is the point. A sign-in page that looked like a different product from
+  the portal it hands you to is the oldest phishing tell there is, and users are taught to notice
+  it. Importing the same `theme.css` means the two origins are the same design system by
+  construction rather than by somebody keeping two colour sets in step.
+*/
+@import '@xui/core/styles/theme.css';
+
+/*
+  ⚠ The CDK overlay stylesheet is imported even though this app opens no overlay today, because
+  `@xui/input` and `@xui/button` peer on `@angular/cdk` and a future validation popover would
+  otherwise render in the document flow. It costs a few hundred bytes and removes a confusing
+  first-time failure.
+*/
+@import '@angular/cdk/overlay-prebuilt.css';
+
+@plugin 'tailwindcss-animate';
+
+/* Tailwind 4 scans sources rather than reading a config. This app's markup is all under src/app. */
+@source './app';
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  @apply bg-background text-foreground antialiased;
+  /*
+    ⚠ NOT `height: 100svh; overflow: hidden` like the portal. The portal is a full-height
+    application surface whose dock manager sizes against the viewport. This is a document — a card
+    on a page — and locking the document scroll here means a user on a short viewport with a
+    validation message showing cannot reach the submit button.
+  */
+  min-height: 100svh;
+}
+
+/*
+  Visible only once focused, so a keyboard user can jump straight to the form — docs/plan/20
+  § Accessibility, i18n, theming makes WCAG 2.2 AA a gate.
+*/
+.skip-link {
+  @apply sr-only;
+}
+
+.skip-link:focus {
+  @apply bg-surface-raised text-foreground ring-focus not-sr-only absolute start-4 top-4 z-50 rounded-md px-4 py-2 ring-2;
+}
