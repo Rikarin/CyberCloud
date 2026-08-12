@@ -16,6 +16,30 @@ allowBuilds:
   msgpackr-extract: false
   unrs-resolver: false
 
+minimumReleaseAgeExclude:
+  - '@xui/breadcrumb@2.2.1'
+  - '@xui/button@2.2.1'
+  - '@xui/core@2.2.1'
+  - '@xui/dialog@2.2.1'
+  - '@xui/divider@2.2.1'
+  - '@xui/dock-manager@2.2.1'
+  - '@xui/icon@2.2.1'
+  - '@xui/input@2.2.1'
+  - '@xui/kbd@2.2.1'
+  - '@xui/menu@2.2.1'
+  - '@xui/non-ideal-state@2.2.1'
+  - '@xui/omnibar@2.2.1'
+  - '@xui/overflow-list@2.2.1'
+  - '@xui/panel-stack@2.2.1'
+  - '@xui/popover@2.2.1'
+  - '@xui/progress-bar@2.2.1'
+  - '@xui/scroll-area@2.2.1'
+  - '@xui/select@2.2.1'
+  - '@xui/spinner@2.2.1'
+  - '@xui/tag@2.2.1'
+  - '@xui/toast@2.2.1'
+  - '@xui/tooltip@2.2.1'
+
 # ⚠ Single-version policy. Every @angular/*, @xui/* and peer package is declared once in the root
 # package.json and pinned exactly; workspace packages carry no runtime dependency ranges of their
 # own. Two copies of @angular/core in one tree is a broken app, and @xui/* peers on exact
