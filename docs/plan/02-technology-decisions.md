@@ -511,6 +511,15 @@ lands.
 > of this note takes it back out, so the target says 36 and 25 today.* The chart's `@param` block is
 > generated from `PostgresServers.Schema2026` and byte-diffed.
 >
+> ⚠ **UPDATED AGAIN THE SAME DAY: two pairs, 63 rows, 40 in the API surface, 23 `@internal`**, once
+> `CyberCloud.Cache/redis` landed with `charts/managed/valkey`. The second chart's `@param` block was
+> written by hand to match what `ChartAnnotationEmitter` would produce and came back **unchanged on
+> the first run** — which is the useful measurement here, because it says the emitter's output is
+> something a person can predict from the schema rather than a format only the generator knows. The
+> per-chart split is in charts/README.md; the short version is that the `@internal` tail is a fixed
+> cost of about eleven rows per managed service and everything else scales with the configuration
+> surface.
+>
 > ⚠ **This paragraph previously read "`Build.Charts` still never opens a registry … grep
 > `build/Build.Charts.cs` for `ResourceSchema` and the only two hits are comments", and directed
 > readers to `ChartRegistryPairTests` as the substitute. The grep was accurate and the conclusion was

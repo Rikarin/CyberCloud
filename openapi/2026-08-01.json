@@ -63,6 +63,331 @@
         }
       }
     },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Cache/redis/{resourceName}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "get": {
+        "operationId": "CyberCloud_Cache_redis_Get",
+        "summary": "Read a CyberCloud.Cache/redis.",
+        "description": "The body is this api-version's projection of the resource: docs/plan/08 § The provider registry keeps grain state as a superset and a read at an older version drops what that version did not declare.",
+        "responses": {
+          "200": {
+            "description": "The resource.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Cache.redis"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "read"
+      },
+      "put": {
+        "operationId": "CyberCloud_Cache_redis_CreateOrUpdate",
+        "summary": "Create or replace a CyberCloud.Cache/redis.",
+        "description": "A full replacement. Every property the schema marks required must be present; a read-only property is refused rather than ignored — docs/plan/08 § The write path, end to end.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CyberCloud.Cache.redis"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "headers": {
+              "Azure-AsyncOperation": {
+                "description": "The absolute URL of the operation to poll.",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "Retry-After": {
+                "description": "Seconds to wait before the first poll.",
+                "required": true,
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "write"
+      },
+      "patch": {
+        "operationId": "CyberCloud_Cache_redis_Update",
+        "summary": "Merge-patch a CyberCloud.Cache/redis.",
+        "description": "A merge patch. The patch itself may omit required properties; the merged result is what is validated — see ResourceSchema.Validate.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CyberCloud.Cache.redis"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "headers": {
+              "Azure-AsyncOperation": {
+                "description": "The absolute URL of the operation to poll.",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "Retry-After": {
+                "description": "Seconds to wait before the first poll.",
+                "required": true,
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "write"
+      },
+      "delete": {
+        "operationId": "CyberCloud_Cache_redis_Delete",
+        "summary": "Delete a CyberCloud.Cache/redis.",
+        "description": "The delete is permanent: this type declares no soft-delete window.",
+        "responses": {
+          "202": {
+            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "headers": {
+              "Azure-AsyncOperation": {
+                "description": "The absolute URL of the operation to poll.",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "Retry-After": {
+                "description": "Seconds to wait before the first poll.",
+                "required": true,
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "delete",
+        "x-cybercloud-soft-delete-days": 0
+      },
+      "x-cybercloud-resource-type": "CyberCloud.Cache/redis",
+      "x-cybercloud-display": {
+        "name": "Valkey cache",
+        "plural": "Valkey caches",
+        "alias": "valkey",
+        "summary": "A managed Valkey cache with Sentinel failover, on spotahome/redis-operator. Valkey rather than Redis, per ADR-011; every Redis client works against it.",
+        "declared": true
+      },
+      "x-cybercloud-supports-tags": true,
+      "x-cybercloud-requires-cluster": true,
+      "x-cybercloud-cluster-id-pointer": "/properties/clusterId",
+      "x-cybercloud-soft-delete-days": 0,
+      "x-cybercloud-meters": [
+        {
+          "meter": "Resources",
+          "amountPointer": "",
+          "fallback": 1
+        }
+      ]
+    },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Cache/redis/{resourceName}/listKeys": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "post": {
+        "operationId": "CyberCloud_Cache_redis_ListKeys",
+        "summary": "listKeys a CyberCloud.Cache/redis.",
+        "description": "An action never creates: a POST to a name that does not exist is a 404 — docs/plan/08 § The write path, end to end. ⚠ The response carries secret material. It is always audited and is never cached — docs/plan/08 § The provider registry.",
+        "responses": {
+          "200": {
+            "description": "The action's result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Cache.redis.ListKeysResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "listKeys",
+        "x-cybercloud-secret": true,
+        "x-cybercloud-long-running": false
+      },
+      "x-cybercloud-resource-type": "CyberCloud.Cache/redis",
+      "x-cybercloud-action": "listKeys"
+    },
     "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.DBforPostgreSQL/servers/{resourceName}": {
       "parameters": [
         {
@@ -904,6 +1229,216 @@
       }
     },
     "schemas": {
+      "CyberCloud.Cache.redis": {
+        "additionalProperties": false,
+        "description": "The body of a CyberCloud.Cache/redis. Generated from the provider registry's schema, which is the same object the write path validates against — docs/plan/08 § The provider registry.",
+        "properties": {
+          "location": {
+            "description": "The region the cache is billed in.",
+            "example": "eu-central",
+            "format": "cybercloud-region",
+            "type": "string",
+            "x-cybercloud-immutable": true,
+            "x-cybercloud-widget": "region"
+          },
+          "properties": {
+            "additionalProperties": false,
+            "description": "The cache's own settings.",
+            "properties": {
+              "clusterId": {
+                "description": "The cluster whose namespace holds the RedisFailover.",
+                "format": "uuid",
+                "type": "string",
+                "x-cybercloud-immutable": true,
+                "x-cybercloud-widget": "cluster"
+              },
+              "maxmemoryPolicy": {
+                "default": "noeviction",
+                "description": "What happens when the cache reaches its memory limit. noeviction returns an error to the writer rather than dropping a key somebody is relying on.",
+                "enum": [
+                  "noeviction",
+                  "allkeys-lru",
+                  "allkeys-lfu",
+                  "allkeys-random",
+                  "volatile-lru",
+                  "volatile-lfu",
+                  "volatile-random",
+                  "volatile-ttl"
+                ],
+                "type": "string"
+              },
+              "mode": {
+                "default": "Sentinel",
+                "description": "Replication topology. Sentinel is the only one this operator implements, and a client written against it is not portable to a sharded deployment, so it may not change after create.",
+                "enum": [
+                  "Sentinel"
+                ],
+                "type": "string",
+                "x-cybercloud-immutable": true
+              },
+              "monitoring": {
+                "additionalProperties": false,
+                "description": "What the platform scrapes.",
+                "properties": {
+                  "enabled": {
+                    "default": true,
+                    "description": "Whether the operator runs a metrics exporter beside every Valkey and every Sentinel pod.",
+                    "type": "boolean"
+                  }
+                },
+                "type": "object"
+              },
+              "persistence": {
+                "additionalProperties": false,
+                "description": "What survives a restart. None of the three settings makes a cache a database.",
+                "properties": {
+                  "class": {
+                    "default": "",
+                    "description": "StorageClass name. Empty means the cluster default.",
+                    "type": "string",
+                    "x-cybercloud-immutable": true,
+                    "x-cybercloud-widget": "storageclass"
+                  },
+                  "fsync": {
+                    "default": "everysec",
+                    "description": "How often the append-only file reaches the disk. Read only when the mode is AOF; everysec can lose the last second of writes.",
+                    "enum": [
+                      "always",
+                      "everysec",
+                      "no"
+                    ],
+                    "type": "string"
+                  },
+                  "mode": {
+                    "default": "AOF",
+                    "description": "None keeps nothing, RDB snapshots periodically, AOF appends every write.",
+                    "enum": [
+                      "None",
+                      "RDB",
+                      "AOF"
+                    ],
+                    "type": "string"
+                  },
+                  "size": {
+                    "default": "8Gi",
+                    "description": "Persistent volume size in Kubernetes quantity form. Unused when the mode is None, which keeps the data directory in memory.",
+                    "example": "8Gi",
+                    "pattern": "^(?:\\d+(\\.\\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)$",
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              },
+              "replicas": {
+                "default": 3,
+                "description": "Number of Valkey instances, including the primary. One is a single point of failure and is offered for development only.",
+                "maximum": 5,
+                "minimum": 1,
+                "type": "integer"
+              },
+              "sizing": {
+                "additionalProperties": false,
+                "description": "CPU and memory, either by preset or explicitly.",
+                "properties": {
+                  "cpu": {
+                    "default": "",
+                    "description": "Explicit vCPU quantity in Kubernetes form, for example 500m or 2. Empty means take it from the preset.",
+                    "pattern": "^(?:(\\d+(\\.\\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)?)$",
+                    "type": "string"
+                  },
+                  "memory": {
+                    "default": "",
+                    "description": "Explicit memory quantity in Kubernetes form, for example 4Gi. Empty means take it from the preset. It also sets maxmemory, so a cache evicts or refuses before the kernel kills the pod.",
+                    "pattern": "^(?:(\\d+(\\.\\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)?)$",
+                    "type": "string"
+                  },
+                  "preset": {
+                    "default": "m1.small",
+                    "description": "A sizing preset from docs/plan/12. Caches use the m1 family, which is 1 vCPU to 8 GiB.",
+                    "enum": [
+                      "m1.nano",
+                      "m1.micro",
+                      "m1.small",
+                      "m1.medium",
+                      "m1.large",
+                      "m1.xlarge",
+                      "m1.2xlarge",
+                      "m1.4xlarge"
+                    ],
+                    "type": "string",
+                    "x-cybercloud-widget": "cozy-preset"
+                  }
+                },
+                "type": "object"
+              },
+              "version": {
+                "default": "8",
+                "description": "Major Valkey version. Minor upgrades are applied automatically in the maintenance window.",
+                "enum": [
+                  "7",
+                  "8"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "clusterId",
+              "replicas",
+              "version"
+            ],
+            "type": "object"
+          },
+          "tags": {
+            "type": "object",
+            "description": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "maxProperties": 50,
+            "x-cybercloud-widget": "tag-input"
+          }
+        },
+        "required": [
+          "location"
+        ],
+        "title": "CyberCloud.Cache/redis",
+        "type": "object"
+      },
+      "CyberCloud.Cache.redis.ListKeysResponse": {
+        "additionalProperties": false,
+        "description": "What CyberCloud.Cache/redis/listKeys returns. ⚠ Secret material. docs/plan/08 § The provider registry makes a secret action the only path a secret value leaves by; this schema is therefore the complete list of what does.",
+        "properties": {
+          "host": {
+            "description": "The in-cluster DNS name of the Sentinel service. ⚠ Not the primary's own address — a client asks Sentinel which member is the primary, because that answer changes at every failover.",
+            "type": "string"
+          },
+          "masterName": {
+            "description": "The Sentinel master group to ask for. Every client library takes this as a separate argument from the host.",
+            "type": "string"
+          },
+          "password": {
+            "description": "The requirepass value, read from the tenant's Vault for this call only.",
+            "format": "password",
+            "type": "string",
+            "writeOnly": true,
+            "x-cybercloud-secret": true
+          },
+          "port": {
+            "description": "The Sentinel TCP port.",
+            "maximum": 65535,
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "host",
+          "masterName",
+          "password",
+          "port"
+        ],
+        "title": "CyberCloud.Cache.redis.ListKeysResponse",
+        "type": "object"
+      },
       "CyberCloud.DBforPostgreSQL.servers": {
         "additionalProperties": false,
         "description": "The body of a CyberCloud.DBforPostgreSQL/servers. Generated from the provider registry's schema, which is the same object the write path validates against — docs/plan/08 § The provider registry.",
@@ -1483,5 +2018,5 @@
       }
     }
   },
-  "x-cybercloud-resource-type-count": 2
+  "x-cybercloud-resource-type-count": 3
 }

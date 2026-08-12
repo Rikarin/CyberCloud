@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      docs/plan/03 § Providers — the first of the five projects: "grain interfaces, resource models,
+      the JSON Schemas". This one is the schema and the spotahome RedisFailover projection.
+
+      ⚠ NO GRAIN INTERFACES, for the reason CyberCloud.Providers.DBforPostgreSQL.Contracts records at
+      length: a cache's desired state is held by CyberCloud.ResourceManager's ResourceGrain. This is
+      the THIRD provider to need none, which is what turns "the manager owns resource state" from an
+      observation into a measurement — docs/plan/25 § R1.
+
+      ⚠ ITS REFERENCE SET IS CyberCloud.ResourceManager.Contracts AND CyberCloud.Kubernetes.Contracts,
+      and nothing else. Rule 2 of docs/plan/03 § Assembly graph rules forbids a Providers.* assembly
+      referencing another Providers.* assembly; this project is the THIRD family, so the rule now has
+      candidates in three and a violation is constructible from any of them.
+
+      ⚠ THE BLIND SPOT THE POSTGRES PROVIDER FOUND IN THAT RULE IS STILL OPEN, and it is worth
+      repeating here because this is the project a rule-2 violation would be written in. The gate reads
+      Assembly.ReferencedAssemblies — the BINDING references in the compiled IL — so a cross-provider
+      dependency that touches only `const` members emits no reference at all: the C# compiler inlines a
+      const into the consuming assembly. Nothing here takes such a reference, and nothing in the build
+      would notice if it did.
+    -->
+
+    <ItemGroup>
+        <ProjectReference Include="../../../CyberCloud.ResourceManager.Contracts/CyberCloud.ResourceManager.Contracts.csproj"/>
+        <ProjectReference Include="../../../CyberCloud.Kubernetes.Contracts/CyberCloud.Kubernetes.Contracts.csproj"/>
+    </ItemGroup>
+
+    <ItemGroup Label="CyberCloud.Analyzers — see CyberCloud.Core.csproj for why this is not a reference">
+        <ProjectReference Include="../../../CyberCloud.Analyzers/CyberCloud.Analyzers.csproj"
+                          OutputItemType="Analyzer"
+                          ReferenceOutputAssembly="false"/>
+    </ItemGroup>
+
+</Project>

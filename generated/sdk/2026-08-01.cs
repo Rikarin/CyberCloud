@@ -26,6 +26,298 @@ public static class GeneratedApiVersion {
     public const string Value = "2026-08-01";
 }
 
+/// <summary>The values /properties/maxmemoryPolicy accepts. ⚠ Closed: the write path refuses anything else.</summary>
+public enum ValkeyCacheMaxmemoryPolicy {
+    /// <summary>Never assigned. Not a value the API accepts.</summary>
+    Unknown = 0,
+
+    /// <summary>noeviction</summary>
+    [JsonStringEnumMemberName("noeviction")]
+    Noeviction = 1,
+
+    /// <summary>allkeys-lru</summary>
+    [JsonStringEnumMemberName("allkeys-lru")]
+    AllkeysLru = 2,
+
+    /// <summary>allkeys-lfu</summary>
+    [JsonStringEnumMemberName("allkeys-lfu")]
+    AllkeysLfu = 3,
+
+    /// <summary>allkeys-random</summary>
+    [JsonStringEnumMemberName("allkeys-random")]
+    AllkeysRandom = 4,
+
+    /// <summary>volatile-lru</summary>
+    [JsonStringEnumMemberName("volatile-lru")]
+    VolatileLru = 5,
+
+    /// <summary>volatile-lfu</summary>
+    [JsonStringEnumMemberName("volatile-lfu")]
+    VolatileLfu = 6,
+
+    /// <summary>volatile-random</summary>
+    [JsonStringEnumMemberName("volatile-random")]
+    VolatileRandom = 7,
+
+    /// <summary>volatile-ttl</summary>
+    [JsonStringEnumMemberName("volatile-ttl")]
+    VolatileTtl = 8
+}
+
+/// <summary>The values /properties/mode accepts. ⚠ Closed: the write path refuses anything else.</summary>
+public enum ValkeyCacheMode {
+    /// <summary>Never assigned. Not a value the API accepts.</summary>
+    Unknown = 0,
+
+    /// <summary>Sentinel</summary>
+    [JsonStringEnumMemberName("Sentinel")]
+    Sentinel = 1
+}
+
+/// <summary>The values /properties/persistence/fsync accepts. ⚠ Closed: the write path refuses anything else.</summary>
+public enum ValkeyCacheFsync {
+    /// <summary>Never assigned. Not a value the API accepts.</summary>
+    Unknown = 0,
+
+    /// <summary>always</summary>
+    [JsonStringEnumMemberName("always")]
+    Always = 1,
+
+    /// <summary>everysec</summary>
+    [JsonStringEnumMemberName("everysec")]
+    Everysec = 2,
+
+    /// <summary>no</summary>
+    [JsonStringEnumMemberName("no")]
+    No = 3
+}
+
+/// <summary>The values /properties/persistence/mode accepts. ⚠ Closed: the write path refuses anything else.</summary>
+public enum ValkeyCacheMode {
+    /// <summary>Never assigned. Not a value the API accepts.</summary>
+    Unknown = 0,
+
+    /// <summary>None</summary>
+    [JsonStringEnumMemberName("None")]
+    None = 1,
+
+    /// <summary>RDB</summary>
+    [JsonStringEnumMemberName("RDB")]
+    RDB = 2,
+
+    /// <summary>AOF</summary>
+    [JsonStringEnumMemberName("AOF")]
+    AOF = 3
+}
+
+/// <summary>The values /properties/sizing/preset accepts. ⚠ Closed: the write path refuses anything else.</summary>
+public enum ValkeyCachePreset {
+    /// <summary>Never assigned. Not a value the API accepts.</summary>
+    Unknown = 0,
+
+    /// <summary>m1.nano</summary>
+    [JsonStringEnumMemberName("m1.nano")]
+    M1Nano = 1,
+
+    /// <summary>m1.micro</summary>
+    [JsonStringEnumMemberName("m1.micro")]
+    M1Micro = 2,
+
+    /// <summary>m1.small</summary>
+    [JsonStringEnumMemberName("m1.small")]
+    M1Small = 3,
+
+    /// <summary>m1.medium</summary>
+    [JsonStringEnumMemberName("m1.medium")]
+    M1Medium = 4,
+
+    /// <summary>m1.large</summary>
+    [JsonStringEnumMemberName("m1.large")]
+    M1Large = 5,
+
+    /// <summary>m1.xlarge</summary>
+    [JsonStringEnumMemberName("m1.xlarge")]
+    M1Xlarge = 6,
+
+    /// <summary>m1.2xlarge</summary>
+    [JsonStringEnumMemberName("m1.2xlarge")]
+    M12xlarge = 7,
+
+    /// <summary>m1.4xlarge</summary>
+    [JsonStringEnumMemberName("m1.4xlarge")]
+    M14xlarge = 8
+}
+
+/// <summary>The values /properties/version accepts. ⚠ Closed: the write path refuses anything else.</summary>
+public enum ValkeyCacheVersion {
+    /// <summary>Never assigned. Not a value the API accepts.</summary>
+    Unknown = 0,
+
+    /// <summary>7</summary>
+    [JsonStringEnumMemberName("7")]
+    N7 = 1,
+
+    /// <summary>8</summary>
+    [JsonStringEnumMemberName("8")]
+    N8 = 2
+}
+
+/// <summary>The body of a CyberCloud.Cache/redis.</summary>
+/// <remarks>A managed Valkey cache with Sentinel failover, on spotahome/redis-operator. Valkey rather than Redis, per ADR-011; every Redis client works against it.</remarks>
+public sealed partial class ValkeyCacheData {
+
+    /// <summary>The region the cache is billed in.</summary>
+    /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+    [JsonPropertyName("location")]
+    public required string Location { get; set; }
+
+    /// <summary>The cluster whose namespace holds the RedisFailover.</summary>
+    /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+    [JsonPropertyName("clusterId")]
+    public required Guid ClusterId { get; set; }
+
+    /// <summary>What happens when the cache reaches its memory limit. noeviction returns an error to the writer rather than dropping a key somebody is relying on.</summary>
+    /// <remarks>Defaults to "noeviction" when left unset.</remarks>
+    [JsonPropertyName("maxmemoryPolicy")]
+    public ValkeyCacheMaxmemoryPolicy? MaxmemoryPolicy { get; set; }
+
+    /// <summary>Replication topology. Sentinel is the only one this operator implements, and a client written against it is not portable to a sharded deployment, so it may not change after create.</summary>
+    /// <remarks>⚠ Cannot change after create. Defaults to "Sentinel" when left unset.</remarks>
+    [JsonPropertyName("mode")]
+    public ValkeyCacheMode? Mode { get; set; }
+
+    /// <summary>Whether the operator runs a metrics exporter beside every Valkey and every Sentinel pod.</summary>
+    /// <remarks>Defaults to true when left unset.</remarks>
+    [JsonPropertyName("enabled")]
+    public bool? Enabled { get; set; }
+
+    /// <summary>StorageClass name. Empty means the cluster default.</summary>
+    /// <remarks>⚠ Cannot change after create. Defaults to "" when left unset.</remarks>
+    [JsonPropertyName("class")]
+    public string? Class { get; set; }
+
+    /// <summary>How often the append-only file reaches the disk. Read only when the mode is AOF; everysec can lose the last second of writes.</summary>
+    /// <remarks>Defaults to "everysec" when left unset.</remarks>
+    [JsonPropertyName("fsync")]
+    public ValkeyCacheFsync? Fsync { get; set; }
+
+    /// <summary>None keeps nothing, RDB snapshots periodically, AOF appends every write.</summary>
+    /// <remarks>Defaults to "AOF" when left unset.</remarks>
+    [JsonPropertyName("mode")]
+    public ValkeyCacheMode? Mode { get; set; }
+
+    /// <summary>Persistent volume size in Kubernetes quantity form. Unused when the mode is None, which keeps the data directory in memory.</summary>
+    /// <remarks>Defaults to "8Gi" when left unset.</remarks>
+    [JsonPropertyName("size")]
+    public string? Size { get; set; }
+
+    /// <summary>Number of Valkey instances, including the primary. One is a single point of failure and is offered for development only.</summary>
+    /// <remarks>Required on a create. Defaults to 3 when left unset.</remarks>
+    [JsonPropertyName("replicas")]
+    public required long Replicas { get; set; }
+
+    /// <summary>Explicit vCPU quantity in Kubernetes form, for example 500m or 2. Empty means take it from the preset.</summary>
+    /// <remarks>Defaults to "" when left unset.</remarks>
+    [JsonPropertyName("cpu")]
+    public string? Cpu { get; set; }
+
+    /// <summary>Explicit memory quantity in Kubernetes form, for example 4Gi. Empty means take it from the preset. It also sets maxmemory, so a cache evicts or refuses before the kernel kills the pod.</summary>
+    /// <remarks>Defaults to "" when left unset.</remarks>
+    [JsonPropertyName("memory")]
+    public string? Memory { get; set; }
+
+    /// <summary>A sizing preset from docs/plan/12. Caches use the m1 family, which is 1 vCPU to 8 GiB.</summary>
+    /// <remarks>Defaults to "m1.small" when left unset.</remarks>
+    [JsonPropertyName("preset")]
+    public ValkeyCachePreset? Preset { get; set; }
+
+    /// <summary>Major Valkey version. Minor upgrades are applied automatically in the maintenance window.</summary>
+    /// <remarks>Required on a create. Defaults to "8" when left unset.</remarks>
+    [JsonPropertyName("version")]
+    public required ValkeyCacheVersion Version { get; set; }
+
+    /// <summary>Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.</summary>
+    [JsonPropertyName("tags")]
+    public IDictionary<string, string> Tags { get; set; } = new Dictionary<string, string>(StringComparer.Ordinal);
+}
+
+/// <summary>One Valkey cache, and the operations on it.</summary>
+public sealed partial class ValkeyCacheResource {
+    /// <summary>The resource's fully qualified id.</summary>
+    public string Id { get; init; } = string.Empty;
+
+    /// <summary>The body, projected at this api-version.</summary>
+    public ValkeyCacheData Data { get; init; } = new();
+
+    /// <summary>Re-reads the resource.</summary>
+    public partial Task<Response<ValkeyCacheResource>> GetAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Amends the resource. A merge patch: what is not set is not changed.</summary>
+    public partial Task<Operation<ValkeyCacheResource>> UpdateAsync(
+        WaitUntil waitUntil,
+        ValkeyCacheData data,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Deletes the resource. ⚠ Permanent: this type declares no soft-delete window.</summary>
+    public partial Task<Operation> DeleteAsync(
+        WaitUntil waitUntil,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>What listKeys returns. ⚠ Secret material: never log or cache this.</summary>
+    public sealed partial class ListKeysResult {
+
+        /// <summary>The in-cluster DNS name of the Sentinel service. ⚠ Not the primary's own address — a client asks Sentinel which member is the primary, because that answer changes at every failover.</summary>
+        [JsonPropertyName("host")]
+        public required string Host { get; set; }
+
+        /// <summary>The Sentinel master group to ask for. Every client library takes this as a separate argument from the host.</summary>
+        [JsonPropertyName("masterName")]
+        public required string MasterName { get; set; }
+
+        /// <summary>The requirepass value, read from the tenant's Vault for this call only.</summary>
+        [JsonPropertyName("password")]
+        public required string Password { get; set; }
+
+        /// <summary>The Sentinel TCP port.</summary>
+        [JsonPropertyName("port")]
+        public required long Port { get; set; }
+    }
+
+    /// <summary>ListKeys. ⚠ An action never creates — a POST to a name that does not exist is a 404. ⚠ The response carries secret material and is always audited.</summary>
+    public partial Task<Response<ListKeysResult>> ListKeysAsync(
+        CancellationToken cancellationToken = default);
+}
+
+/// <summary>The Valkey caches in one resource group.</summary>
+/// <remarks>⚠ Every write is long-running: docs/plan/08 § The write path, end to end
+/// ends in a 202 for every verb, so there is no synchronous overload to offer.</remarks>
+public sealed partial class ValkeyCacheCollection {
+    /// <summary>The resource type these address.</summary>
+    public const string ResourceType = "CyberCloud.Cache/redis";
+
+    /// <summary>The URL template, with the api-version this file was generated at.</summary>
+    public const string PathTemplate = "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Cache/redis/{resourceName}";
+
+    /// <inheritdoc cref="GeneratedApiVersion.Value" />
+    public const string ApiVersion = "2026-08-01";
+
+    /// <summary>Creates or replaces one Valkey cache.</summary>
+    /// <remarks>⚠ Poll with GetProgressAsync() rather than only WaitForCompletionAsync():
+    /// docs/plan/21 § The .NET SDK — "Azure's LROs expose no progress; ours do and the
+    /// SDK should not hide it".</remarks>
+    public partial Task<Operation<ValkeyCacheResource>> CreateOrUpdateAsync(
+        WaitUntil waitUntil,
+        string name,
+        ValkeyCacheData data,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Reads one Valkey cache by name.</summary>
+    public partial Task<Response<ValkeyCacheResource>> GetAsync(string name, CancellationToken cancellationToken = default);
+
+    /// <summary>The Valkey caches in this group, paged.</summary>
+    public partial AsyncPageable<ValkeyCacheResource> GetAllAsync(CancellationToken cancellationToken = default);
+}
+
 /// <summary>The values /properties/extensions accepts. ⚠ Closed: the write path refuses anything else.</summary>
 public enum PostgreSQLServerExtensions {
     /// <summary>Never assigned. Not a value the API accepts.</summary>

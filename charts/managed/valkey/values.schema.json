@@ -1,0 +1,293 @@
+{
+  "$id": "https://schema.cybercloud.io/charts/valkey/values.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "The configuration surface of the valkey chart. GENERATED from values.yaml by `./build.sh Charts` and diffed in CI — docs/plan/03 § charts/. Edit values.yaml, never this file. Members carrying `x-cybercloud-api: false` are chart or platform plumbing and are not part of the resource body.",
+  "properties": {
+    "auth": {
+      "additionalProperties": false,
+      "description": "The credential the operator reads `requirepass` from. Not a tenant-facing setting.",
+      "properties": {
+        "password": {
+          "default": "",
+          "description": "The requirepass value. Resolved from the tenant's Vault at render time by ISecretResolver; it is never written into a values file or into grain state.",
+          "format": "password",
+          "type": "string",
+          "writeOnly": true,
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "The value is provisioned into the tenant's Vault and reaches the RedisFailover as a Secret REFERENCE BY NAME (spec.auth.secretPath), never as a value. Declaring it in the resource body would put a plaintext password into grain state — nothing on the write path substitutes a SecretRef before the grain persists the body — which docs/plan/00 § Non-negotiables forbids outright. docs/plan/12 § Cross-cutting decisions, Credentials, puts the value itself behind listKeys.",
+          "x-cybercloud-order": 0,
+          "x-cybercloud-pointer": "/properties/auth/password",
+          "x-cybercloud-secret": true
+        }
+      },
+      "type": "object",
+      "x-cybercloud-api": false,
+      "x-cybercloud-internal-reason": "The value is provisioned into the tenant's Vault and reaches the RedisFailover as a Secret REFERENCE BY NAME (spec.auth.secretPath), never as a value. Declaring it in the resource body would put a plaintext password into grain state — nothing on the write path substitutes a SecretRef before the grain persists the body — which docs/plan/00 § Non-negotiables forbids outright. docs/plan/12 § Cross-cutting decisions, Credentials, puts the value itself behind listKeys.",
+      "x-cybercloud-order": 7,
+      "x-cybercloud-pointer": "/properties/auth"
+    },
+    "imageName": {
+      "default": "",
+      "description": "Override the Valkey image. Empty means derive it from `version`, which is what keeps minor upgrades automatic.",
+      "type": "string",
+      "x-cybercloud-api": false,
+      "x-cybercloud-internal-reason": "A pinned image defeats automatic minor upgrades, so it is a platform escape hatch rather than a tenant setting. ⚠ Leaving it empty must NOT mean \"let the operator choose\": spotahome's defaultImage is redis:6.2.6-alpine, which is the licence ADR-011 rejected, so the empty case renders a Valkey tag rather than nothing.",
+      "x-cybercloud-order": 9,
+      "x-cybercloud-pointer": "/properties/imageName"
+    },
+    "maxmemoryPolicy": {
+      "default": "noeviction",
+      "description": "What happens when the cache reaches its memory limit. noeviction returns an error to the writer rather than dropping a key somebody is relying on.",
+      "enum": [
+        "noeviction",
+        "allkeys-lru",
+        "allkeys-lfu",
+        "allkeys-random",
+        "volatile-lru",
+        "volatile-lfu",
+        "volatile-random",
+        "volatile-ttl"
+      ],
+      "type": "string",
+      "x-cybercloud-order": 5,
+      "x-cybercloud-pointer": "/properties/maxmemoryPolicy"
+    },
+    "mode": {
+      "default": "Sentinel",
+      "description": "Replication topology. Sentinel is the only one this operator implements, and a client written against it is not portable to a sharded deployment, so it may not change after create.",
+      "enum": [
+        "Sentinel"
+      ],
+      "type": "string",
+      "x-cybercloud-immutable": true,
+      "x-cybercloud-order": 1,
+      "x-cybercloud-pointer": "/properties/mode"
+    },
+    "monitoring": {
+      "additionalProperties": false,
+      "description": "What the platform scrapes.",
+      "properties": {
+        "enabled": {
+          "default": true,
+          "description": "Whether the operator runs a metrics exporter beside every Valkey and every Sentinel pod.",
+          "type": "boolean",
+          "x-cybercloud-order": 0,
+          "x-cybercloud-pointer": "/properties/monitoring/enabled"
+        }
+      },
+      "type": "object",
+      "x-cybercloud-order": 6,
+      "x-cybercloud-pointer": "/properties/monitoring"
+    },
+    "nameOverride": {
+      "default": "",
+      "description": "Replace the generated object-name stem. Empty means derive it from the release name.",
+      "type": "string",
+      "x-cybercloud-api": false,
+      "x-cybercloud-internal-reason": "Helm plumbing. Nothing about it belongs in a resource body.",
+      "x-cybercloud-order": 10,
+      "x-cybercloud-pointer": "/properties/nameOverride"
+    },
+    "persistence": {
+      "additionalProperties": false,
+      "description": "What survives a restart. None of the three settings makes a cache a database.",
+      "properties": {
+        "class": {
+          "default": "",
+          "description": "StorageClass name. Empty means the cluster default.",
+          "type": "string",
+          "x-cybercloud-immutable": true,
+          "x-cybercloud-order": 3,
+          "x-cybercloud-pointer": "/properties/persistence/class",
+          "x-cybercloud-widget": "storageclass"
+        },
+        "fsync": {
+          "default": "everysec",
+          "description": "How often the append-only file reaches the disk. Read only when the mode is AOF; everysec can lose the last second of writes.",
+          "enum": [
+            "always",
+            "everysec",
+            "no"
+          ],
+          "type": "string",
+          "x-cybercloud-order": 1,
+          "x-cybercloud-pointer": "/properties/persistence/fsync"
+        },
+        "mode": {
+          "default": "AOF",
+          "description": "None keeps nothing, RDB snapshots periodically, AOF appends every write.",
+          "enum": [
+            "None",
+            "RDB",
+            "AOF"
+          ],
+          "type": "string",
+          "x-cybercloud-order": 0,
+          "x-cybercloud-pointer": "/properties/persistence/mode"
+        },
+        "size": {
+          "default": "8Gi",
+          "description": "Persistent volume size in Kubernetes quantity form. Unused when the mode is None, which keeps the data directory in memory.",
+          "examples": [
+            "8Gi"
+          ],
+          "pattern": "^(?:\\d+(\\.\\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)$",
+          "type": "string",
+          "x-cybercloud-order": 2,
+          "x-cybercloud-pointer": "/properties/persistence/size"
+        }
+      },
+      "type": "object",
+      "x-cybercloud-order": 4,
+      "x-cybercloud-pointer": "/properties/persistence"
+    },
+    "platform": {
+      "additionalProperties": false,
+      "description": "Resource identity injected by the reconciler. Not a tenant-facing setting.",
+      "properties": {
+        "apiVersion": {
+          "default": "2026-08-01",
+          "description": "The api-version the resource was last written at, rendered into the cybercloud.io/api-version label.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 5,
+          "x-cybercloud-pointer": "/properties/platform/apiVersion"
+        },
+        "managedBy": {
+          "default": "cybercloud",
+          "description": "Value of the cybercloud.io/managed-by label. Constant, and the selector every informer filters on.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 6,
+          "x-cybercloud-pointer": "/properties/platform/managedBy"
+        },
+        "resourceGroup": {
+          "default": "",
+          "description": "Resource group name, rendered into the cybercloud.io/resource-group label.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 2,
+          "x-cybercloud-pointer": "/properties/platform/resourceGroup"
+        },
+        "resourceId": {
+          "default": "",
+          "description": "Resource GUID, rendered into the cybercloud.io/resource-id label.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 3,
+          "x-cybercloud-pointer": "/properties/platform/resourceId"
+        },
+        "resourceType": {
+          "default": "CyberCloud.Cache/redis",
+          "description": "Fully qualified resource type, rendered into the cybercloud.io/resource-type label.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 4,
+          "x-cybercloud-pointer": "/properties/platform/resourceType"
+        },
+        "subscriptionId": {
+          "default": "",
+          "description": "Subscription GUID, rendered into the cybercloud.io/subscription-id label.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 1,
+          "x-cybercloud-pointer": "/properties/platform/subscriptionId"
+        },
+        "tenantId": {
+          "default": "",
+          "description": "Tenant GUID, rendered into the cybercloud.io/tenant-id label.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 0,
+          "x-cybercloud-pointer": "/properties/platform/tenantId"
+        }
+      },
+      "type": "object",
+      "x-cybercloud-api": false,
+      "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+      "x-cybercloud-order": 8,
+      "x-cybercloud-pointer": "/properties/platform"
+    },
+    "replicas": {
+      "default": 3,
+      "description": "Number of Valkey instances, including the primary. One is a single point of failure and is offered for development only.",
+      "maximum": 5,
+      "minimum": 1,
+      "type": "integer",
+      "x-cybercloud-order": 2,
+      "x-cybercloud-pointer": "/properties/replicas"
+    },
+    "sizing": {
+      "additionalProperties": false,
+      "description": "CPU and memory, either by preset or explicitly.",
+      "properties": {
+        "cpu": {
+          "default": "",
+          "description": "Explicit vCPU quantity in Kubernetes form, for example 500m or 2. Empty means take it from the preset.",
+          "pattern": "^(?:(\\d+(\\.\\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)?)$",
+          "type": "string",
+          "x-cybercloud-order": 1,
+          "x-cybercloud-pointer": "/properties/sizing/cpu"
+        },
+        "memory": {
+          "default": "",
+          "description": "Explicit memory quantity in Kubernetes form, for example 4Gi. Empty means take it from the preset. It also sets maxmemory, so a cache evicts or refuses before the kernel kills the pod.",
+          "pattern": "^(?:(\\d+(\\.\\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)?)$",
+          "type": "string",
+          "x-cybercloud-order": 2,
+          "x-cybercloud-pointer": "/properties/sizing/memory"
+        },
+        "preset": {
+          "default": "m1.small",
+          "description": "A sizing preset from docs/plan/12. Caches use the m1 family, which is 1 vCPU to 8 GiB.",
+          "enum": [
+            "m1.nano",
+            "m1.micro",
+            "m1.small",
+            "m1.medium",
+            "m1.large",
+            "m1.xlarge",
+            "m1.2xlarge",
+            "m1.4xlarge"
+          ],
+          "type": "string",
+          "x-cybercloud-order": 0,
+          "x-cybercloud-pointer": "/properties/sizing/preset",
+          "x-cybercloud-widget": "cozy-preset"
+        }
+      },
+      "type": "object",
+      "x-cybercloud-order": 3,
+      "x-cybercloud-pointer": "/properties/sizing"
+    },
+    "version": {
+      "default": "8",
+      "description": "Major Valkey version. Minor upgrades are applied automatically in the maintenance window.",
+      "enum": [
+        "7",
+        "8"
+      ],
+      "type": "string",
+      "x-cybercloud-order": 0,
+      "x-cybercloud-pointer": "/properties/version"
+    }
+  },
+  "required": [
+    "replicas",
+    "version"
+  ],
+  "title": "valkey chart values",
+  "type": "object",
+  "x-cybercloud-api-version": "2026-08-01",
+  "x-cybercloud-chart": "valkey",
+  "x-cybercloud-chart-version": "0.1.0",
+  "x-cybercloud-resource-type": "CyberCloud.Cache/redis"
+}

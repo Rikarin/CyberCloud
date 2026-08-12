@@ -4,6 +4,384 @@
   "generatedFrom": "openapi/2026-08-01.json",
   "description": "Portal form schemas at api-version 2026-08-01. Generated from the OpenAPI document — docs/plan/21 § Generation — and consumed by libs/resource-forms' schema-renderer (docs/plan/20).",
   "forms": {
+    "CyberCloud.Cache/redis": {
+      "resourceType": "CyberCloud.Cache/redis",
+      "apiVersion": "2026-08-01",
+      "title": "Valkey cache",
+      "plural": "Valkey caches",
+      "summary": "A managed Valkey cache with Sentinel failover, on spotahome/redis-operator. Valkey rather than Redis, per ADR-011; every Redis client works against it.",
+      "overrideKey": "CyberCloud.Cache/redis@2026-08-01",
+      "coveredPointers": [
+        "/location",
+        "/properties",
+        "/properties/clusterId",
+        "/properties/maxmemoryPolicy",
+        "/properties/mode",
+        "/properties/monitoring",
+        "/properties/monitoring/enabled",
+        "/properties/persistence",
+        "/properties/persistence/class",
+        "/properties/persistence/fsync",
+        "/properties/persistence/mode",
+        "/properties/persistence/size",
+        "/properties/replicas",
+        "/properties/sizing",
+        "/properties/sizing/cpu",
+        "/properties/sizing/memory",
+        "/properties/sizing/preset",
+        "/properties/version",
+        "/tags"
+      ],
+      "supportsTags": true,
+      "requiresCluster": true,
+      "clusterIdPointer": "/properties/clusterId",
+      "softDeleteDays": 0,
+      "fields": [
+        {
+          "jsonPointer": "/location",
+          "name": "location",
+          "label": "Location",
+          "control": "xui-region",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "The region the cache is billed in.",
+          "format": "cybercloud-region",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new Valkey cache to change it.",
+          "placeholder": "eu-central"
+        },
+        {
+          "jsonPointer": "/properties",
+          "name": "properties",
+          "label": "Properties",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "The cache's own settings."
+        },
+        {
+          "jsonPointer": "/properties/clusterId",
+          "name": "clusterId",
+          "label": "Cluster id",
+          "control": "xui-cluster",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "The cluster whose namespace holds the RedisFailover.",
+          "format": "uuid",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new Valkey cache to change it."
+        },
+        {
+          "jsonPointer": "/properties/maxmemoryPolicy",
+          "name": "maxmemoryPolicy",
+          "label": "Maxmemory policy",
+          "control": "xui-select",
+          "type": "string",
+          "required": false,
+          "section": "general",
+          "hint": "What happens when the cache reaches its memory limit. noeviction returns an error to the writer rather than dropping a key somebody is relying on.",
+          "choices": [
+            {
+              "value": "noeviction",
+              "label": "Noeviction"
+            },
+            {
+              "value": "allkeys-lru",
+              "label": "Allkeys lru"
+            },
+            {
+              "value": "allkeys-lfu",
+              "label": "Allkeys lfu"
+            },
+            {
+              "value": "allkeys-random",
+              "label": "Allkeys random"
+            },
+            {
+              "value": "volatile-lru",
+              "label": "Volatile lru"
+            },
+            {
+              "value": "volatile-lfu",
+              "label": "Volatile lfu"
+            },
+            {
+              "value": "volatile-random",
+              "label": "Volatile random"
+            },
+            {
+              "value": "volatile-ttl",
+              "label": "Volatile ttl"
+            }
+          ],
+          "default": "noeviction"
+        },
+        {
+          "jsonPointer": "/properties/mode",
+          "name": "mode",
+          "label": "Mode",
+          "control": "xui-select",
+          "type": "string",
+          "required": false,
+          "section": "general",
+          "hint": "Replication topology. Sentinel is the only one this operator implements, and a client written against it is not portable to a sharded deployment, so it may not change after create.",
+          "choices": [
+            {
+              "value": "Sentinel",
+              "label": "Sentinel"
+            }
+          ],
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new Valkey cache to change it.",
+          "default": "Sentinel"
+        },
+        {
+          "jsonPointer": "/properties/monitoring",
+          "name": "monitoring",
+          "label": "Monitoring",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "What the platform scrapes."
+        },
+        {
+          "jsonPointer": "/properties/monitoring/enabled",
+          "name": "enabled",
+          "label": "Enabled",
+          "control": "xui-switch",
+          "type": "boolean",
+          "required": false,
+          "section": "monitoring",
+          "hint": "Whether the operator runs a metrics exporter beside every Valkey and every Sentinel pod.",
+          "default": true
+        },
+        {
+          "jsonPointer": "/properties/persistence",
+          "name": "persistence",
+          "label": "Persistence",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "What survives a restart. None of the three settings makes a cache a database."
+        },
+        {
+          "jsonPointer": "/properties/persistence/class",
+          "name": "class",
+          "label": "Class",
+          "control": "xui-storageclass",
+          "type": "string",
+          "required": false,
+          "section": "persistence",
+          "hint": "StorageClass name. Empty means the cluster default.",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new Valkey cache to change it.",
+          "default": ""
+        },
+        {
+          "jsonPointer": "/properties/persistence/fsync",
+          "name": "fsync",
+          "label": "Fsync",
+          "control": "xui-select",
+          "type": "string",
+          "required": false,
+          "section": "persistence",
+          "hint": "How often the append-only file reaches the disk. Read only when the mode is AOF; everysec can lose the last second of writes.",
+          "choices": [
+            {
+              "value": "always",
+              "label": "Always"
+            },
+            {
+              "value": "everysec",
+              "label": "Everysec"
+            },
+            {
+              "value": "no",
+              "label": "No"
+            }
+          ],
+          "default": "everysec"
+        },
+        {
+          "jsonPointer": "/properties/persistence/mode",
+          "name": "mode",
+          "label": "Mode",
+          "control": "xui-select",
+          "type": "string",
+          "required": false,
+          "section": "persistence",
+          "hint": "None keeps nothing, RDB snapshots periodically, AOF appends every write.",
+          "choices": [
+            {
+              "value": "None",
+              "label": "None"
+            },
+            {
+              "value": "RDB",
+              "label": "Rdb"
+            },
+            {
+              "value": "AOF",
+              "label": "Aof"
+            }
+          ],
+          "default": "AOF"
+        },
+        {
+          "jsonPointer": "/properties/persistence/size",
+          "name": "size",
+          "label": "Size",
+          "control": "xui-input",
+          "type": "string",
+          "required": false,
+          "section": "persistence",
+          "hint": "Persistent volume size in Kubernetes quantity form. Unused when the mode is None, which keeps the data directory in memory.",
+          "pattern": "^(?:\\d+(\\.\\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)$",
+          "default": "8Gi",
+          "placeholder": "8Gi"
+        },
+        {
+          "jsonPointer": "/properties/replicas",
+          "name": "replicas",
+          "label": "Replicas",
+          "control": "xui-slider",
+          "type": "integer",
+          "required": true,
+          "section": "general",
+          "hint": "Number of Valkey instances, including the primary. One is a single point of failure and is offered for development only.",
+          "minimum": 1,
+          "maximum": 5,
+          "default": 3
+        },
+        {
+          "jsonPointer": "/properties/sizing",
+          "name": "sizing",
+          "label": "Sizing",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "CPU and memory, either by preset or explicitly."
+        },
+        {
+          "jsonPointer": "/properties/sizing/cpu",
+          "name": "cpu",
+          "label": "Cpu",
+          "control": "xui-input",
+          "type": "string",
+          "required": false,
+          "section": "sizing",
+          "hint": "Explicit vCPU quantity in Kubernetes form, for example 500m or 2. Empty means take it from the preset.",
+          "pattern": "^(?:(\\d+(\\.\\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)?)$",
+          "default": ""
+        },
+        {
+          "jsonPointer": "/properties/sizing/memory",
+          "name": "memory",
+          "label": "Memory",
+          "control": "xui-input",
+          "type": "string",
+          "required": false,
+          "section": "sizing",
+          "hint": "Explicit memory quantity in Kubernetes form, for example 4Gi. Empty means take it from the preset. It also sets maxmemory, so a cache evicts or refuses before the kernel kills the pod.",
+          "pattern": "^(?:(\\d+(\\.\\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)?)$",
+          "default": ""
+        },
+        {
+          "jsonPointer": "/properties/sizing/preset",
+          "name": "preset",
+          "label": "Preset",
+          "control": "xui-cozy-preset",
+          "type": "string",
+          "required": false,
+          "section": "sizing",
+          "hint": "A sizing preset from docs/plan/12. Caches use the m1 family, which is 1 vCPU to 8 GiB.",
+          "choices": [
+            {
+              "value": "m1.nano",
+              "label": "M1 nano"
+            },
+            {
+              "value": "m1.micro",
+              "label": "M1 micro"
+            },
+            {
+              "value": "m1.small",
+              "label": "M1 small"
+            },
+            {
+              "value": "m1.medium",
+              "label": "M1 medium"
+            },
+            {
+              "value": "m1.large",
+              "label": "M1 large"
+            },
+            {
+              "value": "m1.xlarge",
+              "label": "M1 xlarge"
+            },
+            {
+              "value": "m1.2xlarge",
+              "label": "M1 2xlarge"
+            },
+            {
+              "value": "m1.4xlarge",
+              "label": "M1 4xlarge"
+            }
+          ],
+          "default": "m1.small"
+        },
+        {
+          "jsonPointer": "/properties/version",
+          "name": "version",
+          "label": "Version",
+          "control": "xui-select",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "Major Valkey version. Minor upgrades are applied automatically in the maintenance window.",
+          "choices": [
+            {
+              "value": "7",
+              "label": "7"
+            },
+            {
+              "value": "8",
+              "label": "8"
+            }
+          ],
+          "default": "8"
+        },
+        {
+          "jsonPointer": "/tags",
+          "name": "tags",
+          "label": "Tags",
+          "control": "xui-tag-input",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+          "maxProperties": 50
+        }
+      ],
+      "actions": [
+        {
+          "name": "listKeys",
+          "label": "List keys",
+          "permission": "listKeys",
+          "longRunning": false,
+          "secret": true,
+          "fields": [],
+          "confirmOnly": true
+        }
+      ]
+    },
     "CyberCloud.DBforPostgreSQL/servers": {
       "resourceType": "CyberCloud.DBforPostgreSQL/servers",
       "apiVersion": "2026-08-01",

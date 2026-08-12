@@ -72,6 +72,39 @@ Each provider's `.Conformance` project is one `ProviderConformanceCase` and two 
 The second provider renders two objects rather than one and still needed no change to
 `test/CyberCloud.Conformance`, which is the claim that shape was making.
 
+`CyberCloud.Providers.Cache` — `CyberCloud.Cache/redis` on `spotahome/redis-operator`, docs/plan/12's
+second M1 row. **Valkey, not Redis** (ADR-011); the resource path is the Azure-parity one and every
+name a human reads says Valkey.
+
+### What the third provider measured
+
+Where the second provider established things the sample's shape *suggested*, this one is the first to
+report on the platform by **failing** against it. Three findings, in ascending order of how much they
+cost the next eight services:
+
+- **A provider is four module edges, whichever provider it is.** `module-layering.txt` now carries
+  three families with identical columns — `Core`, `Kubernetes`, `ResourceManager`, `Tenancy` — across
+  a trivial provider, one with backup and pooling and extensions, and one that does quantity
+  arithmetic against a third operator. A fourth family arriving with a fifth edge is the signal.
+- **The chart-annotation emitter's output is predictable by hand.** This chart's `@param` block was
+  written to match what `ChartAnnotationEmitter` would produce and came back **unchanged on the first
+  `./build.sh Charts` run**. That matters because the alternative — a format only the generator knows
+  — would make every chart's first commit a two-step ritual.
+- **The cluster-backed conformance suite could not host a real provider at all, and nobody had
+  noticed.** Every service in docs/plan/12 renders a **custom resource**; the reference provider and
+  the sample render a core-group `ConfigMap`; a bare `k3s` serves no REST path for a custom resource.
+  So this provider's `.Cluster.Conformance` went **5 of 6 red on its first run**, and the failure did
+  not say `404` anywhere — `KubeApiClient.ApplyAsync` maps a `409` and `IsTransport`'s set and nothing
+  else, so the raw `k8s.Autorest.HttpOperationException` escaped the grain call and Orleans reported
+  `CodecNotFoundException`. `ProviderConformanceCase.RequiredCrds` closes the first half; **the
+  unmapped-4xx half is a `CyberCloud.Kubernetes` defect and is still open**, and it is the one to
+  care about, because in production it turns an admission-webhook rejection or a missing CRD into a
+  serialization error with no status code in it.
+
+⚠ **This provider is also the first to have all six projects**, including the `*.Cluster.Conformance`
+that `CyberCloud.Providers.DBforPostgreSQL` still owes. Adding one is two class declarations and an
+`AssemblyInfo` line — plus, for a custom resource, the CRD that makes it addressable.
+
 ## Planned namespaces
 
 `Platform`, `Identity`, `ContainerService`, `Compute`, `ContainerInstance`, `ContainerRegistry`,

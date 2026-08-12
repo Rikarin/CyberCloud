@@ -38,7 +38,25 @@ namespace CyberCloud.Cluster.Conformance;
 /// <param name="fixture">The harness.</param>
 public abstract class ClusterConformanceTests<TSource>(ClusterConformanceFixture<TSource> fixture)
     where TSource : IProviderCaseSource {
-    const int MaxDrives = 12;
+    /// <summary>
+    ///     How many times an operation may be driven before it is stuck rather than working.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Twelve until 2026-08-12, and twelve was a budget in <i>passes</i> pretending to be a
+    ///     budget in <i>time</i>.</b> With no delay between drives the whole loop ran in a few
+    ///     milliseconds, which is enough only when every remaining step is ours. The first operation
+    ///     that had to wait for the API server to finish something — a <c>CascadePolicy.Foreground</c>
+    ///     teardown, where the object is held under a <c>foregroundDeletion</c> finalizer until the
+    ///     garbage collector has removed its dependents — reported <c>InProgress</c> twelve times and
+    ///     failed on a status that was correct. Measured against
+    ///     <c>CyberCloud.Cache/redis</c>: the finalizer clears in roughly twenty seconds here, because
+    ///     the collector discovers a <i>newly created</i> custom resource on its periodic resync. A
+    ///     platform cluster installs its CRDs from <c>charts/bundle/</c> long before a tenant creates
+    ///     anything, so that particular wait is this fixture's and not production's — but the budget
+    ///     has to cover it, and forty seconds is cheap next to the twenty this suite already spends
+    ///     starting containers.
+    /// </remarks>
+    const int MaxDrives = 40;
 
     /// <summary>The provider under test.</summary>
     protected static ProviderConformanceCase Case => TSource.ProviderCase;
@@ -587,6 +605,31 @@ public abstract class ClusterConformanceTests<TSource>(ClusterConformanceFixture
         return accepted;
     }
 
+    /// <summary>
+    ///     How long to wait between two drives of an operation that is not terminal yet.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>A reminder does not fire twice in the same microsecond, and until 2026-08-12 this loop
+    ///     did.</b> Twelve back-to-back <c>DriveAsync</c> calls take a few milliseconds in total, so
+    ///     the harness could only host a reconciler whose remaining work was <i>ours</i>. Anything
+    ///     waiting on the API server to finish something — <c>CascadePolicy.Foreground</c>, which holds
+    ///     the object under a <c>foregroundDeletion</c> finalizer until the garbage collector has
+    ///     removed its dependents, is the case that found this — reported <c>InProgress</c> twelve
+    ///     times and the test failed on a status that was correct.
+    ///     <para>
+    ///         The reconcile outcome carries its own <c>retryAfter</c> and this loop cannot see it: an
+    ///         <c>OperationStatus</c> does not carry the backoff the last pass asked for. So this is a
+    ///         floor rather than an honouring — long enough that a controller loop gets a turn, short
+    ///         enough that <see cref="MaxDrives" /> of them is forty seconds. A provider that needs
+    ///         more than that is provisioning for real and belongs on a reminder, not in a test.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ It is paid only by an operation that is <i>not</i> terminal: a provider that converges
+    ///         in one pass waits nothing, which is every provider in the tree except on teardown.
+    ///     </para>
+    /// </remarks>
+    static readonly TimeSpan BetweenDrives = TimeSpan.FromSeconds(1);
+
     /// <summary>Drives an operation the way its reminder would, until it is terminal.</summary>
     /// <param name="harness">The harness.</param>
     /// <param name="operationId">The operation.</param>
@@ -603,6 +646,9 @@ public abstract class ClusterConformanceTests<TSource>(ClusterConformanceFixture
             if (last.IsTerminal) {
                 return last;
             }
+
+            // ⚠ AFTER the terminal check, so a converging operation pays nothing. See BetweenDrives.
+            await Task.Delay(BetweenDrives, TestContext.Current.CancellationToken);
         }
 
         last.ShouldNotBeNull();

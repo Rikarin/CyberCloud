@@ -48,6 +48,15 @@ whatever mechanism its operator already provides* — with `backup.yaml` as the 
 whose operator has none. The evidence so far points at the second, because the first service that had
 an operator answer preferred it.
 
+⚠ **The second service declines piece 7 outright, which the first reading has no way to express.**
+`CyberCloud.Cache/redis` is not backed up: `persistence` is a restart-survival setting and a cache is
+not durable, so a backup on it would be the promise this document warns produces "a support incident
+waiting to happen". Under the first reading that is a missing `backup.yaml` — indistinguishable from
+somebody forgetting. Under the second it is simply a service whose operator offers no backup because
+there is nothing to back up. **A service declining the piece for a stated reason is worth more to this
+open question than a third service implementing it**, and it settles the reading: piece 7 is a
+property of the service, not a file every chart owes.
+
 The **2 engineer-weeks per service** target from [00](00-vision-and-principles.md) is a claim about
 this list. It is measured: the roadmap tracks actual elapsed time per service and treats a miss as a
 platform defect to be investigated, not as an estimate that was optimistic.
@@ -91,13 +100,57 @@ and a genuinely good `Cluster` CRD.
 **Valkey via `spotahome/redis-operator`,** not Redis (ADR-011 — licensing). API-compatible; the product
 page says Valkey and the connection string works with every Redis client.
 
-- Modes: `Standalone`, `Sentinel` (HA), `Cluster` (sharded). ⚠ These are not interchangeable and the
-  API must not pretend they are — a client that works against Sentinel may not work against Cluster
-  (multi-key operations, `SELECT`). The mode is immutable after create and the docs say why.
+- ~~Modes: `Standalone`, `Sentinel` (HA), `Cluster` (sharded).~~ ⚠ **CORRECTED 2026-08-12 by the
+  provider landing — the operator this row names implements one of the three.** The rule stands and is
+  the reason the correction matters: these are not interchangeable and the API must not pretend they
+  are, because a client that works against Sentinel may not work against Cluster (multi-key
+  operations, `SELECT`). The mode is immutable after create and the docs say why. See below.
 - Persistence: `None` / `RDB` / `AOF`, defaulting to `AOF` with `everysec`. The [05](05-state-and-storage.md)
   honesty about what that means is repeated in the product docs, because a customer treating a managed
   cache as durable is a support incident waiting to happen.
-- TLS on by default; `requirepass` from Vault.
+- ~~TLS on by default;~~ ⚠ **not offered — see below.** `requirepass` from Vault.
+- Memory: an eviction policy, and a `maxmemory` **derived from the container's limit rather than
+  exposed**. ⚠ Not in the original list and it is not a nicety: Valkey consults `maxmemory-policy`
+  only when a ceiling is set, so a policy on its own is a setting that has never been read and the pod
+  is OOM killed instead of evicting. Three quarters of the limit, because a background save forks and
+  copies pages, and the replication backlog and client output buffers sit outside the ceiling.
+
+> ⚠ **CORRECTED 2026-08-12, by building it. Three of the things above are not renderable on
+> `spotahome/redis-operator`, and all three were checked against that operator's source rather than
+> its README** — which is why they survived to be written down. `charts/managed/valkey/SOURCE` records
+> the files and `charts/managed/valkey/conformance.yaml § owed` carries each as a named debt.
+>
+> * **`Cluster` mode does not exist.** The operator ships one CRD, `RedisFailover`, and it has no
+>   sharding. There is nothing to render, so the type declares no such value.
+> * **`Standalone` mode is not expressible.** `api/redisfailover/v1/validate.go` replaces a sentinel
+>   replica count of `<= 0` with `defaultSentinelNumber`, which is 3 — so every `RedisFailover` runs a
+>   Sentinel quorum whatever the spec says, and a `Standalone` member would be a value the API accepts
+>   and the cluster ignores.
+> * **TLS is not a field.** Neither `RedisSettings` nor `SentinelSettings` carries one, so "TLS on by
+>   default" has nothing behind it. No `tls.enabled` property is declared, because a boolean the
+>   reconciler accepts and cannot honour is worse than its absence.
+>
+> **So `mode` ships with exactly one member, and the property exists anyway.** Omitting it would be
+> tidier today and would cost a new api-version later: a mode is immutable identity, an api-version is
+> immutable once published, and a topology axis that appears for the first time in 2027 is a new date
+> for every caller. One member is the API saying "this axis exists and today it has one value"; three
+> would be the pretence this row's own ⚠ forbids.
+>
+> **What closing any of them takes** is a different operator (an ADR-010 clause 1 change), a sidecar
+> proxy for TLS, or upstream work — none of which is a provider's to do, and all of which are cheaper
+> to decide with the finding written down here than to rediscover per service.
+
+⚠ **`requirepass` costs more here than the equivalent did on PostgreSQL, and the difference is worth
+carrying into the remaining eight services.** Piece 5 — credential provisioning into the tenant's
+Vault — is not built. CloudNativePG *generates its own password* when the `Secret` its CR references
+is absent, so `CyberCloud.DBforPostgreSQL/servers` has a working database whose credentials `listKeys`
+cannot yet hand out. spotahome generates nothing: with `spec.auth.secretPath` set and no `Secret`, the
+cache does not come up. The provider renders the reference anyway, because the alternative — omitting
+the block — is a running, unauthenticated Valkey reachable by anything in the tenant's namespace, and
+this document's own **"a managed database on a public IP with a weak password is the single most
+common cloud breach"** applies inside a namespace too. **A resource that visibly has not finished
+beats one that quietly came up open**, and the general lesson is that "the operator will fill in the
+gap" is a property of one operator rather than of the pattern.
 
 ### MongoDB-compatible — `CyberCloud.DocumentDB/accounts` · M2 · 1.2 EM
 

@@ -21,11 +21,24 @@ charts/managed/postgres/
 ```
 
 **The annotated `values.yaml` is the description of a managed service's configuration surface, and
-25 of its 36 rows are themselves generated.** `Build.Charts` rewrites the non-`@internal` `@param`
+most of its rows are themselves generated.** `Build.Charts` rewrites the non-`@internal` `@param`
 block from the provider registry and then generates `values.schema.json` from the whole file. A chart
-whose block or whose schema differs from the checked-in one fails CI. The other 11 rows are
-`@internal` and are carried through as bytes — **at every depth**, which is a correction: see
-§ What a chart cannot say.
+whose block or whose schema differs from the checked-in one fails CI. The `@internal` rows are
+carried through as bytes — **at every depth**, which is a correction: see § What a chart cannot say.
+
+Two charts are paired today, and the split is worth reading as a ratio rather than as two numbers:
+
+| Chart | Rows | Generated | `@internal` |
+|---|---|---|---|
+| `managed/postgres` | 36 | 25 | 11 |
+| `managed/valkey` | 27 | 15 | 12 |
+
+⚠ **The `@internal` count barely moves and the generated count nearly halves**, which is the shape to
+expect for the remaining eight: the hand-written tail is the platform's identity block (eight rows),
+Helm plumbing and a credential reference, and it is the same for every managed service. What varies is
+the configuration surface. So the marginal cost of a chart is its API rows, and the `@internal` rows
+are a fixed cost the platform pays once per service and could stop paying if a renderer ever injected
+them — see § What a chart cannot say for why they are not in any `ResourceSchema`.
 
 > ⚠ **CORRECTED 2026-08-12.** This paragraph read: "`Build.Generate` turns that into the resource
 > type's OpenAPI body, the CLI flags, the SDK model and the portal form" — the chart authoring the
@@ -217,6 +230,13 @@ Two vacuous states, each a warning rather than a silent pass — the `Vacuous` c
   > `charts/managed/postgres` declares `CyberCloud.DBforPostgreSQL/servers`, no C# provider declares
   > that type". The provider landed, so the tree reports **one pair compared** and the vacuous branch
   > is now the warning it was written to be rather than a description of the present.
+  >
+  > ⚠ **Two pairs the same day**, once `CyberCloud.Cache/redis` landed with `charts/managed/valkey`.
+  > The number is worth watching rather than updating: the vacuous branch fires on *zero* pairs, so it
+  > has stopped being reachable by accident, and what would reach it now is somebody adding a chart
+  > with no provider or a provider naming a chart that is not in the tree. Both of those are listed by
+  > name in `Unpaired` — which is the half of this warning that keeps working after the count is
+  > non-zero.
 
 The generated file is deterministic: keys sorted ordinally, `InvariantCulture` throughout, LF
 newlines, no timestamps, no paths, no machine names. Declaration order is not lost to the sort — it
@@ -333,6 +353,16 @@ at all.
 > thirteenth was never a chart row. The directive is not dead — the next `SchemaFormat` a provider
 > declares on a tenant-facing property emits it — but nothing in the tree proves the round trip
 > through `build/Build.Charts.cs` end to end today.
+>
+> ⚠ **The second managed service did not change that, and it is the stronger version of the same
+> report.** `CyberCloud.Cache/redis` declares two `SchemaFormat` values — `Uuid` on its cluster id and
+> `Region` on `/location` — and neither reaches a chart: the first is placement and is excluded, the
+> second is root-level and was never a values key. So two providers have now declared a format apiece
+> and `@format` still has no user in any checked-in `values.yaml`. That is evidence about *where*
+> formats live rather than about the directive: a format refines an **envelope** property — a region,
+> a resource id, a cluster id — and an envelope property is by construction not something a chart
+> renders. The directive stays; the honest expectation is that it waits for a service with a
+> tenant-set `uri` or `email` in its configuration surface rather than for the next provider.
 
 ## Forking discipline
 

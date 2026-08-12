@@ -38,6 +38,550 @@
     "timeout": 5
   },
   "groups": {
+    "cache": {
+      "name": "cache",
+      "summary": "Commands for the CyberCloud.Cache provider.",
+      "commands": {
+        "redis": {
+          "name": "redis",
+          "resourceType": "CyberCloud.Cache/redis",
+          "title": "Valkey cache",
+          "plural": "Valkey caches",
+          "summary": "A managed Valkey cache with Sentinel failover, on spotahome/redis-operator. Valkey rather than Redis, per ADR-011; every Redis client works against it.",
+          "verbs": {
+            "create": {
+              "name": "create",
+              "summary": "Create or replace a Valkey cache.",
+              "method": "PUT",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Cache/redis/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": true,
+              "flags": [
+                {
+                  "name": "--class",
+                  "type": "string",
+                  "required": false,
+                  "summary": "StorageClass name. Empty means the cluster default.",
+                  "jsonPointer": "/properties/persistence/class",
+                  "immutable": true,
+                  "widget": "storageclass",
+                  "default": ""
+                },
+                {
+                  "name": "--cluster-id",
+                  "type": "string",
+                  "required": true,
+                  "alias": "--cluster",
+                  "summary": "The cluster whose namespace holds the RedisFailover.",
+                  "jsonPointer": "/properties/clusterId",
+                  "immutable": true,
+                  "widget": "cluster"
+                },
+                {
+                  "name": "--cpu",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Explicit vCPU quantity in Kubernetes form, for example 500m or 2. Empty means take it from the preset.",
+                  "jsonPointer": "/properties/sizing/cpu",
+                  "default": ""
+                },
+                {
+                  "name": "--enabled",
+                  "type": "switch",
+                  "required": false,
+                  "summary": "Whether the operator runs a metrics exporter beside every Valkey and every Sentinel pod.",
+                  "jsonPointer": "/properties/monitoring/enabled",
+                  "default": true
+                },
+                {
+                  "name": "--fsync",
+                  "type": "string",
+                  "required": false,
+                  "summary": "How often the append-only file reaches the disk. Read only when the mode is AOF; everysec can lose the last second of writes.",
+                  "jsonPointer": "/properties/persistence/fsync",
+                  "choices": [
+                    "always",
+                    "everysec",
+                    "no"
+                  ],
+                  "default": "everysec"
+                },
+                {
+                  "name": "--location",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The region the cache is billed in.",
+                  "jsonPointer": "/location",
+                  "immutable": true,
+                  "widget": "region",
+                  "example": "eu-central"
+                },
+                {
+                  "name": "--maxmemory-policy",
+                  "type": "string",
+                  "required": false,
+                  "summary": "What happens when the cache reaches its memory limit. noeviction returns an error to the writer rather than dropping a key somebody is relying on.",
+                  "jsonPointer": "/properties/maxmemoryPolicy",
+                  "choices": [
+                    "noeviction",
+                    "allkeys-lru",
+                    "allkeys-lfu",
+                    "allkeys-random",
+                    "volatile-lru",
+                    "volatile-lfu",
+                    "volatile-random",
+                    "volatile-ttl"
+                  ],
+                  "default": "noeviction"
+                },
+                {
+                  "name": "--memory",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Explicit memory quantity in Kubernetes form, for example 4Gi. Empty means take it from the preset. It also sets maxmemory, so a cache evicts or refuses before the kernel kills the pod.",
+                  "jsonPointer": "/properties/sizing/memory",
+                  "default": ""
+                },
+                {
+                  "name": "--mode",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Replication topology. Sentinel is the only one this operator implements, and a client written against it is not portable to a sharded deployment, so it may not change after create.",
+                  "jsonPointer": "/properties/mode",
+                  "choices": [
+                    "Sentinel"
+                  ],
+                  "immutable": true,
+                  "default": "Sentinel"
+                },
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group."
+                },
+                {
+                  "name": "--persistence-mode",
+                  "type": "string",
+                  "required": false,
+                  "summary": "None keeps nothing, RDB snapshots periodically, AOF appends every write.",
+                  "jsonPointer": "/properties/persistence/mode",
+                  "choices": [
+                    "None",
+                    "RDB",
+                    "AOF"
+                  ],
+                  "default": "AOF"
+                },
+                {
+                  "name": "--preset",
+                  "type": "string",
+                  "required": false,
+                  "summary": "A sizing preset from docs/plan/12. Caches use the m1 family, which is 1 vCPU to 8 GiB.",
+                  "jsonPointer": "/properties/sizing/preset",
+                  "choices": [
+                    "m1.nano",
+                    "m1.micro",
+                    "m1.small",
+                    "m1.medium",
+                    "m1.large",
+                    "m1.xlarge",
+                    "m1.2xlarge",
+                    "m1.4xlarge"
+                  ],
+                  "widget": "cozy-preset",
+                  "default": "m1.small"
+                },
+                {
+                  "name": "--replicas",
+                  "type": "integer",
+                  "required": true,
+                  "summary": "Number of Valkey instances, including the primary. One is a single point of failure and is offered for development only.",
+                  "jsonPointer": "/properties/replicas",
+                  "default": 3
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy."
+                },
+                {
+                  "name": "--size",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Persistent volume size in Kubernetes quantity form. Unused when the mode is None, which keeps the data directory in memory.",
+                  "jsonPointer": "/properties/persistence/size",
+                  "default": "8Gi",
+                  "example": "8Gi"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tags",
+                  "type": "keyValue",
+                  "required": false,
+                  "summary": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+                  "jsonPointer": "/tags",
+                  "widget": "tag-input"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--version",
+                  "type": "string",
+                  "required": true,
+                  "summary": "Major Valkey version. Minor upgrades are applied automatically in the maintenance window.",
+                  "jsonPointer": "/properties/version",
+                  "choices": [
+                    "7",
+                    "8"
+                  ],
+                  "default": "8"
+                }
+              ],
+              "waitFlags": [
+                "--wait",
+                "--no-wait"
+              ]
+            },
+            "delete": {
+              "name": "delete",
+              "summary": "Delete a Valkey cache. Permanent.",
+              "method": "DELETE",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Cache/redis/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": true,
+              "flags": [
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group."
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy."
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "env": "CYC_TENANT"
+                }
+              ],
+              "waitFlags": [
+                "--wait",
+                "--no-wait"
+              ]
+            },
+            "list-keys": {
+              "name": "list-keys",
+              "summary": "listKeys a Valkey cache. ⚠ The response carries secret material — it is always audited and must not be written to a log or a shell history.",
+              "method": "POST",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Cache/redis/{resourceName}/listKeys",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group."
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy."
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "env": "CYC_TENANT"
+                }
+              ],
+              "action": "listKeys",
+              "permission": "listKeys",
+              "secret": true,
+              "rawBody": true
+            },
+            "show": {
+              "name": "show",
+              "summary": "Read a Valkey cache.",
+              "method": "GET",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Cache/redis/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group."
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy."
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "env": "CYC_TENANT"
+                }
+              ]
+            },
+            "update": {
+              "name": "update",
+              "summary": "Amend a Valkey cache. Only the flags given are changed.",
+              "method": "PATCH",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Cache/redis/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": true,
+              "flags": [
+                {
+                  "name": "--class",
+                  "type": "string",
+                  "required": false,
+                  "summary": "StorageClass name. Empty means the cluster default.",
+                  "jsonPointer": "/properties/persistence/class",
+                  "immutable": true,
+                  "widget": "storageclass",
+                  "default": ""
+                },
+                {
+                  "name": "--cluster-id",
+                  "type": "string",
+                  "required": false,
+                  "alias": "--cluster",
+                  "summary": "The cluster whose namespace holds the RedisFailover.",
+                  "jsonPointer": "/properties/clusterId",
+                  "immutable": true,
+                  "widget": "cluster"
+                },
+                {
+                  "name": "--cpu",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Explicit vCPU quantity in Kubernetes form, for example 500m or 2. Empty means take it from the preset.",
+                  "jsonPointer": "/properties/sizing/cpu",
+                  "default": ""
+                },
+                {
+                  "name": "--enabled",
+                  "type": "switch",
+                  "required": false,
+                  "summary": "Whether the operator runs a metrics exporter beside every Valkey and every Sentinel pod.",
+                  "jsonPointer": "/properties/monitoring/enabled",
+                  "default": true
+                },
+                {
+                  "name": "--fsync",
+                  "type": "string",
+                  "required": false,
+                  "summary": "How often the append-only file reaches the disk. Read only when the mode is AOF; everysec can lose the last second of writes.",
+                  "jsonPointer": "/properties/persistence/fsync",
+                  "choices": [
+                    "always",
+                    "everysec",
+                    "no"
+                  ],
+                  "default": "everysec"
+                },
+                {
+                  "name": "--location",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The region the cache is billed in.",
+                  "jsonPointer": "/location",
+                  "immutable": true,
+                  "widget": "region",
+                  "example": "eu-central"
+                },
+                {
+                  "name": "--maxmemory-policy",
+                  "type": "string",
+                  "required": false,
+                  "summary": "What happens when the cache reaches its memory limit. noeviction returns an error to the writer rather than dropping a key somebody is relying on.",
+                  "jsonPointer": "/properties/maxmemoryPolicy",
+                  "choices": [
+                    "noeviction",
+                    "allkeys-lru",
+                    "allkeys-lfu",
+                    "allkeys-random",
+                    "volatile-lru",
+                    "volatile-lfu",
+                    "volatile-random",
+                    "volatile-ttl"
+                  ],
+                  "default": "noeviction"
+                },
+                {
+                  "name": "--memory",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Explicit memory quantity in Kubernetes form, for example 4Gi. Empty means take it from the preset. It also sets maxmemory, so a cache evicts or refuses before the kernel kills the pod.",
+                  "jsonPointer": "/properties/sizing/memory",
+                  "default": ""
+                },
+                {
+                  "name": "--mode",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Replication topology. Sentinel is the only one this operator implements, and a client written against it is not portable to a sharded deployment, so it may not change after create.",
+                  "jsonPointer": "/properties/mode",
+                  "choices": [
+                    "Sentinel"
+                  ],
+                  "immutable": true,
+                  "default": "Sentinel"
+                },
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group."
+                },
+                {
+                  "name": "--persistence-mode",
+                  "type": "string",
+                  "required": false,
+                  "summary": "None keeps nothing, RDB snapshots periodically, AOF appends every write.",
+                  "jsonPointer": "/properties/persistence/mode",
+                  "choices": [
+                    "None",
+                    "RDB",
+                    "AOF"
+                  ],
+                  "default": "AOF"
+                },
+                {
+                  "name": "--preset",
+                  "type": "string",
+                  "required": false,
+                  "summary": "A sizing preset from docs/plan/12. Caches use the m1 family, which is 1 vCPU to 8 GiB.",
+                  "jsonPointer": "/properties/sizing/preset",
+                  "choices": [
+                    "m1.nano",
+                    "m1.micro",
+                    "m1.small",
+                    "m1.medium",
+                    "m1.large",
+                    "m1.xlarge",
+                    "m1.2xlarge",
+                    "m1.4xlarge"
+                  ],
+                  "widget": "cozy-preset",
+                  "default": "m1.small"
+                },
+                {
+                  "name": "--replicas",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "Number of Valkey instances, including the primary. One is a single point of failure and is offered for development only.",
+                  "jsonPointer": "/properties/replicas",
+                  "default": 3
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy."
+                },
+                {
+                  "name": "--size",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Persistent volume size in Kubernetes quantity form. Unused when the mode is None, which keeps the data directory in memory.",
+                  "jsonPointer": "/properties/persistence/size",
+                  "default": "8Gi",
+                  "example": "8Gi"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tags",
+                  "type": "keyValue",
+                  "required": false,
+                  "summary": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+                  "jsonPointer": "/tags",
+                  "widget": "tag-input"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--version",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Major Valkey version. Minor upgrades are applied automatically in the maintenance window.",
+                  "jsonPointer": "/properties/version",
+                  "choices": [
+                    "7",
+                    "8"
+                  ],
+                  "default": "8"
+                }
+              ],
+              "waitFlags": [
+                "--wait",
+                "--no-wait"
+              ]
+            }
+          },
+          "alias": "valkey"
+        }
+      }
+    },
     "dbforpostgresql": {
       "name": "dbforpostgresql",
       "summary": "Commands for the CyberCloud.DBforPostgreSQL provider.",

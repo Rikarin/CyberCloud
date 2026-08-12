@@ -1,0 +1,45 @@
+# Provenance — docs/plan/02 § ADR-010, "Their charts are a starting point, not a dependency.
+# Where a chart is close, fork it into charts/ with the upstream commit recorded in a SOURCE file.
+# A drifting vendored chart with no provenance is how a platform ends up unable to upgrade Postgres."
+#
+# `Build.Charts` requires this file for every chart under charts/managed/ and requires `vendored:`
+# and `upstream:`. "We wrote it" is an answer to "where did this come from"; "there is no SOURCE
+# file" is indistinguishable from "somebody forgot", which is the state ADR-010 exists to prevent.
+
+# Where the templates came from. `none` means the templates in this directory were written here.
+vendored: none
+
+# The upstream project whose CRD contract these templates render against. Not a dependency: the
+# operator is installed by charts/bundle/, and this chart renders only its custom resource.
+upstream: https://github.com/spotahome/redis-operator
+
+# The upstream API this chart's templates target. ⚠ This is an API group/version, not a commit:
+# nothing is vendored, so there is no upstream tree to pin. If a template is ever copied from
+# upstream, replace this with `upstream-commit:` and the full 40-character SHA of the tree it was
+# copied from, and say which files.
+upstream-api: databases.spotahome.com/v1
+
+# The engine the operator runs, which is NOT the engine the operator defaults to. ADR-011 rejects
+# Redis >= 7.4 (RSALv2 / SSPL) and takes Valkey (BSD-3); the operator's own `defaultImage` is
+# `redis:6.2.6-alpine`, so `spec.redis.image` is written on every apply rather than left unset.
+# Leaving it unset would ship the licence this platform decided against, from a default, silently.
+engine: https://github.com/valkey-io/valkey
+
+# Reviewed against the upstream CRD on this date. A bare date rather than a SHA is a weaker claim
+# and is labelled as one — see upstream-api above.
+#
+# ⚠ What this review established, because three of them are absences and an absence is the kind of
+# fact a README does not carry:
+#   * `api/redisfailover/v1/types.go` — RedisSettings and SentinelSettings have NO TLS field, so
+#     docs/plan/12's "TLS on by default" is not renderable. conformance.yaml carries it as owed.
+#   * `api/redisfailover/v1/validate.go` and `defaults.go` — a sentinel replica count of <= 0 is
+#     replaced with `defaultSentinelNumber` (3), so there is no Standalone mode to render.
+#   * There is one CRD, `RedisFailover`. There is no sharded Cluster mode.
+#   * `spec.auth` is `{ secretPath }` only: a Secret NAME, never a value.
+#   * `operator/redisfailover/service/constants.go` — `baseName = "rf"`, `sentinelName = "s"`, so
+#     the Sentinel Service a client connects to is `rfs-{name}`. The monitor group is `mymaster`.
+reviewed: 2026-08-12
+
+# ⚠ Cozystack (docs/plan/02 § ADR-010) contributed the *operator choice* and the annotated-values
+# pipeline shape to this chart, and no code. It is deliberately not listed as `upstream`, because
+# `upstream` means "there is a tree we could diff against" and here there is not.

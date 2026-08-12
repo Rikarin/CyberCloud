@@ -1,0 +1,100 @@
+# Managed Valkey — the configuration surface, once.
+#
+# ⚠ THE `@param` BLOCK BELOW IS GENERATED, up to the blank line before `auth:`. `./build.sh Charts`
+# rewrites it from `ValkeyCaches.Schema2026` and fails on drift — ADR-010 § Which end authors the
+# schema, DECIDED 2026-08-11: the C# ResourceSchema is authored and the chart's annotations are
+# generated from it. Edit the schema; this file follows.
+#
+# ⚠ values.schema.json next to this file is generated from THIS file by the same target, and is
+# diffed in CI. Edit neither.
+#
+# The rows after the generated block are `@internal`: they are rendering inputs rather than parts of
+# the resource body, they are carried through as bytes, and they are the only rows in this file a
+# person edits. The annotation format is charts/README.md § The annotation format.
+
+## @param version {string} Major Valkey version. Minor upgrades are applied automatically in the maintenance window.
+## @required
+## @enum 7 | 8
+version: "8"
+
+## @param mode {string} Replication topology. Sentinel is the only one this operator implements, and a client written against it is not portable to a sharded deployment, so it may not change after create.
+## @immutable
+## @enum Sentinel
+mode: Sentinel
+
+## @param replicas {integer} Number of Valkey instances, including the primary. One is a single point of failure and is offered for development only.
+## @required
+## @range 1..5
+replicas: 3
+
+## @param sizing {object} CPU and memory, either by preset or explicitly.
+sizing:
+  ## @param preset {string} A sizing preset from docs/plan/12. Caches use the m1 family, which is 1 vCPU to 8 GiB.
+  ## @enum m1.nano | m1.micro | m1.small | m1.medium | m1.large | m1.xlarge | m1.2xlarge | m1.4xlarge
+  ## @widget cozy-preset
+  preset: m1.small
+  ## @param cpu {string} Explicit vCPU quantity in Kubernetes form, for example 500m or 2. Empty means take it from the preset.
+  ## @pattern (\d+(\.\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)?
+  cpu: ""
+  ## @param memory {string} Explicit memory quantity in Kubernetes form, for example 4Gi. Empty means take it from the preset. It also sets maxmemory, so a cache evicts or refuses before the kernel kills the pod.
+  ## @pattern (\d+(\.\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)?
+  memory: ""
+
+## @param persistence {object} What survives a restart. None of the three settings makes a cache a database.
+persistence:
+  ## @param mode {string} None keeps nothing, RDB snapshots periodically, AOF appends every write.
+  ## @enum None | RDB | AOF
+  mode: AOF
+  ## @param fsync {string} How often the append-only file reaches the disk. Read only when the mode is AOF; everysec can lose the last second of writes.
+  ## @enum always | everysec | no
+  fsync: everysec
+  ## @param size {string} Persistent volume size in Kubernetes quantity form. Unused when the mode is None, which keeps the data directory in memory.
+  ## @pattern \d+(\.\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?
+  ## @example "8Gi"
+  size: "8Gi"
+  ## @param class {string} StorageClass name. Empty means the cluster default.
+  ## @immutable
+  ## @widget storageclass
+  class: ""
+
+## @param maxmemoryPolicy {string} What happens when the cache reaches its memory limit. noeviction returns an error to the writer rather than dropping a key somebody is relying on.
+## @enum noeviction | allkeys-lru | allkeys-lfu | allkeys-random | volatile-lru | volatile-lfu | volatile-random | volatile-ttl
+maxmemoryPolicy: noeviction
+
+## @param monitoring {object} What the platform scrapes.
+monitoring:
+  ## @param enabled {boolean} Whether the operator runs a metrics exporter beside every Valkey and every Sentinel pod.
+  enabled: true
+
+## @param auth {object} The credential the operator reads `requirepass` from. Not a tenant-facing setting.
+## @internal The value is provisioned into the tenant's Vault and reaches the RedisFailover as a Secret REFERENCE BY NAME (spec.auth.secretPath), never as a value. Declaring it in the resource body would put a plaintext password into grain state — nothing on the write path substitutes a SecretRef before the grain persists the body — which docs/plan/00 § Non-negotiables forbids outright. docs/plan/12 § Cross-cutting decisions, Credentials, puts the value itself behind listKeys.
+auth:
+  ## @param password {string} The requirepass value. Resolved from the tenant's Vault at render time by ISecretResolver; it is never written into a values file or into grain state.
+  ## @secret
+  password: ""
+
+## @param platform {object} Resource identity injected by the reconciler. Not a tenant-facing setting.
+## @internal Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.
+platform:
+  ## @param tenantId {string} Tenant GUID, rendered into the cybercloud.io/tenant-id label.
+  tenantId: ""
+  ## @param subscriptionId {string} Subscription GUID, rendered into the cybercloud.io/subscription-id label.
+  subscriptionId: ""
+  ## @param resourceGroup {string} Resource group name, rendered into the cybercloud.io/resource-group label.
+  resourceGroup: ""
+  ## @param resourceId {string} Resource GUID, rendered into the cybercloud.io/resource-id label.
+  resourceId: ""
+  ## @param resourceType {string} Fully qualified resource type, rendered into the cybercloud.io/resource-type label.
+  resourceType: CyberCloud.Cache/redis
+  ## @param apiVersion {string} The api-version the resource was last written at, rendered into the cybercloud.io/api-version label.
+  apiVersion: "2026-08-01"
+  ## @param managedBy {string} Value of the cybercloud.io/managed-by label. Constant, and the selector every informer filters on.
+  managedBy: cybercloud
+
+## @param imageName {string} Override the Valkey image. Empty means derive it from `version`, which is what keeps minor upgrades automatic.
+## @internal A pinned image defeats automatic minor upgrades, so it is a platform escape hatch rather than a tenant setting. ⚠ Leaving it empty must NOT mean "let the operator choose": spotahome's defaultImage is redis:6.2.6-alpine, which is the licence ADR-011 rejected, so the empty case renders a Valkey tag rather than nothing.
+imageName: ""
+
+## @param nameOverride {string} Replace the generated object-name stem. Empty means derive it from the release name.
+## @internal Helm plumbing. Nothing about it belongs in a resource body.
+nameOverride: ""

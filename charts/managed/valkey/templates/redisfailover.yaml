@@ -1,0 +1,96 @@
+{{/*
+spotahome `RedisFailover` — docs/plan/12 § The catalogue, Valkey.
+
+⚠ This renders a custom resource; it does not install the operator. The operator is
+charts/bundle/'s job, which is why this chart has no CRD directory and no operator Deployment.
+
+⚠ One custom resource and no Services. A RedisFailover expands into a StatefulSet, a Deployment,
+three Services and two ConfigMaps, all of them the operator's. Writing any of them here would be
+this chart competing with the controller that owns them.
+*/}}
+apiVersion: databases.spotahome.com/v1
+kind: RedisFailover
+metadata:
+  name: {{ include "valkey.name" . }}
+  labels:
+    {{- include "valkey.platformLabels" . | nindent 4 }}
+spec:
+  redis:
+    image: {{ include "valkey.image" . | quote }}
+    replicas: {{ .Values.replicas }}
+
+    {{- with include "valkey.resources" . }}
+    resources:
+      {{- . | trim | nindent 6 }}
+    {{- end }}
+
+    customConfig:
+      {{- include "valkey.customConfig" . | trim | nindent 6 }}
+    {{/*
+      ⚠ An emptyDir rather than no `storage` block at all. With neither, the operator mounts nothing
+      and Valkey writes its working files into the container's writable layer — which on a read-only
+      root filesystem fails at start. "None" means the data does not survive the pod, not that there
+      is nowhere to write.
+    */}}
+    storage:
+      {{- if eq .Values.persistence.mode "None" }}
+      emptyDir: {}
+      {{- else }}
+      keepAfterDeletion: true
+      persistentVolumeClaim:
+        metadata:
+          name: {{ printf "%s-data" (include "valkey.name" .) }}
+        spec:
+          accessModes:
+            - ReadWriteOnce
+          resources:
+            requests:
+              storage: {{ .Values.persistence.size | quote }}
+          {{- if .Values.persistence.class }}
+          storageClassName: {{ .Values.persistence.class | quote }}
+          {{- end }}
+      {{- end }}
+
+    exporter:
+      enabled: {{ .Values.monitoring.enabled }}
+  {{/*
+    ⚠ Three sentinels, always, and not a values key. It is the smallest odd number that can hold a
+    majority opinion: two cannot fail over and one fails over on a network blip. The operator's own
+    default is the same 3, and it is written out rather than inherited so that what the reconciler
+    reads back is a number this platform chose.
+
+    ⚠ It is also why there is no `Standalone` mode. `validate.go` replaces a sentinel replica count
+    of <= 0 with defaultSentinelNumber, so "no Sentinel" is not a state this CRD can express.
+  */}}
+  sentinel:
+    replicas: 3
+    exporter:
+      enabled: {{ .Values.monitoring.enabled }}
+  {{/*
+    ⚠ A Secret NAME, never a value. The operator reads `requirepass` out of a Secret in the
+    namespace, so the only component that ever holds the plaintext is whatever writes that Secret —
+    docs/plan/12 § The pattern, once, piece 5. `auth.password` is @internal in values.yaml and is
+    resolved from the tenant's Vault at render time; it never reaches a values file or grain state.
+  */}}
+  auth:
+    secretPath: {{ printf "%s-auth" (include "valkey.name" .) }}
+{{- if .Values.auth.password }}
+---
+{{/*
+The requirepass, as the Secret the CR above references by name. Rendered only when the resolver
+supplied a value.
+
+⚠ Unlike CloudNativePG, this operator generates NOTHING when the Secret is absent: the cache does
+not come up. That is deliberate on both sides — a resource that visibly has not finished is a better
+answer than a running, unauthenticated Valkey reachable by anything in the tenant's namespace.
+*/}}
+apiVersion: v1
+kind: Secret
+type: Opaque
+metadata:
+  name: {{ printf "%s-auth" (include "valkey.name" .) }}
+  labels:
+    {{- include "valkey.platformLabels" . | nindent 4 }}
+stringData:
+  password: {{ .Values.auth.password | quote }}
+{{- end }}
