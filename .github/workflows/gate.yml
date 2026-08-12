@@ -158,9 +158,10 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      # `Charts` has no DependsOn (Build.cs § target graph), but build.sh still needs an SDK to run
-      # the Nuke project itself. `helm` comes with the runner image; Build.Charts.cs § ResolveHelm
-      # fails naming it if it ever stops doing so.
+      # `Charts` depends on `Compile` (Build.cs § target graph — a chart's @param block is generated
+      # from the provider registry, ADR-012's fifth surface), so this job builds the solution before
+      # it lints anything. `helm` comes with the runner image; Build.Charts.cs § ResolveHelm fails
+      # naming it if it ever stops doing so.
       - uses: ./.github/actions/dotnet
 
       - name: ./build.sh Charts
@@ -190,20 +191,52 @@ jobs:
 
   # ── docs/plan/23 § Test layers, row Portal ───────────────────────────────────────────────────────
   #
-  # ⚠ THIS JOB IS EXPECTED TO FAIL TODAY, AND THE FAILURE IS THE POINT.
+  # ⚠ THE TRIPWIRE AT THE END OF THIS JOB IS STILL HERE, AND IT IS NOW QUIET FOR THE RIGHT REASON.
   #
-  # build/Build.Portal.cs is a stub whose stated blocker is that the pnpm workspace does not exist
-  # yet. It does: portal/ has pnpm-lock.yaml, angular.json, five libs, scripts/bundle-budget.mjs,
-  # axe-core and jest-axe, and a `pnpm gates` script that already chains node:check, lint, test and
-  # the production build. So the stub's own reason has expired and the tripwire fires. The fix is to
-  # implement Build.Portal.cs, not to delete this job.
+  # build/Build.Portal.cs used to be a stub whose stated blocker was that the pnpm workspace did not
+  # exist yet. It did: portal/ has pnpm-lock.yaml, angular.json, five libs, scripts/bundle-budget.mjs,
+  # axe-core and jest-axe, and a `pnpm gates` script chaining node:gate, lint, test and the
+  # production build. So the stub's own reason had expired, the tripwire fired, and this job was red.
+  # The fix was to implement the target, which `./build.sh Portal` now does. The tripwire stays: it
+  # short-circuits on a log with no "Not implemented yet" in it, and it is what would notice if
+  # Portal ever regressed to a stub over a workspace that exists.
   portal:
     name: portal
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # `Portal` has no DependsOn and compiles nothing .NET (Build.Portal.cs § BuildPortal), so
+      # unlike the `charts` job above this never builds the solution. The SDK is still needed:
+      # build.sh runs the Nuke project itself.
       - uses: ./.github/actions/dotnet
+
+      # ⚠ node-version-file, not a literal "24" here. portal/README.md § Node settles the pin across
+      # .nvmrc, .node-version and package.json engines, and ends on "the CI image must be Node 24 —
+      # that is the half of this decision that lives outside this repo". This step is that half, and
+      # a fourth copy of the number in this file is a fourth thing to update when the pin moves.
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: portal/.node-version
+
+      # corepack rather than pnpm/action-setup, for the same one-pin reason: corepack takes the
+      # version from `packageManager: pnpm@11.18.0` in portal/package.json, so it is declared once,
+      # in the workspace that has to install with it.
+      #
+      # ⚠ COREPACK_ENABLE_DOWNLOAD_PROMPT=0 because corepack asks before fetching a version it does
+      # not already have, and build.sh's own header makes the case: "A CI step that blocks on a
+      # question is a hung pipeline, not a failing one."
+      #
+      # `pnpm --version` runs from portal/, which is where the packageManager field is — from the
+      # repository root there is no package.json and corepack would answer with its own default.
+      - name: Enable pnpm from portal/package.json's packageManager pin
+        env:
+          COREPACK_ENABLE_DOWNLOAD_PROMPT: 0
+        run: |
+          corepack enable pnpm
+          echo "node: $(node --version)"
+          echo "pnpm: $(cd portal && pnpm --version)"
 
       - name: ./build.sh Portal
         run: ./build.sh Portal 2>&1 | tee "$RUNNER_TEMP/portal.log"

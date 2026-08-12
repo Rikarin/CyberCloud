@@ -1,7 +1,9 @@
+using CyberCloud.Core.Resources;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Shouldly;
 using System.Collections.Immutable;
+using System.Reflection;
 
 namespace CyberCloud.Kubernetes.Contracts.Tests;
 
@@ -243,16 +245,19 @@ public sealed class CompileFailureTests {
     [Fact]
     public void TheHarnessCompilesAgainstTheRealContractsAssembly() {
         // Guards the failure mode that would make every assertion above vacuous: a References set
-        // that does not actually contain the assembly under test. If it were missing, the negative
-        // cases would fail with CS0246 ("type or namespace not found") rather than CS1061, which the
-        // assertions above already distinguish — this makes the reason explicit.
-        var contracts = typeof(KubeLabels).Assembly;
-
-        References.ShouldContain(
-            x => x.Display != null
-                && x.Display.EndsWith(Path.GetFileName(contracts.Location), StringComparison.OrdinalIgnoreCase),
-            $"the probe must reference {contracts.GetName().Name} itself."
-        );
+        // that does not actually contain the assemblies the probe names. If one were missing, the
+        // negative cases would fail with CS0246 ("type or namespace not found") rather than CS1061,
+        // which the assertions above already distinguish — this makes the reason explicit.
+        // ⚠ Both assemblies, not just the one under test: CyberCloud.Core is the one that actually
+        // went missing when the reference set was taken from the load context, and it goes missing
+        // as the `using CyberCloud.Core;` in every snippet, not as a member-resolution failure.
+        foreach (var assembly in (Assembly[]) [typeof(KubeLabels).Assembly, typeof(ResourceId).Assembly]) {
+            References.ShouldContain(
+                x => x.Display != null
+                    && x.Display.EndsWith(Path.GetFileName(assembly.Location), StringComparison.OrdinalIgnoreCase),
+                $"the probe must reference {assembly.GetName().Name} itself."
+            );
+        }
 
         Errors(
                 """
@@ -266,26 +271,42 @@ public sealed class CompileFailureTests {
         var builder = ImmutableArray.CreateBuilder<MetadataReference>();
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        // The whole load context: the framework, CyberCloud.Core, CyberCloud.Kubernetes.Contracts,
-        // Orleans' abstractions. Taking the loaded set rather than a hand-listed one means the
-        // snippet compiles against exactly the assemblies the production code does.
-        foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies()) {
-            if (assembly.IsDynamic || string.IsNullOrEmpty(assembly.Location)) {
-                continue;
-            }
-
-            if (seen.Add(assembly.Location)) {
-                builder.Add(MetadataReference.CreateFromFile(assembly.Location));
+        void Add(string location) {
+            if (!string.IsNullOrEmpty(location) && seen.Add(location)) {
+                builder.Add(MetadataReference.CreateFromFile(location));
             }
         }
+
+        // Everything the host resolved for this process: the shared framework plus every assembly
+        // deployed beside the test — CyberCloud.Core, CyberCloud.Kubernetes.Contracts, Orleans'
+        // abstractions. Same intent as before, that the snippet compiles against exactly what the
+        // production code binds to, but taken from the host's list rather than the load context.
+        //
+        // ⚠ NOT AppDomain.CurrentDomain.GetAssemblies(). That is whatever the runtime has happened
+        // to load by the time this initialiser runs, and this is a `beforefieldinit` class, so the
+        // JIT may run the initialiser at any point before the first read of References — including
+        // before the "touch a contracts type" line that used to sit at the top of Compile. Which
+        // assemblies were loaded then depended on the order xunit ran the tests in the process: run
+        // this class on its own and CyberCloud.Core was absent, every snippet failed with CS0246
+        // "the type or namespace name 'Core' does not exist", and every negative case "passed" for
+        // the wrong reason. The trusted-platform list is fixed at process start and cannot drift.
+        if (AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES") is string trusted) {
+            foreach (var path in trusted.Split(Path.PathSeparator)) {
+                Add(path);
+            }
+        }
+
+        // Belt and braces, and the documentation of what the probe source actually needs: the two
+        // assemblies it names, anchored on types so the compiler — not a string — guarantees they
+        // resolve. Deduplicated against the list above, which normally already has them.
+        Add(typeof(ResourceId).Assembly.Location);   // CyberCloud.Core
+        Add(typeof(KubeLabels).Assembly.Location);   // CyberCloud.Kubernetes.Contracts
+        Add(typeof(object).Assembly.Location);       // System.Private.CoreLib
 
         return builder.ToImmutable();
     }
 
     static ImmutableArray<Diagnostic> Compile(string body) {
-        // Touch a contracts type so the assembly is certainly loaded before References is read.
-        _ = KubeLabels.ManagedByValue;
-
         var source = $$"""
                        using System;
                        using CyberCloud.Core;

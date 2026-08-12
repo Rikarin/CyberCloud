@@ -47,7 +47,7 @@ rather than diverging from it. Node 26 was rejected on one ground: it does not b
 2026-10-20, and a platform's portal should not build on a Current release.
 
 ⚠ **How the pin is enforced, and why the two halves differ.** `scripts/check-node.mjs` warns
-locally and fails in CI (`pnpm node:gate`, which `pnpm ci` runs first). `engine-strict` is
+locally and fails in CI (`pnpm node:gate`, which `pnpm gates` runs first). `engine-strict` is
 deliberately off in `.npmrc`. The reasoning is that a wall in the developer's path and a wall in
 CI's path have opposite costs: a blocked local install stops work over a version that will build
 fine, while a drifted CI image silently produces artefacts nobody can reproduce. So the warning is
@@ -85,7 +85,10 @@ step means one number to reason about.
 
 ## Gates
 
-Every one of these fails the build rather than warning. `pnpm ci` runs them in order.
+Every one of these fails the build rather than warning. `pnpm gates` runs them in order, and
+`./build.sh Portal` runs `pnpm gates` — docs/plan/23 § Build, row `Portal`, and `build/Build.Portal.cs`,
+which invokes this chain rather than restating it. Locally that target runs `pnpm verify` instead,
+which is `gates` without the Node wall; see § Node above for why that asymmetry is deliberate.
 
 | Gate | Command | What it enforces |
 |---|---|---|

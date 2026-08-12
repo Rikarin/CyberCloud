@@ -1,0 +1,379 @@
+using System.Buffers;
+using System.Text;
+using System.Text.Json;
+
+namespace CyberCloud.Kubernetes.Apply;
+
+/// <summary>
+///     Reduces a Kubernetes object to just the fields one field manager owns, so two reads of the
+///     same object can be compared for "did anything <i>we</i> wrote change" without another writer's
+///     edits counting.
+/// </summary>
+/// <remarks>
+///     <para>
+///         <b>Why this exists.</b>
+///         <see cref="ApplyResult.Updated" /> is documented as "the object existed and at least one
+///         field we own changed", and the cheap way to answer that — did
+///         <c>metadata.resourceVersion</c> move between our read and our write — answers a different
+///         question. <c>resourceVersion</c> is shared by every writer, so anything that touches the
+///         object inside the window changes the answer. Against a real k3s, creating a
+///         <c>Deployment</c> and immediately re-applying the identical body reported
+///         <see cref="ApplyResult.Updated" /> in 4 runs out of 20 on an idle machine: the deployment
+///         controller writes <c>status</c> (and the
+///         <c>deployment.kubernetes.io/revision</c> annotation) in that window, and a status write
+///         bumps the same <c>resourceVersion</c>. A <c>ConfigMap</c> never flaked, because nothing
+///         controls a <c>ConfigMap</c>.
+///     </para>
+///     <para>
+///         ⚠ <b>The two obvious narrower answers are both wrong</b>, which is why the projection is
+///         worth its size. Diffing the whole object while ignoring <c>status</c> still trips on the
+///         <c>revision</c> annotation the controller adds under <c>metadata</c>. And
+///         <c>metadata.generation</c>, which ignores status writes, does not move for a label- or
+///         annotation-only change that <i>we</i> made, so it reports a real update as
+///         <see cref="ApplyResult.Unchanged" />.
+///     </para>
+///     <para>
+///         <b>What the API server already tells us.</b> Every apply records its manager's exact field
+///         set in <c>metadata.managedFields</c>, in the <c>FieldsV1</c> format. Projecting both the
+///         before and the after object through <i>our</i> entry and comparing the two projections
+///         asks precisely the contract's question, costs no extra round trip, and is indifferent to
+///         who else wrote in the meantime. A server-side dry-run apply diffed against the live object
+///         is the other standard answer; it costs a request, and it still needs this projection to
+///         avoid the same two traps.
+///     </para>
+///     <para>
+///         <b>The <c>FieldsV1</c> shape</b>, for the walk below. Keys are prefixed by what they
+///         select, and a node with no selector children means the whole value at that path is owned:
+///     </para>
+///     <code>
+///     "fieldsV1": {
+///       "f:metadata": { "f:labels": { "f:app": {} } },       // f: a field name
+///       "f:spec": {
+///         "f:replicas": {},                                  // no children — the value, whole
+///         "f:selector": {},
+///         "f:template": { "f:spec": { "f:containers": {
+///           "k:{\"name\":\"c\"}": { ".": {}, "f:image": {} }  // k: a list-map key, ".": the node itself
+///         } } } } }
+///     </code>
+///     <para>
+///         <c>v:</c> selects a member of a set-typed list by value and <c>i:</c> selects by index;
+///         both are handled. <c>"."</c> means the manager owns the node itself rather than any child,
+///         which carries no value to compare, so it is skipped.
+///     </para>
+/// </remarks>
+public static class OwnedFieldSnapshot {
+    /// <summary>Selects a field by name.</summary>
+    const string FieldPrefix = "f:";
+
+    /// <summary>Selects an element of an associative list by its key fields.</summary>
+    const string KeyPrefix = "k:";
+
+    /// <summary>Selects a member of a set-typed list by its value.</summary>
+    const string ValuePrefix = "v:";
+
+    /// <summary>Selects an element of an ordered list by index.</summary>
+    const string IndexPrefix = "i:";
+
+    /// <summary>
+    ///     Captures the part of an object that belongs to one field manager, as canonical JSON.
+    /// </summary>
+    /// <param name="objectJson">A complete Kubernetes object, as the API server returned it.</param>
+    /// <param name="fieldManager">
+    ///     The manager whose ownership decides what is captured — <c>command.FieldManager</c>. Entries
+    ///     written against a subresource are skipped, so the manager's own <c>status</c> writes, if it
+    ///     ever makes any, never enter the snapshot.
+    /// </param>
+    /// <param name="snapshot">
+    ///     The owned fields, with object keys sorted so that two captures of equal content compare
+    ///     equal as strings. Empty JSON when the manager owns nothing yet, which is a real and
+    ///     different answer from "cannot tell".
+    /// </param>
+    /// <returns>
+    ///     <c>true</c> if the object carried a <c>metadata.managedFields</c> array to project
+    ///     through. <c>false</c> means ownership is unknowable from this body — unparseable JSON, or
+    ///     an API server that strips field management — and the caller needs another signal.
+    /// </returns>
+    public static bool TryCapture(string? objectJson, string fieldManager, out string snapshot) {
+        snapshot = string.Empty;
+
+        if (string.IsNullOrEmpty(objectJson)) {
+            return false;
+        }
+
+        JsonDocument document;
+        try {
+            document = JsonDocument.Parse(objectJson);
+        } catch (JsonException) {
+            return false;
+        }
+
+        using (document) {
+            var root = document.RootElement;
+
+            if (root.ValueKind != JsonValueKind.Object
+                || !root.TryGetProperty("metadata", out var metadata)
+                || metadata.ValueKind != JsonValueKind.Object
+                || !metadata.TryGetProperty("managedFields", out var managedFields)
+                || managedFields.ValueKind != JsonValueKind.Array) {
+                return false;
+            }
+
+            var buffer = new ArrayBufferWriter<byte>();
+            using (var writer = new Utf8JsonWriter(buffer)) {
+                writer.WriteStartArray();
+
+                // Normally one entry — one Apply, one apiVersion. More are possible (an apply at a
+                // second apiVersion, or the same name used for an Update elsewhere), so all of them
+                // are projected, in a fixed order rather than the server's.
+                foreach (var entry in OursSorted(managedFields, fieldManager)) {
+                    Project(root, entry.Fields, writer);
+                }
+
+                writer.WriteEndArray();
+            }
+
+            snapshot = Encoding.UTF8.GetString(buffer.WrittenSpan);
+            return true;
+        }
+    }
+
+    static List<(string Order, JsonElement Fields)> OursSorted(JsonElement managedFields, string fieldManager) {
+        List<(string Order, JsonElement Fields)> ours = [];
+
+        foreach (var entry in managedFields.EnumerateArray()) {
+            if (entry.ValueKind != JsonValueKind.Object
+                || !string.Equals(Text(entry, "manager"), fieldManager, StringComparison.Ordinal)) {
+                continue;
+            }
+
+            // ⚠ The subresource filter is the one that matters here. A controller's status write
+            // lands as a separate entry with "subresource": "status" — that is exactly how the k3s
+            // deployment controller shows up on a Deployment — and status is never ours to compare.
+            if (Text(entry, "subresource").Length > 0) {
+                continue;
+            }
+
+            if (entry.TryGetProperty("fieldsV1", out var fields) && fields.ValueKind == JsonValueKind.Object) {
+                ours.Add(($"{Text(entry, "apiVersion")}/{Text(entry, "operation")}", fields));
+            }
+        }
+
+        ours.Sort(static (a, b) => string.CompareOrdinal(a.Order, b.Order));
+        return ours;
+    }
+
+    /// <summary>Writes the part of <paramref name="value" /> that <paramref name="fields" /> selects.</summary>
+    /// <param name="value">The node of the live object the selectors apply to.</param>
+    /// <param name="fields">The <c>FieldsV1</c> node.</param>
+    /// <param name="writer">Where the projection goes.</param>
+    static void Project(JsonElement value, JsonElement fields, Utf8JsonWriter writer) {
+        var selectors = SelectorsOf(fields);
+
+        // No selector children: the manager owns this node whole, so the whole value is the answer.
+        // That is the common case for an atomic field — .spec.replicas, .spec.selector.
+        if (selectors.Count == 0) {
+            Canonical(value, writer);
+            return;
+        }
+
+        // Keyed by the selector rather than rebuilt into the original shape. The snapshot is only
+        // ever compared for equality, so a faithful reconstruction would be work for nothing — and
+        // keying a list by its selector sidesteps element ordering, which the API server does not
+        // promise to preserve for an associative list.
+        writer.WriteStartObject();
+
+        foreach (var selector in selectors) {
+            if (!TryResolve(value, selector, out var child)) {
+                // The manager owns a path this object does not have — it was applied and then
+                // removed by someone else, or this is the "before" side of a field we are adding.
+                // Leaving the key out is what makes the two snapshots differ.
+                continue;
+            }
+
+            writer.WritePropertyName(selector);
+            Project(child, fields.GetProperty(selector), writer);
+        }
+
+        writer.WriteEndObject();
+    }
+
+    static List<string> SelectorsOf(JsonElement fields) {
+        List<string> selectors = [];
+
+        foreach (var property in fields.EnumerateObject()) {
+            // "." says the manager owns this node itself, not a child of it. There is no value under
+            // it to compare, and its presence never differs between two applies of one body.
+            if (property.NameEquals(".") || property.Value.ValueKind != JsonValueKind.Object) {
+                continue;
+            }
+
+            selectors.Add(property.Name);
+        }
+
+        selectors.Sort(StringComparer.Ordinal);
+        return selectors;
+    }
+
+    static bool TryResolve(JsonElement value, string selector, out JsonElement child) {
+        child = default;
+
+        if (selector.StartsWith(FieldPrefix, StringComparison.Ordinal)) {
+            return value.ValueKind == JsonValueKind.Object
+                && value.TryGetProperty(selector[FieldPrefix.Length..], out child);
+        }
+
+        if (value.ValueKind != JsonValueKind.Array) {
+            return false;
+        }
+
+        if (selector.StartsWith(KeyPrefix, StringComparison.Ordinal)) {
+            return TryFindKeyed(value, selector[KeyPrefix.Length..], out child);
+        }
+
+        if (selector.StartsWith(ValuePrefix, StringComparison.Ordinal)) {
+            return TryFindEqual(value, selector[ValuePrefix.Length..], out child);
+        }
+
+        if (selector.StartsWith(IndexPrefix, StringComparison.Ordinal)
+            && int.TryParse(
+                selector[IndexPrefix.Length..],
+                System.Globalization.NumberStyles.Integer,
+                System.Globalization.CultureInfo.InvariantCulture,
+                out var index
+            )
+            && index >= 0
+            && index < value.GetArrayLength()) {
+            child = value[index];
+            return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>Finds the list element whose key fields match, for a <c>k:</c> selector.</summary>
+    /// <param name="array">The list.</param>
+    /// <param name="keyJson">The selector's payload — an object of the key fields and their values.</param>
+    /// <param name="match">The element, when one matches.</param>
+    static bool TryFindKeyed(JsonElement array, string keyJson, out JsonElement match) {
+        match = default;
+
+        JsonDocument key;
+        try {
+            key = JsonDocument.Parse(keyJson);
+        } catch (JsonException) {
+            return false;
+        }
+
+        using (key) {
+            if (key.RootElement.ValueKind != JsonValueKind.Object) {
+                return false;
+            }
+
+            foreach (var item in array.EnumerateArray()) {
+                if (item.ValueKind != JsonValueKind.Object) {
+                    continue;
+                }
+
+                var matches = true;
+                foreach (var field in key.RootElement.EnumerateObject()) {
+                    if (!item.TryGetProperty(field.Name, out var actual) || !SameValue(actual, field.Value)) {
+                        matches = false;
+                        break;
+                    }
+                }
+
+                if (matches) {
+                    match = item;
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>Finds the set member equal to a <c>v:</c> selector's value.</summary>
+    /// <param name="array">The list.</param>
+    /// <param name="valueJson">The selector's payload — the member's own value.</param>
+    /// <param name="match">The element, when one matches.</param>
+    static bool TryFindEqual(JsonElement array, string valueJson, out JsonElement match) {
+        match = default;
+
+        JsonDocument wanted;
+        try {
+            wanted = JsonDocument.Parse(valueJson);
+        } catch (JsonException) {
+            return false;
+        }
+
+        using (wanted) {
+            foreach (var item in array.EnumerateArray()) {
+                if (SameValue(item, wanted.RootElement)) {
+                    match = item;
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    static bool SameValue(JsonElement left, JsonElement right) =>
+        string.Equals(CanonicalText(left), CanonicalText(right), StringComparison.Ordinal);
+
+    static string CanonicalText(JsonElement value) {
+        var buffer = new ArrayBufferWriter<byte>();
+        using (var writer = new Utf8JsonWriter(buffer)) {
+            Canonical(value, writer);
+        }
+
+        return Encoding.UTF8.GetString(buffer.WrittenSpan);
+    }
+
+    /// <summary>
+    ///     Writes a value with every object's keys in ordinal order, so equal content is equal text.
+    /// </summary>
+    /// <param name="value">The value to write.</param>
+    /// <param name="writer">Where it goes.</param>
+    /// <remarks>
+    ///     The API server's own serialization is already deterministic, so this is belt to that
+    ///     braces — but the snapshot is compared as a <i>string</i>, and a comparison that silently
+    ///     depends on key order is the kind that works for a year and then reports a phantom update.
+    /// </remarks>
+    static void Canonical(JsonElement value, Utf8JsonWriter writer) {
+        switch (value.ValueKind) {
+            case JsonValueKind.Object:
+                writer.WriteStartObject();
+
+                List<JsonProperty> properties = [.. value.EnumerateObject()];
+                properties.Sort(static (a, b) => string.CompareOrdinal(a.Name, b.Name));
+
+                foreach (var property in properties) {
+                    writer.WritePropertyName(property.Name);
+                    Canonical(property.Value, writer);
+                }
+
+                writer.WriteEndObject();
+                break;
+
+            case JsonValueKind.Array:
+                writer.WriteStartArray();
+
+                foreach (var item in value.EnumerateArray()) {
+                    Canonical(item, writer);
+                }
+
+                writer.WriteEndArray();
+                break;
+
+            default:
+                value.WriteTo(writer);
+                break;
+        }
+    }
+
+    static string Text(JsonElement element, string property) =>
+        element.TryGetProperty(property, out var value) && value.ValueKind == JsonValueKind.String
+            ? value.GetString() ?? string.Empty
+            : string.Empty;
+}

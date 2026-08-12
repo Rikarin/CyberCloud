@@ -87,10 +87,18 @@ public enum ApplyResult {
     Updated = 2,
 
     /// <summary>
-    ///     The object existed and the apply was a no-op — the reconcile hash matched, or the API
-    ///     server reported no change. The cheap case docs/plan/09 § The command builder's
-    ///     <c>reconcile-hash</c> annotation exists to detect.
+    ///     The object existed and no field we own changed — the cheap case docs/plan/09 § The command
+    ///     builder's <c>reconcile-hash</c> annotation exists to detect.
     /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>"We own" is the whole of it, and it is narrower than "the object did not change".</b>
+    ///     A controller writing <c>status</c>, or adding an annotation of its own, leaves this
+    ///     <see cref="Unchanged" />: the object moved, our fields did not. <c>KubeApiClient</c> reads
+    ///     ownership out of <c>metadata.managedFields</c> rather than watching
+    ///     <c>metadata.resourceVersion</c>, which is shared by every writer — see
+    ///     <c>OwnedFieldSnapshot</c> for why the shared cursor gets this wrong on any
+    ///     controller-managed kind.
+    /// </remarks>
     Unchanged = 3,
 
     /// <summary>
