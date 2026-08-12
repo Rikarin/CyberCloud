@@ -491,6 +491,40 @@ public sealed record OperationSpec {
     /// </remarks>
     [Id(13)]
     public ImmutableArray<QuotaCommitment> CommittedQuota { get; init; } = [];
+
+    /// <summary>
+    ///     The GUID of the resource this one's address names as its parent, or <see cref="Guid.Empty" />
+    ///     for a top-level resource.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>This exists because the unlink cannot re-derive it, and a tuple you cannot rebuild
+    ///         is a tuple you cannot delete.</b> <c>OperationGrain</c> reconstructs the address with
+    ///         <c>ResourceId.ParsePath(spec.ResourcePath).WithId(spec.ResourceId)</c>, and a parsed path
+    ///         carries no GUIDs at all — docs/plan/06 § Identifiers keeps them out — so the parent's is
+    ///         <see cref="Guid.Empty" /> exactly where <c>UnlinkFromParentAsync</c> needs it.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>And re-resolving it through <c>IResourceIndexGrain</c> at unlink time is the thing
+    ///         that must not be done.</b> The unlink runs after <c>CompleteDeleteAsync</c> — the
+    ///         resource is already gone — and is retried from a reminder to
+    ///         <c>ReconcileSchedule</c>'s sixty-minute ceiling. docs/plan/08 § Deleting a parent
+    ///         resource that has children records that the 409 which would stop a parent being deleted
+    ///         out from under its children is decided and <i>not built</i>, so the parent genuinely may
+    ///         be gone by then. A lookup would fail every retry, converge never, and leave the dangling
+    ///         tuple <c>ParentEdgeTests.DeleteLeavesNoDanglingTuple</c> exists to catch. Persisted at
+    ///         create, read at delete, never resolved twice.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Empty means "as before", which is what makes appending it safe.</b> docs/plan/05
+    ///         § Serialization and schema evolution — an operation started by a peer that predates this
+    ///         member carries nothing here and unlinks a group-subject edge, which is what every
+    ///         resource had when that peer was written. ⚠ Numbered 14, never by renumbering, and the
+    ///         durable tier is JSON so the property NAME is the persisted contract.
+    ///     </para>
+    /// </remarks>
+    [Id(14)]
+    public Guid ParentResourceId { get; init; }
 }
 
 /// <summary>

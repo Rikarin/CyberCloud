@@ -67,14 +67,22 @@ public sealed class ReBacResourceRelationWriter(IGrainFactory grains, ILogger<Re
     public const string ParentRelation = Relations.Parent;
 
     /// <inheritdoc />
-    public Task<Result> LinkToParentAsync(ResourceId id, CancellationToken cancellationToken = default) =>
-        ApplyAsync(id, link: true);
+    public Task<Result> LinkToParentAsync(
+        ResourceId id,
+        Guid parentId,
+        CancellationToken cancellationToken = default
+    ) =>
+        ApplyAsync(id, parentId, link: true);
 
     /// <inheritdoc />
-    public Task<Result> UnlinkFromParentAsync(ResourceId id, CancellationToken cancellationToken = default) =>
-        ApplyAsync(id, link: false);
+    public Task<Result> UnlinkFromParentAsync(
+        ResourceId id,
+        Guid parentId,
+        CancellationToken cancellationToken = default
+    ) =>
+        ApplyAsync(id, parentId, link: false);
 
-    async Task<Result> ApplyAsync(ResourceId id, bool link) {
+    async Task<Result> ApplyAsync(ResourceId id, Guid parentId, bool link) {
         if (id.Id == Guid.Empty) {
             // Not a domain outcome: the caller asked to link an address that has no identity yet.
             // docs/plan/06 § Identifiers — a parsed path yields Guid.Empty, and the GUID arrives at
@@ -87,12 +95,75 @@ public sealed class ReBacResourceRelationWriter(IGrainFactory grains, ILogger<Re
             );
         }
 
+        if (id.Parent is { } parentAddress && parentId == Guid.Empty) {
+            // ⚠ REFUSED ON THE WAY IN, TOLERATED ON THE WAY OUT, and the asymmetry is deliberate.
+            //
+            // LINKING a child without its parent's GUID cannot be made correct: falling back to the
+            // resource group would write a perfectly valid tuple aimed one level too high, the create
+            // would report 202, the resource would be readable by a group owner, and the only symptom
+            // would be that a grant on the parent granted nothing. Nothing downstream detects that,
+            // so it is refused here where the caller can still be told what was missing.
+            //
+            // UNLINKING is the opposite: the resource is already gone and this is being retried from
+            // OperationGrain's reminder. Refusing would fail every retry to the sixty-minute ceiling
+            // and leave the tuple anyway. The subject built below is `resource:{empty}`, which
+            // matches nothing, so the delete is a no-op — one inert row leaked instead of an
+            // operation that can never converge. Same trade the step-8 remarks make in the other
+            // direction, and it is reachable only when the parent was deleted out from under the
+            // child, which is the defect docs/plan/08 § Deleting a parent resource that has children
+            // records as decided and not yet built.
+            if (link) {
+                return Result.Failure(
+                    ErrorCode.InvalidResourceId,
+                    $"'{id.Path}' is a child of '{parentAddress.Path}', so its parent edge must name "
+                    + "that resource — but no parent id was supplied. The GUID is not in the address "
+                    + "(docs/plan/06 § Identifiers) and is resolved through IResourceIndexGrain by "
+                    + "the write path's step 1, which carries it here."
+                );
+            }
+
+            logger.LogWarning(
+                "Unlinking {Path} without its parent's id: the parent tuple is left behind. This "
+                + "means '{Parent}' no longer resolves, so the child outlived its parent.",
+                id.Path,
+                parentAddress.Path
+            );
+        }
+
+        // ── Which parent ───────────────────────────────────────────────────────────────────────
+        //
+        // ⚠ THE SUBJECT IS THE PARENT RESOURCE WHEN THERE IS ONE, AND THE GROUP ONLY WHEN THERE IS
+        // NOT. This pointed at the resource group unconditionally, which is right for a top-level
+        // resource and silently wrong for a child: docs/plan/12 § Child resources chose the
+        // interleaved address — `…/servers/{serverName}/databases/{databaseName}` — over the
+        // flattened one precisely BECAUSE the flattened form could not say which server, so this
+        // edge could only ever aim at the group. Aiming it there anyway spends the decision and
+        // keeps the failure it was meant to remove: granting somebody a Postgres server would grant
+        // nothing on its databases, and deleting the server would leave its databases' tuples
+        // pointing at a resource group that never knew about them.
+        //
+        // ⚠ THE EXTRA HOP NEEDS NO SCHEMA CHANGE, which is worth stating because it looks like it
+        // should. CyberCloudSchema declares `parent` on `resource` with NO subject-type constraint
+        // (SchemaBuilder.Relation takes a name and nothing else), and gives `resource` the same
+        // `This | From(parent, …)` rewrites it gives `resourceGroup` — so the rewrite composes with
+        // itself and resource → resource → resourceGroup → subscription → tenant resolves by the
+        // rules already there. CheckEvaluator.EvaluateTuplesetAsync recurses into whatever object
+        // the tupleset names without a type check. Four hops against CheckLimits' twelve.
+        // SchemaVersion is therefore NOT bumped: no rewrite changed, and the check cache is keyed on
+        // it.
+        var subject = id.Parent is null
+            ? SubjectRef.Of(
+                ReBacResourceAuthorizer.ResourceGroupObjectType,
+                ReBacResourceAuthorizer.GroupObjectId(id)
+            )
+            : SubjectRef.Of(ReBacResourceAuthorizer.ResourceObjectType, parentId);
+
         // ⚠ Spelled out in full. `ObjectRef` is pinned to the Kubernetes one by this assembly's
         // GlobalUsings — see the comment there — and the ReBAC one is a different type entirely.
         var built = RelationTuple.Create(
             CyberCloud.Authorization.Contracts.ObjectRef.Of(ReBacResourceAuthorizer.ResourceObjectType, id.Id),
             ParentRelation,
-            SubjectRef.Of(ReBacResourceAuthorizer.ResourceGroupObjectType, ReBacResourceAuthorizer.GroupObjectId(id))
+            subject
         );
 
         if (built.TryGetError(out var invalid)) {

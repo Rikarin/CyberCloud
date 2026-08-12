@@ -105,17 +105,30 @@ public sealed class RecordingRelationWriter : IResourceRelationWriter {
     }
 
     /// <inheritdoc />
-    public Task<Result> LinkToParentAsync(ResourceId id, CancellationToken cancellationToken = default) {
+    public Task<Result> LinkToParentAsync(
+        ResourceId id,
+        Guid parentId,
+        CancellationToken cancellationToken = default
+    ) {
         if (Fail) {
             return Task.FromResult(Result.Failure(ErrorCode.InternalError, "the tuple store is down"));
         }
 
-        edges[id.Id] = id.SubscriptionId.ToString("N") + "-" + id.ResourceGroup;
+        // ⚠ The same branch the real writer takes — a double that always recorded the group would
+        // agree with a writer that always wrote it, and agree wrongly.
+        edges[id.Id] = id.Parent is null
+            ? id.SubscriptionId.ToString("N") + "-" + id.ResourceGroup
+            : parentId.ToString("N");
+
         return Task.FromResult(Result.Success);
     }
 
     /// <inheritdoc />
-    public Task<Result> UnlinkFromParentAsync(ResourceId id, CancellationToken cancellationToken = default) {
+    public Task<Result> UnlinkFromParentAsync(
+        ResourceId id,
+        Guid parentId,
+        CancellationToken cancellationToken = default
+    ) {
         edges.TryRemove(id.Id, out _);
         return Task.FromResult(Result.Success);
     }
