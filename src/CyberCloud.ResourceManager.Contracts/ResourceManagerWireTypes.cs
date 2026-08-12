@@ -103,8 +103,10 @@ public sealed record CallerContext {
     ///     summary said <c>serviceprincipal</c> until 2026-08-11, which is not a typo with no
     ///     consequence: it names a subject no tuple mentions, so every <c>Check</c> denies and the
     ///     symptom presents as a permissions bug rather than as a bad value. The closed set is
-    ///     <c>SubjectTypes</c> in <c>CyberCloud.Identity.Contracts</c>, which refuses anything outside
-    ///     it rather than correcting a known-bad spelling.
+    ///     <c>SubjectTypes</c> in <c>CyberCloud.Authorization.Contracts</c>, which refuses anything
+    ///     outside it rather than correcting a known-bad spelling. It lived in
+    ///     <c>CyberCloud.Identity.Contracts</c> until 2026-08-12, which was itself the symptom — the
+    ///     vocabulary was declared where one caller could reach it rather than where both could.
     /// </remarks>
     [Id(1)]
     public string SubjectType { get; init; } = "user";
