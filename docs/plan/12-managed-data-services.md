@@ -102,10 +102,10 @@ keyed on `sha256(CanonicalPath)` and the flattened canonical path contains no pa
 Kafka clusters in one resource group could not both have a topic called `events`. That is a
 functional limitation users hit on day one, not a difference of taste.
 
-**3. The ambiguity the depth cap exists to contain is removed rather than capped.**
-[06](06-tenancy-and-resource-model.md) § Identifiers says the grammar "is ambiguous on its own, and
-the naming rule is what saves it" — `servers` + name `databases/orders` and `servers/databases` +
-name `orders` used to render the same string, and only the ban on `/` in a name kept the second
+**3. The ambiguity in the old grammar is removed rather than capped.**
+[06](06-tenancy-and-resource-model.md) § Identifiers used to say the grammar "is ambiguous on its own,
+and the naming rule is what saves it" — `servers` + name `databases/orders` and `servers/databases` +
+name `orders` rendered the same string, and only the ban on `/` in a name kept the second
 reading out. Interleaved, type segments sit at even offsets after the namespace and names at odd
 ones, so the tail length is always even and the depth is half of it. There is no collision left to
 close. The naming rule stays load-bearing as the *second* of two independent defences rather than the
