@@ -365,6 +365,18 @@ sealed class RecordingConnection : IKubeClusterConnection {
     /// <summary>Every object deleted, in order.</summary>
     public List<ObjectRef> Deleted { get; } = [];
 
+    /// <summary>
+    ///     Every object <i>read</i>, in order — clause 4's evidence.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Added for the provider whose rendered object set is a list rather than a pair.</b> A
+    ///     reconciler that applies N objects and reads back fewer reports <c>Converged</c> for
+    ///     objects it never observed, which is exactly what clause 4 forbids — and every other
+    ///     assertion in this file goes green on it, because the applies all happened. Comparing this
+    ///     against <see cref="Applied" /> is the only thing that catches it.
+    /// </remarks>
+    public List<ObjectRef> Read { get; } = [];
+
     /// <summary>Whether every apply answers <c>Suspended</c>.</summary>
     public bool Suspend { get; init; }
 
@@ -419,6 +431,7 @@ sealed class RecordingConnection : IKubeClusterConnection {
 
     public Task<Result<KubeObject>> GetAsync(ObjectRef target, CancellationToken cancellationToken = default) {
         ArgumentNullException.ThrowIfNull(target);
+        Read.Add(target);
 
         return Task.FromResult(
             Objects.TryGetValue(Key(target), out var json)

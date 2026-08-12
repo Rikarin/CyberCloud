@@ -96,11 +96,22 @@ public sealed class NatsReconcilerTests {
                 StringComparer.Ordinal
             );
 
+            var read = connection.Read.Select(RecordingConnection.Key).ToHashSet(StringComparer.Ordinal);
+
+            // ⚠ SET EQUALITY IN BOTH DIRECTIONS, WHICH IS THE ONLY FORM THAT CATCHES EITHER MISTAKE.
+            // Asserting a COUNT would have gone green on a Targets list missing the PodMonitor — the
+            // applies all still happen, the outcome is still Converged, and nothing else in this file
+            // would notice.
+            read.ShouldBe(
+                applied,
+                "the reconciler applied " + applied.Count + " object(s) and read back " + read.Count
+                + ". An object rendered and not read back is one the loop reports Converged without "
+                + "ever having observed."
+            );
+
             applied.Count.ShouldBe(
                 monitoring ? 5 : 4,
-                "the object count changed and this test's expectation did not. Adding an object to "
-                + "NatsClusterReconciler.Rendered without adding it to Targets is the failure this "
-                + "test exists for."
+                "the object count changed and this test's expectation did not."
             );
         }
     }
