@@ -1,4 +1,5 @@
 using CyberCloud.Core;
+using CyberCloud.Core.Contracts;
 
 namespace CyberCloud.Identity.Contracts;
 
@@ -275,4 +276,41 @@ public sealed record OtpDelivery {
     ///     different one.
     /// </remarks>
     public required string Code { get; init; }
+}
+
+/// <summary>
+///     Resolves the TOTP shared secret a <see cref="TotpEnrollment" /> only holds a handle to —
+///     docs/plan/11 § Credentials, "secret stored as a Vault <c>SecretRef</c>, never in grain state".
+/// </summary>
+/// <remarks>
+///     <para>
+///         ⚠ <b>A seam declared here rather than a reuse of <c>ISecretResolver</c>, and the reason is
+///         the assembly graph rather than taste.</b> That interface lives in
+///         <c>CyberCloud.ResourceManager.Contracts</c>, and reaching for it would drag the resource
+///         manager — and through it the Kubernetes and tenancy contracts — into identity for one
+///         method. The header of <c>IdentityWireTypes</c> records the same trade being made
+///         deliberately for <c>SecretRef</c> itself. An implementation is free to be four lines over
+///         <c>ISecretResolver</c>; that adapter belongs in a host that already references both.
+///     </para>
+///     <para>
+///         ⚠ <b>The value comes back to the caller, which is the opposite of how a
+///         <see cref="SecretRef" /> is normally used</b>, and it is unavoidable: RFC 6238 is a shared
+///         secret, so verifying a code means holding the secret at the moment of verification. What
+///         follows from that is where the verification may happen — in a host, in memory, for one
+///         call. ⚠ An implementation that logged, cached or persisted the returned value would put a
+///         permanent second factor bypass in whatever it wrote to.
+///     </para>
+/// </remarks>
+public interface ITotpSecretSeam {
+    /// <summary>
+    ///     Reads the base32 TOTP secret behind a handle.
+    /// </summary>
+    /// <param name="reference">The handle from <see cref="TotpEnrollment.SecretRef" />.</param>
+    /// <param name="cancellationToken">Cancels the read.</param>
+    /// <returns>
+    ///     The base32 secret. ⚠ A failure must not say whether the handle was unknown or the vault
+    ///     was unreachable when the caller is unauthenticated — the sign-in path answers
+    ///     <see cref="UniformFailures.SignIn" /> regardless, so the detail belongs in the log.
+    /// </returns>
+    Task<Result<string>> ResolveAsync(SecretRef reference, CancellationToken cancellationToken = default);
 }

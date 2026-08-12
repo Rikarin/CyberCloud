@@ -57,3 +57,115 @@ export function passkeyUnavailableReason(): PasskeyUnavailableReason | null {
 export function canUsePasskey(): boolean {
   return passkeyUnavailableReason() === null;
 }
+
+/**
+ * Base64url without padding — the encoding WebAuthn uses on the wire.
+ *
+ * ⚠ Not `btoa` alone. Standard base64 emits `+`, `/` and `=`, and the server decodes base64url;
+ * the three characters that differ are exactly the ones that appear in a minority of credential
+ * ids, so getting this wrong produces a sign-in that works for most users and fails for some.
+ */
+function encode(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  for (const byte of bytes) {
+    binary += String.fromCharCode(byte);
+  }
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+/**
+ * The inverse, for the challenge and credential ids the options carry as base64url text.
+ *
+ * ⚠ Returns the `ArrayBuffer` rather than the view. `BufferSource` in the DOM types is
+ * `ArrayBufferView<ArrayBuffer>`, and a `Uint8Array` is `Uint8Array<ArrayBufferLike>` — which
+ * admits `SharedArrayBuffer` and so does not satisfy it. Handing back the buffer sidesteps a cast
+ * that would be load-bearing and unchecked.
+ */
+function decode(value: string): ArrayBuffer {
+  const padded = value.replace(/-/g, '+').replace(/_/g, '/');
+  const binary = atob(padded.padEnd(Math.ceil(padded.length / 4) * 4, '='));
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes.buffer;
+}
+
+/**
+ * Runs the WebAuthn assertion ceremony and returns the result as JSON for the server.
+ *
+ * ⚠ **The options are the server's and are consumed rather than rebuilt.** What this does is the
+ * one transformation the platform requires and no more: `navigator.credentials.get()` takes
+ * `BufferSource`s where JSON carries base64url strings, so `challenge` and `allowCredentials[].id`
+ * are decoded and nothing else is touched. Reconstructing the options — reordering, defaulting, or
+ * "cleaning up" a field — breaks the challenge binding the server verifies against.
+ *
+ * ⚠ **Returns `null` when the user cancels**, which is not an error and must not be rendered as
+ * one. A dismissed authenticator prompt and a failed assertion are indistinguishable from the
+ * `DOMException` alone, and telling a user who chose to cancel that their passkey failed is how
+ * they learn to distrust the button.
+ *
+ * @param optionsJson The `optionsJson` from `POST /api/signin/passkey/begin`, verbatim.
+ * @returns The assertion, serialized for `POST /api/signin/passkey/complete`, or `null`.
+ */
+export async function assertPasskey(optionsJson: string): Promise<string | null> {
+  if (!canUsePasskey() || optionsJson.length === 0) {
+    return null;
+  }
+
+  const options = JSON.parse(optionsJson) as PublicKeyCredentialRequestOptions & {
+    challenge: unknown;
+    allowCredentials?: { id: unknown; type: string; transports?: string[] }[];
+  };
+
+  // ⚠ `allowCredentials` is spread in only when the server sent one. `exactOptionalPropertyTypes`
+  // makes an explicit `undefined` a different thing from an absent key, and WebAuthn treats the two
+  // the same only by luck of implementation.
+  const request: PublicKeyCredentialRequestOptions = {
+    ...options,
+    challenge: decode(String(options.challenge)),
+    ...(options.allowCredentials === undefined
+      ? {}
+      : {
+          allowCredentials: options.allowCredentials.map((credential) => ({
+            ...credential,
+            id: decode(String(credential.id)),
+            type: 'public-key' as const,
+          })),
+        }),
+  };
+
+  let credential: Credential | null;
+  try {
+    credential = await navigator.credentials.get({ publicKey: request });
+  } catch {
+    // ⚠ Swallowed to `null`, deliberately. `NotAllowedError` covers both "the user dismissed the
+    // prompt" and "the authenticator refused", and the spec gives no way to tell them apart — by
+    // design, because distinguishing them would leak whether a credential was present.
+    return null;
+  }
+
+  if (credential === null) {
+    return null;
+  }
+
+  const assertion = credential as PublicKeyCredential;
+  const response = assertion.response as AuthenticatorAssertionResponse;
+
+  // ⚠ `id` is sent as the base64url text the server compares ordinally against its stored
+  // `PasskeyCredential.CredentialId`. `rawId` rides along because the WebAuthn response shape
+  // includes it and the server's library reads the full object.
+  return JSON.stringify({
+    id: assertion.id,
+    rawId: encode(assertion.rawId),
+    type: assertion.type,
+    extensions: assertion.getClientExtensionResults(),
+    response: {
+      authenticatorData: encode(response.authenticatorData),
+      clientDataJSON: encode(response.clientDataJSON),
+      signature: encode(response.signature),
+      userHandle: response.userHandle === null ? null : encode(response.userHandle),
+    },
+  });
+}

@@ -55,6 +55,7 @@ public static class IdentitySiloBuilderExtensions {
         builder.Services.TryAddSingleton<IPasswordHasher>(hasher);
         builder.Services.TryAddSingleton<ILockoutCounter, InMemoryLockoutCounter>();
         builder.Services.TryAddSingleton<IOtpDeliverySeam, UnavailableOtpDelivery>();
+        builder.Services.TryAddSingleton<ITotpSecretSeam, UnavailableTotpSecrets>();
 
         // ⚠ Managed identity — docs/plan/11 § Managed identity, "the feature that removes stored
         // secrets". Three registrations and no configuration, because there is nothing to configure:

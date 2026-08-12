@@ -34,6 +34,24 @@ export interface SignInBeginResponse {
   offered: CredentialKind[];
 }
 
+/** What `POST /api/signin/passkey/begin` answers. */
+export interface PasskeyBeginResponse {
+  /**
+   * The WebAuthn request options, to hand to `navigator.credentials.get()`.
+   *
+   * ⚠ **Passed through without being parsed or rebuilt.** The challenge binding is the server
+   * library's, and reserializing the options breaks it.
+   *
+   * ⚠ **The challenge itself is not in here to be sent back.** The server keeps its own copy in a
+   * protected, HttpOnly cookie and verifies the assertion against that — so this app cannot supply
+   * a challenge of its own even by accident, which is the whole security property of the exchange.
+   *
+   * An empty string means the server could not build one, which is a relying-party
+   * misconfiguration and never an answer about the address.
+   */
+  optionsJson: string;
+}
+
 /** What the credential endpoints answer. */
 export interface SignInResultResponse {
   /** Whether the caller is now authenticated. */
@@ -113,5 +131,62 @@ export class IdentityApi {
    */
   signUp(email: string, returnUrl: string): Observable<SignInResultResponse> {
     return this.#http.post<SignInResultResponse>('/api/signup', { email, returnUrl });
+  }
+
+  /**
+   * Asks for a WebAuthn assertion challenge.
+   *
+   * ⚠ Answers with a challenge of the same shape for an address with no account — the server builds
+   * a discoverable-credential ("usernameless") one, which is what a real usernameless sign-in looks
+   * like anyway. A refusal here would enumerate the tenant from an endpoint that needs no password
+   * guess.
+   *
+   * @param email The address typed. Sent as-is; the server normalizes it.
+   */
+  beginPasskey(email: string): Observable<PasskeyBeginResponse> {
+    return this.#http.post<PasskeyBeginResponse>('/api/signin/passkey/begin', { email });
+  }
+
+  /**
+   * Posts the authenticator's response.
+   *
+   * ⚠ **`assertionJson` is the browser's result serialized verbatim**, and the challenge is
+   * deliberately absent — see `PasskeyBeginResponse.optionsJson`. `withCredentials` is not set
+   * because every call here is same-origin, which is what carries the challenge cookie.
+   *
+   * @param assertionJson The `navigator.credentials.get()` result, encoded by `passkey.ts`.
+   * @param returnUrl Where to go afterwards.
+   */
+  completePasskey(assertionJson: string, returnUrl: string): Observable<SignInResultResponse> {
+    return this.#http.post<SignInResultResponse>('/api/signin/passkey/complete', {
+      assertionJson,
+      returnUrl,
+    });
+  }
+
+  /**
+   * Presents a TOTP code as the second factor.
+   *
+   * ⚠ Who is answering comes from the session cookie the first factor set, never from anything this
+   * app sends — a user id in the body would let anybody holding a pending session name somebody
+   * else's account.
+   *
+   * @param code The six digits typed.
+   * @param returnUrl Where to go afterwards.
+   */
+  verifyTotp(code: string, returnUrl: string): Observable<SignInResultResponse> {
+    return this.#http.post<SignInResultResponse>('/api/signin/totp', { code, returnUrl });
+  }
+
+  /**
+   * Redeems a recovery code as the second factor.
+   *
+   * ⚠ Single-use, and burning one is an auditable event on the server — docs/plan/11 § Credentials.
+   *
+   * @param code The code typed.
+   * @param returnUrl Where to go afterwards.
+   */
+  redeemRecoveryCode(code: string, returnUrl: string): Observable<SignInResultResponse> {
+    return this.#http.post<SignInResultResponse>('/api/signin/recovery-code', { code, returnUrl });
   }
 }
