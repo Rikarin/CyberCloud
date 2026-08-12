@@ -617,10 +617,32 @@ public static class PostgresServers {
         var (cpu, memory) = Resources(desired);
         var extensions = Extensions(desired);
 
+        // ⚠ `shared_preload_libraries` is a SIBLING of `parameters`, not a key inside it, and it is a
+        // LIST rather than a comma-joined string. api/v1/cluster_types.go declares
+        // `AdditionalLibraries []string `json:"shared_preload_libraries,omitempty"`` on
+        // PostgresConfiguration, beside `Parameters map[string]string `json:"parameters,omitempty"``.
+        //
+        // ⚠ The other spelling is not a style difference, it is a 422 on every create. The key is in
+        // pkg/postgres/configuration.go's FixedConfigurationParameters, and
+        // internal/webhook/v1/cluster_webhook.go walks spec.postgresql.parameters and answers a fixed
+        // key with "Can't set fixed configuration parameter" unless the value equals CloudNativePG's
+        // own sanitized one. The webhook builds its ConfigurationInfo without
+        // IncludingSharedPreloadLibraries, so the sanitized value stays at the default settings'
+        // empty string and every non-empty list this renderer could produce differs from it. See
+        // charts/managed/postgres/conformance.yaml § owed, `shared-preload-libraries-is-not-a-parameter`.
         var parameters = new JsonObject { ["max_connections"] = "200" };
+        var postgresql = new JsonObject();
+
         if (extensions.Length > 0) {
-            parameters["shared_preload_libraries"] = string.Join(",", extensions);
+            var libraries = new JsonArray();
+            foreach (var extension in extensions) {
+                libraries.Add(extension);
+            }
+
+            postgresql["shared_preload_libraries"] = libraries;
         }
+
+        postgresql["parameters"] = parameters;
 
         var initdb = new JsonObject {
             ["database"] = Text(desired, "bootstrap", "database", "app"),
@@ -647,7 +669,7 @@ public static class PostgresServers {
         var spec = new JsonObject {
             ["instances"] = Number(desired, "replicas", 2),
             ["imageName"] = "ghcr.io/cloudnative-pg/postgresql:" + Version(desired),
-            ["postgresql"] = new JsonObject { ["parameters"] = parameters },
+            ["postgresql"] = postgresql,
             ["bootstrap"] = new JsonObject { ["initdb"] = initdb },
             ["storage"] = storage,
             ["monitoring"] = new JsonObject { ["enablePodMonitor"] = Flag(desired, "monitoring", "enabled", true) }

@@ -20,10 +20,28 @@ spec:
   {{- end }}
 
   postgresql:
-    parameters:
-      {{- if .Values.extensions }}
-      shared_preload_libraries: {{ join "," .Values.extensions | quote }}
+    {{/*
+      ⚠ A LIST, AND A SIBLING OF `parameters` — NOT A KEY INSIDE IT. api/v1/cluster_types.go declares
+      `AdditionalLibraries []string `json:"shared_preload_libraries,omitempty"`` on
+      PostgresConfiguration, beside `Parameters map[string]string `json:"parameters,omitempty"``.
+
+      ⚠ The other spelling was a 422 on every server created with an extension, after the caller had
+      already been told 202. pkg/postgres/configuration.go lists "shared_preload_libraries" in
+      FixedConfigurationParameters and internal/webhook/v1/cluster_webhook.go walks
+      spec.postgresql.parameters and answers a fixed key with "Can't set fixed configuration
+      parameter" unless the value equals CloudNativePG's own sanitized one — which for this key is
+      the default settings' empty string, because the webhook builds its ConfigurationInfo without
+      IncludingSharedPreloadLibraries. So no non-empty list could ever have passed. The default here
+      is `[]`, which is why nothing noticed. See conformance.yaml § owed,
+      `shared-preload-libraries-is-not-a-parameter`.
+    */}}
+    {{- if .Values.extensions }}
+    shared_preload_libraries:
+      {{- range .Values.extensions }}
+      - {{ . }}
       {{- end }}
+    {{- end }}
+    parameters:
       max_connections: "200"
 
   {{- if .Values.synchronousReplication }}
