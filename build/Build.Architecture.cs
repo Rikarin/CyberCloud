@@ -1813,6 +1813,16 @@ partial class Build
     ///         Test projects are out of scope, matching <see cref="ShippingAssemblies" />. The
     ///         analyzer itself and its own test project are out of scope for the obvious reason.
     ///     </para>
+    ///     <para>
+    ///         ⚠ <b>A reference is half the property, and the half that was missing was the one that
+    ///         can be turned off without touching a project file.</b> This gate proved every project
+    ///         carried the <c>OutputItemType="Analyzer"</c> reference and proved nothing about whether
+    ///         <c>CC1001</c>–<c>CC1007</c> were still error-severity. None is suppressed today, so the
+    ///         rows that lean on them were true — but nothing in the build would have noticed the line
+    ///         in <c>.editorconfig</c> that changed one to <c>none</c>, which is a one-word diff that
+    ///         silently retires a non-negotiable. <see cref="AnalyzerSeverityViolations" /> is that
+    ///         half.
+    ///     </para>
     /// </summary>
     GateOutcome AnalyzerCoverageGate()
     {
@@ -1827,11 +1837,149 @@ partial class Build
                 $"{x.Key} does not reference CyberCloud.Analyzers. Add "
                 + "<ProjectReference Include=\"…/CyberCloud.Analyzers/CyberCloud.Analyzers.csproj\" "
                 + "OutputItemType=\"Analyzer\" ReferenceOutputAssembly=\"false\" /> — without it CC1001–CC1007 "
-                + "do not run on this project, and docs/plan/23 § The architecture gates' four "
+                + "do not run on this project, and docs/plan/23 § The architecture gates' "
                 + "\"analyzer-enforced\" rows are not true of it")
             .ToList();
 
-        return GateOutcome.From("Analyzer coverage", candidates.Count, "shipping project(s)", violations);
+        var rules = AnalyzerRuleIds();
+
+        violations.AddRange(AnalyzerSeverityViolations(rules));
+
+        return GateOutcome.From(
+            "Analyzer coverage",
+            candidates.Count,
+            $"shipping project(s) referencing CyberCloud.Analyzers, and {rules.Count} rule(s) "
+            + "checked for error severity and for suppression",
+            violations);
+    }
+
+    /// <summary>
+    ///     The analyzer's rule ids, read from its release-tracking tables.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Those files rather than a list here, and rather than the <c>const</c>s in
+    ///     <c>Rules.cs</c>.</b> Roslyn's own <c>RS2008</c> fails the analyzer's compilation if a
+    ///     diagnostic it reports is missing from them, so they are the one place in this tree that
+    ///     cannot silently fall behind the analyzers. A list maintained here would be a fourth copy
+    ///     and the first to rot.
+    /// </remarks>
+    List<string> AnalyzerRuleIds()
+    {
+        var directory = RootDirectory / "src" / "CyberCloud.Analyzers";
+
+        var ids = directory
+            .GlobFiles("AnalyzerReleases.*.md")
+            .SelectMany(file => file.ReadAllLines())
+            .Select(line => AnalyzerRuleRow.Match(line))
+            .Where(match => match.Success)
+            .Select(match => match.Groups[1].Value)
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)
+            .ToList();
+
+        // ⚠ The empty-input violation, as an assertion rather than a finding: every check below is a
+        // loop over these ids, so an empty list makes the whole severity half pass over nothing while
+        // the row goes on counting projects and printing a tick.
+        Assert.NotEmpty(
+            ids,
+            $"no CC rule id was found in {RootDirectory.GetRelativePathTo(directory)}/AnalyzerReleases.*.md. "
+            + "Those tables are what this gate reads to know which rules to check, so an empty read "
+            + "would silently reduce this row to the project-reference half it used to be.");
+
+        return ids;
+    }
+
+    /// <summary>Whether a file is one MSBuild evaluates, and so one whose XML means something.</summary>
+    static bool IsMsBuildFile(AbsolutePath file)
+        => file.Extension is ".csproj" or ".props" or ".targets" or ".slnx" or ".slnf" or ".proj";
+
+    /// <summary>A rule row in a release-tracking table: the id in the first column.</summary>
+    static readonly Regex AnalyzerRuleRow = new(@"^(CC\d{4})\s*\|", RegexOptions.Compiled);
+
+    /// <summary>Anything that turns a CC rule down, anywhere in the tree.</summary>
+    static readonly Regex AnalyzerSeverity = new(
+        @"dotnet_diagnostic\.(CC\d{4})\.severity\s*=\s*([A-Za-z]+)",
+        RegexOptions.Compiled);
+
+    /// <summary>
+    ///     Every CC rule is declared <c>error</c> at the root, and nothing anywhere turns one down.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>Both directions, and the second is the one that matters.</b> The root
+    ///         <c>.editorconfig</c> saying <c>error</c> is necessary and not sufficient: EditorConfig
+    ///         resolves nearest-file-first, so a <c>.editorconfig</c> beside any source directory
+    ///         could set <c>none</c> and win, and the root file would still read exactly as it does
+    ///         now. So this checks every tracked file, not the root one.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b><c>[SuppressMessage]</c> is deliberately not checked, and the omission is a
+    ///         boundary rather than a gap.</b> <c>SecretInGrainStateAnalyzer</c>'s remarks document a
+    ///         per-site suppression with a <c>Justification</c> as the designed answer to a false
+    ///         positive on <c>CC1005</c>. A gate that refused it would be overruling the analyzer's
+    ///         own documented escape hatch. What this refuses is the two mechanisms that are not
+    ///         per-site and carry no argument: a severity turned down, and a blanket
+    ///         <c>&lt;NoWarn&gt;</c>. A bare <c>#pragma warning disable</c> is already CC1007's job.
+    ///     </para>
+    /// </remarks>
+    IEnumerable<string> AnalyzerSeverityViolations(List<string> rules)
+    {
+        var declared = new Dictionary<string, string>(StringComparer.Ordinal);
+
+        foreach (var (file, lines) in TrackedText)
+        {
+            for (var i = 0; i < lines.Length; i++)
+            {
+                var line = lines[i];
+
+                foreach (var match in AnalyzerSeverity.Matches(line).Cast<Match>())
+                {
+                    var id = match.Groups[1].Value;
+                    var severity = match.Groups[2].Value;
+
+                    if (!string.Equals(severity, "error", StringComparison.Ordinal))
+                    {
+                        yield return
+                            $"{RootDirectory.GetRelativePathTo(file)}:{i + 1} sets {id} to \"{severity}\". "
+                            + "The rows docs/plan/23 § The architecture gates calls analyzer-enforced are "
+                            + "true only while these are errors — a severity turned down retires a "
+                            + "non-negotiable in one word";
+
+                        continue;
+                    }
+
+                    if (file == RootDirectory / ".editorconfig")
+                        declared[id] = severity;
+                }
+
+                // ⚠ MSBuild files only. docs/plan/00 § Non-negotiables' own row for CC1007 ends
+                // "<NoWarn> in a project file is MSBuild and is still review-enforced" — and that
+                // sentence, in a Markdown table, is what this check flagged the first time it ran
+                // over every tracked file. A gate that fires on the documentation of the rule it
+                // enforces is the false-positive class that gets gates switched off.
+                if (!IsMsBuildFile(file) || !line.Contains("<NoWarn", StringComparison.Ordinal))
+                    continue;
+
+                foreach (var rule in rules.Where(rule => line.Contains(rule, StringComparison.Ordinal)))
+                {
+                    yield return
+                        $"{RootDirectory.GetRelativePathTo(file)}:{i + 1} puts {rule} in <NoWarn>, which "
+                        + "switches it off for the whole project. A false positive is answered with a "
+                        + "[SuppressMessage] carrying a Justification at the site, never with a blanket "
+                        + "exemption a reviewer cannot see the reason for";
+                }
+            }
+        }
+
+        foreach (var rule in rules.Where(rule => !declared.ContainsKey(rule)))
+        {
+            yield return
+                $"{rule} is a rule CyberCloud.Analyzers ships (its AnalyzerReleases table says so) and "
+                + ".editorconfig does not declare dotnet_diagnostic." + rule + ".severity = error. Its "
+                + "declared default is Warning, so it is currently an error only because "
+                + "Directory.Build.props sets TreatWarningsAsErrors — which is a property of the build, "
+                + "not of the rule, and is the wrong thing for a non-negotiable to depend on";
+        }
     }
 
     static bool ReferencesAnalyzer(AbsolutePath project)
