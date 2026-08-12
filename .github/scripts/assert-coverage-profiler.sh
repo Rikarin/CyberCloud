@@ -6,26 +6,42 @@
 # ── ⚠ WHY THIS EXISTS, WHICH IS NOT "TO BE THOROUGH" ─────────────────────────────────────────────
 #
 # dotnet-coverage 18.9.0 fails to instrument by EXITING 0 AND WRITING AN EMPTY REPORT. Observed
-# three ways while writing this:
+# four ways, the last three in containers on an Apple Silicon host:
 #
 #   macOS 15 / arm64                          "No code coverage data available. Profiler was not
 #                                              initialized." → <packages /> , exit 0
-#   Ubuntu 24.04 / x86_64, no libxml2         same line, plus "Verify that glibc (>=2.27), libxml2
+#   Debian 13 / x86_64, no libxml2            same line, plus "Verify that glibc (>=2.27), libxml2
 #                                              and all .NET dependencies are installed"
 #                                              → <packages /> , exit 0
-#   Ubuntu 24.04 / x86_64, libxml2 installed  line-rate="0.667", lines-covered="2" — it works
+#   Debian 13 / x86_64, libxml2 installed     line-rate="0.667", lines-covered="2" — it works
+#   Debian 13 / aarch64, libxml2 installed    "Profiler was not initialized." with NO mention of
+#                                              libxml2 — because libxml2 is not the problem
+#                                              → <packages /> , exit 0
 #
-# The package explains all three: tools/net8.0/any/ has profilers for ubuntu/x64, alpine/x64,
-# macos/x64 and Windows only. THERE IS NO linux-arm64 PROFILER AND NO macos-arm64 ONE.
+# ⚠ The fourth row is the one that catches people out: installing libxml2 on an arm64 runner
+# changes nothing, and the tool stops naming the dependency it named a moment ago.
 #
-# Build.Test.cs § CoverageCollectionIsAvailable knows about the macOS arm64 hole and skips
-# collection there. It does NOT know about the other two, and on Linux it returns true — so a
-# runner without libxml2, or an arm64 Linux runner, collects an empty report, and
-# EnforceCoverageFloor then reports every shipping project at 0 %. That is a red build with a
-# confident, wrong diagnosis: it says "write more tests" when the truth is "the profiler never
-# loaded". This script gets in front of that and says the true thing instead.
+# The package explains all four: tools/net8.0/any/ has profilers for ubuntu/x64, alpine/x64,
+# macos/x64 and Windows only. THERE IS NO linux-arm64 PROFILER AND NO macos-arm64 ONE — both of the
+# package's arm64 directories hold MicrosoftInstrumentationEngine_arm64.dll, a Windows DLL.
 #
-# Costs about fifteen seconds. The alternative costs somebody an afternoon.
+# ⚠ THIS IS NO LONGER THE ONLY THING STANDING BETWEEN A MISSING PROFILER AND A WRONG DIAGNOSIS,
+# and the note matters because the old version of this comment described a hole that is now closed.
+# Build.Test.cs § CoverageCollectionIsAvailable used to be a platform allow-list that knew only
+# about the macOS arm64 hole and returned true on Linux; a runner without libxml2 therefore
+# collected an empty report and the floor reported every shipping project at 0 %. It is now a real
+# probe — it builds these same three lines, collects over them, and requires a line rate strictly
+# between 0 and 1 — and Build.Test.cs § EnforceCoverageFloor additionally refuses to read a floor
+# out of reports that name no assembly at all. So the build is honest about this on its own now,
+# wherever it runs.
+#
+# What this script still buys, and the reason it stays:
+#
+#   * It fails in about fifteen seconds, before ./build.sh Test spends three minutes running the
+#     suites only to end on "not measured".
+#   * It says which of the two causes it is, as a GitHub annotation, with the command to fix it.
+#   * It is a second opinion built from the same three lines, so if it and the build's own probe
+#     ever disagree, the disagreement is about the machine and not about the code.
 
 set -euo pipefail
 

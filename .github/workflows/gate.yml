@@ -69,8 +69,11 @@ jobs:
     name: test
     # ⚠ Pinned to x64, NOT `ubuntu-latest` and never an `-arm` runner. dotnet-coverage 18.9.0 ships
     # no arm64 profiler for Linux — tools/net8.0/any/ in the package has ubuntu/x64, alpine/x64 and
-    # macos/x64 and nothing else — and its way of telling you is to exit 0 with an empty report,
-    # after which the coverage floor reports every project at 0 % and blames the tests.
+    # macos/x64 and nothing else — and its way of telling you is to exit 0 with an empty report.
+    # Measured on linux/arm64: installing libxml2 there changes nothing and the tool stops even
+    # mentioning it. The build now notices that on its own (Build.Test.cs § EnforceCoverageFloor
+    # refuses to read a floor out of a report naming no assembly), so an arm runner would fail
+    # rather than lie — but it would fail every run, which is not a thing to discover on a Tuesday.
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -103,6 +106,28 @@ jobs:
       - name: Prove the suites actually ran
         if: always()
         run: .github/scripts/assert-suites-ran.sh artifacts/test-results "$RUNNER_TEMP/test.log"
+
+      # ⚠ Build.Test.cs already turns "not measured" into a hard failure when Nuke thinks it is on a
+      # server, and that `if (IsServerBuild)` is the whole reason the local run is allowed to be a
+      # warning. Which makes Nuke's host detection load-bearing for the floor: if it ever stopped
+      # recognising GitHub Actions, `Test` would print the ○ warning, exit 0, and the gate would go
+      # green having measured nothing. That is this repository's signature failure — a gate that
+      # stops gating without saying so — so it gets a second reader that depends on nothing but the
+      # log. Cheap: two greps over a file the step above already wrote.
+      - name: The coverage floor was measured, not skipped
+        run: |
+          if grep -q 'coverage floor was NOT ENFORCED' "$RUNNER_TEMP/test.log"; then
+            echo "::error title=Coverage floor::./build.sh Test came back with ○ — it measured no coverage at all — and CI still saw a zero exit code. Build.Test.cs § EnforceCoverageFloor is supposed to make that a hard failure whenever IsServerBuild, so either Nuke stopped detecting GitHub Actions or that branch was removed. docs/plan/23 § Test layers."
+            exit 1
+          fi
+          # Matched without the percentage: `{Floor:P0}` renders "70 %" or "70%" depending on the
+          # culture Serilog happens to be handed, and a gate that depends on that is a gate with a
+          # locale bug waiting in it.
+          if ! grep -q 'shipping project(s) at or above the' "$RUNNER_TEMP/test.log"; then
+            echo "::error title=Coverage floor::./build.sh Test exited 0 without printing the line that says the floor was applied. A green Test that never reached EnforceCoverageFloor is a floor that does not exist. docs/plan/23 § Test layers."
+            exit 1
+          fi
+          grep -E 'Test: coverage floor|shipping project\(s\) at or above|  [✔✘○] CyberCloud' "$RUNNER_TEMP/test.log"
 
       - name: Upload test results and coverage
         if: always()

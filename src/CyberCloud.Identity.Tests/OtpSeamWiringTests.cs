@@ -21,13 +21,16 @@ namespace CyberCloud.Identity.Tests;
 ///         wiring one host and reaching for a convenience that changes the default for all of them.
 ///     </para>
 ///     <para>
-///         ⚠ <b><c>Replace</c> versus <c>TryAdd</c>, which is the other half and is order-dependent
-///         in a way that is easy to get backwards.</b> <c>AddCyberCloudIdentity</c> registers the
-///         refusing seam with <c>TryAdd</c> and <c>AddCommunicationOtpDelivery</c> installs the real
-///         one with <c>Replace</c>, so the pair works whichever order a host writes it in. A plain
-///         <c>Add</c> in the second would win or lose depending on line order — and the losing
-///         arrangement is the one where every OTP fails with a message about wiring that is
-///         <i>present</i>. Both orders are driven below.
+///         ⚠ <b><c>Replace</c> versus <c>TryAdd</c>, and what that pairing does <i>not</i> buy.</b>
+///         <c>AddCyberCloudIdentity</c> registers the refusing seam with <c>TryAdd</c> and
+///         <c>AddCommunicationOtpDelivery</c> installs the real one with <c>Replace</c>, so the pair
+///         works whichever order a host writes it in — both orders are driven below.
+///         <c>AddCommunicationOtpDelivery</c>'s remarks used to justify <c>Replace</c> by saying a
+///         plain <c>Add</c> "would <i>win</i> or lose depending on which order a host happened to
+///         write two lines in". That is false, it was established by swapping <c>Replace</c> for
+///         <c>Add</c> and finding this suite still green, and both are now corrected — see
+///         <see cref="OptingInLeavesNoRefusingSeamBehindIt" /> for the arithmetic and for the
+///         assertion that <i>does</i> separate them.
 ///     </para>
 ///     <para>
 ///         ⚠ <b>No cluster, no grains, no silo started.</b> These are questions about a
@@ -62,32 +65,71 @@ public sealed class OtpSeamWiringTests {
     [InlineData(true)]
     [InlineData(false)]
     public void TheRealSeamWinsWhicheverOrderTheHostWritesTheTwoCallsIn(bool identityFirst) {
-        var seam = Seam(silo => {
-                if (identityFirst) {
-                    silo.AddCyberCloudIdentity().AddCommunicationOtpDelivery(Guid.NewGuid(), Guid.NewGuid());
-                } else {
-                    silo.AddCommunicationOtpDelivery(Guid.NewGuid(), Guid.NewGuid()).AddCyberCloudIdentity();
-                }
-            }
-        );
+        var seam = Seam(silo => Both(silo, identityFirst));
 
         seam.ShouldBeOfType<CommunicationOtpDelivery>(
-            "AddCommunicationOtpDelivery uses Replace and AddCyberCloudIdentity uses TryAdd, so "
-            + "neither order can leave a host with the refusing seam it explicitly opted out of"
+            "a host that opted in must not be left with the refusing seam whichever order it wrote "
+            + "the two calls in"
+        );
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void OptingInLeavesNoRefusingSeamBehindIt(bool identityFirst) {
+        // ⚠ THIS ROW EXISTS BECAUSE THE OBVIOUS VERSION OF IT DOES NOT BITE, AND FINDING THAT OUT
+        // CORRECTED A COMMENT.
+        //
+        // AddCommunicationOtpDelivery's own remarks argue for Replace over Add like this: "called
+        // before it, a plain Add here would be silently overridden — no, worse, it would WIN or lose
+        // depending on which order a host happened to write two lines in". That is not true, and
+        // swapping Replace for Add and re-running the row above is how it was established:
+        //
+        //   TryAdd(refusing) then Add(real) -> two descriptors, and GetRequiredService returns the
+        //                                      LAST, so the real one wins;
+        //   Add(real) then TryAdd(refusing) -> TryAdd is a no-op once any descriptor for the service
+        //                                      type exists, so the real one is the only one.
+        //
+        // Both orders resolve the real seam under Add as well as under Replace, so a resolution
+        // assertion cannot tell them apart. What Replace actually buys is the count: exactly one
+        // descriptor. That matters because IServiceCollection is not only resolved singly — anything
+        // taking IEnumerable<IOtpDeliverySeam>, or calling GetServices, would find the refusing seam
+        // sitting behind the real one and could pick either. THAT is the assertion, and it is the one
+        // that goes red under Add.
+        var services = Compose(silo => Both(silo, identityFirst));
+
+        services.Count(x => x.ServiceType == typeof(IOtpDeliverySeam)).ShouldBe(
+            1,
+            "a host that opted in should have one IOtpDeliverySeam registration, not the real one "
+            + "stacked on top of a refusing one that GetServices would still hand out"
         );
     }
 
     [Fact]
-    public void TheRefusingSeamNeedsNothingTheRealOneNeeds() {
-        // ⚠ Asserted by the absence below rather than in prose: Resolve() registers no IMessageSender,
-        // so a default that had quietly become CommunicationOtpDelivery would throw here instead of
-        // returning. That is what makes the first test above a real assertion rather than a tautology
-        // about whichever type happened to be registered.
-        var services = new ServiceCollection();
+    public void AnUnwiredSiloResolvesItsSeamWithNoCommunicationModuleInTheContainerAtAll() {
+        // ⚠ NO IMessageSender HERE, AND THE ABSENCE IS THE ASSERTION. Every other row in this class
+        // goes through Compose(), which supplies a double so the WIRED cases can construct. This one
+        // deliberately does not: an unwired silo must be able to resolve its IOtpDeliverySeam without
+        // CyberCloud.Communication being present, because such a silo has not called
+        // AddCyberCloudCommunication and has no IMessageSender to give.
+        //
+        // That is what makes "the default is UnavailableOtpDelivery" load-bearing rather than
+        // cosmetic. If the default ever became CommunicationOtpDelivery, this resolution throws an
+        // InvalidOperationException naming IMessageSender — at the first ACTIVATION on a real silo,
+        // not at start-up, and with a stack trace in place of the sentence UnavailableOtpDelivery
+        // was written to hand an operator.
+        var builder = new ServiceCollectionSiloBuilder();
+        builder.AddCyberCloudIdentity();
 
-        services.Any(x => x.ServiceType == typeof(IMessageSender)).ShouldBeFalse();
+        builder.Services.Any(x => x.ServiceType == typeof(IMessageSender)).ShouldBeFalse(
+            "AddCyberCloudIdentity must not drag the sending module into a silo that did not ask "
+            + "for it — module independence, docs/plan/17"
+        );
 
-        Seam(silo => silo.AddCyberCloudIdentity()).ShouldNotBeNull();
+        builder.Services
+            .BuildServiceProvider()
+            .GetRequiredService<IOtpDeliverySeam>()
+            .ShouldBeOfType<UnavailableOtpDelivery>();
     }
 
     /// <summary>
@@ -95,7 +137,12 @@ public sealed class OtpSeamWiringTests {
     ///     came out.
     /// </summary>
     /// <param name="compose">What the host calls.</param>
-    static IOtpDeliverySeam Seam(Action<ISiloBuilder> compose) {
+    static IOtpDeliverySeam Seam(Action<ISiloBuilder> compose) =>
+        Compose(compose).BuildServiceProvider().GetRequiredService<IOtpDeliverySeam>();
+
+    /// <summary>Composes a silo the way a host would and hands back what it registered.</summary>
+    /// <param name="compose">What the host calls.</param>
+    static IServiceCollection Compose(Action<ISiloBuilder> compose) {
         var builder = new ServiceCollectionSiloBuilder();
         compose(builder);
 
@@ -105,7 +152,18 @@ public sealed class OtpSeamWiringTests {
         // comes from AddCyberCloudCommunication, on a silo that has the module.
         builder.Services.AddSingleton<IMessageSender>(new UnusedMessageSender());
 
-        return builder.Services.BuildServiceProvider().GetRequiredService<IOtpDeliverySeam>();
+        return builder.Services;
+    }
+
+    /// <summary>Both calls a host that wants OTP delivery makes, in one order or the other.</summary>
+    /// <param name="silo">The silo being composed.</param>
+    /// <param name="identityFirst">Whether <c>AddCyberCloudIdentity</c> is written first.</param>
+    static void Both(ISiloBuilder silo, bool identityFirst) {
+        if (identityFirst) {
+            silo.AddCyberCloudIdentity().AddCommunicationOtpDelivery(Guid.NewGuid(), Guid.NewGuid());
+        } else {
+            silo.AddCommunicationOtpDelivery(Guid.NewGuid(), Guid.NewGuid()).AddCyberCloudIdentity();
+        }
     }
 
     /// <summary>

@@ -11,6 +11,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using System.Xml.Linq;
 using Nuke.Common;
 using Nuke.Common.IO;
 using Nuke.Common.Tooling;
@@ -300,6 +301,11 @@ partial class Build
 
         var failures = new ConcurrentBag<string>();
 
+        // ⚠ Asked once, here, and not inside the loop. CoverageCollectionIsAvailable now runs a real
+        // dotnet-coverage collection to answer, and doing that from N threads at once would race on
+        // the memo field and build the same probe project N times.
+        var withCoverage = collectCoverage && CoverageCollectionIsAvailable;
+
         Parallel.ForEach(
             projects,
             new ParallelOptions { MaxDegreeOfParallelism = Environment.ProcessorCount },
@@ -321,7 +327,7 @@ partial class Build
                     + $"--project {project} -- --minimum-expected-tests 1 --report-xunit-trx "
                     + $"--report-xunit-trx-filename {name}.trx --results-directory {TestResultsDirectory}";
 
-                var arguments = collectCoverage && CoverageCollectionIsAvailable
+                var arguments = withCoverage
                     ? $"dotnet-coverage collect --nologo --output-format cobertura "
                       + $"--output {CoverageDirectory / $"{name}.cobertura.xml"} -- dotnet {run}"
                     : run;
@@ -422,28 +428,255 @@ partial class Build
     readonly string? CoverageReportFile;
 
     /// <summary>
-    ///     Whether <c>dotnet-coverage</c> can actually instrument on this machine.
+    ///     Whether <c>dotnet-coverage</c> can actually instrument on this machine, answered by
+    ///     instrumenting something and looking at what came back.
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>dotnet-coverage 18.9.0 ships no macOS arm64 profiler, and it does not say so.</b>
-    ///         Verified by inspecting the tool package: <c>tools/net8.0/any/macos/</c> contains only
-    ///         <c>x64</c>, and the one arm64 native engine in the package
-    ///         (<c>arm64/MicrosoftInstrumentationEngine_arm64.dll</c>) is a Windows DLL. A collection
-    ///         run on an Apple Silicon machine therefore succeeds, exits 0, writes a report with
-    ///         <c>number of packages: 0</c>, and prints one line — "No code coverage data available.
-    ///         Profiler was not initialized" — in the middle of the test output.
+    ///         ⚠ <b>dotnet-coverage 18.9.0 fails to instrument by exiting 0 and writing
+    ///         <c>&lt;packages /&gt;</c>.</b> Nothing in the exit code, and nothing in the report's
+    ///         schema, separates that from a genuine run. The one line it prints —
+    ///         "No code coverage data available. Profiler was not initialized" — goes to stdout in
+    ///         the middle of the test output.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>Which is exactly the shape of a gate that silently stops gating</b>, and the
-    ///         reason this is a probe rather than a try/catch: an empty report analysed against the
-    ///         floor would report every project at 0 % and fail for the wrong reason, while a
-    ///         swallowed error would pass. Neither is the truth, which is "not measured here".
+    ///         ⚠ <b>This used to be a platform allow-list, and the allow-list was wrong.</b> It
+    ///         excluded macOS/arm64 and returned <see langword="true" /> everywhere else, which is
+    ///         false on at least two other platforms. Measured, all four cells, with the same
+    ///         three-line probe this property builds:
+    ///     </para>
+    ///     <list type="table">
+    ///         <item>
+    ///             <term>osx-arm64</term>
+    ///             <description>
+    ///                 <c>&lt;packages /&gt;</c>, exit 0. No macOS arm64 profiler in the package.
+    ///             </description>
+    ///         </item>
+    ///         <item>
+    ///             <term>linux-x64, no libxml2</term>
+    ///             <description>
+    ///                 <c>&lt;packages /&gt;</c>, exit 0, and the one hint: "Verify that glibc
+    ///                 (&gt;=2.27), libxml2 and all .NET dependencies are installed". The
+    ///                 <c>mcr.microsoft.com/dotnet/sdk:10.0</c> image does not carry libxml2, and
+    ///                 neither does the GitHub runner image's declared package set.
+    ///             </description>
+    ///         </item>
+    ///         <item>
+    ///             <term>linux-x64, libxml2 installed</term>
+    ///             <description><c>line-rate="0.667"</c> — the only cell that works.</description>
+    ///         </item>
+    ///         <item>
+    ///             <term>linux-arm64, libxml2 installed</term>
+    ///             <description>
+    ///                 <c>&lt;packages /&gt;</c>, exit 0, and no mention of libxml2 at all, because
+    ///                 libxml2 is not the problem. There is no linux-arm64 profiler either.
+    ///             </description>
+    ///         </item>
+    ///     </list>
+    ///     <para>
+    ///         The package explains all four: <c>tools/net8.0/any/</c> carries native profilers for
+    ///         <c>ubuntu/x64</c>, <c>alpine/x64</c> and <c>macos/x64</c> only. Its two arm64
+    ///         directories hold <c>MicrosoftInstrumentationEngine_arm64.dll</c> — a Windows DLL.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ So the honest question is not "which platform is this?" but "does it work here?",
+    ///         and the second one is answerable in about two seconds. An allow-list has to be updated
+    ///         every time somebody finds a new way for the tool to be missing; a probe finds the next
+    ///         one on its own. <c>.github/scripts/assert-coverage-profiler.sh</c> asks the same
+    ///         question one layer up, before the suites run, and is deliberately built the same way
+    ///         so the two can be compared line by line.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ A wrong answer here is survivable in one direction only, and it is the right one:
+    ///         a probe that wrongly says "no" skips collection, which leaves no report, which
+    ///         <see cref="EnforceCoverageFloor" /> turns into a hard failure on CI. A probe that
+    ///         wrongly says "yes" is caught after the fact by the same method, which refuses to read
+    ///         a floor out of a report that mentions no assembly at all.
     ///     </para>
     /// </remarks>
-    static bool CoverageCollectionIsAvailable =>
-        !(EnvironmentInfo.Platform == PlatformFamily.OSX
-            && System.Runtime.InteropServices.RuntimeInformation.OSArchitecture == System.Runtime.InteropServices.Architecture.Arm64);
+    bool CoverageCollectionIsAvailable => coverageCollectionIsAvailable ??= ProbeCoverageCollection();
+
+    bool? coverageCollectionIsAvailable;
+
+    /// <summary>Where the probe assembly is written, built, and collected over.</summary>
+    /// <remarks>
+    ///     Beside the coverage reports rather than inside <see cref="CoverageDirectory" />, which
+    ///     <c>Test</c> cleans before every run — the probe survives so the second run pays for the
+    ///     collection only and not the compile.
+    /// </remarks>
+    AbsolutePath CoverageProbeDirectory => ArtifactsDirectory / "coverage-probe";
+
+    /// <summary>
+    ///     Builds a three-line assembly, collects coverage over it, and reports whether the numbers
+    ///     came back.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>One covered line and one uncovered line, on purpose.</b> A probe whose every line
+    ///         is covered reports <c>line-rate="1"</c>, which is also what the empty report at the
+    ///         top of a broken run reports. Requiring a rate strictly between 0 and 1 means the probe
+    ///         cannot pass by accident — the profiler has to have both found the assembly and
+    ///         recorded which lines actually ran.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ The three stopper files are what keep the probe a probe. <c>artifacts/</c> is inside
+    ///         the repository, so without them MSBuild walks up into the root
+    ///         <c>Directory.Build.props</c> and the probe inherits central package management,
+    ///         analyzers, and <c>TreatWarningsAsErrors</c> — at which point a probe failure would
+    ///         mean "the repository's analyzer settings changed", not "the profiler is missing".
+    ///     </para>
+    /// </remarks>
+    bool ProbeCoverageCollection()
+    {
+        var probe = CoverageProbeDirectory;
+        var assembly = probe / "bin" / "Probe.dll";
+        var report = probe / "probe.cobertura.xml";
+
+        WriteProbeSources(probe);
+
+        var buildExitCode = 0;
+
+        // Quiet while it works — this is three lines of scaffolding, not something a reader of a
+        // green `Test` needs to see. The output is kept so a failure can print it.
+        var buildOutput = DotNetTasks.DotNet(
+            $"build {probe / "Probe.csproj"} --configuration Release --output {probe / "bin"} --nologo",
+            workingDirectory: probe,
+            logOutput: false,
+            logInvocation: false,
+            exitHandler: process => buildExitCode = process.ExitCode);
+
+        if (buildExitCode != 0 || !assembly.FileExists())
+        {
+            // ⚠ Printed, not swallowed. "Could not build the probe" with no compiler output is a
+            // dead end, and the reader has no probe project to go and build by hand — this method
+            // wrote it.
+            foreach (var line in buildOutput.TakeLast(20))
+                Log.Warning("  {Line}", line.Text);
+
+            Log.Warning(
+                "Test: could not build the coverage probe in {Probe} (exit {Exit}), so whether "
+                + "dotnet-coverage {Version} works here is unknown. Treating it as unavailable, which "
+                + "makes the floor say it was not measured rather than guess a number.",
+                probe,
+                buildExitCode,
+                DotNetCoverageVersion);
+
+            return false;
+        }
+
+        report.DeleteFile();
+
+        // ⚠ No exit-code check: the failure this exists to catch exits 0. The report is the answer.
+        DotNetTasks.DotNet(
+            $"dotnet-coverage collect --nologo --output-format cobertura --output {report} "
+            + $"-- dotnet {assembly}",
+            workingDirectory: RootDirectory,
+            logOutput: false,
+            logInvocation: false,
+            exitHandler: process => process.ExitCode);
+
+        if (!report.FileExists())
+        {
+            Log.Warning(
+                "Test: dotnet-coverage {Version} wrote no report for the probe at all on {Platform}. "
+                + "Coverage will not be collected.",
+                DotNetCoverageVersion,
+                EnvironmentInfo.Platform);
+
+            return false;
+        }
+
+        var probed = CoverageReport.Read(report).Modules
+            .FirstOrDefault(x => x.Covered > 0 && x.Covered < x.Coverable);
+
+        if (probed is null)
+        {
+            Log.Warning(
+                "Test: dotnet-coverage {Version} cannot instrument on {Platform}/{Architecture} — it "
+                + "exited 0 and wrote a report with nothing in it. The coverage floor will report "
+                + "that it was not measured rather than report every project at 0 %. On Linux/x64 "
+                + "the usual cause is a missing libxml2 (apt-get install -y libxml2); on any arm64 "
+                + "host the tool ships no profiler at all and an x64 runner is the only fix. "
+                + "Build.Test.cs § CoverageCollectionIsAvailable has the measured matrix.",
+                DotNetCoverageVersion,
+                EnvironmentInfo.Platform,
+                System.Runtime.InteropServices.RuntimeInformation.OSArchitecture);
+
+            return false;
+        }
+
+        Log.Information(
+            "Test: dotnet-coverage {Version} instruments correctly here — the probe came back at "
+            + "{Rate:P1} ({Covered} of {Coverable} lines), so the coverage floor below is measured.",
+            DotNetCoverageVersion,
+            probed.Rate,
+            probed.Covered,
+            probed.Coverable);
+
+        return true;
+    }
+
+    /// <summary>Writes the probe's sources, leaving the timestamps alone when nothing changed.</summary>
+    /// <remarks>
+    ///     Rewriting an identical file would re-date it and cost a rebuild on every <c>Test</c> run.
+    /// </remarks>
+    void WriteProbeSources(AbsolutePath probe)
+    {
+        probe.CreateDirectory();
+
+        // The framework the rest of the tree targets, read rather than repeated — a probe pinned to
+        // a version this machine no longer has installed would fail to build and read as "the
+        // profiler is missing", which is a different and much more confusing sentence.
+        var targetFramework =
+            XDocument.Load(RootDirectory / "Directory.Build.props")
+                .Descendants("TargetFramework")
+                .FirstOrDefault()?.Value
+            ?? throw new InvalidOperationException(
+                "Directory.Build.props declares no <TargetFramework>, so the coverage probe cannot "
+                + "be pinned to the same one as the rest of the tree.");
+
+        // ⚠ Deliberately the same three lines as .github/scripts/assert-coverage-profiler.sh, so a
+        // disagreement between this probe and that one is a real disagreement about the machine.
+        Write(probe / "Program.cs", """
+            public static class Probe
+            {
+                public static int Covered(int n) => n > 0 ? n * 2 : 0;
+                public static int NeverCalled(int n) => n - 1;
+                public static void Main() => System.Console.WriteLine(Covered(21));
+            }
+
+            """);
+
+        Write(probe / "Probe.csproj", $"""
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <OutputType>Exe</OutputType>
+                <TargetFramework>{targetFramework}</TargetFramework>
+                <AssemblyName>Probe</AssemblyName>
+                <RootNamespace>Probe</RootNamespace>
+                <!-- Portable PDBs beside the assembly: no symbols, nothing to instrument. -->
+                <DebugType>portable</DebugType>
+                <Optimize>false</Optimize>
+                <EnableDefaultItems>true</EnableDefaultItems>
+                <GenerateDocumentationFile>false</GenerateDocumentationFile>
+                <EnableNETAnalyzers>false</EnableNETAnalyzers>
+                <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+              </PropertyGroup>
+            </Project>
+
+            """);
+
+        // The stoppers. MSBuild and NuGet both walk up from the project directory, and artifacts/ is
+        // inside the repository.
+        foreach (var stopper in new[] { "Directory.Build.props", "Directory.Build.targets", "Directory.Packages.props" })
+            Write(probe / stopper, "<Project />\n");
+
+        static void Write(AbsolutePath path, string content)
+        {
+            if (!path.FileExists() || path.ReadAllText() != content)
+                path.WriteAllText(content);
+        }
+    }
 
     /// <summary>
     ///     Merges what the run collected and fails any project under the floor.
@@ -453,6 +686,12 @@ partial class Build
     ///     happens to mention. Those two lists differ in the case the floor exists for: a project
     ///     nothing tests produces no package element at all, so a report-driven floor would give it a
     ///     pass — see CoverageReport.cs § Violations.
+    ///     <para>
+    ///         ⚠ There are three answers here, not two, and collapsing the third into either of the
+    ///         others is this file's own worst failure: <b>every project passed</b>,
+    ///         <b>these projects are under-covered</b>, and <b>nothing here measured anything</b>.
+    ///         The third one is ○ — neither a tick nor a cross — and it is a hard failure on CI.
+    ///     </para>
     /// </remarks>
     void EnforceCoverageFloor()
     {
@@ -462,17 +701,45 @@ partial class Build
                 ? CoverageDirectory.GlobFiles("*.cobertura.xml").OrderBy(x => x.Name, StringComparer.Ordinal).ToList()
                 : [];
 
-        if (reports.Count == 0)
+        var coverage = reports.Count == 0
+            ? null
+            : CoverageReport.Read(reports.Select(x => x.ToString()).ToArray());
+
+        // ⚠ THE TRIPWIRE. A report that mentions no assembly at all is what dotnet-coverage writes
+        // when its profiler never loaded — <packages /> , exit 0, on three of the four platforms in
+        // § CoverageCollectionIsAvailable. Reading a floor out of it would report every shipping
+        // project at 0 % and blame the tests, which is a red build with a confident wrong diagnosis.
+        //
+        // ⚠ It is also the backstop for the probe. The probe decides whether to collect at all; this
+        // decides whether what came back means anything, and it is the one of the two that runs
+        // against the real suites. A probe that passes on a machine where the real collection then
+        // fails — a profiler that loads for a hello-world and not for a 40-assembly test host, an
+        // environment variable set for one and not the other — lands here.
+        //
+        // Zero, not "fewer than expected": 39 suites that between them touch every assembly in the
+        // tree cannot honestly produce a report naming none of them, and any threshold above zero
+        // would be a number nobody could defend.
+        var measuredNothing = coverage is null || coverage.MentionedAssemblies.Count == 0;
+
+        if (measuredNothing)
         {
+            var why = reports.Count == 0
+                ? CoverageCollectionIsAvailable
+                    ? $"dotnet-coverage {DotNetCoverageVersion} produced no report, which on a "
+                      + "machine where the probe passed means the collection itself failed; its "
+                      + "output is above"
+                    : $"dotnet-coverage {DotNetCoverageVersion} cannot instrument on "
+                      + $"{EnvironmentInfo.Platform}/{System.Runtime.InteropServices.RuntimeInformation.OSArchitecture}, "
+                      + "which the probe above established by trying it"
+                : $"{reports.Count} report(s) came back naming no assembly at all, so "
+                  + $"dotnet-coverage {DotNetCoverageVersion}'s profiler did not load for the suites "
+                  + "even though the probe said it would. On Linux/x64 install libxml2; on arm64 "
+                  + "there is no profiler to load. Build.Test.cs § CoverageCollectionIsAvailable";
+
             var message =
                 "Test: the coverage floor was NOT ENFORCED. docs/plan/23 § Test layers requires "
                 + $"≥ {CoverageFloor:P0} per project and nothing here measured it — "
-                + (CoverageCollectionIsAvailable
-                    ? $"dotnet-coverage {DotNetCoverageVersion} produced no report, which on a "
-                      + "platform it supports means the collection itself failed; its output is above"
-                    : $"dotnet-coverage {DotNetCoverageVersion} ships no profiler for "
-                      + $"{EnvironmentInfo.Platform}/arm64, and Build.Test.cs "
-                      + "§ CoverageCollectionIsAvailable has the evidence")
+                + why
                 + ". ○, not ✔: this run says nothing about coverage.";
 
             // ⚠ A warning locally and a failure on CI, deliberately asymmetric. Failing every Apple
@@ -492,8 +759,8 @@ partial class Build
             return;
         }
 
-        var coverage = CoverageReport.Read(reports.Select(x => x.ToString()).ToArray());
         var shipping = ShippingAssemblyPaths.Select(x => x.Project.NameWithoutExtension).ToList();
+        var nothingToCover = ProjectsWithNothingToCover(coverage!.MentionedAssemblies);
 
         Log.Information(
             "Test: coverage floor {Floor:P0} per project, over {Reports} report(s) — docs/plan/23 § Test layers",
@@ -511,14 +778,25 @@ partial class Build
                 module.Coverable);
         }
 
-        var violations = coverage.Violations(shipping, CoverageFloor);
+        foreach (var project in nothingToCover.OrderBy(x => x, StringComparer.Ordinal))
+        {
+            Log.Information(
+                "  {Marker} {Assembly,-46} {Note}",
+                "○",
+                project,
+                "no coverable line to instrument — CoverageReport.cs § CoverableLines");
+        }
+
+        var violations = coverage.Violations(shipping, CoverageFloor, nothingToCover);
 
         if (violations.Count == 0)
         {
             Log.Information(
-                "Test: {Count} shipping project(s) at or above the {Floor:P0} floor",
+                "Test: {Count} shipping project(s) at or above the {Floor:P0} floor ({Empty} of them "
+                + "with no executable code at all)",
                 shipping.Count,
-                CoverageFloor);
+                CoverageFloor,
+                nothingToCover.Count);
 
             return;
         }
@@ -532,6 +810,44 @@ partial class Build
             + "fix is a test, never an exclusion — a floor with a list of exemptions is a floor "
             + "shaped like whatever the tree happened to be on the day it was added.");
     }
+
+    /// <summary>
+    ///     The shipping projects that are missing from the report because there is nothing in them to
+    ///     instrument, as opposed to because no test loaded them.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>A project with no executable code and a project nothing tests look identical in a
+    ///         Cobertura report</b> — neither gets a <c>&lt;package&gt;</c> element — and one of them
+    ///         deserves a pass. Four projects in this tree are the first kind:
+    ///         <c>CyberCloud.Providers.*.Application</c>, each one nothing but an ABP module
+    ///         declaration with no body. <c>dotnet-coverage instrument</c> refuses all four with
+    ///         <c>Reason: optimized_or_instrumented</c>, and the floor used to read that silence as
+    ///         0 % — for projects whose three tests pass.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Only projects already absent from the report are asked.</b> A project that shows
+    ///         up with a real number is judged on that number, so this can never lift one over the
+    ///         floor. The set it produces is the single place the floor can be switched off, which is
+    ///         why the evidence behind it is a count of sequence points in a compiled assembly rather
+    ///         than a name, a folder, or a list.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ An assembly this cannot read — missing, or built by some other run — is <b>not</b>
+    ///         excused. <see cref="CoverageReport.CoverableLines" /> answers <see langword="null" />
+    ///         there, and an unanswered question that turns into a pass is the failure this whole
+    ///         file is written against.
+    ///     </para>
+    /// </remarks>
+    /// <param name="mentioned">The assemblies the report does name, which need no examining.</param>
+    // HashSet rather than IReadOnlySet: CA1859 is an error here and this is a private helper — the
+    // same concession Build.Test.cs § ProjectsIn already makes.
+    HashSet<string> ProjectsWithNothingToCover(IReadOnlySet<string> mentioned) =>
+        ShippingAssemblyPaths
+            .Where(x => !mentioned.Contains(x.Project.NameWithoutExtension))
+            .Where(x => CoverageReport.CoverableLines(x.Assembly) == 0)
+            .Select(x => x.Project.NameWithoutExtension)
+            .ToHashSet(StringComparer.Ordinal);
 
     /// <summary>The pinned version, for the message. .config/dotnet-tools.json is the pin.</summary>
     const string DotNetCoverageVersion = "18.9.0";
