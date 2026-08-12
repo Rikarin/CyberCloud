@@ -104,10 +104,30 @@ public sealed class StorageProvider : IResourceProvider {
                 secret: true,
                 response: StorageAccounts.ListKeysResponse
             )
+            // ⚠ THE SHORT NAME IS `objectstore` AND THE OBVIOUS `storage` IS A HARD COLLISION, WHICH
+            // NOTHING IN THE REGISTRY CHECKS. docs/plan/21 § Grammar's alias table would spell this
+            // `storage`, exactly as it spells `postgres` for `dbforpostgresql server`. But
+            // `CliEmitter` derives the GROUP key from the provider namespace, so this namespace's
+            // group is already `storage` — and System.CommandLine's `ValidTokens` builds ONE
+            // dictionary of every command token and every alias in the whole tree, so a group and an
+            // alias that share a string throw `ArgumentException: An item with the same key has
+            // already been added` on the first parse of any command line.
+            //
+            // ⚠ IT IS THE FIRST NAMESPACE WHOSE NATURAL SHORT NAME IS ITS OWN GROUP NAME, and the
+            // four before it are near misses rather than a design: `postgres` against
+            // `dbforpostgresql`, `valkey` against `cache`, `kafka`/`nats` against `messaging`,
+            // `widget` against `sample`. `ProviderRegistry.Build` refuses a DUPLICATE short name —
+            // IResourceTypeBuilder.Display's remarks say so, and say the point is that a duplicate is
+            // "a silo-start failure rather than a CLI that resolves one of two verbs" — and it does
+            // not compare a short name against a group name at all. `DerivedSurfaces.CliProblems`
+            // does not either. What caught it is `cyc.Tests`' EveryVerbInTheTreeIsReachable, which
+            // reports it as an ArgumentException out of System.CommandLine naming neither the
+            // provider nor the string. Recorded at charts/managed/seaweedfs/conformance.yaml § owed,
+            // `short-name-collides-with-the-group`.
             .Display(
                 "Storage account",
                 "Storage accounts",
-                shortName: "storage",
+                shortName: "objectstore",
                 summary: "A managed S3-compatible object store on SeaweedFS, with replicated volume "
                 + "servers, a filer and a scalable S3 gateway."
             )

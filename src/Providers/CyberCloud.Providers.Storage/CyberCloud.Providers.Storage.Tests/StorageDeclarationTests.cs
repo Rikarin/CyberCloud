@@ -75,6 +75,34 @@ public sealed class StorageDeclarationTests {
     }
 
     [Fact]
+    public void TheShortNameIsNotTheGroupNameTheNamespaceAlreadyProduces() {
+        // ⚠ THE COLLISION THIS PROVIDER FOUND, AND THE ONE THE ALIAS TABLE WALKS STRAIGHT INTO.
+        // docs/plan/21 § Grammar's table would spell this alias `storage`, exactly as it spells
+        // `postgres` for `dbforpostgresql server`. CliEmitter derives the GROUP key from the provider
+        // namespace, so `CyberCloud.Storage` is already the group `storage` — and System.CommandLine's
+        // ValidTokens builds ONE dictionary over every command token AND every alias in the tree, so
+        // the two throw `An item with the same key has already been added. Key: storage` on the first
+        // parse of any command line, before any verb runs.
+        //
+        // ⚠ NOTHING IN THE REGISTRY CHECKS THIS. ProviderRegistry.Build refuses a DUPLICATE short
+        // name and does not compare one against a group name; DerivedSurfaces.CliProblems does not
+        // either. cyc.Tests' EveryVerbInTheTreeIsReachable catches it and reports an ArgumentException
+        // out of System.CommandLine that names neither the provider nor the string — which is why the
+        // check is worth having here, where the fix is.
+        var registry = ProviderRegistry.Build([new StorageProvider()]);
+        registry.TryGetType(StorageAccounts.Type, out var registration).ShouldBeTrue();
+
+        // ⚠ A LITERAL, not `ProviderNamespace.Split('.')[^1].ToLowerInvariant()`. Deriving the group
+        // name the same way the emitter does would compare the emitter to itself, which is the shape
+        // that let a casing sabotage stay green on an earlier provider.
+        registration.Display.Alias.ShouldNotBe(
+            "storage",
+            "the short name equals the group name CyberCloud.Storage produces, so every `cyc` "
+            + "invocation throws before it parses."
+        );
+    }
+
+    [Fact]
     public void EveryDeclaredDefaultIsAValueTheApiWouldAccept() {
         // ⚠ SchemaProperty checks its own DefaultJson against its own constraints at construction, so
         // a default outside its @range cannot reach here. What THAT check cannot see is the whole
