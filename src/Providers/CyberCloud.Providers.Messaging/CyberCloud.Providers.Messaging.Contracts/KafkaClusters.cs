@@ -146,20 +146,26 @@ public static class KafkaClusters {
     /// </remarks>
     public const string ClusterLabel = "strimzi.io/cluster";
 
-    // ── The constraint vocabularies, as CyberCloud.DBforPostgreSQL/servers declares them ──────────
+    // ── The constraint vocabularies, now shared by code rather than by shape ──────────────────────
     //
-    // ⚠ These are deliberately the same strings as PostgresServers'. They are NOT shared through a
-    // common assembly, and that is rule 2 of docs/plan/03 § Assembly graph rules rather than an
-    // oversight: no Providers.* assembly may reference another, not even .Contracts, and a `const`
-    // one would not even show up in the AssemblyRef table. A platform-wide Kubernetes-quantity
-    // pattern belongs in CyberCloud.ResourceManager.Contracts next to SchemaFormat when a third
-    // provider needs it; two copies is not yet evidence of a missing seam, three is.
+    // ⚠ The note that stood here said a platform-wide quantity pattern belonged in
+    // CyberCloud.ResourceManager.Contracts "when a third provider needs it; two copies is not yet
+    // evidence of a missing seam, three is". Three arrived, and so did the evidence: an author who
+    // needed to turn one of these strings into a number found a provider's copy of the grammar and
+    // wrote a second quantity parser beside it, in `double`, for something the platform already
+    // parsed exactly in `decimal`.
+    //
+    // The seam is KubeQuantity, and it is beside the parser rather than merely somewhere shared —
+    // that adjacency is the part that stops the next author repeating it. Rule 2 of
+    // docs/plan/03 § Assembly graph rules is untouched: KubeQuantity is in
+    // CyberCloud.ResourceManager.Contracts, which this project already references and every provider
+    // may, so no Providers.* edge is created.
 
-    /// <summary>A Kubernetes quantity — <c>500m</c>, <c>2</c>, <c>4Gi</c>. Anchored by the validator.</summary>
-    public const string QuantityPattern = @"\d+(\.\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?";
+    /// <inheritdoc cref="KubeQuantity.Pattern" />
+    public const string QuantityPattern = KubeQuantity.Pattern;
 
-    /// <summary>A quantity or the empty string, for a field whose default is "take it from the preset".</summary>
-    public const string OptionalQuantityPattern = "(" + QuantityPattern + ")?";
+    /// <inheritdoc cref="KubeQuantity.OptionalPattern" />
+    public const string OptionalQuantityPattern = KubeQuantity.OptionalPattern;
 
     /// <summary>An IPv4 CIDR block. ⚠ Written down, tested, and enforced by nothing — see below.</summary>
     /// <remarks>
