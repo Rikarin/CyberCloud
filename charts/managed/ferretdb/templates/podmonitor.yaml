@@ -1,0 +1,34 @@
+{{- if .Values.monitoring.enabled }}
+{{/*
+docs/plan/12 § The pattern, once, piece 6's SECOND branch — "hand-write one into the chart only when
+there is no operator to ask."
+
+⚠ THIS CHART IS THE FIRST IN THE CATALOGUE TO TAKE BOTH BRANCHES AT ONCE. templates/cluster.yaml
+asks CloudNativePG for the PostgreSQL half through spec.monitoring.enablePodMonitor; there is no
+FerretDB operator at all, so this half is written here. One resource, one `monitoring.enabled` flag,
+two mechanisms.
+
+⚠ AND THE HAZARD THE SECOND BRANCH EXISTS TO WARN ABOUT CANNOT ARISE HERE, for exactly the reason
+charts/managed/nats proved. That warning is that a hand-written scrape hard-codes somebody else's pod
+labels and goes quiet without failing when the operator moves one. These labels are written by
+templates/deployment.yaml onto pods created by templates/deployment.yaml. Hand-writing a scrape is
+safe exactly when there is no operator, which is the same condition that forces the branch.
+
+⚠ THE PATH IS /debug/metrics AND NOT /metrics. internal/util/debug/debug.go registers the handler at
+`http.Handle("/debug/metrics", …)`. A PodMonitor with the conventional path scrapes a 404 forever
+without failing, which is the quiet-scrape failure this whole piece exists to avoid.
+*/}}
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: {{ include "ferretdb.name" . }}
+  labels:
+    {{- include "ferretdb.platformLabels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "ferretdb.selectorLabels" . | nindent 6 }}
+  podMetricsEndpoints:
+    - port: debug
+      path: /debug/metrics
+{{- end }}

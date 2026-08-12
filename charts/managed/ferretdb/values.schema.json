@@ -1,0 +1,298 @@
+{
+  "$id": "https://schema.cybercloud.io/charts/ferretdb/values.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "The configuration surface of the ferretdb chart. GENERATED from values.yaml by `./build.sh Charts` and diffed in CI — docs/plan/03 § charts/. Edit values.yaml, never this file. Members carrying `x-cybercloud-api: false` are chart or platform plumbing and are not part of the resource body.",
+  "properties": {
+    "backup": {
+      "additionalProperties": false,
+      "description": "Backup to an object store, using CloudNativePG's barman-cloud. docs/plan/12: because it is PostgreSQL underneath, backup and point-in-time recovery are the operator's.",
+      "properties": {
+        "destinationPath": {
+          "default": "",
+          "description": "Object-store URL for base backups and WAL, for example s3://tenant-bucket/documentdb. Empty means no backup configuration is rendered, whatever enabled says.",
+          "examples": [
+            "s3://tenant-bucket/documentdb"
+          ],
+          "pattern": "^(?:(s3://[a-z0-9][a-z0-9.\\-]*[a-z0-9](/[^\\s]*)?)?)$",
+          "type": "string",
+          "x-cybercloud-order": 2,
+          "x-cybercloud-pointer": "/properties/backup/destinationPath"
+        },
+        "enabled": {
+          "default": false,
+          "description": "Whether continuous backup and WAL archiving run. ⚠ Off by default, and only because there is no destination to default to: turning it on without a destinationPath below renders no backup configuration at all rather than an empty one, so the two properties have to be set together.",
+          "type": "boolean",
+          "x-cybercloud-order": 0,
+          "x-cybercloud-pointer": "/properties/backup/enabled"
+        },
+        "retentionDays": {
+          "default": 14,
+          "description": "How long base backups and WAL are kept. The point-in-time-recovery window is this number of days.",
+          "maximum": 365,
+          "minimum": 1,
+          "type": "integer",
+          "x-cybercloud-order": 1,
+          "x-cybercloud-pointer": "/properties/backup/retentionDays"
+        }
+      },
+      "type": "object",
+      "x-cybercloud-order": 5,
+      "x-cybercloud-pointer": "/properties/backup"
+    },
+    "gateway": {
+      "additionalProperties": false,
+      "description": "The FerretDB gateway — what speaks the MongoDB wire protocol.",
+      "properties": {
+        "replicas": {
+          "default": 2,
+          "description": "Number of FerretDB pods. The gateway is stateless — it translates and forwards, and every byte is in PostgreSQL — so this is a throughput and availability setting rather than a topology one.",
+          "maximum": 10,
+          "minimum": 1,
+          "type": "integer",
+          "x-cybercloud-order": 0,
+          "x-cybercloud-pointer": "/properties/gateway/replicas"
+        }
+      },
+      "required": [
+        "replicas"
+      ],
+      "type": "object",
+      "x-cybercloud-order": 4,
+      "x-cybercloud-pointer": "/properties/gateway"
+    },
+    "gatewayImage": {
+      "default": "",
+      "description": "Override the full FerretDB image reference, tag included. Empty means ghcr.io/ferretdb/ferretdb at the tag `version` pairs with.",
+      "type": "string",
+      "x-cybercloud-api": false,
+      "x-cybercloud-internal-reason": "One of TWO image overrides, because this chart renders two workloads and one escape hatch could not say which. A pinned reference defeats the version property, so both are platform escape hatches rather than tenant settings.",
+      "x-cybercloud-order": 8,
+      "x-cybercloud-pointer": "/properties/gatewayImage"
+    },
+    "monitoring": {
+      "additionalProperties": false,
+      "description": "What the platform scrapes.",
+      "properties": {
+        "enabled": {
+          "default": true,
+          "description": "Whether both halves of this service are scraped: CloudNativePG is asked for a PodMonitor over the PostgreSQL pods, and the platform writes one over the FerretDB pods because FerretDB has no operator to ask. On by default — docs/plan/12: \"a managed service the tenant cannot see the health of is a black box they will not trust with production\".",
+          "type": "boolean",
+          "x-cybercloud-order": 0,
+          "x-cybercloud-pointer": "/properties/monitoring/enabled"
+        }
+      },
+      "type": "object",
+      "x-cybercloud-order": 6,
+      "x-cybercloud-pointer": "/properties/monitoring"
+    },
+    "nameOverride": {
+      "default": "",
+      "description": "Replace the generated object-name stem. Empty means derive it from the release name.",
+      "type": "string",
+      "x-cybercloud-api": false,
+      "x-cybercloud-internal-reason": "Helm plumbing. Nothing about it belongs in a resource body.",
+      "x-cybercloud-order": 10,
+      "x-cybercloud-pointer": "/properties/nameOverride"
+    },
+    "platform": {
+      "additionalProperties": false,
+      "description": "Resource identity injected by the reconciler. Not a tenant-facing setting.",
+      "properties": {
+        "apiVersion": {
+          "default": "2026-08-01",
+          "description": "The api-version the resource was last written at, rendered into the cybercloud.io/api-version label.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 5,
+          "x-cybercloud-pointer": "/properties/platform/apiVersion"
+        },
+        "managedBy": {
+          "default": "cybercloud",
+          "description": "Value of the cybercloud.io/managed-by label. Constant, and the selector every informer filters on.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 6,
+          "x-cybercloud-pointer": "/properties/platform/managedBy"
+        },
+        "resourceGroup": {
+          "default": "",
+          "description": "Resource group name, rendered into the cybercloud.io/resource-group label.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 2,
+          "x-cybercloud-pointer": "/properties/platform/resourceGroup"
+        },
+        "resourceId": {
+          "default": "",
+          "description": "Resource GUID, rendered into the cybercloud.io/resource-id label.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 3,
+          "x-cybercloud-pointer": "/properties/platform/resourceId"
+        },
+        "resourceType": {
+          "default": "CyberCloud.DocumentDB/accounts",
+          "description": "Fully qualified resource type, rendered into the cybercloud.io/resource-type label.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 4,
+          "x-cybercloud-pointer": "/properties/platform/resourceType"
+        },
+        "subscriptionId": {
+          "default": "",
+          "description": "Subscription GUID, rendered into the cybercloud.io/subscription-id label.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 1,
+          "x-cybercloud-pointer": "/properties/platform/subscriptionId"
+        },
+        "tenantId": {
+          "default": "",
+          "description": "Tenant GUID, rendered into the cybercloud.io/tenant-id label.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 0,
+          "x-cybercloud-pointer": "/properties/platform/tenantId"
+        }
+      },
+      "type": "object",
+      "x-cybercloud-api": false,
+      "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+      "x-cybercloud-order": 7,
+      "x-cybercloud-pointer": "/properties/platform"
+    },
+    "postgres": {
+      "additionalProperties": false,
+      "description": "The CloudNativePG cluster the documents actually live in.",
+      "properties": {
+        "instances": {
+          "default": 2,
+          "description": "Number of PostgreSQL instances, including the primary. One is a single point of failure and is offered for development only. Failover, replication and point-in-time recovery are CloudNativePG's, which is why this row costs 1.2 engineer-months rather than a rebuild of them.",
+          "maximum": 5,
+          "minimum": 1,
+          "type": "integer",
+          "x-cybercloud-order": 0,
+          "x-cybercloud-pointer": "/properties/postgres/instances"
+        }
+      },
+      "required": [
+        "instances"
+      ],
+      "type": "object",
+      "x-cybercloud-order": 1,
+      "x-cybercloud-pointer": "/properties/postgres"
+    },
+    "postgresImage": {
+      "default": "",
+      "description": "Override the full PostgreSQL image reference, tag included. Empty means ghcr.io/ferretdb/postgres-documentdb at the tag `version` pairs with.",
+      "type": "string",
+      "x-cybercloud-api": false,
+      "x-cybercloud-internal-reason": "Overriding this one ALONE is how a cluster ends up with a DocumentDB extension its FerretDB does not know. The pairing is in templates/_helpers.tpl and nothing enforces it once either override is set, which is why both are escape hatches rather than API.",
+      "x-cybercloud-order": 9,
+      "x-cybercloud-pointer": "/properties/postgresImage"
+    },
+    "sizing": {
+      "additionalProperties": false,
+      "description": "CPU and memory per PostgreSQL instance, either by preset or explicitly. The FerretDB gateway pods are sized by the platform and are not affected.",
+      "properties": {
+        "cpu": {
+          "default": "",
+          "description": "Explicit vCPU quantity in Kubernetes form, for example 500m or 2. Empty means take it from the preset.",
+          "pattern": "^(?:(\\d+(\\.\\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)?)$",
+          "type": "string",
+          "x-cybercloud-order": 1,
+          "x-cybercloud-pointer": "/properties/sizing/cpu"
+        },
+        "memory": {
+          "default": "",
+          "description": "Explicit memory quantity in Kubernetes form, for example 4Gi. Empty means take it from the preset.",
+          "pattern": "^(?:(\\d+(\\.\\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)?)$",
+          "type": "string",
+          "x-cybercloud-order": 2,
+          "x-cybercloud-pointer": "/properties/sizing/memory"
+        },
+        "preset": {
+          "default": "s1.small",
+          "description": "A sizing preset from docs/plan/12. Databases use the s1 family, which is 1 vCPU to 4 GiB.",
+          "enum": [
+            "s1.2xlarge",
+            "s1.4xlarge",
+            "s1.large",
+            "s1.medium",
+            "s1.micro",
+            "s1.nano",
+            "s1.small",
+            "s1.xlarge"
+          ],
+          "type": "string",
+          "x-cybercloud-order": 0,
+          "x-cybercloud-pointer": "/properties/sizing/preset",
+          "x-cybercloud-widget": "cozy-preset"
+        }
+      },
+      "type": "object",
+      "x-cybercloud-order": 2,
+      "x-cybercloud-pointer": "/properties/sizing"
+    },
+    "storage": {
+      "additionalProperties": false,
+      "description": "The data volume, per PostgreSQL instance.",
+      "properties": {
+        "class": {
+          "default": "",
+          "description": "StorageClass name for the PostgreSQL volumes. Empty means the cluster default.",
+          "type": "string",
+          "x-cybercloud-immutable": true,
+          "x-cybercloud-order": 1,
+          "x-cybercloud-pointer": "/properties/storage/class",
+          "x-cybercloud-widget": "storageclass"
+        },
+        "size": {
+          "default": "20Gi",
+          "description": "Data volume size per PostgreSQL instance, in Kubernetes quantity form. Every instance carries a full copy, so raw consumption is this times the instance count. Grows online; never shrinks.",
+          "examples": [
+            "20Gi"
+          ],
+          "pattern": "^(?:\\d+(\\.\\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)$",
+          "type": "string",
+          "x-cybercloud-order": 0,
+          "x-cybercloud-pointer": "/properties/storage/size"
+        }
+      },
+      "required": [
+        "size"
+      ],
+      "type": "object",
+      "x-cybercloud-order": 3,
+      "x-cybercloud-pointer": "/properties/storage"
+    },
+    "version": {
+      "default": "2.7",
+      "description": "FerretDB minor version. ⚠ One property moves two images: the DocumentDB PostgreSQL extension and the FerretDB gateway are released as a matched pair and a mismatched pair is a proxy talking to an extension it does not know. FerretDB maintains no long-term branch, so the two values here are the two most recent releases and a third is a new api-version.",
+      "enum": [
+        "2.5",
+        "2.7"
+      ],
+      "type": "string",
+      "x-cybercloud-order": 0,
+      "x-cybercloud-pointer": "/properties/version"
+    }
+  },
+  "required": [
+    "version"
+  ],
+  "title": "ferretdb chart values",
+  "type": "object",
+  "x-cybercloud-api-version": "2026-08-01",
+  "x-cybercloud-chart": "ferretdb",
+  "x-cybercloud-chart-version": "0.1.0",
+  "x-cybercloud-resource-type": "CyberCloud.DocumentDB/accounts"
+}

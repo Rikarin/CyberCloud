@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      docs/plan/03 § Providers — the first of the five projects: "grain interfaces, resource models,
+      the JSON Schemas". This one is the schema and the FerretDB-over-CloudNativePG projection.
+
+      ⚠ NO GRAIN INTERFACES, AND THIS IS THE FIFTH NAMESPACE TO REPORT IT. The sample had none and
+      could be dismissed as trivial; three namespaces later CyberCloud.Providers.Storage said an
+      object-storage account had "the strongest claim to needing state of its own" and still held
+      none. This type has the second-strongest — it fronts a database with its own credential model —
+      and the answer is the same: everything a reconcile needs is in the desired body ResourceGrain
+      already stores, and the credential is written by CloudNativePG into a Secret this assembly only
+      ever names.
+
+      ⚠ IT REFERENCES ONLY CyberCloud.ResourceManager.Contracts AND CyberCloud.Kubernetes.Contracts —
+      the whole reference set docs/plan/03 § The .Contracts split allows a provider, and rule 2 of
+      § Assembly graph rules forbids the rest. ⚠ In particular it does NOT reference
+      CyberCloud.Providers.DBforPostgreSQL.Contracts, although this type renders the same
+      CloudNativePG CRD that provider does. src/Providers/README.md § Hard rule forbids it and
+      module-layering.txt records that a line between two providers "would fail rule 2 and be deleted,
+      not honoured". What that costs is a second rendering of one CRD; what it bought, this once, is
+      the defect that second rendering found — see DocumentDbAccounts.SharedPreloadLibraries.
+    -->
+
+    <ItemGroup>
+        <ProjectReference Include="../../../CyberCloud.ResourceManager.Contracts/CyberCloud.ResourceManager.Contracts.csproj"/>
+        <ProjectReference Include="../../../CyberCloud.Kubernetes.Contracts/CyberCloud.Kubernetes.Contracts.csproj"/>
+    </ItemGroup>
+
+    <ItemGroup Label="CyberCloud.Analyzers — see CyberCloud.Core.csproj for why this is not a reference">
+        <ProjectReference Include="../../../CyberCloud.Analyzers/CyberCloud.Analyzers.csproj"
+                          OutputItemType="Analyzer"
+                          ReferenceOutputAssembly="false"/>
+    </ItemGroup>
+
+</Project>

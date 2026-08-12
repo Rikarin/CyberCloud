@@ -1,0 +1,284 @@
+# Conformance manifest — docs/plan/12 § The pattern, once, piece 8.
+#
+# What the conformance suite asserts about CyberCloud.DocumentDB/accounts. This file is data:
+# `Build.Charts` checks that it is present, non-empty, and names the same resource type as
+# Chart.yaml. The `renders` and `labels` blocks below are asserted today by the two suites that DO
+# run — src/Providers/CyberCloud.Providers.DocumentDB/CyberCloud.Providers.DocumentDB.Conformance
+# (Docker-free) and …Cluster.Conformance (a real k3s API server) — through DocumentDbCase, not by
+# reading this file.
+
+resourceType: CyberCloud.DocumentDB/accounts
+apiVersion: "2026-08-01"
+chart: ferretdb
+
+# Objects the reconciler must have applied once the resource reports Succeeded.
+#
+# ⚠ FOUR, ACROSS FOUR API GROUPS, AND THE INTERESTING PART IS THAT ONE OF THEM HAS AN OPERATOR AND
+# THE OTHERS DO NOT. The `Cluster` expands into instance pods, PVCs, three Services and CloudNativePG's
+# own PodMonitor — none of them listed here, because this block is what the RECONCILER applied and
+# those are the OPERATOR'S. The Deployment, the Service and the PodMonitor have no controller above
+# them at all, so what the reconciler applies is what exists.
+#
+# ⚠ So this row sits in the middle of a range charts/managed/nats (five, no operator) and
+# charts/managed/seaweedfs (one, everything) bracket — and it is the first that is BOTH.
+renders:
+  - group: postgresql.cnpg.io
+    version: v1
+    kind: Cluster
+    count: 1
+  - group: apps
+    version: v1
+    kind: Deployment
+    count: 1
+  - group: ""
+    version: v1
+    kind: Service
+    count: 1
+  - group: monitoring.coreos.com
+    version: v1
+    kind: PodMonitor
+    count: 1
+    when: monitoring.enabled
+
+# ⚠ THERE IS NO `requiredCrds:` BLOCK, AND THAT IS CORRECT RATHER THAN AN OMISSION.
+# `ProviderConformanceCase` has no `RequiredCrds` member and never had one — the harness DERIVES the
+# definitions from the case's own `Objects`, which already carries group, version, kind and plural.
+# Two of the four kinds here need a stub (Cluster, PodMonitor) and two are served by a bare k3s
+# already; the harness works that out from `Objects` rather than from anybody's list.
+
+# ADR-013 — every rendered object carries all seven labels. Asserted against real rendered output,
+# which is what the Labels architecture gate in docs/plan/23 § The architecture gates requires. This
+# provider's *.Conformance project is the SIXTH suite that gate counts.
+labels:
+  required:
+    - cybercloud.io/tenant-id
+    - cybercloud.io/subscription-id
+    - cybercloud.io/resource-group
+    - cybercloud.io/resource-id
+    - cybercloud.io/resource-type
+    - cybercloud.io/api-version
+    - cybercloud.io/managed-by
+  # ⚠ Not the resource type verbatim. A `/` is not a legal label value character, so the value is
+  # lower-cased with `/` replaced by `_` — KubeLabels.ResourceTypeValue.
+  values:
+    cybercloud.io/resource-type: cybercloud.documentdb_accounts
+    cybercloud.io/managed-by: cybercloud
+  # ⚠ NOT one of the seven, and not optional either. These four sit in the Deployment's
+  # spec.selector, which is IMMUTABLE after create, and in the pod template and the PodMonitor's
+  # selector, which have to match it. None of them may ever be replaced by a cybercloud.io/* label,
+  # because cybercloud.io/api-version moves and a resource whose selector moved could never be
+  # updated again. See `pod-labels` below.
+  additional:
+    Deployment:
+      app.kubernetes.io/name: ferretdb
+      app.kubernetes.io/instance: "{resourceName}"
+      app.kubernetes.io/component: gateway
+      app.kubernetes.io/managed-by: cybercloud
+
+# Behaviour a tenant is entitled to. Each is a statement the suite can fail on, not a feature list.
+assertions:
+  - id: connect-and-round-trip-a-document
+    says: >
+      A MongoDB driver configured from listKeys connects to the Service, inserts a document into a
+      collection and reads the same document back.
+  - id: it-is-not-mongodb-and-the-api-says-so
+    says: >
+      Every generated surface that names this type carries the compatibility statement, and a client
+      that opens a session and calls commitTransaction gets a clear "not supported" rather than a
+      hang or a silent no-op. docs/plan/12: selling it as MongoDB "produces a churn event at the
+      first $lookup".
+  - id: anonymous-clients-get-nothing
+    says: >
+      A client that connects with no credentials completes the handshake and then fails every read
+      and every write, because FerretDB forwards credentials to PostgreSQL and PostgreSQL refuses.
+      ⚠ This is the assertion charts/managed/seaweedfs cannot make about its own row, and the reason
+      is upstream's rather than this platform's — website/docs/security/authentication.md.
+  - id: failover-preserves-committed-writes
+    says: >
+      Deleting the primary PostgreSQL pod promotes a replica, and every document whose insert
+      returned success before the delete is still readable afterwards. The gateway reconnects through
+      the -rw Service without its own restart.
+  - id: the-gateway-is-not-the-database
+    says: >
+      Changing gateway.replicas changes throughput and restarts no PostgreSQL instance; changing
+      postgres.instances changes the cluster and restarts no gateway pod. Two workloads, two axes.
+  - id: superuser-secret-removal-is-drift
+    says: >
+      A Cluster whose enableSuperuserAccess is turned off outside the platform reads back as drifted
+      rather than as converged. CloudNativePG deletes the Secret the gateway mounts, so this is the
+      one field whose loss leaves every other signal green.
+  - id: storage-grows-never-shrinks
+    says: Increasing storage.size resizes online; decreasing it is refused at the API.
+  - id: metrics-are-scraped-from-both-halves
+    says: >
+      With monitoring.enabled there is a PodMonitor over the PostgreSQL pods that CloudNativePG
+      created and one over the FerretDB pods that the platform created, and the second one's path is
+      /debug/metrics rather than /metrics.
+  - id: secrets-never-round-trip
+    says: >
+      A GET of the resource never returns a PostgreSQL password in any form. The only path out is the
+      listKeys action.
+
+# Meters the type must emit — docs/plan/12 § The pattern, once, piece 3. Listed here so the
+# conformance suite and the provider's Describe can be diffed against one file rather than agreeing
+# by coincidence.
+#
+# ⚠ Each of the three is a sum over TWO POPULATIONS IN TWO DIFFERENT OBJECTS — the PostgreSQL
+# instances the tenant sizes, and the FerretDB pods the platform sizes. A derivation copied from
+# CyberCloud.DBforPostgreSQL/servers would count the Cluster and miss the Deployment entirely, which
+# on the default body is two whole pods.
+meters:
+  - documentdb.instance.hours
+  - documentdb.storage.gib.hours
+  - documentdb.gateway.hours
+
+# ── owed ──────────────────────────────────────────────────────────────────────────────────────
+#
+# Named here rather than left to be discovered, because an absent capability that nobody wrote down
+# is indistinguishable from one nobody thought of.
+owed:
+  - id: shared-preload-libraries-is-not-a-parameter
+    says: >
+      ⚠ THIS ONE IS NOT ABOUT THIS ROW. It is a live defect in CyberCloud.DBforPostgreSQL/servers,
+      found by writing the SECOND rendering of the CloudNativePG Cluster CRD, and it is recorded here
+      because this is where the evidence was gathered. That provider's PostgresServers.ClusterJson
+      and charts/managed/postgres/templates/cluster.yaml both write
+      `spec.postgresql.parameters.shared_preload_libraries` whenever /properties/extensions is
+      non-empty. Checked in the operator's own source on 2026-08-12: api/v1/cluster_types.go declares
+      `AdditionalLibraries []string json:"shared_preload_libraries"` as a SIBLING of `parameters`;
+      pkg/postgres/configuration.go lists "shared_preload_libraries" in FixedConfigurationParameters;
+      and internal/webhook/v1/cluster_webhook.go walks spec.postgresql.parameters and answers any
+      fixed key with field.Invalid(…, "Can't set fixed configuration parameter") unless the value
+      equals CloudNativePG's own sanitized one — which for this key is not present, because the
+      webhook builds its ConfigurationInfo without shared-library inclusion. So EVERY managed
+      PostgreSQL server created with pgvector, postgis, pg_stat_statements or timescaledb is rejected
+      by admission AFTER the caller was told 202. The default body asks for no extension, which is
+      why nothing has noticed. ⚠ NOT FIXED HERE: this provider does not own that one, and
+      src/Providers/README.md § Hard rule is the reason the two renderings are independent in the
+      first place. What closes it is two edits in that provider — the JSON and the template — plus a
+      test that renders a body with an extension and asserts the key is not under `parameters`.
+  - id: sizing-table-is-not-shared
+    says: >
+      docs/plan/12 § Sizing vocabulary opens "One table, defined once, used by every service and
+      every VM" and there is no such table. PostgresServers.Presets spells s1.small as (500m, 2Gi);
+      StorageAccounts.Presets spells it (1, 4Gi); DocumentDbAccounts.Presets is a THIRD copy and
+      agrees with the second. The two existing ones are the same ratio one rung apart, so a tenant
+      reading `s1.small` on two products gets two different machines. ⚠ And one of them does not hold
+      the ratio its own family name claims: PostgresServers.Presets["s1.nano"] is (100m, 512Mi),
+      which is 5 GiB per core rather than 4, on that rung and no other. This provider took the
+      ratio-correct rungs and pins every one of them, rather than reproducing a neighbour's
+      arithmetic to match it. Closing it is one table in CyberCloud.ResourceManager.Contracts — where
+      KubeQuantity already lives, so there is no rule-2 problem — and then five providers deleting
+      their copies. It is deliberately NOT started here: a sixth copy in a shared assembly that the
+      five existing tables do not use would be a sixth copy, and the migration touches five providers
+      this one may not edit.
+  - id: listkeys-has-no-handler
+    says: >
+      docs/plan/12 § The pattern, once, piece 5 — credential provisioning into the tenant's Vault —
+      needs an OpenBao integration that does not exist, so listKeys has a declared response shape and
+      nothing that serves it. ⚠ WHAT THIS ROW SPECIFICALLY LOSES, and it is the mildest answer the
+      catalogue has given: nothing. The service works. CloudNativePG generates the credential into
+      {name}-pg-superuser and the gateway mounts it, and FerretDB neither stores nor invents a
+      credential of its own — website/docs/security/authentication.md: "FerretDB does not store
+      authentication information (usernames and passwords) itself. Instead, it relies entirely on
+      PostgreSQL's authentication mechanisms", and an anonymous client "may still connect to FerretDB
+      without authentication, but they cannot access or perform actions on the database". So a
+      running account is authenticated, closed to anonymous callers, and its password is a value the
+      tenant cannot obtain through this API — they would have to read the Secret in their own
+      namespace. That is CyberCloud.DBforPostgreSQL/servers' answer reproduced rather than a new one,
+      and it is the FIRST time a row has reproduced an earlier answer instead of adding a worse one
+      (CyberCloud.Cache/redis does not come up; CyberCloud.Storage/accounts comes up open).
+      What closes it: an ISecretResolver implementation backed by OpenBao, and a listKeys handler
+      that reads {name}-pg-superuser's `username` and `password` keys back through it.
+  - id: superuser-is-the-connection-role
+    says: >
+      The gateway connects as the PostgreSQL SUPERUSER, and the rendered Cluster sets
+      enableSuperuserAccess: true to make that possible. That is upstream's documented CloudNativePG
+      shape and it is not the shape this platform should want: docs/plan/12's own "a managed database
+      on a public IP with a weak password is the single most common cloud breach" argues for the
+      least-privileged role that works. The better shape is visible and unverified — install the
+      extension with postInitApplicationSQL (which also runs as superuser) into the APPLICATION
+      database, point FERRETDB_POSTGRESQL_URL at the {name}-pg-app Secret's own `uri` key (which,
+      unlike the superuser secret's, names a real database), and drop enableSuperuserAccess entirely.
+      It was not taken because nothing checkable says the documentdb extension and pg_cron's
+      cron.database_name follow the extension to a non-`postgres` database, and shipping an
+      unverified privilege model produces a service that never comes up. Closing it is one
+      experiment against a real cluster, then three lines.
+  - id: backup-enabled-with-no-destination-does-nothing
+    says: >
+      /properties/backup/enabled and /properties/backup/destinationPath have to be set together and
+      the schema cannot say so. An enabled backup with an empty destination would render
+      barmanObjectStore.destinationPath: "" — a cluster that comes up, archives nothing, and looks
+      backed up — so DocumentDbAccounts.BackupEnabled answers both properties at once and the
+      renderer emits no backup block at all. ⚠ THIRD SIGHTING of the cross-property validation gap,
+      after charts/managed/kafka's `replication-factor-versus-node-count` and
+      charts/managed/seaweedfs' `replication-versus-topology`, and the first where the two properties
+      are in the same sub-object. Three sightings across three services is what makes it a
+      ResourceSchema gap rather than a quirk of any of them. Closing it is a cross-property
+      validation seam on ResourceSchema; until then the API accepts a body that silently means
+      "no backup".
+  - id: version-upgrade-order-is-not-sequenced
+    says: >
+      FerretDB and the DocumentDB extension are one property here and two images, and upstream's
+      documented upgrade order is: install the matching DocumentDB image FIRST, then move FerretDB.
+      One reconcile pass applies both objects, so changing /properties/version starts a CloudNativePG
+      rolling upgrade and a Deployment rollout at the same moment, and there is a window in which new
+      FerretDB pods talk to old extension code. Closing it needs a reconciler that can hold one
+      object back until another reports ready — which is a ReconcileContext that can express a
+      dependency between two applied objects, and nothing in docs/plan/08 § The reconcile loop has
+      one. It is the first ordering constraint any provider has needed.
+  - id: external-exposure
+    says: >
+      docs/plan/12 § Cross-cutting decisions gives every service an optional external listener behind
+      "an explicit CIDR list". Not offered. ⚠ AND THE REASON IS A THIRD DISTINCT ONE, which is what
+      makes it worth writing down. charts/managed/kafka and charts/managed/nats can render the
+      listener and cannot CONSTRAIN it (`@pattern` on an array); charts/managed/seaweedfs cannot
+      render a firewalled one at all (no loadBalancerSourceRanges in the operator's ServiceSpec).
+      Here the field exists — a core Service carries loadBalancerSourceRanges — and the blocker is
+      the CREDENTIAL: docs/plan/12 makes regenerateKeys part of the credential story, nothing
+      implements it, and a public endpoint whose password can never be rotated is worse than no
+      public endpoint. So this one closes with `regenerateKeys`, not with a schema seam or an
+      upstream field.
+  - id: pod-labels
+    says: >
+      ADR-013's seven labels are injected by KubeCommand onto each OBJECT's metadata. The pods a
+      Deployment creates carry spec.template.metadata.labels instead, which is a field of the
+      Deployment's body and which no builder reaches — so a FerretDB pod belonging to this resource
+      cannot be attributed to a tenant by label, which is the one thing the seven exist for. SECOND
+      SIGHTING of charts/managed/nats' item of the same name; what this one adds is that it is not a
+      StatefulSet quirk — a Deployment's spec.selector is immutable in exactly the same way, so
+      writing the seven into the pod template would make a resource whose api-version label moved
+      un-updatable. Closing it is IKubeCommandBuilder learning to inject pod-template labels that are
+      NOT part of the selector.
+  - id: change-streams-are-unverified
+    says: >
+      docs/plan/12's paragraph names change streams among the things FerretDB "does not cover", and
+      DocumentDbAccounts.UnsupportedCommands does NOT list them. That is deliberate: upstream's
+      compatibility page (website/docs/migration/compatibility.md) has no row for change streams
+      either way and a search of that documentation tree for `changeStream` returns nothing, so
+      listing them would be repeating a claim this provider could not check and omitting them
+      silently would be worse. The same is true of per-stage aggregation coverage: `aggregate` is
+      listed as supported and the stages are not enumerated. Closing it is one connection to a
+      running FerretDB with a watch() call — which is exactly what the `connect-and-round-trip-a-document`
+      assertion needs a runner for, and there is no runner for this file yet.
+  - id: grafana-dashboard
+    says: >
+      Both scrape objects ship and the dashboard does not. docs/plan/12 § The pattern, once, piece 6
+      keeps the dashboard chart-side whichever branch the scrape took. THIRD SIGHTING, after
+      charts/managed/nats and charts/managed/seaweedfs — at three of six services it is a property of
+      the pattern rather than of any service. ⚠ This row adds a reason to be careful rather than
+      quick: upstream says in as many words that "the set of metrics is not stable yet", so a
+      dashboard built against FerretDB 2.7's metric names is a dashboard that may go blank on 2.8
+      without anything failing. The CloudNativePG half has no such problem.
+  - id: child-types
+    says: >
+      No child type is declared. Unlike charts/managed/kafka and charts/managed/nats, nothing blocks
+      one — a child ships end to end since 2026-08-12 and charts/managed/seaweedfs-bucket is the
+      proof. What is missing is a CHILD WORTH HAVING: the obvious candidates are databases and
+      collections, and both are created by a MongoDB driver on first write rather than by an API
+      call, so a `accounts/databases` resource type would be a control-plane object the data plane
+      creates behind its back — two writers, no reconciliation, and a resource that reports Succeeded
+      for something a client had already made. The honest first child is `accounts/users`, which maps
+      onto a PostgreSQL role and onto FerretDB's own createUser, and it waits for piece 5 for the
+      same reason listKeys does: a user resource whose password nothing can store is a user nobody
+      can log in as.

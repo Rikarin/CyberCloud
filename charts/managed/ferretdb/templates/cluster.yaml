@@ -1,0 +1,140 @@
+{{/*
+CloudNativePG `Cluster` — docs/plan/12 § The catalogue, MongoDB-compatible: "FerretDB (Apache-2.0)
+over a CloudNativePG cluster".
+
+⚠ This renders a custom resource; it does not install the operator. The operator is
+charts/bundle/'s job, which is why this chart has no CRD directory and no operator Deployment.
+
+⚠ THE SAME CRD charts/managed/postgres RENDERS, WRITTEN AGAIN. src/Providers/README.md § Hard rule
+forbids one provider referencing another, so the C# side cannot share a renderer and neither can
+this. Writing the second one found a defect in the first — see the shared_preload_libraries block
+below and conformance.yaml § owed.
+*/}}
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: {{ include "ferretdb.clusterName" . }}
+  labels:
+    {{- include "ferretdb.platformLabels" . | nindent 4 }}
+spec:
+  instances: {{ .Values.postgres.instances }}
+
+  {{/*
+    ⚠ NOT ghcr.io/cloudnative-pg/postgresql, which is what charts/managed/postgres renders. FerretDB
+    v2 is a proxy over the `documentdb` PostgreSQL extension and a stock image does not carry it, so
+    the bootstrap's CREATE EXTENSION fails and every query after it fails with it.
+  */}}
+  imageName: {{ include "ferretdb.postgresImage" . | quote }}
+
+  {{/*
+    ⚠ 999, and CloudNativePG's defaults are 26 — api/v1/cluster_types.go, DefaultPostgresUID and
+    DefaultPostgresGID. The postgres-documentdb image runs as 999, so a Cluster that left these unset
+    mounts its data directory with an owner the process cannot write and never initialises. The
+    failure is a permission error in an init container's log; nothing on the Cluster's status says
+    "the UID is wrong".
+  */}}
+  postgresUID: 999
+  postgresGID: 999
+
+  {{/*
+    ⚠ WRITTEN ON EVERY APPLY BECAUSE THE CRD DEFAULT IS false. The DocumentDB extension lives in the
+    `postgres` database — see the bootstrap block — and the application owner has no rights there, so
+    the superuser role is the only one that can serve a client.
+
+    ⚠ AND TURNING IT OFF IS THE ONE DRIFT NOTHING ELSE REPORTS. cluster_types.go: when this is
+    disabled "the operator will ignore the SuperuserSecret content, delete it". What is left is a
+    healthy PostgreSQL, a healthy Deployment object, and gateway pods that can never mount their
+    credential.
+  */}}
+  enableSuperuserAccess: true
+
+  {{/*
+    ⚠ Both or neither. A preset that is not in the table renders no requests/limits pair at all
+    rather than a half-specified one, which Kubernetes would accept and schedule against.
+  */}}
+  {{- $cpu := include "ferretdb.cpu" . }}
+  {{- $memory := include "ferretdb.memory" . }}
+  {{- if and $cpu $memory }}
+  resources:
+    requests:
+      cpu: {{ $cpu | quote }}
+      memory: {{ $memory | quote }}
+    limits:
+      cpu: {{ $cpu | quote }}
+      memory: {{ $memory | quote }}
+  {{- end }}
+
+  postgresql:
+    {{/*
+      ⚠ A LIST, AND A SIBLING OF `parameters` — NOT A KEY INSIDE IT. api/v1/cluster_types.go declares
+      `AdditionalLibraries []string \`json:"shared_preload_libraries,omitempty"\`` on
+      PostgresConfiguration; pkg/postgres/configuration.go lists "shared_preload_libraries" in
+      FixedConfigurationParameters; and internal/webhook/v1/cluster_webhook.go walks
+      spec.postgresql.parameters and answers any fixed key with "Can't set fixed configuration
+      parameter".
+
+      ⚠ charts/managed/postgres/templates/cluster.yaml PUTS IT IN `parameters`, so every managed
+      PostgreSQL server created with an extension is rejected by admission after the caller was told
+      202. Its default asks for none, which is why nothing has noticed. Recorded at
+      conformance.yaml § owed, `shared-preload-libraries-is-not-a-parameter`; it is not fixed from
+      here, because this chart does not own that one.
+    */}}
+    shared_preload_libraries:
+      - pg_cron
+      - pg_documentdb_core
+      - pg_documentdb
+    parameters:
+      {{/*
+        ⚠ pg_cron schedules its jobs in exactly ONE database and the DocumentDB extension registers
+        background jobs through it, so this has to name the database the extension is installed in.
+        Written out rather than left to pg_cron's own default of `postgres`, so that moving the
+        extension is one edit with its dependency visible next to it.
+      */}}
+      cron.database_name: "postgres"
+
+  bootstrap:
+    initdb:
+      {{/*
+        ⚠ postInitSQL, NOT postInitApplicationSQL. cluster_types.go documents the first as running
+        "as a superuser in the `postgres` database" and the second in the application database;
+        FERRETDB_POSTGRESQL_URL below names `postgres`, so this is the one that puts the extension
+        where the gateway looks for it.
+
+        ⚠ CASCADE is load-bearing: documentdb depends on pg_documentdb_core, pg_cron, vector and
+        postgis, and without it the statement fails on the first missing dependency.
+      */}}
+      postInitSQL:
+        - CREATE EXTENSION IF NOT EXISTS documentdb CASCADE;
+
+  storage:
+    size: {{ .Values.storage.size | quote }}
+    {{- if .Values.storage.class }}
+    storageClass: {{ .Values.storage.class | quote }}
+    {{- end }}
+
+  {{/*
+    ⚠ RENDERED ONLY WHEN BOTH `enabled` AND `destinationPath` ARE SET, and the second half is the
+    interesting one. An enabled backup with an empty destination renders
+    barmanObjectStore.destinationPath: "" — a cluster that comes up, archives nothing, and reports
+    itself as backed up. ResourceSchema validates each property against constants and has no seam for
+    a relation between two, which is the THIRD sighting of that gap after
+    charts/managed/kafka's `replication-factor-versus-node-count` and charts/managed/seaweedfs'
+    `replication-versus-topology`. So the renderer answers it. See conformance.yaml § owed.
+  */}}
+  {{- if and .Values.backup.enabled .Values.backup.destinationPath }}
+  backup:
+    retentionPolicy: {{ printf "%dd" (int .Values.backup.retentionDays) | quote }}
+    barmanObjectStore:
+      destinationPath: {{ .Values.backup.destinationPath | quote }}
+      wal:
+        compression: gzip
+  {{- end }}
+
+  {{/*
+    docs/plan/12 § The pattern, once, piece 6's FIRST branch — "ask the operator for the scrape object
+    wherever the operator accepts the request". This half of the service has an operator to ask.
+    templates/podmonitor.yaml is the other half, and this chart is the first in the catalogue to need
+    both at once.
+  */}}
+  monitoring:
+    enablePodMonitor: {{ .Values.monitoring.enabled }}
