@@ -299,8 +299,9 @@ public sealed class DocumentDbDeclarationTests {
         // configuration parameter" (internal/webhook/v1/cluster_webhook.go). So the other spelling is
         // not a style difference: it is a 422 on every create, after the caller was told 202.
         //
-        // charts/managed/ferretdb/conformance.yaml § owed carries what it costs
-        // CyberCloud.DBforPostgreSQL/servers, which is not this provider's to fix.
+        // charts/managed/ferretdb/conformance.yaml § owed carried what it cost
+        // CyberCloud.DBforPostgreSQL/servers until that provider fixed both its spellings on
+        // 2026-08-12; the finding now lives at charts/managed/postgres/conformance.yaml § owed.
         using var body = JsonDocument.Parse(DocumentDbAccounts.Body(ClusterId));
 
         var postgresql = JsonNode.Parse(DocumentDbAccounts.ClusterJson("orders", body.RootElement))!

@@ -145,9 +145,10 @@ public sealed class DocumentDbSizingTests {
 
         declared.ShouldBe([.. DocumentDbAccounts.SharedPreloadLibraries]);
 
-        // ⚠ And never under `parameters:`. This is the defect the row above has — see
-        // charts/managed/ferretdb/conformance.yaml § owed,
-        // `shared-preload-libraries-is-not-a-parameter`.
+        // ⚠ And never under `parameters:`. This is the defect the row above HAD, until 2026-08-12 —
+        // see charts/managed/postgres/conformance.yaml § owed,
+        // `shared-preload-libraries-is-not-a-parameter`, which this assertion's twin over there now
+        // guards.
         var parameters = Regex.Match(
             cluster,
             "\\n    parameters:\\n((?:      \\S.*\\n)+)",

@@ -220,8 +220,9 @@ public static class DocumentDbAccounts {
     /// <remarks>
     ///     <para>
     ///         ⚠ <b>THIS RENDERS TO <c>spec.postgresql.shared_preload_libraries</c> — A LIST, A SIBLING
-    ///         OF <c>parameters</c> — AND THE ROW ABOVE PUTS IT <i>INSIDE</i> <c>parameters</c>, WHICH
-    ///         CLOUDNATIVEPG REFUSES.</b> Checked in that operator's source rather than inferred:
+    ///         OF <c>parameters</c> — AND THE ROW ABOVE PUT IT <i>INSIDE</i> <c>parameters</c> UNTIL
+    ///         2026-08-12, WHICH CLOUDNATIVEPG REFUSES.</b> Checked in that operator's source rather
+    ///         than inferred:
     ///         <c>api/v1/cluster_types.go</c> declares
     ///         <c>AdditionalLibraries []string `json:"shared_preload_libraries,omitempty"`</c> on
     ///         <c>PostgresConfiguration</c>, and <c>pkg/postgres/configuration.go</c> lists
@@ -229,22 +230,24 @@ public static class DocumentDbAccounts {
     ///         webhook — <c>internal/webhook/v1/cluster_webhook.go</c> — walks
     ///         <c>spec.postgresql.parameters</c> and answers any fixed key with
     ///         <c>field.Invalid(…, "Can't set fixed configuration parameter")</c> unless the value
-    ///         equals CloudNativePG's own sanitized one, which for this key does not exist because the
-    ///         webhook builds its <c>ConfigurationInfo</c> without shared-library inclusion.
+    ///         equals CloudNativePG's own sanitized one — which is the default settings'
+    ///         <c>SharedPreloadLibraries: ""</c>, because <c>IncludingSharedPreloadLibraries</c> gates
+    ///         the only code that would add to it and the webhook leaves that field <c>false</c>. So
+    ///         no non-empty list can ever equal it.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The consequence for the other row is a real, current defect and it is not this
-    ///         provider's to fix.</b>
+    ///         ⚠ <b>The consequence for the other row was a real defect, and it is fixed since
+    ///         2026-08-12.</b>
     ///         <c>src/Providers/CyberCloud.Providers.DBforPostgreSQL/…/PostgresServers.cs</c>'s
-    ///         <c>ClusterJson</c> writes <c>parameters["shared_preload_libraries"]</c> whenever
-    ///         <c>/properties/extensions</c> is non-empty, and
-    ///         <c>charts/managed/postgres/templates/cluster.yaml</c> does the same — so every server
+    ///         <c>ClusterJson</c> wrote <c>parameters["shared_preload_libraries"]</c> whenever
+    ///         <c>/properties/extensions</c> was non-empty, and
+    ///         <c>charts/managed/postgres/templates/cluster.yaml</c> did the same — so every server
     ///         created with <c>pgvector</c>, <c>postgis</c>, <c>pg_stat_statements</c> or
-    ///         <c>timescaledb</c> is rejected by admission <i>after</i> the caller was told <c>202</c>.
-    ///         The default body asks for none, which is why nothing has noticed.
-    ///         <c>charts/managed/ferretdb/conformance.yaml § owed</c>,
-    ///         <c>shared-preload-libraries-is-not-a-parameter</c>, carries it as a finding about the
-    ///         platform rather than as something silently worked around here.
+    ///         <c>timescaledb</c> was rejected by admission <i>after</i> the caller was told
+    ///         <c>202</c>. The default body asks for none, which is why nothing had noticed. Both
+    ///         spellings now render a list beside <c>parameters</c>;
+    ///         <c>charts/managed/postgres/conformance.yaml § owed</c> carries the finding and
+    ///         <c>charts/managed/ferretdb/conformance.yaml § owed</c> records the close.
     ///     </para>
     ///     <para>
     ///         ⚠ The library names carry the <c>pg_</c> prefix and the <i>extension</i> created from

@@ -138,25 +138,37 @@ meters:
 # is indistinguishable from one nobody thought of.
 owed:
   - id: shared-preload-libraries-is-not-a-parameter
+    status: closed
+    closed: 2026-08-12
     says: >
-      ⚠ THIS ONE IS NOT ABOUT THIS ROW. It is a live defect in CyberCloud.DBforPostgreSQL/servers,
-      found by writing the SECOND rendering of the CloudNativePG Cluster CRD, and it is recorded here
-      because this is where the evidence was gathered. That provider's PostgresServers.ClusterJson
-      and charts/managed/postgres/templates/cluster.yaml both write
-      `spec.postgresql.parameters.shared_preload_libraries` whenever /properties/extensions is
+      ⚠ CLOSED, IN THE OTHER PROVIDER, AND IT WAS NEVER ABOUT THIS ROW. It was a live defect in
+      CyberCloud.DBforPostgreSQL/servers, found by writing the SECOND rendering of the CloudNativePG
+      Cluster CRD, and recorded here because this is where the evidence was gathered. That provider's
+      PostgresServers.ClusterJson and charts/managed/postgres/templates/cluster.yaml both wrote
+      `spec.postgresql.parameters.shared_preload_libraries` whenever /properties/extensions was
       non-empty. Checked in the operator's own source on 2026-08-12: api/v1/cluster_types.go declares
       `AdditionalLibraries []string json:"shared_preload_libraries"` as a SIBLING of `parameters`;
       pkg/postgres/configuration.go lists "shared_preload_libraries" in FixedConfigurationParameters;
       and internal/webhook/v1/cluster_webhook.go walks spec.postgresql.parameters and answers any
       fixed key with field.Invalid(…, "Can't set fixed configuration parameter") unless the value
-      equals CloudNativePG's own sanitized one — which for this key is not present, because the
-      webhook builds its ConfigurationInfo without shared-library inclusion. So EVERY managed
-      PostgreSQL server created with pgvector, postgis, pg_stat_statements or timescaledb is rejected
-      by admission AFTER the caller was told 202. The default body asks for no extension, which is
-      why nothing has noticed. ⚠ NOT FIXED HERE: this provider does not own that one, and
-      src/Providers/README.md § Hard rule is the reason the two renderings are independent in the
-      first place. What closes it is two edits in that provider — the JSON and the template — plus a
-      test that renders a body with an extension and asserts the key is not under `parameters`.
+      equals CloudNativePG's own sanitized one. So EVERY managed PostgreSQL server created with
+      pgvector, postgis, pg_stat_statements or timescaledb was rejected by admission AFTER the caller
+      was told 202. The default body asks for no extension, which is why nothing had noticed.
+      ⚠ ONE CORRECTION TO THE EVIDENCE, AND THE CONCLUSION IS UNCHANGED. This entry said the key "is
+      not present" in the sanitized configuration, so the `!presentInSanitizedConfiguration` branch
+      was always taken. It IS present: setDefaultConfigurations writes
+      `SharedPreloadLibraries: ""` into the defaults — upstream calls it a workaround for PostgreSQL
+      not behaving correctly when a default is not explicit — and IncludingSharedPreloadLibraries,
+      which the webhook leaves false, gates only the code that would ADD libraries to it. So the
+      branch taken is `value != sanitizedValue`, comparing any non-empty list against "". The refusal
+      is still unconditional for every value the renderer could produce; only the empty string would
+      have passed, and the renderer emitted the key only when the list was non-empty.
+      ⚠ What closed it: the JSON and the template both now render a list beside `parameters`, plus
+      two tests — one per spelling, because src/Providers/README.md § Hard rule is why the two
+      renderings are independent in the first place and nothing in ./build.sh compares them. The
+      finding now lives at charts/managed/postgres/conformance.yaml § owed, together with two things
+      it turned up: `the-cluster-pair-is-held-together-by-one-test` and
+      `extension-names-are-not-library-names`.
   - id: sizing-table-is-not-shared
     says: >
       docs/plan/12 § Sizing vocabulary opens "One table, defined once, used by every service and
