@@ -237,6 +237,83 @@ is holding it" shape — but a caller with no lock anywhere in their hierarchy m
 and find one, and every generated SDK branches on the code. Different recovery, therefore different
 code.
 
+### Soft delete: where a deleted resource lives, what happens to its name, and what happens to its quota
+
+[06](06-tenancy-and-resource-model.md) § Tags, locks asks for **"7 days for resources carrying data
+(Vault, Storage, databases)"**, and the registry can already say so — `IProviderBuilder`'s
+`SupportsSoftDelete(int days)`, `ResourceTypeRegistration.SoftDeleteDays`. **Nothing in
+`CyberCloud.ResourceManager` reads it**, and all five providers independently declined to declare it
+for the same stated reason: a type advertising `softDeleteDays: 7` through the generated document
+while delete is irreversible is worse than one advertising nothing. **That instinct is right and the
+fix is not to make them declare it.** Honour it first. Three decisions come before any code, and each
+one decides the ones after it.
+
+**Decided: a soft-deleted resource moves to a different address, out of its resource group.**
+Azure has no ARM-wide soft delete; each provider builds its own, and Key Vault — the canonical one —
+moves the vault to `/subscriptions/{sub}/providers/Microsoft.KeyVault/locations/{loc}/deletedVaults/{name}`,
+a different resource *type* at subscription+location scope, returning `"type":
+"Microsoft.KeyVault/deletedVaults"` and keeping the original address only as a property. Follow it.
+The alternative — the resource stays where it is with a flag — puts an "unless deleted" clause on
+every read path, every list, every ReBAC check and the index claim, and the feature is then only as
+good as the least-remembered of them. Moving it out of the tree is more work once and less work
+forever, and it makes the sharpest failure — *a soft-deleted resource that is still readable at its
+old address* — unreachable by construction rather than a thing to remember. ⚠ The `404` on the old
+address must stay the **canonical** `404` § The enforcement seam in [07](07-rebac-authorization.md)
+requires: a `410 Gone` would tell an unauthorized caller that the name was taken, which is the
+enumeration oracle the status code exists to close.
+
+**Decided: the name is held for the whole window.** Azure holds it — *"You can't reuse the name of a
+key vault that was soft-deleted, until the retention period expires"*, DNS record included. Releasing
+it is the cheaper-sounding option and it breaks restore: a name taken by somebody else leaves a
+restore with nowhere to go, so it would have to fail or overwrite, and both are worse than making the
+tenant wait. `IResourceIndexGrain` is where this lands and it needs one new `IndexEntryState`, not a
+new mechanism: `ResolveAsync` must refuse it — so the resource is not addressable, the `404` above is
+free, and § Deleting a parent resource that has children reads it correctly with no change — while
+`TryClaimAsync` must refuse it too, because the name is taken.
+
+**Decided: committed quota is NOT returned on delete for a soft-deletable type. It is returned on
+purge.** ⚠ **This is the decision most easily got wrong from Azure by analogy, because Azure does
+three different things and the pattern is not the one it looks like.** A soft-deleted Key Vault bills
+nothing during retention and consumes no vault quota — but only because there is no vault-count quota
+in the first place and a vault reserves no capacity. Where the deleted thing *does* hold capacity,
+Azure holds both: Managed HSM says *"These resources remain allocated even when the HSM is in a
+deleted state"* and bills *"at their full hourly rate until they're purged"*, and soft-deleted blob
+data is billed *"at the same rate as active data"*. **The rule is that soft delete is free exactly
+when the deleted thing consumes no reserved capacity** — and a CyberCloud resource in its recovery
+window consumes plenty, because handing the data back is the entire feature: the volumes, the PVCs
+and the memory are all still allocated. So the quota stays committed.
+
+The second reason is the one that matters more than the accounting: **quota held is what makes restore
+total.** A restore that re-reserves would fail against an allowance the tenant has spent in the
+meantime, which is a restore that works only when it is not needed. Concretely this moves
+`OperationSpec.CommittedQuota`'s return from the delete's convergence to the purge, and it moves the
+whole of it — `QuotaMeter.Resources` too, even though a soft-deleted resource is not one anybody can
+use, because a per-meter split reintroduces the partial restore. `DeletePathTests`'
+`ADeleteReturnsExactlyWhatTheCreateCommittedOnEveryMeter` and `MeteredAmountTests`'
+`TenCreateDeleteCyclesLeaveTheMetersWhereTheyStarted` are the two tests that pin the amount and the
+symmetry; for a soft-deletable type they become tests of the purge, with the arithmetic unchanged.
+**Billing during retention is [13](13-compute-vm-containers.md)'s to state**, and the same principle
+decides it: charge for capacity that is still allocated, not for a control plane that refuses every
+call.
+
+Three smaller things follow from Azure and are worth taking as they stand. **Purge is a separate
+operation with its own permission** — Azure's `Microsoft.KeyVault/locations/deletedVaults/purge/action`
+is in Key Vault Contributor's `notActions`, so "may delete" and "may destroy permanently" are
+genuinely separable rights and a role can hold the first without the second. **Purge protection is a
+further opt-in flag that cannot be turned off once on**, which is the only version of it that is worth
+anything. And **retention is set at creation and immutable afterwards** — a window a caller can
+shorten under their own resource is not a recovery window.
+
+⚠ **Refusing a delete with children (above) is what makes all of this tractable, and the reasoning
+should not be lost.** It makes *"a soft-deleted parent with live children"* unreachable, so nothing
+here has to answer it. A cascade could not have: hard-deleting children while the parent is
+recoverable makes restore hand back an account whose buckets are gone — worse than not restoring,
+because the tenant is *told* it came back — and soft-deleting them alongside it needs a restore that
+is transactional over a set, which the platform has no shape for.
+
+⚠ **No provider should declare `SupportsSoftDelete` until the above is built.** The five stated
+reasons in the tree are correct and stay correct; the declaration is the last step, not the first.
+
 ## The provider registry
 
 ```csharp
