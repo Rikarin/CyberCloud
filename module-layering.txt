@@ -135,6 +135,10 @@ CyberCloud.Providers.Sample -> CyberCloud.Core
 CyberCloud.Providers.Sample -> CyberCloud.Kubernetes
 CyberCloud.Providers.Sample -> CyberCloud.ResourceManager
 CyberCloud.Providers.Sample -> CyberCloud.Tenancy
+CyberCloud.Providers.Search -> CyberCloud.Core
+CyberCloud.Providers.Search -> CyberCloud.Kubernetes
+CyberCloud.Providers.Search -> CyberCloud.ResourceManager
+CyberCloud.Providers.Search -> CyberCloud.Tenancy
 CyberCloud.Providers.Storage -> CyberCloud.Core
 CyberCloud.Providers.Storage -> CyberCloud.Kubernetes
 CyberCloud.Providers.Storage -> CyberCloud.ResourceManager

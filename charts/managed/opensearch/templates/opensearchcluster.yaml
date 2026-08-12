@@ -1,0 +1,165 @@
+{{/*
+opensearch-k8s-operator `OpenSearchCluster` — docs/plan/12 § The catalogue, OpenSearch.
+
+⚠ This renders a custom resource; it does not install the operator. The operator is
+charts/bundle/'s job, which is why this chart has no CRD directory and no operator Deployment.
+
+⚠ THE API GROUP IS DEPRECATED UPSTREAM AND IS RENDERED ANYWAY. api/v1/groupversion_info.go says
+"The opensearch.opster.io API group is deprecated ... Please migrate to opensearch.org/v1", and both
+groups exist in the operator's tree today. This is the group a released operator serves; a chart
+rendering into a group the installed operator does not watch produces an object that is applied,
+accepted, and reconciled by nothing. See SOURCE and conformance.yaml § owed.
+
+⚠ ONE custom resource and no StatefulSets, no Services and no ServiceMonitor. The operator expands
+spec.nodePools into a StatefulSet per component, their Services, the TLS Secrets it generates, the
+admin-credentials Secret it generates, and a ServiceMonitor. Writing any of them here would be this
+chart competing with the controller that owns them.
+*/}}
+apiVersion: opensearch.opster.io/v1
+kind: OpenSearchCluster
+metadata:
+  name: {{ include "opensearch.name" . }}
+  labels:
+    {{- include "opensearch.platformLabels" . | nindent 4 }}
+spec:
+  general:
+    {{/*
+      ⚠ serviceName is the ONE field in GeneralConfig with no `omitempty`. The operator names the
+      Service after it and every node's discovery.seed_hosts resolves through that Service, so a
+      cluster that left it unset would never form. It is the object's own name on purpose: two names
+      for one cluster is a thing a support engineer has to hold in their head.
+    */}}
+    serviceName: {{ include "opensearch.name" . }}
+    version: {{ .Values.version | quote }}
+    {{/*
+      ⚠ Written although the CRD defaults it to 9200 (+kubebuilder:default=9200), so the port the
+      endpoint names is a fact of this chart rather than of somebody else's default. It is also one
+      of the three structural defaults that make OpenSearchServices.Matches a CONTAINMENT check
+      rather than an equality one — see SOURCE.
+    */}}
+    httpPort: 9200
+    {{- if .Values.monitoring.enabled }}
+    monitoring:
+      enable: true
+    {{- end }}
+    {{- if .Values.imageName }}
+    image: {{ .Values.imageName | quote }}
+    {{- end }}
+
+  {{/*
+    ⚠ THE ONE BLOCK WHOSE ABSENCE BREAKS THE SERVICE SILENTLY, AND IT IS NOT A VALUES KEY.
+    pkg/reconcilers/tls.go begins `if r.instance.Spec.Security == nil || r.instance.Spec.Security.Tls
+    == nil { r.logger.Info("No security specified. Not doing anything"); return ctrl.Result{}, nil }`
+    — no certificates generated, no secrets created, no volume mounts configured. OpenSearch's
+    security plugin requires transport TLS to form a cluster, so a service rendered without this is a
+    set of nodes that never discover each other and report nothing wrong about it.
+
+    ⚠ perNode on the transport listener is the more expensive of the two legal answers. One shared
+    certificate would satisfy the plugin; a per-node certificate is what makes the peer check
+    identify the NODE, so that one compromised pod cannot impersonate the cluster manager.
+
+    ⚠ NO `config:` BLOCK, and that is the decision this chart is most likely to be second-guessed on.
+    Leaving adminCredentialsSecret unset makes the operator GENERATE a random admin password —
+    pkg/helpers/helpers.go, EnsureAdminCredentialsSecret — so the service comes up authenticated and
+    the platform simply cannot hand the credential out. Rendering a reference to a Secret nothing
+    writes, which is what charts/managed/seaweedfs does, is right there and wrong here: SeaweedFS
+    with no identities file grants admin to everyone, so the dangling reference is the safer of two
+    bad states. Here it would stop a cluster that would otherwise be fine.
+  */}}
+  security:
+    tls:
+      transport:
+        generate: true
+        perNode: true
+      http:
+        generate: true
+
+  {{/*
+    docs/plan/12's "Data/master/coordinating node roles" — an ARRAY inside one object rather than
+    three objects.
+
+    ⚠ THE ORDER IS FIXED: masters, data, coordinators. spec.nodePools has no listMapKey in the
+    operator's CRD, so server-side apply treats the whole array as one atomic field this chart owns.
+    A body that changed nothing must render bytes that changed nothing.
+
+    ⚠ The coordinating pool is OMITTED at zero rather than declared with replicas: 0. NodePool.
+    Replicas has no omitempty, so a zero-replica pool is a real StatefulSet the operator creates,
+    scales to nothing, and then waits on in every readiness roll-up it does.
+
+    ⚠ `roles` on the coordinating pool is [ingest] and NOT the empty list a textbook
+    coordinating-only node carries. pkg/builders/cluster.go does
+    `nodeRolesValue := strings.Join(selectedRoles, ",")` with
+    `if len(selectedRoles) == 0 { nodeRolesValue = "[]" }` — it renders the two-character STRING `[]`
+    into an environment variable, and a node whose roles OpenSearch fails to parse joins as a DEFAULT
+    node, data and cluster-manager both. See conformance.yaml § owed.
+  */}}
+  nodePools:
+    - component: masters
+      replicas: {{ .Values.masterNodes }}
+      diskSize: {{ include "opensearch.controlPlaneVolume" . | quote }}
+      roles:
+        - "cluster_manager"
+      resources:
+        {{- include "opensearch.controlPlaneResources" . | nindent 8 }}
+      {{- if .Values.storage.class }}
+      persistence:
+        pvc:
+          storageClass: {{ .Values.storage.class | quote }}
+          accessModes:
+            - ReadWriteOnce
+      {{- end }}
+
+    {{- $cpu := include "opensearch.cpu" . }}
+    {{- $memory := include "opensearch.memory" . }}
+    - component: data
+      replicas: {{ .Values.dataNodes }}
+      diskSize: {{ .Values.storage.size | quote }}
+      roles:
+        - "data"
+        - "ingest"
+      {{- if and $cpu $memory }}
+      {{/*
+        ⚠ requests and limits at the same values, which is Guaranteed QoS. An OpenSearch node whose
+        memory limit exceeds its request is a node the kubelet may evict while its JVM heap — sized
+        from the LIMIT — is perfectly happy, and a search cluster that loses a data node to eviction
+        re-replicates every shard on it.
+      */}}
+      resources:
+        requests:
+          cpu: {{ $cpu | quote }}
+          memory: {{ $memory | quote }}
+        limits:
+          cpu: {{ $cpu | quote }}
+          memory: {{ $memory | quote }}
+      {{- end }}
+      {{- if .Values.storage.class }}
+      persistence:
+        pvc:
+          storageClass: {{ .Values.storage.class | quote }}
+          accessModes:
+            - ReadWriteOnce
+      {{- end }}
+
+    {{- if gt (int .Values.coordinatingNodes) 0 }}
+    - component: coordinators
+      replicas: {{ .Values.coordinatingNodes }}
+      diskSize: {{ include "opensearch.controlPlaneVolume" . | quote }}
+      roles:
+        - "ingest"
+      {{- if and $cpu $memory }}
+      resources:
+        requests:
+          cpu: {{ $cpu | quote }}
+          memory: {{ $memory | quote }}
+        limits:
+          cpu: {{ $cpu | quote }}
+          memory: {{ $memory | quote }}
+      {{- end }}
+      {{- if .Values.storage.class }}
+      persistence:
+        pvc:
+          storageClass: {{ .Values.storage.class | quote }}
+          accessModes:
+            - ReadWriteOnce
+      {{- end }}
+    {{- end }}
