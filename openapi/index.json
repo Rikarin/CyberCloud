@@ -179,6 +179,7 @@
   "x-cybercloud-providers": [
     "CyberCloud.Analytics",
     "CyberCloud.Cache",
+    "CyberCloud.DBforMySQL",
     "CyberCloud.DBforPostgreSQL",
     "CyberCloud.DocumentDB",
     "CyberCloud.Messaging",
@@ -210,6 +211,19 @@
         "plural": "Valkey caches",
         "alias": "valkey",
         "summary": "A managed Valkey cache with Sentinel failover, on spotahome/redis-operator. Valkey rather than Redis, per ADR-011; every Redis client works against it.",
+        "declared": true
+      }
+    },
+    {
+      "type": "CyberCloud.DBforMySQL/servers",
+      "apiVersions": [
+        "2026-08-01"
+      ],
+      "display": {
+        "name": "MariaDB server",
+        "plural": "MariaDB servers",
+        "alias": "mariadb",
+        "summary": "A managed MariaDB server on mariadb-operator, speaking the MySQL wire protocol, with Galera for high availability. MariaDB is MySQL-compatible on a documented subset and is not MySQL — see the supported-subset table before migrating.",
         "declared": true
       }
     },

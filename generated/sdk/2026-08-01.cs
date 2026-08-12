@@ -520,6 +520,230 @@ public sealed partial class ValkeyCacheCollection {
     public partial AsyncPageable<ValkeyCacheResource> GetAllAsync(CancellationToken cancellationToken = default);
 }
 
+/// <summary>The values /properties/highAvailability accepts. ⚠ Closed: the write path refuses anything else.</summary>
+public enum MariaDBServerHighAvailability {
+    /// <summary>Never assigned. Not a value the API accepts.</summary>
+    Unknown = 0,
+
+    /// <summary>None</summary>
+    [JsonStringEnumMemberName("None")]
+    None = 1,
+
+    /// <summary>Galera</summary>
+    [JsonStringEnumMemberName("Galera")]
+    Galera = 2
+}
+
+/// <summary>The values /properties/sizing/preset accepts. ⚠ Closed: the write path refuses anything else.</summary>
+public enum MariaDBServerPreset {
+    /// <summary>Never assigned. Not a value the API accepts.</summary>
+    Unknown = 0,
+
+    /// <summary>s1.nano</summary>
+    [JsonStringEnumMemberName("s1.nano")]
+    S1Nano = 1,
+
+    /// <summary>s1.micro</summary>
+    [JsonStringEnumMemberName("s1.micro")]
+    S1Micro = 2,
+
+    /// <summary>s1.small</summary>
+    [JsonStringEnumMemberName("s1.small")]
+    S1Small = 3,
+
+    /// <summary>s1.medium</summary>
+    [JsonStringEnumMemberName("s1.medium")]
+    S1Medium = 4,
+
+    /// <summary>s1.large</summary>
+    [JsonStringEnumMemberName("s1.large")]
+    S1Large = 5,
+
+    /// <summary>s1.xlarge</summary>
+    [JsonStringEnumMemberName("s1.xlarge")]
+    S1Xlarge = 6,
+
+    /// <summary>s1.2xlarge</summary>
+    [JsonStringEnumMemberName("s1.2xlarge")]
+    S12xlarge = 7,
+
+    /// <summary>s1.4xlarge</summary>
+    [JsonStringEnumMemberName("s1.4xlarge")]
+    S14xlarge = 8
+}
+
+/// <summary>The values /properties/version accepts. ⚠ Closed: the write path refuses anything else.</summary>
+public enum MariaDBServerVersion {
+    /// <summary>Never assigned. Not a value the API accepts.</summary>
+    Unknown = 0,
+
+    /// <summary>10.11</summary>
+    [JsonStringEnumMemberName("10.11")]
+    N1011 = 1,
+
+    /// <summary>11.4</summary>
+    [JsonStringEnumMemberName("11.4")]
+    N114 = 2,
+
+    /// <summary>11.8</summary>
+    [JsonStringEnumMemberName("11.8")]
+    N118 = 3
+}
+
+/// <summary>The body of a CyberCloud.DBforMySQL/servers.</summary>
+/// <remarks>A managed MariaDB server on mariadb-operator, speaking the MySQL wire protocol, with Galera for high availability. MariaDB is MySQL-compatible on a documented subset and is not MySQL — see the supported-subset table before migrating.</remarks>
+public sealed partial class MariaDBServerData {
+
+    /// <summary>The region the server is billed in.</summary>
+    /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+    [JsonPropertyName("location")]
+    public required string Location { get; set; }
+
+    /// <summary>Name of the application database created on first start. Lower case only, because on Linux a database is a directory and its name is therefore case-sensitive.</summary>
+    /// <remarks>Defaults to "app" when left unset.</remarks>
+    [JsonPropertyName("database")]
+    public string? Database { get; set; }
+
+    /// <summary>Account granted every privilege on the application database. Capped at MySQL's 32 characters rather than MariaDB's longer limit, because this row is sold as MySQL-compatible.</summary>
+    /// <remarks>Defaults to "app" when left unset.</remarks>
+    [JsonPropertyName("username")]
+    public string? Username { get; set; }
+
+    /// <summary>The cluster whose namespace holds the MariaDB objects.</summary>
+    /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+    [JsonPropertyName("clusterId")]
+    public required Guid ClusterId { get; set; }
+
+    /// <summary>Replication topology. Galera is three synchronous instances; None is a single instance and a single point of failure, offered for development only.</summary>
+    /// <remarks>⚠ Cannot change after create. Defaults to "Galera" when left unset.</remarks>
+    [JsonPropertyName("highAvailability")]
+    public MariaDBServerHighAvailability? HighAvailability { get; set; }
+
+    /// <summary>Whether the operator runs a mysqld-exporter beside the server.</summary>
+    /// <remarks>Defaults to true when left unset.</remarks>
+    [JsonPropertyName("enabled")]
+    public bool? Enabled { get; set; }
+
+    /// <summary>Explicit vCPU quantity in Kubernetes form, for example 500m or 2. Empty means take it from the preset.</summary>
+    /// <remarks>Defaults to "" when left unset.</remarks>
+    [JsonPropertyName("cpu")]
+    public string? Cpu { get; set; }
+
+    /// <summary>Explicit memory quantity in Kubernetes form, for example 4Gi. Empty means take it from the preset.</summary>
+    /// <remarks>Defaults to "" when left unset.</remarks>
+    [JsonPropertyName("memory")]
+    public string? Memory { get; set; }
+
+    /// <summary>A sizing preset from docs/plan/12. Databases use the s1 family, which is 1 vCPU to 4 GiB.</summary>
+    /// <remarks>Defaults to "s1.small" when left unset.</remarks>
+    [JsonPropertyName("preset")]
+    public MariaDBServerPreset? Preset { get; set; }
+
+    /// <summary>StorageClass name. Empty means the cluster default.</summary>
+    /// <remarks>⚠ Cannot change after create. Defaults to "" when left unset.</remarks>
+    [JsonPropertyName("class")]
+    public string? Class { get; set; }
+
+    /// <summary>Data volume size in Kubernetes quantity form. Grows online; never shrinks.</summary>
+    /// <remarks>Required on a create. Defaults to "20Gi" when left unset.</remarks>
+    [JsonPropertyName("size")]
+    public required string Size { get; set; }
+
+    /// <summary>Major MariaDB version, by LTS series. Minor upgrades are applied automatically in the maintenance window.</summary>
+    /// <remarks>Required on a create. Defaults to "11.4" when left unset.</remarks>
+    [JsonPropertyName("version")]
+    public required MariaDBServerVersion Version { get; set; }
+
+    /// <summary>Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.</summary>
+    [JsonPropertyName("tags")]
+    public IDictionary<string, string> Tags { get; set; } = new Dictionary<string, string>(StringComparer.Ordinal);
+}
+
+/// <summary>One MariaDB server, and the operations on it.</summary>
+public sealed partial class MariaDBServerResource {
+    /// <summary>The resource's fully qualified id.</summary>
+    public string Id { get; init; } = string.Empty;
+
+    /// <summary>The body, projected at this api-version.</summary>
+    public MariaDBServerData Data { get; init; } = new();
+
+    /// <summary>Re-reads the resource.</summary>
+    public partial Task<Response<MariaDBServerResource>> GetAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Amends the resource. A merge patch: what is not set is not changed.</summary>
+    public partial Task<Operation<MariaDBServerResource>> UpdateAsync(
+        WaitUntil waitUntil,
+        MariaDBServerData data,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Deletes the resource. ⚠ Permanent: this type declares no soft-delete window.</summary>
+    public partial Task<Operation> DeleteAsync(
+        WaitUntil waitUntil,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>What listKeys returns. ⚠ Secret material: never log or cache this.</summary>
+    public sealed partial class ListKeysResult {
+
+        /// <summary>The authentication plugin a client must be configured for. ⚠ Not MySQL 8's caching_sha2_password default — see the supported-subset table. Returned rather than documented because a wrong default here is a connection that fails with a message about a plugin nobody chose.</summary>
+        [JsonPropertyName("authenticationPlugin")]
+        public required string AuthenticationPlugin { get; set; }
+
+        /// <summary>The application database.</summary>
+        [JsonPropertyName("database")]
+        public required string Database { get; set; }
+
+        /// <summary>The in-cluster DNS name to connect to. ⚠ The primary Service's when high availability is on, so the topology is part of the connection string rather than hidden behind it.</summary>
+        [JsonPropertyName("host")]
+        public required string Host { get; set; }
+
+        /// <summary>The application account's password, read from the tenant's Vault for this call only.</summary>
+        [JsonPropertyName("password")]
+        public required string Password { get; set; }
+
+        /// <summary>The TCP port.</summary>
+        [JsonPropertyName("port")]
+        public required long Port { get; set; }
+
+        /// <summary>The application account.</summary>
+        [JsonPropertyName("username")]
+        public required string Username { get; set; }
+    }
+
+    /// <summary>ListKeys. ⚠ An action never creates — a POST to a name that does not exist is a 404. ⚠ The response carries secret material and is always audited.</summary>
+    public partial Task<Response<ListKeysResult>> ListKeysAsync(
+        CancellationToken cancellationToken = default);
+}
+
+/// <summary>The MariaDB servers in one resource group.</summary>
+/// <remarks>⚠ Every write is long-running: docs/plan/08 § The write path, end to end
+/// ends in a 202 for every verb, so there is no synchronous overload to offer.</remarks>
+public sealed partial class MariaDBServerCollection {
+    /// <summary>The resource type these address.</summary>
+    public const string ResourceType = "CyberCloud.DBforMySQL/servers";
+
+    /// <summary>The URL template, with the api-version this file was generated at.</summary>
+    public const string PathTemplate = "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.DBforMySQL/servers/{resourceName}";
+
+    /// <inheritdoc cref="GeneratedApiVersion.Value" />
+    public const string ApiVersion = "2026-08-01";
+
+    /// <summary>Creates or replaces one MariaDB server.</summary>
+    /// <remarks>⚠ Poll with GetProgressAsync() rather than only WaitForCompletionAsync():
+    /// docs/plan/21 § The .NET SDK — "Azure's LROs expose no progress; ours do and the
+    /// SDK should not hide it".</remarks>
+    public partial Task<Operation<MariaDBServerResource>> CreateOrUpdateAsync(
+        WaitUntil waitUntil,
+        string name,
+        MariaDBServerData data,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Reads one MariaDB server by name.</summary>
+    public partial Task<Response<MariaDBServerResource>> GetAsync(string name, CancellationToken cancellationToken = default);
+
+    /// <summary>The MariaDB servers in this group, paged.</summary>
+    public partial AsyncPageable<MariaDBServerResource> GetAllAsync(CancellationToken cancellationToken = default);
+}
+
 /// <summary>The values /properties/extensions accepts. ⚠ Closed: the write path refuses anything else.</summary>
 public enum PostgreSQLServerExtensions {
     /// <summary>Never assigned. Not a value the API accepts.</summary>

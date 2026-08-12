@@ -755,6 +755,365 @@
       "x-cybercloud-resource-type": "CyberCloud.Cache/redis",
       "x-cybercloud-action": "listKeys"
     },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.DBforMySQL/servers/{resourceName}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "get": {
+        "operationId": "CyberCloud_DBforMySQL_servers_Get",
+        "summary": "Read a CyberCloud.DBforMySQL/servers.",
+        "description": "The body is this api-version's projection of the resource: docs/plan/08 § The provider registry keeps grain state as a superset and a read at an older version drops what that version did not declare.",
+        "responses": {
+          "200": {
+            "description": "The resource.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.DBforMySQL.servers"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "read"
+      },
+      "put": {
+        "operationId": "CyberCloud_DBforMySQL_servers_CreateOrUpdate",
+        "summary": "Create or replace a CyberCloud.DBforMySQL/servers.",
+        "description": "A full replacement. Every property the schema marks required must be present; a read-only property is refused rather than ignored — docs/plan/08 § The write path, end to end.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CyberCloud.DBforMySQL.servers"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "headers": {
+              "Azure-AsyncOperation": {
+                "description": "The absolute URL of the operation to poll.",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "Retry-After": {
+                "description": "Seconds to wait before the first poll.",
+                "required": true,
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "write"
+      },
+      "patch": {
+        "operationId": "CyberCloud_DBforMySQL_servers_Update",
+        "summary": "Merge-patch a CyberCloud.DBforMySQL/servers.",
+        "description": "A merge patch. The patch itself may omit required properties; the merged result is what is validated — see ResourceSchema.Validate.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CyberCloud.DBforMySQL.servers"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "headers": {
+              "Azure-AsyncOperation": {
+                "description": "The absolute URL of the operation to poll.",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "Retry-After": {
+                "description": "Seconds to wait before the first poll.",
+                "required": true,
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "write"
+      },
+      "delete": {
+        "operationId": "CyberCloud_DBforMySQL_servers_Delete",
+        "summary": "Delete a CyberCloud.DBforMySQL/servers.",
+        "description": "The delete is permanent: this type declares no soft-delete window.",
+        "responses": {
+          "202": {
+            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "headers": {
+              "Azure-AsyncOperation": {
+                "description": "The absolute URL of the operation to poll.",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "Retry-After": {
+                "description": "Seconds to wait before the first poll.",
+                "required": true,
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "delete",
+        "x-cybercloud-soft-delete-days": 0
+      },
+      "x-cybercloud-resource-type": "CyberCloud.DBforMySQL/servers",
+      "x-cybercloud-display": {
+        "name": "MariaDB server",
+        "plural": "MariaDB servers",
+        "alias": "mariadb",
+        "summary": "A managed MariaDB server on mariadb-operator, speaking the MySQL wire protocol, with Galera for high availability. MariaDB is MySQL-compatible on a documented subset and is not MySQL — see the supported-subset table before migrating.",
+        "declared": true
+      },
+      "x-cybercloud-supports-tags": true,
+      "x-cybercloud-requires-cluster": true,
+      "x-cybercloud-cluster-id-pointer": "/properties/clusterId",
+      "x-cybercloud-soft-delete-days": 0,
+      "x-cybercloud-meters": [
+        {
+          "meter": "MemoryGb",
+          "amountPointer": "",
+          "fallback": null,
+          "expression": "instances × sizing.memory, in GiB, where instances is 3 under Galera and 1 otherwise, taking sizing.preset when the override is empty",
+          "reads": [
+            "/properties/highAvailability",
+            "/properties/sizing/preset",
+            "/properties/sizing/memory"
+          ]
+        },
+        {
+          "meter": "Resources",
+          "amountPointer": "",
+          "fallback": 1,
+          "expression": "1",
+          "reads": []
+        },
+        {
+          "meter": "StorageGb",
+          "amountPointer": "",
+          "fallback": null,
+          "expression": "instances × storage.size, in GiB, where instances is 3 under Galera and 1 otherwise",
+          "reads": [
+            "/properties/highAvailability",
+            "/properties/storage/size"
+          ]
+        },
+        {
+          "meter": "Vcpu",
+          "amountPointer": "",
+          "fallback": null,
+          "expression": "instances × sizing.cpu, in cores, where instances is 3 under Galera and 1 otherwise, taking sizing.preset when the override is empty",
+          "reads": [
+            "/properties/highAvailability",
+            "/properties/sizing/preset",
+            "/properties/sizing/cpu"
+          ]
+        }
+      ]
+    },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.DBforMySQL/servers/{resourceName}/listKeys": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "post": {
+        "operationId": "CyberCloud_DBforMySQL_servers_ListKeys",
+        "summary": "listKeys a CyberCloud.DBforMySQL/servers.",
+        "description": "An action never creates: a POST to a name that does not exist is a 404 — docs/plan/08 § The write path, end to end. ⚠ The response carries secret material. It is always audited and is never cached — docs/plan/08 § The provider registry.",
+        "responses": {
+          "200": {
+            "description": "The action's result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.DBforMySQL.servers.ListKeysResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "listKeys",
+        "x-cybercloud-secret": true,
+        "x-cybercloud-long-running": false
+      },
+      "x-cybercloud-resource-type": "CyberCloud.DBforMySQL/servers",
+      "x-cybercloud-action": "listKeys"
+    },
     "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.DBforPostgreSQL/servers/{resourceName}": {
       "parameters": [
         {
@@ -4517,6 +4876,211 @@
         "title": "CyberCloud.Cache.redis.ListKeysResponse",
         "type": "object"
       },
+      "CyberCloud.DBforMySQL.servers": {
+        "additionalProperties": false,
+        "description": "The body of a CyberCloud.DBforMySQL/servers. Generated from the provider registry's schema, which is the same object the write path validates against — docs/plan/08 § The provider registry.",
+        "properties": {
+          "location": {
+            "description": "The region the server is billed in.",
+            "example": "eu-central",
+            "format": "cybercloud-region",
+            "type": "string",
+            "x-cybercloud-immutable": true,
+            "x-cybercloud-widget": "region"
+          },
+          "properties": {
+            "additionalProperties": false,
+            "description": "The server's own settings.",
+            "properties": {
+              "bootstrap": {
+                "additionalProperties": false,
+                "description": "What exists in the database the moment it comes up.",
+                "properties": {
+                  "database": {
+                    "default": "app",
+                    "description": "Name of the application database created on first start. Lower case only, because on Linux a database is a directory and its name is therefore case-sensitive.",
+                    "maxLength": 64,
+                    "minLength": 1,
+                    "pattern": "^(?:[a-z_][a-z0-9_]*)$",
+                    "type": "string"
+                  },
+                  "username": {
+                    "default": "app",
+                    "description": "Account granted every privilege on the application database. Capped at MySQL's 32 characters rather than MariaDB's longer limit, because this row is sold as MySQL-compatible.",
+                    "maxLength": 32,
+                    "minLength": 1,
+                    "pattern": "^(?:[a-z_][a-z0-9_]*)$",
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              },
+              "clusterId": {
+                "description": "The cluster whose namespace holds the MariaDB objects.",
+                "format": "uuid",
+                "type": "string",
+                "x-cybercloud-immutable": true,
+                "x-cybercloud-widget": "cluster"
+              },
+              "highAvailability": {
+                "default": "Galera",
+                "description": "Replication topology. Galera is three synchronous instances; None is a single instance and a single point of failure, offered for development only.",
+                "enum": [
+                  "None",
+                  "Galera"
+                ],
+                "type": "string",
+                "x-cybercloud-immutable": true
+              },
+              "monitoring": {
+                "additionalProperties": false,
+                "description": "What the platform scrapes.",
+                "properties": {
+                  "enabled": {
+                    "default": true,
+                    "description": "Whether the operator runs a mysqld-exporter beside the server.",
+                    "type": "boolean"
+                  }
+                },
+                "type": "object"
+              },
+              "sizing": {
+                "additionalProperties": false,
+                "description": "CPU and memory, either by preset or explicitly.",
+                "properties": {
+                  "cpu": {
+                    "default": "",
+                    "description": "Explicit vCPU quantity in Kubernetes form, for example 500m or 2. Empty means take it from the preset.",
+                    "pattern": "^(?:(\\d+(\\.\\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)?)$",
+                    "type": "string"
+                  },
+                  "memory": {
+                    "default": "",
+                    "description": "Explicit memory quantity in Kubernetes form, for example 4Gi. Empty means take it from the preset.",
+                    "pattern": "^(?:(\\d+(\\.\\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)?)$",
+                    "type": "string"
+                  },
+                  "preset": {
+                    "default": "s1.small",
+                    "description": "A sizing preset from docs/plan/12. Databases use the s1 family, which is 1 vCPU to 4 GiB.",
+                    "enum": [
+                      "s1.nano",
+                      "s1.micro",
+                      "s1.small",
+                      "s1.medium",
+                      "s1.large",
+                      "s1.xlarge",
+                      "s1.2xlarge",
+                      "s1.4xlarge"
+                    ],
+                    "type": "string",
+                    "x-cybercloud-widget": "cozy-preset"
+                  }
+                },
+                "type": "object"
+              },
+              "storage": {
+                "additionalProperties": false,
+                "description": "The data volume. Every instance gets its own.",
+                "properties": {
+                  "class": {
+                    "default": "",
+                    "description": "StorageClass name. Empty means the cluster default.",
+                    "type": "string",
+                    "x-cybercloud-immutable": true,
+                    "x-cybercloud-widget": "storageclass"
+                  },
+                  "size": {
+                    "default": "20Gi",
+                    "description": "Data volume size in Kubernetes quantity form. Grows online; never shrinks.",
+                    "example": "20Gi",
+                    "pattern": "^(?:\\d+(\\.\\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)$",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "size"
+                ],
+                "type": "object"
+              },
+              "version": {
+                "default": "11.4",
+                "description": "Major MariaDB version, by LTS series. Minor upgrades are applied automatically in the maintenance window.",
+                "enum": [
+                  "10.11",
+                  "11.4",
+                  "11.8"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "clusterId",
+              "version"
+            ],
+            "type": "object"
+          },
+          "tags": {
+            "type": "object",
+            "description": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "maxProperties": 50,
+            "x-cybercloud-widget": "tag-input"
+          }
+        },
+        "required": [
+          "location"
+        ],
+        "title": "CyberCloud.DBforMySQL/servers",
+        "type": "object"
+      },
+      "CyberCloud.DBforMySQL.servers.ListKeysResponse": {
+        "additionalProperties": false,
+        "description": "What CyberCloud.DBforMySQL/servers/listKeys returns. ⚠ Secret material. docs/plan/08 § The provider registry makes a secret action the only path a secret value leaves by; this schema is therefore the complete list of what does.",
+        "properties": {
+          "authenticationPlugin": {
+            "description": "The authentication plugin a client must be configured for. ⚠ Not MySQL 8's caching_sha2_password default — see the supported-subset table. Returned rather than documented because a wrong default here is a connection that fails with a message about a plugin nobody chose.",
+            "type": "string"
+          },
+          "database": {
+            "description": "The application database.",
+            "type": "string"
+          },
+          "host": {
+            "description": "The in-cluster DNS name to connect to. ⚠ The primary Service's when high availability is on, so the topology is part of the connection string rather than hidden behind it.",
+            "type": "string"
+          },
+          "password": {
+            "description": "The application account's password, read from the tenant's Vault for this call only.",
+            "format": "password",
+            "type": "string",
+            "writeOnly": true,
+            "x-cybercloud-secret": true
+          },
+          "port": {
+            "description": "The TCP port.",
+            "maximum": 65535,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "username": {
+            "description": "The application account.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "authenticationPlugin",
+          "database",
+          "host",
+          "password",
+          "port",
+          "username"
+        ],
+        "title": "CyberCloud.DBforMySQL.servers.ListKeysResponse",
+        "type": "object"
+      },
       "CyberCloud.DBforPostgreSQL.servers": {
         "additionalProperties": false,
         "description": "The body of a CyberCloud.DBforPostgreSQL/servers. Generated from the provider registry's schema, which is the same object the write path validates against — docs/plan/08 § The provider registry.",
@@ -6510,5 +7074,5 @@
       }
     }
   },
-  "x-cybercloud-resource-type-count": 11
+  "x-cybercloud-resource-type-count": 12
 }

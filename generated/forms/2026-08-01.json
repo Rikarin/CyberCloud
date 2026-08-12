@@ -670,6 +670,321 @@
         }
       ]
     },
+    "CyberCloud.DBforMySQL/servers": {
+      "resourceType": "CyberCloud.DBforMySQL/servers",
+      "apiVersion": "2026-08-01",
+      "title": "MariaDB server",
+      "plural": "MariaDB servers",
+      "summary": "A managed MariaDB server on mariadb-operator, speaking the MySQL wire protocol, with Galera for high availability. MariaDB is MySQL-compatible on a documented subset and is not MySQL — see the supported-subset table before migrating.",
+      "overrideKey": "CyberCloud.DBforMySQL/servers@2026-08-01",
+      "coveredPointers": [
+        "/location",
+        "/properties",
+        "/properties/bootstrap",
+        "/properties/bootstrap/database",
+        "/properties/bootstrap/username",
+        "/properties/clusterId",
+        "/properties/highAvailability",
+        "/properties/monitoring",
+        "/properties/monitoring/enabled",
+        "/properties/sizing",
+        "/properties/sizing/cpu",
+        "/properties/sizing/memory",
+        "/properties/sizing/preset",
+        "/properties/storage",
+        "/properties/storage/class",
+        "/properties/storage/size",
+        "/properties/version",
+        "/tags"
+      ],
+      "supportsTags": true,
+      "requiresCluster": true,
+      "clusterIdPointer": "/properties/clusterId",
+      "softDeleteDays": 0,
+      "fields": [
+        {
+          "jsonPointer": "/location",
+          "name": "location",
+          "label": "Location",
+          "control": "xui-region",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "The region the server is billed in.",
+          "format": "cybercloud-region",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new MariaDB server to change it.",
+          "placeholder": "eu-central"
+        },
+        {
+          "jsonPointer": "/properties",
+          "name": "properties",
+          "label": "Properties",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "The server's own settings."
+        },
+        {
+          "jsonPointer": "/properties/bootstrap",
+          "name": "bootstrap",
+          "label": "Bootstrap",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "What exists in the database the moment it comes up."
+        },
+        {
+          "jsonPointer": "/properties/bootstrap/database",
+          "name": "database",
+          "label": "Database",
+          "control": "xui-input",
+          "type": "string",
+          "required": false,
+          "section": "bootstrap",
+          "hint": "Name of the application database created on first start. Lower case only, because on Linux a database is a directory and its name is therefore case-sensitive.",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^(?:[a-z_][a-z0-9_]*)$",
+          "default": "app"
+        },
+        {
+          "jsonPointer": "/properties/bootstrap/username",
+          "name": "username",
+          "label": "Username",
+          "control": "xui-input",
+          "type": "string",
+          "required": false,
+          "section": "bootstrap",
+          "hint": "Account granted every privilege on the application database. Capped at MySQL's 32 characters rather than MariaDB's longer limit, because this row is sold as MySQL-compatible.",
+          "minLength": 1,
+          "maxLength": 32,
+          "pattern": "^(?:[a-z_][a-z0-9_]*)$",
+          "default": "app"
+        },
+        {
+          "jsonPointer": "/properties/clusterId",
+          "name": "clusterId",
+          "label": "Cluster id",
+          "control": "xui-cluster",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "The cluster whose namespace holds the MariaDB objects.",
+          "format": "uuid",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new MariaDB server to change it."
+        },
+        {
+          "jsonPointer": "/properties/highAvailability",
+          "name": "highAvailability",
+          "label": "High availability",
+          "control": "xui-select",
+          "type": "string",
+          "required": false,
+          "section": "general",
+          "hint": "Replication topology. Galera is three synchronous instances; None is a single instance and a single point of failure, offered for development only.",
+          "choices": [
+            {
+              "value": "None",
+              "label": "None"
+            },
+            {
+              "value": "Galera",
+              "label": "Galera"
+            }
+          ],
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new MariaDB server to change it.",
+          "default": "Galera"
+        },
+        {
+          "jsonPointer": "/properties/monitoring",
+          "name": "monitoring",
+          "label": "Monitoring",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "What the platform scrapes."
+        },
+        {
+          "jsonPointer": "/properties/monitoring/enabled",
+          "name": "enabled",
+          "label": "Enabled",
+          "control": "xui-switch",
+          "type": "boolean",
+          "required": false,
+          "section": "monitoring",
+          "hint": "Whether the operator runs a mysqld-exporter beside the server.",
+          "default": true
+        },
+        {
+          "jsonPointer": "/properties/sizing",
+          "name": "sizing",
+          "label": "Sizing",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "CPU and memory, either by preset or explicitly."
+        },
+        {
+          "jsonPointer": "/properties/sizing/cpu",
+          "name": "cpu",
+          "label": "Cpu",
+          "control": "xui-input",
+          "type": "string",
+          "required": false,
+          "section": "sizing",
+          "hint": "Explicit vCPU quantity in Kubernetes form, for example 500m or 2. Empty means take it from the preset.",
+          "pattern": "^(?:(\\d+(\\.\\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)?)$",
+          "default": ""
+        },
+        {
+          "jsonPointer": "/properties/sizing/memory",
+          "name": "memory",
+          "label": "Memory",
+          "control": "xui-input",
+          "type": "string",
+          "required": false,
+          "section": "sizing",
+          "hint": "Explicit memory quantity in Kubernetes form, for example 4Gi. Empty means take it from the preset.",
+          "pattern": "^(?:(\\d+(\\.\\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)?)$",
+          "default": ""
+        },
+        {
+          "jsonPointer": "/properties/sizing/preset",
+          "name": "preset",
+          "label": "Preset",
+          "control": "xui-cozy-preset",
+          "type": "string",
+          "required": false,
+          "section": "sizing",
+          "hint": "A sizing preset from docs/plan/12. Databases use the s1 family, which is 1 vCPU to 4 GiB.",
+          "choices": [
+            {
+              "value": "s1.nano",
+              "label": "S1 nano"
+            },
+            {
+              "value": "s1.micro",
+              "label": "S1 micro"
+            },
+            {
+              "value": "s1.small",
+              "label": "S1 small"
+            },
+            {
+              "value": "s1.medium",
+              "label": "S1 medium"
+            },
+            {
+              "value": "s1.large",
+              "label": "S1 large"
+            },
+            {
+              "value": "s1.xlarge",
+              "label": "S1 xlarge"
+            },
+            {
+              "value": "s1.2xlarge",
+              "label": "S1 2xlarge"
+            },
+            {
+              "value": "s1.4xlarge",
+              "label": "S1 4xlarge"
+            }
+          ],
+          "default": "s1.small"
+        },
+        {
+          "jsonPointer": "/properties/storage",
+          "name": "storage",
+          "label": "Storage",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "The data volume. Every instance gets its own."
+        },
+        {
+          "jsonPointer": "/properties/storage/class",
+          "name": "class",
+          "label": "Class",
+          "control": "xui-storageclass",
+          "type": "string",
+          "required": false,
+          "section": "storage",
+          "hint": "StorageClass name. Empty means the cluster default.",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new MariaDB server to change it.",
+          "default": ""
+        },
+        {
+          "jsonPointer": "/properties/storage/size",
+          "name": "size",
+          "label": "Size",
+          "control": "xui-input",
+          "type": "string",
+          "required": true,
+          "section": "storage",
+          "hint": "Data volume size in Kubernetes quantity form. Grows online; never shrinks.",
+          "pattern": "^(?:\\d+(\\.\\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)$",
+          "default": "20Gi",
+          "placeholder": "20Gi"
+        },
+        {
+          "jsonPointer": "/properties/version",
+          "name": "version",
+          "label": "Version",
+          "control": "xui-select",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "Major MariaDB version, by LTS series. Minor upgrades are applied automatically in the maintenance window.",
+          "choices": [
+            {
+              "value": "10.11",
+              "label": "10 11"
+            },
+            {
+              "value": "11.4",
+              "label": "11 4"
+            },
+            {
+              "value": "11.8",
+              "label": "11 8"
+            }
+          ],
+          "default": "11.4"
+        },
+        {
+          "jsonPointer": "/tags",
+          "name": "tags",
+          "label": "Tags",
+          "control": "xui-tag-input",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+          "maxProperties": 50
+        }
+      ],
+      "actions": [
+        {
+          "name": "listKeys",
+          "label": "List keys",
+          "permission": "listKeys",
+          "longRunning": false,
+          "secret": true,
+          "fields": [],
+          "confirmOnly": true
+        }
+      ]
+    },
     "CyberCloud.DBforPostgreSQL/servers": {
       "resourceType": "CyberCloud.DBforPostgreSQL/servers",
       "apiVersion": "2026-08-01",
