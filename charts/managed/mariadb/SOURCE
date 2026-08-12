@@ -1,0 +1,67 @@
+# Provenance — docs/plan/02 § ADR-010, "Their charts are a starting point, not a dependency.
+# Where a chart is close, fork it into charts/ with the upstream commit recorded in a SOURCE file.
+# A drifting vendored chart with no provenance is how a platform ends up unable to upgrade Postgres."
+#
+# `Build.Charts` requires this file for every chart under charts/managed/ and requires `vendored:`
+# and `upstream:`.
+
+# Where the templates came from. `none` means the templates in this directory were written here.
+vendored: none
+
+# The operator whose CRD contract these templates render against. Not a dependency: the operator is
+# installed by charts/bundle/, and this chart renders only its custom resource.
+upstream: https://github.com/mariadb-operator/mariadb-operator
+
+# The upstream API this chart's templates target. ⚠ An API group/version, not a commit: nothing is
+# vendored, so there is no upstream tree to pin. ⚠ `v1alpha1` is the ONLY served version — this is
+# the first chart in the tree whose CRD is not at a stable version, and the cost is recorded in
+# conformance.yaml § owed, `crd-is-v1alpha1`.
+upstream-api: k8s.mariadb.com/v1alpha1
+
+# The engine. MariaDB Server is GPL-2.0 and the operator is Apache-2.0.
+#
+# ⚠ ADR-011's licence table has NO ROW FOR MARIADB, and this is where that is recorded rather than
+# silently assumed. GPL-2.0 is the ClamAV row's situation — "separate process, separate container, no
+# linking" — and running a GPL server as a service is not the use RSALv2/SSPL/BUSL exist to prevent.
+# What ADR-011's enforcement gate scans is chart and bundle IMAGES, and `mariadb:11.4` is one, so the
+# gate sees it whether or not the table names it.
+engine: https://github.com/MariaDB/server
+
+# Reviewed against the upstream CRD on this date. A bare date rather than a SHA is a weaker claim and
+# is labelled as one — see upstream-api above.
+#
+# ⚠ What this review established, read out of the operator's own source rather than its README,
+# because four of the six are things a README does not say:
+#
+#   * `api/v1alpha1/mariadb_keys.go` — `RootPasswordSecretKeyRef()` returns
+#     `{name: "<name>-root", key: "password", Generate: true}`, and `PasswordSecretKeyRef()` returns
+#     `{name: "<name>-password", key: "password", Generate: true}`.
+#   * `api/v1alpha1/mariadb_types.go` § `SetDefaults` — the root ref is filled in ONLY when
+#     `spec.rootPasswordSecretKeyRef` is the ZERO VALUE. ⚠ So a chart that renders the block itself
+#     and omits `generate` gets `false` — the field's own default — and the server never starts. The
+#     operator's generosity is a DEFAULT, not a behaviour, and writing the block replaces it. Both
+#     refs below therefore carry `generate: true` explicitly.
+#   * `SetDefaults` also writes `image`, `rootEmptyPassword: false`, `port: 3306`,
+#     `myCnfConfigMapKeyRef`, `passwordSecretKeyRef`, the metrics exporter's image/port/username/
+#     password ref, `tls: {enabled: true}`, `updateStrategy`, and — via `Storage.SetDefaults()` —
+#     `storage.ephemeral: false`, `resizeInUseVolumes: true`, `waitForVolumeResize: true` and a
+#     `volumeClaimTemplate`. ⚠ THE OPERATOR EDITS THE SPEC IT IS GIVEN, which is why
+#     `MariaDbServers.Matches` is a containment test and not a field comparison.
+#   * TLS is on by DEFAULT (`spec.tls.enabled` defaults to `true` in `SetDefaults`). docs/plan/12
+#     asks for TLS on the Valkey row and could not have it; here it arrives without being asked for,
+#     and no `tls` property is declared because the platform does not manage the issuer yet.
+#     conformance.yaml § owed carries what that leaves open.
+#   * Galera requires an ODD replica count — the CRD carries the rule "An odd number of MariaDB
+#     instances (mariadb.spec.replicas) is required to avoid split brain situations for Galera", with
+#     an opt-out at `galera.replicasAllowEvenNumber`. The opt-out is NOT rendered and the replica
+#     count is not a tenant setting; see conformance.yaml § owed, `replica-count-is-not-a-setting`.
+#   * `api/v1alpha1/mariadb_keys.go` — the Services a client connects to are `<name>` when HA is off
+#     (`GetHost()` → `ServiceFQDN`) and `<name>-primary` when it is on (`PrimaryServiceKey`). Also
+#     `<name>-secondary` and the headless `<name>-internal`. None is applied by this chart; they are
+#     here because `listKeys` advertises one and a connection string built from a guess resolves to
+#     nothing.
+reviewed: 2026-08-12
+
+# ⚠ Cozystack (docs/plan/02 § ADR-010) contributed the *operator choice* and the annotated-values
+# pipeline shape to this chart, and no code. It is deliberately not listed as `upstream`, because
+# `upstream` means "there is a tree we could diff against" and here there is not.

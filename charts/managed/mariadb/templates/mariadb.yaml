@@ -1,0 +1,112 @@
+{{/*
+mariadb-operator's `MariaDB` — docs/plan/12 § The catalogue, MariaDB.
+
+⚠ This renders a custom resource; it does not install the operator. The operator is
+charts/bundle/'s job, which is why this chart has no CRD directory and no operator Deployment.
+
+⚠ One custom resource and no Services. A MariaDB expands into a StatefulSet, four Services
+(`<name>`, `<name>-primary`, `<name>-secondary` and the headless `<name>-internal`), ConfigMaps and,
+under Galera, an agent and a recovery job — all of them the operator's. Writing any of them here
+would be this chart competing with the controller that owns them.
+*/}}
+apiVersion: k8s.mariadb.com/v1alpha1
+kind: MariaDB
+metadata:
+  name: {{ include "mariadb.name" . }}
+  labels:
+    {{- include "mariadb.platformLabels" . | nindent 4 }}
+spec:
+  image: {{ include "mariadb.image" . | quote }}
+  replicas: {{ include "mariadb.replicas" . }}
+  port: 3306
+
+  {{- with include "mariadb.resources" . }}
+  resources:
+    {{- . | trim | nindent 4 }}
+  {{- end }}
+
+  storage:
+    size: {{ .Values.storage.size | quote }}
+    {{- if .Values.storage.class }}
+    storageClassName: {{ .Values.storage.class | quote }}
+    {{- end }}
+
+  {{/*
+    ⚠ TWO SECRET NAMES AND NO VALUES, AND `generate: true` IS LOAD-BEARING RATHER THAN POLITE.
+    `MariaDB.SetDefaults` fills in `spec.rootPasswordSecretKeyRef` — with `Generate: true` — ONLY
+    when the field is the zero value. Rendering the block at all replaces that default, and
+    `generate` is a bool whose own default is `false`, so a block written without it is a server that
+    waits forever for a Secret nothing writes. The operator's generosity is a default, not a
+    behaviour.
+
+    ⚠ `rootEmptyPassword` is written as `false` rather than left out. Its default is already false,
+    and it is the one field on this CRD that turns a managed database into an open one — so it is
+    stated, where a reader looking for "is this thing password-protected" will find the answer.
+
+    ⚠ Both Secret names are the OPERATOR'S OWN DEFAULTS — `<name>-root` and `<name>-password` from
+    `api/v1alpha1/mariadb_keys.go`. Choosing our own would work identically and would mean that if
+    this block were ever dropped, the operator's fallback pointed at two DIFFERENT Secrets and the
+    server came up with credentials nobody had recorded.
+  */}}
+  rootEmptyPassword: false
+  rootPasswordSecretKeyRef:
+    name: {{ printf "%s-root" (include "mariadb.name" .) }}
+    key: password
+    generate: true
+
+  database: {{ .Values.bootstrap.database | quote }}
+  username: {{ .Values.bootstrap.username | quote }}
+  passwordSecretKeyRef:
+    name: {{ printf "%s-password" (include "mariadb.name" .) }}
+    key: password
+    generate: true
+
+  myCnf: |
+    {{- include "mariadb.myCnf" . | nindent 4 }}
+
+  metrics:
+    enabled: {{ .Values.monitoring.enabled }}
+
+  {{- if eq .Values.highAvailability "Galera" }}
+  {{/*
+    ⚠ The block is absent rather than `enabled: false` when HA is off. `IsGaleraEnabled()` reads
+    `spec.galera != nil && spec.galera.enabled`, and `Galera.SetDefaults` runs only when it is
+    enabled — so an `enabled: false` block would be a field this field manager owns forever under
+    server-side apply, on a struct the operator would otherwise never touch.
+  */}}
+  galera:
+    enabled: true
+  {{- end }}
+{{- if .Values.credentials.rootPassword }}
+---
+{{/*
+The root password, as the Secret the CR above references by name. Rendered only when the resolver
+supplied a value.
+
+⚠ When it is absent the operator generates one, because the ref carries `generate: true` — which is
+a better failure than the Valkey row's (a cache that never starts) and the same failure as the
+PostgreSQL row's: a working database whose credentials `listKeys` cannot hand out. docs/plan/12
+§ The pattern, once, piece 5 is what closes it.
+*/}}
+apiVersion: v1
+kind: Secret
+type: Opaque
+metadata:
+  name: {{ printf "%s-root" (include "mariadb.name" .) }}
+  labels:
+    {{- include "mariadb.platformLabels" . | nindent 4 }}
+stringData:
+  password: {{ .Values.credentials.rootPassword | quote }}
+{{- end }}
+{{- if .Values.credentials.password }}
+---
+apiVersion: v1
+kind: Secret
+type: Opaque
+metadata:
+  name: {{ printf "%s-password" (include "mariadb.name" .) }}
+  labels:
+    {{- include "mariadb.platformLabels" . | nindent 4 }}
+stringData:
+  password: {{ .Values.credentials.password | quote }}
+{{- end }}

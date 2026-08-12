@@ -1,0 +1,49 @@
+# Managed MariaDB — docs/plan/12 § The catalogue, "MariaDB — CyberCloud.DBforMySQL/servers".
+#
+# The operator is mariadb-operator, taken from Cozystack's survey per docs/plan/02 § ADR-010
+# clause 1. No Cozystack code is vendored; see SOURCE next to this file.
+#
+# ⚠ THE CHART IS CALLED `mariadb`, THE RESOURCE TYPE IS `CyberCloud.DBforMySQL/servers`, AND THE
+# ENGINE IS MARIADB. docs/plan/12 line 310 says the row is "positioned as MySQL-compatible; the same
+# honesty rule as FerretDB applies to the compatibility claim", and that rule (line 262) is: "This is
+# a compatibility layer and the product page must say so, with a supported-subset table." So the
+# `description` below names MariaDB, the type path keeps the Azure-parity spelling
+# (Microsoft.DBforMySQL/servers → CyberCloud.DBforMySQL/servers) because a path is what a tenant's
+# existing tooling addresses by string, and the supported-subset table lives on MariaDbServers in
+# src/Providers/CyberCloud.Providers.DBforMySQL/. ADR-011 makes the same split for Valkey: the
+# product page says Valkey, the path says redis.
+apiVersion: v2
+name: mariadb
+description: Managed MariaDB on mariadb-operator — MySQL wire-compatible, Galera for HA, MySQL-compatible on the documented subset only.
+type: application
+
+# The chart's own version. Bumped on every change to this directory.
+version: 0.1.0
+
+# The default MariaDB LTS series, matching values.yaml `version`.
+appVersion: "11.4"
+
+kubeVersion: ">=1.31.0-0"
+
+keywords:
+  - mariadb
+  - mysql
+  - database
+  - galera
+
+home: https://mariadb.org
+sources:
+  - https://github.com/MariaDB/server
+  - https://github.com/mariadb-operator/mariadb-operator
+
+maintainers:
+  - name: Cyber Cloud Platform
+
+# ⚠ These three are read by `Build.Charts` and written into `values.schema.json` as
+# `x-cybercloud-*`. They are what makes the generated schema addressable as a resource type's body
+# rather than as an anonymous blob of Helm values — docs/plan/12 § The pattern, once, piece 2.
+# A chart under charts/managed/ without them fails the build.
+annotations:
+  cybercloud.io/resource-type: CyberCloud.DBforMySQL/servers
+  cybercloud.io/api-version: "2026-08-01"
+  cybercloud.io/operator: mariadb-operator

@@ -1,0 +1,288 @@
+{
+  "$id": "https://schema.cybercloud.io/charts/mariadb/values.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "The configuration surface of the mariadb chart. GENERATED from values.yaml by `./build.sh Charts` and diffed in CI — docs/plan/03 § charts/. Edit values.yaml, never this file. Members carrying `x-cybercloud-api: false` are chart or platform plumbing and are not part of the resource body.",
+  "properties": {
+    "bootstrap": {
+      "additionalProperties": false,
+      "description": "What exists in the database the moment it comes up.",
+      "properties": {
+        "database": {
+          "default": "app",
+          "description": "Name of the application database created on first start. Lower case only, because on Linux a database is a directory and its name is therefore case-sensitive.",
+          "maxLength": 64,
+          "minLength": 1,
+          "pattern": "^(?:[a-z_][a-z0-9_]*)$",
+          "type": "string",
+          "x-cybercloud-order": 0,
+          "x-cybercloud-pointer": "/properties/bootstrap/database"
+        },
+        "username": {
+          "default": "app",
+          "description": "Account granted every privilege on the application database. Capped at MySQL's 32 characters rather than MariaDB's longer limit, because this row is sold as MySQL-compatible.",
+          "maxLength": 32,
+          "minLength": 1,
+          "pattern": "^(?:[a-z_][a-z0-9_]*)$",
+          "type": "string",
+          "x-cybercloud-order": 1,
+          "x-cybercloud-pointer": "/properties/bootstrap/username"
+        }
+      },
+      "type": "object",
+      "x-cybercloud-order": 4,
+      "x-cybercloud-pointer": "/properties/bootstrap"
+    },
+    "credentials": {
+      "additionalProperties": false,
+      "description": "The Secrets the operator reads the root and application passwords from. Not a tenant-facing setting.",
+      "properties": {
+        "password": {
+          "default": "",
+          "description": "The application account's password, on the same terms as rootPassword.",
+          "format": "password",
+          "type": "string",
+          "writeOnly": true,
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "The values are provisioned into the tenant's Vault and reach the MariaDB CR as Secret REFERENCES BY NAME (spec.rootPasswordSecretKeyRef, spec.passwordSecretKeyRef), never as values. Declaring either in the resource body would put a plaintext password into grain state — nothing on the write path substitutes a SecretRef before the grain persists the body — which docs/plan/00 § Non-negotiables forbids outright. docs/plan/12 § Cross-cutting decisions, Credentials, puts the values themselves behind listKeys.",
+          "x-cybercloud-order": 1,
+          "x-cybercloud-pointer": "/properties/credentials/password",
+          "x-cybercloud-secret": true
+        },
+        "rootPassword": {
+          "default": "",
+          "description": "The root password. Resolved from the tenant's Vault at render time by ISecretResolver; it is never written into a values file or into grain state. Empty means the operator generates one, because both refs carry `generate: true`.",
+          "format": "password",
+          "type": "string",
+          "writeOnly": true,
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "The values are provisioned into the tenant's Vault and reach the MariaDB CR as Secret REFERENCES BY NAME (spec.rootPasswordSecretKeyRef, spec.passwordSecretKeyRef), never as values. Declaring either in the resource body would put a plaintext password into grain state — nothing on the write path substitutes a SecretRef before the grain persists the body — which docs/plan/00 § Non-negotiables forbids outright. docs/plan/12 § Cross-cutting decisions, Credentials, puts the values themselves behind listKeys.",
+          "x-cybercloud-order": 0,
+          "x-cybercloud-pointer": "/properties/credentials/rootPassword",
+          "x-cybercloud-secret": true
+        }
+      },
+      "type": "object",
+      "x-cybercloud-api": false,
+      "x-cybercloud-internal-reason": "The values are provisioned into the tenant's Vault and reach the MariaDB CR as Secret REFERENCES BY NAME (spec.rootPasswordSecretKeyRef, spec.passwordSecretKeyRef), never as values. Declaring either in the resource body would put a plaintext password into grain state — nothing on the write path substitutes a SecretRef before the grain persists the body — which docs/plan/00 § Non-negotiables forbids outright. docs/plan/12 § Cross-cutting decisions, Credentials, puts the values themselves behind listKeys.",
+      "x-cybercloud-order": 6,
+      "x-cybercloud-pointer": "/properties/credentials"
+    },
+    "highAvailability": {
+      "default": "Galera",
+      "description": "Replication topology. Galera is three synchronous instances; None is a single instance and a single point of failure, offered for development only.",
+      "enum": [
+        "None",
+        "Galera"
+      ],
+      "type": "string",
+      "x-cybercloud-immutable": true,
+      "x-cybercloud-order": 1,
+      "x-cybercloud-pointer": "/properties/highAvailability"
+    },
+    "imageName": {
+      "default": "",
+      "description": "Override the MariaDB image. Empty means derive it from `version`, which is what keeps minor upgrades automatic.",
+      "type": "string",
+      "x-cybercloud-api": false,
+      "x-cybercloud-internal-reason": "A pinned image defeats automatic minor upgrades, so it is a platform escape hatch rather than a tenant setting. ⚠ Empty must NOT mean \"let the operator choose\": mariadb-operator falls back to RelatedMariadbImage, an image chosen by whoever installed the operator rather than by the api-version the tenant asked for.",
+      "x-cybercloud-order": 8,
+      "x-cybercloud-pointer": "/properties/imageName"
+    },
+    "monitoring": {
+      "additionalProperties": false,
+      "description": "What the platform scrapes.",
+      "properties": {
+        "enabled": {
+          "default": true,
+          "description": "Whether the operator runs a mysqld-exporter beside the server.",
+          "type": "boolean",
+          "x-cybercloud-order": 0,
+          "x-cybercloud-pointer": "/properties/monitoring/enabled"
+        }
+      },
+      "type": "object",
+      "x-cybercloud-order": 5,
+      "x-cybercloud-pointer": "/properties/monitoring"
+    },
+    "nameOverride": {
+      "default": "",
+      "description": "Replace the generated object-name stem. Empty means derive it from the release name.",
+      "type": "string",
+      "x-cybercloud-api": false,
+      "x-cybercloud-internal-reason": "Helm plumbing. Nothing about it belongs in a resource body.",
+      "x-cybercloud-order": 9,
+      "x-cybercloud-pointer": "/properties/nameOverride"
+    },
+    "platform": {
+      "additionalProperties": false,
+      "description": "Resource identity injected by the reconciler. Not a tenant-facing setting.",
+      "properties": {
+        "apiVersion": {
+          "default": "2026-08-01",
+          "description": "The api-version the resource was last written at, rendered into the cybercloud.io/api-version label.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 5,
+          "x-cybercloud-pointer": "/properties/platform/apiVersion"
+        },
+        "managedBy": {
+          "default": "cybercloud",
+          "description": "Value of the cybercloud.io/managed-by label. Constant, and the selector every informer filters on.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 6,
+          "x-cybercloud-pointer": "/properties/platform/managedBy"
+        },
+        "resourceGroup": {
+          "default": "",
+          "description": "Resource group name, rendered into the cybercloud.io/resource-group label.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 2,
+          "x-cybercloud-pointer": "/properties/platform/resourceGroup"
+        },
+        "resourceId": {
+          "default": "",
+          "description": "Resource GUID, rendered into the cybercloud.io/resource-id label.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 3,
+          "x-cybercloud-pointer": "/properties/platform/resourceId"
+        },
+        "resourceType": {
+          "default": "CyberCloud.DBforMySQL/servers",
+          "description": "Fully qualified resource type, rendered into the cybercloud.io/resource-type label.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 4,
+          "x-cybercloud-pointer": "/properties/platform/resourceType"
+        },
+        "subscriptionId": {
+          "default": "",
+          "description": "Subscription GUID, rendered into the cybercloud.io/subscription-id label.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 1,
+          "x-cybercloud-pointer": "/properties/platform/subscriptionId"
+        },
+        "tenantId": {
+          "default": "",
+          "description": "Tenant GUID, rendered into the cybercloud.io/tenant-id label.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 0,
+          "x-cybercloud-pointer": "/properties/platform/tenantId"
+        }
+      },
+      "type": "object",
+      "x-cybercloud-api": false,
+      "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+      "x-cybercloud-order": 7,
+      "x-cybercloud-pointer": "/properties/platform"
+    },
+    "sizing": {
+      "additionalProperties": false,
+      "description": "CPU and memory, either by preset or explicitly.",
+      "properties": {
+        "cpu": {
+          "default": "",
+          "description": "Explicit vCPU quantity in Kubernetes form, for example 500m or 2. Empty means take it from the preset.",
+          "pattern": "^(?:(\\d+(\\.\\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)?)$",
+          "type": "string",
+          "x-cybercloud-order": 1,
+          "x-cybercloud-pointer": "/properties/sizing/cpu"
+        },
+        "memory": {
+          "default": "",
+          "description": "Explicit memory quantity in Kubernetes form, for example 4Gi. Empty means take it from the preset.",
+          "pattern": "^(?:(\\d+(\\.\\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)?)$",
+          "type": "string",
+          "x-cybercloud-order": 2,
+          "x-cybercloud-pointer": "/properties/sizing/memory"
+        },
+        "preset": {
+          "default": "s1.small",
+          "description": "A sizing preset from docs/plan/12. Databases use the s1 family, which is 1 vCPU to 4 GiB.",
+          "enum": [
+            "s1.nano",
+            "s1.micro",
+            "s1.small",
+            "s1.medium",
+            "s1.large",
+            "s1.xlarge",
+            "s1.2xlarge",
+            "s1.4xlarge"
+          ],
+          "type": "string",
+          "x-cybercloud-order": 0,
+          "x-cybercloud-pointer": "/properties/sizing/preset",
+          "x-cybercloud-widget": "cozy-preset"
+        }
+      },
+      "type": "object",
+      "x-cybercloud-order": 2,
+      "x-cybercloud-pointer": "/properties/sizing"
+    },
+    "storage": {
+      "additionalProperties": false,
+      "description": "The data volume. Every instance gets its own.",
+      "properties": {
+        "class": {
+          "default": "",
+          "description": "StorageClass name. Empty means the cluster default.",
+          "type": "string",
+          "x-cybercloud-immutable": true,
+          "x-cybercloud-order": 1,
+          "x-cybercloud-pointer": "/properties/storage/class",
+          "x-cybercloud-widget": "storageclass"
+        },
+        "size": {
+          "default": "20Gi",
+          "description": "Data volume size in Kubernetes quantity form. Grows online; never shrinks.",
+          "examples": [
+            "20Gi"
+          ],
+          "pattern": "^(?:\\d+(\\.\\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)$",
+          "type": "string",
+          "x-cybercloud-order": 0,
+          "x-cybercloud-pointer": "/properties/storage/size"
+        }
+      },
+      "required": [
+        "size"
+      ],
+      "type": "object",
+      "x-cybercloud-order": 3,
+      "x-cybercloud-pointer": "/properties/storage"
+    },
+    "version": {
+      "default": "11.4",
+      "description": "Major MariaDB version, by LTS series. Minor upgrades are applied automatically in the maintenance window.",
+      "enum": [
+        "10.11",
+        "11.4",
+        "11.8"
+      ],
+      "type": "string",
+      "x-cybercloud-order": 0,
+      "x-cybercloud-pointer": "/properties/version"
+    }
+  },
+  "required": [
+    "version"
+  ],
+  "title": "mariadb chart values",
+  "type": "object",
+  "x-cybercloud-api-version": "2026-08-01",
+  "x-cybercloud-chart": "mariadb",
+  "x-cybercloud-chart-version": "0.1.0",
+  "x-cybercloud-resource-type": "CyberCloud.DBforMySQL/servers"
+}
