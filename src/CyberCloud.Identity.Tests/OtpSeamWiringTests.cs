@@ -41,9 +41,14 @@ namespace CyberCloud.Identity.Tests;
 public sealed class OtpSeamWiringTests {
     [Fact]
     public void ASiloThatOnlyAddsIdentityGetsTheRefusingSeam() {
-        // ⚠ The default, and it must stay the default. Every host in this repository is in this
-        // state: grep finds no caller of AddCommunicationOtpDelivery outside tests, and the only silo
-        // in src/Hosts (CyberCloud.Silo.Host) does not compose the identity module at all.
+        // ⚠ The default, and it must stay the default. This comment used to add that every host in
+        // the repository was in this state — "grep finds no caller of AddCommunicationOtpDelivery
+        // outside tests, and the only silo in src/Hosts does not compose the identity module at all"
+        // — which was true and was the problem rather than the reassurance: a refusal no container
+        // holds is a message no operator can read. CyberCloud.Silo.Host now composes identity and
+        // calls AddCommunicationOtpDelivery when CyberCloud:Identity:OtpDelivery is configured, so
+        // the unwired case below is a real deployment shape and UnwiredOtpDeliveryTests drives the
+        // refusal end to end through UserGrain.IssueOtpAsync.
         Seam(silo => silo.AddCyberCloudIdentity()).ShouldBeOfType<UnavailableOtpDelivery>();
     }
 
