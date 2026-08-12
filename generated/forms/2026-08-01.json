@@ -670,6 +670,467 @@
         }
       ]
     },
+    "CyberCloud.ContainerService/managedClusters": {
+      "resourceType": "CyberCloud.ContainerService/managedClusters",
+      "apiVersion": "2026-08-01",
+      "title": "Managed Kubernetes cluster",
+      "plural": "Managed Kubernetes clusters",
+      "summary": "A Kubernetes cluster whose control plane runs as pods in the management cluster and whose workers are isolated virtual machines. Node pools are a child resource.",
+      "overrideKey": "CyberCloud.ContainerService/managedClusters@2026-08-01",
+      "coveredPointers": [
+        "/location",
+        "/properties",
+        "/properties/clusterId",
+        "/properties/controlPlane",
+        "/properties/controlPlane/replicas",
+        "/properties/monitoring",
+        "/properties/monitoring/enabled",
+        "/properties/network",
+        "/properties/network/podCidr",
+        "/properties/network/serviceCidr",
+        "/properties/version",
+        "/tags"
+      ],
+      "supportsTags": true,
+      "requiresCluster": true,
+      "clusterIdPointer": "/properties/clusterId",
+      "softDeleteDays": 0,
+      "fields": [
+        {
+          "jsonPointer": "/location",
+          "name": "location",
+          "label": "Location",
+          "control": "xui-region",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "The region the cluster is billed in.",
+          "format": "cybercloud-region",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new Managed Kubernetes cluster to change it.",
+          "placeholder": "eu-central"
+        },
+        {
+          "jsonPointer": "/properties",
+          "name": "properties",
+          "label": "Properties",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "The cluster's own settings."
+        },
+        {
+          "jsonPointer": "/properties/clusterId",
+          "name": "clusterId",
+          "label": "Cluster id",
+          "control": "xui-cluster",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "The management cluster the control plane runs in. ⚠ This is not the cluster being created: it is the cluster whose API server accepts the Cluster API objects that create one.",
+          "format": "uuid",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new Managed Kubernetes cluster to change it."
+        },
+        {
+          "jsonPointer": "/properties/controlPlane",
+          "name": "controlPlane",
+          "label": "Control plane",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "The control plane, which runs as pods in the management cluster."
+        },
+        {
+          "jsonPointer": "/properties/controlPlane/replicas",
+          "name": "replicas",
+          "label": "Replicas",
+          "control": "xui-slider",
+          "type": "integer",
+          "required": true,
+          "section": "controlPlane",
+          "hint": "How many copies of the API server, controller manager and scheduler to run. Two survives a node failure; one is offered for development. ⚠ Unlike an etcd quorum this is a plain replica count — the datastore is separate and is shared — so an even number is not the mistake it would be on a Raft member set.",
+          "minimum": 1,
+          "maximum": 5,
+          "default": 2
+        },
+        {
+          "jsonPointer": "/properties/monitoring",
+          "name": "monitoring",
+          "label": "Monitoring",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "What the platform scrapes."
+        },
+        {
+          "jsonPointer": "/properties/monitoring/enabled",
+          "name": "enabled",
+          "label": "Enabled",
+          "control": "xui-switch",
+          "type": "boolean",
+          "required": false,
+          "section": "monitoring",
+          "hint": "Whether the control plane's own metrics endpoints are scraped. On by default — docs/plan/12: \"a managed service the tenant cannot see the health of is a black box they will not trust with production\". ⚠ It covers the control plane, which runs in the management cluster. Nothing scrapes inside the cluster being created; that needs an agent in the bundle.",
+          "default": true
+        },
+        {
+          "jsonPointer": "/properties/network",
+          "name": "network",
+          "label": "Network",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "The address space of the cluster being created."
+        },
+        {
+          "jsonPointer": "/properties/network/podCidr",
+          "name": "podCidr",
+          "label": "Pod cidr",
+          "control": "xui-cidr",
+          "type": "string",
+          "required": true,
+          "section": "network",
+          "hint": "The CIDR block pods are addressed from. ⚠ It must not overlap the management cluster's own pod or service range, and nothing checks that — an overlap produces a cluster whose nodes route the platform's addresses to themselves.",
+          "pattern": "^(?:((25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)\\.){3}(25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)/([0-9]|[12]\\d|3[0-2]))$",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new Managed Kubernetes cluster to change it.",
+          "default": "10.244.0.0/16",
+          "placeholder": "10.244.0.0/16"
+        },
+        {
+          "jsonPointer": "/properties/network/serviceCidr",
+          "name": "serviceCidr",
+          "label": "Service cidr",
+          "control": "xui-cidr",
+          "type": "string",
+          "required": true,
+          "section": "network",
+          "hint": "The CIDR block Service cluster IPs are allocated from. The same overlap warning applies.",
+          "pattern": "^(?:((25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)\\.){3}(25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)/([0-9]|[12]\\d|3[0-2]))$",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new Managed Kubernetes cluster to change it.",
+          "default": "10.96.0.0/12",
+          "placeholder": "10.96.0.0/12"
+        },
+        {
+          "jsonPointer": "/properties/version",
+          "name": "version",
+          "label": "Version",
+          "control": "xui-select",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "The Kubernetes minor version of the control plane. The patch level is the platform's. ⚠ Upgrade the control plane before the node pools and by at most one minor at a time; a node pool may run up to three minors behind and may never run ahead. Neither rule is enforced by this API today — an illegal pair is refused by the cluster's own admission, after the create was accepted.",
+          "choices": [
+            {
+              "value": "1.32",
+              "label": "1 32"
+            },
+            {
+              "value": "1.33",
+              "label": "1 33"
+            }
+          ],
+          "default": "1.33"
+        },
+        {
+          "jsonPointer": "/tags",
+          "name": "tags",
+          "label": "Tags",
+          "control": "xui-tag-input",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+          "maxProperties": 50
+        }
+      ],
+      "actions": [
+        {
+          "name": "listCredentials",
+          "label": "List credentials",
+          "permission": "listCredentials",
+          "longRunning": false,
+          "secret": true,
+          "fields": [],
+          "confirmOnly": true
+        }
+      ]
+    },
+    "CyberCloud.ContainerService/managedClusters/agentPools": {
+      "resourceType": "CyberCloud.ContainerService/managedClusters/agentPools",
+      "apiVersion": "2026-08-01",
+      "title": "Node pool",
+      "plural": "Node pools",
+      "summary": "A group of identically sized worker virtual machines in a managed Kubernetes cluster, optionally under a cluster-autoscaler.",
+      "overrideKey": "CyberCloud.ContainerService/managedClusters/agentPools@2026-08-01",
+      "coveredPointers": [
+        "/location",
+        "/properties",
+        "/properties/autoscale",
+        "/properties/autoscale/enabled",
+        "/properties/autoscale/maxCount",
+        "/properties/autoscale/minCount",
+        "/properties/clusterId",
+        "/properties/count",
+        "/properties/osDiskSize",
+        "/properties/size",
+        "/properties/upgrade",
+        "/properties/upgrade/maxSurge",
+        "/properties/upgrade/maxUnavailable",
+        "/properties/version",
+        "/tags"
+      ],
+      "supportsTags": true,
+      "requiresCluster": true,
+      "clusterIdPointer": "/properties/clusterId",
+      "softDeleteDays": 0,
+      "fields": [
+        {
+          "jsonPointer": "/location",
+          "name": "location",
+          "label": "Location",
+          "control": "xui-region",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "The region the pool is billed in.",
+          "format": "cybercloud-region",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new Node pool to change it.",
+          "placeholder": "eu-central"
+        },
+        {
+          "jsonPointer": "/properties",
+          "name": "properties",
+          "label": "Properties",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "The pool's own settings."
+        },
+        {
+          "jsonPointer": "/properties/autoscale",
+          "name": "autoscale",
+          "label": "Autoscale",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "Whether a cluster-autoscaler may resize the pool."
+        },
+        {
+          "jsonPointer": "/properties/autoscale/enabled",
+          "name": "enabled",
+          "label": "Enabled",
+          "control": "xui-switch",
+          "type": "boolean",
+          "required": false,
+          "section": "autoscale",
+          "hint": "Whether the pool carries autoscaler bounds. Off by default. ⚠ Turning it on changes what the pool costs: quota is then reserved against maxCount, because a pool that may grow to twenty machines has to have twenty machines' worth of headroom to grow into.",
+          "default": false
+        },
+        {
+          "jsonPointer": "/properties/autoscale/maxCount",
+          "name": "maxCount",
+          "label": "Max count",
+          "control": "xui-slider",
+          "type": "integer",
+          "required": false,
+          "section": "autoscale",
+          "hint": "The largest the autoscaler may grow the pool to, and what quota is reserved against while autoscaling is on. ⚠ Nothing checks that it is at least minCount — that is a relation between two properties of one body, which the schema validates nothing about.",
+          "minimum": 1,
+          "maximum": 100,
+          "default": 3
+        },
+        {
+          "jsonPointer": "/properties/autoscale/minCount",
+          "name": "minCount",
+          "label": "Min count",
+          "control": "xui-slider",
+          "type": "integer",
+          "required": false,
+          "section": "autoscale",
+          "hint": "The smallest the autoscaler may shrink the pool to. Ignored when autoscaling is off.",
+          "minimum": 1,
+          "maximum": 100,
+          "default": 1
+        },
+        {
+          "jsonPointer": "/properties/clusterId",
+          "name": "clusterId",
+          "label": "Cluster id",
+          "control": "xui-cluster",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "The management cluster the machine objects are applied to. Must be the one the cluster is in — nothing checks that, and a pool placed elsewhere produces a MachineDeployment naming a Cluster that is not there, which Cluster API accepts and never reconciles.",
+          "format": "uuid",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new Node pool to change it."
+        },
+        {
+          "jsonPointer": "/properties/count",
+          "name": "count",
+          "label": "Count",
+          "control": "xui-slider",
+          "type": "integer",
+          "required": true,
+          "section": "general",
+          "hint": "How many worker VMs the pool runs. ⚠ When autoscaling is on this is the starting size and the autoscaler moves it; quota is reserved against the maximum in that case, not against this.",
+          "minimum": 1,
+          "maximum": 100,
+          "default": 3
+        },
+        {
+          "jsonPointer": "/properties/osDiskSize",
+          "name": "osDiskSize",
+          "label": "Os disk size",
+          "control": "xui-input",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "The root volume of each VM, in Kubernetes quantity form. It holds the operating system, the container images and every writable layer, so a pool running large images needs more of it than a pool running small ones.",
+          "pattern": "^(?:\\d+(\\.\\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)$",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new Node pool to change it.",
+          "default": "60Gi",
+          "placeholder": "60Gi"
+        },
+        {
+          "jsonPointer": "/properties/size",
+          "name": "size",
+          "label": "Size",
+          "control": "xui-cozy-preset",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "The VM size, from the platform's sizing catalogue. Kubernetes nodes use the s1 family, which is 1 vCPU to 4 GiB. ⚠ Immutable: a Cluster API machine template cannot be resized in place, so changing this would mean replacing every VM in the pool, which is a different operation from the one a PUT looks like.",
+          "choices": [
+            {
+              "value": "s1.2xlarge",
+              "label": "S1 2xlarge"
+            },
+            {
+              "value": "s1.4xlarge",
+              "label": "S1 4xlarge"
+            },
+            {
+              "value": "s1.large",
+              "label": "S1 large"
+            },
+            {
+              "value": "s1.medium",
+              "label": "S1 medium"
+            },
+            {
+              "value": "s1.micro",
+              "label": "S1 micro"
+            },
+            {
+              "value": "s1.nano",
+              "label": "S1 nano"
+            },
+            {
+              "value": "s1.small",
+              "label": "S1 small"
+            },
+            {
+              "value": "s1.xlarge",
+              "label": "S1 xlarge"
+            }
+          ],
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new Node pool to change it.",
+          "default": "s1.small"
+        },
+        {
+          "jsonPointer": "/properties/upgrade",
+          "name": "upgrade",
+          "label": "Upgrade",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "How machines are replaced when the pool changes."
+        },
+        {
+          "jsonPointer": "/properties/upgrade/maxSurge",
+          "name": "maxSurge",
+          "label": "Max surge",
+          "control": "xui-slider",
+          "type": "integer",
+          "required": false,
+          "section": "upgrade",
+          "hint": "How many extra machines may exist during a rolling replacement. One means a new VM boots and joins before an old one is removed, which is why it is the default: it costs one machine's capacity and loses none.",
+          "minimum": 0,
+          "maximum": 10,
+          "default": 1
+        },
+        {
+          "jsonPointer": "/properties/upgrade/maxUnavailable",
+          "name": "maxUnavailable",
+          "label": "Max unavailable",
+          "control": "xui-slider",
+          "type": "integer",
+          "required": false,
+          "section": "upgrade",
+          "hint": "How many machines may be missing during a rolling replacement. Zero with a surge of one is the safe pair; raising it is faster and reduces the pool's capacity while it runs. ⚠ Both being zero would make an upgrade unable to start, and nothing refuses that pair.",
+          "minimum": 0,
+          "maximum": 10,
+          "default": 0
+        },
+        {
+          "jsonPointer": "/properties/version",
+          "name": "version",
+          "label": "Version",
+          "control": "xui-select",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "The Kubernetes minor version the nodes run. ⚠ It may be up to three minors behind the cluster's control plane and may never be ahead of it. This API does not check that — the cluster's version is a different resource — so an illegal pair is accepted here and produces nodes that join and then misbehave.",
+          "choices": [
+            {
+              "value": "1.32",
+              "label": "1 32"
+            },
+            {
+              "value": "1.33",
+              "label": "1 33"
+            }
+          ],
+          "default": "1.33"
+        },
+        {
+          "jsonPointer": "/tags",
+          "name": "tags",
+          "label": "Tags",
+          "control": "xui-tag-input",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+          "maxProperties": 50
+        }
+      ],
+      "actions": [
+        {
+          "name": "upgradeNodeImage",
+          "label": "Upgrade node image",
+          "permission": "write",
+          "longRunning": true,
+          "secret": false,
+          "fields": [],
+          "confirmOnly": true
+        }
+      ]
+    },
     "CyberCloud.DBforMySQL/servers": {
       "resourceType": "CyberCloud.DBforMySQL/servers",
       "apiVersion": "2026-08-01",

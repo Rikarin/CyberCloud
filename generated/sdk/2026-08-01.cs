@@ -520,6 +520,315 @@ public sealed partial class ValkeyCacheCollection {
     public partial AsyncPageable<ValkeyCacheResource> GetAllAsync(CancellationToken cancellationToken = default);
 }
 
+/// <summary>The values /properties/version accepts. ⚠ Closed: the write path refuses anything else.</summary>
+public enum ManagedKubernetesClusterVersion {
+    /// <summary>Never assigned. Not a value the API accepts.</summary>
+    Unknown = 0,
+
+    /// <summary>1.32</summary>
+    [JsonStringEnumMemberName("1.32")]
+    N132 = 1,
+
+    /// <summary>1.33</summary>
+    [JsonStringEnumMemberName("1.33")]
+    N133 = 2
+}
+
+/// <summary>The body of a CyberCloud.ContainerService/managedClusters.</summary>
+/// <remarks>A Kubernetes cluster whose control plane runs as pods in the management cluster and whose workers are isolated virtual machines. Node pools are a child resource.</remarks>
+public sealed partial class ManagedKubernetesClusterData {
+
+    /// <summary>The region the cluster is billed in.</summary>
+    /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+    [JsonPropertyName("location")]
+    public required string Location { get; set; }
+
+    /// <summary>The management cluster the control plane runs in. ⚠ This is not the cluster being created: it is the cluster whose API server accepts the Cluster API objects that create one.</summary>
+    /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+    [JsonPropertyName("clusterId")]
+    public required Guid ClusterId { get; set; }
+
+    /// <summary>How many copies of the API server, controller manager and scheduler to run. Two survives a node failure; one is offered for development. ⚠ Unlike an etcd quorum this is a plain replica count — the datastore is separate and is shared — so an even number is not the mistake it would be on a Raft member set.</summary>
+    /// <remarks>Required on a create. Defaults to 2 when left unset.</remarks>
+    [JsonPropertyName("replicas")]
+    public required long Replicas { get; set; }
+
+    /// <summary>Whether the control plane's own metrics endpoints are scraped. On by default — docs/plan/12: "a managed service the tenant cannot see the health of is a black box they will not trust with production". ⚠ It covers the control plane, which runs in the management cluster. Nothing scrapes inside the cluster being created; that needs an agent in the bundle.</summary>
+    /// <remarks>Defaults to true when left unset.</remarks>
+    [JsonPropertyName("enabled")]
+    public bool? Enabled { get; set; }
+
+    /// <summary>The CIDR block pods are addressed from. ⚠ It must not overlap the management cluster's own pod or service range, and nothing checks that — an overlap produces a cluster whose nodes route the platform's addresses to themselves.</summary>
+    /// <remarks>Required on a create. ⚠ Cannot change after create. Defaults to "10.244.0.0/16" when left unset.</remarks>
+    [JsonPropertyName("podCidr")]
+    public required string PodCidr { get; set; }
+
+    /// <summary>The CIDR block Service cluster IPs are allocated from. The same overlap warning applies.</summary>
+    /// <remarks>Required on a create. ⚠ Cannot change after create. Defaults to "10.96.0.0/12" when left unset.</remarks>
+    [JsonPropertyName("serviceCidr")]
+    public required string ServiceCidr { get; set; }
+
+    /// <summary>The Kubernetes minor version of the control plane. The patch level is the platform's. ⚠ Upgrade the control plane before the node pools and by at most one minor at a time; a node pool may run up to three minors behind and may never run ahead. Neither rule is enforced by this API today — an illegal pair is refused by the cluster's own admission, after the create was accepted.</summary>
+    /// <remarks>Required on a create. Defaults to "1.33" when left unset.</remarks>
+    [JsonPropertyName("version")]
+    public required ManagedKubernetesClusterVersion Version { get; set; }
+
+    /// <summary>Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.</summary>
+    [JsonPropertyName("tags")]
+    public IDictionary<string, string> Tags { get; set; } = new Dictionary<string, string>(StringComparer.Ordinal);
+}
+
+/// <summary>One Managed Kubernetes cluster, and the operations on it.</summary>
+public sealed partial class ManagedKubernetesClusterResource {
+    /// <summary>The resource's fully qualified id.</summary>
+    public string Id { get; init; } = string.Empty;
+
+    /// <summary>The body, projected at this api-version.</summary>
+    public ManagedKubernetesClusterData Data { get; init; } = new();
+
+    /// <summary>Re-reads the resource.</summary>
+    public partial Task<Response<ManagedKubernetesClusterResource>> GetAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Amends the resource. A merge patch: what is not set is not changed.</summary>
+    public partial Task<Operation<ManagedKubernetesClusterResource>> UpdateAsync(
+        WaitUntil waitUntil,
+        ManagedKubernetesClusterData data,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Deletes the resource. ⚠ Permanent: this type declares no soft-delete window.</summary>
+    public partial Task<Operation> DeleteAsync(
+        WaitUntil waitUntil,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>What listCredentials returns. ⚠ Secret material: never log or cache this.</summary>
+    public sealed partial class ListCredentialsResult {
+
+        /// <summary>The URL the kubeconfig points at, https://host:port. ⚠ It is an address inside the management cluster and is not routable from anywhere else — the control plane is deliberately not exposed, because there is no upstream field to attach a CIDR allow-list to. Returned separately so that a caller does not have to parse YAML to discover that.</summary>
+        [JsonPropertyName("apiServerEndpoint")]
+        public required Uri ApiServerEndpoint { get; set; }
+
+        /// <summary>When the credential stops working, RFC 3339. ⚠ Returned because a credential with no stated expiry is one every caller will paste into CI and never rotate — docs/plan/13 makes "a kubectl credential that expires" part of what a tenant is buying.</summary>
+        [JsonPropertyName("expiresAt")]
+        public required DateTimeOffset ExpiresAt { get; set; }
+
+        /// <summary>A complete kubeconfig for the cluster, YAML. ⚠ docs/plan/13 requires this to be short-lived and scoped rather than the cluster's admin credential; what Cluster API generates is the admin one, and narrowing it needs a certificate request against the cluster this platform cannot yet reach.</summary>
+        [JsonPropertyName("kubeconfig")]
+        public required string Kubeconfig { get; set; }
+    }
+
+    /// <summary>ListCredentials. ⚠ An action never creates — a POST to a name that does not exist is a 404. ⚠ The response carries secret material and is always audited.</summary>
+    public partial Task<Response<ListCredentialsResult>> ListCredentialsAsync(
+        CancellationToken cancellationToken = default);
+}
+
+/// <summary>The Managed Kubernetes clusters in one resource group.</summary>
+/// <remarks>⚠ Every write is long-running: docs/plan/08 § The write path, end to end
+/// ends in a 202 for every verb, so there is no synchronous overload to offer.</remarks>
+public sealed partial class ManagedKubernetesClusterCollection {
+    /// <summary>The resource type these address.</summary>
+    public const string ResourceType = "CyberCloud.ContainerService/managedClusters";
+
+    /// <summary>The URL template, with the api-version this file was generated at.</summary>
+    public const string PathTemplate = "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.ContainerService/managedClusters/{resourceName}";
+
+    /// <inheritdoc cref="GeneratedApiVersion.Value" />
+    public const string ApiVersion = "2026-08-01";
+
+    /// <summary>Creates or replaces one Managed Kubernetes cluster.</summary>
+    /// <remarks>⚠ Poll with GetProgressAsync() rather than only WaitForCompletionAsync():
+    /// docs/plan/21 § The .NET SDK — "Azure's LROs expose no progress; ours do and the
+    /// SDK should not hide it".</remarks>
+    public partial Task<Operation<ManagedKubernetesClusterResource>> CreateOrUpdateAsync(
+        WaitUntil waitUntil,
+        string name,
+        ManagedKubernetesClusterData data,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Reads one Managed Kubernetes cluster by name.</summary>
+    public partial Task<Response<ManagedKubernetesClusterResource>> GetAsync(string name, CancellationToken cancellationToken = default);
+
+    /// <summary>The Managed Kubernetes clusters in this group, paged.</summary>
+    public partial AsyncPageable<ManagedKubernetesClusterResource> GetAllAsync(CancellationToken cancellationToken = default);
+}
+
+/// <summary>The values /properties/size accepts. ⚠ Closed: the write path refuses anything else.</summary>
+public enum NodePoolSize {
+    /// <summary>Never assigned. Not a value the API accepts.</summary>
+    Unknown = 0,
+
+    /// <summary>s1.2xlarge</summary>
+    [JsonStringEnumMemberName("s1.2xlarge")]
+    S12xlarge = 1,
+
+    /// <summary>s1.4xlarge</summary>
+    [JsonStringEnumMemberName("s1.4xlarge")]
+    S14xlarge = 2,
+
+    /// <summary>s1.large</summary>
+    [JsonStringEnumMemberName("s1.large")]
+    S1Large = 3,
+
+    /// <summary>s1.medium</summary>
+    [JsonStringEnumMemberName("s1.medium")]
+    S1Medium = 4,
+
+    /// <summary>s1.micro</summary>
+    [JsonStringEnumMemberName("s1.micro")]
+    S1Micro = 5,
+
+    /// <summary>s1.nano</summary>
+    [JsonStringEnumMemberName("s1.nano")]
+    S1Nano = 6,
+
+    /// <summary>s1.small</summary>
+    [JsonStringEnumMemberName("s1.small")]
+    S1Small = 7,
+
+    /// <summary>s1.xlarge</summary>
+    [JsonStringEnumMemberName("s1.xlarge")]
+    S1Xlarge = 8
+}
+
+/// <summary>The values /properties/version accepts. ⚠ Closed: the write path refuses anything else.</summary>
+public enum NodePoolVersion {
+    /// <summary>Never assigned. Not a value the API accepts.</summary>
+    Unknown = 0,
+
+    /// <summary>1.32</summary>
+    [JsonStringEnumMemberName("1.32")]
+    N132 = 1,
+
+    /// <summary>1.33</summary>
+    [JsonStringEnumMemberName("1.33")]
+    N133 = 2
+}
+
+/// <summary>The body of a CyberCloud.ContainerService/managedClusters/agentPools.</summary>
+/// <remarks>A group of identically sized worker virtual machines in a managed Kubernetes cluster, optionally under a cluster-autoscaler.</remarks>
+public sealed partial class NodePoolData {
+
+    /// <summary>The region the pool is billed in.</summary>
+    /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+    [JsonPropertyName("location")]
+    public required string Location { get; set; }
+
+    /// <summary>Whether the pool carries autoscaler bounds. Off by default. ⚠ Turning it on changes what the pool costs: quota is then reserved against maxCount, because a pool that may grow to twenty machines has to have twenty machines' worth of headroom to grow into.</summary>
+    /// <remarks>Defaults to false when left unset.</remarks>
+    [JsonPropertyName("enabled")]
+    public bool? Enabled { get; set; }
+
+    /// <summary>The largest the autoscaler may grow the pool to, and what quota is reserved against while autoscaling is on. ⚠ Nothing checks that it is at least minCount — that is a relation between two properties of one body, which the schema validates nothing about.</summary>
+    /// <remarks>Defaults to 3 when left unset.</remarks>
+    [JsonPropertyName("maxCount")]
+    public long? MaxCount { get; set; }
+
+    /// <summary>The smallest the autoscaler may shrink the pool to. Ignored when autoscaling is off.</summary>
+    /// <remarks>Defaults to 1 when left unset.</remarks>
+    [JsonPropertyName("minCount")]
+    public long? MinCount { get; set; }
+
+    /// <summary>The management cluster the machine objects are applied to. Must be the one the cluster is in — nothing checks that, and a pool placed elsewhere produces a MachineDeployment naming a Cluster that is not there, which Cluster API accepts and never reconciles.</summary>
+    /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+    [JsonPropertyName("clusterId")]
+    public required Guid ClusterId { get; set; }
+
+    /// <summary>How many worker VMs the pool runs. ⚠ When autoscaling is on this is the starting size and the autoscaler moves it; quota is reserved against the maximum in that case, not against this.</summary>
+    /// <remarks>Required on a create. Defaults to 3 when left unset.</remarks>
+    [JsonPropertyName("count")]
+    public required long Count { get; set; }
+
+    /// <summary>The root volume of each VM, in Kubernetes quantity form. It holds the operating system, the container images and every writable layer, so a pool running large images needs more of it than a pool running small ones.</summary>
+    /// <remarks>Required on a create. ⚠ Cannot change after create. Defaults to "60Gi" when left unset.</remarks>
+    [JsonPropertyName("osDiskSize")]
+    public required string OsDiskSize { get; set; }
+
+    /// <summary>The VM size, from the platform's sizing catalogue. Kubernetes nodes use the s1 family, which is 1 vCPU to 4 GiB. ⚠ Immutable: a Cluster API machine template cannot be resized in place, so changing this would mean replacing every VM in the pool, which is a different operation from the one a PUT looks like.</summary>
+    /// <remarks>Required on a create. ⚠ Cannot change after create. Defaults to "s1.small" when left unset.</remarks>
+    [JsonPropertyName("size")]
+    public required NodePoolSize Size { get; set; }
+
+    /// <summary>How many extra machines may exist during a rolling replacement. One means a new VM boots and joins before an old one is removed, which is why it is the default: it costs one machine's capacity and loses none.</summary>
+    /// <remarks>Defaults to 1 when left unset.</remarks>
+    [JsonPropertyName("maxSurge")]
+    public long? MaxSurge { get; set; }
+
+    /// <summary>How many machines may be missing during a rolling replacement. Zero with a surge of one is the safe pair; raising it is faster and reduces the pool's capacity while it runs. ⚠ Both being zero would make an upgrade unable to start, and nothing refuses that pair.</summary>
+    /// <remarks>Defaults to 0 when left unset.</remarks>
+    [JsonPropertyName("maxUnavailable")]
+    public long? MaxUnavailable { get; set; }
+
+    /// <summary>The Kubernetes minor version the nodes run. ⚠ It may be up to three minors behind the cluster's control plane and may never be ahead of it. This API does not check that — the cluster's version is a different resource — so an illegal pair is accepted here and produces nodes that join and then misbehave.</summary>
+    /// <remarks>Required on a create. Defaults to "1.33" when left unset.</remarks>
+    [JsonPropertyName("version")]
+    public required NodePoolVersion Version { get; set; }
+
+    /// <summary>Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.</summary>
+    [JsonPropertyName("tags")]
+    public IDictionary<string, string> Tags { get; set; } = new Dictionary<string, string>(StringComparer.Ordinal);
+}
+
+/// <summary>One Node pool, and the operations on it.</summary>
+public sealed partial class NodePoolResource {
+    /// <summary>The resource's fully qualified id.</summary>
+    public string Id { get; init; } = string.Empty;
+
+    /// <summary>The body, projected at this api-version.</summary>
+    public NodePoolData Data { get; init; } = new();
+
+    /// <summary>Re-reads the resource.</summary>
+    public partial Task<Response<NodePoolResource>> GetAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Amends the resource. A merge patch: what is not set is not changed.</summary>
+    public partial Task<Operation<NodePoolResource>> UpdateAsync(
+        WaitUntil waitUntil,
+        NodePoolData data,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Deletes the resource. ⚠ Permanent: this type declares no soft-delete window.</summary>
+    public partial Task<Operation> DeleteAsync(
+        WaitUntil waitUntil,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>UpgradeNodeImage. ⚠ An action never creates — a POST to a name that does not exist is a 404.</summary>
+    public partial Task<Operation<System.Text.Json.JsonElement>> UpgradeNodeImageAsync(
+        WaitUntil waitUntil,
+        CancellationToken cancellationToken = default);
+}
+
+/// <summary>The Node pools in one parent.</summary>
+/// <remarks>⚠ Every write is long-running: docs/plan/08 § The write path, end to end
+/// ends in a 202 for every verb, so there is no synchronous overload to offer.
+/// ⚠ The leading parameter(s) name the ancestors this type nests inside —
+/// docs/plan/12 § Child resources addresses a child
+/// '…/{parentType}/{parentName}/{childType}/{childName}', so the parent's name is
+/// part of the address rather than part of the body.</remarks>
+public sealed partial class NodePoolCollection {
+    /// <summary>The resource type these address.</summary>
+    public const string ResourceType = "CyberCloud.ContainerService/managedClusters/agentPools";
+
+    /// <summary>The URL template, with the api-version this file was generated at.</summary>
+    public const string PathTemplate = "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.ContainerService/managedClusters/{managedClustersName}/agentPools/{resourceName}";
+
+    /// <inheritdoc cref="GeneratedApiVersion.Value" />
+    public const string ApiVersion = "2026-08-01";
+
+    /// <summary>Creates or replaces one Node pool.</summary>
+    /// <remarks>⚠ Poll with GetProgressAsync() rather than only WaitForCompletionAsync():
+    /// docs/plan/21 § The .NET SDK — "Azure's LROs expose no progress; ours do and the
+    /// SDK should not hide it".</remarks>
+    public partial Task<Operation<NodePoolResource>> CreateOrUpdateAsync(
+        WaitUntil waitUntil,
+        string managedClustersName, string name,
+        NodePoolData data,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Reads one Node pool by name.</summary>
+    public partial Task<Response<NodePoolResource>> GetAsync(string managedClustersName, string name, CancellationToken cancellationToken = default);
+
+    /// <summary>The Node pools in one parent, paged.</summary>
+    public partial AsyncPageable<NodePoolResource> GetAllAsync(string managedClustersName, CancellationToken cancellationToken = default);
+}
+
 /// <summary>The values /properties/highAvailability accepts. ⚠ Closed: the write path refuses anything else.</summary>
 public enum MariaDBServerHighAvailability {
     /// <summary>Never assigned. Not a value the API accepts.</summary>

@@ -755,6 +755,756 @@
       "x-cybercloud-resource-type": "CyberCloud.Cache/redis",
       "x-cybercloud-action": "listKeys"
     },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.ContainerService/managedClusters/{managedClustersName}/agentPools/{resourceName}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "name": "managedClustersName",
+          "in": "path",
+          "required": true,
+          "description": "The name of the parent resource this one lives inside. A child is addressed through its parent — docs/plan/12 § Child resources.",
+          "schema": {
+            "type": "string",
+            "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
+            "minLength": 1,
+            "maxLength": 63
+          }
+        },
+        {
+          "$ref": "#/components/parameters/ResourceName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "get": {
+        "operationId": "CyberCloud_ContainerService_managedClusters_agentPools_Get",
+        "summary": "Read a CyberCloud.ContainerService/managedClusters/agentPools.",
+        "description": "The body is this api-version's projection of the resource: docs/plan/08 § The provider registry keeps grain state as a superset and a read at an older version drops what that version did not declare.",
+        "responses": {
+          "200": {
+            "description": "The resource.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.ContainerService.managedClusters.agentPools"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "read"
+      },
+      "put": {
+        "operationId": "CyberCloud_ContainerService_managedClusters_agentPools_CreateOrUpdate",
+        "summary": "Create or replace a CyberCloud.ContainerService/managedClusters/agentPools.",
+        "description": "A full replacement. Every property the schema marks required must be present; a read-only property is refused rather than ignored — docs/plan/08 § The write path, end to end.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CyberCloud.ContainerService.managedClusters.agentPools"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "headers": {
+              "Azure-AsyncOperation": {
+                "description": "The absolute URL of the operation to poll.",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "Retry-After": {
+                "description": "Seconds to wait before the first poll.",
+                "required": true,
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "write"
+      },
+      "patch": {
+        "operationId": "CyberCloud_ContainerService_managedClusters_agentPools_Update",
+        "summary": "Merge-patch a CyberCloud.ContainerService/managedClusters/agentPools.",
+        "description": "A merge patch. The patch itself may omit required properties; the merged result is what is validated — see ResourceSchema.Validate.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CyberCloud.ContainerService.managedClusters.agentPools"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "headers": {
+              "Azure-AsyncOperation": {
+                "description": "The absolute URL of the operation to poll.",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "Retry-After": {
+                "description": "Seconds to wait before the first poll.",
+                "required": true,
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "write"
+      },
+      "delete": {
+        "operationId": "CyberCloud_ContainerService_managedClusters_agentPools_Delete",
+        "summary": "Delete a CyberCloud.ContainerService/managedClusters/agentPools.",
+        "description": "The delete is permanent: this type declares no soft-delete window.",
+        "responses": {
+          "202": {
+            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "headers": {
+              "Azure-AsyncOperation": {
+                "description": "The absolute URL of the operation to poll.",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "Retry-After": {
+                "description": "Seconds to wait before the first poll.",
+                "required": true,
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "delete",
+        "x-cybercloud-soft-delete-days": 0
+      },
+      "x-cybercloud-resource-type": "CyberCloud.ContainerService/managedClusters/agentPools",
+      "x-cybercloud-display": {
+        "name": "Node pool",
+        "plural": "Node pools",
+        "alias": "nodepool",
+        "summary": "A group of identically sized worker virtual machines in a managed Kubernetes cluster, optionally under a cluster-autoscaler.",
+        "declared": true
+      },
+      "x-cybercloud-supports-tags": true,
+      "x-cybercloud-requires-cluster": true,
+      "x-cybercloud-cluster-id-pointer": "/properties/clusterId",
+      "x-cybercloud-soft-delete-days": 0,
+      "x-cybercloud-meters": [
+        {
+          "meter": "MemoryGb",
+          "amountPointer": "",
+          "fallback": null,
+          "expression": "(autoscale.enabled ? autoscale.maxCount : count) × the size preset's memory, in GiB",
+          "reads": [
+            "/properties/count",
+            "/properties/size",
+            "/properties/autoscale/enabled",
+            "/properties/autoscale/maxCount"
+          ]
+        },
+        {
+          "meter": "Resources",
+          "amountPointer": "",
+          "fallback": 1,
+          "expression": "1",
+          "reads": []
+        },
+        {
+          "meter": "StorageGb",
+          "amountPointer": "",
+          "fallback": null,
+          "expression": "(autoscale.enabled ? autoscale.maxCount : count) × osDiskSize, in GiB",
+          "reads": [
+            "/properties/count",
+            "/properties/osDiskSize",
+            "/properties/autoscale/enabled",
+            "/properties/autoscale/maxCount"
+          ]
+        },
+        {
+          "meter": "Vcpu",
+          "amountPointer": "",
+          "fallback": null,
+          "expression": "(autoscale.enabled ? autoscale.maxCount : count) × the size preset's cpu, in cores",
+          "reads": [
+            "/properties/count",
+            "/properties/size",
+            "/properties/autoscale/enabled",
+            "/properties/autoscale/maxCount"
+          ]
+        }
+      ]
+    },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.ContainerService/managedClusters/{managedClustersName}/agentPools/{resourceName}/upgradeNodeImage": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "name": "managedClustersName",
+          "in": "path",
+          "required": true,
+          "description": "The name of the parent resource this one lives inside. A child is addressed through its parent — docs/plan/12 § Child resources.",
+          "schema": {
+            "type": "string",
+            "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
+            "minLength": 1,
+            "maxLength": 63
+          }
+        },
+        {
+          "$ref": "#/components/parameters/ResourceName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "post": {
+        "operationId": "CyberCloud_ContainerService_managedClusters_agentPools_UpgradeNodeImage",
+        "summary": "upgradeNodeImage a CyberCloud.ContainerService/managedClusters/agentPools.",
+        "description": "An action never creates: a POST to a name that does not exist is a 404 — docs/plan/08 § The write path, end to end. This action is long-running: it answers 202 and an operation to poll, like every other write.",
+        "responses": {
+          "202": {
+            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "headers": {
+              "Azure-AsyncOperation": {
+                "description": "The absolute URL of the operation to poll.",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "Retry-After": {
+                "description": "Seconds to wait before the first poll.",
+                "required": true,
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "write",
+        "x-cybercloud-secret": false,
+        "x-cybercloud-long-running": true
+      },
+      "x-cybercloud-resource-type": "CyberCloud.ContainerService/managedClusters/agentPools",
+      "x-cybercloud-action": "upgradeNodeImage"
+    },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.ContainerService/managedClusters/{resourceName}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "get": {
+        "operationId": "CyberCloud_ContainerService_managedClusters_Get",
+        "summary": "Read a CyberCloud.ContainerService/managedClusters.",
+        "description": "The body is this api-version's projection of the resource: docs/plan/08 § The provider registry keeps grain state as a superset and a read at an older version drops what that version did not declare.",
+        "responses": {
+          "200": {
+            "description": "The resource.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.ContainerService.managedClusters"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "read"
+      },
+      "put": {
+        "operationId": "CyberCloud_ContainerService_managedClusters_CreateOrUpdate",
+        "summary": "Create or replace a CyberCloud.ContainerService/managedClusters.",
+        "description": "A full replacement. Every property the schema marks required must be present; a read-only property is refused rather than ignored — docs/plan/08 § The write path, end to end.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CyberCloud.ContainerService.managedClusters"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "headers": {
+              "Azure-AsyncOperation": {
+                "description": "The absolute URL of the operation to poll.",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "Retry-After": {
+                "description": "Seconds to wait before the first poll.",
+                "required": true,
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "write"
+      },
+      "patch": {
+        "operationId": "CyberCloud_ContainerService_managedClusters_Update",
+        "summary": "Merge-patch a CyberCloud.ContainerService/managedClusters.",
+        "description": "A merge patch. The patch itself may omit required properties; the merged result is what is validated — see ResourceSchema.Validate.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CyberCloud.ContainerService.managedClusters"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "headers": {
+              "Azure-AsyncOperation": {
+                "description": "The absolute URL of the operation to poll.",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "Retry-After": {
+                "description": "Seconds to wait before the first poll.",
+                "required": true,
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "write"
+      },
+      "delete": {
+        "operationId": "CyberCloud_ContainerService_managedClusters_Delete",
+        "summary": "Delete a CyberCloud.ContainerService/managedClusters.",
+        "description": "The delete is permanent: this type declares no soft-delete window.",
+        "responses": {
+          "202": {
+            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "headers": {
+              "Azure-AsyncOperation": {
+                "description": "The absolute URL of the operation to poll.",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "Retry-After": {
+                "description": "Seconds to wait before the first poll.",
+                "required": true,
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "delete",
+        "x-cybercloud-soft-delete-days": 0
+      },
+      "x-cybercloud-resource-type": "CyberCloud.ContainerService/managedClusters",
+      "x-cybercloud-display": {
+        "name": "Managed Kubernetes cluster",
+        "plural": "Managed Kubernetes clusters",
+        "alias": "aks",
+        "summary": "A Kubernetes cluster whose control plane runs as pods in the management cluster and whose workers are isolated virtual machines. Node pools are a child resource.",
+        "declared": true
+      },
+      "x-cybercloud-supports-tags": true,
+      "x-cybercloud-requires-cluster": true,
+      "x-cybercloud-cluster-id-pointer": "/properties/clusterId",
+      "x-cybercloud-soft-delete-days": 0,
+      "x-cybercloud-meters": [
+        {
+          "meter": "Clusters",
+          "amountPointer": "",
+          "fallback": 1,
+          "expression": "1",
+          "reads": []
+        },
+        {
+          "meter": "MemoryGb",
+          "amountPointer": "",
+          "fallback": null,
+          "expression": "controlPlane.replicas × 3 containers × 1Gi, in GiB",
+          "reads": [
+            "/properties/controlPlane/replicas"
+          ]
+        },
+        {
+          "meter": "Resources",
+          "amountPointer": "",
+          "fallback": 1,
+          "expression": "1",
+          "reads": []
+        },
+        {
+          "meter": "Vcpu",
+          "amountPointer": "",
+          "fallback": null,
+          "expression": "controlPlane.replicas × 3 containers × 500m, in cores",
+          "reads": [
+            "/properties/controlPlane/replicas"
+          ]
+        }
+      ]
+    },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.ContainerService/managedClusters/{resourceName}/listCredentials": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "post": {
+        "operationId": "CyberCloud_ContainerService_managedClusters_ListCredentials",
+        "summary": "listCredentials a CyberCloud.ContainerService/managedClusters.",
+        "description": "An action never creates: a POST to a name that does not exist is a 404 — docs/plan/08 § The write path, end to end. ⚠ The response carries secret material. It is always audited and is never cached — docs/plan/08 § The provider registry.",
+        "responses": {
+          "200": {
+            "description": "The action's result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.ContainerService.managedClusters.ListCredentialsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "listCredentials",
+        "x-cybercloud-secret": true,
+        "x-cybercloud-long-running": false
+      },
+      "x-cybercloud-resource-type": "CyberCloud.ContainerService/managedClusters",
+      "x-cybercloud-action": "listCredentials"
+    },
     "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.DBforMySQL/servers/{resourceName}": {
       "parameters": [
         {
@@ -4876,6 +5626,286 @@
         "title": "CyberCloud.Cache.redis.ListKeysResponse",
         "type": "object"
       },
+      "CyberCloud.ContainerService.managedClusters": {
+        "additionalProperties": false,
+        "description": "The body of a CyberCloud.ContainerService/managedClusters. Generated from the provider registry's schema, which is the same object the write path validates against — docs/plan/08 § The provider registry.",
+        "properties": {
+          "location": {
+            "description": "The region the cluster is billed in.",
+            "example": "eu-central",
+            "format": "cybercloud-region",
+            "type": "string",
+            "x-cybercloud-immutable": true,
+            "x-cybercloud-widget": "region"
+          },
+          "properties": {
+            "additionalProperties": false,
+            "description": "The cluster's own settings.",
+            "properties": {
+              "clusterId": {
+                "description": "The management cluster the control plane runs in. ⚠ This is not the cluster being created: it is the cluster whose API server accepts the Cluster API objects that create one.",
+                "format": "uuid",
+                "type": "string",
+                "x-cybercloud-immutable": true,
+                "x-cybercloud-widget": "cluster"
+              },
+              "controlPlane": {
+                "additionalProperties": false,
+                "description": "The control plane, which runs as pods in the management cluster.",
+                "properties": {
+                  "replicas": {
+                    "default": 2,
+                    "description": "How many copies of the API server, controller manager and scheduler to run. Two survives a node failure; one is offered for development. ⚠ Unlike an etcd quorum this is a plain replica count — the datastore is separate and is shared — so an even number is not the mistake it would be on a Raft member set.",
+                    "maximum": 5,
+                    "minimum": 1,
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "replicas"
+                ],
+                "type": "object"
+              },
+              "monitoring": {
+                "additionalProperties": false,
+                "description": "What the platform scrapes.",
+                "properties": {
+                  "enabled": {
+                    "default": true,
+                    "description": "Whether the control plane's own metrics endpoints are scraped. On by default — docs/plan/12: \"a managed service the tenant cannot see the health of is a black box they will not trust with production\". ⚠ It covers the control plane, which runs in the management cluster. Nothing scrapes inside the cluster being created; that needs an agent in the bundle.",
+                    "type": "boolean"
+                  }
+                },
+                "type": "object"
+              },
+              "network": {
+                "additionalProperties": false,
+                "description": "The address space of the cluster being created.",
+                "properties": {
+                  "podCidr": {
+                    "default": "10.244.0.0/16",
+                    "description": "The CIDR block pods are addressed from. ⚠ It must not overlap the management cluster's own pod or service range, and nothing checks that — an overlap produces a cluster whose nodes route the platform's addresses to themselves.",
+                    "example": "10.244.0.0/16",
+                    "pattern": "^(?:((25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)\\.){3}(25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)/([0-9]|[12]\\d|3[0-2]))$",
+                    "type": "string",
+                    "x-cybercloud-immutable": true,
+                    "x-cybercloud-widget": "cidr"
+                  },
+                  "serviceCidr": {
+                    "default": "10.96.0.0/12",
+                    "description": "The CIDR block Service cluster IPs are allocated from. The same overlap warning applies.",
+                    "example": "10.96.0.0/12",
+                    "pattern": "^(?:((25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)\\.){3}(25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)/([0-9]|[12]\\d|3[0-2]))$",
+                    "type": "string",
+                    "x-cybercloud-immutable": true,
+                    "x-cybercloud-widget": "cidr"
+                  }
+                },
+                "required": [
+                  "podCidr",
+                  "serviceCidr"
+                ],
+                "type": "object"
+              },
+              "version": {
+                "default": "1.33",
+                "description": "The Kubernetes minor version of the control plane. The patch level is the platform's. ⚠ Upgrade the control plane before the node pools and by at most one minor at a time; a node pool may run up to three minors behind and may never run ahead. Neither rule is enforced by this API today — an illegal pair is refused by the cluster's own admission, after the create was accepted.",
+                "enum": [
+                  "1.32",
+                  "1.33"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "clusterId",
+              "version"
+            ],
+            "type": "object"
+          },
+          "tags": {
+            "type": "object",
+            "description": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "maxProperties": 50,
+            "x-cybercloud-widget": "tag-input"
+          }
+        },
+        "required": [
+          "location"
+        ],
+        "title": "CyberCloud.ContainerService/managedClusters",
+        "type": "object"
+      },
+      "CyberCloud.ContainerService.managedClusters.ListCredentialsResponse": {
+        "additionalProperties": false,
+        "description": "What CyberCloud.ContainerService/managedClusters/listCredentials returns. ⚠ Secret material. docs/plan/08 § The provider registry makes a secret action the only path a secret value leaves by; this schema is therefore the complete list of what does.",
+        "properties": {
+          "apiServerEndpoint": {
+            "description": "The URL the kubeconfig points at, https://host:port. ⚠ It is an address inside the management cluster and is not routable from anywhere else — the control plane is deliberately not exposed, because there is no upstream field to attach a CIDR allow-list to. Returned separately so that a caller does not have to parse YAML to discover that.",
+            "format": "uri",
+            "type": "string"
+          },
+          "expiresAt": {
+            "description": "When the credential stops working, RFC 3339. ⚠ Returned because a credential with no stated expiry is one every caller will paste into CI and never rotate — docs/plan/13 makes \"a kubectl credential that expires\" part of what a tenant is buying.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "kubeconfig": {
+            "description": "A complete kubeconfig for the cluster, YAML. ⚠ docs/plan/13 requires this to be short-lived and scoped rather than the cluster's admin credential; what Cluster API generates is the admin one, and narrowing it needs a certificate request against the cluster this platform cannot yet reach.",
+            "format": "password",
+            "type": "string",
+            "writeOnly": true,
+            "x-cybercloud-secret": true
+          }
+        },
+        "required": [
+          "apiServerEndpoint",
+          "expiresAt",
+          "kubeconfig"
+        ],
+        "title": "CyberCloud.ContainerService.managedClusters.ListCredentialsResponse",
+        "type": "object"
+      },
+      "CyberCloud.ContainerService.managedClusters.agentPools": {
+        "additionalProperties": false,
+        "description": "The body of a CyberCloud.ContainerService/managedClusters/agentPools. Generated from the provider registry's schema, which is the same object the write path validates against — docs/plan/08 § The provider registry.",
+        "properties": {
+          "location": {
+            "description": "The region the pool is billed in.",
+            "example": "eu-central",
+            "format": "cybercloud-region",
+            "type": "string",
+            "x-cybercloud-immutable": true,
+            "x-cybercloud-widget": "region"
+          },
+          "properties": {
+            "additionalProperties": false,
+            "description": "The pool's own settings.",
+            "properties": {
+              "autoscale": {
+                "additionalProperties": false,
+                "description": "Whether a cluster-autoscaler may resize the pool.",
+                "properties": {
+                  "enabled": {
+                    "default": false,
+                    "description": "Whether the pool carries autoscaler bounds. Off by default. ⚠ Turning it on changes what the pool costs: quota is then reserved against maxCount, because a pool that may grow to twenty machines has to have twenty machines' worth of headroom to grow into.",
+                    "type": "boolean"
+                  },
+                  "maxCount": {
+                    "default": 3,
+                    "description": "The largest the autoscaler may grow the pool to, and what quota is reserved against while autoscaling is on. ⚠ Nothing checks that it is at least minCount — that is a relation between two properties of one body, which the schema validates nothing about.",
+                    "maximum": 100,
+                    "minimum": 1,
+                    "type": "integer"
+                  },
+                  "minCount": {
+                    "default": 1,
+                    "description": "The smallest the autoscaler may shrink the pool to. Ignored when autoscaling is off.",
+                    "maximum": 100,
+                    "minimum": 1,
+                    "type": "integer"
+                  }
+                },
+                "type": "object"
+              },
+              "clusterId": {
+                "description": "The management cluster the machine objects are applied to. Must be the one the cluster is in — nothing checks that, and a pool placed elsewhere produces a MachineDeployment naming a Cluster that is not there, which Cluster API accepts and never reconciles.",
+                "format": "uuid",
+                "type": "string",
+                "x-cybercloud-immutable": true,
+                "x-cybercloud-widget": "cluster"
+              },
+              "count": {
+                "default": 3,
+                "description": "How many worker VMs the pool runs. ⚠ When autoscaling is on this is the starting size and the autoscaler moves it; quota is reserved against the maximum in that case, not against this.",
+                "maximum": 100,
+                "minimum": 1,
+                "type": "integer"
+              },
+              "osDiskSize": {
+                "default": "60Gi",
+                "description": "The root volume of each VM, in Kubernetes quantity form. It holds the operating system, the container images and every writable layer, so a pool running large images needs more of it than a pool running small ones.",
+                "example": "60Gi",
+                "pattern": "^(?:\\d+(\\.\\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)$",
+                "type": "string",
+                "x-cybercloud-immutable": true
+              },
+              "size": {
+                "default": "s1.small",
+                "description": "The VM size, from the platform's sizing catalogue. Kubernetes nodes use the s1 family, which is 1 vCPU to 4 GiB. ⚠ Immutable: a Cluster API machine template cannot be resized in place, so changing this would mean replacing every VM in the pool, which is a different operation from the one a PUT looks like.",
+                "enum": [
+                  "s1.2xlarge",
+                  "s1.4xlarge",
+                  "s1.large",
+                  "s1.medium",
+                  "s1.micro",
+                  "s1.nano",
+                  "s1.small",
+                  "s1.xlarge"
+                ],
+                "type": "string",
+                "x-cybercloud-immutable": true,
+                "x-cybercloud-widget": "cozy-preset"
+              },
+              "upgrade": {
+                "additionalProperties": false,
+                "description": "How machines are replaced when the pool changes.",
+                "properties": {
+                  "maxSurge": {
+                    "default": 1,
+                    "description": "How many extra machines may exist during a rolling replacement. One means a new VM boots and joins before an old one is removed, which is why it is the default: it costs one machine's capacity and loses none.",
+                    "maximum": 10,
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "maxUnavailable": {
+                    "default": 0,
+                    "description": "How many machines may be missing during a rolling replacement. Zero with a surge of one is the safe pair; raising it is faster and reduces the pool's capacity while it runs. ⚠ Both being zero would make an upgrade unable to start, and nothing refuses that pair.",
+                    "maximum": 10,
+                    "minimum": 0,
+                    "type": "integer"
+                  }
+                },
+                "type": "object"
+              },
+              "version": {
+                "default": "1.33",
+                "description": "The Kubernetes minor version the nodes run. ⚠ It may be up to three minors behind the cluster's control plane and may never be ahead of it. This API does not check that — the cluster's version is a different resource — so an illegal pair is accepted here and produces nodes that join and then misbehave.",
+                "enum": [
+                  "1.32",
+                  "1.33"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "clusterId",
+              "count",
+              "osDiskSize",
+              "size",
+              "version"
+            ],
+            "type": "object"
+          },
+          "tags": {
+            "type": "object",
+            "description": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "maxProperties": 50,
+            "x-cybercloud-widget": "tag-input"
+          }
+        },
+        "required": [
+          "location"
+        ],
+        "title": "CyberCloud.ContainerService/managedClusters/agentPools",
+        "type": "object"
+      },
       "CyberCloud.DBforMySQL.servers": {
         "additionalProperties": false,
         "description": "The body of a CyberCloud.DBforMySQL/servers. Generated from the provider registry's schema, which is the same object the write path validates against — docs/plan/08 § The provider registry.",
@@ -7074,5 +8104,5 @@
       }
     }
   },
-  "x-cybercloud-resource-type-count": 12
+  "x-cybercloud-resource-type-count": 14
 }

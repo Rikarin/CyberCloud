@@ -179,6 +179,7 @@
   "x-cybercloud-providers": [
     "CyberCloud.Analytics",
     "CyberCloud.Cache",
+    "CyberCloud.ContainerService",
     "CyberCloud.DBforMySQL",
     "CyberCloud.DBforPostgreSQL",
     "CyberCloud.DocumentDB",
@@ -211,6 +212,32 @@
         "plural": "Valkey caches",
         "alias": "valkey",
         "summary": "A managed Valkey cache with Sentinel failover, on spotahome/redis-operator. Valkey rather than Redis, per ADR-011; every Redis client works against it.",
+        "declared": true
+      }
+    },
+    {
+      "type": "CyberCloud.ContainerService/managedClusters",
+      "apiVersions": [
+        "2026-08-01"
+      ],
+      "display": {
+        "name": "Managed Kubernetes cluster",
+        "plural": "Managed Kubernetes clusters",
+        "alias": "aks",
+        "summary": "A Kubernetes cluster whose control plane runs as pods in the management cluster and whose workers are isolated virtual machines. Node pools are a child resource.",
+        "declared": true
+      }
+    },
+    {
+      "type": "CyberCloud.ContainerService/managedClusters/agentPools",
+      "apiVersions": [
+        "2026-08-01"
+      ],
+      "display": {
+        "name": "Node pool",
+        "plural": "Node pools",
+        "alias": "nodepool",
+        "summary": "A group of identically sized worker virtual machines in a managed Kubernetes cluster, optionally under a cluster-autoscaler.",
         "declared": true
       }
     },
