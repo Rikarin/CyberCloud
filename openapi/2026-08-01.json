@@ -319,7 +319,9 @@
         {
           "meter": "Resources",
           "amountPointer": "",
-          "fallback": 1
+          "fallback": 1,
+          "expression": "1",
+          "reads": []
         }
       ]
     },
@@ -642,9 +644,44 @@
       "x-cybercloud-soft-delete-days": 0,
       "x-cybercloud-meters": [
         {
+          "meter": "MemoryGb",
+          "amountPointer": "",
+          "fallback": null,
+          "expression": "replicas × sizing.memory, in GiB, taking sizing.preset when the override is empty",
+          "reads": [
+            "/properties/replicas",
+            "/properties/sizing/preset",
+            "/properties/sizing/memory"
+          ]
+        },
+        {
           "meter": "Resources",
           "amountPointer": "",
-          "fallback": 1
+          "fallback": 1,
+          "expression": "1",
+          "reads": []
+        },
+        {
+          "meter": "StorageGb",
+          "amountPointer": "",
+          "fallback": null,
+          "expression": "replicas × (storage.size + storage.walSize), in GiB; walSize empty means one volume",
+          "reads": [
+            "/properties/replicas",
+            "/properties/storage/size",
+            "/properties/storage/walSize"
+          ]
+        },
+        {
+          "meter": "Vcpu",
+          "amountPointer": "",
+          "fallback": null,
+          "expression": "replicas × sizing.cpu, in cores, taking sizing.preset when the override is empty",
+          "reads": [
+            "/properties/replicas",
+            "/properties/sizing/preset",
+            "/properties/sizing/cpu"
+          ]
         }
       ]
     },
@@ -969,7 +1006,9 @@
         {
           "meter": "Resources",
           "amountPointer": "",
-          "fallback": 1
+          "fallback": 1,
+          "expression": "1",
+          "reads": []
         }
       ]
     },
