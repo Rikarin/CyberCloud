@@ -81,10 +81,12 @@ public sealed class VaultOptions {
     ///     per call rather than per silo, which this type has no member for because nothing resolves
     ///     per-tenant handles yet.
     ///     <para>
-    ///         ⚠ Namespaces are open-source in OpenBao from 2.3.1 and were <b>not</b> in the fork's
+    ///         ⚠ Namespaces are open-source in OpenBao from 2.3 and were <b>not</b> in the fork's
     ///         first releases — they are Enterprise-only in HashiCorp Vault, which is what makes
-    ///         docs/plan/18's topology affordable at all under ADR-011. Verified against OpenBao's
-    ///         own namespace announcement rather than assumed from Vault's documentation.
+    ///         docs/plan/18's topology affordable at all under ADR-011. Read in OpenBao's own
+    ///         namespaces announcement, which also promises API compatibility with Vault Enterprise,
+    ///         rather than assumed from Vault's documentation. It is why <c>OpenBaoFixture</c> pins a
+    ///         2.x image.
     ///     </para>
     /// </remarks>
     public string Namespace { get; set; } = string.Empty;

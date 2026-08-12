@@ -41,7 +41,7 @@ public sealed class OpenBaoFixture : IAsyncLifetime {
     /// <remarks>
     ///     ⚠ Pinned to a digest-stable tag rather than <c>latest</c>, and to a 2.x release rather
     ///     than 1.x, because namespaces — docs/plan/18 § Shape's "namespace per tenant" — arrived in
-    ///     the open-source fork at 2.3.1. A suite pinned below that would be testing a client against
+    ///     the open-source fork at 2.3. A suite pinned below that would be testing a client against
     ///     a server that cannot do the thing the topology depends on.
     /// </remarks>
     public const string Image = "openbao/openbao:2.4.1";
