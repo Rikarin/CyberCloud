@@ -39,6 +39,10 @@ public class ErrorCodeRegistryTests {
         "QuotaExceeded",
         "ResourceAlreadyExists",
         "ResourceGroupNotFound",
+        // Added with the child-delete gate (docs/plan/08 § Deleting a parent resource that has
+        // children): a delete refused because the resource still has children is a 409 the caller
+        // recovers from by deleting the children, which is a different recovery from ScopeLocked's.
+        "ResourceHasChildren",
         "ResourceNotFound",
         // Added with CyberCloud.Authorization (docs/plan/07 § The model): a check that names a
         // permission the schema does not define must be neither a denial nor an allow.

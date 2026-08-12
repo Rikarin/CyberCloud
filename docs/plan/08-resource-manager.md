@@ -188,20 +188,131 @@ Why refuse, when the resource *group* cascades:
 child whose own delete is stuck holds its parent undeletable. That is why the answer is a `409` *with
 a count* rather than a bare refusal — the caller has to be able to see what is holding it.
 
-**Not implemented, because the platform cannot enumerate children.** `IResourceIndexGrain` is
-path→GUID and one-way ([06](06-tenancy-and-resource-model.md) § Grain keys), so "what are this
-resource's children" is answerable only from the resource-graph projection, which is *eventually
-consistent* — and a delete gate reading a stale index either orphans a child it did not see or refuses
-over a child that is already gone. The two honest options are a per-parent child counter maintained
-transactionally where the index claim and release already happen, or a strongly-consistent child index
-grain keyed on the parent's address. The counter is the smaller and is where this should start.
+**Implemented, and the counter is on the parent's own index grain.** The blocker recorded here was
+that `IResourceIndexGrain` is path→GUID and one-way ([06](06-tenancy-and-resource-model.md) § Grain
+keys), so "what are this resource's children" was answerable only from the resource-graph projection,
+which is *eventually consistent* — and a delete gate reading a stale index either orphans a child it
+did not see or refuses over a child that is already gone. Of the two honest options this named — a
+per-parent counter maintained where the index claim and release already happen, or a
+strongly-consistent child index keyed on the parent's address — **`IResourceIndexGrain` turns out to
+be both at once**, so the counter lives there rather than in a grain of its own:
 
-⚠ **Until it exists, deleting a parent leaves its children addressable and pointing at nothing** — and
-their ReBAC `parent` edge pointing at a resource that is gone. That is the residual defect, recorded
-here rather than left to be rediscovered from an orphaned database. What the platform must *not* do
-instead is re-check the parent on every write to a child: that turns a deleted parent into a frozen
-child which answers `404` to a `GET` for a resource that plainly exists, which is worse than the
-orphan. `ParentExistenceTests.AnUpdateOfAnExistingChildDoesNotRecheckTheParent` pins that.
+- It is keyed on the parent's canonical path, so it is **one activation per parent address**: no new
+  key shape, no new grain type, no new cardinality question ([04](04-orleans-topology.md) § Grain
+  taxonomy's review question is already answered for this key).
+- It is the same activation the parent's delete calls `ReleaseAsync` on, so **"is this name taken" and
+  "does it still have children" are answered by one single-threaded entity that cannot disagree with
+  itself**. That is the strong consistency the projection could not offer.
+- `AddChildAsync` / `RemoveChildAsync` / `ChildrenAsync` count **per child type**, not per child. A
+  list of names would put one entry per child on the parent's durable row and rewrite the whole row on
+  every child create; a count per type is a handful of bytes at any fan-out and still answers "how
+  many, and of what", which is all the refusal needs.
+
+**The two endpoints are the moments the child starts and stops existing, and they are deliberately
+asymmetric.** The increment is on the *create*, immediately after the index claim is confirmed — a
+count raised before the durable write would survive a create that then failed, and nothing would ever
+lower it, so the parent would answer `409` to its own delete forever with only an operator able to
+clear it. The decrement is on the *delete*, in `OperationGrain` after `CompleteDeleteAsync`, beside
+the ReBAC unlink and for the same reasons: a child that is still tearing down **still exists** — 06
+§ Two-phase create keeps it visible, in `Deleting`, with its meter ticking — so it must still hold its
+parent, and the removal has to be re-drivable, because a count left high is worse than a dangling
+tuple. `RemoveChildAsync` clamps at zero so the re-drive is safe; `ReleaseAsync` clears the counts with
+the binding, so a name reused by a new resource cannot inherit the old one's children.
+
+⚠ **The residual is a count that is one too low, and it is the recoverable direction.** A silo lost
+between the index confirm and the increment leaves a child that exists and is not counted — the orphan
+this gate closes, in a microsecond-wide window, and no worse than the behaviour before the gate
+existed. The opposite residual, a count too high, is what the ordering above is chosen to avoid.
+
+What the platform must *not* do instead is re-check the parent on every write to a child: that turns a
+deleted parent into a frozen child which answers `404` to a `GET` for a resource that plainly exists,
+which is worse than the orphan. `ParentExistenceTests.AnUpdateOfAnExistingChildDoesNotRecheckTheParent`
+pins that — and it now makes the parent stop resolving through the index grain directly, because the
+refusal makes "delete the parent out from under a live child" unreachable through the API while
+leaving every *other* way a parent can stop resolving intact.
+
+⚠ **The refusal carries its own error code, `ResourceHasChildren`, and the sentence above about
+reusing `ScopeLocked`'s shape means the message rather than the code.** Same `409`, same "here is what
+is holding it" shape — but a caller with no lock anywhere in their hierarchy must not be told to go
+and find one, and every generated SDK branches on the code. Different recovery, therefore different
+code.
+
+### Soft delete: where a deleted resource lives, what happens to its name, and what happens to its quota
+
+[06](06-tenancy-and-resource-model.md) § Tags, locks asks for **"7 days for resources carrying data
+(Vault, Storage, databases)"**, and the registry can already say so — `IProviderBuilder`'s
+`SupportsSoftDelete(int days)`, `ResourceTypeRegistration.SoftDeleteDays`. **Nothing in
+`CyberCloud.ResourceManager` reads it**, and all five providers independently declined to declare it
+for the same stated reason: a type advertising `softDeleteDays: 7` through the generated document
+while delete is irreversible is worse than one advertising nothing. **That instinct is right and the
+fix is not to make them declare it.** Honour it first. Three decisions come before any code, and each
+one decides the ones after it.
+
+**Decided: a soft-deleted resource moves to a different address, out of its resource group.**
+Azure has no ARM-wide soft delete; each provider builds its own, and Key Vault — the canonical one —
+moves the vault to `/subscriptions/{sub}/providers/Microsoft.KeyVault/locations/{loc}/deletedVaults/{name}`,
+a different resource *type* at subscription+location scope, returning `"type":
+"Microsoft.KeyVault/deletedVaults"` and keeping the original address only as a property. Follow it.
+The alternative — the resource stays where it is with a flag — puts an "unless deleted" clause on
+every read path, every list, every ReBAC check and the index claim, and the feature is then only as
+good as the least-remembered of them. Moving it out of the tree is more work once and less work
+forever, and it makes the sharpest failure — *a soft-deleted resource that is still readable at its
+old address* — unreachable by construction rather than a thing to remember. ⚠ The `404` on the old
+address must stay the **canonical** `404` § The enforcement seam in [07](07-rebac-authorization.md)
+requires: a `410 Gone` would tell an unauthorized caller that the name was taken, which is the
+enumeration oracle the status code exists to close.
+
+**Decided: the name is held for the whole window.** Azure holds it — *"You can't reuse the name of a
+key vault that was soft-deleted, until the retention period expires"*, DNS record included. Releasing
+it is the cheaper-sounding option and it breaks restore: a name taken by somebody else leaves a
+restore with nowhere to go, so it would have to fail or overwrite, and both are worse than making the
+tenant wait. `IResourceIndexGrain` is where this lands and it needs one new `IndexEntryState`, not a
+new mechanism: `ResolveAsync` must refuse it — so the resource is not addressable, the `404` above is
+free, and § Deleting a parent resource that has children reads it correctly with no change — while
+`TryClaimAsync` must refuse it too, because the name is taken.
+
+**Decided: committed quota is NOT returned on delete for a soft-deletable type. It is returned on
+purge.** ⚠ **This is the decision most easily got wrong from Azure by analogy, because Azure does
+three different things and the pattern is not the one it looks like.** A soft-deleted Key Vault bills
+nothing during retention and consumes no vault quota — but only because there is no vault-count quota
+in the first place and a vault reserves no capacity. Where the deleted thing *does* hold capacity,
+Azure holds both: Managed HSM says *"These resources remain allocated even when the HSM is in a
+deleted state"* and bills *"at their full hourly rate until they're purged"*, and soft-deleted blob
+data is billed *"at the same rate as active data"*. **The rule is that soft delete is free exactly
+when the deleted thing consumes no reserved capacity** — and a CyberCloud resource in its recovery
+window consumes plenty, because handing the data back is the entire feature: the volumes, the PVCs
+and the memory are all still allocated. So the quota stays committed.
+
+The second reason is the one that matters more than the accounting: **quota held is what makes restore
+total.** A restore that re-reserves would fail against an allowance the tenant has spent in the
+meantime, which is a restore that works only when it is not needed. Concretely this moves
+`OperationSpec.CommittedQuota`'s return from the delete's convergence to the purge, and it moves the
+whole of it — `QuotaMeter.Resources` too, even though a soft-deleted resource is not one anybody can
+use, because a per-meter split reintroduces the partial restore. `DeletePathTests`'
+`ADeleteReturnsExactlyWhatTheCreateCommittedOnEveryMeter` and `MeteredAmountTests`'
+`TenCreateDeleteCyclesLeaveTheMetersWhereTheyStarted` are the two tests that pin the amount and the
+symmetry; for a soft-deletable type they become tests of the purge, with the arithmetic unchanged.
+**Billing during retention is [13](13-compute-vm-containers.md)'s to state**, and the same principle
+decides it: charge for capacity that is still allocated, not for a control plane that refuses every
+call.
+
+Three smaller things follow from Azure and are worth taking as they stand. **Purge is a separate
+operation with its own permission** — Azure's `Microsoft.KeyVault/locations/deletedVaults/purge/action`
+is in Key Vault Contributor's `notActions`, so "may delete" and "may destroy permanently" are
+genuinely separable rights and a role can hold the first without the second. **Purge protection is a
+further opt-in flag that cannot be turned off once on**, which is the only version of it that is worth
+anything. And **retention is set at creation and immutable afterwards** — a window a caller can
+shorten under their own resource is not a recovery window.
+
+⚠ **Refusing a delete with children (above) is what makes all of this tractable, and the reasoning
+should not be lost.** It makes *"a soft-deleted parent with live children"* unreachable, so nothing
+here has to answer it. A cascade could not have: hard-deleting children while the parent is
+recoverable makes restore hand back an account whose buckets are gone — worse than not restoring,
+because the tenant is *told* it came back — and soft-deleting them alongside it needs a restore that
+is transactional over a set, which the platform has no shape for.
+
+⚠ **No provider should declare `SupportsSoftDelete` until the above is built.** The five stated
+reasons in the tree are correct and stay correct; the declaration is the last step, not the first.
 
 ## The provider registry
 

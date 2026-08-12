@@ -2622,6 +2622,7 @@
           "OperationCanceled",
           "OperationInProgress",
           "ResourceAlreadyExists",
+          "ResourceHasChildren",
           "ScopeLocked"
         ]
       },
@@ -4146,6 +4147,7 @@
           "QuotaExceeded",
           "ResourceAlreadyExists",
           "ResourceGroupNotFound",
+          "ResourceHasChildren",
           "ResourceNotFound",
           "SchemaInvalid",
           "ScopeLocked",
@@ -4172,6 +4174,7 @@
           "QuotaExceeded": 429,
           "ResourceAlreadyExists": 409,
           "ResourceGroupNotFound": 404,
+          "ResourceHasChildren": 409,
           "ResourceNotFound": 404,
           "SchemaInvalid": 404,
           "ScopeLocked": 409,

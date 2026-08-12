@@ -135,6 +135,24 @@ public sealed class ErrorCode : IEquatable<ErrorCode> {
     public static readonly ErrorCode ResourceGroupNotFound = new("ResourceGroupNotFound", Status.NotFound);
 
     /// <summary>
+    ///     A delete was refused because the resource still has child resources. docs/plan/08
+    ///     § Deleting a parent resource that has children.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>A code of its own rather than <see cref="ScopeLocked" />, and the document's sentence
+    ///     is the reason rather than an exception to it.</b> docs/plan/08 says the refusal <i>"reuses
+    ///     the shape <c>ScopeLocked</c> already has — 'you cannot delete this yet, here is what is
+    ///     holding it' — rather than inventing a second one"</i>. That shape is the <b>message</b>: a
+    ///     409 that names the blocker so the caller can go and remove it. The <i>code</i> is what a
+    ///     client library branches on, and <see cref="ScopeLocked" />'s own summary is "a lock forbids
+    ///     the write or the delete" — so reusing it would tell a caller with no lock anywhere in their
+    ///     hierarchy to go and find one, and would make "remove the lock" and "delete the children"
+    ///     indistinguishable to every generated SDK. Same status, same message shape, different
+    ///     recovery, therefore a different code.
+    /// </remarks>
+    public static readonly ErrorCode ResourceHasChildren = new("ResourceHasChildren", Status.Conflict);
+
+    /// <summary>
     ///     The resource does not exist <i>or</i> the caller may not see it. docs/plan/00 § Non-negotiables.
     /// </summary>
     public static readonly ErrorCode ResourceNotFound = new("ResourceNotFound", Status.NotFound);
@@ -208,6 +226,7 @@ public sealed class ErrorCode : IEquatable<ErrorCode> {
         ProvisioningFailed,
         ResourceAlreadyExists,
         ResourceGroupNotFound,
+        ResourceHasChildren,
         ResourceNotFound,
         SchemaInvalid,
         ScopeLocked,

@@ -47,6 +47,11 @@ static class ResultShaper {
         // through GatewayErrors.NotFound: "that subscription does not exist" and "that resource does
         // not exist" must not be distinguishable, or the subscription id is enumerable.
         [ErrorCode.ResourceGroupNotFound.Value] = StatusCodes.Status404NotFound,
+        // ⚠ 409 and NOT rewritten to the canonical 404, which is safe only because the caller has
+        // already been through the enforcement seam on this path: DeleteAsync authorizes before the
+        // child gate runs, so anyone who sees this could already read the resource and its children
+        // are not an existence oracle. docs/plan/08 § Deleting a parent resource that has children.
+        [ErrorCode.ResourceHasChildren.Value] = StatusCodes.Status409Conflict,
         [ErrorCode.ResourceNotFound.Value] = StatusCodes.Status404NotFound,
         [ErrorCode.SubscriptionNotFound.Value] = StatusCodes.Status404NotFound,
         [ErrorCode.TenantNotFound.Value] = StatusCodes.Status404NotFound,
