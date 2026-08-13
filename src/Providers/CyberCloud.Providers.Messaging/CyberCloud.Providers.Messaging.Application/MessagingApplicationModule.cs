@@ -1,5 +1,18 @@
+using CyberCloud.Core.Contracts;
+using CyberCloud.ResourceManager;
 using Volo.Abp.Application;
 using Volo.Abp.Modularity;
+
+// ── Rule 4's declaration — docs/plan/03 § Assembly graph rules ────────────────────────────────
+//
+// ⚠ TWO HOSTS, AND THE SECOND ONE IS NOT A CONCESSION. The silo runs the reconcilers this module
+// registers; the gateway builds the SAME registry from the SAME providers, because RouteStage
+// resolves a path against it and a gateway with its own list would route from a description of a
+// platform the silo is not running. OwningHostAttribute allows multiple for exactly this — rule 5
+// lets the gateway reference a provider's .Application assembly, and rule 4 wants each host that
+// does named in one reviewable line.
+[assembly: OwningHost("CyberCloud.Silo.Host")]
+[assembly: OwningHost("CyberCloud.Gateway.Host")]
 
 namespace CyberCloud.Providers.Messaging.Application;
 
@@ -8,28 +21,30 @@ namespace CyberCloud.Providers.Messaging.Application;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         docs/plan/03 § Providers: <i>"Each is an ABP module (<c>[DependsOn]</c>), each registers
-///         its resource types into <c>CyberCloud.ResourceManager</c>."</i> The second half is not done
-///         here: registering a provider is
-///         <c>ISiloBuilder.AddCyberCloudProvider&lt;MessagingProvider&gt;()</c>, which runs against
-///         the silo builder before the container is built, and an ABP module's
-///         <c>ConfigureServices</c> runs after.
+///         docs/plan/03 § Providers: <i>"Each is an ABP module (<c>[DependsOn]</c>), each registers its
+///         resource types into <c>CyberCloud.ResourceManager</c>."</i> Both halves happen here — a host
+///         that <c>[DependsOn]</c> this module gets the provider, its reconcilers and its action
+///         handlers, and there is no second call it can forget.
 ///     </para>
 ///     <para>
-///         ⚠ <b>The sample called this "a platform observation, not a provider quirk"; the second
-///         provider called the repeat "the observation happening a second time, which is what turns
-///         it into evidence"; this is the third, and it is the one the second provider predicted.</b>
-///         Its note said the separate silo-builder call <i>"is the one nobody adding the third
-///         provider will remember — its symptom is a namespace whose endpoints answer <c>404</c> with
-///         nothing in the log"</i>. The prediction was accurate as a hazard and wrong about how it
-///         would be found: <c>./build.sh Generate</c> reads provider <b>assemblies</b> rather than a
-///         host's wiring, so a forgotten call shows up as a resource type missing from the generated
-///         OpenAPI document — visible, and at build time. The gap is real for a running silo and the
-///         generated surfaces are not the thing that closes it. Closing it means either a
-///         module-collection seam on <c>ISiloBuilder</c> or a registry built lazily from the
-///         container; both are changes to <c>CyberCloud.ResourceManager</c>'s wiring and neither
-///         belongs here.
+///         ⚠ <b>The paragraph that used to be here said the second half could not be done, and it was
+///         wrong by the time it was written.</b> It read: registering a provider is
+///         <c>ISiloBuilder.AddCyberCloudProvider&lt;MessagingProvider&gt;()</c>, which runs before the
+///         container is built, while an ABP module's <c>ConfigureServices</c> runs after — so a host
+///         has to make two calls. The registry had already stopped being built at wiring time: it is a
+///         factory over <c>GetServices&lt;IResourceProvider&gt;()</c>, resolved once, after everything
+///         is registered. The cost of believing otherwise was not theoretical.
+///         <c>AddCyberCloudProvider</c> ended up with <b>no caller anywhere in the repository</b>, so
+///         no silo in <c>src/Hosts</c> served a single resource type and every conformance suite that
+///         proved otherwise had built its own <c>TestCluster</c> and registered the provider itself.
 ///     </para>
 /// </remarks>
 [DependsOn(typeof(AbpDddApplicationModule))]
-public sealed class MessagingApplicationModule : AbpModule;
+public sealed class MessagingApplicationModule : AbpModule {
+    /// <inheritdoc />
+    public override void ConfigureServices(ServiceConfigurationContext context) {
+        ArgumentNullException.ThrowIfNull(context);
+
+        context.Services.AddCyberCloudProvider(new MessagingProvider());
+    }
+}

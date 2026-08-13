@@ -29,6 +29,23 @@
 
     <ItemGroup>
         <ProjectReference Include="../CyberCloud.Providers.Sample.Contracts/CyberCloud.Providers.Sample.Contracts.csproj"/>
+        <!--
+          ⚠ THE IMPLEMENTATION ASSEMBLY, AND THIS LINE IS WHAT MAKES THE MODULE BELOW WORTH LOADING.
+          docs/plan/03 § Providers: "each registers its resource types into CyberCloud.ResourceManager".
+          The provider class lives next door, so registering it means naming it, and rule 2 has nothing
+          to say about a reference inside one family. Rule 5 keeps the gateway off the implementation
+          assembly and it still holds: the gateway references THIS project, binds the module type, and
+          binds nothing from the implementation.
+        -->
+        <ProjectReference Include="../CyberCloud.Providers.Sample/CyberCloud.Providers.Sample.csproj"/>
+        <!--
+          ⚠ AddCyberCloudProvider LIVES IN THE IMPLEMENTATION ASSEMBLY, NOT IN .Contracts, because
+          what it registers is what the provider's Describe declared — the reconciler and handler
+          types DiscoveringProviderBuilder walks. module-layering.txt already carries this family's
+          edge to CyberCloud.ResourceManager; this line adds no module coupling that was not already
+          declared and reviewed.
+        -->
+        <ProjectReference Include="../../../CyberCloud.ResourceManager/CyberCloud.ResourceManager.csproj"/>
     </ItemGroup>
 
     <ItemGroup Label="CyberCloud.Analyzers — see CyberCloud.Core.csproj for why this is not a reference">

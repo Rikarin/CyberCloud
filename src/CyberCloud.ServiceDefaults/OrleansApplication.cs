@@ -6,6 +6,7 @@ using Microsoft.Extensions.Hosting;
 using Orleans.Clustering.Kubernetes;
 using Orleans.Configuration;
 using Serilog;
+using StackExchange.Redis;
 using System.Net;
 
 namespace CyberCloud.ServiceDefaults;
@@ -121,7 +122,6 @@ public static class OrleansApplication {
                 //
                 //   .AddMultitenantStreams(StreamProviders.Events, NatsStreamProvider.Configure)
                 //   .AddMultitenantCommunicationSeparation(_ => new PlatformCrossTenantAuthorizer())
-                //   .UseRedisReminderService(o => o.ConfigureSharded())
                 //
                 // ⚠ AddMultitenantCommunicationSeparation is the one that matters and it is NOT here.
                 // docs/plan/04 § Silo composition calls it "not optional"; its argument is an
@@ -139,6 +139,34 @@ public static class OrleansApplication {
                         silo.AddCyberCloudGrainStorage(storageOptions);
                     } else {
                         configureStorage(silo, storageOptions);
+                    }
+
+                    // ── Reminders ── docs/plan/04 § Reminders: "Redis reminder service, sharded
+                    // with the hot tier."
+                    //
+                    // ⚠ IT IS HERE, INSIDE THE SAME `if`, BECAUSE IT READS THE SAME CONNECTION
+                    // STRING. The hot tier's Redis is the reminder table's Redis — a reminder table
+                    // on a different one would be a second thing to provision, a second thing to
+                    // lose, and a second answer to "did this resource's reconcile tick survive the
+                    // restart".
+                    //
+                    // ⚠ AND WITHOUT IT THE RECONCILE LOOP CANNOT START, LATE AND FROM INSIDE A GRAIN.
+                    // OperationGrain is IRemindable (docs/plan/08 § Long-running operations) and
+                    // calls RegisterOrUpdateReminder, which throws on a silo with no reminder
+                    // service — during the first create, not at start-up. UsageSamplerGrain and
+                    // UsageRollupGrain are the same. Every test fixture in the tree wires
+                    // UseInMemoryReminderService for exactly this reason, and no production host
+                    // wired anything at all.
+                    //
+                    // Conditional for the same reason the tiers above are: a silo with no configured
+                    // storage cannot persist a grain, so it was never going to drive a reconcile
+                    // loop, and making Redis a precondition of CreateSilo returning a usable host
+                    // would put a container behind every host test in this repository.
+                    if (!string.IsNullOrWhiteSpace(storageOptions.Hot.ConnectionString)) {
+                        silo.UseRedisReminderService(reminders =>
+                            reminders.ConfigurationOptions =
+                                ConfigurationOptions.Parse(storageOptions.Hot.ConnectionString)
+                        );
                     }
                 }
 

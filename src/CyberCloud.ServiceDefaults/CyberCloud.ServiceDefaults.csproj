@@ -41,6 +41,12 @@
         <!-- Durable: AdoNetGrainStorage + AdoNetGrainStorageOptions. Absent from docs/plan/02's register. -->
         <PackageReference Include="Microsoft.Orleans.Persistence.AdoNet"/>
         <!--
+          Reminders, on the hot tier's Redis — docs/plan/04 § Reminders. In this group rather than a
+          group of its own because it is configured from the hot tier's connection string and shares
+          its lifetime: CreateSilo wires both inside the same `if (storage.Exists())`.
+        -->
+        <PackageReference Include="Microsoft.Orleans.Reminders.Redis"/>
+        <!--
           Per-tenant storage provider instances, keyed by the tenant id in the grain key — ADR-002.
           This is what makes the two references above sharded rather than shared.
         -->

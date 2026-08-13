@@ -22,11 +22,19 @@ public static class ResourceManagerSiloBuilderExtensions {
     /// <returns>The same builder, for chaining.</returns>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>Call this <i>after</i> every provider has been registered.</b> The registry is
-    ///         built once from every <see cref="IResourceProvider" /> in the container, and a provider
-    ///         registered afterwards would not be in it — its endpoints would answer <c>404</c> with
-    ///         nothing in the log. The registry is a singleton with a factory rather than an instance
-    ///         precisely so the build happens at first resolve, which is after wiring finishes.
+    ///         ⚠ <b>The order of this call and the provider registrations does not matter, and it is
+    ///         worth knowing why, because the remark here used to say the opposite.</b> The registry is
+    ///         a singleton with a <i>factory</i> rather than an instance, so it is built from every
+    ///         <see cref="IResourceProvider" /> in the container at first resolve — after all wiring
+    ///         has finished. That is what lets a provider be registered from an ABP module's
+    ///         <c>ConfigureServices</c>, which runs later than anything on <see cref="ISiloBuilder" />.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>What does matter is that the host registers providers at all.</b> A host that calls
+    ///         this and no <c>AddCyberCloudProvider</c> gets a registry with no types, and
+    ///         <c>ProviderRegistry.Build</c> throws rather than serving one: an empty registry answers
+    ///         the canonical <c>404</c> to every resource and action path, which is indistinguishable
+    ///         from a caller asking for a type that does not exist.
     ///     </para>
     ///     <para>
     ///         ⚠ <b>Every seam gets a default and every default is honest about what it is.</b>
@@ -154,24 +162,69 @@ public static class ResourceManagerSiloBuilderExtensions {
         where TProvider : class, IResourceProvider, new() {
         ArgumentNullException.ThrowIfNull(silo);
 
-        return silo.ConfigureServices(services => {
-                var provider = new TProvider();
-                services.AddSingleton<IResourceProvider>(provider);
+        return silo.ConfigureServices(services => services.AddCyberCloudProvider(new TProvider()));
+    }
 
-                var builder = new DiscoveringProviderBuilder();
-                provider.Describe(builder);
+    /// <summary>
+    ///     Registers one provider and its reconcilers into a container.
+    /// </summary>
+    /// <param name="services">The container.</param>
+    /// <param name="provider">The provider instance. One per process — see the remarks.</param>
+    /// <returns>The same collection, for chaining.</returns>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>This is the overload a provider's <c>*.Application</c> ABP module calls, and its
+    ///         existence is what closed the "one provider, one registration" split.</b> Every
+    ///         <c>*ApplicationModule</c> in the tree used to carry the same paragraph: registering a
+    ///         provider is a call on <see cref="ISiloBuilder" />, which runs before the container is
+    ///         built, while an ABP module's <c>ConfigureServices</c> runs after — so a host had to load
+    ///         the module <i>and</i> make a second, separate call, and could do the first without the
+    ///         second. It could and did: <c>AddCyberCloudProvider&lt;TProvider&gt;</c> had no caller
+    ///         anywhere in the repository, so no silo served a single resource type.
+    ///     </para>
+    ///     <para>
+    ///         The paragraph named the way out and it had already been built: the registry is
+    ///         registered as a factory over <c>GetServices&lt;IResourceProvider&gt;()</c>, so it is
+    ///         constructed at first resolve rather than at wiring time, and <i>when</i> a provider is
+    ///         added stopped mattering. Only the container does, which is what an ABP module has.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Reconcilers and handlers are registered as singletons and by their concrete
+    ///         type.</b> Singleton because clause 2 of docs/plan/08 § The reconcile loop makes one
+    ///         instance per process correct and a transient registration would hide a field long enough
+    ///         for it to reach production. By concrete type because the registry stores
+    ///         <c>ReconcilerType</c> and <c>ActionRegistration.HandlerType</c>, and
+    ///         <c>ReconcileDriver</c> and <c>ActionDispatcher</c> resolve those — a registration only
+    ///         against <see cref="IResourceReconciler" /> would give each a list to search rather than
+    ///         a lookup, and two reconcilers for one type would be found by whichever came first.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b><c>AddSingleton</c> for the provider and <c>TryAdd</c> for what it declares.</b>
+    ///         The provider is additive because the registry is the union of every provider in the
+    ///         process and a <c>TryAdd</c> would silently drop the second one; the reconcilers are not,
+    ///         because a host that registered a substitute first is entitled to keep it.
+    ///     </para>
+    /// </remarks>
+    public static IServiceCollection AddCyberCloudProvider(
+        this IServiceCollection services,
+        IResourceProvider provider
+    ) {
+        ArgumentNullException.ThrowIfNull(services);
+        ArgumentNullException.ThrowIfNull(provider);
 
-                foreach (var reconciler in builder.Reconcilers) {
-                    services.TryAddSingleton(reconciler);
-                }
+        services.AddSingleton(provider);
 
-                // ⚠ Singletons by concrete type, for the reasons above and one more that is specific
-                // to a handler: ActionDispatcher resolves ActionRegistration.HandlerType, so a
-                // registration only against IResourceActionHandler would give it a list to search.
-                foreach (var handler in builder.Handlers) {
-                    services.TryAddSingleton(handler);
-                }
-            }
-        );
+        var builder = new DiscoveringProviderBuilder();
+        provider.Describe(builder);
+
+        foreach (var reconciler in builder.Reconcilers) {
+            services.TryAddSingleton(reconciler);
+        }
+
+        foreach (var handler in builder.Handlers) {
+            services.TryAddSingleton(handler);
+        }
+
+        return services;
     }
 }

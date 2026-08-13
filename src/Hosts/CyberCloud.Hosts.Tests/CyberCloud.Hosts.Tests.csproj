@@ -1,0 +1,43 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      The suite that composes the REAL hosts. docs/plan/04 § Silo composition, docs/plan/10 § Shape.
+
+      ⚠ WHY THIS PROJECT EXISTS, IN ONE SENTENCE: every other suite in the repository builds its own
+      TestCluster, registers the resource manager and registers a provider — so all 61 of them stayed
+      green through the whole period in which CyberCloud.Silo.Host referenced no provider module and
+      composed no resource manager, and CyberCloud.Gateway.Host built its provider registry from an
+      empty set. A green conformance run is a statement about a harness. Nothing here builds a
+      TestCluster: every test calls SiloComposition.BuildAsync or GatewayComposition.BuildAsync, which
+      is the identical call Program.cs makes.
+
+      ⚠ IT REFERENCES BOTH HOSTS, and that is the point rather than a shortcut. The silo reconciles
+      from its container and the gateway routes from its registry, the two are composed in two
+      processes from two [DependsOn] lists, and rule 4 leaves no third place to hold one list — so the
+      only way "the two agree" can be checked at all is a test that builds both.
+
+      What this suite does NOT do: start a silo, connect a client, or reach a database. Composition is
+      what it asserts, so it stops at Build(). CyberCloud.ServiceDefaults.Tests is where a silo is
+      started for real over HTTP.
+    -->
+
+    <ItemGroup>
+        <FrameworkReference Include="Microsoft.AspNetCore.App"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Include="xunit.v3"/>
+        <PackageReference Include="Shouldly"/>
+        <PackageReference Include="Microsoft.Orleans.Server"/>
+    </ItemGroup>
+
+    <ItemGroup Label="Global usings">
+        <Using Include="Xunit"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../CyberCloud.Silo.Host/CyberCloud.Silo.Host.csproj"/>
+        <ProjectReference Include="../CyberCloud.Gateway.Host/CyberCloud.Gateway.Host.csproj"/>
+    </ItemGroup>
+
+</Project>

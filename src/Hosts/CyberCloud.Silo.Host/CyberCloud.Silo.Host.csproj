@@ -2,11 +2,19 @@
 
     <!--
       docs/plan/03 § Hosts: "CyberCloud.Silo.Host/  # the Orleans silo — loads every provider module".
-  
-      It loads no provider modules yet, because there are none. What it does have is the whole of
-      docs/plan/04 § Silo composition that exists today — CreateSilo, the two storage tiers, the
-      tenancy grains and the cross-tenant separation — plus the one-shot `apply-durable-schema` mode
-      (see Program.cs), which is the thing that makes a fresh PostgreSQL shard usable at all.
+
+      ⚠ IT NOW DOES, AND UNTIL IT DID, NOTHING IN THIS PLATFORM RECONCILED ANYTHING. This project's
+      reference set was ServiceDefaults, Tenancy, Communication and Identity: no CyberCloud.ResourceManager,
+      so OperationGrain, ResourceGrain and ConnectionGrain were in no silo's manifest, and no provider
+      module at all, so `AddCyberCloudProvider` had zero callers across the whole repository. Sixteen
+      resource types across eleven providers had nowhere to execute, and every conformance suite was
+      green because each one builds its own TestCluster and registers the manager and a provider itself.
+      docs/plan/24's M1 exit story could not have run in this process.
+
+      What it has beyond that is the whole of docs/plan/04 § Silo composition that exists today —
+      CreateSilo, the two storage tiers, the tenancy grains and the cross-tenant separation — plus the
+      one-shot `apply-durable-schema` mode (see Program.cs), which is the thing that makes a fresh
+      PostgreSQL shard usable at all.
     -->
 
     <PropertyGroup>
@@ -53,6 +61,60 @@
           operator-facing message was written, tested, and unreachable in production.
         -->
         <ProjectReference Include="../../CyberCloud.Identity/CyberCloud.Identity.csproj"/>
+        <!--
+          docs/plan/08's write path and reconcile loop. The same two-part arrangement again, and this
+          is the one whose absence was the largest gap in the repository: Orleans DISCOVERS grains by
+          scanning referenced assemblies, so THIS line is what puts OperationGrain, ResourceGrain and
+          ConnectionGrain in the silo, and the AddCyberCloudResourceManager() call in Program.cs is what
+          registers the write path, the reconcile driver and the seams their constructors ask for.
+
+          ⚠ IT IS HERE BECAUSE THIS HOST NAMES AddCyberCloudResourceManager, NOT BECAUSE THE GRAINS
+          WOULD OTHERWISE BE MISSING — and that distinction was checked rather than assumed. Deleting
+          this line and rebuilding leaves ResourceGrain, OperationGrain and ConnectionGrain in the
+          silo's grain manifest all the same: each provider module below reaches this assembly, and
+          Orleans' generated ApplicationPart metadata travels through the transitive closure. So the
+          reference is a direct one for the ordinary reason — SiloComposition binds a type from it —
+          and NOT a load-bearing part of grain discovery.
+
+          What is load-bearing is that some path reaches this assembly at all. HostCompositionTests
+          .TheResourceManagerGrainsAreInTheSilosManifest asserts the outcome — the grain types are in
+          GrainTypeOptions — rather than the reference, because a ProjectReference that satisfies the
+          compiler and a grain the runtime can place are two different claims.
+        -->
+        <ProjectReference Include="../../CyberCloud.ResourceManager/CyberCloud.ResourceManager.csproj"/>
+    </ItemGroup>
+
+    <!--
+      ── Every provider module — docs/plan/04 § Silo composition ─────────────────────────────────
+
+      "Every silo loads every provider module. There are no specialised silo roles." Each line below
+      is one ABP module, pulled in by SiloHostModule's [DependsOn], whose ConfigureServices registers
+      its provider, its reconcilers and its action handlers into the container the registry is built
+      from.
+
+      ⚠ NAMED ONE BY ONE RATHER THAN DISCOVERED. ProviderDiscovery exists and scans an assembly, and
+      its own remarks forbid a silo using it: "a silo whose API surface depended on which assemblies
+      happened to be next to it on disk would answer 404 for a provider somebody forgot to copy, with
+      nothing in the log". A missing line here is a missing line in a diff.
+
+      ⚠ THIS LIST AND CyberCloud.Gateway.Host'S MUST BE THE SAME LIST, and nothing about a
+      ProjectReference makes that true. The gateway routes from ITS registry, so a provider here and
+      not there is a type that reconciles and cannot be reached, and a provider there and not here is
+      a type that accepts a create and never converges. HostCompositionTests compares the two
+      composed registries and fails on the difference.
+    -->
+    <ItemGroup Label="The provider modules — docs/plan/03 § Providers">
+        <ProjectReference Include="../../Providers/CyberCloud.Providers.Analytics/CyberCloud.Providers.Analytics.Application/CyberCloud.Providers.Analytics.Application.csproj"/>
+        <ProjectReference Include="../../Providers/CyberCloud.Providers.Cache/CyberCloud.Providers.Cache.Application/CyberCloud.Providers.Cache.Application.csproj"/>
+        <ProjectReference Include="../../Providers/CyberCloud.Providers.ContainerService/CyberCloud.Providers.ContainerService.Application/CyberCloud.Providers.ContainerService.Application.csproj"/>
+        <ProjectReference Include="../../Providers/CyberCloud.Providers.DBforMySQL/CyberCloud.Providers.DBforMySQL.Application/CyberCloud.Providers.DBforMySQL.Application.csproj"/>
+        <ProjectReference Include="../../Providers/CyberCloud.Providers.DBforPostgreSQL/CyberCloud.Providers.DBforPostgreSQL.Application/CyberCloud.Providers.DBforPostgreSQL.Application.csproj"/>
+        <ProjectReference Include="../../Providers/CyberCloud.Providers.DocumentDB/CyberCloud.Providers.DocumentDB.Application/CyberCloud.Providers.DocumentDB.Application.csproj"/>
+        <ProjectReference Include="../../Providers/CyberCloud.Providers.Messaging/CyberCloud.Providers.Messaging.Application/CyberCloud.Providers.Messaging.Application.csproj"/>
+        <ProjectReference Include="../../Providers/CyberCloud.Providers.Network/CyberCloud.Providers.Network.Application/CyberCloud.Providers.Network.Application.csproj"/>
+        <ProjectReference Include="../../Providers/CyberCloud.Providers.Sample/CyberCloud.Providers.Sample.Application/CyberCloud.Providers.Sample.Application.csproj"/>
+        <ProjectReference Include="../../Providers/CyberCloud.Providers.Search/CyberCloud.Providers.Search.Application/CyberCloud.Providers.Search.Application.csproj"/>
+        <ProjectReference Include="../../Providers/CyberCloud.Providers.Storage/CyberCloud.Providers.Storage.Application/CyberCloud.Providers.Storage.Application.csproj"/>
     </ItemGroup>
 
     <ItemGroup>
