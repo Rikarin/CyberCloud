@@ -31,10 +31,10 @@ public static class ResourceManagerSiloBuilderExtensions {
     ///     </para>
     ///     <para>
     ///         ⚠ <b>What does matter is that the host registers providers at all.</b> A host that calls
-    ///         this and no <c>AddCyberCloudProvider</c> gets a registry with no types, and
-    ///         <c>ProviderRegistry.Build</c> throws rather than serving one: an empty registry answers
-    ///         the canonical <c>404</c> to every resource and action path, which is indistinguishable
-    ///         from a caller asking for a type that does not exist.
+    ///         this and no <c>AddCyberCloudProvider</c> would get a registry with no types, and
+    ///         resolving <see cref="IProviderRegistry" /> throws rather than serving one: an empty
+    ///         registry answers the canonical <c>404</c> to every resource and action path, which is
+    ///         indistinguishable from a caller asking for a type that does not exist.
     ///     </para>
     ///     <para>
     ///         ⚠ <b>Every seam gets a default and every default is honest about what it is.</b>
@@ -97,7 +97,7 @@ public static class ResourceManagerSiloBuilderExtensions {
         // Built from whatever providers the container holds at first resolve — see the remarks on
         // ordering.
         services.TryAddSingleton<IProviderRegistry>(
-            provider => ProviderRegistry.Build(provider.GetServices<IResourceProvider>())
+            provider => BuildRegistry(provider.GetServices<IResourceProvider>())
         );
 
         services.TryAddSingleton<IPolicyEvaluator, NotSupportedPolicyEvaluator>();
@@ -227,5 +227,45 @@ public static class ResourceManagerSiloBuilderExtensions {
         }
 
         return services;
+    }
+
+    /// <summary>
+    ///     Builds the registry a <b>host</b> serves from, refusing an empty provider set.
+    /// </summary>
+    /// <param name="providers">Every provider the container holds.</param>
+    /// <returns>The built registry.</returns>
+    /// <exception cref="InvalidOperationException">There is no provider at all.</exception>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>The check is here rather than in <c>ProviderRegistry.Build</c>, and the difference
+    ///         between the two callers is what decides it.</b> A host with no providers is a wiring
+    ///         mistake: the registry is the platform's whole API surface, so every resource and action
+    ///         path answers the canonical <c>404</c> — the same answer a caller gets for a type that
+    ///         genuinely does not exist, with nothing in the log to tell them apart. That is what
+    ///         <c>CyberCloud.Gateway.Host</c> shipped as, and no test could see it because every
+    ///         harness registers a provider of its own.
+    ///     </para>
+    ///     <para>
+    ///         The other caller is <c>Build.Generate</c>'s generator, for which zero providers is an
+    ///         ordinary state it reports on rather than an error — its vacuity tripwire needs a run
+    ///         over no assemblies to succeed so it can be told apart from a run over an assembly that
+    ///         declared nothing. Refusing inside <c>Build</c> broke that, which is how the two callers
+    ///         turned out to want different answers.
+    ///     </para>
+    /// </remarks>
+    static ProviderRegistry BuildRegistry(IEnumerable<IResourceProvider> providers) {
+        var all = providers as IReadOnlyCollection<IResourceProvider> ?? [.. providers];
+
+        if (all.Count == 0) {
+            throw new InvalidOperationException(
+                "No IResourceProvider is registered, so this host's provider registry would describe "
+                + "a platform that serves no resource type at all. Every resource and action path "
+                + "would answer 404 and nothing would say why. A host that calls "
+                + "AddCyberCloudResourceManager registers its providers too — "
+                + "docs/plan/04 § Silo composition, \"every silo loads every provider module\"."
+            );
+        }
+
+        return ProviderRegistry.Build(all);
     }
 }

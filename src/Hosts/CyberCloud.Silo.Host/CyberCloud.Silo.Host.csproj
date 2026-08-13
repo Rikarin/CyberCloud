@@ -131,6 +131,18 @@
 
     <ItemGroup>
         <PackageReference Include="Volo.Abp.Autofac"/>
+        <!--
+          Reminders, on the hot tier's Redis — docs/plan/04 § Reminders. ⚠ THE PACKAGE IS HERE AND NOT
+          IN CyberCloud.ServiceDefaults, which is where it was first put and where it was wrong.
+          CreateSilo wires the two storage tiers whenever CyberCloud:Storage is configured, and
+          "configured" is not "reachable": CyberCloud.ServiceDefaults.Tests'
+          UnreachableShardReadinessFixture sets a hot-tier connection string and points it at nothing
+          on purpose, so a reminder service wired on the same condition failed that fixture at
+          start-up with a Redis connection error. Only a host knows whether its Redis is real.
+        -->
+        <PackageReference Include="Microsoft.Orleans.Reminders.Redis"/>
+        <!-- ConfigurationOptions.Parse, for the line above. -->
+        <PackageReference Include="StackExchange.Redis"/>
     </ItemGroup>
 
     <ItemGroup Label="CyberCloud.Analyzers — docs/plan/00 § Coding standards, § Non-negotiables">

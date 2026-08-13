@@ -53,9 +53,9 @@ public sealed class ProviderRegistry : IProviderRegistry {
     ///     404" is a bad way to find out about a copy-pasted namespace string.
     /// </param>
     /// <exception cref="InvalidOperationException">
-    ///     There are no providers at all, a provider declares no types, two providers share a
-    ///     namespace, two types collide, a type declares no api-version, or a reconciler's
-    ///     <c>Type</c> names a type its provider did not declare.
+    ///     A provider declares no types, two providers share a namespace, two types collide, a type
+    ///     declares no api-version, or a reconciler's <c>Type</c> names a type its provider did not
+    ///     declare.
     /// </exception>
     /// <remarks>
     ///     <para>
@@ -64,41 +64,29 @@ public sealed class ProviderRegistry : IProviderRegistry {
     ///         docs/plan/00 § Coding standards.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>An empty provider set is the loudest of the failures and it used to be the only
-    ///         silent one.</b> A host that composes the resource manager and registers no
-    ///         <see cref="IResourceProvider" /> built a registry with no types, and every resource and
-    ///         action path then answered the canonical <c>404</c> — the same answer a caller gets for a
-    ///         type that genuinely does not exist, with nothing in the log to tell the two apart. That
-    ///         is what <c>CyberCloud.Gateway.Host</c> shipped as: it called
-    ///         <c>AddCyberCloudResourceManager</c> and no <c>AddCyberCloudProvider</c>, and no test
-    ///         could see it because every harness registers a provider of its own. The registry is the
-    ///         platform's whole API surface, so a platform with none is a wiring mistake rather than a
-    ///         supported shape, and it fails at first resolve.
+    ///         ⚠ <b>An empty provider set is <i>not</i> one of them, and the refusal it deserves lives
+    ///         one layer up.</b> A <b>host</b> with no providers is a wiring mistake whose whole
+    ///         symptom is a <c>404</c> on every path — see
+    ///         <c>ResourceManagerSiloBuilderExtensions.AddCyberCloudResourceManager</c>, which is where
+    ///         that is refused. A <b>build step</b> with no providers is an ordinary state:
+    ///         <c>Build.Generate</c> runs the generator over whatever assemblies the solution has, and
+    ///         its own vacuity report depends on telling "no assembly was handed to me" from "an
+    ///         assembly was handed to me and declared nothing" — a distinction that needs both runs to
+    ///         succeed. Putting the check here made
+    ///         <c>CyberCloud.ResourceManager.Generator.Tests.GenerationReportTests</c> fail, which is
+    ///         the tripwire that exists because a discovery predicate once found no providers and the
+    ///         target reported success.
     ///     </para>
     /// </remarks>
     public static ProviderRegistry Build(IEnumerable<IResourceProvider> providers) {
         ArgumentNullException.ThrowIfNull(providers);
-
-        // Materialised before the loop, because the emptiness check below has to be able to see a
-        // set that is enumerated exactly once — GetServices<T> hands back a lazy sequence.
-        var all = providers as IReadOnlyCollection<IResourceProvider> ?? [.. providers];
-
-        if (all.Count == 0) {
-            throw new InvalidOperationException(
-                "No IResourceProvider is registered, so the provider registry would describe a "
-                + "platform that serves no resource type at all. Every resource and action path "
-                + "would answer 404 and nothing would say why. A host that calls "
-                + "AddCyberCloudResourceManager registers its providers too — "
-                + "docs/plan/04 § Silo composition, \"every silo loads every provider module\"."
-            );
-        }
 
         var types = new List<ResourceTypeRegistration>();
         var namespaces = new List<string>();
         var seenNamespaces = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var seenTypes = new HashSet<string>(StringComparer.Ordinal);
 
-        foreach (var provider in all) {
+        foreach (var provider in providers) {
             ArgumentNullException.ThrowIfNull(provider);
 
             if (!seenNamespaces.Add(provider.ProviderNamespace)) {

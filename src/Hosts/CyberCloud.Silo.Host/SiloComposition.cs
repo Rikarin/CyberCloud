@@ -3,9 +3,11 @@ using CyberCloud.Kubernetes;
 using CyberCloud.ResourceManager;
 using CyberCloud.ResourceManager.Contracts;
 using CyberCloud.ServiceDefaults;
+using CyberCloud.ServiceDefaults.Storage;
 using CyberCloud.Tenancy;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
+using StackExchange.Redis;
 
 namespace CyberCloud.Silo.Host;
 
@@ -40,7 +42,7 @@ public static class SiloComposition {
         var builder = OrleansApplication.CreateSilo(
             args,
             configureCluster: ConfigureCluster,
-            configureStorage: (silo, storage) => silo.AddCyberCloudTenancy(storage)
+            configureStorage: ConfigureStorage
         );
 
         // ⚠ Required, and not optional. CreateSilo calls builder.Host.UseAutofac(), and ABP's
@@ -85,11 +87,8 @@ public static class SiloComposition {
     ///         resource path; <c>ProviderRegistry.Build</c> now refuses to build one.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>Reminders are not here, and that moved on purpose.</b>
-    ///         <c>OperationGrain</c> is <c>IRemindable</c>, so the reconcile loop needs a reminder
-    ///         service — and it is configured from the hot tier's connection string, so it belongs
-    ///         beside the tiers in <c>OrleansApplication.CreateSilo</c> rather than in a host that would
-    ///         have to re-read the same configuration section to find it.
+    ///         Reminders are wired in <see cref="ConfigureStorage" />, which is where this host is
+    ///         handed the storage options they are configured from.
     ///     </para>
     /// </remarks>
     static void ConfigureCluster(ISiloBuilder silo) {
@@ -116,5 +115,49 @@ public static class SiloComposition {
                 }
             )
             .AddCyberCloudResourceManager();
+    }
+
+    /// <summary>
+    ///     The two storage tiers, and the reminder table that shares the hot one's Redis.
+    /// </summary>
+    /// <param name="silo">The silo builder.</param>
+    /// <param name="storage">The bound <c>CyberCloud:Storage</c> section.</param>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>The reconcile loop is a reminder, so without this the resource manager composes and
+    ///         then throws on the first create.</b> <c>OperationGrain</c> is <c>IRemindable</c> and
+    ///         calls <c>RegisterOrUpdateReminder</c>, which throws on a silo with no reminder service —
+    ///         late, inside a grain call, rather than at start-up. <c>UsageSamplerGrain</c> and
+    ///         <c>UsageRollupGrain</c> are the same. Every test fixture in the tree wires
+    ///         <c>UseInMemoryReminderService</c> for exactly this reason, and no production host wired
+    ///         anything at all.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Redis, from the hot tier's own connection string</b> — docs/plan/04 § Reminders,
+    ///         "sharded with the hot tier", read literally. A reminder table on a different Redis would
+    ///         be a second thing to provision, a second thing to lose, and a second answer to "did this
+    ///         resource's reconcile tick survive the restart".
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>In the HOST and not in <c>OrleansApplication.CreateSilo</c>, which is where it was
+    ///         first written and where it was wrong.</b> <c>CreateSilo</c> wires the tiers whenever
+    ///         <c>CyberCloud:Storage</c> is configured, and "configured" is not "reachable":
+    ///         <c>CyberCloud.ServiceDefaults.Tests</c>' unreachable-shard fixture sets a hot-tier
+    ///         connection string and points it at nothing on purpose, so a reminder service on the same
+    ///         condition failed that fixture at start-up with a Redis connection error. A silo that
+    ///         means to serve tenants wants exactly this failure; a fixture asserting readiness
+    ///         behaviour does not, and only a host knows which it is.
+    ///     </para>
+    /// </remarks>
+    static void ConfigureStorage(ISiloBuilder silo, CyberCloudStorageOptions storage) {
+        silo.AddCyberCloudTenancy(storage);
+
+        if (string.IsNullOrWhiteSpace(storage.Hot.ConnectionString)) {
+            return;
+        }
+
+        silo.UseRedisReminderService(reminders =>
+            reminders.ConfigurationOptions = ConfigurationOptions.Parse(storage.Hot.ConnectionString)
+        );
     }
 }
