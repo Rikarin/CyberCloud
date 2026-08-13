@@ -920,11 +920,33 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
             $"'{Case.ActionName}' is the case's action and the provider does not declare it"
         );
 
+        // ⚠ LONG-RUNNING IS ASKED FIRST, AND THE ORDER IS THE ASSERTION.
+        //
+        // The table has four cells and only three are reachable, but they do not partition the way
+        // "handler or no handler" suggests. `ResourceManagerService` refuses a missing handler only on
+        // the SYNCHRONOUS branch — a long-running action never had a handler and never needed one,
+        // because it starts an operation and the operation grain drives the work. Asking
+        // `HandlerType is null` first swallows the long-running-without-a-handler cell into the refusal
+        // branch and asserts a refusal the manager is right not to give.
+        //
+        // That is not hypothetical: `CyberCloud.ContainerService/agentPools` declares
+        // `upgradeNodeImage` as `longRunning: true` with no handler, which is the correct declaration
+        // for a node-image roll, and it was the first case to reach this branch.
+        if (declared.LongRunning) {
+            action.IsSuccess.ShouldBeTrue(action.Error?.Message);
+
+            var started = action.GetValueOrThrow();
+            started.Completed.ShouldBeFalse();
+            started.OperationId.ShouldNotBe(Guid.Empty);
+
+            return;
+        }
+
         if (declared.HandlerType is null) {
             action.IsFailure.ShouldBeTrue(
-                "an action with no handler answered success. Before handlers existed that was a 202 "
-                + "for an operation that re-ran the reconciler; a refusal naming the action is worth "
-                + "more than work the caller did not ask for."
+                "a synchronous action with no handler answered success. Before handlers existed that "
+                + "was a 202 for an operation that re-ran the reconciler; a refusal naming the action "
+                + "is worth more than work the caller did not ask for."
             );
 
             action.Error!.Message.ShouldContain(Case.ActionName);
@@ -935,13 +957,6 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
 
         action.IsSuccess.ShouldBeTrue(action.Error?.Message);
         var accepted = action.GetValueOrThrow();
-
-        if (declared.LongRunning) {
-            accepted.Completed.ShouldBeFalse();
-            accepted.OperationId.ShouldNotBe(Guid.Empty);
-
-            return;
-        }
 
         accepted.Completed.ShouldBeTrue(
             "a synchronous action answers 200 with its own body; Completed is what the gateway keys "

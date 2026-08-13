@@ -25,6 +25,36 @@ namespace CyberCloud.ResourceManager.Tests;
 /// </remarks>
 [Collection(ResourceManagerSuite.Name)]
 public sealed class SoftDeletePathTests(ResourceManagerCluster cluster) {
+    /// <summary>This suite's own subscription.</summary>
+    /// <remarks>
+    ///     ⚠ <b><see cref="ResourceManagerCluster.IsolatedSubscription" />, and this suite has a
+    ///     stronger claim on it than the two that already address it.</b> Its remarks describe the
+    ///     shared subscription's <c>Vcpu</c> budget as a hidden coupling in which a class that adds a
+    ///     couple of creates pushes an unrelated class into <c>QuotaExceeded</c>. That is not
+    ///     hypothetical here: this file and <c>ActionDispatchTests</c> were written on two branches at
+    ///     once, each green alone, and the merge put eleven tests red across
+    ///     <c>OperationTests</c>, <c>ParentEdgeStepTests</c> and <c>ActionBodyTests</c> — none of them
+    ///     the ones that spent the budget.
+    ///     <para>
+    ///         ⚠ And the coupling is worse for a soft-delete suite than for any other, because
+    ///         docs/plan/08 § Soft delete makes a soft delete hold its committed quota until the purge.
+    ///         A create here that is soft-deleted and not purged keeps its lease by design, so this
+    ///         file spends the shared budget in a way no ordinary create/delete pair does.
+    ///     </para>
+    /// </remarks>
+    static Guid Subscription => ResourceManagerCluster.IsolatedSubscription;
+
+    /// <summary>A vault's address in this suite's own subscription.</summary>
+    /// <remarks>
+    ///     ⚠ A local helper rather than a subscription parameter on
+    ///     <c>ResourceManagerCluster.VaultAddress</c>, for the reason that helper's own remarks give
+    ///     about <c>Address</c>: an argument that can be forgotten is a test that passes for the wrong
+    ///     reason. The type stays baked in, so a soft-delete case still cannot be written against the
+    ///     hard-delete type by accident.
+    /// </remarks>
+    static ResourceId VaultAddress(string name, string group = "prod") =>
+        new(ResourceManagerCluster.Tenant, Subscription, group, TestingProvider.VaultTypeName, name, Guid.Empty);
+
     // ── (a) and (b): the resource leaves, and the 404 is the canonical one ──────────────────────
 
     /// <summary>
@@ -52,7 +82,7 @@ public sealed class SoftDeletePathTests(ResourceManagerCluster cluster) {
     [Fact]
     public async Task TheOldAddressAnswersTheCanonical404OnReadOnDeleteAndOnTheIndexClaim() {
         ResourceManagerCluster.ResetDoubles();
-        var address = ResourceManagerCluster.VaultAddress("gone-from-here");
+        var address = VaultAddress("gone-from-here");
 
         var created = await Create(address);
         created.IsSuccess.ShouldBeTrue(created.Error?.Message);
@@ -64,7 +94,7 @@ public sealed class SoftDeletePathTests(ResourceManagerCluster cluster) {
         deleted.IsSuccess.ShouldBeTrue(deleted.Error?.Message);
 
         // The 404 a name nothing ever claimed gets, at an address of the same type in the same group.
-        var absent = await Read(ResourceManagerCluster.VaultAddress("never-existed"));
+        var absent = await Read(VaultAddress("never-existed"));
         absent.IsFailure.ShouldBeTrue();
 
         // ── Door 1: a read ──────────────────────────────────────────────────────────────────────
@@ -116,7 +146,7 @@ public sealed class SoftDeletePathTests(ResourceManagerCluster cluster) {
     [Fact]
     public async Task TheNameIsHeldForTheWholeWindowAndTheEntryIsNotFree() {
         ResourceManagerCluster.ResetDoubles();
-        var address = ResourceManagerCluster.VaultAddress("name-held");
+        var address = VaultAddress("name-held");
 
         var created = await Create(address);
         await Converge(created.GetValueOrThrow());
@@ -176,9 +206,9 @@ public sealed class SoftDeletePathTests(ResourceManagerCluster cluster) {
     [Fact]
     public async Task ThePurgeReturnsExactlyWhatTheCreateCommittedOnEveryMeterAndTheDeleteReturnsNothing() {
         ResourceManagerCluster.ResetDoubles();
-        var address = ResourceManagerCluster.VaultAddress("returns-at-purge");
+        var address = VaultAddress("returns-at-purge");
 
-        var quota = cluster.Quota(ResourceManagerCluster.Tenant, ResourceManagerCluster.Subscription);
+        var quota = cluster.Quota(ResourceManagerCluster.Tenant, Subscription);
         var vcpuBefore = (await quota.GetUsageAsync(QuotaMeter.Vcpu)).GetValueOrThrow().Committed;
         var countBefore = (await quota.GetUsageAsync(QuotaMeter.Resources)).GetValueOrThrow().Committed;
 
@@ -246,7 +276,7 @@ public sealed class SoftDeletePathTests(ResourceManagerCluster cluster) {
     public async Task TenCreateSoftDeletePurgeCyclesLeaveTheMetersWhereTheyStarted() {
         ResourceManagerCluster.ResetDoubles();
 
-        var quota = cluster.Quota(ResourceManagerCluster.Tenant, ResourceManagerCluster.Subscription);
+        var quota = cluster.Quota(ResourceManagerCluster.Tenant, Subscription);
         var vcpuBefore = (await quota.GetUsageAsync(QuotaMeter.Vcpu)).GetValueOrThrow().Committed;
         var countBefore = (await quota.GetUsageAsync(QuotaMeter.Resources)).GetValueOrThrow().Committed;
 
@@ -254,7 +284,7 @@ public sealed class SoftDeletePathTests(ResourceManagerCluster cluster) {
             // ⚠ The same NAME every time, which is only possible because the purge released it. A
             // cycle that had to invent a new name each round would not notice a purge that left the
             // index parked.
-            var address = ResourceManagerCluster.VaultAddress("cycled");
+            var address = VaultAddress("cycled");
 
             var created = await Create(address, size: 3);
             created.IsSuccess.ShouldBeTrue($"cycle {i}: {created.Error?.Message}");
@@ -296,7 +326,7 @@ public sealed class SoftDeletePathTests(ResourceManagerCluster cluster) {
     [Fact]
     public async Task ASoftDeleteLeavesTheDataPlaneUpAndOnlyThePurgeTakesItDown() {
         ResourceManagerCluster.ResetDoubles();
-        var address = ResourceManagerCluster.VaultAddress("still-running");
+        var address = VaultAddress("still-running");
 
         var created = await Create(address);
         await Converge(created.GetValueOrThrow());
@@ -354,14 +384,14 @@ public sealed class SoftDeletePathTests(ResourceManagerCluster cluster) {
     [Fact]
     public async Task TheParentEdgeMovesToTheSubscriptionWhileDeletedAndBackOnRestore() {
         ResourceManagerCluster.ResetDoubles();
-        var address = ResourceManagerCluster.VaultAddress("reparented");
+        var address = VaultAddress("reparented");
 
         var created = await Create(address);
         await Converge(created.GetValueOrThrow());
 
         var resourceId = created.GetValueOrThrow().Resource.Id;
-        var group = "resourceGroup:" + ResourceManagerCluster.Subscription.ToString("N") + "-prod";
-        var subscription = "subscription:" + ResourceManagerCluster.Subscription.ToString("N");
+        var group = "resourceGroup:" + Subscription.ToString("N") + "-prod";
+        var subscription = "subscription:" + Subscription.ToString("N");
 
         RecordingRelationWriter.Edges[resourceId].ShouldBe(group, "a live resource hangs off its group");
 
@@ -428,7 +458,7 @@ public sealed class SoftDeletePathTests(ResourceManagerCluster cluster) {
     [Fact]
     public async Task ARoleAssignmentWrittenDirectlyOnTheResourceIsGoneAfterARestore() {
         ResourceManagerCluster.ResetDoubles();
-        var address = ResourceManagerCluster.VaultAddress("regrant-me");
+        var address = VaultAddress("regrant-me");
 
         var created = await Create(address);
         await Converge(created.GetValueOrThrow());
@@ -468,7 +498,7 @@ public sealed class SoftDeletePathTests(ResourceManagerCluster cluster) {
     [Fact]
     public async Task ARestoreBringsTheResourceBackAtItsOldAddressWithWhatWasWritten() {
         ResourceManagerCluster.ResetDoubles();
-        var address = ResourceManagerCluster.VaultAddress("comes-back");
+        var address = VaultAddress("comes-back");
 
         var created = await Create(address, size: 4);
         await Converge(created.GetValueOrThrow());
@@ -508,7 +538,7 @@ public sealed class SoftDeletePathTests(ResourceManagerCluster cluster) {
     [Fact]
     public async Task ARestoreAfterTheWindowHasPassedIsRefused() {
         ResourceManagerCluster.ResetDoubles();
-        var address = ResourceManagerCluster.VaultAddress("too-late");
+        var address = VaultAddress("too-late");
 
         var created = await Create(address);
         await Converge(created.GetValueOrThrow());
@@ -552,12 +582,12 @@ public sealed class SoftDeletePathTests(ResourceManagerCluster cluster) {
     public async Task RestoringALiveResourceAnUnknownNameAndAHardDeleteTypeAllAnswerTheSame404() {
         ResourceManagerCluster.ResetDoubles();
 
-        var live = ResourceManagerCluster.VaultAddress("alive");
+        var live = VaultAddress("alive");
         var created = await Create(live);
         await Converge(created.GetValueOrThrow());
 
         var onLive = await Restore(live);
-        var onUnknown = await Restore(ResourceManagerCluster.VaultAddress("no-such-vault"));
+        var onUnknown = await Restore(VaultAddress("no-such-vault"));
 
         // ⚠ The hard-delete type, soft-deleted-shaped request. `widgets` declares no window, so there
         // is no recovery to ask about — and the answer must not say so.
@@ -619,7 +649,7 @@ public sealed class SoftDeletePathTests(ResourceManagerCluster cluster) {
     [Fact]
     public async Task TheRecoveryWindowIsStampedOnceAndARedrivenDeleteDoesNotExtendIt() {
         ResourceManagerCluster.ResetDoubles();
-        var address = ResourceManagerCluster.VaultAddress("window-fixed");
+        var address = VaultAddress("window-fixed");
 
         var created = await Create(address);
         await Converge(created.GetValueOrThrow());
@@ -657,7 +687,7 @@ public sealed class SoftDeletePathTests(ResourceManagerCluster cluster) {
     [Fact]
     public async Task PurgeProtectionCannotBeTurnedOffAndAProtectedResourceCannotBePurged() {
         ResourceManagerCluster.ResetDoubles();
-        var address = ResourceManagerCluster.VaultAddress("protected");
+        var address = VaultAddress("protected");
 
         var created = await Create(address, purgeProtection: true);
         created.IsSuccess.ShouldBeTrue(created.Error?.Message);
@@ -722,7 +752,7 @@ public sealed class SoftDeletePathTests(ResourceManagerCluster cluster) {
     [Fact]
     public async Task AResourceWithoutPurgeProtectionIsPurgeable() {
         ResourceManagerCluster.ResetDoubles();
-        var address = ResourceManagerCluster.VaultAddress("unprotected");
+        var address = VaultAddress("unprotected");
 
         var created = await Create(address);
         await Converge(created.GetValueOrThrow());
@@ -761,7 +791,7 @@ public sealed class SoftDeletePathTests(ResourceManagerCluster cluster) {
     [Fact]
     public async Task APurgeChecksThePurgePermissionAndNotTheDeletePermission() {
         ResourceManagerCluster.ResetDoubles();
-        var address = ResourceManagerCluster.VaultAddress("may-delete-only");
+        var address = VaultAddress("may-delete-only");
 
         var created = await Create(address);
         await Converge(created.GetValueOrThrow());
