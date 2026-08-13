@@ -9,7 +9,9 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Xml.Linq;
 using Nuke.Common;
@@ -306,11 +308,74 @@ partial class Build
         // the memo field and build the same probe project N times.
         var withCoverage = collectCoverage && CoverageCollectionIsAvailable;
 
+        // ⚠ CONTAINER-BACKED SUITES RUN AT A LOWER DEGREE THAN THE REST, AND THE NUMBER IS MEASURED
+        // RATHER THAN CHOSEN.
+        //
+        // `Environment.ProcessorCount` over every suite was right when six suites wanted a container.
+        // 26 of 62 do now — every provider family ships a `.Cluster.Conformance` — so on a ten-core
+        // host ten of them could start k3s, PostgreSQL and Redis simultaneously. Measured over six
+        // full runs on an otherwise idle machine, exactly one passed first time. The other five each
+        // lost a DIFFERENT suite, and the symptom differed every time: a port-bind refusal, an Npgsql
+        // connect timeout inside a collection fixture, three suites sitting at zero tests started for
+        // nineteen minutes, and a TLS reset from a k3s API server that went away mid-suite.
+        //
+        // ⚠ THE POINT IS NOT THE FLAKINESS, IT IS WHAT THE FLAKINESS COSTS. Each of those five runs
+        // had to be read exception by exception to tell contention from a real regression — and twice
+        // it WAS a real regression. A gate whose red is usually meaningless is a gate people stop
+        // reading, which is the failure mode this whole target exists to avoid.
+        //
+        // A retry would be the wrong fix: it hides the two real regressions along with the three fake
+        // ones. Capping the concurrency removes the cause instead.
+        //
+        // ⚠ FOUR IS A STARTING POINT AND IS EXPECTED TO NEED TUNING. It is not derived from anything
+        // except that runs deadlocked with four or more `.Cluster.Conformance` suites live and did not
+        // below that. `CC_TEST_CONTAINER_PARALLELISM` overrides it so a host with more memory need not
+        // edit this file, and so the number can be raised with evidence rather than by hope.
+        var containerBacked = projects
+            .Where(x => File.ReadAllText(x).Contains("Testcontainers", StringComparison.Ordinal))
+            .ToHashSet();
+
+        var containerDegree =
+            int.TryParse(Environment.GetEnvironmentVariable("CC_TEST_CONTAINER_PARALLELISM"), out var configured)
+            && configured > 0
+                ? configured
+                : 4;
+
+        Log.Information(
+            "Test: {Container} of {Total} suite(s) reference Testcontainers and run at a parallelism of "
+            + "{Degree}; the remaining {Rest} run at {Cpu}. Build.Test.cs § RunSuites has the measurement.",
+            containerBacked.Count,
+            projects.Count,
+            containerDegree,
+            projects.Count - containerBacked.Count,
+            Environment.ProcessorCount
+        );
+
+        // The container-backed ones go first, because they dominate wall clock and the cheap suites
+        // fill the idle cores behind them rather than the other way round.
+        var ordered = projects.OrderByDescending(containerBacked.Contains).ToList();
+
+        // ⚠ Constructed HERE, not lazily inside the loop body. The first version of this was a
+        // `static SemaphoreSlim? slots` with `slots ??= new(...)`, which is not thread-safe: several
+        // workers each built their own semaphore, so a thread could `Wait` on one instance and
+        // `Release` another, and the run died with "Adding the specified count to the semaphore would
+        // cause it to exceed its maximum count". One object, created before anything can race for it.
+        using var containerSlots = new SemaphoreSlim(containerDegree, containerDegree);
+
         Parallel.ForEach(
-            projects,
+            Partitioner.Create(ordered, EnumerablePartitionerOptions.NoBuffering),
             new ParallelOptions { MaxDegreeOfParallelism = Environment.ProcessorCount },
             project =>
             {
+                // ⚠ One semaphore, taken only by the suites that need a container. A cheap suite never
+                // waits on it, so capping the containers costs nothing on the other 36.
+                var gated = containerBacked.Contains(project);
+
+                if (gated) {
+                    containerSlots.Wait();
+                }
+
+                try {
                 var name = project.NameWithoutExtension;
                 var exitCode = 0;
 
@@ -340,6 +405,12 @@ partial class Build
 
                 if (exitCode != 0)
                     failures.Add($"{name} exited {exitCode}");
+                }
+                finally {
+                    if (gated) {
+                        containerSlots.Release();
+                    }
+                }
             });
 
         // ⚠ Every suite runs before any failure is reported — the same reasoning as
@@ -359,8 +430,13 @@ partial class Build
             $"{failures.Count} of {projects.Count} {target} suite(s) failed: {string.Join(", ", named)}. "
             + "Their output is above. ⚠ A suite named here with no failing test in its .trx did not "
             + "fail an assertion — it exited non-zero, and build/README.md § failed to bind host port "
-            + "covers the commonest cause on this platform.");
+            + "covers the commonest cause on this platform. ⚠ That section names a port-bind refusal "
+            + "and this failure may not look like one: an Npgsql connect timeout inside a collection "
+            + "fixture, a suite sitting at zero tests started, and a TLS reset from a k3s API server "
+            + "that went away are all the same cause wearing different clothes. Run the named suite "
+            + "alone before believing it, and if it passes alone, lower CC_TEST_CONTAINER_PARALLELISM.");
     }
+
 
     /// <summary>
     ///     Whether a suite <em>declares</em> a test matching a filter, without running it.
