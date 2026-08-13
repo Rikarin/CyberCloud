@@ -1,5 +1,18 @@
+using CyberCloud.Core.Contracts;
+using CyberCloud.ResourceManager;
 using Volo.Abp.Application;
 using Volo.Abp.Modularity;
+
+// ── Rule 4's declaration — docs/plan/03 § Assembly graph rules ────────────────────────────────
+//
+// ⚠ TWO HOSTS, AND THE SECOND ONE IS NOT A CONCESSION. The silo runs the reconcilers this module
+// registers; the gateway builds the SAME registry from the SAME providers, because RouteStage
+// resolves a path against it and a gateway with its own list would route from a description of a
+// platform the silo is not running. OwningHostAttribute allows multiple for exactly this — rule 5
+// lets the gateway reference a provider's .Application assembly, and rule 4 wants each host that
+// does named in one reviewable line.
+[assembly: OwningHost("CyberCloud.Silo.Host")]
+[assembly: OwningHost("CyberCloud.Gateway.Host")]
 
 namespace CyberCloud.Providers.DBforMySQL.Application;
 
@@ -9,22 +22,29 @@ namespace CyberCloud.Providers.DBforMySQL.Application;
 /// <remarks>
 ///     <para>
 ///         docs/plan/03 § Providers: <i>"Each is an ABP module (<c>[DependsOn]</c>), each registers its
-///         resource types into <c>CyberCloud.ResourceManager</c>."</i> The second half is not done
-///         here: registering a provider is
-///         <c>ISiloBuilder.AddCyberCloudProvider&lt;MariaDbProvider&gt;()</c>, which runs against the
-///         silo builder before the container is built, and an ABP module's <c>ConfigureServices</c>
-///         runs after.
+///         resource types into <c>CyberCloud.ResourceManager</c>."</i> Both halves happen here — a host
+///         that <c>[DependsOn]</c> this module gets the provider, its reconcilers and its action
+///         handlers, and there is no second call it can forget.
 ///     </para>
 ///     <para>
-///         ⚠ <b>The third provider called the surviving warning "a seam, not a mechanism" and named
-///         what closing it would take. Nothing has closed it, and this is the sixth family to depend
-///         on a comment.</b> The symptom of forgetting the silo-builder call is a namespace whose
-///         endpoints answer <c>404</c> with nothing in the log — and the only reason it is not missing
-///         here is, again, that the note existed to be read. Six repetitions is enough evidence to
-///         stop calling it an observation: the fix is a module-collection seam on <c>ISiloBuilder</c>
-///         or a registry built lazily from the container, both changes to
-///         <c>CyberCloud.ResourceManager</c>'s wiring and neither one a provider's to make.
+///         ⚠ <b>The paragraph that used to be here said the second half could not be done, and it was
+///         wrong by the time it was written.</b> It read: registering a provider is
+///         <c>ISiloBuilder.AddCyberCloudProvider&lt;MariaDbProvider&gt;()</c>, which runs before the
+///         container is built, while an ABP module's <c>ConfigureServices</c> runs after — so a host
+///         has to make two calls. The registry had already stopped being built at wiring time: it is a
+///         factory over <c>GetServices&lt;IResourceProvider&gt;()</c>, resolved once, after everything
+///         is registered. The cost of believing otherwise was not theoretical.
+///         <c>AddCyberCloudProvider</c> ended up with <b>no caller anywhere in the repository</b>, so
+///         no silo in <c>src/Hosts</c> served a single resource type and every conformance suite that
+///         proved otherwise had built its own <c>TestCluster</c> and registered the provider itself.
 ///     </para>
 /// </remarks>
 [DependsOn(typeof(AbpDddApplicationModule))]
-public sealed class MariaDbApplicationModule : AbpModule;
+public sealed class MariaDbApplicationModule : AbpModule {
+    /// <inheritdoc />
+    public override void ConfigureServices(ServiceConfigurationContext context) {
+        ArgumentNullException.ThrowIfNull(context);
+
+        context.Services.AddCyberCloudProvider(new MariaDbProvider());
+    }
+}

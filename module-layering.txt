@@ -156,12 +156,27 @@ CyberCloud.Vault -> CyberCloud.ResourceManager
 # IClusterConnectionGrain.AttachAsync lives. A line to that IMPLEMENTATION assembly would be the
 # obvious way to register the new cluster as a connection, and it is not here — a provider may
 # reference CyberCloud.Kubernetes.Contracts only (docs/plan/03 § The .Contracts split), and attaching
-# a connection is the resource manager's job rather than a reconciler's. The consequence is written
-# down rather than worked around: a cluster this provider creates is NOT reachable as a clusterId
-# afterwards, and nothing in the whole tree calls AttachAsync outside a test.
-# See charts/managed/kubernetes/conformance.yaml § owed, `the-cluster-this-creates-is-not-connectable`.
-# ⚠ That is the M1 exit story's FOURTH step — "create a VPC and a Postgres server in it" — and it is
-# blocked by a missing WRITE, not by a missing edge.
+# a connection is the resource manager's job rather than a reconciler's.
+#
+# ⚠ THE REFUSAL HELD AND THE CONSEQUENCE IS NOW PAID FOR, BY A SEAM ABOVE THE PROVIDER RATHER THAN BY
+# A LINE HERE. This paragraph used to end "a cluster this provider creates is NOT reachable as a
+# clusterId afterwards, and nothing in the whole tree calls AttachAsync outside a test", which was
+# true for as long as there was nowhere else for the write to live. There is now:
+# IClusterConnectionRegistrar in CyberCloud.ResourceManager.Contracts, implemented by
+# GrainClusterConnectionRegistrar in CyberCloud.ResourceManager — an assembly that already reaches
+# CyberCloud.Kubernetes.Contracts, and whose edge to this module is the one declared below. The
+# reconciler REPORTS what it produced through ReconcileContext.ClusterConnections and ReconcileDriver
+# performs the attach, after the pass, and only when it converged. So the provider supplies the facts
+# only it knows and the manager makes the write only it may, and this family still has four edges.
+#
+# ⚠ THE REVERSE EDGE IS WHAT MADE THE HOME OBVIOUS. Beside ClusterConnectionHandle is where the
+# registrar belongs by shape, and CyberCloud.Kubernetes -> CyberCloud.ResourceManager is a cycle
+# against the line already below. Rule 7 refusing it is what put the implementation on the correct
+# side of the seam rather than the convenient one.
+# See charts/managed/kubernetes/conformance.yaml § owed, `the-cluster-this-creates-is-not-connectable`,
+# whose remaining half is the credential: nothing yet reads Cluster API's `{cluster}-kubeconfig`
+# Secret out of the MANAGEMENT cluster.
+# ⚠ That is the M1 exit story's FOURTH step — "create a VPC and a Postgres server in it".
 # ⚠ AND CyberCloud.Providers.Network IS THE FIRST FAMILY THAT OTHER FAMILIES WILL WANT A LINE **TO**,
 # WHICH IS THE OTHER DIRECTION AND THE SAME REFUSAL. Every family above wants a fifth line to reach
 # something it needs; this one is the thing docs/plan/13's VMs and containers, docs/plan/14's own load

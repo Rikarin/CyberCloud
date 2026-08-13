@@ -50,6 +50,7 @@ public sealed class ReconcileDriver(
     IServiceProvider services,
     IGrainFactory grains,
     IClusterConnectionFactory clusters,
+    IClusterConnectionRegistrar clusterRegistrar,
     ISecretResolver secrets,
     ISecretWriter secretWriter,
     IClock clock
@@ -142,6 +143,7 @@ public sealed class ReconcileDriver(
 
         var desired = ParseOrEmpty(reconcileInput.Desired);
         var log = new CollectingReconcileLog(clock);
+        var produced = new CollectingClusterConnectionSink();
 
         var context = new ReconcileContext(
             id,
@@ -155,7 +157,10 @@ public sealed class ReconcileDriver(
         ) {
             // ⚠ The one place the host's writer reaches a pass. Everything else that builds a context
             // — a test, a conformance harness — gets RefusingSecretWriter and has to say otherwise.
-            SecretWriter = secretWriter
+            SecretWriter = secretWriter,
+            // ⚠ COLLECTED HERE AND ACTED ON BELOW, WHICH IS WHAT KEEPS THE ATTACH BEHIND THE
+            // CONVERGENCE. The reconciler reports; this driver decides whether the report is due.
+            ClusterConnections = produced
         };
 
         using var budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -198,6 +203,50 @@ public sealed class ReconcileDriver(
                 log.Drain(),
                 true
             );
+        }
+
+        // ── Attaching a cluster this pass produced. See IClusterConnectionRegistrar. ──────────────
+        //
+        // ⚠ AFTER THE PASS AND ONLY ON Converged, WHICH IS THE POINT OF DOING IT HERE AT ALL. Clause
+        // 4 makes Converged mean the reconciler READ THE DESIRED SHAPE BACK, so on this type it means
+        // the control plane reported ready — and a connection registered before that is a connection
+        // every later placement fails against, for the six to eight minutes docs/plan/09 § Kubernetes
+        // in Kubernetes budgets. A descriptor reported on an InProgress pass is dropped; the next
+        // pass reports it again, because a reconciler is idempotent.
+        if (produced.Descriptor is { } reported && outcome.IsConverged) {
+            // ⚠ THE CLUSTER ID AND THE OWNING TENANT ARE STAMPED HERE AND NOT TAKEN FROM THE
+            // PROVIDER, which is the second half of "the seam is above the provider". Both are facts
+            // the manager owns — the resource's own GUID and the tenant its operation belongs to —
+            // and a provider that supplied them would be a provider able to register somebody else's
+            // cluster under its own tenant, or to register itself under a tenant that does not own
+            // it. The grain checks the owner on every later call, so what is written here is what
+            // every subsequent tenancy decision about this cluster is made against.
+            var descriptor = reported with {
+                ClusterId = id.Id,
+                OwningTenantId = spec.TenantId
+            };
+
+            var attached = await clusterRegistrar.AttachAsync(descriptor, cancellationToken);
+
+            if (attached.TryGetError(out var attachError)) {
+                // ⚠ THE PASS FAILS, and reporting Converged here instead was the tempting mistake.
+                // The reconciler is right that the cluster exists; what does not exist is any way to
+                // reach it, and a resource that reports Succeeded for a cluster nothing can place
+                // anything in moves the failure to whoever tries next — one resource later, with an
+                // error about the second resource.
+                log.Report(
+                    "attaching-cluster",
+                    $"the control plane converged and its connection could not be registered: {attachError.Message}"
+                );
+
+                outcome = ReconcileOutcome.FromFailure(attachError);
+            } else {
+                log.Report(
+                    "attached-cluster",
+                    $"cluster {descriptor.ClusterId:D} is registered and can now be placed in",
+                    100
+                );
+            }
         }
 
         // Observe after every pass that ran, converged or not. The drift scan compares against this,
@@ -335,5 +384,27 @@ sealed class CollectingReconcileLog(IClock clock) : IReconcileLog {
         var drained = entries.ToImmutableArray();
         entries.Clear();
         return drained;
+    }
+}
+
+/// <summary>
+///     The <see cref="IClusterConnectionSink" /> one pass writes into. The driver decides what to do
+///     with it.
+/// </summary>
+/// <remarks>
+///     ⚠ <b>One descriptor, last one wins, and not a list.</b> A pass converges one resource and a
+///     resource is one cluster, so two reports in a pass is a reconciler correcting itself rather than
+///     two clusters. Keeping a list would make "which of these did we attach" a question, and the only
+///     safe answer to it would be all of them.
+/// </remarks>
+sealed class CollectingClusterConnectionSink : IClusterConnectionSink {
+    /// <summary>What the pass reported, or <see langword="null" /> if it reported nothing.</summary>
+    public ClusterConnectionDescriptor? Descriptor { get; private set; }
+
+    /// <inheritdoc />
+    public void Produced(ClusterConnectionDescriptor descriptor) {
+        ArgumentNullException.ThrowIfNull(descriptor);
+
+        Descriptor = descriptor;
     }
 }

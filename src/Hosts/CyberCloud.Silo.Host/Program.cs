@@ -1,8 +1,6 @@
-using CyberCloud.Communication;
 using CyberCloud.ServiceDefaults;
 using CyberCloud.ServiceDefaults.Storage;
 using CyberCloud.Silo.Host;
-using CyberCloud.Tenancy;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -38,51 +36,13 @@ if (args.Contains(applySchemaFlag, StringComparer.Ordinal)) {
     );
 }
 
-var builder = OrleansApplication.CreateSilo(
-    args,
-    // ── The sending domain — docs/plan/17, docs/plan/04 § Silo composition ─────────────────────
-    //
-    // ⚠ THIS ADDS SEVEN GRAIN TYPES TO THE SILO AND NO NEW START-UP REQUIREMENT, and the second half
-    // is the part worth checking rather than assuming. AddCyberCloudCommunication registers
-    // services only — the clock, the five refusing channel providers, the provider registry, the
-    // client-side sender and the webhook router. It configures no reminder service (nothing in the
-    // module is IRemindable), no stream provider, and no storage: the grains bind
-    // StorageTiers.Hot and StorageTiers.Durable, which are exactly the two AddCyberCloudTenancy
-    // already wires below. That is why this can sit beside the tenancy call rather than needing the
-    // "reminders are the host's to choose" arrangement AddCyberCloudResourceManager's remarks
-    // describe.
-    //
-    // ⚠ configureCluster runs AFTER configureStorage inside CreateSilo, which is the order this
-    // needs: the tiers must exist before a grain that binds one is activated. Nothing here resolves
-    // a tier at wiring time, so the ordering is belt to the braces rather than load-bearing.
-    //
-    // ⚠ WITH NO CARRIER CONFIGURED, EVERY SEND FAILS WITH A SENTENCE SAYING SO. That is the
-    // designed state of a silo with no Twilio client in it, not a defect — see
-    // CommunicationSiloBuilderExtensions on why the refusing seams are registered rather than
-    // omitted. A channel with no provider at all would fail with a wiring error instead, which is
-    // the message an operator cannot act on.
-    // ── The identity module — docs/plan/11, docs/plan/04 § Silo composition ────────────────────
-    //
-    // ⚠ THIS IS WHAT MAKES A ONE-TIME CODE POSSIBLE ANYWHERE IN THE PLATFORM, AND ITS ABSENCE WAS
-    // NOT A REGISTRATION OVERSIGHT — it was the reason three separate comments in this tree claimed
-    // UnavailableOtpDelivery was "what every host gets" while no host had one at all.
-    //
-    // The ProjectReference in this .csproj is what puts the identity grains in the silo (Orleans
-    // DISCOVERS grains by scanning referenced assemblies); AddSiloIdentity below is what registers
-    // the services their constructors ask for, including the IOtpDeliverySeam that
-    // UserGrain.IssueOtpAsync calls. Either one without the other is a silo that fails at the first
-    // activation rather than at start-up.
-    //
-    // ⚠ It goes BESIDE AddCyberCloudCommunication and not instead of it: the seam adapter resolves
-    // IMessageSender, which that call is what provides. OtpPolicy carries the argument for why the
-    // code is minted, stored and verified here rather than in CyberCloud.Identity.Host.
-    configureCluster: silo => silo.AddCyberCloudCommunication().AddSiloIdentity(),
-    configureStorage: (silo, storage) => silo.AddCyberCloudTenancy(storage)
-);
-
-await builder.Services.AddApplicationAsync<SiloHostModule>();
-
-var app = builder.Build();
+// ⚠ EVERY LINE OF COMPOSITION LIVES IN SiloComposition AND NOT HERE, and that is not tidiness.
+// Top-level statements cannot be called from a test, so for as long as the wiring was in this file
+// the only thing that could exercise it was a process launch — and the wiring was wrong: no provider
+// module, no resource manager, no reconciler anywhere in production, with 61 green test suites over
+// it. SiloComposition.BuildAsync is what CyberCloud.Silo.Host.Tests composes, so a test can fail on
+// what this process actually builds.
+var app = await SiloComposition.BuildAsync(args);
 
 // ⚠ NOT `app.InitializeApplicationAsync()`, which is the line every ABP sample uses. That extension
 // lives in Volo.Abp.AspNetCore, a package docs/plan/02's dependency register does not list and this

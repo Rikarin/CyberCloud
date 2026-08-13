@@ -1,3 +1,4 @@
+using CyberCloud.Kubernetes.Contracts;
 using CyberCloud.Core.Time;
 using System.Collections.Concurrent;
 using System.Collections.Immutable;
@@ -40,6 +41,17 @@ public static class FakeWorld {
     /// <summary>Resources whose <i>teardown</i> should fail, retryably.</summary>
     public static ConcurrentDictionary<Guid, string> FailTeardownWith { get; } = new();
 
+    /// <summary>
+    ///     Resources whose reconcile reports a cluster it produced, with the endpoint to report.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ Standing in for <c>CyberCloud.ContainerService/managedClusters</c>, the one real type
+    ///     whose product is a Kubernetes API server. What is under test here is the <i>driver's</i>
+    ///     half — that a report becomes an attach only after the pass converges — so the reconciler
+    ///     reporting it can be the ordinary test one.
+    /// </remarks>
+    public static ConcurrentDictionary<Guid, string> ProduceClusterAt { get; } = new();
+
     /// <summary>Forgets everything.</summary>
     public static void Reset() {
         Applied.Clear();
@@ -48,6 +60,7 @@ public static class FakeWorld {
         StayInProgress.Clear();
         FailWith.Clear();
         FailTeardownWith.Clear();
+        ProduceClusterAt.Clear();
     }
 }
 
@@ -86,6 +99,21 @@ public sealed class ConformingReconciler(IClock clock) : IResourceReconciler {
         // The apply is idempotent: writing the same value twice is the same value.
         FakeWorld.Applied[context.Id.Id] = desired;
         context.Log.Report("applying", $"applied {desired.Length} bytes of desired state", 60);
+
+        // ⚠ REPORTED BEFORE THE OUTCOME IS DECIDED, ON PURPOSE. A reconciler cannot know whether its
+        // own pass will converge — it reports what it produced and the driver decides whether the
+        // report is due. Reporting here rather than in the converged branch is what makes
+        // AClusterReportedByAPassThatDidNotConvergeIsNotAttached a real test rather than a tautology.
+        if (FakeWorld.ProduceClusterAt.TryGetValue(context.Id.Id, out var endpoint)) {
+            context.ClusterConnections.Produced(
+                new() {
+                    Kind = ClusterConnectionKind.InHouse,
+                    Endpoint = endpoint,
+                    CredentialRef = "kube-secret://testing/widget-kubeconfig#value",
+                    DisplayName = context.Id.Name
+                }
+            );
+        }
 
         if (FakeWorld.StayInProgress.ContainsKey(context.Id.Id)) {
             return Task.FromResult(

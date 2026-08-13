@@ -58,9 +58,25 @@ public sealed class ProviderRegistry : IProviderRegistry {
     ///     declare.
     /// </exception>
     /// <remarks>
-    ///     Throws rather than returning a <see cref="Result" /> because every one of these is a bug in
-    ///     code, discovered at silo start, with nobody to hand a <see cref="Result" /> to —
-    ///     docs/plan/00 § Coding standards.
+    ///     <para>
+    ///         Throws rather than returning a <see cref="Result" /> because every one of these is a bug
+    ///         in code, discovered at silo start, with nobody to hand a <see cref="Result" /> to —
+    ///         docs/plan/00 § Coding standards.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>An empty provider set is <i>not</i> one of them, and the refusal it deserves lives
+    ///         one layer up.</b> A <b>host</b> with no providers is a wiring mistake whose whole
+    ///         symptom is a <c>404</c> on every path — see
+    ///         <c>ResourceManagerSiloBuilderExtensions.AddCyberCloudResourceManager</c>, which is where
+    ///         that is refused. A <b>build step</b> with no providers is an ordinary state:
+    ///         <c>Build.Generate</c> runs the generator over whatever assemblies the solution has, and
+    ///         its own vacuity report depends on telling "no assembly was handed to me" from "an
+    ///         assembly was handed to me and declared nothing" — a distinction that needs both runs to
+    ///         succeed. Putting the check here made
+    ///         <c>CyberCloud.ResourceManager.Generator.Tests.GenerationReportTests</c> fail, which is
+    ///         the tripwire that exists because a discovery predicate once found no providers and the
+    ///         target reported success.
+    ///     </para>
     /// </remarks>
     public static ProviderRegistry Build(IEnumerable<IResourceProvider> providers) {
         ArgumentNullException.ThrowIfNull(providers);

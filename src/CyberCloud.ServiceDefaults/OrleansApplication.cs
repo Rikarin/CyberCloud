@@ -121,7 +121,6 @@ public static class OrleansApplication {
                 //
                 //   .AddMultitenantStreams(StreamProviders.Events, NatsStreamProvider.Configure)
                 //   .AddMultitenantCommunicationSeparation(_ => new PlatformCrossTenantAuthorizer())
-                //   .UseRedisReminderService(o => o.ConfigureSharded())
                 //
                 // ⚠ AddMultitenantCommunicationSeparation is the one that matters and it is NOT here.
                 // docs/plan/04 § Silo composition calls it "not optional"; its argument is an
@@ -135,6 +134,17 @@ public static class OrleansApplication {
                     var storageOptions = new CyberCloudStorageOptions();
                     storage.Bind(storageOptions);
 
+                    // ── Reminders are the host's, and `configureStorage` is how it gets to choose ──
+                    //
+                    // ⚠ NOT WIRED HERE, AND THIS COMMENT IS WHERE THE ATTEMPT WENT. docs/plan/04
+                    // § Reminders puts a Redis reminder service "sharded with the hot tier", which
+                    // reads like it belongs beside the tiers below — and wiring it here made
+                    // `UnreachableShardReadinessFixture` fail at start-up, because that fixture
+                    // configures a hot-tier connection string on purpose and points it at nothing.
+                    // "The hot tier is configured" and "there is a Redis behind it" are different
+                    // facts, and only a host knows which it has. CyberCloud.Silo.Host's
+                    // configureStorage lambda is what calls UseRedisReminderService, from these same
+                    // options.
                     if (configureStorage is null) {
                         silo.AddCyberCloudGrainStorage(storageOptions);
                     } else {

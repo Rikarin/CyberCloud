@@ -272,6 +272,77 @@ public static class ManagedClusters {
     /// <param name="name">The resource's own name.</param>
     public static string KubeconfigSecretName(string name) => name + "-kubeconfig";
 
+    /// <summary>
+    ///     The scheme a cluster's credential reference is written in — a <c>Secret</c> in the
+    ///     management cluster rather than a path in a vault.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>A second scheme, because the credential is in a place a vault path cannot name.</b>
+    ///     Every other <c>ClusterConnectionDescriptor.CredentialRef</c> in this platform points into
+    ///     OpenBao. Cluster API writes this one itself, into a <c>Secret</c> in the management
+    ///     cluster's own namespace, and nothing copies it out — so a ref that pretended to be a vault
+    ///     path would name a path with nothing at it.
+    /// </remarks>
+    public const string KubeconfigRefScheme = "kube-secret";
+
+    /// <summary>
+    ///     Where a created cluster's kubeconfig lives, as a <c>ClusterConnectionDescriptor</c>
+    ///     credential reference.
+    /// </summary>
+    /// <param name="ns">The management-cluster namespace the resource's objects are in.</param>
+    /// <param name="name">The resource's own name.</param>
+    /// <returns><c>kube-secret://{namespace}/{cluster}-kubeconfig#value</c>.</returns>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>NOTHING RESOLVES THIS YET, AND THAT IS RECORDED RATHER THAN IMPLIED.</b>
+    ///         <c>IKubeApiClientFactory</c> has a case for
+    ///         <c>ClusterConnectionKind.InHouse</c> and resolves its credential through
+    ///         <c>ISecretResolver</c>, which reads a vault. A resolver that reads a <c>Secret</c> out
+    ///         of the <i>management</i> cluster is the missing half — see
+    ///         <c>charts/managed/kubernetes/conformance.yaml § owed</c>,
+    ///         <c>the-cluster-this-creates-is-not-connectable</c>, item (b). Attaching the connection
+    ///         is item (a) and is built: the descriptor is registered, the cluster is addressable by
+    ///         <c>clusterId</c>, and the first call through it fails on the credential with a message
+    ///         naming this scheme rather than failing on "no connection" with nothing to act on.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The key is <c>value</c>, which is Cluster API's, not ours.</b> The
+    ///         <c>Secret</c> it writes carries the whole kubeconfig under a single <c>value</c> key.
+    ///     </para>
+    /// </remarks>
+    public static string KubeconfigCredentialRef(string ns, string name) =>
+        $"{KubeconfigRefScheme}://{ns}/{KubeconfigSecretName(name)}#value";
+
+    /// <summary>
+    ///     The API server URL a ready cluster reports, or an empty string when no controller has
+    ///     written one.
+    /// </summary>
+    /// <param name="objectJson">The <c>Cluster</c> object's JSON, as the API server returned it.</param>
+    /// <remarks>
+    ///     ⚠ <b>Read from <c>spec.controlPlaneEndpoint</c>, which the Kamaji control-plane provider
+    ///     patches onto the <c>Cluster</c> itself</b> — see
+    ///     <see cref="ExternallyManagedAnnotation" /> for why exactly one controller owns that field
+    ///     and what happens when two do. An empty answer means the endpoint has not been assigned, and
+    ///     a connection registered against an empty endpoint would be one every later call fails on,
+    ///     so the reconciler does not report a cluster it cannot name an address for.
+    /// </remarks>
+    public static string ApiServerEndpoint(string objectJson) {
+        if (Document(objectJson)?["spec"] is not JsonObject spec) {
+            return string.Empty;
+        }
+
+        if (spec["controlPlaneEndpoint"] is not JsonObject endpoint) {
+            return string.Empty;
+        }
+
+        var host = endpoint["host"]?.GetValue<string>() ?? string.Empty;
+        var port = endpoint["port"]?.GetValue<int>() ?? 0;
+
+        return string.IsNullOrWhiteSpace(host) || port <= 0
+            ? string.Empty
+            : string.Create(CultureInfo.InvariantCulture, $"https://{host}:{port}");
+    }
+
     /// <summary>The <c>Cluster</c> a resource owns.</summary>
     /// <param name="ns">The resource's namespace.</param>
     /// <param name="name">The resource's own name.</param>

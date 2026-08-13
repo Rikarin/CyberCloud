@@ -72,49 +72,54 @@ public sealed class SampleApplicationModuleTests {
     }
 
     [Fact]
-    public void TheApplicationAssemblyBindsNothingFromTheReconcilersHalfOfTheProvider() {
-        // ⚠ AN EDGE NO ASSEMBLY-GRAPH RULE COVERS, and this is the finding rather than the test.
-        // Rule 2 reads as cross-provider, so Sample.Application → Sample is same-provider and passes.
-        // Rule 5 only inspects assemblies whose name starts with CyberCloud.Gateway. Rule 4
-        // constrains who may reference THIS assembly, not what it may reference.
+    public void TheApplicationAssemblyBindsItsProviderAndStillNoKubernetesClient() {
+        // ⚠ THIS TEST USED TO ASSERT THE OPPOSITE, AND THE CHANGE IS THE POINT RATHER THAN A
+        // RELAXATION. It read TheApplicationAssemblyBindsNothingFromTheReconcilersHalfOfTheProvider,
+        // and its argument was sound as far as it went: rule 2 reads as cross-provider, rule 5 only
+        // inspects CyberCloud.Gateway.*, rule 4 constrains who may reference this assembly rather
+        // than what it may reference — so Sample.Application → Sample was an edge no rule watched,
+        // and binding the implementation would pull it into any host that loads this module.
         //
-        // A host loads this module for the application layer — rule 5 explicitly permits the gateway
-        // to do so — and if this assembly bound the implementation it would pull the reconciler,
-        // Orleans and KubernetesClient into that host's process. That is the coupling rules 3 and 5
-        // exist to prevent, arriving through the one door neither watches.
+        // ⚠ WHAT IT MISSED IS THAT THE EDGE IS LOAD-BEARING AND ITS ABSENCE COST THE PLATFORM ITS
+        // WHOLE API SURFACE. IProviderRegistry — the one description of what this platform serves,
+        // and what stage 6 resolves every request path against — is built from IResourceProvider
+        // INSTANCES in the process. The provider class lives in the implementation assembly, because
+        // its Describe names the reconciler type. So a module that binds nothing from the
+        // implementation is a module that cannot register a provider, and for as long as none of
+        // them could, `AddCyberCloudProvider` had zero callers in the repository: no silo reconciled
+        // anything and the gateway answered 404 to every resource and action path.
         //
-        // ⚠ Same semantics as the gates: an assembly reference exists only where a type was bound,
-        // which is what build/ArchitectureFacts.cs reads off the AssemblyRef table.
+        // ⚠ THE COUPLING THE OLD TEST FEARED IS REAL AND IS PAID DELIBERATELY. Both hosts load
+        // provider implementations into their process — the gateway included, because ActionDispatcher
+        // resolves a synchronous action's handler type there. What rule 5 forbids is the GATEWAY
+        // naming an implementation type, which it still does not: it binds this module and nothing
+        // else, and GatewayIsolationTests reads its AssemblyRef table for exactly that.
+        //
+        // ⚠ WHAT DOES NOT ARRIVE IS THE HALF THAT WOULD HAVE MATTERED. KubernetesClient is asserted
+        // absent below and stays absent: rule 3 keeps k8s.Models inside CyberCloud.Kubernetes, so a
+        // provider implementation binds the .Contracts seam and never the client. The old test's
+        // three prohibitions were one real one and two that were carrying it.
         var bound = typeof(SampleApplicationModule).Assembly
             .GetReferencedAssemblies()
             .Select(x => x.Name ?? string.Empty)
             .ToList();
 
-        // Exact: CyberCloud.Providers.Sample.Contracts is the reference this project is meant to
-        // have, and a StartsWith check would call it a violation.
-        bound.ShouldNotContain("CyberCloud.Providers.Sample");
-        bound.ShouldNotContain("CyberCloud.ResourceManager");
-        bound.ShouldNotContain("CyberCloud.Kubernetes");
-        bound.ShouldNotContain("KubernetesClient");
+        // Exact rather than StartsWith: CyberCloud.Providers.Sample.Contracts is a different
+        // assembly and a prefix check could not tell the two apart.
+        bound.ShouldContain(
+            "CyberCloud.Providers.Sample",
+            "the module registers `new SampleProvider()`, which is what puts this provider in the "
+            + "registry both hosts route from"
+        );
 
-        // ⚠ WHAT THIS ASSEMBLY ACTUALLY BINDS, measured rather than assumed, because two guesses
-        // about it were wrong before this test settled:
-        //
-        //   System.Runtime, Orleans.Serialization.Abstractions, Orleans.Serialization,
-        //   Volo.Abp.Ddd.Application, Volo.Abp.Core
-        //
-        // ⚠ Orleans is NOT prohibited above, and an earlier draft of this test was wrong to prohibit
-        // it. Nothing anyone wrote here mentions Orleans: the source generator arrives transitively
-        // with CyberCloud.Providers.Sample.Contracts and emits a type-manifest provider into every
-        // assembly it runs in, including one whose only type is an empty module. Asserting its
-        // absence would be asserting that a generator this repository depends on stops working.
-        //
-        // ⚠ CyberCloud.Providers.Sample.Contracts is NOT in the set either, despite the
-        // ProjectReference, because SampleApplicationModule binds no type from it. That is the same
-        // semantics build/ArchitectureFacts.cs reads, and it is why the six assembly-graph rules are
-        // about bound types rather than about .csproj lines.
-        //
-        // The prohibitions above are asserted and the set is not: a package upgrade legitimately
-        // changes the second and never the first.
+        bound.ShouldContain(
+            "CyberCloud.ResourceManager",
+            "AddCyberCloudProvider lives in the implementation assembly because what it registers is "
+            + "what Describe declared — the reconciler and handler types"
+        );
+
+        // ⚠ THE ONE THAT STILL HAS TO HOLD, and rule 3 is what makes it hold rather than this line.
+        bound.ShouldNotContain("KubernetesClient");
+        bound.ShouldNotContain("CyberCloud.Kubernetes");
     }
 }

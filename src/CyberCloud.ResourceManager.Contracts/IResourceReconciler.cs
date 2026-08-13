@@ -103,6 +103,28 @@ public readonly record struct ReconcileContext(
     ///     </para>
     /// </remarks>
     public ISecretWriter SecretWriter { get; init; } = new RefusingSecretWriter();
+
+    /// <summary>
+    ///     Where a pass that produced a reachable cluster says so. ⚠ Reported, not attached — the
+    ///     driver performs the write, and only after the pass converges.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>An <c>init</c> property with a refusing default, for the same reason
+    ///         <see cref="SecretWriter" /> is one.</b> Every construction of this record that predates
+    ///         the cluster-attach path names its arguments and means them; a tenth positional parameter
+    ///         would make each of them choose a sink, and the ones that did not care would reach for
+    ///         whatever compiled.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Almost every reconciler ignores this, and one does not.</b>
+    ///         <c>CyberCloud.ContainerService/managedClusters</c> is the only type in the tree whose
+    ///         product <i>is</i> a Kubernetes API server, so it is the only one with anything to
+    ///         report — see <see cref="IClusterConnectionRegistrar" /> for why the write belongs above
+    ///         the provider rather than inside it.
+    ///     </para>
+    /// </remarks>
+    public IClusterConnectionSink ClusterConnections { get; init; } = new RefusingClusterConnectionSink();
 }
 
 /// <summary>

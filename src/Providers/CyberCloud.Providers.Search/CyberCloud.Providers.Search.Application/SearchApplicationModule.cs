@@ -1,5 +1,18 @@
+using CyberCloud.Core.Contracts;
+using CyberCloud.ResourceManager;
 using Volo.Abp.Application;
 using Volo.Abp.Modularity;
+
+// ── Rule 4's declaration — docs/plan/03 § Assembly graph rules ────────────────────────────────
+//
+// ⚠ TWO HOSTS, AND THE SECOND ONE IS NOT A CONCESSION. The silo runs the reconcilers this module
+// registers; the gateway builds the SAME registry from the SAME providers, because RouteStage
+// resolves a path against it and a gateway with its own list would route from a description of a
+// platform the silo is not running. OwningHostAttribute allows multiple for exactly this — rule 5
+// lets the gateway reference a provider's .Application assembly, and rule 4 wants each host that
+// does named in one reviewable line.
+[assembly: OwningHost("CyberCloud.Silo.Host")]
+[assembly: OwningHost("CyberCloud.Gateway.Host")]
 
 namespace CyberCloud.Providers.Search.Application;
 
@@ -8,26 +21,30 @@ namespace CyberCloud.Providers.Search.Application;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         docs/plan/03 § Providers: <i>"Each is an ABP module (<c>[DependsOn]</c>), each registers
-///         its resource types into <c>CyberCloud.ResourceManager</c>."</i> The second half is not done
-///         here: registering a provider is
-///         <c>ISiloBuilder.AddCyberCloudProvider&lt;SearchProvider&gt;()</c>, which runs against the
-///         silo builder before the container is built, and an ABP module's <c>ConfigureServices</c>
-///         runs after.
+///         docs/plan/03 § Providers: <i>"Each is an ABP module (<c>[DependsOn]</c>), each registers its
+///         resource types into <c>CyberCloud.ResourceManager</c>."</i> Both halves happen here — a host
+///         that <c>[DependsOn]</c> this module gets the provider, its reconcilers and its action
+///         handlers, and there is no second call it can forget.
 ///     </para>
 ///     <para>
-///         ⚠ <b>The fifth empty <c>.Application</c> project, and the count has stopped being news.</b>
-///         The sample's emptiness could be dismissed as triviality; the second provider called its own
-///         <i>"evidence about the registry-as-routing-source decision"</i>; the third said three was
-///         the number at which <i>"the project's existence, rather than its emptiness, is the thing
-///         worth questioning"</i>; the fifth said <i>"nothing new was learned here, and that is itself
-///         the report"</i>. This one adds the only thing left to add, which is a <b>negative result
-///         about a different kind of service</b>: the four namespaces before it are stores and
-///         brokers, and a search service has an obvious candidate for an application service — a query
-///         proxy — and it is still not one, because a query goes to the data plane and the data plane
-///         is not something the resource manager routes. Five namespaces in, no provider has needed an
-///         application service, and now none of the two shapes has.
+///         ⚠ <b>The paragraph that used to be here said the second half could not be done, and it was
+///         wrong by the time it was written.</b> It read: registering a provider is
+///         <c>ISiloBuilder.AddCyberCloudProvider&lt;SearchProvider&gt;()</c>, which runs before the
+///         container is built, while an ABP module's <c>ConfigureServices</c> runs after — so a host
+///         has to make two calls. The registry had already stopped being built at wiring time: it is a
+///         factory over <c>GetServices&lt;IResourceProvider&gt;()</c>, resolved once, after everything
+///         is registered. The cost of believing otherwise was not theoretical.
+///         <c>AddCyberCloudProvider</c> ended up with <b>no caller anywhere in the repository</b>, so
+///         no silo in <c>src/Hosts</c> served a single resource type and every conformance suite that
+///         proved otherwise had built its own <c>TestCluster</c> and registered the provider itself.
 ///     </para>
 /// </remarks>
 [DependsOn(typeof(AbpDddApplicationModule))]
-public sealed class SearchApplicationModule : AbpModule;
+public sealed class SearchApplicationModule : AbpModule {
+    /// <inheritdoc />
+    public override void ConfigureServices(ServiceConfigurationContext context) {
+        ArgumentNullException.ThrowIfNull(context);
+
+        context.Services.AddCyberCloudProvider(new SearchProvider());
+    }
+}

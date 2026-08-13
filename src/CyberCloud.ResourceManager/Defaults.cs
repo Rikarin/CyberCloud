@@ -245,6 +245,39 @@ public sealed class NoClusterConnectionFactory : IClusterConnectionFactory {
 }
 
 /// <summary>
+///     The <see cref="IClusterConnectionRegistrar" /> a host with no cluster fabric registers.
+/// </summary>
+/// <remarks>
+///     ⚠ <b>It refuses, which turns a cluster that would have converged unreachable into a cluster
+///     that does not converge.</b> That is deliberate and it is the harsher of the two answers.
+///     <c>ReconcileDriver</c> turns this failure into the pass's outcome, so a
+///     <c>CyberCloud.ContainerService/managedClusters</c> create on a host with no registrar reports
+///     the missing wiring instead of reporting <c>Succeeded</c> for a cluster nothing can then place a
+///     resource in. The second is what the platform did before the seam existed, and the tenant found
+///     out one resource later.
+/// </remarks>
+public sealed class UnavailableClusterConnectionRegistrar : IClusterConnectionRegistrar {
+    /// <inheritdoc />
+    public Task<Result> AttachAsync(
+        ClusterConnectionDescriptor descriptor,
+        CancellationToken cancellationToken = default
+    ) {
+        ArgumentNullException.ThrowIfNull(descriptor);
+
+        return Task.FromResult(
+            Result.Failure(
+                ErrorCode.InternalError,
+                $"No cluster-connection registrar is wired, so {descriptor} cannot be registered and "
+                + "nothing could later be placed in it. A silo that serves "
+                + "CyberCloud.ContainerService/managedClusters registers "
+                + "GrainClusterConnectionRegistrar and calls AddCyberCloudKubernetes, which is what "
+                + "activates the connection grain this writes to."
+            )
+        );
+    }
+}
+
+/// <summary>
 ///     The <see cref="IClusterObjectInventory" /> a silo with no informer bridge registers.
 /// </summary>
 /// <remarks>

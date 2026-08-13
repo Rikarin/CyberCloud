@@ -28,23 +28,23 @@
     -->
 
     <Folder Name="/solution items/">
-        <File Path=".editorconfig"/>
-        <File Path=".gitignore"/>
-        <File Path="Directory.Build.props"/>
-        <File Path="Directory.Build.targets"/>
-        <File Path="Directory.Packages.props"/>
-        <File Path="global.json"/>
-        <File Path=".config/dotnet-tools.json"/>
+        <File Path=".editorconfig" />
+        <File Path=".gitignore" />
+        <File Path="Directory.Build.props" />
+        <File Path="Directory.Build.targets" />
+        <File Path="Directory.Packages.props" />
+        <File Path="global.json" />
+        <File Path=".config/dotnet-tools.json" />
         <!--
           The reviewed list of grain types whose state is durable — docs/plan/05 § Choosing a tier,
           enforced by the Storage tier gate in build/Build.Architecture.cs. Here because a change to
           it is reviewed like a schema migration, and a file nobody can open from the solution is a
           file nobody reviews.
         -->
-        <File Path="durable-grains.txt"/>
+        <File Path="durable-grains.txt" />
     </Folder>
 
-    <Folder Name="/build/"/>
+    <Folder Name="/build/" />
 
     <Folder Name="/src/">
         <!--
@@ -53,44 +53,44 @@
           the compiler, which may be running on .NET Framework). The five projects it polices reference
           it with OutputItemType="Analyzer", not as an ordinary reference.
         -->
-        <Project Path="src/CyberCloud.Analyzers/CyberCloud.Analyzers.csproj"/>
-        <Project Path="src/CyberCloud.Analyzers.Tests/CyberCloud.Analyzers.Tests.csproj"/>
-        <Project Path="src/CyberCloud.Communication.Contracts/CyberCloud.Communication.Contracts.csproj"/>
-        <Project Path="src/CyberCloud.Communication.Contracts.Tests/CyberCloud.Communication.Contracts.Tests.csproj"/>
-        <Project Path="src/CyberCloud.Communication/CyberCloud.Communication.csproj"/>
-        <Project Path="src/CyberCloud.Communication.Tests/CyberCloud.Communication.Tests.csproj"/>
-        <Project Path="src/CyberCloud.Core/CyberCloud.Core.csproj"/>
-        <Project Path="src/CyberCloud.Core.Tests/CyberCloud.Core.Tests.csproj"/>
-        <Project Path="src/CyberCloud.Core.Contracts/CyberCloud.Core.Contracts.csproj"/>
-        <Project Path="src/CyberCloud.Core.Contracts.Tests/CyberCloud.Core.Contracts.Tests.csproj"/>
-        <Project Path="src/CyberCloud.ServiceDefaults/CyberCloud.ServiceDefaults.csproj"/>
-        <Project Path="src/CyberCloud.ServiceDefaults.Tests/CyberCloud.ServiceDefaults.Tests.csproj"/>
-        <Project Path="src/CyberCloud.Tenancy.Contracts/CyberCloud.Tenancy.Contracts.csproj"/>
-        <Project Path="src/CyberCloud.Tenancy.Contracts.Tests/CyberCloud.Tenancy.Contracts.Tests.csproj"/>
-        <Project Path="src/CyberCloud.Tenancy/CyberCloud.Tenancy.csproj"/>
-        <Project Path="src/CyberCloud.Tenancy.Tests/CyberCloud.Tenancy.Tests.csproj"/>
-        <Project Path="src/CyberCloud.Authorization.Contracts/CyberCloud.Authorization.Contracts.csproj"/>
-        <Project Path="src/CyberCloud.Authorization.Contracts.Tests/CyberCloud.Authorization.Contracts.Tests.csproj"/>
-        <Project Path="src/CyberCloud.Authorization/CyberCloud.Authorization.csproj"/>
-        <Project Path="src/CyberCloud.Authorization.Tests/CyberCloud.Authorization.Tests.csproj"/>
-        <Project Path="src/CyberCloud.Kubernetes.Contracts/CyberCloud.Kubernetes.Contracts.csproj"/>
-        <Project Path="src/CyberCloud.Kubernetes.Contracts.Tests/CyberCloud.Kubernetes.Contracts.Tests.csproj"/>
-        <Project Path="src/CyberCloud.Kubernetes/CyberCloud.Kubernetes.csproj"/>
-        <Project Path="src/CyberCloud.Kubernetes.Tests/CyberCloud.Kubernetes.Tests.csproj"/>
-        <Project Path="src/CyberCloud.Metering.Contracts/CyberCloud.Metering.Contracts.csproj"/>
-        <Project Path="src/CyberCloud.Metering.Contracts.Tests/CyberCloud.Metering.Contracts.Tests.csproj"/>
-        <Project Path="src/CyberCloud.Metering/CyberCloud.Metering.csproj"/>
-        <Project Path="src/CyberCloud.Metering.Tests/CyberCloud.Metering.Tests.csproj"/>
-        <Project Path="src/CyberCloud.ResourceManager.Contracts/CyberCloud.ResourceManager.Contracts.csproj"/>
-        <Project Path="src/CyberCloud.ResourceManager.Contracts.Tests/CyberCloud.ResourceManager.Contracts.Tests.csproj"/>
-        <Project Path="src/CyberCloud.ResourceManager/CyberCloud.ResourceManager.csproj"/>
-        <Project Path="src/CyberCloud.ResourceManager.Tests/CyberCloud.ResourceManager.Tests.csproj"/>
+        <Project Path="src/CyberCloud.Analyzers/CyberCloud.Analyzers.csproj" />
+        <Project Path="src/CyberCloud.Analyzers.Tests/CyberCloud.Analyzers.Tests.csproj" />
+        <Project Path="src/CyberCloud.Communication.Contracts/CyberCloud.Communication.Contracts.csproj" />
+        <Project Path="src/CyberCloud.Communication.Contracts.Tests/CyberCloud.Communication.Contracts.Tests.csproj" />
+        <Project Path="src/CyberCloud.Communication/CyberCloud.Communication.csproj" />
+        <Project Path="src/CyberCloud.Communication.Tests/CyberCloud.Communication.Tests.csproj" />
+        <Project Path="src/CyberCloud.Core/CyberCloud.Core.csproj" />
+        <Project Path="src/CyberCloud.Core.Tests/CyberCloud.Core.Tests.csproj" />
+        <Project Path="src/CyberCloud.Core.Contracts/CyberCloud.Core.Contracts.csproj" />
+        <Project Path="src/CyberCloud.Core.Contracts.Tests/CyberCloud.Core.Contracts.Tests.csproj" />
+        <Project Path="src/CyberCloud.ServiceDefaults/CyberCloud.ServiceDefaults.csproj" />
+        <Project Path="src/CyberCloud.ServiceDefaults.Tests/CyberCloud.ServiceDefaults.Tests.csproj" />
+        <Project Path="src/CyberCloud.Tenancy.Contracts/CyberCloud.Tenancy.Contracts.csproj" />
+        <Project Path="src/CyberCloud.Tenancy.Contracts.Tests/CyberCloud.Tenancy.Contracts.Tests.csproj" />
+        <Project Path="src/CyberCloud.Tenancy/CyberCloud.Tenancy.csproj" />
+        <Project Path="src/CyberCloud.Tenancy.Tests/CyberCloud.Tenancy.Tests.csproj" />
+        <Project Path="src/CyberCloud.Authorization.Contracts/CyberCloud.Authorization.Contracts.csproj" />
+        <Project Path="src/CyberCloud.Authorization.Contracts.Tests/CyberCloud.Authorization.Contracts.Tests.csproj" />
+        <Project Path="src/CyberCloud.Authorization/CyberCloud.Authorization.csproj" />
+        <Project Path="src/CyberCloud.Authorization.Tests/CyberCloud.Authorization.Tests.csproj" />
+        <Project Path="src/CyberCloud.Kubernetes.Contracts/CyberCloud.Kubernetes.Contracts.csproj" />
+        <Project Path="src/CyberCloud.Kubernetes.Contracts.Tests/CyberCloud.Kubernetes.Contracts.Tests.csproj" />
+        <Project Path="src/CyberCloud.Kubernetes/CyberCloud.Kubernetes.csproj" />
+        <Project Path="src/CyberCloud.Kubernetes.Tests/CyberCloud.Kubernetes.Tests.csproj" />
+        <Project Path="src/CyberCloud.Metering.Contracts/CyberCloud.Metering.Contracts.csproj" />
+        <Project Path="src/CyberCloud.Metering.Contracts.Tests/CyberCloud.Metering.Contracts.Tests.csproj" />
+        <Project Path="src/CyberCloud.Metering/CyberCloud.Metering.csproj" />
+        <Project Path="src/CyberCloud.Metering.Tests/CyberCloud.Metering.Tests.csproj" />
+        <Project Path="src/CyberCloud.ResourceManager.Contracts/CyberCloud.ResourceManager.Contracts.csproj" />
+        <Project Path="src/CyberCloud.ResourceManager.Contracts.Tests/CyberCloud.ResourceManager.Contracts.Tests.csproj" />
+        <Project Path="src/CyberCloud.ResourceManager/CyberCloud.ResourceManager.csproj" />
+        <Project Path="src/CyberCloud.ResourceManager.Tests/CyberCloud.ResourceManager.Tests.csproj" />
         <!--
           ADR-012's generation step. An Exe, run by `./build.sh Generate` and by the Generated
           surfaces gate — never deployed. See its .csproj for why it is a separate process from the
           Nuke build rather than code inside it.
         -->
-        <Project Path="src/CyberCloud.ResourceManager.Generator/CyberCloud.ResourceManager.Generator.csproj"/>
+        <Project Path="src/CyberCloud.ResourceManager.Generator/CyberCloud.ResourceManager.Generator.csproj" />
         <!--
           ⚠ The generator's suite drives Program.Main IN-PROCESS. docs/plan/23 § Test layers puts the
           ≥ 70 % coverage floor on every shipping project, and dotnet-coverage instruments the test
@@ -98,13 +98,13 @@
           suite that exercised every line of it would still report 0 %. That is why the generator has
           an InternalsVisibleTo and an `internal` Main.
         -->
-        <Project Path="src/CyberCloud.ResourceManager.Generator.Tests/CyberCloud.ResourceManager.Generator.Tests.csproj"/>
+        <Project Path="src/CyberCloud.ResourceManager.Generator.Tests/CyberCloud.ResourceManager.Generator.Tests.csproj" />
 
         <!-- docs/plan/11. The hosts live under /src/Hosts/ — cookies there, bearer at the gateway. -->
-        <Project Path="src/CyberCloud.Identity.Contracts/CyberCloud.Identity.Contracts.csproj"/>
-        <Project Path="src/CyberCloud.Identity.Contracts.Tests/CyberCloud.Identity.Contracts.Tests.csproj"/>
-        <Project Path="src/CyberCloud.Identity/CyberCloud.Identity.csproj"/>
-        <Project Path="src/CyberCloud.Identity.Tests/CyberCloud.Identity.Tests.csproj"/>
+        <Project Path="src/CyberCloud.Identity.Contracts/CyberCloud.Identity.Contracts.csproj" />
+        <Project Path="src/CyberCloud.Identity.Contracts.Tests/CyberCloud.Identity.Contracts.Tests.csproj" />
+        <Project Path="src/CyberCloud.Identity/CyberCloud.Identity.csproj" />
+        <Project Path="src/CyberCloud.Identity.Tests/CyberCloud.Identity.Tests.csproj" />
         <!--
           The hand-written half of the .NET SDK — docs/plan/21 § Generation. ⚠ It is the ONE project
           under src/ with IsPackable=true: docs/plan/03 § Top level keeps `cli/` out of src/ "because
@@ -116,8 +116,8 @@
           ⚠ Nothing named Azure.* is in its graph — docs/plan/21 § The .NET SDK, DECIDED 2026-08-11.
           Its only package is Polly, which was already in the register for the fabric.
         -->
-        <Project Path="src/CyberCloud.Sdk/CyberCloud.Sdk.csproj"/>
-        <Project Path="src/CyberCloud.Sdk.Tests/CyberCloud.Sdk.Tests.csproj"/>
+        <Project Path="src/CyberCloud.Sdk/CyberCloud.Sdk.csproj" />
+        <Project Path="src/CyberCloud.Sdk.Tests/CyberCloud.Sdk.Tests.csproj" />
 
         <!--
           docs/plan/18 § CyberCloud.KeyVault/vaults — the platform's OpenBao client and the one
@@ -127,8 +127,8 @@
           assembly name is fixed by CC1005 — CyberCloud.Analyzers/WellKnown.cs's VaultAssembly is the
           exemption, matched exactly or by dotted prefix.
         -->
-        <Project Path="src/CyberCloud.Vault/CyberCloud.Vault.csproj"/>
-        <Project Path="src/CyberCloud.Vault.Tests/CyberCloud.Vault.Tests.csproj"/>
+        <Project Path="src/CyberCloud.Vault/CyberCloud.Vault.csproj" />
+        <Project Path="src/CyberCloud.Vault.Tests/CyberCloud.Vault.Tests.csproj" />
     </Folder>
     <!--
       docs/plan/03 § Providers — the five projects every provider has. CyberCloud.Sample is the first
@@ -146,9 +146,9 @@
       There is now, and docs/plan/12 § The catalogue has nine more.
     -->
     <Folder Name="/src/Providers/">
-        <Project Path="src/Providers/CyberCloud.Providers.Sample/CyberCloud.Providers.Sample.Contracts/CyberCloud.Providers.Sample.Contracts.csproj"/>
-        <Project Path="src/Providers/CyberCloud.Providers.Sample/CyberCloud.Providers.Sample/CyberCloud.Providers.Sample.csproj"/>
-        <Project Path="src/Providers/CyberCloud.Providers.Sample/CyberCloud.Providers.Sample.Application/CyberCloud.Providers.Sample.Application.csproj"/>
+        <Project Path="src/Providers/CyberCloud.Providers.Sample/CyberCloud.Providers.Sample.Contracts/CyberCloud.Providers.Sample.Contracts.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.Sample/CyberCloud.Providers.Sample/CyberCloud.Providers.Sample.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.Sample/CyberCloud.Providers.Sample.Application/CyberCloud.Providers.Sample.Application.csproj" />
         <!--
           ⚠ A sixth project in a folder docs/plan/03 § Providers describes with five, and it is a
           suite rather than a provider part. Rule 4 ("nothing references a *.Application assembly
@@ -156,15 +156,15 @@
           Build.Architecture.cs § ShippingAssemblies, which is every project where SuiteOwning is
           null, and a *.Tests project is claimed by the per-PR suite.
         -->
-        <Project Path="src/Providers/CyberCloud.Providers.Sample/CyberCloud.Providers.Sample.Application.Tests/CyberCloud.Providers.Sample.Application.Tests.csproj"/>
-        <Project Path="src/Providers/CyberCloud.Providers.Sample/CyberCloud.Providers.Sample.Tests/CyberCloud.Providers.Sample.Tests.csproj"/>
-        <Project Path="src/Providers/CyberCloud.Providers.Sample/CyberCloud.Providers.Sample.Conformance/CyberCloud.Providers.Sample.Conformance.csproj"/>
+        <Project Path="src/Providers/CyberCloud.Providers.Sample/CyberCloud.Providers.Sample.Application.Tests/CyberCloud.Providers.Sample.Application.Tests.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.Sample/CyberCloud.Providers.Sample.Tests/CyberCloud.Providers.Sample.Tests.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.Sample/CyberCloud.Providers.Sample.Conformance/CyberCloud.Providers.Sample.Conformance.csproj" />
         <!--
           The cluster-backed half of the same suite — two class declarations over the same
           ProviderConformanceCase, in a project that may depend on a Docker daemon because the one
           above must not. See its .csproj.
         -->
-        <Project Path="src/Providers/CyberCloud.Providers.Sample/CyberCloud.Providers.Sample.Cluster.Conformance/CyberCloud.Providers.Sample.Cluster.Conformance.csproj"/>
+        <Project Path="src/Providers/CyberCloud.Providers.Sample/CyberCloud.Providers.Sample.Cluster.Conformance/CyberCloud.Providers.Sample.Cluster.Conformance.csproj" />
 
         <!--
           The second provider family, and the first one that is a feature rather than a measurement.
@@ -180,11 +180,11 @@
           kind now, derived from the case's own Objects, so this family needs no new declaration for
           it.
         -->
-        <Project Path="src/Providers/CyberCloud.Providers.DBforPostgreSQL/CyberCloud.Providers.DBforPostgreSQL.Contracts/CyberCloud.Providers.DBforPostgreSQL.Contracts.csproj"/>
-        <Project Path="src/Providers/CyberCloud.Providers.DBforPostgreSQL/CyberCloud.Providers.DBforPostgreSQL/CyberCloud.Providers.DBforPostgreSQL.csproj"/>
-        <Project Path="src/Providers/CyberCloud.Providers.DBforPostgreSQL/CyberCloud.Providers.DBforPostgreSQL.Application/CyberCloud.Providers.DBforPostgreSQL.Application.csproj"/>
-        <Project Path="src/Providers/CyberCloud.Providers.DBforPostgreSQL/CyberCloud.Providers.DBforPostgreSQL.Tests/CyberCloud.Providers.DBforPostgreSQL.Tests.csproj"/>
-        <Project Path="src/Providers/CyberCloud.Providers.DBforPostgreSQL/CyberCloud.Providers.DBforPostgreSQL.Conformance/CyberCloud.Providers.DBforPostgreSQL.Conformance.csproj"/>
+        <Project Path="src/Providers/CyberCloud.Providers.DBforPostgreSQL/CyberCloud.Providers.DBforPostgreSQL.Contracts/CyberCloud.Providers.DBforPostgreSQL.Contracts.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.DBforPostgreSQL/CyberCloud.Providers.DBforPostgreSQL/CyberCloud.Providers.DBforPostgreSQL.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.DBforPostgreSQL/CyberCloud.Providers.DBforPostgreSQL.Application/CyberCloud.Providers.DBforPostgreSQL.Application.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.DBforPostgreSQL/CyberCloud.Providers.DBforPostgreSQL.Tests/CyberCloud.Providers.DBforPostgreSQL.Tests.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.DBforPostgreSQL/CyberCloud.Providers.DBforPostgreSQL.Conformance/CyberCloud.Providers.DBforPostgreSQL.Conformance.csproj" />
 
         <!--
           ⚠ THIS BLOCK CARRIED UNRESOLVED CONFLICT MARKERS UNTIL 2026-08-12, AND NOTHING NOTICED.
@@ -205,12 +205,12 @@
           object to a real API server, and this is the first provider whose object is a CUSTOM
           RESOURCE whose CRD nothing installs. What that turned up is on the .csproj.
         -->
-        <Project Path="src/Providers/CyberCloud.Providers.Cache/CyberCloud.Providers.Cache.Contracts/CyberCloud.Providers.Cache.Contracts.csproj"/>
-        <Project Path="src/Providers/CyberCloud.Providers.Cache/CyberCloud.Providers.Cache/CyberCloud.Providers.Cache.csproj"/>
-        <Project Path="src/Providers/CyberCloud.Providers.Cache/CyberCloud.Providers.Cache.Application/CyberCloud.Providers.Cache.Application.csproj"/>
-        <Project Path="src/Providers/CyberCloud.Providers.Cache/CyberCloud.Providers.Cache.Tests/CyberCloud.Providers.Cache.Tests.csproj"/>
-        <Project Path="src/Providers/CyberCloud.Providers.Cache/CyberCloud.Providers.Cache.Conformance/CyberCloud.Providers.Cache.Conformance.csproj"/>
-        <Project Path="src/Providers/CyberCloud.Providers.Cache/CyberCloud.Providers.Cache.Cluster.Conformance/CyberCloud.Providers.Cache.Cluster.Conformance.csproj"/>
+        <Project Path="src/Providers/CyberCloud.Providers.Cache/CyberCloud.Providers.Cache.Contracts/CyberCloud.Providers.Cache.Contracts.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.Cache/CyberCloud.Providers.Cache/CyberCloud.Providers.Cache.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.Cache/CyberCloud.Providers.Cache.Application/CyberCloud.Providers.Cache.Application.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.Cache/CyberCloud.Providers.Cache.Tests/CyberCloud.Providers.Cache.Tests.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.Cache/CyberCloud.Providers.Cache.Conformance/CyberCloud.Providers.Cache.Conformance.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.Cache/CyberCloud.Providers.Cache.Cluster.Conformance/CyberCloud.Providers.Cache.Cluster.Conformance.csproj" />
 
         <!--
           The fourth provider family — CyberCloud.Messaging/kafkaClusters on Strimzi,
@@ -223,12 +223,12 @@
           COST THE SAME AGAIN AND ADDED NO ROW BELOW, which is what makes that cost flat rather than
           merely small once: this comment is the only line in this file the third type changed.
         -->
-        <Project Path="src/Providers/CyberCloud.Providers.Messaging/CyberCloud.Providers.Messaging.Contracts/CyberCloud.Providers.Messaging.Contracts.csproj"/>
-        <Project Path="src/Providers/CyberCloud.Providers.Messaging/CyberCloud.Providers.Messaging/CyberCloud.Providers.Messaging.csproj"/>
-        <Project Path="src/Providers/CyberCloud.Providers.Messaging/CyberCloud.Providers.Messaging.Application/CyberCloud.Providers.Messaging.Application.csproj"/>
-        <Project Path="src/Providers/CyberCloud.Providers.Messaging/CyberCloud.Providers.Messaging.Tests/CyberCloud.Providers.Messaging.Tests.csproj"/>
-        <Project Path="src/Providers/CyberCloud.Providers.Messaging/CyberCloud.Providers.Messaging.Conformance/CyberCloud.Providers.Messaging.Conformance.csproj"/>
-        <Project Path="src/Providers/CyberCloud.Providers.Messaging/CyberCloud.Providers.Messaging.Cluster.Conformance/CyberCloud.Providers.Messaging.Cluster.Conformance.csproj"/>
+        <Project Path="src/Providers/CyberCloud.Providers.Messaging/CyberCloud.Providers.Messaging.Contracts/CyberCloud.Providers.Messaging.Contracts.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.Messaging/CyberCloud.Providers.Messaging/CyberCloud.Providers.Messaging.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.Messaging/CyberCloud.Providers.Messaging.Application/CyberCloud.Providers.Messaging.Application.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.Messaging/CyberCloud.Providers.Messaging.Tests/CyberCloud.Providers.Messaging.Tests.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.Messaging/CyberCloud.Providers.Messaging.Conformance/CyberCloud.Providers.Messaging.Conformance.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.Messaging/CyberCloud.Providers.Messaging.Cluster.Conformance/CyberCloud.Providers.Messaging.Cluster.Conformance.csproj" />
 
         <!--
           The fifth provider family — CyberCloud.Storage/accounts on SeaweedFS.
@@ -242,12 +242,12 @@
           ⚠ It closes the assumption charts/managed/postgres was already making: that chart renders a
           backup destination of s3://tenant-bucket/postgres against a provider that did not exist.
         -->
-        <Project Path="src/Providers/CyberCloud.Providers.Storage/CyberCloud.Providers.Storage.Contracts/CyberCloud.Providers.Storage.Contracts.csproj"/>
-        <Project Path="src/Providers/CyberCloud.Providers.Storage/CyberCloud.Providers.Storage/CyberCloud.Providers.Storage.csproj"/>
-        <Project Path="src/Providers/CyberCloud.Providers.Storage/CyberCloud.Providers.Storage.Application/CyberCloud.Providers.Storage.Application.csproj"/>
-        <Project Path="src/Providers/CyberCloud.Providers.Storage/CyberCloud.Providers.Storage.Tests/CyberCloud.Providers.Storage.Tests.csproj"/>
-        <Project Path="src/Providers/CyberCloud.Providers.Storage/CyberCloud.Providers.Storage.Conformance/CyberCloud.Providers.Storage.Conformance.csproj"/>
-        <Project Path="src/Providers/CyberCloud.Providers.Storage/CyberCloud.Providers.Storage.Cluster.Conformance/CyberCloud.Providers.Storage.Cluster.Conformance.csproj"/>
+        <Project Path="src/Providers/CyberCloud.Providers.Storage/CyberCloud.Providers.Storage.Contracts/CyberCloud.Providers.Storage.Contracts.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.Storage/CyberCloud.Providers.Storage/CyberCloud.Providers.Storage.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.Storage/CyberCloud.Providers.Storage.Application/CyberCloud.Providers.Storage.Application.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.Storage/CyberCloud.Providers.Storage.Tests/CyberCloud.Providers.Storage.Tests.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.Storage/CyberCloud.Providers.Storage.Conformance/CyberCloud.Providers.Storage.Conformance.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.Storage/CyberCloud.Providers.Storage.Cluster.Conformance/CyberCloud.Providers.Storage.Cluster.Conformance.csproj" />
 
         <!--
           The sixth provider family — CyberCloud.Search/services on the OpenSearch operator.
@@ -264,12 +264,12 @@
           ADR-010 clause 1's survey picks the operator. It is the only row in the catalogue whose two
           halves come from two different decision records.
         -->
-        <Project Path="src/Providers/CyberCloud.Providers.Search/CyberCloud.Providers.Search.Contracts/CyberCloud.Providers.Search.Contracts.csproj"/>
-        <Project Path="src/Providers/CyberCloud.Providers.Search/CyberCloud.Providers.Search/CyberCloud.Providers.Search.csproj"/>
-        <Project Path="src/Providers/CyberCloud.Providers.Search/CyberCloud.Providers.Search.Application/CyberCloud.Providers.Search.Application.csproj"/>
-        <Project Path="src/Providers/CyberCloud.Providers.Search/CyberCloud.Providers.Search.Tests/CyberCloud.Providers.Search.Tests.csproj"/>
-        <Project Path="src/Providers/CyberCloud.Providers.Search/CyberCloud.Providers.Search.Conformance/CyberCloud.Providers.Search.Conformance.csproj"/>
-        <Project Path="src/Providers/CyberCloud.Providers.Search/CyberCloud.Providers.Search.Cluster.Conformance/CyberCloud.Providers.Search.Cluster.Conformance.csproj"/>
+        <Project Path="src/Providers/CyberCloud.Providers.Search/CyberCloud.Providers.Search.Contracts/CyberCloud.Providers.Search.Contracts.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.Search/CyberCloud.Providers.Search/CyberCloud.Providers.Search.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.Search/CyberCloud.Providers.Search.Application/CyberCloud.Providers.Search.Application.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.Search/CyberCloud.Providers.Search.Tests/CyberCloud.Providers.Search.Tests.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.Search/CyberCloud.Providers.Search.Conformance/CyberCloud.Providers.Search.Conformance.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.Search/CyberCloud.Providers.Search.Cluster.Conformance/CyberCloud.Providers.Search.Cluster.Conformance.csproj" />
 
         <!--
           The seventh provider family — CyberCloud.DocumentDB/accounts, FerretDB over CloudNativePG.
@@ -286,12 +286,12 @@
           found a defect in the first — charts/managed/ferretdb/conformance.yaml § owed,
           `shared-preload-libraries-is-not-a-parameter`.
         -->
-        <Project Path="src/Providers/CyberCloud.Providers.DocumentDB/CyberCloud.Providers.DocumentDB.Contracts/CyberCloud.Providers.DocumentDB.Contracts.csproj"/>
-        <Project Path="src/Providers/CyberCloud.Providers.DocumentDB/CyberCloud.Providers.DocumentDB/CyberCloud.Providers.DocumentDB.csproj"/>
-        <Project Path="src/Providers/CyberCloud.Providers.DocumentDB/CyberCloud.Providers.DocumentDB.Application/CyberCloud.Providers.DocumentDB.Application.csproj"/>
-        <Project Path="src/Providers/CyberCloud.Providers.DocumentDB/CyberCloud.Providers.DocumentDB.Tests/CyberCloud.Providers.DocumentDB.Tests.csproj"/>
-        <Project Path="src/Providers/CyberCloud.Providers.DocumentDB/CyberCloud.Providers.DocumentDB.Conformance/CyberCloud.Providers.DocumentDB.Conformance.csproj"/>
-        <Project Path="src/Providers/CyberCloud.Providers.DocumentDB/CyberCloud.Providers.DocumentDB.Cluster.Conformance/CyberCloud.Providers.DocumentDB.Cluster.Conformance.csproj"/>
+        <Project Path="src/Providers/CyberCloud.Providers.DocumentDB/CyberCloud.Providers.DocumentDB.Contracts/CyberCloud.Providers.DocumentDB.Contracts.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.DocumentDB/CyberCloud.Providers.DocumentDB/CyberCloud.Providers.DocumentDB.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.DocumentDB/CyberCloud.Providers.DocumentDB.Application/CyberCloud.Providers.DocumentDB.Application.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.DocumentDB/CyberCloud.Providers.DocumentDB.Tests/CyberCloud.Providers.DocumentDB.Tests.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.DocumentDB/CyberCloud.Providers.DocumentDB.Conformance/CyberCloud.Providers.DocumentDB.Conformance.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.DocumentDB/CyberCloud.Providers.DocumentDB.Cluster.Conformance/CyberCloud.Providers.DocumentDB.Cluster.Conformance.csproj" />
 
         <!--
           The eighth provider family — CyberCloud.Analytics/clickhouseClusters on the Altinity
@@ -310,12 +310,12 @@
           installation NAMES a Keeper's Service in spec.configuration.zookeeper.nodes, and nothing this
           provider applies creates that Service.
         -->
-        <Project Path="src/Providers/CyberCloud.Providers.Analytics/CyberCloud.Providers.Analytics.Contracts/CyberCloud.Providers.Analytics.Contracts.csproj"/>
-        <Project Path="src/Providers/CyberCloud.Providers.Analytics/CyberCloud.Providers.Analytics/CyberCloud.Providers.Analytics.csproj"/>
-        <Project Path="src/Providers/CyberCloud.Providers.Analytics/CyberCloud.Providers.Analytics.Application/CyberCloud.Providers.Analytics.Application.csproj"/>
-        <Project Path="src/Providers/CyberCloud.Providers.Analytics/CyberCloud.Providers.Analytics.Tests/CyberCloud.Providers.Analytics.Tests.csproj"/>
-        <Project Path="src/Providers/CyberCloud.Providers.Analytics/CyberCloud.Providers.Analytics.Conformance/CyberCloud.Providers.Analytics.Conformance.csproj"/>
-        <Project Path="src/Providers/CyberCloud.Providers.Analytics/CyberCloud.Providers.Analytics.Cluster.Conformance/CyberCloud.Providers.Analytics.Cluster.Conformance.csproj"/>
+        <Project Path="src/Providers/CyberCloud.Providers.Analytics/CyberCloud.Providers.Analytics.Contracts/CyberCloud.Providers.Analytics.Contracts.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.Analytics/CyberCloud.Providers.Analytics/CyberCloud.Providers.Analytics.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.Analytics/CyberCloud.Providers.Analytics.Application/CyberCloud.Providers.Analytics.Application.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.Analytics/CyberCloud.Providers.Analytics.Tests/CyberCloud.Providers.Analytics.Tests.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.Analytics/CyberCloud.Providers.Analytics.Conformance/CyberCloud.Providers.Analytics.Conformance.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.Analytics/CyberCloud.Providers.Analytics.Cluster.Conformance/CyberCloud.Providers.Analytics.Cluster.Conformance.csproj" />
 
         <!--
           The ninth provider family — CyberCloud.DBforMySQL/servers on mariadb-operator,
@@ -334,12 +334,12 @@
           is a pattern rather than an exception, and the pattern is: the path keeps parity, the prose
           tells the truth, and the supported-subset table is where the difference is written down.
         -->
-        <Project Path="src/Providers/CyberCloud.Providers.DBforMySQL/CyberCloud.Providers.DBforMySQL.Contracts/CyberCloud.Providers.DBforMySQL.Contracts.csproj"/>
-        <Project Path="src/Providers/CyberCloud.Providers.DBforMySQL/CyberCloud.Providers.DBforMySQL/CyberCloud.Providers.DBforMySQL.csproj"/>
-        <Project Path="src/Providers/CyberCloud.Providers.DBforMySQL/CyberCloud.Providers.DBforMySQL.Application/CyberCloud.Providers.DBforMySQL.Application.csproj"/>
-        <Project Path="src/Providers/CyberCloud.Providers.DBforMySQL/CyberCloud.Providers.DBforMySQL.Tests/CyberCloud.Providers.DBforMySQL.Tests.csproj"/>
-        <Project Path="src/Providers/CyberCloud.Providers.DBforMySQL/CyberCloud.Providers.DBforMySQL.Conformance/CyberCloud.Providers.DBforMySQL.Conformance.csproj"/>
-        <Project Path="src/Providers/CyberCloud.Providers.DBforMySQL/CyberCloud.Providers.DBforMySQL.Cluster.Conformance/CyberCloud.Providers.DBforMySQL.Cluster.Conformance.csproj"/>
+        <Project Path="src/Providers/CyberCloud.Providers.DBforMySQL/CyberCloud.Providers.DBforMySQL.Contracts/CyberCloud.Providers.DBforMySQL.Contracts.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.DBforMySQL/CyberCloud.Providers.DBforMySQL/CyberCloud.Providers.DBforMySQL.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.DBforMySQL/CyberCloud.Providers.DBforMySQL.Application/CyberCloud.Providers.DBforMySQL.Application.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.DBforMySQL/CyberCloud.Providers.DBforMySQL.Tests/CyberCloud.Providers.DBforMySQL.Tests.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.DBforMySQL/CyberCloud.Providers.DBforMySQL.Conformance/CyberCloud.Providers.DBforMySQL.Conformance.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.DBforMySQL/CyberCloud.Providers.DBforMySQL.Cluster.Conformance/CyberCloud.Providers.DBforMySQL.Cluster.Conformance.csproj" />
 
         <!--
           The tenth provider family — CyberCloud.ContainerService/managedClusters and its agentPools
@@ -361,12 +361,12 @@
           resize its account; an agent pool is the only way a cluster gets bigger, so this family's
           quota is not a create-time constant on either type.
         -->
-        <Project Path="src/Providers/CyberCloud.Providers.ContainerService/CyberCloud.Providers.ContainerService.Contracts/CyberCloud.Providers.ContainerService.Contracts.csproj"/>
-        <Project Path="src/Providers/CyberCloud.Providers.ContainerService/CyberCloud.Providers.ContainerService/CyberCloud.Providers.ContainerService.csproj"/>
-        <Project Path="src/Providers/CyberCloud.Providers.ContainerService/CyberCloud.Providers.ContainerService.Application/CyberCloud.Providers.ContainerService.Application.csproj"/>
-        <Project Path="src/Providers/CyberCloud.Providers.ContainerService/CyberCloud.Providers.ContainerService.Tests/CyberCloud.Providers.ContainerService.Tests.csproj"/>
-        <Project Path="src/Providers/CyberCloud.Providers.ContainerService/CyberCloud.Providers.ContainerService.Conformance/CyberCloud.Providers.ContainerService.Conformance.csproj"/>
-        <Project Path="src/Providers/CyberCloud.Providers.ContainerService/CyberCloud.Providers.ContainerService.Cluster.Conformance/CyberCloud.Providers.ContainerService.Cluster.Conformance.csproj"/>
+        <Project Path="src/Providers/CyberCloud.Providers.ContainerService/CyberCloud.Providers.ContainerService.Contracts/CyberCloud.Providers.ContainerService.Contracts.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.ContainerService/CyberCloud.Providers.ContainerService/CyberCloud.Providers.ContainerService.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.ContainerService/CyberCloud.Providers.ContainerService.Application/CyberCloud.Providers.ContainerService.Application.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.ContainerService/CyberCloud.Providers.ContainerService.Tests/CyberCloud.Providers.ContainerService.Tests.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.ContainerService/CyberCloud.Providers.ContainerService.Conformance/CyberCloud.Providers.ContainerService.Conformance.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.ContainerService/CyberCloud.Providers.ContainerService.Cluster.Conformance/CyberCloud.Providers.ContainerService.Cluster.Conformance.csproj" />
 
         <!--
           The eleventh provider family — CyberCloud.Network/virtualNetworks and its children, on
@@ -386,21 +386,22 @@
           where the tree before it had one parent and one child. What that cost is recorded in
           src/Providers/README.md § What the tenth provider measured.
         -->
-        <Project Path="src/Providers/CyberCloud.Providers.Network/CyberCloud.Providers.Network.Contracts/CyberCloud.Providers.Network.Contracts.csproj"/>
-        <Project Path="src/Providers/CyberCloud.Providers.Network/CyberCloud.Providers.Network/CyberCloud.Providers.Network.csproj"/>
-        <Project Path="src/Providers/CyberCloud.Providers.Network/CyberCloud.Providers.Network.Application/CyberCloud.Providers.Network.Application.csproj"/>
-        <Project Path="src/Providers/CyberCloud.Providers.Network/CyberCloud.Providers.Network.Tests/CyberCloud.Providers.Network.Tests.csproj"/>
-        <Project Path="src/Providers/CyberCloud.Providers.Network/CyberCloud.Providers.Network.Conformance/CyberCloud.Providers.Network.Conformance.csproj"/>
-        <Project Path="src/Providers/CyberCloud.Providers.Network/CyberCloud.Providers.Network.Cluster.Conformance/CyberCloud.Providers.Network.Cluster.Conformance.csproj"/>
+        <Project Path="src/Providers/CyberCloud.Providers.Network/CyberCloud.Providers.Network.Contracts/CyberCloud.Providers.Network.Contracts.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.Network/CyberCloud.Providers.Network/CyberCloud.Providers.Network.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.Network/CyberCloud.Providers.Network.Application/CyberCloud.Providers.Network.Application.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.Network/CyberCloud.Providers.Network.Tests/CyberCloud.Providers.Network.Tests.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.Network/CyberCloud.Providers.Network.Conformance/CyberCloud.Providers.Network.Conformance.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.Network/CyberCloud.Providers.Network.Cluster.Conformance/CyberCloud.Providers.Network.Cluster.Conformance.csproj" />
     </Folder>
     <Folder Name="/src/Hosts/">
-        <Project Path="src/Hosts/CyberCloud.Gateway.Host/CyberCloud.Gateway.Host.csproj"/>
-        <Project Path="src/Hosts/CyberCloud.Gateway.Host.Tests/CyberCloud.Gateway.Host.Tests.csproj"/>
-        <Project Path="src/Hosts/CyberCloud.Silo.Host/CyberCloud.Silo.Host.csproj"/>
-        <Project Path="src/Hosts/CyberCloud.AppHost/CyberCloud.AppHost.csproj"/>
-        <Project Path="src/Hosts/CyberCloud.AppHost.Tests/CyberCloud.AppHost.Tests.csproj"/>
-        <Project Path="src/Hosts/CyberCloud.Identity.Host/CyberCloud.Identity.Host.csproj"/>
-        <Project Path="src/Hosts/CyberCloud.Identity.Host.Tests/CyberCloud.Identity.Host.Tests.csproj"/>
+        <Project Path="src/Hosts/CyberCloud.Gateway.Host/CyberCloud.Gateway.Host.csproj" />
+        <Project Path="src/Hosts/CyberCloud.Gateway.Host.Tests/CyberCloud.Gateway.Host.Tests.csproj" />
+        <Project Path="src/Hosts/CyberCloud.Silo.Host/CyberCloud.Silo.Host.csproj" />
+        <Project Path="src/Hosts/CyberCloud.AppHost/CyberCloud.AppHost.csproj" />
+        <Project Path="src/Hosts/CyberCloud.AppHost.Tests/CyberCloud.AppHost.Tests.csproj" />
+        <Project Path="src/Hosts/CyberCloud.Identity.Host/CyberCloud.Identity.Host.csproj" />
+        <Project Path="src/Hosts/CyberCloud.Hosts.Tests/CyberCloud.Hosts.Tests.csproj" />
+        <Project Path="src/Hosts/CyberCloud.Identity.Host.Tests/CyberCloud.Identity.Host.Tests.csproj" />
     </Folder>
     <!--
       docs/plan/03 § Top level keeps `cli/` out of src/ because it ships separately.
@@ -413,8 +414,8 @@
       RootNamespace is CyberCloud.Cli — see cyc.csproj.
     -->
     <Folder Name="/cli/">
-        <Project Path="cli/cyc/cyc.csproj"/>
-        <Project Path="cli/cyc.Tests/cyc.Tests.csproj"/>
+        <Project Path="cli/cyc/cyc.csproj" />
+        <Project Path="cli/cyc.Tests/cyc.Tests.csproj" />
     </Folder>
 
     <!--
@@ -426,7 +427,7 @@
       CyberCloud.Providers.Sample.Conformance references it to run the same suite against a real one.
     -->
     <Folder Name="/test/">
-        <Project Path="test/CyberCloud.Conformance/CyberCloud.Conformance.csproj"/>
+        <Project Path="test/CyberCloud.Conformance/CyberCloud.Conformance.csproj" />
         <!--
           ⚠ The half of the conformance suite that needs Docker, and the reason it is a project of its
           own rather than a package added above: Testcontainers in CyberCloud.Conformance.csproj would
@@ -440,7 +441,7 @@
           CyberCloud.Conformance: it runs against the reference provider AND is referenced by each
           provider's own `.Cluster.Conformance` project.
         -->
-        <Project Path="test/CyberCloud.Cluster.Conformance/CyberCloud.Cluster.Conformance.csproj"/>
-        <Project Path="test/CyberCloud.Isolation/CyberCloud.Isolation.csproj"/>
+        <Project Path="test/CyberCloud.Cluster.Conformance/CyberCloud.Cluster.Conformance.csproj" />
+        <Project Path="test/CyberCloud.Isolation/CyberCloud.Isolation.csproj" />
     </Folder>
 </Solution>
