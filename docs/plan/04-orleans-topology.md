@@ -26,6 +26,35 @@ on a per-request path, that is a bug with a name — [05 § The tenant directory
 
 Every silo loads every provider module. There are no specialised silo roles.
 
+⚠ **CORRECTED — this section described a composition nothing performed, for as long as there was a
+silo.** `CyberCloud.Silo.Host` referenced no provider module and never called
+`AddCyberCloudResourceManager`, so `OperationGrain`, `ResourceGrain` and `ConnectionGrain` were in no
+silo's grain manifest and `AddCyberCloudProvider<T>` had **zero callers anywhere in the repository**.
+`CyberCloud.Gateway.Host` composed the manager and registered no provider, so its registry was built
+from an empty set and stage 6 answered the canonical `404` to every resource and action path. Sixteen
+resource types across eleven providers had nowhere to execute. Three things about the shape of that
+are worth keeping, because the sentence above was true as a design and false as a description:
+
+- **A provider arrives as an ABP module and nothing else.** Each `*.Application` module's
+  `ConfigureServices` registers its `IResourceProvider`, its reconcilers and its action handlers. The
+  earlier arrangement — load the module *and* make a separate `ISiloBuilder` call — was justified by
+  a claim that had already stopped being true: `IProviderRegistry` is a factory registration built at
+  first resolve, so *when* a provider is registered stopped mattering, and only the container does.
+- **Both hosts hold the same list and nothing can merge them.**
+  § [03 § Assembly graph rules](03-repository-layout.md), rule 4 lets only a host reference a
+  `*.Application` assembly, so there is no third place for one list to live. `SiloHostModule` and
+  `GatewayHostModule` each name all eleven, and `CyberCloud.Hosts.Tests` composes both hosts and fails
+  on a difference — a provider in one and not the other either cannot be reached or never converges.
+- **An empty registry is now a start-up failure.** `ProviderRegistry.Build` refuses a provider set with
+  nothing in it, because a registry with no types answers the same `404` a genuinely unknown type
+  gets, and nothing anywhere says which of the two happened.
+
+⚠ **Composition lives in `SiloComposition.BuildAsync` and `GatewayComposition.BuildAsync`, not in
+`Program.cs`.** Top-level statements cannot be called, so wiring in `Program.cs` is wiring nothing can
+assert against — which is exactly how the gap above survived 61 green test suites. Every conformance
+and resource-manager suite builds its own `TestCluster` and registers the manager and a provider
+itself, so a green conformance run is a statement about a harness.
+
 **Why not roles.** Role-partitioned silos ("data providers here, network providers there") sound like
 isolation and deliver a placement problem: a resource grain calls its provider's reconciler, and if
 those are on different silos every reconcile is a network hop. Uniform silos let Orleans place a
@@ -189,6 +218,22 @@ consumer can drop what it has already seen. Anything requiring global order does
 ## Reminders
 
 Redis reminder service, sharded with the hot tier. Reminders are used for exactly four things:
+
+⚠ **This is wired in `OrleansApplication.CreateSilo`, beside the two storage tiers, and it was not
+wired at all until the resource manager was composed.** It reads the hot tier's own connection string —
+"sharded with the hot tier" taken literally — and it is conditional on `CyberCloud:Storage` being
+configured, for the same reason the tiers are: a silo with no configured storage cannot persist a
+grain, so it was never going to drive a reconcile loop, and making Redis a precondition would put a
+container behind every host test. Without it `OperationGrain.RegisterOrUpdateReminder` throws inside
+the first create rather than at start-up, which is why every test fixture in the tree calls
+`UseInMemoryReminderService` and no production host called anything.
+
+**Which process owns the loop, and what stops the other from starting one.** The silo. A reconcile
+tick is a reminder registered by a *grain*, grains activate on silos only, and the gateway is an
+Orleans **client** (§ [03 § Hosts](03-repository-layout.md)) with no reminder service to register
+into — so composing the resource manager there registers `ReconcileDriver` and `DriftScanner` and
+resolves neither. Two *silos* are not a second driver either: Orleans places one activation of a grain
+key cluster-wide, so one operation grain drives one resource however many silos are running.
 
 1. **Reconcile ticks** — every resource grain in a non-terminal state has a reminder that fires on a
    backoff schedule (10 s → 30 s → 2 min → 10 min, capped) until it reaches `Succeeded` or `Failed`.

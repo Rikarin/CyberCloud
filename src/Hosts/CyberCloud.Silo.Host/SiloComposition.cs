@@ -1,5 +1,7 @@
 using CyberCloud.Communication;
+using CyberCloud.Kubernetes;
 using CyberCloud.ResourceManager;
+using CyberCloud.ResourceManager.Contracts;
 using CyberCloud.ServiceDefaults;
 using CyberCloud.Tenancy;
 using Microsoft.AspNetCore.Builder;
@@ -90,8 +92,29 @@ public static class SiloComposition {
     ///         have to re-read the same configuration section to find it.
     ///     </para>
     /// </remarks>
-    static void ConfigureCluster(ISiloBuilder silo) =>
+    static void ConfigureCluster(ISiloBuilder silo) {
         silo.AddCyberCloudCommunication()
             .AddSiloIdentity()
+            // ⚠ BEFORE AddCyberCloudResourceManager, and here the order does matter. The manager's
+            // registrations are TryAdd, so the two cluster seams below have to be in the container
+            // first or the refusing defaults win — NoClusterConnectionFactory, which answers null to
+            // every Connect, and UnavailableClusterConnectionRegistrar, which refuses every attach.
+            .AddCyberCloudKubernetes()
+            .ConfigureServices(services => {
+                    // ── The cluster fabric, docs/plan/09 ────────────────────────────────────────
+                    //
+                    // ⚠ THE ONLY IMPLEMENTATIONS OF THESE TWO OUTSIDE A TEST, AND UNTIL THEY EXISTED
+                    // NO PRODUCTION HOST COULD REACH A CLUSTER AT ALL. Every host registered
+                    // NoClusterConnectionFactory, so a resource type declaring RequiresCluster was
+                    // refused by ReconcileDriver by name — the right refusal, and not a connection.
+                    //
+                    // AddCyberCloudKubernetes above is the other half: it puts ClusterConnectionGrain
+                    // in the silo and registers ClusterConnectionTenantFilter, which is what
+                    // establishes the caller tenant the null-tenant grain checks against.
+                    services.AddSingleton<IClusterConnectionFactory, GrainClusterConnectionFactory>();
+                    services.AddSingleton<IClusterConnectionRegistrar, GrainClusterConnectionRegistrar>();
+                }
+            )
             .AddCyberCloudResourceManager();
+    }
 }

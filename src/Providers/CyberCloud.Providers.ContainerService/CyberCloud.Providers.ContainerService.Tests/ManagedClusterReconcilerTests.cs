@@ -200,8 +200,55 @@ public sealed class ManagedClusterReconcilerTests {
     }
 
     [Fact]
-    public async Task AControlPlaneThatReportsReadyConverges() {
+    public async Task AControlPlaneThatReportsReadyConvergesAndReportsItsConnection() {
         var connection = new RecordingConnection();
+        var clusters = new RecordingClusterSink();
+        using var body = JsonDocument.Parse(ManagedClusters.Body(ClusterId));
+
+        await Reconcile(connection, body.RootElement);
+
+        var address = Address("observed", TenantA, SubscriptionA);
+        var ns = ReconcileDriver.NamespaceFor(address);
+        var target = ManagedClusters.ClusterRef(ns, "observed");
+
+        connection.Objects[RecordingConnection.Key(target)] = WithControlPlaneEndpoint(
+            WithReadyCondition(
+                connection.Objects[RecordingConnection.Key(target)],
+                ready: true,
+                "Cluster is ready"
+            ),
+            "10.0.0.7",
+            6443
+        );
+
+        (await Reconcile(connection, body.RootElement, clusters: clusters))
+            .ShouldBe(ReconcileOutcome.Converged);
+
+        // ⚠ THE HALF THAT DID NOT EXIST. A cluster that converges and is never registered is a
+        // cluster nothing can be placed in — docs/plan/24's M1 exit story is "create a VPC and a
+        // Postgres server IN IT", and step 4 needs a clusterId that resolves.
+        var reported = clusters.Descriptor.ShouldNotBeNull();
+
+        reported.Kind.ShouldBe(ClusterConnectionKind.InHouse);
+        reported.Endpoint.ShouldBe("https://10.0.0.7:6443");
+        reported.CredentialRef.ShouldBe(ManagedClusters.KubeconfigCredentialRef(ns, "observed"));
+
+        // ⚠ NOT SET HERE, ON PURPOSE. ReconcileDriver stamps the cluster id and the owning tenant
+        // from the resource and its operation, so a provider cannot register a cluster under a
+        // tenant that does not own it — and the grain checks that owner on every later call.
+        reported.ClusterId.ShouldBe(Guid.Empty);
+        reported.OwningTenantId.ShouldBe(Guid.Empty);
+    }
+
+    [Fact]
+    public async Task AReadyControlPlaneWithNoEndpointYetIsNotAttached() {
+        // ⚠ FAILURE CLASS (g): ATTACHING A CLUSTER THAT IS NOT READY TO BE ATTACHED. Cluster API
+        // passes through a state where the Ready condition is true and spec.controlPlaneEndpoint has
+        // not been patched on. A connection registered then carries no address, so every later
+        // placement into that cluster fails on a URL nobody wrote — and it fails against the SECOND
+        // resource the tenant creates, with an error about that resource.
+        var connection = new RecordingConnection();
+        var clusters = new RecordingClusterSink();
         using var body = JsonDocument.Parse(ManagedClusters.Body(ClusterId));
 
         await Reconcile(connection, body.RootElement);
@@ -215,7 +262,39 @@ public sealed class ManagedClusterReconcilerTests {
             "Cluster is ready"
         );
 
-        (await Reconcile(connection, body.RootElement)).ShouldBe(ReconcileOutcome.Converged);
+        var outcome = await Reconcile(connection, body.RootElement, clusters: clusters);
+
+        outcome.Kind.ShouldBe(ReconcileOutcomeKind.InProgress);
+        clusters.Descriptor.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task AClusterThatIsNotReadyReportsNoConnection() {
+        // The other side of (g), and the ordinary one: for the six to eight minutes docs/plan/09
+        // budgets there is no API server, and nothing may be registered.
+        var connection = new RecordingConnection();
+        var clusters = new RecordingClusterSink();
+        using var body = JsonDocument.Parse(ManagedClusters.Body(ClusterId));
+
+        await Reconcile(connection, body.RootElement);
+
+        var address = Address("observed", TenantA, SubscriptionA);
+        var target = ManagedClusters.ClusterRef(ReconcileDriver.NamespaceFor(address), "observed");
+
+        connection.Objects[RecordingConnection.Key(target)] = WithControlPlaneEndpoint(
+            WithReadyCondition(
+                connection.Objects[RecordingConnection.Key(target)],
+                ready: false,
+                "Waiting for the first worker to join"
+            ),
+            "10.0.0.7",
+            6443
+        );
+
+        (await Reconcile(connection, body.RootElement, clusters: clusters))
+            .Kind.ShouldBe(ReconcileOutcomeKind.InProgress);
+
+        clusters.Descriptor.ShouldBeNull();
     }
 
     [Fact]
@@ -377,10 +456,13 @@ public sealed class ManagedClusterReconcilerTests {
     static async Task<ReconcileOutcome> Reconcile(
         RecordingConnection connection,
         JsonElement desired,
-        IReconcileLog? log = null
+        IReconcileLog? log = null,
+        IClusterConnectionSink? clusters = null
     ) =>
-        await new ManagedClusterReconciler(new FixedClock())
-            .ReconcileAsync(Context(connection, desired, log), TestContext.Current.CancellationToken);
+        await new ManagedClusterReconciler(new FixedClock()).ReconcileAsync(
+            Context(connection, desired, log, clusters),
+            TestContext.Current.CancellationToken
+        );
 
     static async Task<ReconcileOutcome> Pass(
         ManagedClusterReconciler reconciler,
@@ -405,7 +487,8 @@ public sealed class ManagedClusterReconcilerTests {
     static ReconcileContext Context(
         IKubeClusterConnection? connection,
         JsonElement desired,
-        IReconcileLog? log = null
+        IReconcileLog? log = null,
+        IClusterConnectionSink? clusters = null
     ) {
         var address = Address("observed", TenantA, SubscriptionA);
 
@@ -418,7 +501,13 @@ public sealed class ManagedClusterReconcilerTests {
             connection,
             new UnavailableSecretResolver(),
             log ?? new NullLog()
-        );
+        ) {
+            // ⚠ The default is RefusingClusterConnectionSink, which throws. That is what a hand-built
+            // context deserves — a reconciler that produced a cluster and had its report dropped is
+            // the exact failure this seam closes — so a test that reaches the Ready branch has to
+            // supply one, and the ones that do not are asserting they never reach it.
+            ClusterConnections = clusters ?? new RecordingClusterSink()
+        };
     }
 
     /// <summary>An address in a named tenant and its own subscription.</summary>
@@ -433,6 +522,21 @@ public sealed class ManagedClusterReconcilerTests {
         );
 
     static JsonObject Spec(string objectJson) => JsonNode.Parse(objectJson)!["spec"]!.AsObject();
+
+    /// <summary>
+    ///     Puts a <c>spec.controlPlaneEndpoint</c> on an object, the way the Kamaji control-plane
+    ///     provider patches one on.
+    /// </summary>
+    static string WithControlPlaneEndpoint(string objectJson, string host, int port) {
+        var node = JsonNode.Parse(objectJson)!.AsObject();
+
+        node["spec"]!.AsObject()["controlPlaneEndpoint"] = new JsonObject {
+            ["host"] = host,
+            ["port"] = port
+        };
+
+        return node.ToJsonString();
+    }
 
     static string WithReadyCondition(string objectJson, bool ready, string message) {
         var node = JsonNode.Parse(objectJson)!.AsObject();
@@ -599,6 +703,15 @@ sealed class RecordingConnection : IKubeClusterConnection {
     ///     the status on the apply at the top of each pass — and this is the only type in the tree
     ///     whose <c>Converged</c> reads one, so no earlier provider's copy of this harness needed it.
     /// </remarks>
+    /// <remarks>
+    ///     ⚠ <b>AND <c>spec.controlPlaneEndpoint</c>, WHICH IS THE SECOND WAY THIS FAKE WAS WRONG.</b>
+    ///     Server-side apply leaves a field alone when another field manager owns it, and that field
+    ///     is owned by the Kamaji control-plane provider rather than by this reconciler — see
+    ///     <c>ManagedClusters.ExternallyManagedAnnotation</c>, which is the annotation that makes
+    ///     exactly one controller own it. A fake that dropped it on every apply would erase the
+    ///     cluster's address at the top of each pass, which reads as "Cluster API never assigned one"
+    ///     and is a state that would then last forever.
+    /// </remarks>
     /// <param name="key">The stored object's key.</param>
     /// <param name="body">What the apply carried.</param>
     string WithExistingStatus(string key, string body) {
@@ -606,14 +719,20 @@ sealed class RecordingConnection : IKubeClusterConnection {
             return body;
         }
 
-        var previous = System.Text.Json.Nodes.JsonNode.Parse(existing) as JsonObject;
-
-        if (previous?["status"] is not { } status) {
+        if (System.Text.Json.Nodes.JsonNode.Parse(existing) is not JsonObject previous) {
             return body;
         }
 
         var applied = System.Text.Json.Nodes.JsonNode.Parse(body)!.AsObject();
-        applied["status"] = status.DeepClone();
+
+        if (previous["status"] is { } status) {
+            applied["status"] = status.DeepClone();
+        }
+
+        if (previous["spec"]?["controlPlaneEndpoint"] is { } endpoint
+            && applied["spec"] is JsonObject spec) {
+            spec["controlPlaneEndpoint"] = endpoint.DeepClone();
+        }
 
         return applied.ToJsonString();
     }
@@ -647,4 +766,18 @@ sealed class CollectingLog : IReconcileLog {
     public void Report(string phase, string detail) => Entries.Add((phase, detail));
 
     public void Report(string phase, string detail, int percent) => Entries.Add((phase, detail));
+}
+
+/// <summary>The <see cref="IClusterConnectionSink" /> these tests read back.</summary>
+/// <remarks>
+///     ⚠ It records rather than attaching, which is what a reconciler is allowed to cause.
+///     <c>ReconcileDriver</c> is what turns a record into an <c>AttachAsync</c>, and only after the
+///     pass converges — <c>CyberCloud.ResourceManager.Tests.ClusterAttachTests</c> is where that half is asserted.
+/// </remarks>
+sealed class RecordingClusterSink : IClusterConnectionSink {
+    /// <summary>What the pass reported, or <see langword="null" />.</summary>
+    public ClusterConnectionDescriptor? Descriptor { get; private set; }
+
+    /// <inheritdoc />
+    public void Produced(ClusterConnectionDescriptor descriptor) => Descriptor = descriptor;
 }

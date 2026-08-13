@@ -1,3 +1,4 @@
+using CyberCloud.Kubernetes.Contracts;
 using CyberCloud.Core.Contracts;
 using CyberCloud.ResourceManager.Actions;
 using CyberCloud.Core.Time;
@@ -552,6 +553,7 @@ public sealed class ResourceManagerCluster : IAsyncLifetime {
         RecordingRelationWriter.Reset();
         RecordingChangeSink.Reset();
         ScriptedInterestAuthorizer.Reset();
+        RecordingClusterRegistrar.Reset();
         TestClock.Instance.Reset();
     }
 
@@ -658,6 +660,12 @@ public sealed class ResourceManagerCluster : IAsyncLifetime {
                     // per-connect, and re-checked on relation changes.
                     services.AddSingleton<IInterestAuthorizer, ScriptedInterestAuthorizer>();
 
+                    // ⚠ The cluster-attach seam. Recording rather than grain-backed, because there
+                    // is no ClusterConnectionGrain in this harness — CyberCloud.Kubernetes is a
+                    // module this suite does not compose. What is under test is the DRIVER's rule:
+                    // a report becomes an attach only after the pass converges.
+                    services.AddSingleton<IClusterConnectionRegistrar, RecordingClusterRegistrar>();
+
                     // A cap of two, so the interest limit is reachable in a test rather than after
                     // 200 subscribes. docs/plan/10 § Rate limiting.
                     services.AddSingleton(new ConnectionLimits { StreamsPerConnection = 2 });
@@ -692,4 +700,39 @@ public sealed class ResourceManagerCluster : IAsyncLifetime {
 public sealed class ResourceManagerSuite : ICollectionFixture<ResourceManagerCluster> {
     /// <summary>The collection name.</summary>
     public const string Name = "resource-manager-cluster";
+}
+
+/// <summary>
+///     An <see cref="IClusterConnectionRegistrar" /> a test reads back, and can make fail.
+/// </summary>
+/// <remarks>
+///     ⚠ <b>Static state, like the rest of this harness's doubles</b>, because Orleans constructs it
+///     inside the silo's container and a test has no other handle on the instance. Reset per test
+///     class through <see cref="Reset" />.
+/// </remarks>
+public sealed class RecordingClusterRegistrar : IClusterConnectionRegistrar {
+    /// <summary>Every descriptor attached, in order.</summary>
+    public static ConcurrentBag<ClusterConnectionDescriptor> Attached { get; } = [];
+
+    /// <summary>When set, every attach fails with this message.</summary>
+    public static string? FailWith { get; set; }
+
+    /// <summary>Forgets everything.</summary>
+    public static void Reset() {
+        Attached.Clear();
+        FailWith = null;
+    }
+
+    /// <inheritdoc />
+    public Task<Result> AttachAsync(
+        ClusterConnectionDescriptor descriptor,
+        CancellationToken cancellationToken = default
+    ) {
+        if (FailWith is { } failure) {
+            return Task.FromResult(Result.Failure(ErrorCode.InternalError, failure));
+        }
+
+        Attached.Add(descriptor);
+        return Task.FromResult(Result.Success);
+    }
 }

@@ -106,6 +106,7 @@ public static class ResourceManagerSiloBuilderExtensions {
         services.TryAddSingleton<ISecretResolver, UnavailableSecretResolver>();
         services.TryAddSingleton<ISecretWriter, UnavailableSecretWriter>();
         services.TryAddSingleton<IClusterConnectionFactory, NoClusterConnectionFactory>();
+        services.TryAddSingleton<IClusterConnectionRegistrar, UnavailableClusterConnectionRegistrar>();
         services.TryAddSingleton<IClusterObjectInventory, UnavailableClusterObjectInventory>();
         services.TryAddSingleton<IResourceAuthorizer, ReBacResourceAuthorizer>();
 

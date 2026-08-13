@@ -172,7 +172,54 @@ public sealed class ManagedClusterReconciler(IClock clock) : IResourceReconciler
             return ReconcileOutcome.FromFailure(statusError);
         }
 
-        var readiness = ManagedClusters.Readiness(clusterObject.GetValueOrThrow().Json);
+        var clusterJson = clusterObject.GetValueOrThrow().Json;
+        var readiness = ManagedClusters.Readiness(clusterJson);
+
+        // ── Making the product reachable — the seam is IClusterConnectionRegistrar ────────────────
+        //
+        // ⚠ REPORTED, NOT ATTACHED, AND THIS RECONCILER MAY NOT DO MORE THAN REPORT. A provider
+        // references CyberCloud.Kubernetes.Contracts only (docs/plan/03 § The .Contracts split), so
+        // IClusterConnectionGrain.AttachAsync is not reachable from here — and module-layering.txt
+        // records that refusal as a decision rather than an obstacle: "attaching a connection is the
+        // resource manager's job rather than a reconciler's". ReconcileDriver performs the write,
+        // after this pass, and only if it returns Converged.
+        //
+        // ⚠ ONLY WHEN Cluster API SAYS Ready, WHICH IS NARROWER THAN WHEN THIS METHOD CONVERGES. The
+        // NotReported branch below also converges — the harnesses have no Cluster API controller
+        // behind the CRDs, and conformance.yaml § owed, `converged-is-not-ready` is that hole — but a
+        // connection registered against a control plane no controller has confirmed is a connection
+        // every later placement fails against, for the six to eight minutes docs/plan/09 § Kubernetes
+        // in Kubernetes budgets before an API server exists. So the two conditions differ on purpose:
+        // converging early is a hole this type already owns, and attaching early would hand the
+        // consequences to the NEXT resource a tenant creates.
+        //
+        // ⚠ AND ONLY WITH AN ENDPOINT. A descriptor with no address is a connection whose first call
+        // fails on a URL nobody wrote, so a Ready cluster with no controlPlaneEndpoint is reported as
+        // in progress rather than registered — it is a state Cluster API passes through, and the next
+        // pass finds the field.
+        if (readiness.Kind == ClusterReadinessKind.Ready) {
+            var endpoint = ManagedClusters.ApiServerEndpoint(clusterJson);
+
+            if (string.IsNullOrEmpty(endpoint)) {
+                return ReconcileOutcome.InProgress(
+                    $"'{name}' reports its control plane ready and has no spec.controlPlaneEndpoint "
+                    + "yet, so there is no address to register a connection against",
+                    TimeSpan.FromSeconds(15)
+                );
+            }
+
+            // ⚠ ClusterId and OwningTenantId are deliberately left unset: ReconcileDriver stamps
+            // both from the resource and its operation, so a provider cannot register a cluster
+            // under a tenant that does not own it.
+            context.ClusterConnections.Produced(
+                new() {
+                    Kind = ClusterConnectionKind.InHouse,
+                    CredentialRef = ManagedClusters.KubeconfigCredentialRef(context.Namespace, name),
+                    Endpoint = endpoint,
+                    DisplayName = name
+                }
+            );
+        }
 
         if (readiness.Kind == ClusterReadinessKind.NotReady) {
             // ⚠ THE STEP LIST docs/plan/09 ASKS FOR, AND THE WORDS ARE UPSTREAM'S. That document's

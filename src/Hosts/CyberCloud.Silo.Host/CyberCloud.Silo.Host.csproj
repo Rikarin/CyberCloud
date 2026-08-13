@@ -82,6 +82,18 @@
           compiler and a grain the runtime can place are two different claims.
         -->
         <ProjectReference Include="../../CyberCloud.ResourceManager/CyberCloud.ResourceManager.csproj"/>
+        <!--
+          docs/plan/09's cluster fabric. AddCyberCloudKubernetes() in SiloComposition is what puts
+          ClusterConnectionGrain in the silo and registers ClusterConnectionTenantFilter — the filter
+          that establishes the caller tenant a null-tenant grain has nothing else to check against.
+
+          ⚠ A HOST MAY TAKE THIS EDGE AND NOTHING ELSE MAY TAKE IT BACKWARDS. module-layering.txt
+          carries CyberCloud.ResourceManager -> CyberCloud.Kubernetes, so the reverse would be a cycle
+          and rule 7 refuses one; that is why GrainClusterConnectionRegistrar lives in the resource
+          manager rather than beside ClusterConnectionHandle. Hosts are out of rule 7's scope, which
+          is what makes composing both here legal and correct.
+        -->
+        <ProjectReference Include="../../CyberCloud.Kubernetes/CyberCloud.Kubernetes.csproj"/>
     </ItemGroup>
 
     <!--

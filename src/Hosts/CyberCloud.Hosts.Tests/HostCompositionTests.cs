@@ -1,5 +1,7 @@
 using CyberCloud.Gateway.Host;
+using CyberCloud.Kubernetes.Connections;
 using CyberCloud.ResourceManager;
+using CyberCloud.ResourceManager.Contracts;
 using CyberCloud.ResourceManager.Contracts.Registry;
 using CyberCloud.ResourceManager.Grains;
 using CyberCloud.ResourceManager.Reconcile;
@@ -249,6 +251,59 @@ public sealed class HostCompositionTests {
         await using var silo = await BuildSiloAsync();
 
         silo.Services.GetService<ReconcileDriver>().ShouldNotBeNull();
+    }
+
+    // ── The cluster fabric: a created cluster has to be connectable ───────────────────────────────
+
+    /// <summary>
+    ///     ⚠ The silo wires the real cluster seams rather than the refusing defaults.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         <b>Both defaults are correct and neither is a connection.</b>
+    ///         <c>NoClusterConnectionFactory</c> answers <see langword="null" /> to every
+    ///         <c>Connect</c>, so <c>ReconcileDriver</c> refuses any type declaring
+    ///         <c>RequiresCluster</c> by name; <c>UnavailableClusterConnectionRegistrar</c> refuses
+    ///         every attach, so a managed cluster converges and is never registered. Every host in the
+    ///         tree held both, and the only implementations that were not refusals were test fakes.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ It checks the concrete types rather than that something resolves, because the
+    ///         refusing defaults resolve perfectly well — that is what made their presence invisible.
+    ///     </para>
+    /// </remarks>
+    [Fact]
+    public async Task TheSiloWiresTheClusterFabricRatherThanTheRefusingDefaults() {
+        await using var silo = await BuildSiloAsync();
+
+        silo.Services
+            .GetRequiredService<IClusterConnectionFactory>()
+            .ShouldBeOfType<GrainClusterConnectionFactory>();
+
+        silo.Services
+            .GetRequiredService<IClusterConnectionRegistrar>()
+            .ShouldBeOfType<GrainClusterConnectionRegistrar>();
+    }
+
+    /// <summary>
+    ///     ⚠ The connection grain is in the silo's manifest, so there is something for the registrar
+    ///     to write to.
+    /// </summary>
+    /// <remarks>
+    ///     A registrar that takes a reference to a grain no silo can activate is the same defect as
+    ///     the one it replaced, one layer down: the attach would fail at runtime with a message about
+    ///     a grain type rather than about wiring. <c>AddCyberCloudKubernetes</c> is what composes it,
+    ///     and the <c>ProjectReference</c> is what lets Orleans see it.
+    /// </remarks>
+    [Fact]
+    public async Task TheClusterConnectionGrainIsInTheSilosManifest() {
+        await using var silo = await BuildSiloAsync();
+
+        silo.Services
+            .GetRequiredService<IOptions<GrainTypeOptions>>()
+            .Value
+            .Classes
+            .ShouldContain(typeof(ClusterConnectionGrain));
     }
 
     // ── Failure class (d): two hosts driving the same reminder ────────────────────────────────────

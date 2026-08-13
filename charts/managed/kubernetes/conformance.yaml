@@ -145,19 +145,27 @@ owed:
       pins the behaviour against the counter-example so it cannot change unnoticed.
   - id: the-cluster-this-creates-is-not-connectable
     says: >
-      ⚠ THIS IS THE M1 EXIT STORY'S FOURTH STEP AND IT IS BLOCKED BY A MISSING WRITE. docs/plan/24's
+      ⚠ HALF CLOSED — (a) IS BUILT, (b) IS STILL OWED, AND WHAT IS LEFT IS THE CREDENTIAL. docs/plan/24's
       story is "create an in-house Kubernetes cluster (~8 min, with visible steps) → create a VPC and a
       Postgres server IN IT". A Postgres server is placed by clusterId, a clusterId resolves through
       IClusterConnectionFactory, and a connection exists once somebody calls
-      IClusterConnectionGrain.AttachAsync — which, grepped across the whole tree, is called by tests
-      and by nothing else. The seam is otherwise complete: ClusterConnectionKind.InHouse exists,
-      IKubeApiClientFactory has a case for it, and it resolves a kubeconfig through a CredentialRef.
-      What is missing is (a) something that attaches a descriptor when a managed cluster converges, and
-      (b) a resolver that reads Cluster API's `{cluster}-kubeconfig` Secret out of the MANAGEMENT
-      cluster rather than out of a Vault that does not exist. ⚠ Neither belongs in a reconciler: a
-      reconciler may not reference CyberCloud.Kubernetes' implementation assembly (docs/plan/03 § The
-      .Contracts split), and attaching a connection is a resource-manager concern. module-layering.txt
-      records the refusal and the alternative in the same place.
+      IClusterConnectionGrain.AttachAsync — which, until the seam below, was called by tests and by
+      nothing else. (a) IS DONE: this reconciler reports the cluster it produced through
+      ReconcileContext.ClusterConnections, ReconcileDriver attaches it through
+      IClusterConnectionRegistrar after the pass and only when it CONVERGED, and the driver stamps the
+      cluster id and the owning tenant itself so a provider cannot register a cluster under a tenant
+      that does not own it. ⚠ It reports only when Cluster API's own Ready condition is true AND
+      spec.controlPlaneEndpoint is set, which is narrower than when this type converges — see
+      `converged-is-not-ready` — because a connection registered before the API server serves requests
+      is one every later placement fails against, and it fails against the NEXT resource the tenant
+      creates. (b) IS NOT DONE: the descriptor's CredentialRef is written as
+      `kube-secret://{namespace}/{cluster}-kubeconfig#value` and NOTHING RESOLVES THAT SCHEME. A
+      resolver reading Cluster API's Secret out of the MANAGEMENT cluster is the missing half, so the
+      first call through an attached connection fails on the credential — with a message naming the
+      scheme, rather than on "no connection" with nothing to act on. ⚠ Neither half belongs in a
+      reconciler: a reconciler may not reference CyberCloud.Kubernetes' implementation assembly
+      (docs/plan/03 § The .Contracts split), and attaching a connection is a resource-manager concern.
+      module-layering.txt records the refusal and what was built instead in the same place.
   - id: listcredentials-has-no-handler
     says: >
       IProviderBuilder.Action takes a name, a kind, a permission, a request shape and a response shape,
