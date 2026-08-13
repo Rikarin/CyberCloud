@@ -49,6 +49,23 @@ are worth keeping, because the sentence above was true as a design and false as 
   nothing in it, because a registry with no types answers the same `404` a genuinely unknown type
   gets, and nothing anywhere says which of the two happened.
 
+⚠ **Loading eleven provider modules costs nothing measurable at start-up, and it does cost one line.**
+Measured on the real host, process launch to `/alive` answering `200`, no containers: **1.6–2.1 s with
+one provider module and 1.6–2.1 s with eleven** — the spread is JIT and disk warm-up, and there is no
+signal from the module count at this size. That is worth recording because the catalogue in
+§ [03 § Providers](03-repository-layout.md) is planned to roughly triple, and the number to re-measure
+against is this one. What the modules *do* cost is `builder.Services.AddAuthorization()` in
+`SiloComposition`: `AbpDddApplicationModule`'s graph brings enough of ASP.NET Core's authorization
+surface that `WebApplication` inserts `UseAuthorization` itself, and that middleware then throws for a
+marker only `AddAuthorization()` adds. A silo that authorizes nobody needs the line anyway.
+
+⚠ **`Build()` is not `StartAsync()`, and the gap is where that defect lived.** The failure above is
+thrown from `ConfigureApplication`, inside `StartAsync` — so a suite that composed both hosts and
+asserted against their containers was green against a silo that died on every launch. The only suite
+that caught it was `CyberCloud.AppHost.Tests`, which starts the real silo behind Aspire, and it caught
+it as nine fixtures timing out after ten minutes, naming nothing. `HostCompositionTests` now starts
+both hosts as well: the same defect surfaces there in under a second, as the exception itself.
+
 ⚠ **Composition lives in `SiloComposition.BuildAsync` and `GatewayComposition.BuildAsync`, not in
 `Program.cs`.** Top-level statements cannot be called, so wiring in `Program.cs` is wiring nothing can
 assert against — which is exactly how the gap above survived 61 green test suites. Every conformance

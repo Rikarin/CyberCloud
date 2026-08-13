@@ -45,6 +45,33 @@ public static class SiloComposition {
             configureStorage: ConfigureStorage
         );
 
+        // ── ⚠ REQUIRED THE MOMENT A PROVIDER MODULE JOINS THE GRAPH, AND ONLY THEN ────────────────
+        //
+        // A silo serves nothing but health endpoints and authorizes nobody, so this line reads like
+        // it does not belong. It is what keeps the process alive. Each provider's *.Application
+        // module depends on AbpDddApplicationModule, whose graph brings in Volo.Abp.Authorization;
+        // that registers enough of ASP.NET Core's authorization surface for WebApplication to decide
+        // the app wants authorization and to insert UseAuthorization into the pipeline for itself.
+        // UseAuthorization then calls VerifyServicesRegistered, which looks for the marker only
+        // AddAuthorization() adds, does not find it, and throws
+        //
+        //     InvalidOperationException: Unable to find the required services. Please add all the
+        //     required services by calling 'IServiceCollection.AddAuthorization' …
+        //
+        // out of app.RunAsync() — at START-UP, on a host that composes and builds perfectly.
+        //
+        // ⚠ THIS IS WHY Build() IS NOT ENOUGH TO TEST A HOST, AND IT COST A WHOLE DEBUGGING SESSION
+        // TO LEARN. CyberCloud.Hosts.Tests composes both hosts and asserts against the container they
+        // produced; every one of those tests stayed green while this host could not start at all,
+        // because the failure is in ConfigureApplication, which runs on StartAsync and not on Build.
+        // CyberCloud.AppHost.Tests was the only suite in the repository that starts the real silo,
+        // and it was the only one that failed. HostCompositionTests now starts both hosts too.
+        //
+        // CyberCloud.Identity.Host reached the same line by the same route — see
+        // IdentityHostAuthentication, where it sits under a real authentication scheme rather than
+        // under an empty one.
+        builder.Services.AddAuthorization();
+
         // ⚠ Required, and not optional. CreateSilo calls builder.Host.UseAutofac(), and ABP's
         // service-provider factory resolves IModuleContainer during Build(). Without a module the host
         // dies with "Could not find singleton service: Volo.Abp.Modularity.IModuleContainer" — a

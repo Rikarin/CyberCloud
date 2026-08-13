@@ -253,6 +253,71 @@ public sealed class HostCompositionTests {
         silo.Services.GetService<ReconcileDriver>().ShouldNotBeNull();
     }
 
+    // ── Composing is not starting, and the difference cost a debugging session ────────────────────
+
+    /// <summary>
+    ///     ⚠ Both hosts <b>start</b>, not merely compose.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         <b>Every other test in this file passed while <c>CyberCloud.Silo.Host</c> could not
+    ///         start at all.</b> Loading the eleven provider modules brings
+    ///         <c>AbpDddApplicationModule</c>'s graph in, and with it enough of ASP.NET Core's
+    ///         authorization surface that <c>WebApplication</c> inserts <c>UseAuthorization</c> into
+    ///         the pipeline by itself. That middleware then looks for the marker only
+    ///         <c>AddAuthorization()</c> adds and throws — from <c>ConfigureApplication</c>, which runs
+    ///         inside <c>StartAsync</c> and <b>not</b> inside <c>Build</c>. So a suite that stopped at
+    ///         <c>Build()</c> was green against a silo that died on every launch.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b><c>CyberCloud.AppHost.Tests</c> was the only suite in the repository that caught
+    ///         it</b>, because it was the only one that starts the real silo — and it caught it as nine
+    ///         fixtures timing out after ten minutes, which names nothing. This test is the cheap
+    ///         version: no containers, no Aspire, and the failure is the exception itself.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The gateway is started against the silo, in that order, because it is an Orleans
+    ///         client.</b> Started alone it never reaches its web pipeline at all — the cluster client's
+    ///         hosted service exhausts its connection retries and the process dies with a
+    ///         <c>TaskCanceledException</c> from <c>OutsideRuntimeClient</c>, which would make this test
+    ///         fail for a reason that has nothing to do with what it is asserting.
+    ///     </para>
+    /// </remarks>
+    [Fact]
+    public async Task BothHostsStartAndNotOnlyCompose() {
+        var siloPort = FreePort();
+        var gatewayPort = FreePort();
+
+        await using var silo = await SiloComposition.BuildAsync(
+            [
+                "--environment", "Development",
+                "--urls", "http://127.0.0.1:0",
+                $"--{CyberCloudClusterOptions.SectionName}:LocalhostSiloPort={siloPort}",
+                $"--{CyberCloudClusterOptions.SectionName}:LocalhostGatewayPort={gatewayPort}"
+            ]
+        );
+
+        await silo.StartAsync(TestContext.Current.CancellationToken);
+
+        await using var gateway = await GatewayComposition.BuildAsync(
+            [
+                "--environment", "Development",
+                "--urls", "http://127.0.0.1:0",
+                $"--{CyberCloudClusterOptions.SectionName}:LocalhostGatewayPort={gatewayPort}"
+            ]
+        );
+
+        await gateway.StartAsync(TestContext.Current.CancellationToken);
+
+        // Resolving the registry from a STARTED host is the second half: the factory runs at first
+        // resolve, so a provider whose Describe throws would surface here rather than at composition.
+        gateway.Services.GetRequiredService<IProviderRegistry>().Types.ShouldNotBeEmpty();
+        silo.Services.GetRequiredService<IProviderRegistry>().Types.ShouldNotBeEmpty();
+
+        await gateway.StopAsync(TestContext.Current.CancellationToken);
+        await silo.StopAsync(TestContext.Current.CancellationToken);
+    }
+
     // ── The cluster fabric: a created cluster has to be connectable ───────────────────────────────
 
     /// <summary>
