@@ -575,6 +575,35 @@ public sealed class ResourceManagerCluster : IAsyncLifetime {
         await CreateSubscriptionAsync(Tenant, IsolatedSubscription);
         await CreateSubscriptionAsync(OtherTenant, Subscription);
 
+        // ⚠ AND EVERY METER IS PUT OUT OF THE WAY, BECAUSE THE DEFAULT BUDGET WAS A LANDMINE.
+        //
+        // A converged create commits its lease for the rest of the run, so the suite's committed total
+        // only ever climbs and the default Vcpu limit of 100 was a scarce global that every class
+        // shared. IsolatedSubscription was added as a place for a class to go, and it did not hold:
+        // three separate classes stepped on the budget in one night — SoftDeletePathTests,
+        // ActionDispatchTests and ClusterAttachTests, each written on its own branch, each green
+        // alone. Every time, the failure landed in OperationTests and ParentEdgeStepTests, which spend
+        // nothing, and named quota rather than the class that spent it.
+        //
+        // ⚠ The design was backwards. Every class depended implicitly on a scarce resource, and the
+        // one test that actually wants scarcity got it by accident. Lifting the limits inverts that:
+        // quota stops being ambient, and a test that wants a refusal asks for one.
+        //
+        // Nothing that asserts a refusal is weakened by this, which was checked rather than assumed:
+        //   • ExceedingAMeterIsRefusedAtStepSixAndNamesTheMeter reads usage.Limit and requests
+        //     Limit + 1, so it refuses at any limit; `/properties/size` carries no schema maximum, so
+        //     the oversized body still reaches step 6 rather than failing validation at step 2.
+        //   • ConnectionGrainTests' QuotaExceeded is ConnectionLimits.StreamsPerConnection, which is
+        //     not a subscription meter at all.
+        //   • InheritedLockTests asserts an error is NOT QuotaExceeded, which a lifted limit can only
+        //     make more robust.
+        //
+        // ProviderTestCluster.LiftQuotaAsync does the same for the conformance harness and its remarks
+        // carry the same argument, arrived at independently.
+        await LiftQuotaAsync(Tenant, Subscription);
+        await LiftQuotaAsync(Tenant, IsolatedSubscription);
+        await LiftQuotaAsync(OtherTenant, Subscription);
+
         Manager = new ResourceManagerService(
             Registry,
             new SwitchableAuthorizer(),
@@ -626,6 +655,29 @@ public sealed class ResourceManagerCluster : IAsyncLifetime {
             .CreateAsync(tenant, "eu-west-1");
 
         made.IsSuccess.ShouldBeTrue(made.Error?.Message);
+    }
+
+    /// <summary>Puts every quota meter out of the way for one subscription.</summary>
+    /// <param name="tenant">The tenant.</param>
+    /// <param name="subscription">The subscription.</param>
+    /// <remarks>
+    ///     ⚠ <b>Every declared meter, rather than the ones today's tests happen to draw.</b> Lifting
+    ///     only <see cref="QuotaMeter.Vcpu" /> would put the budget back the day a class declared
+    ///     another, and the failure would name quota rather than the class — which is the whole defect
+    ///     this closes. <c>ProviderTestCluster.LiftQuotaAsync</c> reached the same rule for the
+    ///     conformance harness.
+    /// </remarks>
+    async Task LiftQuotaAsync(Guid tenant, Guid subscription) {
+        var quota = For(tenant).GetGrain<IQuotaGrain>(GrainKeys.Subscription(subscription));
+
+        foreach (var meter in Enum.GetValues<QuotaMeter>()) {
+            if (meter == QuotaMeter.Unknown) {
+                continue;
+            }
+
+            var set = await quota.SetLimitAsync(meter, 1_000_000m);
+            set.IsSuccess.ShouldBeTrue(set.Error?.Message);
+        }
     }
 
     /// <inheritdoc />
