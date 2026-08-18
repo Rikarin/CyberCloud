@@ -1,9 +1,13 @@
 using CyberCloud.Conformance;
 using CyberCloud.Conformance.Harness;
 using CyberCloud.Core.Resources;
+using CyberCloud.Kubernetes.Contracts;
 using CyberCloud.Providers.ContainerService.Contracts;
 using Shouldly;
 using System.Collections.Immutable;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
@@ -68,11 +72,107 @@ public sealed class ManagedClusterCase : IProviderCaseSource {
                 ManagedClusters.ControlPlaneRef(ns, id.Name),
                 ManagedClusters.ClusterRef(ns, id.Name)
             ],
+            // ⚠ TWO OBJECTS, AND NEITHER IS THIS PROVIDER'S TO WRITE. Cluster API creates the
+            // kubeconfig Secret when the control plane comes up, and the Kamaji control-plane provider
+            // PATCHES `spec.controlPlaneEndpoint` onto the Cluster it does not own — see
+            // ManagedClusters.ExternallyManagedAnnotation for why exactly one controller owns that
+            // field. `listCredentials` reads one of each, which is why both are here.
+            //
+            // ⚠ The Cluster placed here carries the endpoint and NOT the rest of the applied shape,
+            // and that narrowness is safe for a stated reason rather than by luck: this hook runs only
+            // inside the action assertion, after every test that judges the object against the desired
+            // body has finished with it. A fixture that tried to reproduce the whole applied object
+            // would be asserting the reconciler's output from the test's side, which is what
+            // ObjectMatchesDesired is for.
+            OperatorWritten = (id, ns) => [
+                (KubeSecret.Ref(ns, ManagedClusters.KubeconfigSecretName(id.Name)),
+                    OperatorSecret.Json(
+                        KubeSecret.Ref(ns, ManagedClusters.KubeconfigSecretName(id.Name)),
+                        [(ManagedClusters.KubeconfigKey, Kubeconfig(ns, id.Name))]
+                    )),
+                (ManagedClusters.ClusterRef(ns, id.Name), EndpointedCluster(ns, id.Name))
+            ],
             ObjectMatchesDesired = (objectJson, desiredJson) => {
                 using var desired = JsonDocument.Parse(desiredJson);
                 return ManagedClusters.Matches(objectJson, desired.RootElement);
             }
         };
+
+    /// <summary>The API server host the fixture's control plane reports.</summary>
+    const string EndpointHost = "conformance-control-plane";
+
+    /// <summary>Its port.</summary>
+    const int EndpointPort = 6443;
+
+    /// <summary>The Cluster as the control-plane provider leaves it, endpoint patched on.</summary>
+    /// <param name="ns">The namespace.</param>
+    /// <param name="name">The resource's own name.</param>
+    static string EndpointedCluster(string ns, string name) =>
+        new JsonObject {
+            ["apiVersion"] = "cluster.x-k8s.io/v1beta1",
+            ["kind"] = "Cluster",
+            ["metadata"] = new JsonObject { ["name"] = name, ["namespace"] = ns },
+            ["spec"] = new JsonObject {
+                ["controlPlaneEndpoint"] = new JsonObject {
+                    ["host"] = EndpointHost,
+                    ["port"] = EndpointPort
+                }
+            }
+        }.ToJsonString();
+
+    /// <summary>
+    ///     A kubeconfig shaped like the one Cluster API writes, with a real client certificate in it.
+    /// </summary>
+    /// <param name="ns">The namespace.</param>
+    /// <param name="name">The resource's own name.</param>
+    /// <remarks>
+    ///     ⚠ <b>A GENUINE CERTIFICATE, GENERATED HERE, AND THAT IS THE POINT OF THE FIXTURE RATHER
+    ///     THAN CEREMONY.</b> <c>ManagedClusters.CredentialExpiry</c> answers <c>/expiresAt</c> by
+    ///     opening the certificate and reading its <c>notAfter</c>; a fixture with a placeholder string
+    ///     where the certificate goes would exercise the line scan and never the parse, and the parse
+    ///     is the half that decides whether a caller gets a date or a refusal.
+    /// </remarks>
+    static string Kubeconfig(string ns, string name) {
+        using var key = RSA.Create(2048);
+
+        var request = new CertificateRequest(
+            "CN=kubernetes-admin, O=system:masters",
+            key,
+            HashAlgorithmName.SHA256,
+            RSASignaturePadding.Pkcs1
+        );
+
+        using var certificate = request.CreateSelfSigned(
+            DateTimeOffset.UtcNow.AddMinutes(-5),
+            DateTimeOffset.UtcNow.AddHours(10)
+        );
+
+        var pem = Convert.ToBase64String(
+            Encoding.UTF8.GetBytes(certificate.ExportCertificatePem())
+        );
+
+        // ⚠ Written as YAML text rather than through a serializer, because that is what the handler
+        // meets: there is no YAML parser in this tree and CredentialExpiry scans for one line.
+        return $"""
+               apiVersion: v1
+               kind: Config
+               clusters:
+               - name: {name}
+                 cluster:
+                   server: https://{EndpointHost}:{EndpointPort}
+               contexts:
+               - name: {name}-admin@{name}
+                 context:
+                   cluster: {name}
+                   namespace: {ns}
+                   user: {name}-admin
+               current-context: {name}-admin@{name}
+               users:
+               - name: {name}-admin
+                 user:
+                   client-certificate-data: {pem}
+               """;
+    }
 
     /// <summary>A valid body with the required pod CIDR removed.</summary>
     /// <param name="body">A valid body.</param>

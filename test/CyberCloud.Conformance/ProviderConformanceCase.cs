@@ -107,6 +107,39 @@ public sealed record ProviderConformanceCase {
     /// <remarks>The parameters are the object's JSON and the desired body's JSON text.</remarks>
     public required Func<string, string, bool> ObjectMatchesDesired { get; init; }
 
+    /// <summary>
+    ///     Objects an <b>operator</b> writes that this platform never applies, and their JSON.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         <b>Every managed service whose credential is generated rather than minted needs this,
+    ///         and nothing in the harness could express it.</b> A <c>listKeys</c> on
+    ///         <c>CyberCloud.DBforPostgreSQL/servers</c> reads <c>{cluster}-app</c> — a Secret
+    ///         CloudNativePG creates while bringing the cluster up. The reconciler does not apply it,
+    ///         so <see cref="Objects" /> must not name it (that member is what the suite asserts a
+    ///         converged resource <i>put</i> there, and a reconciler is judged against it). But the
+    ///         fake cluster is empty except for what was applied, so without this the action reads
+    ///         nothing and the handler is judged on a world its real counterpart never sees.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Placed behind the reconciler's back on purpose.</b> These arrive by the same
+    ///         route <c>FakeKubeCluster.MutateBehindTheirBack</c> models — something other than this
+    ///         platform wrote them — which is exactly what an operator is. A provider that placed one
+    ///         through the apply path would be asserting its reconciler creates an object it does
+    ///         not.
+    ///     </para>
+    ///     <para>
+    ///         The parameters are the resource's id (with its GUID resolved) and the namespace
+    ///         <c>ReconcileDriver.NamespaceFor</c> derived — the same two <see cref="Objects" />
+    ///         takes. Empty by default: most types have no such object, and a provider that needs one
+    ///         is saying something specific about its engine.
+    ///     </para>
+    /// </remarks>
+    public Func<ResourceId, string, ImmutableArray<(ObjectRef Target, string Json)>> OperatorWritten {
+        get;
+        init;
+    } = static (_, _) => [];
+
     // ── There is deliberately NO RequiredCrds member, and the reason is worth keeping ─────────────
     //
     // A bare k3s serves no REST path for a custom resource, so the cluster-backed half of the suite
