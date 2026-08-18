@@ -1086,6 +1086,458 @@
         }
       }
     },
+    "containerregistry": {
+      "name": "containerregistry",
+      "summary": "Commands for the CyberCloud.ContainerRegistry provider.",
+      "commands": {
+        "registries": {
+          "name": "registries",
+          "resourceType": "CyberCloud.ContainerRegistry/registries",
+          "title": "Container registry",
+          "plural": "Container registries",
+          "summary": "A private OCI container registry on Harbor, with a web portal, an image store and a seven-day recovery window.",
+          "verbs": {
+            "create": {
+              "name": "create",
+              "summary": "Create or replace a Container registry.",
+              "method": "PUT",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.ContainerRegistry/registries/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": true,
+              "flags": [
+                {
+                  "name": "--class",
+                  "type": "string",
+                  "required": false,
+                  "summary": "StorageClass name for the image volume. Empty means the cluster default.",
+                  "jsonPointer": "/properties/storage/class",
+                  "immutable": true,
+                  "widget": "storageclass",
+                  "default": ""
+                },
+                {
+                  "name": "--cluster-id",
+                  "type": "string",
+                  "required": true,
+                  "alias": "--cluster",
+                  "summary": "The cluster whose namespace holds the registry.",
+                  "jsonPointer": "/properties/clusterId",
+                  "immutable": true,
+                  "widget": "cluster"
+                },
+                {
+                  "name": "--cpu",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Explicit vCPU quantity in Kubernetes form, for example 500m or 2. Empty means take it from the preset.",
+                  "jsonPointer": "/properties/sizing/cpu",
+                  "default": ""
+                },
+                {
+                  "name": "--enabled",
+                  "type": "switch",
+                  "required": false,
+                  "summary": "Whether Harbor's core exports Prometheus metrics and a PodMonitor selects them. On by default — docs/plan/12: \"a managed service the tenant cannot see the health of is a black box they will not trust with production\". Turning it off removes the metrics port as well as the scrape, so nothing is left listening on an unscraped address.",
+                  "jsonPointer": "/properties/monitoring/enabled",
+                  "default": true
+                },
+                {
+                  "name": "--location",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The region the registry is billed in.",
+                  "jsonPointer": "/location",
+                  "immutable": true,
+                  "widget": "region",
+                  "example": "eu-central"
+                },
+                {
+                  "name": "--memory",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Explicit memory quantity in Kubernetes form, for example 4Gi. Empty means take it from the preset.",
+                  "jsonPointer": "/properties/sizing/memory",
+                  "default": ""
+                },
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--preset",
+                  "type": "string",
+                  "required": false,
+                  "summary": "A sizing preset from docs/plan/12. The registry uses the s1 family, which is 1 vCPU to 4 GiB.",
+                  "jsonPointer": "/properties/sizing/preset",
+                  "choices": [
+                    "s1.2xlarge",
+                    "s1.4xlarge",
+                    "s1.large",
+                    "s1.medium",
+                    "s1.micro",
+                    "s1.nano",
+                    "s1.small",
+                    "s1.xlarge"
+                  ],
+                  "widget": "cozy-preset",
+                  "default": "s1.small"
+                },
+                {
+                  "name": "--replicas",
+                  "type": "integer",
+                  "required": true,
+                  "summary": "How many replicas of each stateless component — the API core, the web portal and the job service — run. Two is the smallest count that survives a node drain. The registry itself, the database and Redis each own a volume and run one replica whatever this says.",
+                  "jsonPointer": "/properties/replicas",
+                  "default": 2
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--size",
+                  "type": "string",
+                  "required": true,
+                  "summary": "Image storage, in Kubernetes quantity form. Grows online; never shrinks. ⚠ This is a filesystem volume rather than the tenant's object-storage bucket, which is what docs/plan/13 asks for and what the platform cannot yet give it — see the registry's own documentation.",
+                  "jsonPointer": "/properties/storage/size",
+                  "default": "100Gi",
+                  "example": "100Gi"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tags",
+                  "type": "keyValue",
+                  "required": false,
+                  "summary": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+                  "jsonPointer": "/tags",
+                  "widget": "tag-input"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--version",
+                  "type": "string",
+                  "required": true,
+                  "summary": "Harbor minor version. The platform pins the patch, because Harbor publishes image tags per patch and a bare minor resolves to nothing. A minor leaving support is a portal notice and a 120-day window — docs/plan/12 § Cross-cutting decisions.",
+                  "jsonPointer": "/properties/version",
+                  "choices": [
+                    "2.14",
+                    "2.15"
+                  ],
+                  "default": "2.15"
+                }
+              ],
+              "waitFlags": [
+                "--wait",
+                "--no-wait"
+              ]
+            },
+            "delete": {
+              "name": "delete",
+              "summary": "Delete a Container registry. Permanent.",
+              "method": "DELETE",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.ContainerRegistry/registries/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": true,
+              "flags": [
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                }
+              ],
+              "waitFlags": [
+                "--wait",
+                "--no-wait"
+              ]
+            },
+            "list-credentials": {
+              "name": "list-credentials",
+              "summary": "listCredentials a Container registry. ⚠ The response carries secret material — it is always audited and must not be written to a log or a shell history.",
+              "method": "POST",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.ContainerRegistry/registries/{resourceName}/listCredentials",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                }
+              ],
+              "action": "listCredentials",
+              "permission": "listCredentials",
+              "secret": true,
+              "rawBody": true
+            },
+            "show": {
+              "name": "show",
+              "summary": "Read a Container registry.",
+              "method": "GET",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.ContainerRegistry/registries/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                }
+              ]
+            },
+            "update": {
+              "name": "update",
+              "summary": "Amend a Container registry. Only the flags given are changed.",
+              "method": "PATCH",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.ContainerRegistry/registries/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": true,
+              "flags": [
+                {
+                  "name": "--class",
+                  "type": "string",
+                  "required": false,
+                  "summary": "StorageClass name for the image volume. Empty means the cluster default.",
+                  "jsonPointer": "/properties/storage/class",
+                  "immutable": true,
+                  "widget": "storageclass",
+                  "default": ""
+                },
+                {
+                  "name": "--cluster-id",
+                  "type": "string",
+                  "required": false,
+                  "alias": "--cluster",
+                  "summary": "The cluster whose namespace holds the registry.",
+                  "jsonPointer": "/properties/clusterId",
+                  "immutable": true,
+                  "widget": "cluster"
+                },
+                {
+                  "name": "--cpu",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Explicit vCPU quantity in Kubernetes form, for example 500m or 2. Empty means take it from the preset.",
+                  "jsonPointer": "/properties/sizing/cpu",
+                  "default": ""
+                },
+                {
+                  "name": "--enabled",
+                  "type": "switch",
+                  "required": false,
+                  "summary": "Whether Harbor's core exports Prometheus metrics and a PodMonitor selects them. On by default — docs/plan/12: \"a managed service the tenant cannot see the health of is a black box they will not trust with production\". Turning it off removes the metrics port as well as the scrape, so nothing is left listening on an unscraped address.",
+                  "jsonPointer": "/properties/monitoring/enabled",
+                  "default": true
+                },
+                {
+                  "name": "--location",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The region the registry is billed in.",
+                  "jsonPointer": "/location",
+                  "immutable": true,
+                  "widget": "region",
+                  "example": "eu-central"
+                },
+                {
+                  "name": "--memory",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Explicit memory quantity in Kubernetes form, for example 4Gi. Empty means take it from the preset.",
+                  "jsonPointer": "/properties/sizing/memory",
+                  "default": ""
+                },
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--preset",
+                  "type": "string",
+                  "required": false,
+                  "summary": "A sizing preset from docs/plan/12. The registry uses the s1 family, which is 1 vCPU to 4 GiB.",
+                  "jsonPointer": "/properties/sizing/preset",
+                  "choices": [
+                    "s1.2xlarge",
+                    "s1.4xlarge",
+                    "s1.large",
+                    "s1.medium",
+                    "s1.micro",
+                    "s1.nano",
+                    "s1.small",
+                    "s1.xlarge"
+                  ],
+                  "widget": "cozy-preset",
+                  "default": "s1.small"
+                },
+                {
+                  "name": "--replicas",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "How many replicas of each stateless component — the API core, the web portal and the job service — run. Two is the smallest count that survives a node drain. The registry itself, the database and Redis each own a volume and run one replica whatever this says.",
+                  "jsonPointer": "/properties/replicas",
+                  "default": 2
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--size",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Image storage, in Kubernetes quantity form. Grows online; never shrinks. ⚠ This is a filesystem volume rather than the tenant's object-storage bucket, which is what docs/plan/13 asks for and what the platform cannot yet give it — see the registry's own documentation.",
+                  "jsonPointer": "/properties/storage/size",
+                  "default": "100Gi",
+                  "example": "100Gi"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tags",
+                  "type": "keyValue",
+                  "required": false,
+                  "summary": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+                  "jsonPointer": "/tags",
+                  "widget": "tag-input"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--version",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Harbor minor version. The platform pins the patch, because Harbor publishes image tags per patch and a bare minor resolves to nothing. A minor leaving support is a portal notice and a 120-day window — docs/plan/12 § Cross-cutting decisions.",
+                  "jsonPointer": "/properties/version",
+                  "choices": [
+                    "2.14",
+                    "2.15"
+                  ],
+                  "default": "2.15"
+                }
+              ],
+              "waitFlags": [
+                "--wait",
+                "--no-wait"
+              ]
+            }
+          },
+          "alias": "registry"
+        }
+      }
+    },
     "containerservice": {
       "name": "containerservice",
       "summary": "Commands for the CyberCloud.ContainerService provider.",
@@ -5335,6 +5787,490 @@
             }
           },
           "alias": "rabbitmq"
+        }
+      }
+    },
+    "monitor": {
+      "name": "monitor",
+      "summary": "Commands for the CyberCloud.Monitor provider.",
+      "commands": {
+        "workspaces": {
+          "name": "workspaces",
+          "resourceType": "CyberCloud.Monitor/workspaces",
+          "title": "Monitor workspace",
+          "plural": "Monitor workspaces",
+          "summary": "A tenancy in the platform's metrics, logs and traces stores, with its own retention, quota, ingest key and read-only datasource endpoints.",
+          "verbs": {
+            "create": {
+              "name": "create",
+              "summary": "Create or replace a Monitor workspace.",
+              "method": "PUT",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Monitor/workspaces/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": true,
+              "flags": [
+                {
+                  "name": "--cardinality-cap",
+                  "type": "integer",
+                  "required": true,
+                  "summary": "Distinct values one metric label may take before the series carrying it are rejected. The rejection names the offending label — docs/plan/16 § Ingest — because a rejection nobody can diagnose is one the client just retries.",
+                  "jsonPointer": "/properties/quota/cardinalityCap",
+                  "default": 20000
+                },
+                {
+                  "name": "--cluster-id",
+                  "type": "string",
+                  "required": true,
+                  "alias": "--cluster",
+                  "summary": "The regional cluster whose telemetry data plane serves this workspace. ⚠ Nothing is deployed into it: a workspace is a tenancy in stores the platform already runs, and this is where its ingest routing is published.",
+                  "jsonPointer": "/properties/clusterId",
+                  "immutable": true,
+                  "widget": "cluster"
+                },
+                {
+                  "name": "--location",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The region the workspace is billed in, and the region whose telemetry stores hold its data.",
+                  "jsonPointer": "/location",
+                  "immutable": true,
+                  "widget": "region",
+                  "example": "eu-central"
+                },
+                {
+                  "name": "--logs",
+                  "type": "string",
+                  "required": true,
+                  "summary": "Logs retention tier: short is 7 days, standard 30, extended 90. ⚠ Shortening this under an existing workspace destroys the lines already outside the new window, and the reconciler refuses the change rather than applying it.",
+                  "jsonPointer": "/properties/retention/logs",
+                  "choices": [
+                    "short",
+                    "standard",
+                    "extended"
+                  ],
+                  "widget": "sku",
+                  "default": "short"
+                },
+                {
+                  "name": "--logs-gb-per-day",
+                  "type": "integer",
+                  "required": true,
+                  "summary": "Log lines accepted per day, in gibibytes.",
+                  "jsonPointer": "/properties/quota/logsGbPerDay",
+                  "default": 10
+                },
+                {
+                  "name": "--metrics",
+                  "type": "string",
+                  "required": true,
+                  "summary": "Metrics retention tier: short is 15 days, standard 90, extended 400. ⚠ Shortening this under an existing workspace destroys the samples already outside the new window, and the reconciler refuses the change rather than applying it.",
+                  "jsonPointer": "/properties/retention/metrics",
+                  "choices": [
+                    "short",
+                    "standard",
+                    "extended"
+                  ],
+                  "widget": "sku",
+                  "default": "short"
+                },
+                {
+                  "name": "--metrics-gb-per-day",
+                  "type": "integer",
+                  "required": true,
+                  "summary": "Metric samples accepted per day, in gibibytes. This is the first factor of what the workspace draws against the subscription's storage quota; the second is the retention tier.",
+                  "jsonPointer": "/properties/quota/metricsGbPerDay",
+                  "default": 5
+                },
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--over-quota-sample-rate",
+                  "type": "integer",
+                  "required": true,
+                  "summary": "The percentage of data still accepted once a signal is over its daily allowance. ⚠ It cannot be zero: docs/plan/16 requires that going over quota samples at a visible rate rather than dropping silently, and zero is a silent drop spelled as a rate.",
+                  "jsonPointer": "/properties/quota/overQuotaSampleRate",
+                  "default": 10
+                },
+                {
+                  "name": "--purge-protection",
+                  "type": "switch",
+                  "required": true,
+                  "summary": "Whether this workspace may be destroyed before its seven-day recovery window is out. Once true it stays true for the rest of the workspace's life, and a purge is refused while it is set.",
+                  "jsonPointer": "/properties/purgeProtection",
+                  "default": false
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--series-cap",
+                  "type": "integer",
+                  "required": true,
+                  "summary": "Active metric series the workspace may hold at once. One tenant putting a request id in a metric label is how a shared time-series database dies, so this is a ceiling rather than a guideline.",
+                  "jsonPointer": "/properties/quota/seriesCap",
+                  "default": 1000000
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tags",
+                  "type": "keyValue",
+                  "required": false,
+                  "summary": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+                  "jsonPointer": "/tags",
+                  "widget": "tag-input"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--traces",
+                  "type": "string",
+                  "required": true,
+                  "summary": "Traces retention tier: short is 3 days, standard 14, extended 30. ⚠ Shortening this under an existing workspace destroys the spans already outside the new window, and the reconciler refuses the change rather than applying it.",
+                  "jsonPointer": "/properties/retention/traces",
+                  "choices": [
+                    "short",
+                    "standard",
+                    "extended"
+                  ],
+                  "widget": "sku",
+                  "default": "short"
+                },
+                {
+                  "name": "--traces-gb-per-day",
+                  "type": "integer",
+                  "required": true,
+                  "summary": "Spans accepted per day, in gibibytes.",
+                  "jsonPointer": "/properties/quota/tracesGbPerDay",
+                  "default": 5
+                }
+              ],
+              "waitFlags": [
+                "--wait",
+                "--no-wait"
+              ]
+            },
+            "delete": {
+              "name": "delete",
+              "summary": "Delete a Monitor workspace. Recoverable for 7 day(s); purge to end that early.",
+              "method": "DELETE",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Monitor/workspaces/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": true,
+              "flags": [
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                }
+              ],
+              "waitFlags": [
+                "--wait",
+                "--no-wait"
+              ]
+            },
+            "list-keys": {
+              "name": "list-keys",
+              "summary": "listKeys a Monitor workspace. ⚠ The response carries secret material — it is always audited and must not be written to a log or a shell history.",
+              "method": "POST",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Monitor/workspaces/{resourceName}/listKeys",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                }
+              ],
+              "action": "listKeys",
+              "permission": "listKeys",
+              "secret": true,
+              "rawBody": true
+            },
+            "show": {
+              "name": "show",
+              "summary": "Read a Monitor workspace.",
+              "method": "GET",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Monitor/workspaces/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                }
+              ]
+            },
+            "update": {
+              "name": "update",
+              "summary": "Amend a Monitor workspace. Only the flags given are changed.",
+              "method": "PATCH",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Monitor/workspaces/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": true,
+              "flags": [
+                {
+                  "name": "--cardinality-cap",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "Distinct values one metric label may take before the series carrying it are rejected. The rejection names the offending label — docs/plan/16 § Ingest — because a rejection nobody can diagnose is one the client just retries.",
+                  "jsonPointer": "/properties/quota/cardinalityCap",
+                  "default": 20000
+                },
+                {
+                  "name": "--cluster-id",
+                  "type": "string",
+                  "required": false,
+                  "alias": "--cluster",
+                  "summary": "The regional cluster whose telemetry data plane serves this workspace. ⚠ Nothing is deployed into it: a workspace is a tenancy in stores the platform already runs, and this is where its ingest routing is published.",
+                  "jsonPointer": "/properties/clusterId",
+                  "immutable": true,
+                  "widget": "cluster"
+                },
+                {
+                  "name": "--location",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The region the workspace is billed in, and the region whose telemetry stores hold its data.",
+                  "jsonPointer": "/location",
+                  "immutable": true,
+                  "widget": "region",
+                  "example": "eu-central"
+                },
+                {
+                  "name": "--logs",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Logs retention tier: short is 7 days, standard 30, extended 90. ⚠ Shortening this under an existing workspace destroys the lines already outside the new window, and the reconciler refuses the change rather than applying it.",
+                  "jsonPointer": "/properties/retention/logs",
+                  "choices": [
+                    "short",
+                    "standard",
+                    "extended"
+                  ],
+                  "widget": "sku",
+                  "default": "short"
+                },
+                {
+                  "name": "--logs-gb-per-day",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "Log lines accepted per day, in gibibytes.",
+                  "jsonPointer": "/properties/quota/logsGbPerDay",
+                  "default": 10
+                },
+                {
+                  "name": "--metrics",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Metrics retention tier: short is 15 days, standard 90, extended 400. ⚠ Shortening this under an existing workspace destroys the samples already outside the new window, and the reconciler refuses the change rather than applying it.",
+                  "jsonPointer": "/properties/retention/metrics",
+                  "choices": [
+                    "short",
+                    "standard",
+                    "extended"
+                  ],
+                  "widget": "sku",
+                  "default": "short"
+                },
+                {
+                  "name": "--metrics-gb-per-day",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "Metric samples accepted per day, in gibibytes. This is the first factor of what the workspace draws against the subscription's storage quota; the second is the retention tier.",
+                  "jsonPointer": "/properties/quota/metricsGbPerDay",
+                  "default": 5
+                },
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--over-quota-sample-rate",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "The percentage of data still accepted once a signal is over its daily allowance. ⚠ It cannot be zero: docs/plan/16 requires that going over quota samples at a visible rate rather than dropping silently, and zero is a silent drop spelled as a rate.",
+                  "jsonPointer": "/properties/quota/overQuotaSampleRate",
+                  "default": 10
+                },
+                {
+                  "name": "--purge-protection",
+                  "type": "switch",
+                  "required": false,
+                  "summary": "Whether this workspace may be destroyed before its seven-day recovery window is out. Once true it stays true for the rest of the workspace's life, and a purge is refused while it is set.",
+                  "jsonPointer": "/properties/purgeProtection",
+                  "default": false
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--series-cap",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "Active metric series the workspace may hold at once. One tenant putting a request id in a metric label is how a shared time-series database dies, so this is a ceiling rather than a guideline.",
+                  "jsonPointer": "/properties/quota/seriesCap",
+                  "default": 1000000
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tags",
+                  "type": "keyValue",
+                  "required": false,
+                  "summary": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+                  "jsonPointer": "/tags",
+                  "widget": "tag-input"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--traces",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Traces retention tier: short is 3 days, standard 14, extended 30. ⚠ Shortening this under an existing workspace destroys the spans already outside the new window, and the reconciler refuses the change rather than applying it.",
+                  "jsonPointer": "/properties/retention/traces",
+                  "choices": [
+                    "short",
+                    "standard",
+                    "extended"
+                  ],
+                  "widget": "sku",
+                  "default": "short"
+                },
+                {
+                  "name": "--traces-gb-per-day",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "Spans accepted per day, in gibibytes.",
+                  "jsonPointer": "/properties/quota/tracesGbPerDay",
+                  "default": 5
+                }
+              ],
+              "waitFlags": [
+                "--wait",
+                "--no-wait"
+              ]
+            }
+          },
+          "alias": "workspace"
         }
       }
     },

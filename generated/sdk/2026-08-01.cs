@@ -520,6 +520,194 @@ public sealed partial class ValkeyCacheCollection {
     public partial AsyncPageable<ValkeyCacheResource> GetAllAsync(CancellationToken cancellationToken = default);
 }
 
+/// <summary>The values /properties/sizing/preset accepts. ⚠ Closed: the write path refuses anything else.</summary>
+public enum ContainerRegistryPreset {
+    /// <summary>Never assigned. Not a value the API accepts.</summary>
+    Unknown = 0,
+
+    /// <summary>s1.2xlarge</summary>
+    [JsonStringEnumMemberName("s1.2xlarge")]
+    S12xlarge = 1,
+
+    /// <summary>s1.4xlarge</summary>
+    [JsonStringEnumMemberName("s1.4xlarge")]
+    S14xlarge = 2,
+
+    /// <summary>s1.large</summary>
+    [JsonStringEnumMemberName("s1.large")]
+    S1Large = 3,
+
+    /// <summary>s1.medium</summary>
+    [JsonStringEnumMemberName("s1.medium")]
+    S1Medium = 4,
+
+    /// <summary>s1.micro</summary>
+    [JsonStringEnumMemberName("s1.micro")]
+    S1Micro = 5,
+
+    /// <summary>s1.nano</summary>
+    [JsonStringEnumMemberName("s1.nano")]
+    S1Nano = 6,
+
+    /// <summary>s1.small</summary>
+    [JsonStringEnumMemberName("s1.small")]
+    S1Small = 7,
+
+    /// <summary>s1.xlarge</summary>
+    [JsonStringEnumMemberName("s1.xlarge")]
+    S1Xlarge = 8
+}
+
+/// <summary>The values /properties/version accepts. ⚠ Closed: the write path refuses anything else.</summary>
+public enum ContainerRegistryVersion {
+    /// <summary>Never assigned. Not a value the API accepts.</summary>
+    Unknown = 0,
+
+    /// <summary>2.14</summary>
+    [JsonStringEnumMemberName("2.14")]
+    N214 = 1,
+
+    /// <summary>2.15</summary>
+    [JsonStringEnumMemberName("2.15")]
+    N215 = 2
+}
+
+/// <summary>The body of a CyberCloud.ContainerRegistry/registries.</summary>
+/// <remarks>A private OCI container registry on Harbor, with a web portal, an image store and a seven-day recovery window.</remarks>
+public sealed partial class ContainerRegistryData {
+
+    /// <summary>The region the registry is billed in.</summary>
+    /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+    [JsonPropertyName("location")]
+    public required string Location { get; set; }
+
+    /// <summary>The cluster whose namespace holds the registry.</summary>
+    /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+    [JsonPropertyName("clusterId")]
+    public required Guid ClusterId { get; set; }
+
+    /// <summary>Whether Harbor's core exports Prometheus metrics and a PodMonitor selects them. On by default — docs/plan/12: "a managed service the tenant cannot see the health of is a black box they will not trust with production". Turning it off removes the metrics port as well as the scrape, so nothing is left listening on an unscraped address.</summary>
+    /// <remarks>Defaults to true when left unset.</remarks>
+    [JsonPropertyName("enabled")]
+    public bool? Enabled { get; set; }
+
+    /// <summary>How many replicas of each stateless component — the API core, the web portal and the job service — run. Two is the smallest count that survives a node drain. The registry itself, the database and Redis each own a volume and run one replica whatever this says.</summary>
+    /// <remarks>Required on a create. Defaults to 2 when left unset.</remarks>
+    [JsonPropertyName("replicas")]
+    public required long Replicas { get; set; }
+
+    /// <summary>Explicit vCPU quantity in Kubernetes form, for example 500m or 2. Empty means take it from the preset.</summary>
+    /// <remarks>Defaults to "" when left unset.</remarks>
+    [JsonPropertyName("cpu")]
+    public string? Cpu { get; set; }
+
+    /// <summary>Explicit memory quantity in Kubernetes form, for example 4Gi. Empty means take it from the preset.</summary>
+    /// <remarks>Defaults to "" when left unset.</remarks>
+    [JsonPropertyName("memory")]
+    public string? Memory { get; set; }
+
+    /// <summary>A sizing preset from docs/plan/12. The registry uses the s1 family, which is 1 vCPU to 4 GiB.</summary>
+    /// <remarks>Defaults to "s1.small" when left unset.</remarks>
+    [JsonPropertyName("preset")]
+    public ContainerRegistryPreset? Preset { get; set; }
+
+    /// <summary>StorageClass name for the image volume. Empty means the cluster default.</summary>
+    /// <remarks>⚠ Cannot change after create. Defaults to "" when left unset.</remarks>
+    [JsonPropertyName("class")]
+    public string? Class { get; set; }
+
+    /// <summary>Image storage, in Kubernetes quantity form. Grows online; never shrinks. ⚠ This is a filesystem volume rather than the tenant's object-storage bucket, which is what docs/plan/13 asks for and what the platform cannot yet give it — see the registry's own documentation.</summary>
+    /// <remarks>Required on a create. Defaults to "100Gi" when left unset.</remarks>
+    [JsonPropertyName("size")]
+    public required string Size { get; set; }
+
+    /// <summary>Harbor minor version. The platform pins the patch, because Harbor publishes image tags per patch and a bare minor resolves to nothing. A minor leaving support is a portal notice and a 120-day window — docs/plan/12 § Cross-cutting decisions.</summary>
+    /// <remarks>Required on a create. Defaults to "2.15" when left unset.</remarks>
+    [JsonPropertyName("version")]
+    public required ContainerRegistryVersion Version { get; set; }
+
+    /// <summary>Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.</summary>
+    [JsonPropertyName("tags")]
+    public IDictionary<string, string> Tags { get; set; } = new Dictionary<string, string>(StringComparer.Ordinal);
+}
+
+/// <summary>One Container registry, and the operations on it.</summary>
+public sealed partial class ContainerRegistryResource {
+    /// <summary>The resource's fully qualified id.</summary>
+    public string Id { get; init; } = string.Empty;
+
+    /// <summary>The body, projected at this api-version.</summary>
+    public ContainerRegistryData Data { get; init; } = new();
+
+    /// <summary>Re-reads the resource.</summary>
+    public partial Task<Response<ContainerRegistryResource>> GetAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Amends the resource. A merge patch: what is not set is not changed.</summary>
+    public partial Task<Operation<ContainerRegistryResource>> UpdateAsync(
+        WaitUntil waitUntil,
+        ContainerRegistryData data,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Deletes the resource. ⚠ Permanent: this type declares no soft-delete window.</summary>
+    public partial Task<Operation> DeleteAsync(
+        WaitUntil waitUntil,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>What listCredentials returns. ⚠ Secret material: never log or cache this.</summary>
+    public sealed partial class ListCredentialsResult {
+
+        /// <summary>The in-cluster registry endpoint — what docker login takes. ⚠ http rather than https, and no external address is returned, because there is none.</summary>
+        [JsonPropertyName("endpoint")]
+        public required string Endpoint { get; set; }
+
+        /// <summary>The administrator's password, read from the tenant's Vault for this call only. Minted at create; never derived from the resource id.</summary>
+        [JsonPropertyName("password")]
+        public required string Password { get; set; }
+
+        /// <summary>Harbor's web UI, which is a different Service from the API endpoint because this row renders no single front door.</summary>
+        [JsonPropertyName("portalUrl")]
+        public required string PortalUrl { get; set; }
+
+        /// <summary>The administrator's username. Always admin — Harbor seeds that row and nothing renames it.</summary>
+        [JsonPropertyName("username")]
+        public required string Username { get; set; }
+    }
+
+    /// <summary>ListCredentials. ⚠ An action never creates — a POST to a name that does not exist is a 404. ⚠ The response carries secret material and is always audited.</summary>
+    public partial Task<Response<ListCredentialsResult>> ListCredentialsAsync(
+        CancellationToken cancellationToken = default);
+}
+
+/// <summary>The Container registries in one resource group.</summary>
+/// <remarks>⚠ Every write is long-running: docs/plan/08 § The write path, end to end
+/// ends in a 202 for every verb, so there is no synchronous overload to offer.</remarks>
+public sealed partial class ContainerRegistryCollection {
+    /// <summary>The resource type these address.</summary>
+    public const string ResourceType = "CyberCloud.ContainerRegistry/registries";
+
+    /// <summary>The URL template, with the api-version this file was generated at.</summary>
+    public const string PathTemplate = "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.ContainerRegistry/registries/{resourceName}";
+
+    /// <inheritdoc cref="GeneratedApiVersion.Value" />
+    public const string ApiVersion = "2026-08-01";
+
+    /// <summary>Creates or replaces one Container registry.</summary>
+    /// <remarks>⚠ Poll with GetProgressAsync() rather than only WaitForCompletionAsync():
+    /// docs/plan/21 § The .NET SDK — "Azure's LROs expose no progress; ours do and the
+    /// SDK should not hide it".</remarks>
+    public partial Task<Operation<ContainerRegistryResource>> CreateOrUpdateAsync(
+        WaitUntil waitUntil,
+        string name,
+        ContainerRegistryData data,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Reads one Container registry by name.</summary>
+    public partial Task<Response<ContainerRegistryResource>> GetAsync(string name, CancellationToken cancellationToken = default);
+
+    /// <summary>The Container registries in this group, paged.</summary>
+    public partial AsyncPageable<ContainerRegistryResource> GetAllAsync(CancellationToken cancellationToken = default);
+}
+
 /// <summary>The values /properties/version accepts. ⚠ Closed: the write path refuses anything else.</summary>
 public enum ManagedKubernetesClusterVersion {
     /// <summary>Never assigned. Not a value the API accepts.</summary>
@@ -2256,6 +2444,218 @@ public sealed partial class RabbitMQClusterCollection {
 
     /// <summary>The RabbitMQ clusters in this group, paged.</summary>
     public partial AsyncPageable<RabbitMQClusterResource> GetAllAsync(CancellationToken cancellationToken = default);
+}
+
+/// <summary>The values /properties/retention/logs accepts. ⚠ Closed: the write path refuses anything else.</summary>
+public enum MonitorWorkspaceLogs {
+    /// <summary>Never assigned. Not a value the API accepts.</summary>
+    Unknown = 0,
+
+    /// <summary>short</summary>
+    [JsonStringEnumMemberName("short")]
+    Short = 1,
+
+    /// <summary>standard</summary>
+    [JsonStringEnumMemberName("standard")]
+    Standard = 2,
+
+    /// <summary>extended</summary>
+    [JsonStringEnumMemberName("extended")]
+    Extended = 3
+}
+
+/// <summary>The values /properties/retention/metrics accepts. ⚠ Closed: the write path refuses anything else.</summary>
+public enum MonitorWorkspaceMetrics {
+    /// <summary>Never assigned. Not a value the API accepts.</summary>
+    Unknown = 0,
+
+    /// <summary>short</summary>
+    [JsonStringEnumMemberName("short")]
+    Short = 1,
+
+    /// <summary>standard</summary>
+    [JsonStringEnumMemberName("standard")]
+    Standard = 2,
+
+    /// <summary>extended</summary>
+    [JsonStringEnumMemberName("extended")]
+    Extended = 3
+}
+
+/// <summary>The values /properties/retention/traces accepts. ⚠ Closed: the write path refuses anything else.</summary>
+public enum MonitorWorkspaceTraces {
+    /// <summary>Never assigned. Not a value the API accepts.</summary>
+    Unknown = 0,
+
+    /// <summary>short</summary>
+    [JsonStringEnumMemberName("short")]
+    Short = 1,
+
+    /// <summary>standard</summary>
+    [JsonStringEnumMemberName("standard")]
+    Standard = 2,
+
+    /// <summary>extended</summary>
+    [JsonStringEnumMemberName("extended")]
+    Extended = 3
+}
+
+/// <summary>The body of a CyberCloud.Monitor/workspaces.</summary>
+/// <remarks>A tenancy in the platform's metrics, logs and traces stores, with its own retention, quota, ingest key and read-only datasource endpoints.</remarks>
+public sealed partial class MonitorWorkspaceData {
+
+    /// <summary>The region the workspace is billed in, and the region whose telemetry stores hold its data.</summary>
+    /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+    [JsonPropertyName("location")]
+    public required string Location { get; set; }
+
+    /// <summary>The regional cluster whose telemetry data plane serves this workspace. ⚠ Nothing is deployed into it: a workspace is a tenancy in stores the platform already runs, and this is where its ingest routing is published.</summary>
+    /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+    [JsonPropertyName("clusterId")]
+    public required Guid ClusterId { get; set; }
+
+    /// <summary>Whether this workspace may be destroyed before its seven-day recovery window is out. Once true it stays true for the rest of the workspace's life, and a purge is refused while it is set.</summary>
+    /// <remarks>Required on a create. Defaults to false when left unset.</remarks>
+    [JsonPropertyName("purgeProtection")]
+    public required bool PurgeProtection { get; set; }
+
+    /// <summary>Distinct values one metric label may take before the series carrying it are rejected. The rejection names the offending label — docs/plan/16 § Ingest — because a rejection nobody can diagnose is one the client just retries.</summary>
+    /// <remarks>Required on a create. Defaults to 20000 when left unset.</remarks>
+    [JsonPropertyName("cardinalityCap")]
+    public required long CardinalityCap { get; set; }
+
+    /// <summary>Log lines accepted per day, in gibibytes.</summary>
+    /// <remarks>Required on a create. Defaults to 10 when left unset.</remarks>
+    [JsonPropertyName("logsGbPerDay")]
+    public required long LogsGbPerDay { get; set; }
+
+    /// <summary>Metric samples accepted per day, in gibibytes. This is the first factor of what the workspace draws against the subscription's storage quota; the second is the retention tier.</summary>
+    /// <remarks>Required on a create. Defaults to 5 when left unset.</remarks>
+    [JsonPropertyName("metricsGbPerDay")]
+    public required long MetricsGbPerDay { get; set; }
+
+    /// <summary>The percentage of data still accepted once a signal is over its daily allowance. ⚠ It cannot be zero: docs/plan/16 requires that going over quota samples at a visible rate rather than dropping silently, and zero is a silent drop spelled as a rate.</summary>
+    /// <remarks>Required on a create. Defaults to 10 when left unset.</remarks>
+    [JsonPropertyName("overQuotaSampleRate")]
+    public required long OverQuotaSampleRate { get; set; }
+
+    /// <summary>Active metric series the workspace may hold at once. One tenant putting a request id in a metric label is how a shared time-series database dies, so this is a ceiling rather than a guideline.</summary>
+    /// <remarks>Required on a create. Defaults to 1000000 when left unset.</remarks>
+    [JsonPropertyName("seriesCap")]
+    public required long SeriesCap { get; set; }
+
+    /// <summary>Spans accepted per day, in gibibytes.</summary>
+    /// <remarks>Required on a create. Defaults to 5 when left unset.</remarks>
+    [JsonPropertyName("tracesGbPerDay")]
+    public required long TracesGbPerDay { get; set; }
+
+    /// <summary>Logs retention tier: short is 7 days, standard 30, extended 90. ⚠ Shortening this under an existing workspace destroys the lines already outside the new window, and the reconciler refuses the change rather than applying it.</summary>
+    /// <remarks>Required on a create. Defaults to "short" when left unset.</remarks>
+    [JsonPropertyName("logs")]
+    public required MonitorWorkspaceLogs Logs { get; set; }
+
+    /// <summary>Metrics retention tier: short is 15 days, standard 90, extended 400. ⚠ Shortening this under an existing workspace destroys the samples already outside the new window, and the reconciler refuses the change rather than applying it.</summary>
+    /// <remarks>Required on a create. Defaults to "short" when left unset.</remarks>
+    [JsonPropertyName("metrics")]
+    public required MonitorWorkspaceMetrics Metrics { get; set; }
+
+    /// <summary>Traces retention tier: short is 3 days, standard 14, extended 30. ⚠ Shortening this under an existing workspace destroys the spans already outside the new window, and the reconciler refuses the change rather than applying it.</summary>
+    /// <remarks>Required on a create. Defaults to "short" when left unset.</remarks>
+    [JsonPropertyName("traces")]
+    public required MonitorWorkspaceTraces Traces { get; set; }
+
+    /// <summary>Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.</summary>
+    [JsonPropertyName("tags")]
+    public IDictionary<string, string> Tags { get; set; } = new Dictionary<string, string>(StringComparer.Ordinal);
+}
+
+/// <summary>One Monitor workspace, and the operations on it.</summary>
+public sealed partial class MonitorWorkspaceResource {
+    /// <summary>The resource's fully qualified id.</summary>
+    public string Id { get; init; } = string.Empty;
+
+    /// <summary>The body, projected at this api-version.</summary>
+    public MonitorWorkspaceData Data { get; init; } = new();
+
+    /// <summary>Re-reads the resource.</summary>
+    public partial Task<Response<MonitorWorkspaceResource>> GetAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Amends the resource. A merge patch: what is not set is not changed.</summary>
+    public partial Task<Operation<MonitorWorkspaceResource>> UpdateAsync(
+        WaitUntil waitUntil,
+        MonitorWorkspaceData data,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Deletes the resource. ⚠ Recoverable for 7 day(s): the resource keeps its quota and its data, and its name is held. Purge to end that window early — a separate permission, 'purge'.</summary>
+    public partial Task<Operation> DeleteAsync(
+        WaitUntil waitUntil,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>What listKeys returns. ⚠ Secret material: never log or cache this.</summary>
+    public sealed partial class ListKeysResult {
+
+        /// <summary>The VictoriaMetrics tenant this workspace's metrics live under. It appears in every metrics URL below and is returned rather than left to be guessed at.</summary>
+        [JsonPropertyName("accountId")]
+        public required string AccountId { get; set; }
+
+        /// <summary>The ClickHouse database this workspace's logs, traces and events live in. It is the one platform-chosen string that reaches the tenant's SQL.</summary>
+        [JsonPropertyName("database")]
+        public required string Database { get; set; }
+
+        /// <summary>The ingest key, read from the tenant's vault for this call only. It authenticates writes on every endpoint above.</summary>
+        [JsonPropertyName("ingestKey")]
+        public required string IngestKey { get; set; }
+
+        /// <summary>Where OTLP over gRPC is accepted, host:port.</summary>
+        [JsonPropertyName("otlpEndpoint")]
+        public required string OtlpEndpoint { get; set; }
+
+        /// <summary>The read-only PromQL/MetricsQL datasource URL, for the tenant's own Grafana or an external one.</summary>
+        [JsonPropertyName("promqlEndpoint")]
+        public required string PromqlEndpoint { get; set; }
+
+        /// <summary>Where Prometheus remote-write is accepted.</summary>
+        [JsonPropertyName("remoteWriteEndpoint")]
+        public required string RemoteWriteEndpoint { get; set; }
+
+        /// <summary>The read-only SQL datasource URL for logs, traces and events.</summary>
+        [JsonPropertyName("sqlEndpoint")]
+        public required string SqlEndpoint { get; set; }
+    }
+
+    /// <summary>ListKeys. ⚠ An action never creates — a POST to a name that does not exist is a 404. ⚠ The response carries secret material and is always audited.</summary>
+    public partial Task<Response<ListKeysResult>> ListKeysAsync(
+        CancellationToken cancellationToken = default);
+}
+
+/// <summary>The Monitor workspaces in one resource group.</summary>
+/// <remarks>⚠ Every write is long-running: docs/plan/08 § The write path, end to end
+/// ends in a 202 for every verb, so there is no synchronous overload to offer.</remarks>
+public sealed partial class MonitorWorkspaceCollection {
+    /// <summary>The resource type these address.</summary>
+    public const string ResourceType = "CyberCloud.Monitor/workspaces";
+
+    /// <summary>The URL template, with the api-version this file was generated at.</summary>
+    public const string PathTemplate = "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Monitor/workspaces/{resourceName}";
+
+    /// <inheritdoc cref="GeneratedApiVersion.Value" />
+    public const string ApiVersion = "2026-08-01";
+
+    /// <summary>Creates or replaces one Monitor workspace.</summary>
+    /// <remarks>⚠ Poll with GetProgressAsync() rather than only WaitForCompletionAsync():
+    /// docs/plan/21 § The .NET SDK — "Azure's LROs expose no progress; ours do and the
+    /// SDK should not hide it".</remarks>
+    public partial Task<Operation<MonitorWorkspaceResource>> CreateOrUpdateAsync(
+        WaitUntil waitUntil,
+        string name,
+        MonitorWorkspaceData data,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Reads one Monitor workspace by name.</summary>
+    public partial Task<Response<MonitorWorkspaceResource>> GetAsync(string name, CancellationToken cancellationToken = default);
+
+    /// <summary>The Monitor workspaces in this group, paged.</summary>
+    public partial AsyncPageable<MonitorWorkspaceResource> GetAllAsync(CancellationToken cancellationToken = default);
 }
 
 /// <summary>The body of a CyberCloud.Network/virtualNetworks.</summary>

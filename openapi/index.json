@@ -179,11 +179,13 @@
   "x-cybercloud-providers": [
     "CyberCloud.Analytics",
     "CyberCloud.Cache",
+    "CyberCloud.ContainerRegistry",
     "CyberCloud.ContainerService",
     "CyberCloud.DBforMySQL",
     "CyberCloud.DBforPostgreSQL",
     "CyberCloud.DocumentDB",
     "CyberCloud.Messaging",
+    "CyberCloud.Monitor",
     "CyberCloud.Network",
     "CyberCloud.Sample",
     "CyberCloud.Search",
@@ -214,6 +216,19 @@
         "plural": "Valkey caches",
         "alias": "valkey",
         "summary": "A managed Valkey cache with Sentinel failover, on spotahome/redis-operator. Valkey rather than Redis, per ADR-011; every Redis client works against it.",
+        "declared": true
+      }
+    },
+    {
+      "type": "CyberCloud.ContainerRegistry/registries",
+      "apiVersions": [
+        "2026-08-01"
+      ],
+      "display": {
+        "name": "Container registry",
+        "plural": "Container registries",
+        "alias": "registry",
+        "summary": "A private OCI container registry on Harbor, with a web portal, an image store and a seven-day recovery window.",
         "declared": true
       }
     },
@@ -318,6 +333,19 @@
         "plural": "RabbitMQ clusters",
         "alias": "rabbitmq",
         "summary": "A managed RabbitMQ cluster on the RabbitMQ Cluster Operator, with quorum queues as the default queue type and the management UI reachable only in-cluster.",
+        "declared": true
+      }
+    },
+    {
+      "type": "CyberCloud.Monitor/workspaces",
+      "apiVersions": [
+        "2026-08-01"
+      ],
+      "display": {
+        "name": "Monitor workspace",
+        "plural": "Monitor workspaces",
+        "alias": "workspace",
+        "summary": "A tenancy in the platform's metrics, logs and traces stores, with its own retention, quota, ingest key and read-only datasource endpoints.",
         "declared": true
       }
     },

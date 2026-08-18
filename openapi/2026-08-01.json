@@ -761,6 +761,367 @@
       "x-cybercloud-resource-type": "CyberCloud.Cache/redis",
       "x-cybercloud-action": "listKeys"
     },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.ContainerRegistry/registries/{resourceName}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "get": {
+        "operationId": "CyberCloud_ContainerRegistry_registries_Get",
+        "summary": "Read a CyberCloud.ContainerRegistry/registries.",
+        "description": "The body is this api-version's projection of the resource: docs/plan/08 § The provider registry keeps grain state as a superset and a read at an older version drops what that version did not declare.",
+        "responses": {
+          "200": {
+            "description": "The resource.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.ContainerRegistry.registries"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "read"
+      },
+      "put": {
+        "operationId": "CyberCloud_ContainerRegistry_registries_CreateOrUpdate",
+        "summary": "Create or replace a CyberCloud.ContainerRegistry/registries.",
+        "description": "A full replacement. Every property the schema marks required must be present; a read-only property is refused rather than ignored — docs/plan/08 § The write path, end to end.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CyberCloud.ContainerRegistry.registries"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "headers": {
+              "Azure-AsyncOperation": {
+                "description": "The absolute URL of the operation to poll.",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "Retry-After": {
+                "description": "Seconds to wait before the first poll.",
+                "required": true,
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "write"
+      },
+      "patch": {
+        "operationId": "CyberCloud_ContainerRegistry_registries_Update",
+        "summary": "Merge-patch a CyberCloud.ContainerRegistry/registries.",
+        "description": "A merge patch. The patch itself may omit required properties; the merged result is what is validated — see ResourceSchema.Validate.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CyberCloud.ContainerRegistry.registries"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "headers": {
+              "Azure-AsyncOperation": {
+                "description": "The absolute URL of the operation to poll.",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "Retry-After": {
+                "description": "Seconds to wait before the first poll.",
+                "required": true,
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "write"
+      },
+      "delete": {
+        "operationId": "CyberCloud_ContainerRegistry_registries_Delete",
+        "summary": "Delete a CyberCloud.ContainerRegistry/registries.",
+        "description": "The delete is permanent: this type declares no soft-delete window.",
+        "responses": {
+          "202": {
+            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "headers": {
+              "Azure-AsyncOperation": {
+                "description": "The absolute URL of the operation to poll.",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "Retry-After": {
+                "description": "Seconds to wait before the first poll.",
+                "required": true,
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "delete",
+        "x-cybercloud-soft-delete-days": 0,
+        "x-cybercloud-purge-permission": ""
+      },
+      "x-cybercloud-resource-type": "CyberCloud.ContainerRegistry/registries",
+      "x-cybercloud-display": {
+        "name": "Container registry",
+        "plural": "Container registries",
+        "alias": "registry",
+        "summary": "A private OCI container registry on Harbor, with a web portal, an image store and a seven-day recovery window.",
+        "declared": true
+      },
+      "x-cybercloud-supports-tags": true,
+      "x-cybercloud-requires-cluster": true,
+      "x-cybercloud-cluster-id-pointer": "/properties/clusterId",
+      "x-cybercloud-soft-delete-days": 0,
+      "x-cybercloud-purge-permission": "",
+      "x-cybercloud-purge-protection-pointer": "",
+      "x-cybercloud-meters": [
+        {
+          "meter": "MemoryGb",
+          "amountPointer": "",
+          "fallback": null,
+          "expression": "sizing.memory (from sizing.preset when unset) + (3 × replicas + 2) × 512Mi, in GiB",
+          "reads": [
+            "/properties/replicas",
+            "/properties/sizing/preset",
+            "/properties/sizing/memory"
+          ]
+        },
+        {
+          "meter": "Resources",
+          "amountPointer": "",
+          "fallback": 1,
+          "expression": "1",
+          "reads": []
+        },
+        {
+          "meter": "StorageGb",
+          "amountPointer": "",
+          "fallback": null,
+          "expression": "storage.size + 10Gi for the metadata database + 1Gi for the job queue, in GiB",
+          "reads": [
+            "/properties/storage/size"
+          ]
+        },
+        {
+          "meter": "Vcpu",
+          "amountPointer": "",
+          "fallback": null,
+          "expression": "sizing.cpu (from sizing.preset when unset) + (3 × replicas + 2) × 250m, in cores",
+          "reads": [
+            "/properties/replicas",
+            "/properties/sizing/preset",
+            "/properties/sizing/cpu"
+          ]
+        }
+      ]
+    },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.ContainerRegistry/registries/{resourceName}/listCredentials": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "post": {
+        "operationId": "CyberCloud_ContainerRegistry_registries_ListCredentials",
+        "summary": "listCredentials a CyberCloud.ContainerRegistry/registries.",
+        "description": "An action never creates: a POST to a name that does not exist is a 404 — docs/plan/08 § The write path, end to end. ⚠ The response carries secret material. It is always audited and is never cached — docs/plan/08 § The provider registry.",
+        "responses": {
+          "200": {
+            "description": "The action's result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.ContainerRegistry.registries.ListCredentialsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "listCredentials",
+        "x-cybercloud-secret": true,
+        "x-cybercloud-long-running": false
+      },
+      "x-cybercloud-resource-type": "CyberCloud.ContainerRegistry/registries",
+      "x-cybercloud-action": "listCredentials"
+    },
     "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.ContainerService/managedClusters/{managedClustersName}/agentPools/{resourceName}": {
       "parameters": [
         {
@@ -3658,6 +4019,350 @@
         "x-cybercloud-long-running": false
       },
       "x-cybercloud-resource-type": "CyberCloud.Messaging/rabbitmqClusters",
+      "x-cybercloud-action": "listKeys"
+    },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Monitor/workspaces/{resourceName}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "get": {
+        "operationId": "CyberCloud_Monitor_workspaces_Get",
+        "summary": "Read a CyberCloud.Monitor/workspaces.",
+        "description": "The body is this api-version's projection of the resource: docs/plan/08 § The provider registry keeps grain state as a superset and a read at an older version drops what that version did not declare.",
+        "responses": {
+          "200": {
+            "description": "The resource.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Monitor.workspaces"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "read"
+      },
+      "put": {
+        "operationId": "CyberCloud_Monitor_workspaces_CreateOrUpdate",
+        "summary": "Create or replace a CyberCloud.Monitor/workspaces.",
+        "description": "A full replacement. Every property the schema marks required must be present; a read-only property is refused rather than ignored — docs/plan/08 § The write path, end to end.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CyberCloud.Monitor.workspaces"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "headers": {
+              "Azure-AsyncOperation": {
+                "description": "The absolute URL of the operation to poll.",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "Retry-After": {
+                "description": "Seconds to wait before the first poll.",
+                "required": true,
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "write"
+      },
+      "patch": {
+        "operationId": "CyberCloud_Monitor_workspaces_Update",
+        "summary": "Merge-patch a CyberCloud.Monitor/workspaces.",
+        "description": "A merge patch. The patch itself may omit required properties; the merged result is what is validated — see ResourceSchema.Validate.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CyberCloud.Monitor.workspaces"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "headers": {
+              "Azure-AsyncOperation": {
+                "description": "The absolute URL of the operation to poll.",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "Retry-After": {
+                "description": "Seconds to wait before the first poll.",
+                "required": true,
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "write"
+      },
+      "delete": {
+        "operationId": "CyberCloud_Monitor_workspaces_Delete",
+        "summary": "Delete a CyberCloud.Monitor/workspaces.",
+        "description": "A deleted CyberCloud.Monitor/workspaces is recoverable for 7 day(s) — docs/plan/06 § Tags, locks. It leaves its resource group and its old address answers 404; its name is held and its quota stays committed for the whole window. Restore it, or purge it to end the window early — a purge needs 'purge', which is a separate right from 'delete'.",
+        "responses": {
+          "202": {
+            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "headers": {
+              "Azure-AsyncOperation": {
+                "description": "The absolute URL of the operation to poll.",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "Retry-After": {
+                "description": "Seconds to wait before the first poll.",
+                "required": true,
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "delete",
+        "x-cybercloud-soft-delete-days": 7,
+        "x-cybercloud-purge-permission": "purge"
+      },
+      "x-cybercloud-resource-type": "CyberCloud.Monitor/workspaces",
+      "x-cybercloud-display": {
+        "name": "Monitor workspace",
+        "plural": "Monitor workspaces",
+        "alias": "workspace",
+        "summary": "A tenancy in the platform's metrics, logs and traces stores, with its own retention, quota, ingest key and read-only datasource endpoints.",
+        "declared": true
+      },
+      "x-cybercloud-supports-tags": true,
+      "x-cybercloud-requires-cluster": true,
+      "x-cybercloud-cluster-id-pointer": "/properties/clusterId",
+      "x-cybercloud-soft-delete-days": 7,
+      "x-cybercloud-purge-permission": "purge",
+      "x-cybercloud-purge-protection-pointer": "/properties/purgeProtection",
+      "x-cybercloud-meters": [
+        {
+          "meter": "Resources",
+          "amountPointer": "",
+          "fallback": 1,
+          "expression": "1",
+          "reads": []
+        },
+        {
+          "meter": "StorageGb",
+          "amountPointer": "",
+          "fallback": null,
+          "expression": "the sum over metrics, logs and traces of (retention tier's days) × (that signal's quota in GiB/day), in GiB",
+          "reads": [
+            "/properties/retention/metrics",
+            "/properties/retention/logs",
+            "/properties/retention/traces",
+            "/properties/quota/metricsGbPerDay",
+            "/properties/quota/logsGbPerDay",
+            "/properties/quota/tracesGbPerDay"
+          ]
+        }
+      ]
+    },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Monitor/workspaces/{resourceName}/listKeys": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "post": {
+        "operationId": "CyberCloud_Monitor_workspaces_ListKeys",
+        "summary": "listKeys a CyberCloud.Monitor/workspaces.",
+        "description": "An action never creates: a POST to a name that does not exist is a 404 — docs/plan/08 § The write path, end to end. ⚠ The response carries secret material. It is always audited and is never cached — docs/plan/08 § The provider registry.",
+        "responses": {
+          "200": {
+            "description": "The action's result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Monitor.workspaces.ListKeysResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "listKeys",
+        "x-cybercloud-secret": true,
+        "x-cybercloud-long-running": false
+      },
+      "x-cybercloud-resource-type": "CyberCloud.Monitor/workspaces",
       "x-cybercloud-action": "listKeys"
     },
     "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Network/virtualNetworks/{resourceName}": {
@@ -7110,6 +7815,173 @@
         "title": "CyberCloud.Cache.redis.ListKeysResponse",
         "type": "object"
       },
+      "CyberCloud.ContainerRegistry.registries": {
+        "additionalProperties": false,
+        "description": "The body of a CyberCloud.ContainerRegistry/registries. Generated from the provider registry's schema, which is the same object the write path validates against — docs/plan/08 § The provider registry.",
+        "properties": {
+          "location": {
+            "description": "The region the registry is billed in.",
+            "example": "eu-central",
+            "format": "cybercloud-region",
+            "type": "string",
+            "x-cybercloud-immutable": true,
+            "x-cybercloud-widget": "region"
+          },
+          "properties": {
+            "additionalProperties": false,
+            "description": "The registry's own settings.",
+            "properties": {
+              "clusterId": {
+                "description": "The cluster whose namespace holds the registry.",
+                "format": "uuid",
+                "type": "string",
+                "x-cybercloud-immutable": true,
+                "x-cybercloud-widget": "cluster"
+              },
+              "monitoring": {
+                "additionalProperties": false,
+                "description": "What the platform scrapes.",
+                "properties": {
+                  "enabled": {
+                    "default": true,
+                    "description": "Whether Harbor's core exports Prometheus metrics and a PodMonitor selects them. On by default — docs/plan/12: \"a managed service the tenant cannot see the health of is a black box they will not trust with production\". Turning it off removes the metrics port as well as the scrape, so nothing is left listening on an unscraped address.",
+                    "type": "boolean"
+                  }
+                },
+                "type": "object"
+              },
+              "replicas": {
+                "default": 2,
+                "description": "How many replicas of each stateless component — the API core, the web portal and the job service — run. Two is the smallest count that survives a node drain. The registry itself, the database and Redis each own a volume and run one replica whatever this says.",
+                "maximum": 10,
+                "minimum": 1,
+                "type": "integer"
+              },
+              "sizing": {
+                "additionalProperties": false,
+                "description": "CPU and memory for the registry pod, either by preset or explicitly. The other five components are sized by the platform and are not affected.",
+                "properties": {
+                  "cpu": {
+                    "default": "",
+                    "description": "Explicit vCPU quantity in Kubernetes form, for example 500m or 2. Empty means take it from the preset.",
+                    "pattern": "^(?:(\\d+(\\.\\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)?)$",
+                    "type": "string"
+                  },
+                  "memory": {
+                    "default": "",
+                    "description": "Explicit memory quantity in Kubernetes form, for example 4Gi. Empty means take it from the preset.",
+                    "pattern": "^(?:(\\d+(\\.\\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)?)$",
+                    "type": "string"
+                  },
+                  "preset": {
+                    "default": "s1.small",
+                    "description": "A sizing preset from docs/plan/12. The registry uses the s1 family, which is 1 vCPU to 4 GiB.",
+                    "enum": [
+                      "s1.2xlarge",
+                      "s1.4xlarge",
+                      "s1.large",
+                      "s1.medium",
+                      "s1.micro",
+                      "s1.nano",
+                      "s1.small",
+                      "s1.xlarge"
+                    ],
+                    "type": "string",
+                    "x-cybercloud-widget": "cozy-preset"
+                  }
+                },
+                "type": "object"
+              },
+              "storage": {
+                "additionalProperties": false,
+                "description": "Where the image layers live.",
+                "properties": {
+                  "class": {
+                    "default": "",
+                    "description": "StorageClass name for the image volume. Empty means the cluster default.",
+                    "type": "string",
+                    "x-cybercloud-immutable": true,
+                    "x-cybercloud-widget": "storageclass"
+                  },
+                  "size": {
+                    "default": "100Gi",
+                    "description": "Image storage, in Kubernetes quantity form. Grows online; never shrinks. ⚠ This is a filesystem volume rather than the tenant's object-storage bucket, which is what docs/plan/13 asks for and what the platform cannot yet give it — see the registry's own documentation.",
+                    "example": "100Gi",
+                    "pattern": "^(?:\\d+(\\.\\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)$",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "size"
+                ],
+                "type": "object"
+              },
+              "version": {
+                "default": "2.15",
+                "description": "Harbor minor version. The platform pins the patch, because Harbor publishes image tags per patch and a bare minor resolves to nothing. A minor leaving support is a portal notice and a 120-day window — docs/plan/12 § Cross-cutting decisions.",
+                "enum": [
+                  "2.14",
+                  "2.15"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "clusterId",
+              "replicas",
+              "version"
+            ],
+            "type": "object"
+          },
+          "tags": {
+            "type": "object",
+            "description": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "maxProperties": 50,
+            "x-cybercloud-widget": "tag-input"
+          }
+        },
+        "required": [
+          "location"
+        ],
+        "title": "CyberCloud.ContainerRegistry/registries",
+        "type": "object"
+      },
+      "CyberCloud.ContainerRegistry.registries.ListCredentialsResponse": {
+        "additionalProperties": false,
+        "description": "What CyberCloud.ContainerRegistry/registries/listCredentials returns. ⚠ Secret material. docs/plan/08 § The provider registry makes a secret action the only path a secret value leaves by; this schema is therefore the complete list of what does.",
+        "properties": {
+          "endpoint": {
+            "description": "The in-cluster registry endpoint — what docker login takes. ⚠ http rather than https, and no external address is returned, because there is none.",
+            "type": "string"
+          },
+          "password": {
+            "description": "The administrator's password, read from the tenant's Vault for this call only. Minted at create; never derived from the resource id.",
+            "format": "password",
+            "type": "string",
+            "writeOnly": true,
+            "x-cybercloud-secret": true
+          },
+          "portalUrl": {
+            "description": "Harbor's web UI, which is a different Service from the API endpoint because this row renders no single front door.",
+            "type": "string"
+          },
+          "username": {
+            "description": "The administrator's username. Always admin — Harbor seeds that row and nothing renames it.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "endpoint",
+          "password",
+          "portalUrl",
+          "username"
+        ],
+        "title": "CyberCloud.ContainerRegistry.registries.ListCredentialsResponse",
+        "type": "object"
+      },
       "CyberCloud.ContainerService.managedClusters": {
         "additionalProperties": false,
         "description": "The body of a CyberCloud.ContainerService/managedClusters. Generated from the provider registry's schema, which is the same object the write path validates against — docs/plan/08 § The provider registry.",
@@ -8817,6 +9689,207 @@
         "title": "CyberCloud.Messaging.rabbitmqClusters.ListKeysResponse",
         "type": "object"
       },
+      "CyberCloud.Monitor.workspaces": {
+        "additionalProperties": false,
+        "description": "The body of a CyberCloud.Monitor/workspaces. Generated from the provider registry's schema, which is the same object the write path validates against — docs/plan/08 § The provider registry.",
+        "properties": {
+          "location": {
+            "description": "The region the workspace is billed in, and the region whose telemetry stores hold its data.",
+            "example": "eu-central",
+            "format": "cybercloud-region",
+            "type": "string",
+            "x-cybercloud-immutable": true,
+            "x-cybercloud-widget": "region"
+          },
+          "properties": {
+            "additionalProperties": false,
+            "description": "The workspace's own settings.",
+            "properties": {
+              "clusterId": {
+                "description": "The regional cluster whose telemetry data plane serves this workspace. ⚠ Nothing is deployed into it: a workspace is a tenancy in stores the platform already runs, and this is where its ingest routing is published.",
+                "format": "uuid",
+                "type": "string",
+                "x-cybercloud-immutable": true,
+                "x-cybercloud-widget": "cluster"
+              },
+              "purgeProtection": {
+                "default": false,
+                "description": "Whether this workspace may be destroyed before its seven-day recovery window is out. Once true it stays true for the rest of the workspace's life, and a purge is refused while it is set.",
+                "type": "boolean"
+              },
+              "quota": {
+                "additionalProperties": false,
+                "description": "What the workspace may take in per day, and what happens when it takes in more.",
+                "properties": {
+                  "cardinalityCap": {
+                    "default": 20000,
+                    "description": "Distinct values one metric label may take before the series carrying it are rejected. The rejection names the offending label — docs/plan/16 § Ingest — because a rejection nobody can diagnose is one the client just retries.",
+                    "maximum": 1000000,
+                    "minimum": 100,
+                    "type": "integer"
+                  },
+                  "logsGbPerDay": {
+                    "default": 10,
+                    "description": "Log lines accepted per day, in gibibytes.",
+                    "maximum": 10000,
+                    "minimum": 1,
+                    "type": "integer"
+                  },
+                  "metricsGbPerDay": {
+                    "default": 5,
+                    "description": "Metric samples accepted per day, in gibibytes. This is the first factor of what the workspace draws against the subscription's storage quota; the second is the retention tier.",
+                    "maximum": 10000,
+                    "minimum": 1,
+                    "type": "integer"
+                  },
+                  "overQuotaSampleRate": {
+                    "default": 10,
+                    "description": "The percentage of data still accepted once a signal is over its daily allowance. ⚠ It cannot be zero: docs/plan/16 requires that going over quota samples at a visible rate rather than dropping silently, and zero is a silent drop spelled as a rate.",
+                    "maximum": 100,
+                    "minimum": 1,
+                    "type": "integer"
+                  },
+                  "seriesCap": {
+                    "default": 1000000,
+                    "description": "Active metric series the workspace may hold at once. One tenant putting a request id in a metric label is how a shared time-series database dies, so this is a ceiling rather than a guideline.",
+                    "maximum": 50000000,
+                    "minimum": 1000,
+                    "type": "integer"
+                  },
+                  "tracesGbPerDay": {
+                    "default": 5,
+                    "description": "Spans accepted per day, in gibibytes.",
+                    "maximum": 10000,
+                    "minimum": 1,
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "cardinalityCap",
+                  "logsGbPerDay",
+                  "metricsGbPerDay",
+                  "overQuotaSampleRate",
+                  "seriesCap",
+                  "tracesGbPerDay"
+                ],
+                "type": "object"
+              },
+              "retention": {
+                "additionalProperties": false,
+                "description": "How long each signal is kept. Priced per tier — docs/plan/16 § Cost and retention honesty.",
+                "properties": {
+                  "logs": {
+                    "default": "short",
+                    "description": "Logs retention tier: short is 7 days, standard 30, extended 90. ⚠ Shortening this under an existing workspace destroys the lines already outside the new window, and the reconciler refuses the change rather than applying it.",
+                    "enum": [
+                      "short",
+                      "standard",
+                      "extended"
+                    ],
+                    "type": "string",
+                    "x-cybercloud-widget": "sku"
+                  },
+                  "metrics": {
+                    "default": "short",
+                    "description": "Metrics retention tier: short is 15 days, standard 90, extended 400. ⚠ Shortening this under an existing workspace destroys the samples already outside the new window, and the reconciler refuses the change rather than applying it.",
+                    "enum": [
+                      "short",
+                      "standard",
+                      "extended"
+                    ],
+                    "type": "string",
+                    "x-cybercloud-widget": "sku"
+                  },
+                  "traces": {
+                    "default": "short",
+                    "description": "Traces retention tier: short is 3 days, standard 14, extended 30. ⚠ Shortening this under an existing workspace destroys the spans already outside the new window, and the reconciler refuses the change rather than applying it.",
+                    "enum": [
+                      "short",
+                      "standard",
+                      "extended"
+                    ],
+                    "type": "string",
+                    "x-cybercloud-widget": "sku"
+                  }
+                },
+                "required": [
+                  "logs",
+                  "metrics",
+                  "traces"
+                ],
+                "type": "object"
+              }
+            },
+            "required": [
+              "clusterId",
+              "purgeProtection"
+            ],
+            "type": "object"
+          },
+          "tags": {
+            "type": "object",
+            "description": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "maxProperties": 50,
+            "x-cybercloud-widget": "tag-input"
+          }
+        },
+        "required": [
+          "location"
+        ],
+        "title": "CyberCloud.Monitor/workspaces",
+        "type": "object"
+      },
+      "CyberCloud.Monitor.workspaces.ListKeysResponse": {
+        "additionalProperties": false,
+        "description": "What CyberCloud.Monitor/workspaces/listKeys returns. ⚠ Secret material. docs/plan/08 § The provider registry makes a secret action the only path a secret value leaves by; this schema is therefore the complete list of what does.",
+        "properties": {
+          "accountId": {
+            "description": "The VictoriaMetrics tenant this workspace's metrics live under. It appears in every metrics URL below and is returned rather than left to be guessed at.",
+            "type": "string"
+          },
+          "database": {
+            "description": "The ClickHouse database this workspace's logs, traces and events live in. It is the one platform-chosen string that reaches the tenant's SQL.",
+            "type": "string"
+          },
+          "ingestKey": {
+            "description": "The ingest key, read from the tenant's vault for this call only. It authenticates writes on every endpoint above.",
+            "format": "password",
+            "type": "string",
+            "writeOnly": true,
+            "x-cybercloud-secret": true
+          },
+          "otlpEndpoint": {
+            "description": "Where OTLP over gRPC is accepted, host:port.",
+            "type": "string"
+          },
+          "promqlEndpoint": {
+            "description": "The read-only PromQL/MetricsQL datasource URL, for the tenant's own Grafana or an external one.",
+            "type": "string"
+          },
+          "remoteWriteEndpoint": {
+            "description": "Where Prometheus remote-write is accepted.",
+            "type": "string"
+          },
+          "sqlEndpoint": {
+            "description": "The read-only SQL datasource URL for logs, traces and events.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "accountId",
+          "database",
+          "ingestKey",
+          "otlpEndpoint",
+          "promqlEndpoint",
+          "remoteWriteEndpoint",
+          "sqlEndpoint"
+        ],
+        "title": "CyberCloud.Monitor.workspaces.ListKeysResponse",
+        "type": "object"
+      },
       "CyberCloud.Network.virtualNetworks": {
         "additionalProperties": false,
         "description": "The body of a CyberCloud.Network/virtualNetworks. Generated from the provider registry's schema, which is the same object the write path validates against — docs/plan/08 § The provider registry.",
@@ -10230,5 +11303,5 @@
       }
     }
   },
-  "x-cybercloud-resource-type-count": 18
+  "x-cybercloud-resource-type-count": 20
 }

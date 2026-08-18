@@ -674,6 +674,268 @@
         }
       ]
     },
+    "CyberCloud.ContainerRegistry/registries": {
+      "resourceType": "CyberCloud.ContainerRegistry/registries",
+      "apiVersion": "2026-08-01",
+      "title": "Container registry",
+      "plural": "Container registries",
+      "summary": "A private OCI container registry on Harbor, with a web portal, an image store and a seven-day recovery window.",
+      "overrideKey": "CyberCloud.ContainerRegistry/registries@2026-08-01",
+      "coveredPointers": [
+        "/location",
+        "/properties",
+        "/properties/clusterId",
+        "/properties/monitoring",
+        "/properties/monitoring/enabled",
+        "/properties/replicas",
+        "/properties/sizing",
+        "/properties/sizing/cpu",
+        "/properties/sizing/memory",
+        "/properties/sizing/preset",
+        "/properties/storage",
+        "/properties/storage/class",
+        "/properties/storage/size",
+        "/properties/version",
+        "/tags"
+      ],
+      "supportsTags": true,
+      "requiresCluster": true,
+      "clusterIdPointer": "/properties/clusterId",
+      "softDeleteDays": 0,
+      "purgePermission": "",
+      "purgeProtectionPointer": "",
+      "fields": [
+        {
+          "jsonPointer": "/location",
+          "name": "location",
+          "label": "Location",
+          "control": "xui-region",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "The region the registry is billed in.",
+          "format": "cybercloud-region",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new Container registry to change it.",
+          "placeholder": "eu-central"
+        },
+        {
+          "jsonPointer": "/properties",
+          "name": "properties",
+          "label": "Properties",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "The registry's own settings."
+        },
+        {
+          "jsonPointer": "/properties/clusterId",
+          "name": "clusterId",
+          "label": "Cluster id",
+          "control": "xui-cluster",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "The cluster whose namespace holds the registry.",
+          "format": "uuid",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new Container registry to change it."
+        },
+        {
+          "jsonPointer": "/properties/monitoring",
+          "name": "monitoring",
+          "label": "Monitoring",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "What the platform scrapes."
+        },
+        {
+          "jsonPointer": "/properties/monitoring/enabled",
+          "name": "enabled",
+          "label": "Enabled",
+          "control": "xui-switch",
+          "type": "boolean",
+          "required": false,
+          "section": "monitoring",
+          "hint": "Whether Harbor's core exports Prometheus metrics and a PodMonitor selects them. On by default — docs/plan/12: \"a managed service the tenant cannot see the health of is a black box they will not trust with production\". Turning it off removes the metrics port as well as the scrape, so nothing is left listening on an unscraped address.",
+          "default": true
+        },
+        {
+          "jsonPointer": "/properties/replicas",
+          "name": "replicas",
+          "label": "Replicas",
+          "control": "xui-slider",
+          "type": "integer",
+          "required": true,
+          "section": "general",
+          "hint": "How many replicas of each stateless component — the API core, the web portal and the job service — run. Two is the smallest count that survives a node drain. The registry itself, the database and Redis each own a volume and run one replica whatever this says.",
+          "minimum": 1,
+          "maximum": 10,
+          "default": 2
+        },
+        {
+          "jsonPointer": "/properties/sizing",
+          "name": "sizing",
+          "label": "Sizing",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "CPU and memory for the registry pod, either by preset or explicitly. The other five components are sized by the platform and are not affected."
+        },
+        {
+          "jsonPointer": "/properties/sizing/cpu",
+          "name": "cpu",
+          "label": "Cpu",
+          "control": "xui-input",
+          "type": "string",
+          "required": false,
+          "section": "sizing",
+          "hint": "Explicit vCPU quantity in Kubernetes form, for example 500m or 2. Empty means take it from the preset.",
+          "pattern": "^(?:(\\d+(\\.\\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)?)$",
+          "default": ""
+        },
+        {
+          "jsonPointer": "/properties/sizing/memory",
+          "name": "memory",
+          "label": "Memory",
+          "control": "xui-input",
+          "type": "string",
+          "required": false,
+          "section": "sizing",
+          "hint": "Explicit memory quantity in Kubernetes form, for example 4Gi. Empty means take it from the preset.",
+          "pattern": "^(?:(\\d+(\\.\\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)?)$",
+          "default": ""
+        },
+        {
+          "jsonPointer": "/properties/sizing/preset",
+          "name": "preset",
+          "label": "Preset",
+          "control": "xui-cozy-preset",
+          "type": "string",
+          "required": false,
+          "section": "sizing",
+          "hint": "A sizing preset from docs/plan/12. The registry uses the s1 family, which is 1 vCPU to 4 GiB.",
+          "choices": [
+            {
+              "value": "s1.2xlarge",
+              "label": "S1 2xlarge"
+            },
+            {
+              "value": "s1.4xlarge",
+              "label": "S1 4xlarge"
+            },
+            {
+              "value": "s1.large",
+              "label": "S1 large"
+            },
+            {
+              "value": "s1.medium",
+              "label": "S1 medium"
+            },
+            {
+              "value": "s1.micro",
+              "label": "S1 micro"
+            },
+            {
+              "value": "s1.nano",
+              "label": "S1 nano"
+            },
+            {
+              "value": "s1.small",
+              "label": "S1 small"
+            },
+            {
+              "value": "s1.xlarge",
+              "label": "S1 xlarge"
+            }
+          ],
+          "default": "s1.small"
+        },
+        {
+          "jsonPointer": "/properties/storage",
+          "name": "storage",
+          "label": "Storage",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "Where the image layers live."
+        },
+        {
+          "jsonPointer": "/properties/storage/class",
+          "name": "class",
+          "label": "Class",
+          "control": "xui-storageclass",
+          "type": "string",
+          "required": false,
+          "section": "storage",
+          "hint": "StorageClass name for the image volume. Empty means the cluster default.",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new Container registry to change it.",
+          "default": ""
+        },
+        {
+          "jsonPointer": "/properties/storage/size",
+          "name": "size",
+          "label": "Size",
+          "control": "xui-input",
+          "type": "string",
+          "required": true,
+          "section": "storage",
+          "hint": "Image storage, in Kubernetes quantity form. Grows online; never shrinks. ⚠ This is a filesystem volume rather than the tenant's object-storage bucket, which is what docs/plan/13 asks for and what the platform cannot yet give it — see the registry's own documentation.",
+          "pattern": "^(?:\\d+(\\.\\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)$",
+          "default": "100Gi",
+          "placeholder": "100Gi"
+        },
+        {
+          "jsonPointer": "/properties/version",
+          "name": "version",
+          "label": "Version",
+          "control": "xui-select",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "Harbor minor version. The platform pins the patch, because Harbor publishes image tags per patch and a bare minor resolves to nothing. A minor leaving support is a portal notice and a 120-day window — docs/plan/12 § Cross-cutting decisions.",
+          "choices": [
+            {
+              "value": "2.14",
+              "label": "2 14"
+            },
+            {
+              "value": "2.15",
+              "label": "2 15"
+            }
+          ],
+          "default": "2.15"
+        },
+        {
+          "jsonPointer": "/tags",
+          "name": "tags",
+          "label": "Tags",
+          "control": "xui-tag-input",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+          "maxProperties": 50
+        }
+      ],
+      "actions": [
+        {
+          "name": "listCredentials",
+          "label": "List credentials",
+          "permission": "listCredentials",
+          "longRunning": false,
+          "secret": true,
+          "fields": [],
+          "confirmOnly": true
+        }
+      ]
+    },
     "CyberCloud.ContainerService/managedClusters": {
       "resourceType": "CyberCloud.ContainerService/managedClusters",
       "apiVersion": "2026-08-01",
@@ -3453,6 +3715,283 @@
             }
           ],
           "default": "4.1"
+        },
+        {
+          "jsonPointer": "/tags",
+          "name": "tags",
+          "label": "Tags",
+          "control": "xui-tag-input",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+          "maxProperties": 50
+        }
+      ],
+      "actions": [
+        {
+          "name": "listKeys",
+          "label": "List keys",
+          "permission": "listKeys",
+          "longRunning": false,
+          "secret": true,
+          "fields": [],
+          "confirmOnly": true
+        }
+      ]
+    },
+    "CyberCloud.Monitor/workspaces": {
+      "resourceType": "CyberCloud.Monitor/workspaces",
+      "apiVersion": "2026-08-01",
+      "title": "Monitor workspace",
+      "plural": "Monitor workspaces",
+      "summary": "A tenancy in the platform's metrics, logs and traces stores, with its own retention, quota, ingest key and read-only datasource endpoints.",
+      "overrideKey": "CyberCloud.Monitor/workspaces@2026-08-01",
+      "coveredPointers": [
+        "/location",
+        "/properties",
+        "/properties/clusterId",
+        "/properties/purgeProtection",
+        "/properties/quota",
+        "/properties/quota/cardinalityCap",
+        "/properties/quota/logsGbPerDay",
+        "/properties/quota/metricsGbPerDay",
+        "/properties/quota/overQuotaSampleRate",
+        "/properties/quota/seriesCap",
+        "/properties/quota/tracesGbPerDay",
+        "/properties/retention",
+        "/properties/retention/logs",
+        "/properties/retention/metrics",
+        "/properties/retention/traces",
+        "/tags"
+      ],
+      "supportsTags": true,
+      "requiresCluster": true,
+      "clusterIdPointer": "/properties/clusterId",
+      "softDeleteDays": 7,
+      "purgePermission": "purge",
+      "purgeProtectionPointer": "/properties/purgeProtection",
+      "fields": [
+        {
+          "jsonPointer": "/location",
+          "name": "location",
+          "label": "Location",
+          "control": "xui-region",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "The region the workspace is billed in, and the region whose telemetry stores hold its data.",
+          "format": "cybercloud-region",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new Monitor workspace to change it.",
+          "placeholder": "eu-central"
+        },
+        {
+          "jsonPointer": "/properties",
+          "name": "properties",
+          "label": "Properties",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "The workspace's own settings."
+        },
+        {
+          "jsonPointer": "/properties/clusterId",
+          "name": "clusterId",
+          "label": "Cluster id",
+          "control": "xui-cluster",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "The regional cluster whose telemetry data plane serves this workspace. ⚠ Nothing is deployed into it: a workspace is a tenancy in stores the platform already runs, and this is where its ingest routing is published.",
+          "format": "uuid",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new Monitor workspace to change it."
+        },
+        {
+          "jsonPointer": "/properties/purgeProtection",
+          "name": "purgeProtection",
+          "label": "Purge protection",
+          "control": "xui-switch",
+          "type": "boolean",
+          "required": true,
+          "section": "general",
+          "hint": "Whether this workspace may be destroyed before its seven-day recovery window is out. Once true it stays true for the rest of the workspace's life, and a purge is refused while it is set.",
+          "default": false
+        },
+        {
+          "jsonPointer": "/properties/quota",
+          "name": "quota",
+          "label": "Quota",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "What the workspace may take in per day, and what happens when it takes in more."
+        },
+        {
+          "jsonPointer": "/properties/quota/cardinalityCap",
+          "name": "cardinalityCap",
+          "label": "Cardinality cap",
+          "control": "xui-slider",
+          "type": "integer",
+          "required": true,
+          "section": "quota",
+          "hint": "Distinct values one metric label may take before the series carrying it are rejected. The rejection names the offending label — docs/plan/16 § Ingest — because a rejection nobody can diagnose is one the client just retries.",
+          "minimum": 100,
+          "maximum": 1000000,
+          "default": 20000
+        },
+        {
+          "jsonPointer": "/properties/quota/logsGbPerDay",
+          "name": "logsGbPerDay",
+          "label": "Logs gb per day",
+          "control": "xui-slider",
+          "type": "integer",
+          "required": true,
+          "section": "quota",
+          "hint": "Log lines accepted per day, in gibibytes.",
+          "minimum": 1,
+          "maximum": 10000,
+          "default": 10
+        },
+        {
+          "jsonPointer": "/properties/quota/metricsGbPerDay",
+          "name": "metricsGbPerDay",
+          "label": "Metrics gb per day",
+          "control": "xui-slider",
+          "type": "integer",
+          "required": true,
+          "section": "quota",
+          "hint": "Metric samples accepted per day, in gibibytes. This is the first factor of what the workspace draws against the subscription's storage quota; the second is the retention tier.",
+          "minimum": 1,
+          "maximum": 10000,
+          "default": 5
+        },
+        {
+          "jsonPointer": "/properties/quota/overQuotaSampleRate",
+          "name": "overQuotaSampleRate",
+          "label": "Over quota sample rate",
+          "control": "xui-slider",
+          "type": "integer",
+          "required": true,
+          "section": "quota",
+          "hint": "The percentage of data still accepted once a signal is over its daily allowance. ⚠ It cannot be zero: docs/plan/16 requires that going over quota samples at a visible rate rather than dropping silently, and zero is a silent drop spelled as a rate.",
+          "minimum": 1,
+          "maximum": 100,
+          "default": 10
+        },
+        {
+          "jsonPointer": "/properties/quota/seriesCap",
+          "name": "seriesCap",
+          "label": "Series cap",
+          "control": "xui-slider",
+          "type": "integer",
+          "required": true,
+          "section": "quota",
+          "hint": "Active metric series the workspace may hold at once. One tenant putting a request id in a metric label is how a shared time-series database dies, so this is a ceiling rather than a guideline.",
+          "minimum": 1000,
+          "maximum": 50000000,
+          "default": 1000000
+        },
+        {
+          "jsonPointer": "/properties/quota/tracesGbPerDay",
+          "name": "tracesGbPerDay",
+          "label": "Traces gb per day",
+          "control": "xui-slider",
+          "type": "integer",
+          "required": true,
+          "section": "quota",
+          "hint": "Spans accepted per day, in gibibytes.",
+          "minimum": 1,
+          "maximum": 10000,
+          "default": 5
+        },
+        {
+          "jsonPointer": "/properties/retention",
+          "name": "retention",
+          "label": "Retention",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "How long each signal is kept. Priced per tier — docs/plan/16 § Cost and retention honesty."
+        },
+        {
+          "jsonPointer": "/properties/retention/logs",
+          "name": "logs",
+          "label": "Logs",
+          "control": "xui-sku",
+          "type": "string",
+          "required": true,
+          "section": "retention",
+          "hint": "Logs retention tier: short is 7 days, standard 30, extended 90. ⚠ Shortening this under an existing workspace destroys the lines already outside the new window, and the reconciler refuses the change rather than applying it.",
+          "choices": [
+            {
+              "value": "short",
+              "label": "Short"
+            },
+            {
+              "value": "standard",
+              "label": "Standard"
+            },
+            {
+              "value": "extended",
+              "label": "Extended"
+            }
+          ],
+          "default": "short"
+        },
+        {
+          "jsonPointer": "/properties/retention/metrics",
+          "name": "metrics",
+          "label": "Metrics",
+          "control": "xui-sku",
+          "type": "string",
+          "required": true,
+          "section": "retention",
+          "hint": "Metrics retention tier: short is 15 days, standard 90, extended 400. ⚠ Shortening this under an existing workspace destroys the samples already outside the new window, and the reconciler refuses the change rather than applying it.",
+          "choices": [
+            {
+              "value": "short",
+              "label": "Short"
+            },
+            {
+              "value": "standard",
+              "label": "Standard"
+            },
+            {
+              "value": "extended",
+              "label": "Extended"
+            }
+          ],
+          "default": "short"
+        },
+        {
+          "jsonPointer": "/properties/retention/traces",
+          "name": "traces",
+          "label": "Traces",
+          "control": "xui-sku",
+          "type": "string",
+          "required": true,
+          "section": "retention",
+          "hint": "Traces retention tier: short is 3 days, standard 14, extended 30. ⚠ Shortening this under an existing workspace destroys the spans already outside the new window, and the reconciler refuses the change rather than applying it.",
+          "choices": [
+            {
+              "value": "short",
+              "label": "Short"
+            },
+            {
+              "value": "standard",
+              "label": "Standard"
+            },
+            {
+              "value": "extended",
+              "label": "Extended"
+            }
+          ],
+          "default": "short"
         },
         {
           "jsonPointer": "/tags",
