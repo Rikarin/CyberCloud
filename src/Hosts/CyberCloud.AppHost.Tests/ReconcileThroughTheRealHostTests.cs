@@ -429,16 +429,24 @@ public sealed class ReconcileThroughTheRealHostTests(LocalTopology topology) : I
     }
 
     /// <summary>
-    ///     Attaches the local k3s as the cluster the widget's body names, and proves the silo can
-    ///     reach it.
+    ///     Attaches the local k3s as the cluster the widget's body names.
     /// </summary>
     /// <param name="cancellationToken">The test's token.</param>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>The ping is not decoration; it is where a wiring failure becomes legible.</b>
-    ///         Without it, a silo that cannot resolve the kubeconfig produces a reconcile that fails
-    ///         a minute later, inside a reminder, and the test's only evidence is a timeout. With it,
-    ///         the failure names the connection.
+    ///         ⚠ <b>It attaches and does <i>not</i> ping, and the reason is a real property of the
+    ///         grain rather than an omission.</b> <c>ClusterConnectionGrain</c> is null-tenant, so
+    ///         <c>EnsureCallerMayReach</c> is the only thing standing between two tenants — and it
+    ///         admits the owning tenant's grains, other null-tenant grains and a platform operator,
+    ///         and nothing else. An Orleans <i>client</i> is <c>CallerKind.Client</c> and is refused
+    ///         with <c>ResourceNotFound</c>, so a test that pinged from here would be asserting
+    ///         against a check that is working. The first <c>AttachAsync</c> is the one call that is
+    ///         open, because it is what establishes the ownership every later check reads.
+    ///     </para>
+    ///     <para>
+    ///         The consequence is that a kubeconfig this silo cannot resolve does not surface here.
+    ///         It surfaces as the operation's own failure a minute later, with the resolver's sentence
+    ///         in <c>OperationStatus.Error</c> — which <see cref="Diagnose" /> prints.
     ///     </para>
     ///     <para>
     ///         ⚠ <b>The credential reference is a <c>file:</c> URI and the silo is what decides
@@ -464,15 +472,6 @@ public sealed class ReconcileThroughTheRealHostTests(LocalTopology topology) : I
 
         attached.IsSuccess.ShouldBeTrue(
             $"the cluster could not be attached: {attached.Error?.Code} — {attached.Error?.Message}"
-        );
-
-        var ping = await connection.PingAsync();
-
-        ping.IsSuccess.ShouldBeTrue(
-            $"the silo cannot reach the AppHost's k3s: {ping.Error?.Code} — {ping.Error?.Message}. "
-            + "A message about a missing kubeconfig resolver means the silo was started without "
-            + $"'{"CyberCloud:Silo:KubeconfigRoot"}' — see LocalKubeconfigFiles and the AppHost's two "
-            + "silo declarations."
         );
 
         cancellationToken.ThrowIfCancellationRequested();
