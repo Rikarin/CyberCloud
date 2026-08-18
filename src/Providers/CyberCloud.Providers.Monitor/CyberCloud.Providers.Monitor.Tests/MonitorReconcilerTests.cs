@@ -30,21 +30,26 @@ public sealed class MonitorReconcilerTests {
     }
 
     [Fact]
-    public void TheStructuralCheckStillMissesAReadonlyMutableCache() {
-        // ⚠ THE BLIND SPOT, PINNED AGAINST A COUNTER-EXAMPLE THAT SHOULD FAIL AND DOES NOT.
-        // ReconcilerConformance.CheckNoHiddenState skips a field that is `readonly`, and a `readonly`
-        // Dictionary is mutable forever — which is exactly the shape a per-tenant cache takes when
-        // somebody adds one for performance. SIX providers have confirmed that only the cross-tenant
-        // test below catches it; this is the seventh, and pinning it is what stops the next test
-        // looking redundant.
+    public void TheStructuralCheckCatchesAReadonlyMutableCache() {
+        // ⚠ CALIBRATION, AND IT NOW POINTS THE OTHER WAY. This test used to assert that
+        // CheckNoHiddenState MISSED the counter-example below, because it skipped every
+        // `field.IsInitOnly` — and `readonly` stops the FIELD being reassigned while stopping
+        // nothing about the dictionary, so a per-tenant cache passed clause 2 while accumulating
+        // state on a singleton every tenant shares. Seven families each pinned that blind spot
+        // and it is now closed; this is what holds it closed.
         //
-        // If somebody ever closes the hole, THIS test goes red and says where to delete the
-        // now-unnecessary belt — a better outcome than a comment nobody re-reads.
-        ReconcilerConformance.CheckNoHiddenState(new ReconcilerWithAReadonlyCache()).ShouldBeEmpty(
-            "the structural check now catches a readonly mutable collection. That is an improvement — "
-            + "delete this test and say so in ReconcilerConformance's remarks, which currently promise "
-            + "the opposite."
+        // ⚠ THE CROSS-TENANT TEST BELOW STAYS, AND IS NOT MADE REDUNDANT BY THIS. This one reads
+        // a field's declared TYPE. That one drives ONE reconciler instance through TWO tenants and
+        // compares what each got, which is the only way to catch mixing no field type could show.
+        var findings = ReconcilerConformance.CheckNoHiddenState(new ReconcilerWithAReadonlyCache());
+
+        findings.ShouldContain(
+            x => x.Clause == ReconcilerClause.NoHiddenState,
+            "a readonly field holding a mutable Dictionary is state on a shared singleton, and the "
+            + "structural check is what catches it before the behavioural test has to"
         );
+
+        findings.ShouldContain(x => x.Detail.Contains("lastRendered", StringComparison.Ordinal));
     }
 
     [Fact]

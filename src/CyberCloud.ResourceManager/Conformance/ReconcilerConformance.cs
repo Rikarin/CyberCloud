@@ -342,7 +342,7 @@ public static class ReconcilerConformance {
                         new(
                             ReconcilerClause.NoHiddenState,
                             $"'{current.Name}.{field.Name}' is a readonly field holding a mutable "
-                            + $"{field.FieldType.Name}. 'readonly' stops the FIELD being reassigned and "
+                            + "collection. 'readonly' stops the FIELD being reassigned and "
                             + "stops nothing about the collection, so this is per-pass state on a "
                             + "singleton that every tenant shares — it breaks when the grain moves silo "
                             + "and it leaks between tenants before that. Hold it in ImmutableArray, "
