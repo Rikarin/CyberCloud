@@ -1185,16 +1185,24 @@ public static class CloudConsoles {
             // FOUND AND BOTH FAKE HARNESSES HID. This read `is JsonArray { Count: 0 }`, which is what
             // the provider APPLIES — and `NetworkPolicySpec.Ingress` carries `omitempty`, so an empty
             // rule list comes back from a real API server as NO `ingress` KEY AT ALL. The console
-            // therefore converged in the Docker-free harness (which echoes the apply) and in every
+            // therefore converged in the Docker-free harness (which echoed the apply) and in every
             // unit test, and sat in InProgress forever against k3s. It is the exact hazard this
             // method's own remarks predicted for built-in types, walked into two hundred lines below
             // the warning.
+            //
+            // ⚠ SPELLED AS `KubeJson.IsAbsentOrEmpty` RATHER THAN HAND-ROLLED, because the hazard is
+            // not this provider's. FakeKubeCluster now strips empty collections from BUILT-IN objects
+            // so the strict spelling goes red in a suite instead of in production, and
+            // src/Providers/README.md § Comparing an object you read back sends the next author here.
+            // ⚠ It would be the WRONG call on a custom resource, where an empty object is a presence
+            // flag and absent is genuinely different — see KubeJson's own remarks. A NetworkPolicy is
+            // a built-in, which is what makes it right here.
             //
             // ⚠ AND THE TWO REALLY ARE THE SAME THING HERE, which is why accepting both is not a
             // weakening: "deny all ingress" is expressed by naming Ingress in `policyTypes` with no
             // rules, and an absent list and an empty one are both no rules. The line above is what
             // carries the meaning; this one only refuses a policy that grew a rule.
-            && spec["ingress"] is not JsonArray { Count: > 0 }
+            && KubeJson.IsAbsentOrEmpty(spec["ingress"])
             && spec["egress"] is JsonArray egress
             && egress.Count >= ExpectedEgressRules(desired);
     }
