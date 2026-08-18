@@ -591,6 +591,11 @@ public sealed partial class ContainerRegistryData {
     [JsonPropertyName("enabled")]
     public bool? Enabled { get; set; }
 
+    /// <summary>Whether this registry may be destroyed before its seven-day recovery window is out. Once true it stays true for the rest of the registry's life, and a purge is refused while it is set — a flag whose holder can clear it and then purge is one round-trip of protection.</summary>
+    /// <remarks>Defaults to false when left unset.</remarks>
+    [JsonPropertyName("purgeProtection")]
+    public bool? PurgeProtection { get; set; }
+
     /// <summary>How many replicas of each stateless component — the API core, the web portal and the job service — run. Two is the smallest count that survives a node drain. The registry itself, the database and Redis each own a volume and run one replica whatever this says.</summary>
     /// <remarks>Required on a create. Defaults to 2 when left unset.</remarks>
     [JsonPropertyName("replicas")]
@@ -648,7 +653,7 @@ public sealed partial class ContainerRegistryResource {
         ContainerRegistryData data,
         CancellationToken cancellationToken = default);
 
-    /// <summary>Deletes the resource. ⚠ Permanent: this type declares no soft-delete window.</summary>
+    /// <summary>Deletes the resource. ⚠ Recoverable for 7 day(s): the resource keeps its quota and its data, and its name is held. Purge to end that window early — a separate permission, 'purge'.</summary>
     public partial Task<Operation> DeleteAsync(
         WaitUntil waitUntil,
         CancellationToken cancellationToken = default);
@@ -2586,7 +2591,7 @@ public sealed partial class MonitorWorkspaceResource {
         MonitorWorkspaceData data,
         CancellationToken cancellationToken = default);
 
-    /// <summary>Deletes the resource. ⚠ Permanent: this type declares no soft-delete window.</summary>
+    /// <summary>Deletes the resource. ⚠ Recoverable for 7 day(s): the resource keeps its quota and its data, and its name is held. Purge to end that window early — a separate permission, 'purge'.</summary>
     public partial Task<Operation> DeleteAsync(
         WaitUntil waitUntil,
         CancellationToken cancellationToken = default);

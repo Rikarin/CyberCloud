@@ -950,7 +950,7 @@
       "delete": {
         "operationId": "CyberCloud_ContainerRegistry_registries_Delete",
         "summary": "Delete a CyberCloud.ContainerRegistry/registries.",
-        "description": "The delete is permanent: this type declares no soft-delete window.",
+        "description": "A deleted CyberCloud.ContainerRegistry/registries is recoverable for 7 day(s) — docs/plan/06 § Tags, locks. Its data plane is torn down, so nothing keeps running and nothing keeps being metered for compute; its stored state and its volumes are kept, so a restore re-applies exactly what was there. Its old address answers 404 for the whole window, its name is held, and its quota stays committed so that a restore cannot fail against an allowance spent since. Restore it, or purge it to end the window early — a purge needs 'purge', which is a separate right from 'delete'.",
         "responses": {
           "202": {
             "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
@@ -999,8 +999,8 @@
           }
         },
         "x-cybercloud-permission": "delete",
-        "x-cybercloud-soft-delete-days": 0,
-        "x-cybercloud-purge-permission": ""
+        "x-cybercloud-soft-delete-days": 7,
+        "x-cybercloud-purge-permission": "purge"
       },
       "x-cybercloud-resource-type": "CyberCloud.ContainerRegistry/registries",
       "x-cybercloud-display": {
@@ -1013,9 +1013,9 @@
       "x-cybercloud-supports-tags": true,
       "x-cybercloud-requires-cluster": true,
       "x-cybercloud-cluster-id-pointer": "/properties/clusterId",
-      "x-cybercloud-soft-delete-days": 0,
-      "x-cybercloud-purge-permission": "",
-      "x-cybercloud-purge-protection-pointer": "",
+      "x-cybercloud-soft-delete-days": 7,
+      "x-cybercloud-purge-permission": "purge",
+      "x-cybercloud-purge-protection-pointer": "/properties/purgeProtection",
       "x-cybercloud-meters": [
         {
           "meter": "MemoryGb",
@@ -4210,7 +4210,7 @@
       "delete": {
         "operationId": "CyberCloud_Monitor_workspaces_Delete",
         "summary": "Delete a CyberCloud.Monitor/workspaces.",
-        "description": "The delete is permanent: this type declares no soft-delete window.",
+        "description": "A deleted CyberCloud.Monitor/workspaces is recoverable for 7 day(s) — docs/plan/06 § Tags, locks. Its data plane is torn down, so nothing keeps running and nothing keeps being metered for compute; its stored state and its volumes are kept, so a restore re-applies exactly what was there. Its old address answers 404 for the whole window, its name is held, and its quota stays committed so that a restore cannot fail against an allowance spent since. Restore it, or purge it to end the window early — a purge needs 'purge', which is a separate right from 'delete'.",
         "responses": {
           "202": {
             "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
@@ -4259,8 +4259,8 @@
           }
         },
         "x-cybercloud-permission": "delete",
-        "x-cybercloud-soft-delete-days": 0,
-        "x-cybercloud-purge-permission": ""
+        "x-cybercloud-soft-delete-days": 7,
+        "x-cybercloud-purge-permission": "purge"
       },
       "x-cybercloud-resource-type": "CyberCloud.Monitor/workspaces",
       "x-cybercloud-display": {
@@ -4273,9 +4273,9 @@
       "x-cybercloud-supports-tags": true,
       "x-cybercloud-requires-cluster": true,
       "x-cybercloud-cluster-id-pointer": "/properties/clusterId",
-      "x-cybercloud-soft-delete-days": 0,
-      "x-cybercloud-purge-permission": "",
-      "x-cybercloud-purge-protection-pointer": "",
+      "x-cybercloud-soft-delete-days": 7,
+      "x-cybercloud-purge-permission": "purge",
+      "x-cybercloud-purge-protection-pointer": "/properties/purgeProtection",
       "x-cybercloud-meters": [
         {
           "meter": "Resources",
@@ -7849,6 +7849,11 @@
                   }
                 },
                 "type": "object"
+              },
+              "purgeProtection": {
+                "default": false,
+                "description": "Whether this registry may be destroyed before its seven-day recovery window is out. Once true it stays true for the rest of the registry's life, and a purge is refused while it is set — a flag whose holder can clear it and then purge is one round-trip of protection.",
+                "type": "boolean"
               },
               "replicas": {
                 "default": 2,
