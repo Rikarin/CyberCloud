@@ -2365,6 +2365,165 @@ public sealed partial class VirtualNetworkCollection {
     public partial AsyncPageable<VirtualNetworkResource> GetAllAsync(CancellationToken cancellationToken = default);
 }
 
+/// <summary>The body of a CyberCloud.Network/virtualNetworks/securityGroups.</summary>
+/// <remarks>A deny-by-default set of allow rules that become OVN ACLs on the ports in a virtual network. A workload may carry several.</remarks>
+public sealed partial class SecurityGroupData {
+
+    /// <summary>The region the security group lives in. It must be the network's own region — nothing checks that.</summary>
+    /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+    [JsonPropertyName("location")]
+    public required string Location { get; set; }
+
+    /// <summary>Whether workloads that carry this same security group may reach each other without a rule. Off by default: it is the one setting here that permits traffic nobody wrote a rule for.</summary>
+    /// <remarks>Defaults to false when left unset.</remarks>
+    [JsonPropertyName("allowSameGroupTraffic")]
+    public bool? AllowSameGroupTraffic { get; set; }
+
+    /// <summary>The cluster whose fabric carries the security group. Must be the cluster the network is in — nothing checks that.</summary>
+    /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+    [JsonPropertyName("clusterId")]
+    public required Guid ClusterId { get; set; }
+
+    /// <summary>Whether outbound ICMP is allowed to the remotes above. Off by default.</summary>
+    /// <remarks>Defaults to false when left unset.</remarks>
+    [JsonPropertyName("allowIcmp")]
+    public bool? AllowIcmp { get; set; }
+
+    /// <summary>The IPv4 range outbound traffic may reach, or empty for no IPv4 rules at all.</summary>
+    /// <remarks>Defaults to "" when left unset.</remarks>
+    [JsonPropertyName("remoteV4")]
+    public string? RemoteV4 { get; set; }
+
+    /// <summary>The IPv6 range outbound traffic may reach, or empty for no IPv6 rules at all.</summary>
+    /// <remarks>Defaults to "" when left unset.</remarks>
+    [JsonPropertyName("remoteV6")]
+    public string? RemoteV6 { get; set; }
+
+    /// <summary>TCP ports outbound traffic may reach, in the same form as the inbound list. Empty means no outbound TCP.</summary>
+    /// <remarks>Defaults to "" when left unset.</remarks>
+    [JsonPropertyName("tcpPorts")]
+    public string? TcpPorts { get; set; }
+
+    /// <summary>UDP ports outbound traffic may reach. Empty means no outbound UDP — which includes DNS on port 53.</summary>
+    /// <remarks>Defaults to "" when left unset.</remarks>
+    [JsonPropertyName("udpPorts")]
+    public string? UdpPorts { get; set; }
+
+    /// <summary>Whether inbound ICMP is allowed from the remotes above. Off by default. ⚠ With this off, a workload in this group does not answer ping and does not receive path-MTU messages.</summary>
+    /// <remarks>Defaults to false when left unset.</remarks>
+    [JsonPropertyName("allowIcmp")]
+    public bool? AllowIcmp { get; set; }
+
+    /// <summary>The IPv4 range inbound traffic may come from, in CIDR form, or empty for no IPv4 rules at all. Use 0.0.0.0/0 for the whole internet.</summary>
+    /// <remarks>Defaults to "" when left unset.</remarks>
+    [JsonPropertyName("remoteV4")]
+    public string? RemoteV4 { get; set; }
+
+    /// <summary>The IPv6 range inbound traffic may come from, or empty for no IPv6 rules at all. ⚠ A group with only an IPv4 remote silently permits nothing over IPv6, which on a dual-stack subnet is not the same as permitting nothing.</summary>
+    /// <remarks>Defaults to "" when left unset.</remarks>
+    [JsonPropertyName("remoteV6")]
+    public string? RemoteV6 { get; set; }
+
+    /// <summary>TCP ports inbound traffic may reach, as a comma-separated list of ports and ranges — for example 80,443,8000-8100. Empty means no TCP is allowed inbound. ⚠ There is no way to say 'every protocol'; 1-65535 says 'every TCP port'.</summary>
+    /// <remarks>Defaults to "" when left unset.</remarks>
+    [JsonPropertyName("tcpPorts")]
+    public string? TcpPorts { get; set; }
+
+    /// <summary>UDP ports inbound traffic may reach, in the same form as tcpPorts. Empty means no UDP is allowed inbound.</summary>
+    /// <remarks>Defaults to "" when left unset.</remarks>
+    [JsonPropertyName("udpPorts")]
+    public string? UdpPorts { get; set; }
+
+    /// <summary>Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.</summary>
+    [JsonPropertyName("tags")]
+    public IDictionary<string, string> Tags { get; set; } = new Dictionary<string, string>(StringComparer.Ordinal);
+}
+
+/// <summary>One Security group, and the operations on it.</summary>
+public sealed partial class SecurityGroupResource {
+    /// <summary>The resource's fully qualified id.</summary>
+    public string Id { get; init; } = string.Empty;
+
+    /// <summary>The body, projected at this api-version.</summary>
+    public SecurityGroupData Data { get; init; } = new();
+
+    /// <summary>Re-reads the resource.</summary>
+    public partial Task<Response<SecurityGroupResource>> GetAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Amends the resource. A merge patch: what is not set is not changed.</summary>
+    public partial Task<Operation<SecurityGroupResource>> UpdateAsync(
+        WaitUntil waitUntil,
+        SecurityGroupData data,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Deletes the resource. ⚠ Permanent: this type declares no soft-delete window.</summary>
+    public partial Task<Operation> DeleteAsync(
+        WaitUntil waitUntil,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>What showEffectiveRules returns.</summary>
+    public sealed partial class ShowEffectiveRulesResult {
+
+        /// <summary>Whether workloads carrying this same group reach each other without a rule. ⚠ Returned because it is the one permission that is not in the list above.</summary>
+        [JsonPropertyName("allowSameGroupTraffic")]
+        public required bool AllowSameGroupTraffic { get; set; }
+
+        /// <summary>How many rules there are. ⚠ Worth reading next to the body: one port list of three entries with two remotes is six rules.</summary>
+        [JsonPropertyName("count")]
+        public required long Count { get; set; }
+
+        /// <summary>What happens to traffic no rule above matches. It is always 'drop' — the fabric installs a default-deny for every port in a security group and this resource cannot change that.</summary>
+        [JsonPropertyName("defaultAction")]
+        public required string DefaultAction { get; set; }
+
+        /// <summary>⚠ What this answer is and is not. It is what the platform asks the fabric for, derived from the resource's stored body — not a reading of the ACLs OVN currently holds.</summary>
+        [JsonPropertyName("note")]
+        public required string Note { get; set; }
+
+        /// <summary>Every rule this security group's body becomes, in the order it is written to the fabric, one sentence each. An empty list means the group permits nothing, which is a valid and fully restrictive configuration.</summary>
+        [JsonPropertyName("rules")]
+        public IList<string> Rules { get; set; } = new List<string>();
+    }
+
+    /// <summary>ShowEffectiveRules. ⚠ An action never creates — a POST to a name that does not exist is a 404.</summary>
+    public partial Task<Response<ShowEffectiveRulesResult>> ShowEffectiveRulesAsync(
+        CancellationToken cancellationToken = default);
+}
+
+/// <summary>The Security groups in one parent.</summary>
+/// <remarks>⚠ Every write is long-running: docs/plan/08 § The write path, end to end
+/// ends in a 202 for every verb, so there is no synchronous overload to offer.
+/// ⚠ The leading parameter(s) name the ancestors this type nests inside —
+/// docs/plan/12 § Child resources addresses a child
+/// '…/{parentType}/{parentName}/{childType}/{childName}', so the parent's name is
+/// part of the address rather than part of the body.</remarks>
+public sealed partial class SecurityGroupCollection {
+    /// <summary>The resource type these address.</summary>
+    public const string ResourceType = "CyberCloud.Network/virtualNetworks/securityGroups";
+
+    /// <summary>The URL template, with the api-version this file was generated at.</summary>
+    public const string PathTemplate = "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Network/virtualNetworks/{virtualNetworksName}/securityGroups/{resourceName}";
+
+    /// <inheritdoc cref="GeneratedApiVersion.Value" />
+    public const string ApiVersion = "2026-08-01";
+
+    /// <summary>Creates or replaces one Security group.</summary>
+    /// <remarks>⚠ Poll with GetProgressAsync() rather than only WaitForCompletionAsync():
+    /// docs/plan/21 § The .NET SDK — "Azure's LROs expose no progress; ours do and the
+    /// SDK should not hide it".</remarks>
+    public partial Task<Operation<SecurityGroupResource>> CreateOrUpdateAsync(
+        WaitUntil waitUntil,
+        string virtualNetworksName, string name,
+        SecurityGroupData data,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Reads one Security group by name.</summary>
+    public partial Task<Response<SecurityGroupResource>> GetAsync(string virtualNetworksName, string name, CancellationToken cancellationToken = default);
+
+    /// <summary>The Security groups in one parent, paged.</summary>
+    public partial AsyncPageable<SecurityGroupResource> GetAllAsync(string virtualNetworksName, CancellationToken cancellationToken = default);
+}
+
 /// <summary>The body of a CyberCloud.Network/virtualNetworks/subnets.</summary>
 /// <remarks>A range inside a virtual network that workloads are given addresses from, with optional outbound NAT and optional isolation from other subnets.</remarks>
 public sealed partial class SubnetData {

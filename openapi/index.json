@@ -334,6 +334,19 @@
       }
     },
     {
+      "type": "CyberCloud.Network/virtualNetworks/securityGroups",
+      "apiVersions": [
+        "2026-08-01"
+      ],
+      "display": {
+        "name": "Security group",
+        "plural": "Security groups",
+        "alias": "secgroup",
+        "summary": "A deny-by-default set of allow rules that become OVN ACLs on the ports in a virtual network. A workload may carry several.",
+        "declared": true
+      }
+    },
+    {
       "type": "CyberCloud.Network/virtualNetworks/subnets",
       "apiVersions": [
         "2026-08-01"
