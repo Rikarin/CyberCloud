@@ -350,6 +350,19 @@
       }
     },
     {
+      "type": "CyberCloud.Network/publicIpAddresses",
+      "apiVersions": [
+        "2026-08-01"
+      ],
+      "display": {
+        "name": "Public IP address",
+        "plural": "Public IP addresses",
+        "alias": "publicip",
+        "summary": "A public address allocated from the region's pool, which a load balancer or a gateway can later be given. On its own it carries no traffic.",
+        "declared": true
+      }
+    },
+    {
       "type": "CyberCloud.Network/virtualNetworks",
       "apiVersions": [
         "2026-08-01"

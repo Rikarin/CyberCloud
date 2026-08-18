@@ -1,0 +1,76 @@
+# actions-without-handlers.txt — the declared actions that cannot run, and why.
+#
+# A provider declares an action and every generated surface publishes it: the path in
+# openapi/2026-08-01.json, the verb in the `cyc` tree, the method on the .NET SDK, the form in the
+# portal. None of those four records whether anything can SERVE the action, so a platform that
+# publishes twelve actions nothing can execute produces documents byte-identical to one where all
+# twelve work. `ActionDispatcher` refuses a synchronous action with no handler as
+# ErrorCode.InternalError — a 500, deliberately, because the caller POSTed something this platform
+# publishes in its own OpenAPI document and a 4xx would send them looking at their own request.
+#
+# Enforced in both directions by the Action handlers gate in build/Build.Architecture.cs:
+#
+#   * a synchronous action with no handler that is NOT listed here fails the build. That is the
+#     durable half: the thirteenth gap cannot reach four generated surfaces the way the first twelve
+#     did, quietly, as a side effect of a declaration nobody paired with an implementation;
+#   * a line here that names an action which now HAS a handler — or which no provider declares any
+#     more — also fails. A debt list that outlives the debt is a list nobody trusts, and the next
+#     person to read it cannot tell which rows are real.
+#
+# ⚠ ADDING A LINE IS A REVIEW REQUEST, NOT A BUILD FIX. The question a reviewer is being asked is
+# "should this platform publish a call that answers 500?", and the answer is almost always no. It is
+# yes only when the action's api-version is already published — a published api-version is immutable
+# (docs/plan/08 § The provider registry) and removing a path from it is a breaking change the OpenAPI
+# compatibility gate refuses — AND the thing the action would return does not exist yet for a reason
+# that is written down. Both halves. "No handler yet" on an unpublished action is not a reason to add
+# a line; it is a reason to write the handler or not declare the action.
+#
+# ⚠ A long-running action needs no line and must not have one. It answers 202, starts an operation,
+# and the operation grain drives the resource type's reconciler; `ProviderBuilder.Action` refuses
+# `longRunning` together with a handler for that reason. `CyberCloud.ContainerService/agentPools`'
+# `upgradeNodeImage` is the precedent and is correct as declared.
+#
+# One action per line: the resource type, whitespace, the action name. Blank lines and lines
+# starting with `#` are ignored. Matched case-insensitively on the action, as the registry and a URL
+# segment both are.
+
+# ── The credential does not exist, because nothing mints one ───────────────────────────────────
+#
+# These four declare `listKeys` and there is no key. The engine is deployed with no authentication
+# configured at all, so there is nothing for a handler to read and nothing it could honestly return:
+# a handler that answered with an empty `password` against a schema saying the field is required
+# would publish a credential that authenticates nothing, which is worse than the refusal. Closing
+# each one is a change to that provider's RECONCILER — render the engine's user, mint the secret
+# through ISecretWriter's mint-once rule, apply it — and only then a handler that reads it. That is
+# the shape CyberCloud.Storage/accounts, CyberCloud.Monitor/workspaces and
+# CyberCloud.ContainerRegistry/registries already have.
+
+# No `spec.configuration.users` is rendered, so the operator deploys `default` with an empty password
+# behind a pod-IP allow-list — authenticated by network position rather than by a credential.
+CyberCloud.Analytics/clickHouseClusters       listKeys
+
+# No `KafkaUser` is rendered and the listeners declare no SASL mechanism, so no SCRAM user exists and
+# Strimzi generates no Secret. Adding one is also a listener change, which is visible to every client
+# already connected to an existing cluster.
+CyberCloud.Messaging/kafkaClusters            listKeys
+
+# No `authorization` block is written into nats.conf, so the server accepts every connection reaching
+# it and there is no user and no password — recorded in charts/managed/nats/conformance.yaml § owed.
+CyberCloud.Messaging/natsClusters             listKeys
+
+# ⚠ THE ONE ON THIS LIST WHERE THE MISSING SECRET IS ALSO A LIVE DEFECT. The RedisFailover this
+# provider applies sets `auth.secretPath` to `{name}-auth` and NOTHING WRITES THAT SECRET — not the
+# reconciler, not the operator, which generates nothing. So the cache never comes up and the resource
+# sits InProgress; `listKeys` having no key to read is the second symptom rather than the problem.
+# Closing it is the same reconciler change as the three above and it is worth more than they are,
+# because it is the difference between the type working and not.
+CyberCloud.Cache/redis                        listKeys
+
+# ── The reading the action returns comes from a pipeline that is not built ──────────────────────
+
+# `stats` returns an object count and a byte total. There is no S3 or RGW admin client in the tree
+# and nothing scrapes the metrics port the account asks the operator to expose; the metering pipeline
+# derives storage from the account's DESIRED body rather than from an observation, so it has no
+# reading to hand over either. docs/plan/22's usage pipeline is what this is the tenant-facing half
+# of, and it is not written.
+CyberCloud.Storage/accounts/buckets           stats

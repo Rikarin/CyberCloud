@@ -1,0 +1,67 @@
+{{/*
+Kube-OVN `OvnEip` — docs/plan/14 § Everything else, `publicIpAddresses`: "a metered, quota'd,
+allocatable resource in its own right — because IPv4 is scarce and must be accounted".
+
+⚠ This renders a custom resource; it does not install Kube-OVN. ADR-019 puts Kube-OVN on the cluster
+alongside Cilium as platform infrastructure, and a tenant's OvnEip is a row in that installation.
+
+⚠ NO `namespace:` IN metadata. `OvnEip` is `+kubebuilder:resource:scope="Cluster"`. The separation a
+namespace would have provided is in the object's NAME — see `kube-ovn-eip.objectName`.
+
+⚠ ONE object, and no Service, no Secret and no ServiceMonitor. An EIP is a row in OVN's IPAM and a
+logical address: no pod, nothing to scrape, nothing to connect to. That is also why the type declares
+QuotaMeter.Resources — and, uniquely in the catalogue, QuotaMeter.PublicIps, because the thing being
+allocated is the scarce one.
+
+⚠ AN ADDRESS ON ITS OWN CARRIES NO TRAFFIC, which is this type's answer to "what does an empty body
+expose". Reaching a tenant workload through an EIP takes a SECOND object — an OvnFip, OvnDnatRule or
+OvnSnatRule naming it — and this chart renders none. conformance.yaml,
+`an-unattached-address-carries-no-traffic`.
+*/}}
+apiVersion: kubeovn.io/v1
+kind: OvnEip
+metadata:
+  name: {{ include "kube-ovn-eip.objectName" . }}
+  labels:
+    {{- include "kube-ovn-eip.platformLabels" . | nindent 4 }}
+spec:
+  {{/*
+    ⚠ SENT EXPLICITLY EVEN THOUGH THE CONTROLLER SUPPLIES IT, on the rule kube-ovn-security-group
+    established for `allowSameGroupTraffic`: handleAddOvnEip reads an empty spec.type as `nat`, but
+    "the substrate's zero value happens to be safe" is a fact about a version of Go source rather
+    than a property of this resource — and PublicIpAddresses.Matches can only compare a field that
+    was sent.
+
+    ⚠ AND ITS TWO SIBLINGS ARE THE REASON IT IS A CONSTANT RATHER THAN A VALUE. `lsp` makes the
+    controller create a bare logical switch port ON A NODE and `lrp` a logical router port for a
+    VPC's external gateway; both are an operator's layering decision in the same shape as
+    SecurityGroupSpec.Tier, and a tenant body that could elect one would be reaching into the
+    platform's own fabric.
+  */}}
+  type: "nat"
+
+  {{/*
+    ⚠ THE KEY IS OMITTED RATHER THAN SENT EMPTY, AND SENDING IT EMPTY IS A DEADLOCK RATHER THAN A
+    TIDINESS PROBLEM. createOrUpdateOvnEipCR writes the ALLOCATED address into spec.v4Ip through a
+    full `OvnEips().Update(...)`, taking field-manager ownership of it. An apply carrying
+    `v4Ip: ""` would claim the same field at a different value, and every later apply would answer a
+    field-manager conflict: the resource would sit in InProgress forever on an address that was
+    allocated correctly the first time.
+
+    ⚠ It is CyberCloud.Terminal/consoles' finding — an empty value is not an absent one — arriving on
+    a SCALAR instead of a list, and with a worse symptom. PublicIpAddresses.OvnEipJson does the same
+    omission on the C# side and NetworkPublicIpTests pins both halves.
+
+    ⚠ NO `externalSubnet` and NO `macAddress`, for two different reasons. The MAC is IPAM's and IS
+    written back to the spec, so sending one would be a value overwritten a pass later. The pool is
+    the operator's `--external-gateway-switch` (default "external") and is NOT written back on an
+    object this platform applied — the controller resolves it into a local variable and records its
+    choice on the `ovn.kubernetes.io/subnet` label instead. SOURCE records the difference from
+    kube-ovn-subnet's `spec.vpc`, and the check that an empty field still releases the address.
+  */}}
+  {{- if .Values.address.v4 }}
+  v4Ip: {{ .Values.address.v4 | quote }}
+  {{- end }}
+  {{- if .Values.address.v6 }}
+  v6Ip: {{ .Values.address.v6 | quote }}
+  {{- end }}

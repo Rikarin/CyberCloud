@@ -125,7 +125,8 @@ public sealed class ContainerServiceProvider : IResourceProvider {
                 ActionKind.Post,
                 ManagedClusters.ListCredentialsPermission,
                 secret: true,
-                response: ManagedClusters.ListCredentialsResponse
+                response: ManagedClusters.ListCredentialsResponse,
+                handler: typeof(ManagedClusterListCredentialsHandler)
             )
             // ⚠ `aks` AND `nodepool`, AND THE CHECK CyberCloud.Storage/accounts DEMANDS WAS RUN BY
             // HAND AGAINST LITERALS. CliEmitter derives the CLI GROUP key from the provider

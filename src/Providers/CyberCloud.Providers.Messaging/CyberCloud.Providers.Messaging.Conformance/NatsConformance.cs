@@ -74,6 +74,10 @@ public sealed class NatsCase : IProviderCaseSource {
                 NatsClusters.ClientServiceRef(ns, id.Name),
                 NatsClusters.PodMonitorRef(ns, id.Name)
             ],
+            // This platform mints or computes everything this type's actions hand back, so no operator
+            // writes an object any action reads. Stated rather than defaulted — see
+            // ProviderConformanceCase.OperatorWritten.
+            OperatorWritten = static (_, _) => [],
             ObjectMatchesDesired = match => {
                 using var desired = JsonDocument.Parse(match.DesiredJson);
                 return NatsClusters.Matches(match.ObjectJson, desired.RootElement);

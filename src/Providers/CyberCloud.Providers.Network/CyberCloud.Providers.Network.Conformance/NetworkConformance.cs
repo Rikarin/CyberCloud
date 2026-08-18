@@ -63,6 +63,10 @@ public sealed class VirtualNetworkCase : IProviderCaseSource {
             InvalidBodyTarget = "/properties/addressSpace/v4",
             ActionName = VirtualNetworks.ShowIsolationAction,
             Objects = (id, ns) => [VirtualNetworks.VpcRef(ns, id.Name)],
+            // This platform mints or computes everything this type's actions hand back, so no operator
+            // writes an object any action reads. Stated rather than defaulted — see
+            // ProviderConformanceCase.OperatorWritten.
+            OperatorWritten = static (_, _) => [],
             ObjectMatchesDesired = match => {
                 using var desired = JsonDocument.Parse(match.DesiredJson);
                 return VirtualNetworks.Matches(match.ObjectJson, desired.RootElement);
@@ -120,6 +124,10 @@ public sealed class NetworkSubnetCase : IProviderCaseSource {
             InvalidBodyTarget = "/properties/addressPrefix/v4",
             ActionName = NetworkSubnets.AddressUsageAction,
             Objects = (id, ns) => [NetworkSubnets.SubnetRef(ns, id)],
+            // This platform mints or computes everything this type's actions hand back, so no operator
+            // writes an object any action reads. Stated rather than defaulted — see
+            // ProviderConformanceCase.OperatorWritten.
+            OperatorWritten = static (_, _) => [],
             // ⚠ THE WHOLE PREDICATE, AND `spec.vpc` IS THE FIELD IT WAS WORTH CHANGING THE HARNESS
             // FOR. A Subnet whose `vpc` is wrong hands out addresses inside a DIFFERENT tenant's
             // routing domain under this tenant's resource id, and `vpc` is derived from the address —
@@ -206,6 +214,10 @@ public sealed class NetworkSecurityGroupCase : IProviderCaseSource {
             // which for a subnet costs the `spec.vpc` half of its comparison. A SecurityGroup has no
             // field derived from the address at all, so nothing is left out here and the shared suite
             // checks exactly what the reconciler does.
+            // This platform mints or computes everything this type's actions hand back, so no operator
+            // writes an object any action reads. Stated rather than defaulted — see
+            // ProviderConformanceCase.OperatorWritten.
+            OperatorWritten = static (_, _) => [],
             ObjectMatchesDesired = match => {
                 using var desired = JsonDocument.Parse(match.DesiredJson);
                 return NetworkSecurityGroups.Matches(match.ObjectJson, desired.RootElement);
@@ -215,6 +227,93 @@ public sealed class NetworkSecurityGroupCase : IProviderCaseSource {
     /// <inheritdoc />
     public static ImmutableArray<ProviderConformanceCase> Ancestors { get; } =
         [VirtualNetworkCase.ProviderCase];
+}
+
+/// <summary>
+///     <c>CyberCloud.Network/publicIpAddresses</c> — the family's fourth type and its first
+///     top-level one since the network itself.
+/// </summary>
+/// <remarks>
+///     <para>
+///         ⚠ <b>NO <c>Ancestors</c>, WHICH IS THE STRUCTURAL DIFFERENCE FROM THE OTHER TWO
+///         ADDITIONS.</b> A subnet and a security group each declare the network's own case object so
+///         the harness can create the parent first. An <c>OvnEip</c> names no VPC — it is allocated
+///         from the operator's external subnet and attached later by a separate NAT object — so this
+///         type is at <see cref="ResourceTypeName.Depth" /> 0 and there is nothing to create first.
+///         ⚠ It therefore runs the parent's 27 applicable assertions rather than the children's 28:
+///         <c>CreatingUnderAParentThatDoesNotExistIsTheSame404AsAnAbsentResource</c> self-skips at
+///         depth 0.
+///     </para>
+///     <para>
+///         ⚠ <b><c>ChangedBody</c> VARIES A PROPERTY THE SCHEMA MARKS <c>Immutable</c>, AND THAT IS
+///         NOT AN OVERSIGHT — IT IS THE ONLY AXIS THIS TYPE HAS.</b> Read firsthand in
+///         <c>pkg/controller/ovn_eip.go</c> at <c>v1.16.2</c>: <c>handleUpdateOvnEip</c> refuses a
+///         changed <c>v4Ip</c>, <c>v6Ip</c>, <c>macAddress</c> and <c>type</c> — four errors, one per
+///         field, each beginning <i>"not support change"</i> — and <c>handleAddOvnEip</c> returns
+///         early once <c>status.macAddress</c> is set. <b>Every field of an <c>OvnEip</c> is immutable
+///         once it is ready</b>, so there is no body change that both reaches the cluster and would
+///         survive a real controller, and <c>ProviderConformanceCase.ChangedBody</c> is <c>required</c>
+///         with no way to say so. What this case therefore proves is that the renderer's output
+///         reaches the cluster on an update; what it does <b>not</b> prove is that the update takes
+///         effect on a real fabric — where the controller would log a refusal that nothing surfaces
+///         while the platform reported <c>Succeeded</c>.
+///         <c>charts/managed/kube-ovn-eip/conformance.yaml § owed</c>,
+///         <c>an-allocated-address-cannot-be-changed</c>. ⚠ <c>SchemaProperty.Immutable</c> is a
+///         declaration the manager does not enforce — its own remarks say so — so the write is
+///         accepted here rather than refused, and that is the platform's recorded gap rather than this
+///         provider's.
+///     </para>
+///     <para>
+///         ⚠ <b>THE INVALID BODY IS A MALFORMED ADDRESS RATHER THAN A MISSING PROPERTY</b>, because
+///         this type has no required property under <c>/properties</c> beyond the cluster: an address
+///         the fabric picks is the ordinary request, so demanding one would be demanding that a tenant
+///         know an address before they have been given one. <c>10.0.0</c> is refused at the API by
+///         <see cref="IpAddresses.OptionalV4Pattern" />, with a <c>400</c> and this pointer, before the
+///         write path answers.
+///     </para>
+/// </remarks>
+public sealed class PublicIpAddressCase : IProviderCaseSource {
+    /// <inheritdoc />
+    public static ProviderConformanceCase ProviderCase { get; } =
+        new() {
+            DisplayName = "CyberCloud.Network/publicIpAddresses",
+            CreateProvider = () => new NetworkProvider(),
+            ReconcilerType = typeof(PublicIpAddressReconciler),
+            CreateReconciler = clock => new PublicIpAddressReconciler(clock),
+            Type = PublicIpAddresses.Type,
+            ApiVersion = PublicIpAddresses.V2026,
+            // ⚠ The default asks for no particular address, which is the body whose rendered object
+            // OMITS `spec.v4Ip` entirely. That is the case that deadlocks if the key is emitted empty
+            // — see PublicIpAddresses.OvnEipJson — so it is the one the whole suite runs against.
+            Body = cluster => PublicIpAddresses.Body(cluster),
+            ChangedBody = cluster => PublicIpAddresses.Body(cluster, addressV4: "10.100.0.7"),
+            InvalidBody = cluster => PublicIpAddresses.Body(cluster, addressV4: "10.0.0"),
+            InvalidBodyTarget = "/properties/address/v4",
+            ActionName = PublicIpAddresses.AllocationAction,
+            Objects = (id, ns) => [PublicIpAddresses.OvnEipRef(ns, id.Name)],
+            // ⚠ THE WHOLE PREDICATE, like the security group's and unlike the subnet's — and this
+            // type reads NOTHING off `match`'s address half, which is a fact about the type rather
+            // than a limit of the member. `PublicIpAddresses.Matches` compares `type`, `v4Ip` and
+            // `v6Ip`, all of which the BODY decides. This is a depth-1 type, so there is no parent
+            // for a spec field to point at — the subnet's `spec.vpc` problem cannot arise here.
+            //
+            // ⚠ AN OvnEip IS CLUSTER-SCOPED TOO, so `OvnEipRef` sets `Namespace = string.Empty` and
+            // the derived namespace IS a component of the object's `metadata.name`. That still buys
+            // this case nothing: the suite reads the object AT that ObjectRef, so a name rendered
+            // against the wrong namespace fails as "not in the cluster" before any comparison runs.
+            // `match.Namespace` is the right tool only where a name component reappears INSIDE the
+            // spec, which is the subnet's case and not this one.
+            // ⚠ Empty, and that is a statement rather than a formality — the member's own remarks
+            // say so. An OvnEip carries no credential: the address is allocated by the controller
+            // into `spec.v4Ip` and there is no Secret anywhere in this type's object set. The
+            // provider most likely to omit this member is the next one to grow an
+            // operator-generated credential, which is why it is `required`.
+            OperatorWritten = static (_, _) => [],
+            ObjectMatchesDesired = match => {
+                using var desired = JsonDocument.Parse(match.DesiredJson);
+                return PublicIpAddresses.Matches(match.ObjectJson, desired.RootElement);
+            }
+        };
 }
 
 /// <summary>The shared suite, run against the virtual-network provider.</summary>
@@ -244,6 +343,14 @@ public sealed class NetworkSecurityGroupConformance(
 ) : ProviderConformanceTests<NetworkSecurityGroupCase>(cluster),
     IClassFixture<ProviderTestCluster<NetworkSecurityGroupCase>>;
 
+/// <summary>
+///     The <b>same</b> suite again, run against the public-address type.
+/// </summary>
+/// <param name="cluster">The harness.</param>
+public sealed class PublicIpAddressConformance(ProviderTestCluster<PublicIpAddressCase> cluster)
+    : ProviderConformanceTests<PublicIpAddressCase>(cluster),
+        IClassFixture<ProviderTestCluster<PublicIpAddressCase>>;
+
 /// <summary>The container-backed half, skipped loudly, against the virtual-network type.</summary>
 public sealed class VirtualNetworkClusterBackedConformance()
     : ClusterBackedConformanceTests(VirtualNetworkCase.ProviderCase);
@@ -255,6 +362,10 @@ public sealed class NetworkSubnetClusterBackedConformance()
 /// <summary>The container-backed half, skipped loudly, against the security-group child type.</summary>
 public sealed class NetworkSecurityGroupClusterBackedConformance()
     : ClusterBackedConformanceTests(NetworkSecurityGroupCase.ProviderCase);
+
+/// <summary>The container-backed half, skipped loudly, against the public-address type.</summary>
+public sealed class PublicIpAddressClusterBackedConformance()
+    : ClusterBackedConformanceTests(PublicIpAddressCase.ProviderCase);
 
 /// <summary>
 ///     What this provider's two registrations into the shared suite are <b>shaped</b> like.
@@ -279,12 +390,27 @@ public sealed class NetworkSuiteShapeTests {
             "the security group runs a different set of assertions than the virtual network does."
         );
 
+        RunnableFactsOf(typeof(PublicIpAddressConformance)).ShouldBe(
+            parent,
+            "the public address runs a different set of assertions than the virtual network does. It "
+            + "is the family's second TOP-LEVEL type, so it must run exactly the network's set — a "
+            + "type that is neither a child nor a copy of the parent is the one a shape test would "
+            + "otherwise let drift."
+        );
+
         parent.Length.ShouldBeGreaterThan(20);
     }
 
     [Fact]
     public void OnlyTheChildrenDescribeAnAncestorAndItIsTheNetworksOwnCaseObject() {
         AncestorsOf<VirtualNetworkCase>().ShouldBeEmpty();
+
+        // ⚠ AND THE PUBLIC ADDRESS IS THE ONE ADDITION THAT MUST *NOT* DECLARE ONE. Three of the four
+        // types in this family are inside a virtual network and the fourth reads as though it should
+        // be. An ancestor here would make the harness create a Vpc before every address case, which
+        // would pass — and would encode into the suite a containment the substrate does not have: an
+        // OvnEip carries no field naming a VPC at all.
+        AncestorsOf<PublicIpAddressCase>().ShouldBeEmpty();
 
         // ⚠ BOTH children, and the assertion is `ShouldBeSameAs` rather than an equality: an ancestor
         // that is a SECOND DESCRIPTION of the virtual network can disagree with the network's own
@@ -351,6 +477,22 @@ public sealed class NetworkSuiteShapeTests {
 
         group[0].IsClusterScoped.ShouldBeTrue(
             "a Kube-OVN SecurityGroup is +kubebuilder:resource:scope=\"Cluster\"."
+        );
+
+        var address = PublicIpAddressCase.ProviderCase.Objects(id, "ns");
+
+        address.Length.ShouldBe(1);
+
+        address[0].IsClusterScoped.ShouldBeTrue(
+            "a Kube-OVN OvnEip is +kubebuilder:resource:scope=\"Cluster\"."
+        );
+
+        address[0].Kind.Plural.ShouldBe(
+            "ovn-eips",
+            "the plural is HYPHENATED — +kubebuilder:resource:path=\"ovn-eips\". "
+            + "ClusterConformanceHarness derives its CRD stub's path from GroupVersionKind.Plural, so "
+            + "`ovneips` would install a definition at a path the apply never reaches — and the "
+            + "symptom is a discovery error naming a missing operator rather than a wrong plural."
         );
 
         group[0].Kind.Plural.ShouldBe(

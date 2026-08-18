@@ -1,5 +1,6 @@
 using CyberCloud.Conformance;
 using CyberCloud.Conformance.Harness;
+using CyberCloud.Kubernetes.Contracts;
 using CyberCloud.Providers.DocumentDB.Contracts;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -62,6 +63,20 @@ public sealed class DocumentDbCase : IProviderCaseSource {
                     DocumentDbAccounts.ServiceRef(ns, id.Name),
                     DocumentDbAccounts.PodMonitorRef(ns, id.Name)
                 ],
+            // ⚠ CloudNativePG's superuser Secret, which `EnableSuperuserAccess` asks for and this
+            // reconciler never writes. The `uri` key the real object also carries is left out on
+            // purpose: its dbname is "*", nothing may return it, and a fixture that offered it would
+            // make reaching for it look supported.
+            OperatorWritten = (id, ns) => [
+                (KubeSecret.Ref(ns, DocumentDbAccounts.SuperuserSecretName(id.Name)),
+                    OperatorSecret.Json(
+                        KubeSecret.Ref(ns, DocumentDbAccounts.SuperuserSecretName(id.Name)),
+                        [
+                            (DocumentDbAccounts.UsernameKey, "postgres"),
+                            (DocumentDbAccounts.PasswordKey, "a-generated-password")
+                        ]
+                    ))
+            ],
             ObjectMatchesDesired = match => {
                 using var desired = JsonDocument.Parse(match.DesiredJson);
                 return DocumentDbAccounts.Matches(match.ObjectJson, desired.RootElement);

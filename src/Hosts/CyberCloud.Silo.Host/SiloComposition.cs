@@ -1,12 +1,18 @@
+using CyberCloud.Authorization;
 using CyberCloud.Communication;
+using CyberCloud.Core.Time;
 using CyberCloud.Kubernetes;
+using CyberCloud.Kubernetes.Connections;
 using CyberCloud.ResourceManager;
 using CyberCloud.ResourceManager.Contracts;
 using CyberCloud.ServiceDefaults;
 using CyberCloud.ServiceDefaults.Storage;
 using CyberCloud.Tenancy;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
 using StackExchange.Redis;
 
 namespace CyberCloud.Silo.Host;
@@ -121,6 +127,27 @@ public static class SiloComposition {
     static void ConfigureCluster(ISiloBuilder silo) {
         silo.AddCyberCloudCommunication()
             .AddSiloIdentity()
+            // ── docs/plan/07's ReBAC engine — step 3 of every write ────────────────────────────────
+            //
+            // ⚠ WITHOUT THIS THE ENFORCEMENT SEAM ANSWERED 404 TO EVERYBODY, INCLUDING ITSELF.
+            // AddCyberCloudResourceManager below registers ReBacResourceAuthorizer, which asks
+            // ICheckGrain whether the caller may write. The .csproj reference is what puts CheckGrain,
+            // TupleStoreGrain and the two relation grains in the silo; THIS call is what gives
+            // CheckGrain the schema it evaluates against, because a schema is a decision the host
+            // makes rather than something Orleans can discover. A silo with the grains and no schema
+            // fails to activate the check grain, and a silo with neither fails the check itself — and
+            // both arrive at the caller as the canonical 404 that docs/plan/07 § The enforcement seam
+            // requires, which is why this was invisible.
+            //
+            // ⚠ The default schema is CyberCloudSchema.Instance — docs/plan/07 § Azure RBAC, expressed
+            // in it. A test silo may pass its own; a production one has exactly one.
+            .AddCyberCloudAuthorization()
+            // ── The kubeconfig resolver, BEFORE AddCyberCloudKubernetes ────────────────────────────
+            //
+            // ⚠ ORDER, AND FOR THE SAME REASON THE TWO CLUSTER SEAMS ARE ORDERED BELOW.
+            // AddCyberCloudKubernetes registers IKubeApiClientFactory with TryAddSingleton, so the
+            // FIRST registration wins and a resolver added afterwards would never be resolved.
+            .ConfigureServices(ConfigureKubeconfigResolver(silo.Configuration))
             // ⚠ BEFORE AddCyberCloudResourceManager, and here the order does matter. The manager's
             // registrations are TryAdd, so the two cluster seams below have to be in the container
             // first or the refusing defaults win — NoClusterConnectionFactory, which answers null to
@@ -142,6 +169,48 @@ public static class SiloComposition {
                 }
             )
             .AddCyberCloudResourceManager();
+    }
+
+    /// <summary>
+    ///     Registers a kubeconfig resolver when this silo has been given a directory to read from.
+    /// </summary>
+    /// <param name="configuration">The host's configuration.</param>
+    /// <returns>The registration, which does nothing when no root is configured.</returns>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>Doing nothing is the correct behaviour for a silo with no root, and it is not the
+    ///         same as doing nothing at all.</b> <c>KubeApiClientFactory</c> with no
+    ///         <c>ResolveKubeconfig</c> refuses every connect with a sentence naming this seam, which
+    ///         is what a production silo should say until <c>CyberCloud.KeyVault</c> can answer for it.
+    ///         What was wrong before was that <i>every</i> silo was in that state and nothing could
+    ///         leave it.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The whole factory is re-registered rather than the delegate configured</b>, because
+    ///         <c>ResolveKubeconfig</c> is an <c>init</c>-only property: it is settable at construction
+    ///         and nowhere else, which is the shape that keeps a running silo's credential path from
+    ///         being moved underneath it.
+    ///     </para>
+    /// </remarks>
+    static Action<IServiceCollection> ConfigureKubeconfigResolver(IConfiguration configuration) {
+        var root = configuration[LocalKubeconfigFiles.RootKey];
+
+        return services => {
+            if (string.IsNullOrWhiteSpace(root)) {
+                return;
+            }
+
+            services.TryAddSingleton<IClock, SystemClock>();
+
+            services.TryAddSingleton<IKubeApiClientFactory>(provider =>
+                new KubeApiClientFactory(
+                    provider.GetRequiredService<IClock>(),
+                    provider.GetService<ILogger<KubeApiClientFactory>>()
+                ) {
+                    ResolveKubeconfig = LocalKubeconfigFiles.ResolverFor(root)
+                }
+            );
+        };
     }
 
     /// <summary>

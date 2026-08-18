@@ -35,6 +35,10 @@ public sealed class ReferenceCase : IProviderCaseSource {
             ActionName = "ping",
             Objects = (id, ns) =>
                 [new() { Kind = Probes.Kind, Namespace = ns, Name = Probes.ObjectNameOf(id) }],
+            // This platform mints or computes everything this type's actions hand back, so no operator
+            // writes an object any action reads. Stated rather than defaulted — see
+            // ProviderConformanceCase.OperatorWritten.
+            OperatorWritten = static (_, _) => [],
             ObjectMatchesDesired = match => Probes.Matches(match.ObjectJson, match.DesiredJson)
         };
 }
@@ -77,6 +81,10 @@ public sealed class ReferenceChildCase : IProviderCaseSource {
             ActionName = "ping",
             Objects = (id, ns) =>
                 [new() { Kind = Probes.Kind, Namespace = ns, Name = Probes.ObjectNameOf(id) }],
+            // This platform mints or computes everything this type's actions hand back, so no operator
+            // writes an object any action reads. Stated rather than defaulted — see
+            // ProviderConformanceCase.OperatorWritten.
+            OperatorWritten = static (_, _) => [],
             ObjectMatchesDesired = match => Probes.Matches(match.ObjectJson, match.DesiredJson)
         };
 

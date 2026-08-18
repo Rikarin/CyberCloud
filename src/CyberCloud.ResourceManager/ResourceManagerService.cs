@@ -443,7 +443,7 @@ public sealed class ResourceManagerService(
     }
 
     /// <inheritdoc />
-    public async Task<Result<ResourceSnapshot>> RestoreAsync(
+    public async Task<Result<WriteAccepted>> RestoreAsync(
         WriteRequest request,
         CancellationToken cancellationToken = default
     ) {
@@ -454,7 +454,7 @@ public sealed class ResourceManagerService(
 
         var resolved = await ResolveAsync(request, trace);
         if (resolved.TryGetError(out var resolveError)) {
-            return Result<ResourceSnapshot>.Failure(resolveError);
+            return Result<WriteAccepted>.Failure(resolveError);
         }
 
         var target = resolved.GetValueOrThrow();
@@ -468,7 +468,7 @@ public sealed class ResourceManagerService(
         // that is a second method rather than a flag on the first.
         var parked = await RestorableAsync(target);
         if (parked.TryGetError(out var parkedError)) {
-            return Result<ResourceSnapshot>.Failure(parkedError);
+            return Result<WriteAccepted>.Failure(parkedError);
         }
 
         var addressed = target with { Id = target.Id.WithId(parked.GetValueOrThrow()) };
@@ -499,22 +499,54 @@ public sealed class ResourceManagerService(
         );
 
         if (authorized.TryGetError(out var authError)) {
-            return Result<ResourceSnapshot>.Failure(authError);
+            return Result<WriteAccepted>.Failure(authError);
         }
 
         trace.Enter(WriteStep.Locks);
 
         var lockLevel = await locks.ResolveAsync(addressed.Id, cancellationToken);
         if (lockLevel.TryGetError(out var lockError)) {
-            return Result<ResourceSnapshot>.Failure(lockError);
+            return Result<WriteAccepted>.Failure(lockError);
         }
 
         if (lockLevel.GetValueOrThrow() == LockLevel.ReadOnly) {
-            return Result<ResourceSnapshot>.Failure(
+            return Result<WriteAccepted>.Failure(
                 ErrorCode.ScopeLocked,
                 $"'{request.Path}' is covered by a ReadOnly lock, so it cannot be restored — a restore "
                 + "puts a resource back into the scope the lock covers. docs/plan/06 § Tags, locks."
             );
+        }
+
+        // ⚠ A DELETE THAT IS STILL TEARING THE DATA PLANE DOWN IS NOT A RESOURCE THAT CAN BE
+        // RESTORED YET, AND THIS READ IS WHERE THAT IS REFUSED.
+        //
+        // The index is parked on the delete's REQUEST path, before its operation has run a single
+        // pass — so a resource can be soft-deleted, unaddressable and still have pods coming down.
+        // Restoring in that window would put two operations on one resource driving it towards
+        // opposite shapes, which is the race the single-writer guard exists for; and the resource
+        // grain cannot apply that guard itself, because a parked resource's OperationId always names
+        // the delete and a guard reading "somebody else holds this" would refuse every first restore.
+        // So it is asked here, of the operation, exactly as the delete path asks the resource before
+        // releasing the index: the refusal has to come before anything irreversible.
+        var deleting = await Resource(addressed).GetAsync(addressed.ApiVersion.Value, []);
+        if (deleting.TryGetError(out var deletingError)) {
+            return Result<WriteAccepted>.Failure(deletingError);
+        }
+
+        var parkedBy = deleting.GetValueOrThrow().OperationId;
+        if (parkedBy != Guid.Empty) {
+            var driving = await Operation(addressed, parkedBy).GetAsync();
+
+            if (driving.IsSuccess
+                && driving.GetValueOrThrow().State is OperationState.NotStarted or OperationState.Running) {
+                return Result<WriteAccepted>.Failure(
+                    ErrorCode.OperationInProgress,
+                    $"Operation {parkedBy:D} is still tearing '{request.Path}' down and it is "
+                    + $"{driving.GetValueOrThrow().State}. Poll that operation before restoring — a "
+                    + "restore that raced its own delete would re-apply objects the teardown is still "
+                    + "removing."
+                );
+            }
         }
 
         trace.Enter(WriteStep.IndexClaim);
@@ -532,7 +564,7 @@ public sealed class ResourceManagerService(
         // second would be two reads of a value that can change between them.
         var restored = await Index(addressed).RestoreAsync(addressed.Id.Id);
         if (restored.TryGetError(out var restoreError)) {
-            return Result<ResourceSnapshot>.Failure(restoreError);
+            return Result<WriteAccepted>.Failure(restoreError);
         }
 
         trace.Enter(WriteStep.LinkParent);
@@ -549,24 +581,80 @@ public sealed class ResourceManagerService(
         );
 
         if (reparented.TryGetError(out var reparentError)) {
-            return Result<ResourceSnapshot>.Failure(reparentError);
+            return Result<WriteAccepted>.Failure(reparentError);
         }
 
         trace.Enter(WriteStep.SubmitDesired);
 
-        // ⚠ Deleting → Succeeded, and there was never anything to re-apply. The soft delete never
-        // ran a reconcile pass — docs/plan/08 § Soft delete keeps the volumes, the PVCs and the memory
-        // allocated, which is both why the quota stayed committed and why the data plane is already
-        // exactly as the caller left it. This moves the label, and only the label.
-        var live = await Resource(addressed).CompleteAsync(ProvisioningState.Succeeded, null);
-        if (live.TryGetError(out var completeError)) {
-            return Result<ResourceSnapshot>.Failure(completeError);
+        // ── AND NOW THE DATA PLANE COMES BACK, WHICH IS THE HALF THIS METHOD USED TO SKIP ────────
+        //
+        // ⚠ THIS WAS `CompleteAsync(Succeeded)` — one label move — AND THE COMMENT ABOVE IT SAID
+        // "there was never anything to re-apply", WHICH WAS TRUE ONLY BECAUSE THE SOFT DELETE RAN NO
+        // TEARDOWN. That is the defect two providers withdrew their recovery windows over: a resource
+        // whose pods kept running after a delete the tenant was told had converged. A soft delete now
+        // tears the data plane down like any other delete — see OperationGrain.DriveAsync — so a
+        // restore has work to do, and this is it.
+        //
+        // ⚠ NO BODY IS SUBMITTED AND NONE IS ASKED FOR. The resource grain still holds the superset
+        // the delete did not clear, and ReconcileDriver reads desired state from the grain rather than
+        // from the operation spec, so `Desired: "{}"` below is not a body — it is the same placeholder
+        // every delete and purge spec carries. What comes back is byte for byte what was there, which
+        // is the property a recovery window is FOR: a restore that re-derived a body from anywhere
+        // else would be handing the tenant a resource they did not have.
+        //
+        // ⚠ AND NO QUOTA IS RESERVED. docs/plan/08 § Soft delete: the committed amounts stayed
+        // committed through the whole window precisely so "a restore that re-reserved would fail
+        // against an allowance the tenant has spent in the meantime, which is a restore that works
+        // only when it is not needed". So this operation carries no leases and returns nothing — the
+        // arithmetic is untouched from create to purge, and failure class (a) has no way in.
+        var operationId = Guid.NewGuid();
+
+        var beginning = await Resource(addressed).BeginRestoreAsync(operationId);
+        if (beginning.TryGetError(out var beginError)) {
+            return Result<WriteAccepted>.Failure(beginError);
+        }
+
+        var snapshot = beginning.GetValueOrThrow();
+
+        trace.Enter(WriteStep.StartOperation);
+
+        var started = await Operation(addressed, operationId)
+            .StartAsync(
+                new() {
+                    OperationId = operationId,
+                    Kind = OperationKind.Restore,
+                    ResourcePath = addressed.Id.Path,
+                    ResourceId = addressed.Id.Id,
+                    TenantId = addressed.Id.TenantId,
+                    SubscriptionId = addressed.Id.SubscriptionId,
+                    ApiVersion = addressed.ApiVersion.Value,
+                    Desired = "{}",
+                    QuotaLeaseIds = [],
+                    CommittedQuota = [],
+                    IndexClaimed = false,
+                    ParentResourceId = await ParentIdOf(addressed),
+                    Caller = request.Caller
+                }
+            );
+
+        if (started.TryGetError(out var startError)) {
+            return Result<WriteAccepted>.Failure(startError);
         }
 
         trace.Enter(WriteStep.EmitChanged);
-        await EmitAsync(ResourceChangeKind.Updated, addressed, live.GetValueOrThrow(), cancellationToken);
+        await EmitAsync(ResourceChangeKind.Updated, addressed, snapshot, cancellationToken);
 
-        return await Resource(addressed).GetAsync(addressed.ApiVersion.Value, ReadablePointers(addressed.Schema));
+        trace.Enter(WriteStep.Accepted);
+
+        return Result<WriteAccepted>.Success(
+            new() {
+                OperationId = operationId,
+                OperationUri = OperationUri(operationId),
+                RetryAfterSeconds = ReconcileSchedule.InitialRetryAfterSeconds,
+                Resource = snapshot,
+                Trace = trace.Build()
+            }
+        );
     }
 
     /// <inheritdoc />

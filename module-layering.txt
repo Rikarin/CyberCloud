@@ -190,6 +190,17 @@ CyberCloud.Vault -> CyberCloud.ResourceManager
 # them children, rendering four Kube-OVN kinds across one API group. The fifth-edge signal has still
 # not fired from any provider's own needs.
 #
+# ⚠ AND STILL FOUR AFTER CyberCloud.Network/publicIpAddresses, WHICH IS THE FIRST TYPE IN THIS FAMILY
+# THAT IS NOT INSIDE A VIRTUAL NETWORK. It draws QuotaMeter.PublicIps, which is the first draw of that
+# meter in the platform — and that needs nothing new here, because CyberCloud.Tenancy is already one
+# of the four. What it did NOT need is the interesting half: an OvnEip names no VPC, so the type has
+# no parent and reaches no sibling. ⚠ The consumer that WILL want a line to it is docs/plan/14's own
+# `loadBalancers`, which has to attach an address to a backend — and that is the same refusal and the
+# same sanctioned route as the paragraph above, one type further in. The attachment is a second
+# Kube-OVN object naming PublicIpAddresses.ObjectNameOf's output, which is derivable from a resource
+# id alone, so the edge is not needed for the join — only for resolving the id, which is
+# CyberCloud.ResourceManager's.
+#
 # ⚠ AND CyberCloud.Providers.ContainerRegistry IS THE THIRD FAMILY WITH A REASON TO WANT A FIFTH, AND
 # THE FIRST WHOSE PLAN DOCUMENT ASKS FOR THE EDGE IN AS MANY WORDS. docs/plan/13 § Container Registry:
 # "Storage backend is the tenant's SeaweedFS bucket, so registry storage is billed like any other

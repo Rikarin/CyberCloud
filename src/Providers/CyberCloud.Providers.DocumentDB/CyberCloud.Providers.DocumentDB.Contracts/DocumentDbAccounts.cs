@@ -410,6 +410,18 @@ public static class DocumentDbAccounts {
     /// </remarks>
     public static string SuperuserSecretName(string name) => ClusterName(name) + "-superuser";
 
+    /// <summary>The keys inside <see cref="SuperuserSecretName" />.</summary>
+    /// <remarks>
+    ///     ⚠ The Secret is <c>kubernetes.io/basic-auth</c>, so the two names are the type's rather
+    ///     than anyone's choice. <see cref="DeploymentJson" /> already projects both into the
+    ///     gateway's environment; <c>listKeys</c> reads the same two, which is what makes the
+    ///     credential this action returns the credential the gateway is actually using.
+    /// </remarks>
+    public const string UsernameKey = "username";
+
+    /// <inheritdoc cref="UsernameKey" />
+    public const string PasswordKey = "password";
+
     /// <summary>The in-cluster MongoDB endpoint <c>listKeys</c> hands out.</summary>
     /// <param name="ns">The resource's namespace.</param>
     /// <param name="name">The resource's own name.</param>

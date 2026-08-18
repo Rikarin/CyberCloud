@@ -1,5 +1,6 @@
 using CyberCloud.Conformance;
 using CyberCloud.Conformance.Harness;
+using CyberCloud.Kubernetes.Contracts;
 using CyberCloud.Providers.DBforMySQL.Contracts;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -45,6 +46,19 @@ public sealed class MariaDbCase : IProviderCaseSource {
             // object the provider does not apply fails every world-facing assertion for the case's
             // reason rather than the provider's.
             Objects = (id, ns) => [MariaDbServers.ServerRef(ns, id.Name)],
+            // ⚠ mariadb-operator's. ServerJson renders `passwordSecretKeyRef` with `generate: true`,
+            // so the operator creates this object and puts the value in the database at bootstrap.
+            // The root Secret it also generates is deliberately absent: listKeys does not read it, and
+            // a fixture carrying a credential no code path touches invites one to start.
+            OperatorWritten = (id, ns) => [
+                (KubeSecret.Ref(ns, MariaDbServers.PasswordSecretName(id.Name)),
+                    OperatorSecret.Json(
+                        KubeSecret.Ref(ns, MariaDbServers.PasswordSecretName(id.Name)),
+                        [
+                            (MariaDbServers.PasswordKey, "a-generated-password")
+                        ]
+                    ))
+            ],
             ObjectMatchesDesired = match => {
                 using var desired = JsonDocument.Parse(match.DesiredJson);
                 return MariaDbServers.Matches(match.ObjectJson, desired.RootElement);

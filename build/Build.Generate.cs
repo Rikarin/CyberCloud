@@ -240,6 +240,35 @@ partial class Build
         IReadOnlyList<string> Problems,
         int PreservedInternalLines);
 
+    /// <summary>
+    ///     One action a provider declared, as the registry holds it.
+    ///     <para>
+    ///         ⚠ <b>Read off the registry rather than off a generated surface, because none of the
+    ///         four carries it.</b> An action reaches <c>openapi/</c>, the <c>cyc</c> verb tree, the
+    ///         SDK and the portal form from its declaration alone; whether anything can serve it is
+    ///         not part of any of those documents, so a document publishing an action nothing can run
+    ///         is byte-identical to one publishing an action that works. <see cref="Handler" /> is
+    ///         the fact the <c>Action handlers</c> gate forms its verdict from.
+    ///     </para>
+    /// </summary>
+    /// <param name="Type">The resource type, for example <c>CyberCloud.Storage/accounts</c>.</param>
+    /// <param name="Name">The action, for example <c>listKeys</c>.</param>
+    /// <param name="LongRunning">
+    ///     Whether the action answers <c>202</c> and drives the type's reconciler through an
+    ///     operation. A long-running action needs no handler and must never be asked for one.
+    /// </param>
+    /// <param name="Secret">Whether the response carries secret material.</param>
+    /// <param name="Handler">
+    ///     The <c>IResourceActionHandler</c> implementation's full name, or <c>null</c> when the
+    ///     provider declared none.
+    /// </param>
+    sealed record DeclaredAction(
+        string Type,
+        string Name,
+        bool LongRunning,
+        bool Secret,
+        string? Handler);
+
     sealed record GenerationReport(
         int Providers,
         int ResourceTypes,
@@ -252,7 +281,8 @@ partial class Build
         IReadOnlyList<ChartAnnotationFile> ChartAnnotations,
         IReadOnlyList<string> ChartUnpaired,
         int ManagedCharts,
-        int TypesNamingAChart);
+        int TypesNamingAChart,
+        IReadOnlyList<DeclaredAction> Actions);
 
     /// <summary>
     ///     Runs the generator and parses its report.
@@ -375,6 +405,21 @@ partial class Build
             .OrderBy(x => x.File, StringComparer.Ordinal)
             .ToList();
 
+        var actions = (root["actions"] as JsonArray ?? new JsonArray())
+            .Select(x => x!.AsObject())
+            .Select(x => new DeclaredAction(
+                x["type"]!.GetValue<string>(),
+                x["name"]!.GetValue<string>(),
+                x["longRunning"]!.GetValue<bool>(),
+                x["secret"]!.GetValue<bool>(),
+                // ⚠ A JSON null is a JsonNode that is absent from the object, not a JsonNull node —
+                // System.Text.Json.Nodes drops it — so both the missing key and the declared-null case
+                // arrive here the same way, which is what "the provider named no handler" means.
+                x["handler"] is { } handler ? handler.GetValue<string>() : null))
+            .OrderBy(x => x.Type, StringComparer.Ordinal)
+            .ThenBy(x => x.Name, StringComparer.Ordinal)
+            .ToList();
+
         return new(
             root["providers"]!.GetValue<int>(),
             root["resourceTypes"]!.GetValue<int>(),
@@ -387,7 +432,8 @@ partial class Build
             chartAnnotations,
             Strings(root["chartUnpaired"]),
             root["chartManagedCharts"]?.GetValue<int>() ?? 0,
-            root["chartTypesNamingAChart"]?.GetValue<int>() ?? 0);
+            root["chartTypesNamingAChart"]?.GetValue<int>() ?? 0,
+            actions);
     }
 
     static List<string> Strings(JsonNode? node) =>

@@ -41,8 +41,13 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/dotnet
 
+      # ⚠ run-build.sh rather than `| tee`, here and in every job below. Nuke colours its output on
+      # Actions even through a pipe, and Serilog's theme wraps each structured-log property in
+      # escape sequences, so a pattern spanning one never matches the tee'd file. The header of
+      # .github/scripts/run-build.sh has the whole account; the short version is that this is why
+      # every guard below that reads a COUNT out of a log was reading bytes that are not there.
       - name: ./build.sh Architecture
-        run: ./build.sh Architecture 2>&1 | tee "$RUNNER_TEMP/architecture.log"
+        run: .github/scripts/run-build.sh "$RUNNER_TEMP/architecture.log" Architecture
 
       # ⚠ Build.Architecture.cs § GateStatus already separates "enforced" from "inspected nothing"
       # and prints ○ for the second. It does not fail on ○, because a tree too small for a gate is a
@@ -60,7 +65,12 @@ jobs:
           {
             echo "### Architecture gates"
             echo '```'
-            grep -E '  [✔○⌨▪✘] ' "$RUNNER_TEMP/architecture.log" | sed 's/^[0-9:]* \[INF\] //'
+            # ⚠ An alternation, not the bracket expression `[✔○⌨▪✘]` this used to be. A bracket
+            # expression over multi-byte characters only works in a UTF-8 locale; under LC_ALL=C
+            # grep compares it byte by byte and matches none of them. The runner's locale is not
+            # this repository's to pin, and the same five symbols written as an alternation match
+            # identically in either. Same set of lines, one fewer thing to depend on.
+            grep -E '  (✔|○|⌨|▪|✘) ' "$RUNNER_TEMP/architecture.log" | sed 's/^[0-9:]* \[INF\] //'
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -99,7 +109,7 @@ jobs:
           echo "Docker works — the Grain, Reconciler and Conformance layers have what they need."
 
       - name: ./build.sh Test
-        run: ./build.sh Test 2>&1 | tee "$RUNNER_TEMP/test.log"
+        run: .github/scripts/run-build.sh "$RUNNER_TEMP/test.log" Test
 
       # always(): the guard is diagnostic as well as a gate, and "26 suites, 3 104 tests" is worth
       # as much beside a failed run as beside a green one.
@@ -127,7 +137,7 @@ jobs:
             echo "::error title=Coverage floor::./build.sh Test exited 0 without printing the line that says the floor was applied. A green Test that never reached EnforceCoverageFloor is a floor that does not exist. docs/plan/23 § Test layers."
             exit 1
           fi
-          grep -E 'Test: coverage floor|shipping project\(s\) at or above|  [✔✘○] CyberCloud' "$RUNNER_TEMP/test.log"
+          grep -E 'Test: coverage floor|shipping project\(s\) at or above|  (✔|✘|○) CyberCloud' "$RUNNER_TEMP/test.log"
 
       - name: Upload test results and coverage
         if: always()
@@ -150,7 +160,7 @@ jobs:
       - uses: ./.github/actions/dotnet
 
       - name: ./build.sh Generate
-        run: ./build.sh Generate 2>&1 | tee "$RUNNER_TEMP/generate.log"
+        run: .github/scripts/run-build.sh "$RUNNER_TEMP/generate.log" Generate
 
       # ⚠ Belt and braces over Build.Generate.cs, which fails on drift for PUBLISHED documents and
       # rewrites unpublished ones in place. An unpublished api-version that regenerates differently
@@ -190,7 +200,7 @@ jobs:
       - uses: ./.github/actions/dotnet
 
       - name: ./build.sh Charts
-        run: ./build.sh Charts 2>&1 | tee "$RUNNER_TEMP/charts.log"
+        run: .github/scripts/run-build.sh "$RUNNER_TEMP/charts.log" Charts
 
       # Build.Charts.cs prints "inspected 0 chart(s) … ○, not ✔" and passes. Right answer for a
       # build on a tree with no charts; wrong answer for a gate in a repository that has them,
@@ -264,7 +274,7 @@ jobs:
           echo "pnpm: $(cd portal && pnpm --version)"
 
       - name: ./build.sh Portal
-        run: ./build.sh Portal 2>&1 | tee "$RUNNER_TEMP/portal.log"
+        run: .github/scripts/run-build.sh "$RUNNER_TEMP/portal.log" Portal
 
       - name: Portal is not a stub over a real workspace
         run: .github/scripts/assert-stub-still-blocked.sh Portal "$RUNNER_TEMP/portal.log" portal/pnpm-lock.yaml

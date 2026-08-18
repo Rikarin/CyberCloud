@@ -93,6 +93,10 @@ public sealed class ContainerRegistryCase : IProviderCaseSource {
                 ContainerRegistries.JobServiceDeploymentRef(ns, id.Name),
                 ContainerRegistries.PodMonitorRef(ns, id.Name)
             ],
+            // This platform mints or computes everything this type's actions hand back, so no operator
+            // writes an object any action reads. Stated rather than defaulted — see
+            // ProviderConformanceCase.OperatorWritten.
+            OperatorWritten = static (_, _) => [],
             ObjectMatchesDesired = match => {
                 using var desired = JsonDocument.Parse(match.DesiredJson);
                 return ContainerRegistries.Matches(match.ObjectJson, desired.RootElement);

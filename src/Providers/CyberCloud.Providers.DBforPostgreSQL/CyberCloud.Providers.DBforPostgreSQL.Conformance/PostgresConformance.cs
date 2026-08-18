@@ -1,5 +1,6 @@
 using CyberCloud.Conformance;
 using CyberCloud.Conformance.Harness;
+using CyberCloud.Kubernetes.Contracts;
 using CyberCloud.Providers.DBforPostgreSQL.Contracts;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -46,6 +47,20 @@ public sealed class PostgresCase : IProviderCaseSource {
             Objects = (id, ns) => [
                 PostgresServers.ClusterRef(ns, id.Name),
                 PostgresServers.PoolerRef(ns, id.Name)
+            ],
+            // ⚠ CloudNativePG's, not this reconciler's — ClusterJson deliberately renders no
+            // `bootstrap.initdb.secret`, so the operator generates the owner's password itself. It is
+            // not in `Objects` above because that member is what the reconciler is judged on having
+            // APPLIED, and applying this one would be the defect rather than the fixture.
+            OperatorWritten = (id, ns) => [
+                (KubeSecret.Ref(ns, PostgresServers.CredentialSecretName(id.Name)),
+                    OperatorSecret.Json(
+                        KubeSecret.Ref(ns, PostgresServers.CredentialSecretName(id.Name)),
+                        [
+                            (PostgresServers.UsernameKey, "app"),
+                            (PostgresServers.PasswordKey, "a-generated-password")
+                        ]
+                    ))
             ],
             ObjectMatchesDesired = match => {
                 using var desired = JsonDocument.Parse(match.DesiredJson);

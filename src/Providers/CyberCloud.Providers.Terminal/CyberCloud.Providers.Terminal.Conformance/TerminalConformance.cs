@@ -73,6 +73,10 @@ public sealed class CloudConsoleCase : IProviderCaseSource {
             // state of this type, so listing it would make the suite demand the very thing the design
             // exists to avoid.
             Objects = (id, ns) => CloudConsoles.Objects(ns, id.Name),
+            // This platform mints or computes everything this type's actions hand back, so no operator
+            // writes an object any action reads. Stated rather than defaulted — see
+            // ProviderConformanceCase.OperatorWritten.
+            OperatorWritten = static (_, _) => [],
             ObjectMatchesDesired = match => {
                 using var desired = JsonDocument.Parse(match.DesiredJson);
                 return CloudConsoles.Matches(match.ObjectJson, desired.RootElement);

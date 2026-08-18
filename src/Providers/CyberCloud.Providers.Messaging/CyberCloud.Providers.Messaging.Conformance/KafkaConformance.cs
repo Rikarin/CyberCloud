@@ -51,6 +51,10 @@ public sealed class KafkaCase : IProviderCaseSource {
                 KafkaClusters.KafkaRef(ns, id.Name),
                 KafkaClusters.NodePoolRef(ns, id.Name)
             ],
+            // This platform mints or computes everything this type's actions hand back, so no operator
+            // writes an object any action reads. Stated rather than defaulted — see
+            // ProviderConformanceCase.OperatorWritten.
+            OperatorWritten = static (_, _) => [],
             ObjectMatchesDesired = match => {
                 using var desired = JsonDocument.Parse(match.DesiredJson);
                 return KafkaClusters.Matches(match.ObjectJson, desired.RootElement);

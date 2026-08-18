@@ -24,6 +24,13 @@ public sealed class GenerationReportTests {
 
     /// <summary>Exactly what <c>Build.Generate.cs § Parse</c> reads off the root, plus what it does not.</summary>
     static readonly string[] RootKeys = [
+        // ⚠ The one key that is read off the REGISTRY rather than off anything this process emitted,
+        // and it exists because no generated surface carries the fact behind it. An action reaches
+        // openapi/, the cyc verb tree, the SDK and the portal form from its declaration alone;
+        // whether a handler can serve it is in none of the four, so a document publishing a call that
+        // answers 500 is byte-identical to one where it works. build/Build.Architecture.cs § the
+        // Action handlers gate forms its verdict from this array.
+        "actions",
         "apiVersions",
         "assembliesScanned",
         // ⚠ The four chart keys arrived with ADR-012's fifth surface and this list was not grown with
@@ -71,6 +78,20 @@ public sealed class GenerationReportTests {
         "surface"
     ];
 
+    /// <summary>The members of one <c>actions</c> entry, which <c>Parse</c> also indexes by literal.</summary>
+    /// <remarks>
+    ///     ⚠ Asserted where <c>chartAnnotations</c>' members are not, and the difference is that this
+    ///     array is never empty for the fixture: <c>CyberCloud.Providers.Sample</c> declares
+    ///     <c>ping</c>, so the loop below has something to walk. That gap is recorded above.
+    /// </remarks>
+    static readonly string[] ActionKeys = [
+        "handler",
+        "longRunning",
+        "name",
+        "secret",
+        "type"
+    ];
+
     static IReadOnlyList<string> KeysOf(JsonObject value) =>
         [.. value.Select(x => x.Key).OrderBy(x => x, StringComparer.Ordinal)];
 
@@ -105,6 +126,17 @@ public sealed class GenerationReportTests {
 
         foreach (var surface in derived) {
             KeysOf(surface!.AsObject()).ShouldBe([.. DerivedKeys.OrderBy(x => x, StringComparer.Ordinal)]);
+        }
+
+        var actions = report["actions"]!.AsArray();
+
+        // The Sample provider declares exactly one action, `ping`. Asserted rather than assumed: an
+        // empty array would let the loop below pass while walking nothing, which is the failure mode
+        // the chartAnnotations note above records for the one case where it cannot be avoided.
+        actions.Count.ShouldBe(1);
+
+        foreach (var action in actions) {
+            KeysOf(action!.AsObject()).ShouldBe([.. ActionKeys.OrderBy(x => x, StringComparer.Ordinal)]);
         }
     }
 
@@ -153,12 +185,29 @@ public sealed class GenerationReportTests {
                 read.AddRange(value["problems"]!.AsArray().Select(x => x!.GetValue<string>()));
             }
 
+            foreach (var action in report["actions"]!.AsArray()) {
+                var value = action!.AsObject();
+
+                read.Add(value["type"]!.GetValue<string>());
+                read.Add(value["name"]!.GetValue<string>());
+                read.Add(value["longRunning"]!.GetValue<bool>());
+                read.Add(value["secret"]!.GetValue<bool>());
+
+                // ⚠ `handler` is the ONE nullable member of the report, and Parse reads it with a
+                // pattern rather than a null-forgiving indexer for that reason. A JSON null is not a
+                // JsonNull node — System.Text.Json.Nodes drops the property — so "the provider named
+                // no handler" and "the key is missing" arrive identically, and the read must survive
+                // both. `ping` names one, so what is exercised here is the non-null branch; the null
+                // branch is what every row of actions-without-handlers.txt is.
+                read.Add(value["handler"] is { } handler ? handler.GetValue<string>() : "(none)");
+            }
+
             read.AddRange(report["stale"]!.AsArray().Select(x => x!.GetValue<string>()));
             read.AddRange(report["derivedStale"]!.AsArray().Select(x => x!.GetValue<string>()));
         });
 
-        // 5 root values + 2 documents × 4 scalars + 3 derived surfaces × 5 scalars.
-        read.Count.ShouldBe(28);
+        // 5 root values + 2 documents × 4 scalars + 3 derived surfaces × 5 scalars + 1 action × 5.
+        read.Count.ShouldBe(33);
     }
 
     [Fact]

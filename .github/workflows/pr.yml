@@ -109,7 +109,10 @@ jobs:
         with:
           base: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
           head: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha }}
-          extra_args: --results=verified,unknown --fail
+          # ⚠ No `--fail` here either — the action passes it itself and trufflehog refuses a
+          # repeated flag. nightly.yml's copy of this step is where that was found, because this
+          # workflow has never run: there has been no pull request and no merge group.
+          extra_args: --results=verified,unknown
 
       # ⚠ docs/plan/23 § CI shape lists dependency review under `weekly.yml`. It cannot live there:
       # actions/dependency-review-action compares a pull request's dependency graph against its

@@ -94,6 +94,27 @@
           is what makes composing both here legal and correct.
         -->
         <ProjectReference Include="../../CyberCloud.Kubernetes/CyberCloud.Kubernetes.csproj"/>
+        <!--
+          docs/plan/07's ReBAC engine, and its absence was step 3 of every write.
+
+          ⚠ NOTHING IN src/Hosts REFERENCED THIS ASSEMBLY. AddCyberCloudResourceManager registers
+          ReBacResourceAuthorizer and ReBacResourceRelationWriter — both real, both reached in
+          production — and every call they make is to ICheckGrain, IObjectRelationsGrain,
+          ISubjectRelationsGrain or ITupleStoreGrain, whose interfaces live in
+          CyberCloud.Authorization.Contracts and whose IMPLEMENTATIONS live here. So the gateway
+          composed an authorizer, the silo held no grain able to answer it, and the enforcement seam's
+          own rule turned the resulting failure into the canonical 404: ReBacResourceAuthorizer logs
+          "checking '{permission}' on '{path}' failed rather than answering" and returns
+          ResourceNotFound. Every create through the real hosts answered 404 for a resource the caller
+          was entitled to make, and the log line naming the reason was the only evidence.
+
+          ⚠ THIS COULD NOT BE SEEN FROM ANY CONFORMANCE SUITE. ResourceManagerCluster and both halves
+          of the provider conformance harness substitute the authorizer — SwitchableAuthorizer,
+          PermissiveAuthorizer — so the ONLY thing that composes ReBacResourceAuthorizer against real
+          grains is a production host, and no test started one until
+          CyberCloud.AppHost.Tests/ReconcileThroughTheRealHostTests.cs.
+        -->
+        <ProjectReference Include="../../CyberCloud.Authorization/CyberCloud.Authorization.csproj"/>
     </ItemGroup>
 
     <!--

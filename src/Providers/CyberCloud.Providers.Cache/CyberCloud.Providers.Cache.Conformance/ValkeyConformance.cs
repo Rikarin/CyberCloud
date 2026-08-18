@@ -45,6 +45,10 @@ public sealed class ValkeyCase : IProviderCaseSource {
             // case listing an object the provider does not apply fails every world-facing assertion for
             // the case's reason rather than the provider's.
             Objects = (id, ns) => [ValkeyCaches.FailoverRef(ns, id.Name)],
+            // This platform mints or computes everything this type's actions hand back, so no operator
+            // writes an object any action reads. Stated rather than defaulted — see
+            // ProviderConformanceCase.OperatorWritten.
+            OperatorWritten = static (_, _) => [],
             ObjectMatchesDesired = match => {
                 using var desired = JsonDocument.Parse(match.DesiredJson);
                 return ValkeyCaches.Matches(match.ObjectJson, desired.RootElement);

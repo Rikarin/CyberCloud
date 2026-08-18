@@ -191,6 +191,40 @@ public interface IResourceGrain : IGrainWithStringKey {
     /// </remarks>
     Task<Result> CompleteDeleteAsync();
 
+    /// <summary>
+    ///     Begins a restore: moves a soft-deleted resource out of <c>Deleting</c> and records the
+    ///     operation that will apply its desired state again.
+    /// </summary>
+    /// <param name="operationId">The <see cref="OperationKind.Restore" /> operation that will drive it.</param>
+    /// <returns>
+    ///     The snapshot in <see cref="ProvisioningState.Updating" />, or
+    ///     <see cref="ErrorCode.Conflict" /> when the resource is not <c>Deleting</c>.
+    /// </returns>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>A restore is a write, and this is the only member that can start one, because
+    ///         <see cref="SubmitDesiredAsync" /> takes a body and a restore has none.</b> The whole
+    ///         point of the recovery window is that the tenant supplies nothing: the body the delete
+    ///         did not throw away is the body that comes back, byte for byte, so re-submitting it
+    ///         through the write path would be the platform inventing a caller.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b><c>Updating</c> rather than <c>Creating</c>, and the resource never stops
+    ///         existing.</b> <c>Creating</c> is what a name that held nothing becomes; this name held
+    ///         a resource the whole time — that is what the window <i>is</i> — and its
+    ///         <c>CreatedAt</c>, its version history and its etag lineage are all continuous through
+    ///         it. A restore that reported <c>Creating</c> would tell a tenant their data had a new
+    ///         birthday.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Idempotent for the same operation and refused for a different one</b>, exactly as
+    ///         <see cref="BeginDeleteAsync" /> is: the restore is driven from a reminder and a
+    ///         re-drive must not fail, while a second restore racing the first would drive one
+    ///         resource towards two shapes.
+    ///     </para>
+    /// </remarks>
+    Task<Result<ResourceSnapshot>> BeginRestoreAsync(Guid operationId);
+
     /// <summary>Records a terminal provisioning state after a reconcile pass ended.</summary>
     /// <param name="terminal">
     ///     <see cref="ProvisioningState.Succeeded" />, <see cref="ProvisioningState.Failed" /> or

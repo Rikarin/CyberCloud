@@ -460,19 +460,35 @@ public static class OpenApiEmitter {
                 // While nothing in the resource manager read SoftDeleteDays, a type declaring seven
                 // days published a recovery window the platform could not deliver, and the honest
                 // thing the emitter could do was say so in the document. docs/plan/08 § Soft delete is
-                // built now: the DELETE parks the resource, the name is held, the quota stays
-                // committed and a purge ends it. So the description states what happens, and a
-                // document that still carried the disclaimer would be the same defect with the sign
-                // flipped — understating a guarantee callers can now rely on.
+                // built now: the DELETE tears the data plane down, parks the resource, holds the name
+                // and keeps the quota committed, and a purge ends it. So the description states what
+                // happens, and a document that still carried the disclaimer would be the same defect
+                // with the sign flipped — understating a guarantee callers can now rely on.
+                //
+                // ⚠ IT ALSO SAID THE RESOURCE "LEAVES ITS RESOURCE GROUP", AND IT NEVER DID. That
+                // sentence was written from docs/plan/08's first decision, which moved a soft-deleted
+                // resource to a subscription-scoped address the way Key Vault does — and which could
+                // not be built, because ResourceId.ParsePath makes `resourceGroups/{rg}` mandatory in
+                // every path the platform can parse. What ships keeps the ResourceId exactly as it
+                // was. The document was unpublished only because no type declared a window, so it
+                // would have republished the falsehood the moment one did.
+                //
+                // ⚠ AND IT SAID NOTHING ABOUT THE DATA PLANE, WHICH IS THE PART A CALLER PLANS
+                // AROUND. A recovery window that kept the workload running would be a delete that
+                // does not delete; one that destroys the data would be a slower delete. Saying which
+                // of the two this is — the workload stops, the data stays — is the whole of what a
+                // reader needs from this field.
                 ["description"] = type.SoftDeleteDays > 0
                     ? "A deleted "
                     + type.Type
                     + " is recoverable for "
                     + type.SoftDeleteDays.ToString(CultureInfo.InvariantCulture)
-                    + " day(s) — docs/plan/06 § Tags, locks. It leaves its resource group and its old "
-                    + "address answers 404; its name is held and its quota stays committed for the "
-                    + "whole window. Restore it, or purge it to end the window early — a purge needs "
-                    + "'"
+                    + " day(s) — docs/plan/06 § Tags, locks. Its data plane is torn down, so nothing "
+                    + "keeps running and nothing keeps being metered for compute; its stored state and "
+                    + "its volumes are kept, so a restore re-applies exactly what was there. Its old "
+                    + "address answers 404 for the whole window, its name is held, and its quota stays "
+                    + "committed so that a restore cannot fail against an allowance spent since. "
+                    + "Restore it, or purge it to end the window early — a purge needs '"
                     + type.PurgePermission
                     + "', which is a separate right from '"
                     + type.DeletePermission

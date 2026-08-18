@@ -123,7 +123,8 @@ public sealed class DocumentDbProvider : IResourceProvider {
                 ActionKind.Post,
                 DocumentDbAccounts.ListKeysPermission,
                 secret: true,
-                response: DocumentDbAccounts.ListKeysResponse
+                response: DocumentDbAccounts.ListKeysResponse,
+                handler: typeof(DocumentDbAccountListKeysHandler)
             )
             // ⚠ `docdb`, AND THE THREE OBVIOUS ALTERNATIVES ARE EACH WRONG FOR A DIFFERENT REASON.
             //

@@ -963,6 +963,112 @@ single group needs is **one**. The remote is then a v4 slot and a v6 slot (`addr
 **What landed on this pass: `virtualNetworks/securityGroups`, plus handlers for all three of the
 family's actions.** `publicIpAddresses`, `dnsZones`, `loadBalancers` and `vpnGateways` remain
 **owed**; `routeTables` remains **refused**.
+
+### What the eleventh provider's third pass measured
+
+⚠ **`publicIpAddresses` landed, and it is the first type in the platform that draws
+`QuotaMeter.PublicIps`.** That meter has been in `QuotaGrain`'s defaults — 20 per subscription — since
+before this family existed and **nothing had ever drawn it**. The reason was recorded on the previous
+pass and held: every provider that reached for it wanted a *conditional* draw (an address only when a
+body asked for external exposure) and `QuotaGrain.TryReserveAsync` refuses a non-positive amount by
+name. An address resource draws exactly one, unconditionally, and `ResourceManagerService.AmountFor`
+answers `meter.Fallback ?? 1m` for an empty `AmountPointer`, so `.Meters(PublicIps, Resources)` is
+**flat** — no pointer, no fallback, no `MeterDerivation`.
+
+- ⚠ **What keeps the draw unconditional is an ABSENCE, and it is the finding that generalises.** The
+  obvious property to add is `ipVersion`, and it must not be added — twice over. First, for
+  `NetworkSubnets`' `protocol` reason: the families an EIP gets are decided by the **external pool**
+  it comes from (`acquireIPAddress` returns whatever that subnet carries), so the control would be one
+  the substrate ignores. Second, and harder: **a tenant who could ask for an IPv6-only address would
+  be asking for a resource that draws zero scarce addresses**, and a zero draw is the exact thing
+  `TryReserveAsync` refuses. So "a meter that may draw zero" is the seam an IPv6-only address wants,
+  and it is `CyberCloud.Tenancy`'s rather than a provider's. **The absence of a property is what makes
+  a meter expressible** — recorded because the reflex is to add the property and discover the refusal
+  from a 500.
+- ⚠ **THE FIRST TYPE IN THIS FAMILY THAT IS NOT A CHILD, AND THE SUBSTRATE DECIDED IT.** Three of the
+  four types here are a network and two things inside one, and a fourth reads as though it should be
+  too. **An `OvnEip` names no VPC**: it is allocated from the *operator's* external subnet and attached
+  to a tenant's routing domain later, by a separate `OvnFip`/`OvnDnatRule`/`OvnSnatRule` object that
+  names it. docs/plan/14 § Load balancing spells the type `CyberCloud.Network/publicIpAddresses`, with
+  no network segment, and the substrate agrees. ⚠ The consequence is the safety answer: **an unattached
+  address is inert**, structurally rather than by a default, which is the second time in this family
+  that failure class (b) has come back safe.
+- ⚠ **AN EMPTY STRING IS NOT AN ABSENT KEY, ON A SCALAR, AND HERE IT IS A DEADLOCK.**
+  `CyberCloud.Terminal/consoles` found this on lists — every optional list on a built-in object is
+  `omitempty`, so an empty list applied comes back with no key. This is the same shape one level down
+  and with a worse symptom: `createOrUpdateOvnEipCR` writes the **allocated** address into
+  `spec.v4Ip` through a full `OvnEips().Update(...)`, taking field-manager ownership of it, so an
+  apply carrying `v4Ip: ""` claims the same field at a different value and **every later apply answers
+  `ApplyResult.Conflict`** — the resource sits in `InProgress` forever on an address that was
+  allocated correctly the first time. The renderer emits `v4Ip`/`v6Ip` **only when the body asked for
+  a particular address**, in both the C# and the Helm halves, and `NetworkPublicIpTests` pins both.
+- ⚠ **`Matches` met the family's canonicalisation trap in its SECOND shape, and the two are worth
+  distinguishing.** `NetworkSubnets.Matches` compares parsed networks because the controller
+  **rewrites what it was sent**. Here the controller **fills in what it was not**: a body that asked
+  for no particular address will always disagree with the object on `spec.v4Ip`, and a comparison that
+  insisted would report drift on an address allocated exactly as asked, forever. So an address is
+  compared **only when one was requested**. Both directions are run in `NetworkPublicIpTests` against
+  a hand-written controller-shaped read-back, because there is no Kube-OVN in any harness here.
+- ⚠ **THE FAMILY'S "SEND IT EXPLICITLY" RULE INVERTED ONCE, AND THE DIFFERENCE IS WHOSE DEFAULT IT
+  IS.** `NetworkSubnets.SubnetJson` sends `spec.vpc` because letting it default binds the subnet to
+  the *platform's own* VPC. This chart deliberately does **not** send `spec.externalSubnet`, because
+  `handleAddOvnEip` falls back to `c.config.ExternalGatewaySwitch` — the operator's
+  `--external-gateway-switch`, default `external` — and that name is a property of the **deployment**
+  which this repository cannot know. **There the substrate's default is wrong; here it is the only
+  right answer available.** ⚠ **The hazard that argument had to survive was checked rather than waved
+  at**: both delete paths call `ReleaseAddressByPod(eip.Name, eip.Spec.ExternalSubnet)` with the field
+  left empty, which reads like an address that never returns to the pool — and `pkg/ipam/ipam.go`
+  releases from **every** subnet when the name is empty, so it is a superset rather than a no-op.
+  ⚠ **And the field is not written back** on an object this platform applied: only the controller's
+  *create* branch sets it, so the pool it chose is observable on the `ovn.kubernetes.io/subnet` label
+  instead — a different label namespace from ADR-013's seven, so the two do not fight.
+  `charts/managed/kube-ovn-eip/conformance.yaml § owed`,
+  `the-external-pool-is-the-operators-default` — the same shape as `reserved-list-is-compiled-in`.
+- ⚠ **THE FIRST TYPE IN THE TREE WITH NO MUTABLE PROPERTY, AND THE SHARED SUITE CANNOT SAY SO.** Read
+  firsthand in `pkg/controller/ovn_eip.go` at `v1.16.2`: `handleUpdateOvnEip` refuses a changed
+  `v4Ip`, `v6Ip`, `macAddress` and `type` — four errors, one per field, every one beginning *"not
+  support change"* — and `handleAddOvnEip` returns early once `status.macAddress` is set. **An
+  `OvnEip` is wholly immutable once ready.** `ProviderConformanceCase.ChangedBody` is `required` and
+  must "change something the reconciler applies", so the case varies the requested address: that
+  proves the renderer reaches the cluster and **cannot** prove the update takes effect. ⚠ It compounds
+  with a platform gap that is already written down — `SchemaProperty.Immutable` is *a declaration with
+  no enforcement*, by its own remarks — so the platform accepts the PUT and reports `Succeeded` while
+  the fabric logs a refusal nobody sees. Named as a defect at
+  `charts/managed/kube-ovn-eip/conformance.yaml § owed`, `an-allocated-address-cannot-be-changed`.
+  **This is the first case in the tree where a provider needed the suite to admit a type with no
+  update axis, and the suite was left alone rather than changed under four other agents.**
+- ⚠ **A SECOND HYPHENATED PLURAL, WHICH KILLS THE RULE THE FIRST ONE SUGGESTED.**
+  `+kubebuilder:resource:...path="ovn-eips",singular="ovn-eip"`, read firsthand and confirmed in the
+  CRD Kube-OVN's own chart installs. Two of the four kinds this family renders hyphenate and two do
+  not, so *"Kube-OVN pluralises by lower-casing the kind"* is wrong half the time — and
+  `ClusterConformanceHarness` derives its CRD stub's path from `GroupVersionKind.Plural`, so a guess
+  installs a definition at a path the apply never reaches and the symptom is a **discovery error
+  naming a missing operator**.
+- ⚠ **THE SHORT-NAME LIST WAS OUT OF DATE AGAIN, AND FOR THE SECOND CONSECUTIVE PASS NOTHING COLLIDED
+  BY LUCK.** The previous pass added `containerservice`, `aks` and `nodepool` and wrote down that a
+  list nobody notices is stale proves nothing. Three more group keys (`monitor`, `terminal`,
+  `containerregistry`) and three more short names (`workspace`, `shell`, `registry`) had landed since,
+  so `vnet`, `subnet` and `secgroup` were being checked against **eleven of fourteen**. ⚠ Two of the
+  three missing short names are declared through a `const string ShortName` rather than a literal at
+  the call site, **so a `grep 'shortName: "'` misses them** — which is exactly how the list went stale
+  twice. `publicip` is checked against all fourteen keys and all seventeen names, as literals.
+- ⚠ **The only action in the catalogue that returns the resource's own reason for existing.** Every
+  other declared action reports a refinement — how full a subnet is, what a rule set expands to, what
+  an isolation claim does not cover. `POST …/showAllocation` returns **the address**, which is not in
+  the body (the body is what was *asked* for), is derivable from nothing, and lives on
+  `OvnEip.status.v4Ip` and nowhere else. It carries `ready` alongside it, because the controller
+  writes the address as soon as IPAM allocates and `ready` only after a separate
+  `patchOvnEipStatus(key, true)`, and an address without the flag is one a tenant points DNS at a few
+  seconds too early.
+
+**What landed on this pass: `publicIpAddresses`.** `dnsZones`, `loadBalancers` and `vpnGateways`
+remain **owed** — each with what was learned about it at `NetworkProvider`'s remarks — and
+`routeTables` remains **refused**. ⚠ **`dnsZones` is owed for a reason that is not software**:
+docs/plan/14 is explicit that *"the provider is 1.5 EM; the operations are the cost"* and that **the
+decision whether the platform runs authoritative DNS or fronts a wholesale provider has not been
+taken**. A resource type declared before that decision would take it by accident, and the row that
+would take it is `zoneType: public`.
+
 ### What the twelfth provider measured
 
 `CyberCloud.Providers.Terminal` — `CyberCloud.Terminal/consoles`,
@@ -1049,7 +1155,8 @@ first image in the tree that is not a .NET application. All of it is at
 VictoriaMetrics and ClickHouse, [16 § `CyberCloud.Monitor/workspaces`](../../docs/plan/16-observability.md),
 **M1 · 2.5 EM**, and step 7 of [24](../../docs/plan/24-roadmap.md)'s M1 exit story — *"see metrics and
 logs"*. **The first family whose product is not a workload at all**, and the first to declare
-`SupportsSoftDelete` — and then to withdraw it, for a reason it had to measure to find.
+`SupportsSoftDelete` — then to withdraw it, for a reason it had to measure to find, and then to
+declare it again once the platform closed what the measurement found.
 
 ### What the twelfth provider measured
 
@@ -1128,51 +1235,44 @@ logs"*. **The first family whose product is not a workload at all**, and the fir
   > ⚠ **AND DECLARING ONE IS THE SECOND FAMILY IN TWELVE TO NEED A CHANGE TO
   > `test/CyberCloud.Cluster.Conformance`, ON AN AXIS ELEVEN FAMILIES HAD SILENTLY AGREED ON.**
   > `ClusterConformanceTests.TheLifecycleRunsAgainstARealApiServer` asserted **unconditionally** that
-  > every rendered object is gone after a converged teardown. Its Docker-free twin has branched on
-  > `SoftDeleteDays > 0` since soft delete was built — *"handing the data back is the entire feature,
-  > so the volumes and the PVCs stay allocated until a purge"* — and the cluster-backed half never
-  > learned it, because for eleven families both branches say the same thing. This provider went
-  > **1 of 6 red against k3s while the Docker-free suite was 27 of 27 green**, which is the shape
-  > that says the *suite* is wrong rather than the provider; the failure named the surviving
-  > `Secret`, which reads as a reconciler that forgot to tear down. ⚠ **The shipping code was right
-  > the whole time** — `ResourceManagerService`'s delete path parks the index entry and leaves the
-  > data plane standing on purpose — which is exactly what `CyberCloud.Providers.Network` found
-  > about `KubeApiClient` and cluster scope. The branch is now in both halves, derived from the
-  > registry rather than declared per provider, so **nothing changes for the eleven earlier
-  > families**: none of them declares a window, and all of them take the hard-delete branch they
-  > always took.
+  > every rendered object is gone after a converged teardown, and this provider went **1 of 6 red
+  > against k3s while the Docker-free suite was 27 of 27 green** — the shape that usually says the
+  > *suite* is wrong rather than the provider. It was read that way, a `recoverable` branch was added
+  > to both halves, and **that reading was itself wrong**: what the failure reported was a real
+  > defect, and the branch encoded it as the contract. Both branches are gone again. The objects are
+  > asserted gone for every type, and the recoverable arm asserts what a window actually keeps.
 
-  > ⚠⚠ **AND THE DECLARATION HAS SINCE BEEN WITHDRAWN, WHICH IS THE ACTUAL FINDING.** Two drafts
-  > of that argument were wrong before the third was measured. `IResourceReconciler.DeleteAsync` is
-  > **never called** for a type declaring a window — `OperationGrain.DriveAsync` returns early and
-  > runs no pass — `ParkAsync` states that *"its quota stays committed until it is purged"*, and the
-  > object left standing is the **`VMUser`**, which is the one thing on this row that enforces
-  > anything, because vmauth resolves it the moment it is applied. So a soft-deleted workspace is an
-  > **authenticated, billed, open write path into a store the tenant believes is gone**: a collector
-  > nobody reconfigured keeps writing, the retention keeps accruing, and the only way to stop it is
-  > a purge behind a permission the tenant may not hold. ⚠ On a database or an object store a
-  > recovery window merely holds disk; **here it holds an open ingest endpoint**, which docs/plan/08
-  > does not anticipate because nothing before this declared a window. **A delete that does not
-  > delete is worse than no recovery window**, so it is withdrawn — the same conclusion
+  > ⚠⚠ **THE DECLARATION WAS WITHDRAWN AND IS BACK, AND THE WITHDRAWAL IS THE FINDING.** Two drafts
+  > of that argument were wrong before the third was measured. `IResourceReconciler.DeleteAsync` was
+  > **never called** for a type declaring a window — `OperationGrain.DriveAsync` returned early and
+  > ran no pass — `ParkAsync` states that *"its quota stays committed until it is purged"*, and the
+  > object left standing was the **`VMUser`**, which is the one thing on this row that enforces
+  > anything, because vmauth resolves it the moment it is applied. So a soft-deleted workspace was an
+  > **authenticated, billed, open write path into a store the tenant believed was gone**: a collector
+  > nobody reconfigured kept writing, the retention kept accruing, and the only way to stop it was a
+  > purge behind a permission the tenant may not hold. ⚠ On a database or an object store a recovery
+  > window merely holds disk; **here it held an open ingest endpoint**, which docs/plan/08 did not
+  > anticipate because nothing before this had declared a window. **A delete that does not delete is
+  > worse than no recovery window**, so it was withdrawn — the same conclusion
   > `CyberCloud.ContainerRegistry/registries` reached from its own measurement, for a reason that is
   > worse here rather than merely similar: fifteen idle Harbor objects cost money, and this costs
   > money *and* silently ingests data.
   >
-  > ⚠ **What did NOT reproduce is recorded too, because a finding that fails to replicate is worth
-  > as much as one that does.** That row measured a soft-deleted resource *reconciling its whole
-  > data plane back*; on this type that path is not reachable, checked rather than assumed. Driving
-  > the completed delete operation again returns nothing, and disabling `OperationGrain`'s
-  > soft-delete branch makes the pass run with `tearingDown` **true** — `OperationSpec.Kind` is
-  > `Delete` — so it **destroys** the objects instead, failing that experiment and the shared
-  > suite's recoverable branch in the opposite direction. The withdrawal does not rest on it.
+  > ⚠ **What did NOT reproduce is what located the fix, and it is why a failed replication is worth
+  > as much as a successful one.** That row measured a soft-deleted resource *reconciling its whole
+  > data plane back*; on this type that path was not reachable, checked rather than assumed. Driving
+  > the completed delete operation again returned nothing, and disabling `OperationGrain`'s
+  > soft-delete branch made the pass run with `tearingDown` **true** — `OperationSpec.Kind` is
+  > `Delete` — so it **destroyed** the objects instead. ⚠ **There was no re-apply anywhere.** The
+  > other row's evidence was a conformance assertion reporting an **end state**, and an end state
+  > cannot tell *never torn down* from *torn down and re-applied* — different bugs, different files.
+  > Recording the discrepancy rather than inheriting the answer is what made it findable.
   >
-  > ⚠ **Re-declaring is one line, and that is built rather than promised.** `SoftDeleteDays`, the
-  > purge-protection property the builder refuses the type without, `MonitorDeclarationTests`'
-  > coverage of both, and the conformance experiment — which **skips itself loudly** instead of
-  > being deleted — all stay. **And the cluster-backed suite's `recoverable` branch stays too**: it
-  > reads the registry, costs nothing while no type declares a window, and is what makes the one
-  > line safe when somebody restores it. `conformance.yaml § owed`,
-  > `soft-delete-is-withdrawn-not-declined`.
+  > ⚠ **And re-declaring was one line, because everything the declaration needs was kept rather than
+  > deleted**: `SoftDeleteDays`, the purge-protection property the builder refuses the type without,
+  > `MonitorDeclarationTests`' coverage of both, and the conformance experiment, which **skipped
+  > itself loudly** instead of being removed and started asserting again on the same run.
+  > `conformance.yaml § owed`, `soft-delete-was-withdrawn-and-is-declared-again`.
 
 - **⚠ A RETENTION A TENANT CAN SHORTEN IS AN IRREVERSIBLE DATA-LOSS PATH AUTHORISED BY A REQUEST THE
   PLATFORM ALREADY ANSWERED `202` TO — fifth sighting of the missing write-path predicate, and the
@@ -1307,41 +1407,48 @@ tree, measured it against a real API server, and took it back.
   once, permanently, and a *later* mint would not take effect at all. That last fact is why
   `ContainerRegistryListCredentialsHandler` reads and never mints, and it is a stronger reason than
   the one `StorageAccountListKeysHandler` gives.
-- **⚠ THIS ROW DECLARED THE FIRST `SupportsSoftDelete` IN THE TREE, AND DECLARING IT IS WHAT FOUND
-  THAT A SOFT-DELETED RESOURCE REBUILDS ITS ENTIRE DATA PLANE AFTER A CONVERGED TEARDOWN. THE
-  DECLARATION IS WITHDRAWN AND THE FINDING IS THE DELIVERABLE.** Eleven families declined the
-  declaration for one shared reason — the manager did not read `SoftDeleteDays` — and docs/plan/08
-  § Soft delete is built now, so the question each type owes is its own: *can the deleted thing
-  genuinely be handed back?* Here the answer is yes, and the mechanism is **Kubernetes' rather than
-  this provider's**: a claim created by a `volumeClaimTemplate` is not removed by deleting the
-  `StatefulSet`, which is why all three volume-owning components are `StatefulSet`s rather than
-  `Deployment`s with claims beside them. So the declaration went in.
+- **⚠ THIS ROW DECLARED THE FIRST `SupportsSoftDelete` IN THE TREE, DECLARING IT IS WHAT FOUND THAT A
+  SOFT DELETE TORE NOTHING DOWN, AND THE ROW THEN WROTE THE FINDING UP AS THE WRONG MECHANISM.**
+  Eleven families declined the declaration for one shared reason — the manager did not read
+  `SoftDeleteDays` — and docs/plan/08 § Soft delete is built, so the question each type owes is its
+  own: *can the deleted thing genuinely be handed back?* Here the answer is yes, and the mechanism is
+  **Kubernetes' rather than this provider's**: a claim created by a `volumeClaimTemplate` is not
+  removed by deleting the `StatefulSet`, which is why all three volume-owning components are
+  `StatefulSet`s rather than `Deployment`s with claims beside them. So the declaration went in.
   <br>⚠ **Measured, not argued.** `ClusterConformanceTests.TheLifecycleRunsAgainstARealApiServer`
   failed with *"is still in the real cluster after a converged teardown"*; reordering the case's
   `Objects` showed it was not one object but **every** object, the core `Deployment` included.
   Removing that one call and changing nothing else made the same test pass, and putting it back made
   it fail again.
-  <br>⚠ **What it means, because it is worse than it sounds.** A tenant deletes a registry; the API
-  answers, the operation converges, the resource stops being addressable — and the workload comes
-  back and keeps running, sampled by docs/plan/22's usage pipeline, holding its quota, invisible to
-  the tenant who would delete it again. docs/plan/08 chose to **move** the resource out of the tree
-  rather than flag it in place, because a flag *"puts an 'unless deleted' clause on every read path,
-  every list, every ReBAC check and the index claim, and the feature is then only as good as the
-  least-remembered of them"*. The **index** entry moves and `ResolveAsync` refuses it — that half
-  works. The **reconcile loop's view of the resource** does not move, and on the non-soft-delete path
-  it is `ResourceGrain.CompleteDeleteAsync` clearing grain state that stops the loop — which a
-  resource that must survive for a restore cannot do. The least-remembered clause was the one the
-  document did not look at.
-  <br>⚠ **Two things had to be true at once for anyone to see it**, which is why eleven families did
-  not: a type that declares the window, and a teardown wide enough to be unmistakable.
-  `charts/managed/harbor/conformance.yaml § owed`, `a-soft-deleted-resource-undeletes-itself`,
-  carries the reproduction; the three arguments the call needs are kept, documented and asserted
-  against, so re-declaring it is one line.
-  <br>⚠ **Two smaller findings stand whatever happens to that one.** Nothing removes a
-  `PersistentVolumeClaim` on a purge, so a purged resource would return its quota and leave its disks
-  allocated; and `ResourceManagerService.RestoreAsync` and `PurgeAsync` are reachable from **no
-  gateway stage at all**, grepped rather than assumed — so even a working window would be one nobody
-  could exercise.
+  <br>⚠⚠ **And the row recorded that as a soft-deleted resource REBUILDING its data plane — an active
+  re-apply — which it was not.** That assertion reports an **end state**: an object is present. An end
+  state cannot distinguish *never torn down* from *torn down and re-applied*, and the two are
+  different bugs in different code. It was the first: `OperationGrain.DriveAsync` returned before
+  running any pass for a soft delete, so nothing was ever asked to come down.
+  `CyberCloud.Monitor/workspaces` declared a window the same day, could not reproduce a re-apply on
+  its own row, checked three ways, and **recorded the discrepancy rather than inheriting this row's
+  answer** — which is what made the disagreement findable at all. ⚠ **The transferable lesson is about
+  evidence: a result cannot name a mechanism, and a write-up that names one anyway sends the next
+  reader to the wrong file.**
+  <br>⚠ **The defect was real either way, and it is worse than it sounds.** A tenant deletes a
+  registry; the API answers, the operation converges, the resource stops being addressable — and the
+  workload keeps running, sampled by docs/plan/22's usage pipeline, holding its quota, invisible to
+  the tenant who would delete it again. **A delete that does not delete is worse than no recovery
+  window**, so the declaration was withdrawn.
+  <br>⚠ **It is declared again, because it is closed.** A soft delete now runs the reconciler's
+  `DeleteAsync` exactly as a hard delete does, and the four things that make it soft happen after that
+  pass reads back: the name is held, the committed quota is kept, the resource grain keeps its desired
+  state, and the ReBAC parent edge moves to the subscription. The fifteen objects come down and the
+  **disks stay**, which is what makes this row's window honest and what a restore re-attaches.
+  `charts/managed/harbor/conformance.yaml § owed`,
+  `a-soft-deleted-resource-was-never-torn-down`.
+  <br>⚠ **Two smaller findings stand whatever happened to that one, and one of them grew.** Nothing
+  removes a `PersistentVolumeClaim` on a purge — and now that the objects come down at the *delete*,
+  a purge reaches the provider with nothing to do at all, so a purged registry returns its quota and
+  leaves its disks: the largest remaining gap in this row's window. And
+  `ResourceManagerService.RestoreAsync` and `PurgeAsync` are reachable from **no gateway stage at
+  all**, grepped rather than assumed, so a tenant cannot exercise the window a `DELETE` now gives
+  them.
 - **⚠ `Matches` IS CONTAINMENT FOR A REASON THAT IS NOT MERELY FALSE HERE BUT UNAVAILABLE.** Five
   families argue it from a CRD's `+kubebuilder:default` markers or from an operator's mutating
   webhook; `KafkaClusters` and `ClickHouseClusters` found CRDs that declared none and could at least

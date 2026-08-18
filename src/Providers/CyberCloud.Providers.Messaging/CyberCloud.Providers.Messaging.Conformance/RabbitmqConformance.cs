@@ -1,5 +1,6 @@
 using CyberCloud.Conformance;
 using CyberCloud.Conformance.Harness;
+using CyberCloud.Kubernetes.Contracts;
 using CyberCloud.Providers.Messaging.Contracts;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -63,6 +64,19 @@ public sealed class RabbitmqCase : IProviderCaseSource {
             // conditional object to pin, because the operator owns everything a setting could turn
             // on or off.
             Objects = (id, ns) => [RabbitmqClusters.ClusterRef(ns, id.Name)],
+            // ⚠ The cluster-operator's default-user Secret. The real object carries seven keys; the
+            // two returned are here and the other five are not, so a handler that started echoing
+            // `host` or `port` back instead of computing them would fail rather than pass by accident.
+            OperatorWritten = (id, ns) => [
+                (KubeSecret.Ref(ns, RabbitmqClusters.DefaultUserSecretName(id.Name)),
+                    OperatorSecret.Json(
+                        KubeSecret.Ref(ns, RabbitmqClusters.DefaultUserSecretName(id.Name)),
+                        [
+                            (RabbitmqClusterListKeysHandler.UsernameKey, "a-generated-user"),
+                            (RabbitmqClusterListKeysHandler.PasswordKey, "a-generated-password")
+                        ]
+                    ))
+            ],
             ObjectMatchesDesired = match => {
                 using var desired = JsonDocument.Parse(match.DesiredJson);
                 return RabbitmqClusters.Matches(match.ObjectJson, desired.RootElement);

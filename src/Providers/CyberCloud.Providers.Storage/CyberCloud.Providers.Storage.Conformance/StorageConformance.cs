@@ -87,6 +87,10 @@ public sealed class StorageCase : IProviderCaseSource {
                 StorageAccounts.ConfigSecretRef(ns, id.Name),
                 StorageAccounts.SeaweedRef(ns, id.Name)
             ],
+            // This platform mints or computes everything this type's actions hand back, so no operator
+            // writes an object any action reads. Stated rather than defaulted — see
+            // ProviderConformanceCase.OperatorWritten.
+            OperatorWritten = static (_, _) => [],
             ObjectMatchesDesired = match => {
                 using var desired = JsonDocument.Parse(match.DesiredJson);
                 return StorageAccounts.Matches(match.ObjectJson, desired.RootElement);
@@ -161,6 +165,10 @@ public sealed class StorageBucketCase : IProviderCaseSource {
             InvalidBodyTarget = StorageBuckets.ClusterIdPointer,
             ActionName = StorageBuckets.StatsAction,
             Objects = (id, ns) => [StorageBuckets.BucketRef(ns, id)],
+            // This platform mints or computes everything this type's actions hand back, so no operator
+            // writes an object any action reads. Stated rather than defaulted — see
+            // ProviderConformanceCase.OperatorWritten.
+            OperatorWritten = static (_, _) => [],
             // ⚠ THE WHOLE PREDICATE, WHICH IT WAS NOT UNTIL `MatchContext` CARRIED AN ADDRESS. This
             // used to be `StorageBuckets.MatchesBody` — the body half — because
             // `ObjectMatchesDesired` was `(objectJson, desiredJson) => bool` and a bucket's

@@ -311,3 +311,115 @@ public sealed class ShowEffectiveRulesHandler : IResourceActionHandler {
         );
     }
 }
+
+/// <summary>
+///     Serves <c>POST …/publicIpAddresses/{name}/showAllocation</c>: the address the fabric actually
+///     handed out.
+/// </summary>
+/// <remarks>
+///     <para>
+///         ⚠ <b>THIS IS THE ONLY ACTION IN THE CATALOGUE THAT RETURNS THE RESOURCE'S OWN REASON FOR
+///         EXISTING.</b> Every other one reports a refinement — how full a subnet is, what a rule set
+///         expands to, what the isolation claim does not cover. A public address <i>is</i> the value
+///         the fabric picked: it is not in the body, because the body is what was asked for, and it is
+///         derivable from nothing. Without this action a tenant would have to read
+///         <c>OvnEip.status.v4Ip</c>, on an object they have no access to, in a cluster they cannot
+///         reach.
+///     </para>
+///     <para>
+///         ⚠ <b><c>ready</c> IS RETURNED WITH THE ADDRESS AND NOT INSTEAD OF IT.</b> The controller
+///         writes <c>status.v4Ip</c> as soon as IPAM allocates and <c>status.ready</c> only after the
+///         fabric has finished — <c>patchOvnEipStatus(key, true)</c> is a separate call in
+///         <c>handleAddOvnEip</c>. An address without the flag is a value a tenant would point DNS at
+///         a few seconds too early; the flag without the address is a spinner. Both, always.
+///     </para>
+///     <para>
+///         ⚠ <b><c>attachedTo</c> IS <c>status.nat</c> AND IT IS EMPTY FOR EVERY ADDRESS IN THIS
+///         API-VERSION.</b> It names the NAT rule using the address — an <c>OvnFip</c>,
+///         <c>OvnDnatRule</c> or <c>OvnSnatRule</c> — and nothing in this platform creates one yet, so
+///         "I allocated an address and nothing happens" is the question this type will be asked most
+///         often. Returning the field empty answers it honestly rather than leaving the tenant to
+///         infer it. It is also what the delete path waits on: the fabric will not release an address
+///         a rule still names.
+///     </para>
+///     <para>
+///         ⚠ <b><c>sampledAt</c> IS WHEN THE PLATFORM READ THE OBJECT, NOT WHEN THE FABRIC WROTE
+///         IT</b>, for <see cref="ListAddressUsageHandler" />'s reason: <c>OvnEipStatus</c> carries no
+///         timestamp on the allocation, only <c>conditions[]</c>, and those are about readiness rather
+///         than about these values.
+///     </para>
+///     <para>
+///         ⚠ <b>An address whose controller has not run yet reports empties and <c>ready: false</c>
+///         rather than refusing.</b> An <c>OvnEip</c> that was applied a moment ago has no
+///         <c>status</c> at all, and a <c>404</c> or an error there would read as "your address is
+///         gone" at the one moment it is most likely to be asked for.
+///     </para>
+/// </remarks>
+/// <param name="clock">Stamps <c>sampledAt</c>. ⚠ The handler's only field, and it is not mutable.</param>
+public sealed class ShowAllocationHandler(IClock clock) : IResourceActionHandler {
+    /// <inheritdoc />
+    public ResourceTypeName Type => PublicIpAddresses.Type;
+
+    /// <inheritdoc />
+    public string Action => PublicIpAddresses.AllocationAction;
+
+    /// <inheritdoc />
+    public async Task<Result<string>> InvokeAsync(
+        ActionContext context,
+        CancellationToken cancellationToken = default
+    ) {
+        if (context.Cluster is not { } cluster) {
+            // ⚠ Unreachable in production — the type declares RequiresCluster and ActionDispatcher
+            // refuses before a handler is reached. It is here because "unreachable" is a claim about a
+            // call site rather than about this method.
+            return Result<string>.Failure(
+                ErrorCode.InternalError,
+                $"'{context.Id.Path}' has no cluster connection, and an allocated address is read from "
+                + "the OvnEip object in a cluster."
+            );
+        }
+
+        var target = PublicIpAddresses.OvnEipRef(context.Namespace, context.Id.Name);
+        var read = await cluster.GetAsync(target, cancellationToken);
+
+        if (read.TryGetError(out var error)) {
+            return Result<string>.Failure(error);
+        }
+
+        var status = StatusOf(read.GetValueOrThrow().Json);
+
+        return Result<string>.Success(
+            new JsonObject {
+                ["v4"] = Text(status, "v4Ip"),
+                ["v6"] = Text(status, "v6Ip"),
+                ["macAddress"] = Text(status, "macAddress"),
+                ["ready"] = status?["ready"] is JsonValue ready
+                    && ready.TryGetValue<bool>(out var isReady)
+                    && isReady,
+                ["attachedTo"] = Text(status, "nat"),
+                ["sampledAt"] = clock.UtcNow.ToString("O", CultureInfo.InvariantCulture)
+            }.ToJsonString()
+        );
+    }
+
+    /// <summary>The <c>status</c> of an <c>OvnEip</c> document, or <see langword="null" />.</summary>
+    /// <param name="objectJson">The object's JSON.</param>
+    static JsonObject? StatusOf(string objectJson) {
+        JsonNode? parsed;
+        try {
+            parsed = JsonNode.Parse(objectJson);
+        } catch (JsonException) {
+            return null;
+        }
+
+        return parsed is JsonObject document && document["status"] is JsonObject status ? status : null;
+    }
+
+    /// <summary>One status string, or empty when the controller has not written one.</summary>
+    /// <param name="status">The address's status.</param>
+    /// <param name="name">The status field.</param>
+    static string Text(JsonObject? status, string name) =>
+        status?[name] is JsonValue value && value.GetValueKind() is JsonValueKind.String
+            ? value.GetValue<string>()
+            : string.Empty;
+}
