@@ -127,6 +127,7 @@
         <ProjectReference Include="../../Providers/CyberCloud.Providers.Sample/CyberCloud.Providers.Sample.Application/CyberCloud.Providers.Sample.Application.csproj"/>
         <ProjectReference Include="../../Providers/CyberCloud.Providers.Search/CyberCloud.Providers.Search.Application/CyberCloud.Providers.Search.Application.csproj"/>
         <ProjectReference Include="../../Providers/CyberCloud.Providers.Storage/CyberCloud.Providers.Storage.Application/CyberCloud.Providers.Storage.Application.csproj"/>
+        <ProjectReference Include="../../Providers/CyberCloud.Providers.Terminal/CyberCloud.Providers.Terminal.Application/CyberCloud.Providers.Terminal.Application.csproj"/>
     </ItemGroup>
 
     <ItemGroup>

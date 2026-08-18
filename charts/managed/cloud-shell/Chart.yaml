@@ -1,0 +1,52 @@
+# The cloud terminal — docs/plan/19 § CyberCloud.Terminal/consoles, "M1 · 1.5 EM", and step 6 of
+# docs/plan/24's M1 exit story.
+#
+# ⚠ IT IS UNDER charts/managed/ AND IT IS NOT A MANAGED THIRD-PARTY SERVICE, WHICH IS A FIRST FOR THIS
+# DIRECTORY AND IS DELIBERATE. Every other chart here wraps somebody else's operator; this one renders
+# four core Kubernetes objects and an image the platform builds itself. It is still a catalogue row —
+# a tenant creates one, is billed for it and deletes it — and `Build.Charts` requires SOURCE,
+# conformance.yaml and both cybercloud.io/* annotations ONLY for a chart under charts/managed/, so a
+# chart outside it is a catalogue row that quietly owes no conformance manifest. That is the same
+# argument charts/managed/kubernetes made when it declined charts/tenant-cluster/, and it applies here
+# for a different reason: not "it is a service like the others" but "it owes the same eighth piece".
+#
+# ⚠ THE ONE THING THIS CHART CANNOT DESCRIBE IS THE PRODUCT. A console's product is an interactive
+# session, and neither Helm nor a values file has a shape for "a pod that exists while somebody is
+# typing". templates/console.yaml renders the DURABLE half — the three objects the reconciler applies
+# — and the pod is rendered in C# by the connect action and appears in no template here. See
+# conformance.yaml § owed, `the-chart-cannot-render-the-product`.
+apiVersion: v2
+name: cloud-shell
+description: A browser shell in the tenant's own cluster — a persistent home volume, a managed identity, and a network policy that decides what the shell can reach.
+type: application
+
+# The chart's own version. Bumped on every change to this directory.
+#
+# ⚠ A NEW SHELL IMAGE MOVES THIS AND NOT THE api-version. The image is a digest the platform pins;
+# which tools are in it is not an API change and no stored resource body carries one.
+version: 0.1.0
+
+# ⚠ THERE IS NO UPSTREAM, so appVersion is the shell image's own generation rather than a third
+# party's release. It is "0" because no image exists yet — see conformance.yaml § owed,
+# `no-image-pipeline`.
+appVersion: "0"
+
+kubeVersion: ">=1.31.0-0"
+
+keywords:
+  - terminal
+  - shell
+  - cloudshell
+
+home: https://github.com/cybercloud
+sources:
+  - https://github.com/cybercloud
+
+maintainers:
+  - name: Cyber Cloud Platform
+
+# ⚠ These three are read by `Build.Charts` and written into `values.schema.json` as `x-cybercloud-*`.
+annotations:
+  cybercloud.io/resource-type: CyberCloud.Terminal/consoles
+  cybercloud.io/api-version: "2026-08-01"
+  cybercloud.io/operator: none

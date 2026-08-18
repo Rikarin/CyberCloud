@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      docs/plan/03 § Providers — the first of the five projects: "grain interfaces, resource models,
+      the JSON Schemas". Here it is the console's schema, the four Kubernetes objects it becomes, and
+      the pod spec the session path renders.
+
+      ⚠ NO GRAIN INTERFACES, AND THIS IS THE FIRST FAMILY FOR WHICH THAT SENTENCE NEEDED AN ARGUMENT
+      RATHER THAN A PRECEDENT. docs/plan/19 § Architecture puts an `ITerminalSessionGrain` in the
+      picture, and eleven families before this one recorded "no grain" as evidence that the manager
+      owns resource state. Both are true and they are about different objects: the CONSOLE's desired
+      state is held by CyberCloud.ResourceManager's ResourceGrain like every other resource, and the
+      SESSION — an exec stream, a resize channel, an output ring buffer — is not a resource at all and
+      is not declared here. See CloudConsoles' remarks, § What is a resource and what is a session.
+
+      ⚠ ITS REFERENCE SET IS CyberCloud.ResourceManager.Contracts AND CyberCloud.Kubernetes.Contracts,
+      and nothing else. Rule 2 of docs/plan/03 § Assembly graph rules forbids a Providers.* assembly
+      referencing another. That rule bites harder here than anywhere else in the tree: the whole point
+      of a cloud shell is to reach the tenant's OTHER resources, and this assembly may not name one of
+      them. It does not need to — what it renders is a NetworkPolicy over label selectors, and a label
+      is a string. See CloudConsoles.NetworkPolicyJson.
+    -->
+
+    <ItemGroup>
+        <ProjectReference Include="../../../CyberCloud.ResourceManager.Contracts/CyberCloud.ResourceManager.Contracts.csproj"/>
+        <ProjectReference Include="../../../CyberCloud.Kubernetes.Contracts/CyberCloud.Kubernetes.Contracts.csproj"/>
+    </ItemGroup>
+
+    <ItemGroup Label="CyberCloud.Analyzers — see CyberCloud.Core.csproj for why this is not a reference">
+        <ProjectReference Include="../../../CyberCloud.Analyzers/CyberCloud.Analyzers.csproj"
+                          OutputItemType="Analyzer"
+                          ReferenceOutputAssembly="false"/>
+    </ItemGroup>
+
+</Project>

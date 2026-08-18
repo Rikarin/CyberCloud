@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      docs/plan/03 § Providers — the fifth project: "the shared provider conformance suite,
+      parameterised".
+
+      ⚠ IT CONTAINS NO ASSERTIONS, AND THIS FAMILY IS THE SHARPEST TEST THAT CLAIM HAS HAD. Every
+      provider before this one sells a converged object, which is what the shared suite asserts about.
+      This one sells a session. test/CyberCloud.Conformance was not touched — but the reason is not
+      that the suite turned out to cover a session; it is that this provider's CASE describes only the
+      durable half, and the suite is therefore making exactly the claims it can make and no more. That
+      is stated at CloudConsoleCase and again in conformance.yaml § owed, `the-suite-never-attaches`.
+
+      ⚠ THIS PROJECT IS ANOTHER SUITE THE Labels ARCHITECTURE GATE COUNTS. Build.Architecture
+      § LabelsGate runs EveryAppliedObjectCarriesTheSevenMandatoryLabelsAndBothAnnotations in every
+      *.Conformance project under src/Providers. ⚠ It counts the three objects the RECONCILER applies;
+      the pod, which the session path applies, is outside every suite in the tree and its labels are
+      pinned by a hand-written test instead.
+
+      ⚠ IT REFERENCES A PROJECT UNDER test/, which docs/plan/03 § test/ intends: CyberCloud.Conformance
+      is "the shared provider suite (parameterised, REFERENCED BY PROVIDERS)". docs/plan/03 § Assembly
+      graph rules is about the shipped graph and excludes test projects by construction.
+    -->
+
+    <ItemGroup>
+        <PackageReference Include="xunit.v3"/>
+        <PackageReference Include="Shouldly"/>
+    </ItemGroup>
+
+    <ItemGroup Label="Global usings">
+        <Using Include="Xunit"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../CyberCloud.Providers.Terminal/CyberCloud.Providers.Terminal.csproj"/>
+        <ProjectReference Include="../../../../test/CyberCloud.Conformance/CyberCloud.Conformance.csproj"/>
+    </ItemGroup>
+
+</Project>

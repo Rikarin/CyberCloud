@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      docs/plan/03 § Providers — the implementation assembly: "grains, reconcilers, the chart
+      bindings". A reconciler, an action handler and a chart binding; no grain (see the .Contracts
+      .csproj).
+
+      ⚠ ITS ENTIRE REFERENCE SET IS ITS OWN .Contracts. Everything else — IResourceReconciler,
+      IResourceActionHandler, ReconcileContext, KubeCommand — arrives through it.
+      docs/plan/07 § The enforcement seam: "Providers never call the engine." Here that is mechanical
+      rather than reviewed, because CyberCloud.ResourceManager.Contracts does not reference
+      CyberCloud.Authorization.Contracts, so ICheckGrain is not nameable from this assembly at all.
+
+      ⚠ THAT MECHANICAL GUARANTEE COSTS THIS PROVIDER SOMETHING NO EARLIER ONE PAID, AND IT IS WORTH
+      NAMING WHERE THE REFERENCE SET IS DECLARED. A console is a credential path — docs/plan/19
+      § Auditing exists for that reason — and the `connect` action would like to refuse a caller who is
+      not the console's own principal. It cannot: ActionContext carries no CallerContext, and this
+      assembly could not name one usefully if it did. The permission check that DOES happen is the
+      registry's, above this assembly, and the residual gap is
+      charts/managed/cloud-shell/conformance.yaml § owed, `connect-cannot-see-its-caller`.
+
+      ⚠ NO KubernetesClient. docs/plan/03 § Assembly graph rules, rule 3: nothing above
+      CyberCloud.Kubernetes names a k8s.Models type. Every object this provider renders — a
+      PersistentVolumeClaim, a ServiceAccount, a NetworkPolicy and a Pod — HAS a k8s.Models type,
+      which is new: eleven families before this one rendered custom resources where the temptation
+      does not arise. They are built as JsonObject anyway, and rule 3 is why.
+    -->
+
+    <ItemGroup>
+        <ProjectReference Include="../CyberCloud.Providers.Terminal.Contracts/CyberCloud.Providers.Terminal.Contracts.csproj"/>
+    </ItemGroup>
+
+    <ItemGroup Label="CyberCloud.Analyzers — see CyberCloud.Core.csproj for why this is not a reference">
+        <ProjectReference Include="../../../CyberCloud.Analyzers/CyberCloud.Analyzers.csproj"
+                          OutputItemType="Analyzer"
+                          ReferenceOutputAssembly="false"/>
+    </ItemGroup>
+
+</Project>
