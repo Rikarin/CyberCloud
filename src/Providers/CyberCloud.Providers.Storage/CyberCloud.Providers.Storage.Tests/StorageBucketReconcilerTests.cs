@@ -378,14 +378,14 @@ public sealed class StorageBucketReconcilerTests {
 }
 
 /// <summary>
-///     A bucket reconciler that <c>CheckNoHiddenState</c> passes and that is not stateless.
+///     A reconciler that <c>CheckNoHiddenState</c> reports and that is not stateless.
 /// </summary>
 /// <remarks>
-///     ⚠ <b>Keyed on the BUCKET'S own name, which is what makes this shape worse on a child than on a
-///     top-level type.</b> Two accounts in one resource group may each hold a bucket called
-///     <c>assets</c>, so this cache collides between two resources of <i>one</i> tenant — and no
-///     cross-tenant test would ever see it. The field is <see langword="readonly" />, so
-///     <c>CheckNoHiddenState</c> skips it and the dictionary is mutable forever.
+///     The field is <see langword="readonly" />, which stops it being reassigned and stops nothing
+///     about the dictionary it holds. That is the shape a per-tenant cache takes when somebody adds
+///     one for performance. <c>CheckNoHiddenState</c> used to skip it for being
+///     <see langword="readonly" /> and now reports it; the cross-tenant test in the sibling file is
+///     what still catches the mixing a field's declared type cannot show.
 /// </remarks>
 sealed class BucketReconcilerWithAReadonlyCache : IResourceReconciler {
     readonly Dictionary<string, string> lastRendered = new(StringComparer.Ordinal);

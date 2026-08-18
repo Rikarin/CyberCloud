@@ -411,7 +411,7 @@ public sealed class AgentPoolReconcilerTests {
         JsonNode.Parse(objectJson)!["metadata"]!["annotations"]?.AsObject() ?? [];
 }
 
-/// <summary>A child reconciler that <c>CheckNoHiddenState</c> passes and that is not stateless.</summary>
+/// <summary>A child reconciler that <c>CheckNoHiddenState</c> reports and that is not stateless.</summary>
 sealed class PoolReconcilerWithAReadonlyCache : IResourceReconciler {
     readonly Dictionary<string, string> lastRendered = new(StringComparer.Ordinal);
 

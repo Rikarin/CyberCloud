@@ -314,9 +314,9 @@ public sealed class ContainerRegistryReconciler(IClock clock) : IResourceReconci
     ///     </para>
     ///     <para>
     ///         ⚠ Static, like <c>NatsClusters</c>' equivalent, because a reconciler is one singleton
-    ///         across every tenant in the process — clause 2, and the blind spot
-    ///         <c>CheckNoHiddenState</c> has around a <c>readonly</c> field holding a mutable
-    ///         collection.
+    ///         across every tenant in the process — clause 2. Memoising this into a <c>readonly</c>
+    ///         dictionary is the shape that used to get past <c>CheckNoHiddenState</c>; it no longer
+    ///         does.
     ///     </para>
     /// </remarks>
     public static ObjectRef[] Targets(string ns, string name, JsonElement desired) {
