@@ -34,7 +34,7 @@ public sealed class ReferenceCase : IProviderCaseSource {
             ActionName = "ping",
             Objects = (id, ns) =>
                 [new() { Kind = Probes.Kind, Namespace = ns, Name = Probes.ObjectNameOf(id) }],
-            ObjectMatchesDesired = Probes.Matches
+            ObjectMatchesDesired = match => Probes.Matches(match.ObjectJson, match.DesiredJson)
         };
 }
 
@@ -76,7 +76,7 @@ public sealed class ReferenceChildCase : IProviderCaseSource {
             ActionName = "ping",
             Objects = (id, ns) =>
                 [new() { Kind = Probes.Kind, Namespace = ns, Name = Probes.ObjectNameOf(id) }],
-            ObjectMatchesDesired = Probes.Matches
+            ObjectMatchesDesired = match => Probes.Matches(match.ObjectJson, match.DesiredJson)
         };
 
     /// <inheritdoc />

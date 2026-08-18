@@ -72,9 +72,9 @@ public sealed class AnalyticsCase : IProviderCaseSource {
             // `kind` AND RETURNS FALSE FOR ONE IT DOES NOT KNOW. A Matches that defaulted to true for
             // an unrecognised document would report a Keeper that was never applied as converged, and
             // this member is the only place that shape is exercised.
-            ObjectMatchesDesired = (objectJson, desiredJson) => {
-                using var desired = JsonDocument.Parse(desiredJson);
-                return ClickHouseClusters.Matches(objectJson, desired.RootElement);
+            ObjectMatchesDesired = match => {
+                using var desired = JsonDocument.Parse(match.DesiredJson);
+                return ClickHouseClusters.Matches(match.ObjectJson, desired.RootElement);
             }
         };
 

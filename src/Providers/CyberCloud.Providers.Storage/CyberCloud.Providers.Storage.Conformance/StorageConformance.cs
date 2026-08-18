@@ -87,9 +87,9 @@ public sealed class StorageCase : IProviderCaseSource {
                 StorageAccounts.ConfigSecretRef(ns, id.Name),
                 StorageAccounts.SeaweedRef(ns, id.Name)
             ],
-            ObjectMatchesDesired = (objectJson, desiredJson) => {
-                using var desired = JsonDocument.Parse(desiredJson);
-                return StorageAccounts.Matches(objectJson, desired.RootElement);
+            ObjectMatchesDesired = match => {
+                using var desired = JsonDocument.Parse(match.DesiredJson);
+                return StorageAccounts.Matches(match.ObjectJson, desired.RootElement);
             }
         };
 
@@ -176,9 +176,9 @@ public sealed class StorageBucketCase : IProviderCaseSource {
             // a bucket called `assets`.
             // charts/managed/seaweedfs-bucket/conformance.yaml § owed,
             // `object-matches-desired-cannot-see-an-address`.
-            ObjectMatchesDesired = (objectJson, desiredJson) => {
-                using var desired = JsonDocument.Parse(desiredJson);
-                return StorageBuckets.MatchesBody(objectJson, desired.RootElement);
+            ObjectMatchesDesired = match => {
+                using var desired = JsonDocument.Parse(match.DesiredJson);
+                return StorageBuckets.MatchesBody(match.ObjectJson, desired.RootElement);
             }
         };
 

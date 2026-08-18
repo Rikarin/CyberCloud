@@ -73,9 +73,9 @@ public sealed class CloudConsoleCase : IProviderCaseSource {
             // state of this type, so listing it would make the suite demand the very thing the design
             // exists to avoid.
             Objects = (id, ns) => CloudConsoles.Objects(ns, id.Name),
-            ObjectMatchesDesired = (objectJson, desiredJson) => {
-                using var desired = JsonDocument.Parse(desiredJson);
-                return CloudConsoles.Matches(objectJson, desired.RootElement);
+            ObjectMatchesDesired = match => {
+                using var desired = JsonDocument.Parse(match.DesiredJson);
+                return CloudConsoles.Matches(match.ObjectJson, desired.RootElement);
             }
         };
 

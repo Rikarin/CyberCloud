@@ -43,9 +43,9 @@ public sealed class SampleCase : IProviderCaseSource {
             // group's namespace.
             Objects = (id, ns) =>
                 [new() { Kind = SampleWidgets.ConfigMapKind, Namespace = ns, Name = id.Name }],
-            ObjectMatchesDesired = (objectJson, desiredJson) => {
-                using var desired = JsonDocument.Parse(desiredJson);
-                return SampleWidgets.Matches(objectJson, desired.RootElement);
+            ObjectMatchesDesired = match => {
+                using var desired = JsonDocument.Parse(match.DesiredJson);
+                return SampleWidgets.Matches(match.ObjectJson, desired.RootElement);
             }
         };
 

@@ -93,9 +93,9 @@ public sealed class ContainerRegistryCase : IProviderCaseSource {
                 ContainerRegistries.JobServiceDeploymentRef(ns, id.Name),
                 ContainerRegistries.PodMonitorRef(ns, id.Name)
             ],
-            ObjectMatchesDesired = (objectJson, desiredJson) => {
-                using var desired = JsonDocument.Parse(desiredJson);
-                return ContainerRegistries.Matches(objectJson, desired.RootElement);
+            ObjectMatchesDesired = match => {
+                using var desired = JsonDocument.Parse(match.DesiredJson);
+                return ContainerRegistries.Matches(match.ObjectJson, desired.RootElement);
             }
         };
 

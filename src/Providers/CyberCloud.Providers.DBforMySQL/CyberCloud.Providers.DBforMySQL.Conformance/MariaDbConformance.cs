@@ -45,9 +45,9 @@ public sealed class MariaDbCase : IProviderCaseSource {
             // object the provider does not apply fails every world-facing assertion for the case's
             // reason rather than the provider's.
             Objects = (id, ns) => [MariaDbServers.ServerRef(ns, id.Name)],
-            ObjectMatchesDesired = (objectJson, desiredJson) => {
-                using var desired = JsonDocument.Parse(desiredJson);
-                return MariaDbServers.Matches(objectJson, desired.RootElement);
+            ObjectMatchesDesired = match => {
+                using var desired = JsonDocument.Parse(match.DesiredJson);
+                return MariaDbServers.Matches(match.ObjectJson, desired.RootElement);
             }
         };
 

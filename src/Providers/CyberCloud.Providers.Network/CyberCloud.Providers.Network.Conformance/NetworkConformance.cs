@@ -63,9 +63,9 @@ public sealed class VirtualNetworkCase : IProviderCaseSource {
             InvalidBodyTarget = "/properties/addressSpace/v4",
             ActionName = VirtualNetworks.ShowIsolationAction,
             Objects = (id, ns) => [VirtualNetworks.VpcRef(ns, id.Name)],
-            ObjectMatchesDesired = (objectJson, desiredJson) => {
-                using var desired = JsonDocument.Parse(desiredJson);
-                return VirtualNetworks.Matches(objectJson, desired.RootElement);
+            ObjectMatchesDesired = match => {
+                using var desired = JsonDocument.Parse(match.DesiredJson);
+                return VirtualNetworks.Matches(match.ObjectJson, desired.RootElement);
             }
         };
 
@@ -133,9 +133,9 @@ public sealed class NetworkSubnetCase : IProviderCaseSource {
             // ONE resource group each holding a subnet called `web`.
             // charts/managed/kube-ovn-subnet/conformance.yaml § owed,
             // `object-matches-desired-cannot-see-an-address`.
-            ObjectMatchesDesired = (objectJson, desiredJson) => {
-                using var desired = JsonDocument.Parse(desiredJson);
-                return NetworkSubnets.MatchesBody(objectJson, desired.RootElement);
+            ObjectMatchesDesired = match => {
+                using var desired = JsonDocument.Parse(match.DesiredJson);
+                return NetworkSubnets.MatchesBody(match.ObjectJson, desired.RootElement);
             }
         };
 
@@ -197,9 +197,9 @@ public sealed class NetworkSecurityGroupCase : IProviderCaseSource {
             // which for a subnet costs the `spec.vpc` half of its comparison. A SecurityGroup has no
             // field derived from the address at all, so nothing is left out here and the shared suite
             // checks exactly what the reconciler does.
-            ObjectMatchesDesired = (objectJson, desiredJson) => {
-                using var desired = JsonDocument.Parse(desiredJson);
-                return NetworkSecurityGroups.Matches(objectJson, desired.RootElement);
+            ObjectMatchesDesired = match => {
+                using var desired = JsonDocument.Parse(match.DesiredJson);
+                return NetworkSecurityGroups.Matches(match.ObjectJson, desired.RootElement);
             }
         };
 

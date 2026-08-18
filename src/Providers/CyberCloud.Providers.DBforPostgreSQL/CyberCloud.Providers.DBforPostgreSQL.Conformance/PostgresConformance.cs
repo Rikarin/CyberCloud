@@ -47,9 +47,9 @@ public sealed class PostgresCase : IProviderCaseSource {
                 PostgresServers.ClusterRef(ns, id.Name),
                 PostgresServers.PoolerRef(ns, id.Name)
             ],
-            ObjectMatchesDesired = (objectJson, desiredJson) => {
-                using var desired = JsonDocument.Parse(desiredJson);
-                return PostgresServers.Matches(objectJson, desired.RootElement);
+            ObjectMatchesDesired = match => {
+                using var desired = JsonDocument.Parse(match.DesiredJson);
+                return PostgresServers.Matches(match.ObjectJson, desired.RootElement);
             }
         };
 

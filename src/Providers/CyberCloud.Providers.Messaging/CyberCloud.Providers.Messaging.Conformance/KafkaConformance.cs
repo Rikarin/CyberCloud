@@ -51,9 +51,9 @@ public sealed class KafkaCase : IProviderCaseSource {
                 KafkaClusters.KafkaRef(ns, id.Name),
                 KafkaClusters.NodePoolRef(ns, id.Name)
             ],
-            ObjectMatchesDesired = (objectJson, desiredJson) => {
-                using var desired = JsonDocument.Parse(desiredJson);
-                return KafkaClusters.Matches(objectJson, desired.RootElement);
+            ObjectMatchesDesired = match => {
+                using var desired = JsonDocument.Parse(match.DesiredJson);
+                return KafkaClusters.Matches(match.ObjectJson, desired.RootElement);
             }
         };
 

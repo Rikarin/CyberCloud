@@ -104,8 +104,13 @@ public sealed record ProviderConformanceCase {
     public required Func<ResourceId, string, ImmutableArray<ObjectRef>> Objects { get; init; }
 
     /// <summary>Whether an object read out of the cluster carries what a desired body asked for.</summary>
-    /// <remarks>The parameters are the object's JSON and the desired body's JSON text.</remarks>
-    public required Func<string, string, bool> ObjectMatchesDesired { get; init; }
+    /// <remarks>
+    ///     ⚠ <b>Takes a <see cref="MatchContext" /> rather than two strings, and the address in it is
+    ///     the point.</b> See that type's remarks: without it a child's suite checks strictly less
+    ///     than a parent's, and two provider families each recorded that in their own notes rather
+    ///     than fixing it.
+    /// </remarks>
+    public required Func<MatchContext, bool> ObjectMatchesDesired { get; init; }
 
     // ── There is deliberately NO RequiredCrds member, and the reason is worth keeping ─────────────
     //
@@ -134,6 +139,70 @@ public sealed record ProviderConformanceCase {
     // If a provider ever needs the operator's real CRD — to assert its manifest validates rather than
     // merely applies — add the member back as a SUPPLEMENT to the derivation, never as a replacement
     // for it. The floor must stay underivable-from-nothing.
+}
+
+/// <summary>
+///     One object read out of the cluster, the body it should carry, and <b>the address it was
+///     rendered for</b>.
+/// </summary>
+/// <remarks>
+///     <para>
+///         ⚠ <b>This type exists for <see cref="Id" />, and everything else on it was already
+///         reachable.</b> <see cref="ProviderConformanceCase.ObjectMatchesDesired" /> used to be
+///         <c>(objectJson, desiredJson) =&gt; bool</c>. That is enough for a top-level type, whose
+///         whole rendered spec is a function of its body, and it is <i>not</i> enough for a child: a
+///         bucket's <c>spec.name</c> is its own name and its <c>spec.clusterRef</c> is its parent's,
+///         both of which live in the address and neither of which was reachable. So a child's suite
+///         checked strictly less than a parent's — it could not tell which parent's object it was
+///         looking at, and could not catch two accounts in one resource group each holding a bucket
+///         called <c>assets</c>. Recorded first by <c>CyberCloud.Storage/accounts/buckets</c> and
+///         again by the Network family before it was fixed.
+///     </para>
+///     <para>
+///         ⚠ <b>A record rather than more positional parameters, and that is what makes the next
+///         member cheap.</b> The harness constructs this and a case only reads it, so adding a member
+///         later touches <c>ProviderConformanceTests</c>, <c>ClusterConformanceTests</c> and
+///         <c>SiloKillConformanceTests</c> — and nothing in the fourteen provider families. A third
+///         positional parameter would have touched all fourteen again, which is the cost this change
+///         paid once and should not pay twice. Two adjacent positional strings that were both JSON
+///         were also one transposition away from a suite that passed for the wrong reason.
+///     </para>
+///     <para>
+///         ⚠ <b>Every member is <c>required</c>, for the reason
+///         <see cref="ProviderConformanceCase" />'s are.</b> Here the rule points the other way — an
+///         optional member would be something the <i>harness</i> quietly stops telling the case, and
+///         a case cannot assert on a fact it was not given.
+///         <c>SuiteRejectionTests.EveryCaseFieldIsRequiredSoAPartialRegistrationDoesNotCompile</c>
+///         reads this type as well as the case.
+///     </para>
+/// </remarks>
+public sealed record MatchContext {
+    /// <summary>The object as the cluster holds it.</summary>
+    public required string ObjectJson { get; init; }
+
+    /// <summary>The desired body the object was rendered from, as JSON text.</summary>
+    public required string DesiredJson { get; init; }
+
+    /// <summary>
+    ///     The resource the object was rendered for, with its GUID resolved.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b><c>ParentNames</c> is the half a child needs and the half nothing else carries.</b>
+    ///     A child's rendered spec points at its parent by name, and that name is in the address and
+    ///     in no body — <c>ResourceId.ParentNames</c> holds the ancestors outermost first. For a
+    ///     top-level type it is empty and this member is usually unread, which is correct rather than
+    ///     wasteful: the suite hands over what it knows, and each case decides what its own type's
+    ///     spec is a function of.
+    /// </remarks>
+    public required ResourceId Id { get; init; }
+
+    /// <summary>Which of the resource's objects this is.</summary>
+    /// <remarks>
+    ///     A case that renders several kinds can dispatch on <c>Target.Kind</c> rather than sniffing
+    ///     <c>kind</c> out of <see cref="ObjectJson" />, and <c>Target.Namespace</c> saves it
+    ///     re-deriving what <c>ReconcileDriver.NamespaceFor</c> already computed.
+    /// </remarks>
+    public required ObjectRef Target { get; init; }
 }
 
 /// <summary>

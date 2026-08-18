@@ -68,9 +68,9 @@ public sealed class ManagedClusterCase : IProviderCaseSource {
                 ManagedClusters.ControlPlaneRef(ns, id.Name),
                 ManagedClusters.ClusterRef(ns, id.Name)
             ],
-            ObjectMatchesDesired = (objectJson, desiredJson) => {
-                using var desired = JsonDocument.Parse(desiredJson);
-                return ManagedClusters.Matches(objectJson, desired.RootElement);
+            ObjectMatchesDesired = match => {
+                using var desired = JsonDocument.Parse(match.DesiredJson);
+                return ManagedClusters.Matches(match.ObjectJson, desired.RootElement);
             }
         };
 
@@ -143,9 +143,9 @@ public sealed class AgentPoolCase : IProviderCaseSource {
             // and `AgentPoolReconcilerTests` asserts the other against real addresses — including the
             // case this harness could never reach, two clusters in ONE resource group each holding a
             // pool called `workers`.
-            ObjectMatchesDesired = (objectJson, desiredJson) => {
-                using var desired = JsonDocument.Parse(desiredJson);
-                return AgentPools.MatchesBody(objectJson, desired.RootElement);
+            ObjectMatchesDesired = match => {
+                using var desired = JsonDocument.Parse(match.DesiredJson);
+                return AgentPools.MatchesBody(match.ObjectJson, desired.RootElement);
             }
         };
 

@@ -87,9 +87,9 @@ public sealed class OpenSearchCase : IProviderCaseSource {
             InvalidBodyTarget = "/properties/storage/size",
             ActionName = OpenSearchServices.ListKeysAction,
             Objects = (id, ns) => [OpenSearchServices.ClusterRef(ns, id.Name)],
-            ObjectMatchesDesired = (objectJson, desiredJson) => {
-                using var desired = JsonDocument.Parse(desiredJson);
-                return OpenSearchServices.Matches(objectJson, desired.RootElement);
+            ObjectMatchesDesired = match => {
+                using var desired = JsonDocument.Parse(match.DesiredJson);
+                return OpenSearchServices.Matches(match.ObjectJson, desired.RootElement);
             }
         };
 

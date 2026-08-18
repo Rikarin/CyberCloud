@@ -63,9 +63,9 @@ public sealed class RabbitmqCase : IProviderCaseSource {
             // conditional object to pin, because the operator owns everything a setting could turn
             // on or off.
             Objects = (id, ns) => [RabbitmqClusters.ClusterRef(ns, id.Name)],
-            ObjectMatchesDesired = (objectJson, desiredJson) => {
-                using var desired = JsonDocument.Parse(desiredJson);
-                return RabbitmqClusters.Matches(objectJson, desired.RootElement);
+            ObjectMatchesDesired = match => {
+                using var desired = JsonDocument.Parse(match.DesiredJson);
+                return RabbitmqClusters.Matches(match.ObjectJson, desired.RootElement);
             }
         };
 

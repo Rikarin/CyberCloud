@@ -45,9 +45,9 @@ public sealed class ValkeyCase : IProviderCaseSource {
             // case listing an object the provider does not apply fails every world-facing assertion for
             // the case's reason rather than the provider's.
             Objects = (id, ns) => [ValkeyCaches.FailoverRef(ns, id.Name)],
-            ObjectMatchesDesired = (objectJson, desiredJson) => {
-                using var desired = JsonDocument.Parse(desiredJson);
-                return ValkeyCaches.Matches(objectJson, desired.RootElement);
+            ObjectMatchesDesired = match => {
+                using var desired = JsonDocument.Parse(match.DesiredJson);
+                return ValkeyCaches.Matches(match.ObjectJson, desired.RootElement);
             }
         };
 

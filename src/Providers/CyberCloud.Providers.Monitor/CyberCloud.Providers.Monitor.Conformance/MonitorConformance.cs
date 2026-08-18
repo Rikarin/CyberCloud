@@ -106,9 +106,9 @@ public sealed class MonitorCase : IProviderCaseSource {
             // a workspace the ingest host believes in and vmauth refuses every write to.
             // ⚠ MonitorWorkspaces.MatchesShape, NOT MonitorWorkspaces.Matches, AND THE DIFFERENCE IS
             // THE FINDING RATHER THAN A SHORTCUT. See that method's remarks, and this class's.
-            ObjectMatchesDesired = (objectJson, desiredJson) => {
-                using var desired = JsonDocument.Parse(desiredJson);
-                return MonitorWorkspaces.MatchesShape(objectJson, desired.RootElement);
+            ObjectMatchesDesired = match => {
+                using var desired = JsonDocument.Parse(match.DesiredJson);
+                return MonitorWorkspaces.MatchesShape(match.ObjectJson, desired.RootElement);
             }
         };
 

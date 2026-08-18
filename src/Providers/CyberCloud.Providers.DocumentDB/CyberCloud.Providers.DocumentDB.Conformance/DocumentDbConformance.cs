@@ -62,9 +62,9 @@ public sealed class DocumentDbCase : IProviderCaseSource {
                     DocumentDbAccounts.ServiceRef(ns, id.Name),
                     DocumentDbAccounts.PodMonitorRef(ns, id.Name)
                 ],
-            ObjectMatchesDesired = (objectJson, desiredJson) => {
-                using var desired = JsonDocument.Parse(desiredJson);
-                return DocumentDbAccounts.Matches(objectJson, desired.RootElement);
+            ObjectMatchesDesired = match => {
+                using var desired = JsonDocument.Parse(match.DesiredJson);
+                return DocumentDbAccounts.Matches(match.ObjectJson, desired.RootElement);
             }
         };
 

@@ -74,9 +74,9 @@ public sealed class NatsCase : IProviderCaseSource {
                 NatsClusters.ClientServiceRef(ns, id.Name),
                 NatsClusters.PodMonitorRef(ns, id.Name)
             ],
-            ObjectMatchesDesired = (objectJson, desiredJson) => {
-                using var desired = JsonDocument.Parse(desiredJson);
-                return NatsClusters.Matches(objectJson, desired.RootElement);
+            ObjectMatchesDesired = match => {
+                using var desired = JsonDocument.Parse(match.DesiredJson);
+                return NatsClusters.Matches(match.ObjectJson, desired.RootElement);
             }
         };
 

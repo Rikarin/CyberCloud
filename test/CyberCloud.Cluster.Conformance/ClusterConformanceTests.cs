@@ -186,7 +186,7 @@ public abstract class ClusterConformanceTests<TSource>(ClusterConformanceFixture
 
             // And the object carries what the desired body asked for — the case's own ground truth,
             // read from the API server rather than from our cache of it.
-            Case.ObjectMatchesDesired(json!, Body()).ShouldBeTrue(
+            MatchesDesired(accepted.Resource.Id, name, target, json!, Body()).ShouldBeTrue(
                 $"'{target}' is in the cluster but does not carry the desired shape: {json}"
             );
         }
@@ -539,7 +539,7 @@ public abstract class ClusterConformanceTests<TSource>(ClusterConformanceFixture
             $"'{target}' was not put back by the re-drive, so the drift was noticed and not corrected."
         );
 
-        Case.ObjectMatchesDesired(restored!, Body()).ShouldBeTrue(
+        MatchesDesired(accepted.Resource.Id, name, target, restored!, Body()).ShouldBeTrue(
             "the object came back without the desired shape."
         );
 
@@ -683,9 +683,44 @@ public abstract class ClusterConformanceTests<TSource>(ClusterConformanceFixture
     /// <param name="resourceId">The resource's GUID.</param>
     /// <param name="name">Its name.</param>
     protected static ImmutableArray<ObjectRef> ObjectsOf(Guid resourceId, string name) {
-        var address = ClusterConformanceHarness<TSource>.Address(name).WithId(resourceId);
+        var address = AddressOf(resourceId, name);
         return Case.Objects(address, ReconcileDriver.NamespaceFor(address));
     }
+
+    /// <summary>The address <see cref="ObjectsOf" /> rendered for.</summary>
+    /// <param name="resourceId">The resource's GUID.</param>
+    /// <param name="name">Its name.</param>
+    protected static ResourceId AddressOf(Guid resourceId, string name) =>
+        ClusterConformanceHarness<TSource>.Address(name).WithId(resourceId);
+
+    /// <summary>
+    ///     Asks the case whether one object carries what a desired body asked for, <b>at a named
+    ///     address</b>.
+    /// </summary>
+    /// <param name="resourceId">The resource's GUID.</param>
+    /// <param name="name">Its name.</param>
+    /// <param name="target">Which of its objects.</param>
+    /// <param name="objectJson">The object as the API server holds it.</param>
+    /// <param name="desiredJson">The body it should carry.</param>
+    /// <remarks>
+    ///     ⚠ The one place a <see cref="MatchContext" /> is built in this suite — see that record's
+    ///     remarks for why it is a record and not a longer parameter list.
+    /// </remarks>
+    protected static bool MatchesDesired(
+        Guid resourceId,
+        string name,
+        ObjectRef target,
+        string objectJson,
+        string desiredJson
+    ) =>
+        Case.ObjectMatchesDesired(
+            new() {
+                ObjectJson = objectJson,
+                DesiredJson = desiredJson,
+                Id = AddressOf(resourceId, name),
+                Target = target
+            }
+        );
 
     /// <summary>Writes a resource and asserts the request was accepted.</summary>
     /// <param name="harness">The harness.</param>
