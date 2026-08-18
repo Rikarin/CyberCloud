@@ -1,4 +1,5 @@
 using CyberCloud.ResourceManager.Registry;
+using CyberCloud.Tenancy.Contracts;
 
 namespace CyberCloud.Providers.Network.Tests;
 
@@ -35,7 +36,17 @@ public sealed class NetworkDeclarationTests {
         // already in the tree and its key was never typed here, so `vnet` and `subnet` were checked
         // against ten of eleven group keys. Neither collides, so nothing broke; the omission was luck
         // rather than a check, and a list nobody notices is out of date is a list that proves nothing.
-        "containerservice"
+        "containerservice",
+        // ⚠ ADDED WHEN THE FOURTH TYPE ARRIVED, AND ALL THREE WERE MISSING — the same failure again,
+        // one pass later. `CyberCloud.Monitor`, `CyberCloud.Terminal` and
+        // `CyberCloud.ContainerRegistry` had all landed since the last time this list was touched, so
+        // `vnet`, `subnet` and `secgroup` were being checked against eleven of fourteen group keys.
+        // Nothing collides, so nothing broke — twice in a row the check has been luck. The list is
+        // now derived-by-hand from `grep -rh 'ProviderNamespace = "' src/Providers`, which is the
+        // command to re-run when a provider is added.
+        "monitor",
+        "terminal",
+        "containerregistry"
     ];
 
     /// <summary>Every short name already declared in the tree, as a literal.</summary>
@@ -54,7 +65,13 @@ public sealed class NetworkDeclarationTests {
         "mariadb",
         // ⚠ ContainerServiceProvider's two, absent for the same reason `containerservice` was.
         "aks",
-        "nodepool"
+        "nodepool",
+        // ⚠ The three that landed since, found by `grep -rn 'shortName' src/Providers` — two of them
+        // are declared through a `const string ShortName` rather than a literal at the call site,
+        // which is why a grep for `shortName: "` alone misses them and is worth saying once.
+        "workspace",
+        "shell",
+        "registry"
     ];
 
     [Fact]
@@ -64,16 +81,57 @@ public sealed class NetworkDeclarationTests {
         // process that does not start. Running it here is what turns those into a test failure.
         var registry = Build();
 
-        registry.Types.Length.ShouldBe(3);
+        registry.Types.Length.ShouldBe(4);
 
         registry.Types.Select(x => x.Type.ToString()).ShouldBe(
             [
                 "CyberCloud.Network/virtualNetworks",
                 "CyberCloud.Network/virtualNetworks/subnets",
-                "CyberCloud.Network/virtualNetworks/securityGroups"
+                "CyberCloud.Network/virtualNetworks/securityGroups",
+                // ⚠ ONE SEGMENT, NOT TWO. The other three types in this family are a network and two
+                // things inside one; an OvnEip names no VPC, so this is a top-level type at Depth 1.
+                "CyberCloud.Network/publicIpAddresses"
             ],
             ignoreOrder: true
         );
+    }
+
+    [Fact]
+    public void OnlyThePublicAddressDrawsTheScarceMeterAndItDrawsExactlyOne() {
+        // ⚠ THE ASSERTION THIS TYPE EXISTS FOR. QuotaMeter.PublicIps has been in QuotaGrain's
+        // defaults — 20 per subscription — since before this provider, and NOTHING HAD EVER DRAWN IT:
+        // every provider that reached for it wanted a CONDITIONAL draw and QuotaGrain.TryReserveAsync
+        // refuses a non-positive amount by name, "A reservation must be positive; 0 is not."
+        //
+        // ⚠ AND IT IS FLAT, WHICH IS THE HALF THAT IS EASY TO GET WRONG. ResourceManagerService.
+        // AmountFor answers `meter.Fallback ?? 1m` only when AmountPointer is EMPTY; a pointer that
+        // resolved to nothing with no fallback is an InternalError that refuses the write. So a meter
+        // declared through `Meter(PublicIps, "/properties/count")` by somebody being helpful would
+        // turn every create into a 500. `Meters(...)` is the pointerless overload and this pins it.
+        foreach (var type in Build().Types) {
+            var meters = type.Meters.Select(x => x.Meter).ToList();
+
+            meters.ShouldContain(QuotaMeter.Resources, type.Type.ToString());
+
+            if (type.Type == PublicIpAddresses.Type) {
+                meters.ShouldBe([QuotaMeter.PublicIps, QuotaMeter.Resources], ignoreOrder: true);
+            } else {
+                meters.ShouldNotContain(
+                    QuotaMeter.PublicIps,
+                    $"{type.Type} draws the scarce meter, and a Vpc, a Subnet and a SecurityGroup are "
+                    + "rows in a database that consume no address at all"
+                );
+            }
+
+            foreach (var meter in type.Meters) {
+                meter.AmountPointer.ShouldBeEmpty(
+                    $"{type.Type}/{meter.Meter} declares a pointer, so AmountFor no longer answers "
+                    + "Fallback ?? 1m and a body that does not carry it refuses the write"
+                );
+
+                meter.Derivation.ShouldBeNull($"{type.Type}/{meter.Meter}");
+            }
+        }
     }
 
     [Fact]
@@ -165,8 +223,8 @@ public sealed class NetworkDeclarationTests {
     }
 
     [Fact]
-    public void TheThreeShortNamesAreDistinctFromEachOther() {
-        // ⚠ With three types in one family there are three chances to collide, including with each
+    public void TheFourShortNamesAreDistinctFromEachOther() {
+        // ⚠ With four types in one family there are four chances to collide, including with each
         // other — and ProviderRegistry.Build DOES refuse this one, which is why the assertion is
         // cheap and worth having anyway: it names the problem where a silo-start failure would not.
         var names = ShortNames().ToList();
@@ -179,7 +237,11 @@ public sealed class NetworkDeclarationTests {
         // ⚠ `secgroup` AND NOT `sg`, WHICH IS KUBE-OVN'S OWN shortName. Two characters is a token
         // somebody else will reach for, and the collision throws on EVERY `cyc` parse rather than on
         // the one command that uses it.
-        ShortNames().ShouldBe(["vnet", "subnet", "secgroup"], ignoreOrder: true);
+        //
+        // ⚠ `publicip` AND NOT `pip` OR `eip`, for the same reason plus one more: `eip` is the
+        // SUBSTRATE'S word rather than the product's, and docs/plan/21 § Grammar spells the type
+        // `publicIpAddresses`. A tenant who has never heard of Kube-OVN should be able to guess it.
+        ShortNames().ShouldBe(["vnet", "subnet", "secgroup", "publicip"], ignoreOrder: true);
     }
 
     [Fact]
@@ -289,6 +351,16 @@ public sealed class NetworkDeclarationTests {
         // `securitygroups` would install a definition at a path the apply never reaches — and the
         // symptom is a discovery error naming a missing operator rather than a wrong plural.
         NetworkSecurityGroups.SecurityGroupKind.Plural.ShouldBe("security-groups");
+
+        PublicIpAddresses.OvnEipRef("ns", "web").IsClusterScoped.ShouldBeTrue();
+
+        // ⚠ THE SECOND HYPHENATED PLURAL IN THIS FAMILY, AND THE SECOND ONE A HAND-WRITTEN GUESS
+        // WOULD GET WRONG. `+kubebuilder:resource:...path="ovn-eips",singular="ovn-eip"` — read
+        // firsthand from pkg/apis/kubeovn/v1/ovn-eip.go and confirmed in the CRD Kube-OVN's own chart
+        // installs. Two out of the four kinds this family renders hyphenate, so "Kube-OVN pluralises
+        // by lower-casing the kind" is a rule that is wrong half the time.
+        PublicIpAddresses.OvnEipKind.Plural.ShouldBe("ovn-eips");
+        PublicIpAddresses.OvnEipKind.Kind.ShouldBe("OvnEip");
     }
 
     // ── The isolation claim, which docs/plan/14 makes the named risk of this row ─────────────────

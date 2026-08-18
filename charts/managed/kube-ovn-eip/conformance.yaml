@@ -1,0 +1,209 @@
+# Conformance manifest — docs/plan/12 § The pattern, once, piece 8.
+#
+# What the conformance suite asserts about CyberCloud.Network/publicIpAddresses. This file is data:
+# `Build.Charts` checks that it is present, non-empty, and names the same resource type as Chart.yaml.
+# The suite that reads the rest of it lives in test/ and does not exist yet.
+
+resourceType: CyberCloud.Network/publicIpAddresses
+apiVersion: "2026-08-01"
+chart: kube-ovn-eip
+
+# Objects the reconciler must have applied once the resource reports Succeeded.
+renders:
+  - group: kubeovn.io
+    version: v1
+    kind: OvnEip
+    count: 1
+    clusterScoped: true
+
+# ADR-013 — every rendered object carries all seven labels.
+labels:
+  required:
+    - cybercloud.io/tenant-id
+    - cybercloud.io/subscription-id
+    - cybercloud.io/resource-group
+    - cybercloud.io/resource-id
+    - cybercloud.io/resource-type
+    - cybercloud.io/api-version
+    - cybercloud.io/managed-by
+  values:
+    cybercloud.io/resource-type: cybercloud.network_publicipaddresses
+    cybercloud.io/managed-by: cybercloud
+
+# Behaviour a tenant is entitled to. Each is a statement the suite can fail on, not a feature list.
+assertions:
+  - id: an-unattached-address-carries-no-traffic
+    says: >
+      An address created with no other resource pointing at it reaches nothing and is reached by
+      nothing. ⚠ THIS IS THE SAFETY QUESTION FOR THIS TYPE and it was established from the object
+      model rather than assumed: an OvnEip is an entry in OVN's IPAM plus a logical address, and every
+      path from the internet to a tenant workload goes through a SECOND object that names the EIP — an
+      OvnFip, an OvnDnatRule or an OvnSnatRule. This chart renders none of them and nothing in this
+      platform creates one yet. So "I allocated a public address" is not "I published something",
+      which is the opposite of how this class of question usually fails, and it is the second time in
+      this family that the answer has come back safe.
+  - id: an-address-the-fabric-picks-is-not-drift
+    says: >
+      A body that asks for no particular address converges, and stays converged, after the controller
+      writes the allocated address into spec.v4Ip. ⚠ THE SINGLE MOST LIKELY BUG IN THIS TYPE.
+      createOrUpdateOvnEipCR issues a full OvnEips().Update(...) that sets spec.v4Ip, spec.v6Ip,
+      spec.macAddress and spec.type — four fields, and NOT spec.externalSubnet, which its update
+      branch leaves alone; a Matches that compared spec.v4Ip against the body's empty string
+      would report drift on an address allocated exactly as asked, forever, and the resource would
+      never leave InProgress. It is NetworkSubnets.Matches' canonicalisation trap in its second shape
+      — there the controller REWRITES what it was sent, here it FILLS IN what it was not.
+      NetworkPublicIpTests runs the mistake red.
+  - id: an-unrequested-address-is-absent-from-the-spec-not-empty
+    says: >
+      The rendered object carries NO `v4Ip` key at all when the body names no address, and carries it
+      when the body does. ⚠ Sending `v4Ip: ""` is a DEADLOCK rather than an untidiness: it claims
+      field-manager ownership of a field the controller then sets to the allocated address, so every
+      later apply answers ApplyResult.Conflict and the resource sits in InProgress on an address that
+      was allocated correctly the first time. It is CyberCloud.Terminal/consoles' "an empty list is
+      not an absent one" arriving on a SCALAR, with a worse symptom. Both the chart template and
+      PublicIpAddresses.OvnEipJson do the omission and NetworkPublicIpTests pins both.
+  - id: the-address-is-readable-and-only-through-the-action
+    says: >
+      `POST …/showAllocation` returns the address the fabric allocated, its MAC, whether it is ready
+      and what is attached to it. ⚠ It is the only way a tenant can learn any of that: the address is
+      not in the body, because the body is what was ASKED for, and it is derivable from nothing — it
+      lives on OvnEip.status.v4Ip and nowhere else. This is the only action in the catalogue that
+      returns the resource's own reason for existing rather than a refinement of it.
+  - id: two-subscriptions-may-hold-an-address-of-the-same-name
+    says: >
+      Two subscriptions each creating a public address called `web` get two OvnEips and two distinct
+      addresses. ⚠ AN OvnEip IS CLUSTER-SCOPED, so ReconcileDriver.NamespaceFor separates nothing and
+      the rendered object name is the only thing keeping them apart — and here a collision does not
+      merely overwrite a configuration, it hands TWO TENANTS THE SAME ADDRESS: the second tenant's
+      traffic would arrive at the first tenant's NAT rule. NetworkPublicIpTests asserts it, including
+      the cross-tenant case.
+  - id: one-address-draws-one-public-ip
+    says: >
+      Creating an address reserves exactly 1 against QuotaMeter.PublicIps and 1 against
+      QuotaMeter.Resources, and deleting it returns both. ⚠ THIS IS THE FIRST TYPE IN THE PLATFORM
+      THAT DRAWS PublicIps AT ALL — the meter has existed since QuotaGrain's defaults, 20 per
+      subscription, and nothing had ever drawn it, because every provider that reached for it wanted a
+      CONDITIONAL draw and QuotaGrain.TryReserveAsync refuses a non-positive amount by name. The draw
+      is flat: ResourceManagerService.AmountFor answers `meter.Fallback ?? 1m` for an empty
+      AmountPointer, so no pointer, no fallback and no MeterDerivation are involved.
+
+# Meters the type must emit.
+#
+# ⚠ TWO, AND publicIps IS THE ONE docs/plan/14 ASKED FOR BY NAME: "a metered, quota'd, allocatable
+# resource in its own right — because IPv4 is scarce and must be accounted". Everything else in this
+# family draws `resources` alone, because a Vpc, a Subnet and a SecurityGroup are rows in a database
+# and consume nothing attributable. An address is different in kind: it is the one thing this family
+# hands a tenant that there is a finite supply of.
+meters:
+  - publicIps
+  - resources
+
+# ── owed ──────────────────────────────────────────────────────────────────────────────────────────
+owed:
+  - id: an-allocated-address-cannot-be-changed
+    says: >
+      ⚠ THE HEADLINE COST, AND IT IS A DEFECT IN WHAT THIS REPOSITORY CAN CHECK RATHER THAN IN THE
+      TYPE. Read firsthand in pkg/controller/ovn_eip.go at v1.16.2: handleUpdateOvnEip refuses a
+      changed v4Ip, v6Ip, macAddress and type — four errors, one per field, every one beginning "not
+      support change" — and handleAddOvnEip returns early once status.macAddress is set. AN OvnEip IS
+      WHOLLY IMMUTABLE ONCE READY, so this is the first type in the tree with no mutable property at
+      all. Two things follow. (1) The schema marks both address properties Immutable, and
+      SchemaProperty.Immutable is a DECLARATION THE MANAGER DOES NOT ENFORCE — its own remarks say so
+      — so the platform accepts a PUT that changes one and reports Succeeded while the fabric changes
+      nothing and logs a refusal nobody sees. (2) ProviderConformanceCase.ChangedBody is `required`
+      and must "change something the reconciler applies", so the shared suite cannot express a type
+      with no mutable field; PublicIpAddressCase varies the requested address, which proves the
+      renderer reaches the cluster and CANNOT prove the update takes effect. ⚠ WHAT WOULD CLOSE IT is
+      the update path consulting Immutable, which is CyberCloud.ResourceManager surface rather than a
+      provider's — the same class of platform seam as
+      charts/managed/kube-ovn-vpc's `address-space-is-validated-after-202`.
+  - id: the-external-pool-is-the-operators-default
+    says: >
+      A tenant cannot choose which pool an address comes from, and an operator cannot offer two.
+      spec.externalSubnet is deliberately not sent: handleAddOvnEip falls back to
+      c.config.ExternalGatewaySwitch — the operator's `--external-gateway-switch` flag, default
+      "external" — and that name is a property of the DEPLOYMENT, which this repository cannot know.
+      ⚠ THE OPPOSITE OF kube-ovn-subnet's spec.vpc DECISION, and the difference is worth stating:
+      there the substrate's default is the PLATFORM'S OWN VPC and is wrong, so the field is sent; here
+      the substrate's default is the operator's own pool and is the only right answer available. A
+      compiled-in guess would be a pool that does not exist in the first region whose operator renamed
+      theirs, and the symptom would be an address that never becomes ready. It is the same shape as
+      charts/managed/kube-ovn-vpc's `reserved-list-is-compiled-in`: configuration that has no seam to
+      reach a provider through, because ReconcileContext carries a cluster connection, an
+      ISecretResolver and nothing else. ⚠ THE HAZARD THIS HAD TO SURVIVE WAS CHECKED RATHER THAN WAVED
+      AT: both delete paths call c.ipam.ReleaseAddressByPod(eip.Name, eip.Spec.ExternalSubnet) with
+      the field left empty, which reads like an address that is never returned to the pool — and
+      pkg/ipam/ipam.go releases from EVERY subnet when the name is empty, so it is a superset rather
+      than a no-op. ⚠ The field is also NOT written back on an object this platform applied: only
+      createOrUpdateOvnEipCR's CREATE branch sets it, so the pool the fabric chose is observable on
+      the `ovn.kubernetes.io/subnet` label rather than in the spec.
+  - id: an-ipv6-only-address-is-not-expressible
+    says: >
+      Whether an address has a v6 half is decided by the external pool, not by the tenant, and there
+      is no `ipVersion` property — for NetworkSubnets' `protocol` reason: acquireIPAddress hands back
+      whatever the pool carries, so the control would be one the substrate ignores. ⚠ THE METER IS THE
+      SECOND REASON AND IT IS THE HARDER ONE. A tenant who could ask for an IPv6-only address would be
+      asking for a resource that draws ZERO scarce addresses, and QuotaGrain.TryReserveAsync refuses a
+      non-positive reservation by name — which is exactly why no earlier provider could draw
+      QuotaMeter.PublicIps at all. Closing it needs a meter that may draw zero, which is a
+      CyberCloud.Tenancy decision rather than a provider's, and until then "PublicIps counts the
+      scarce half" is both the honest reading and the only expressible one.
+  - id: an-address-is-not-checked-against-the-pool-before-202
+    says: >
+      A tenant may ask for 10.100.0.7 in a region whose pool is 192.0.2.0/24, and the API accepts it:
+      the pattern checks the SHAPE and IpAddresses.ProblemWith checks the family and the fabric's
+      lower-case rule, and neither can know what the pool holds — the pool's name is the operator's
+      and its range is on a Subnet object in the cluster. So a wrong address is refused by the fabric,
+      after the 202, and the resource sits in InProgress. ⚠ NARROWER THAN THE FAMILY'S USUAL SIGHTING:
+      charts/managed/kube-ovn-vpc's `address-space-is-validated-after-202` is a whole compiled-in
+      table re-checked in a reconciler; this is one value against state that lives in the cluster,
+      which no provider predicate on the write path could have consulted either.
+  - id: soft-delete-would-leak-the-scarcest-meter
+    says: >
+      ⚠ THE ONE DECISION ON THIS TYPE THAT LOOKS OBVIOUS AND IS BACKWARDS, recorded so nobody
+      "corrects" it. Releasing a scarce address reads as exactly what a recovery window is for. What
+      SupportsSoftDelete DOES today is park the name in the index AND WITHHOLD THE COMMITTED QUOTA
+      UNTIL A PURGE — OperationGrain returns CommittedQuota only for a delete that is not soft — while
+      RestoreAsync and PurgeAsync have NO HTTP ROUTE. A window here would hold a tenant's PublicIps
+      allowance, 20 by default, against addresses they deleted, for the whole window, with no way to
+      recover one and no way to release one early: a one-way leak on the platform's scarcest meter.
+      The window becomes right THE DAY A PURGE ROUTE EXISTS, and not before.
+  - id: nothing-can-be-given-an-address-yet
+    says: >
+      docs/plan/14 § Load balancing has a public address serve a loadBalancers resource, and
+      § Everything else has natGateways use one for SNAT. Neither exists: loadBalancers is owed and
+      natGateways is M2. So every address in this api-version reports `attachedTo: ""` and carries no
+      traffic. ⚠ WHAT WAS AVOIDED is foreclosing the join: an attachment is a SECOND Kube-OVN object
+      (OvnFip/OvnDnatRule/OvnSnatRule) that names this EIP by its rendered object name, which
+      PublicIpAddresses.ObjectNameOf derives from a resource id alone — so the join is a resource id a
+      future provider resolves through CyberCloud.ResourceManager, exactly as
+      `nothing-can-join-a-network-yet` describes, and nothing here needs to change for it.
+  - id: the-cilium-lb-ipam-allocator-is-not-implemented
+    says: >
+      docs/plan/14 § Load balancing warns that "which allocator serves this depends on where the
+      address lives" — Cilium LB-IPAM for an address on the PLATFORM'S fabric, a Kube-OVN EIP for one
+      inside a tenant VPC — and that "both surface as CyberCloud.Network/publicIpAddresses and the
+      reconciler picks". This provider implements the tenant half only, and says so rather than
+      pretending the choice is made. ⚠ WHY THERE IS NO PROPERTY FOR IT: the input that would choose is
+      "what is this address for", which is a fact about the resource that gets ATTACHED to it, and
+      nothing can attach one yet. A selector declared now would be a control with no consequence, and
+      the doc's own warning — "assuming one allocator for both is the mistake this note exists to
+      prevent" — is met by naming the gap rather than by guessing at it.
+  - id: the-cluster-backed-suite-proves-less-than-it-looks
+    says: >
+      The k3s the cluster suite starts has no Kube-OVN and no CRDs for it, so the derived stub's
+      schema is x-kubernetes-preserve-unknown-fields. What it proves: a cluster-scoped apply reaches
+      the right REST path under the HYPHENATED plural `ovn-eips`, and ADR-013 labels survive real
+      admission. ⚠ WHAT IT PROVES LESS OF HERE THAN ANYWHERE ELSE IN THE FAMILY: every interesting
+      behaviour of this type belongs to a controller that is not running — the allocation, the
+      write-back to .spec that Matches is built around, the field-manager conflict that omitting
+      `v4Ip` avoids, and the refusal to change an allocated address. NetworkPublicIpTests hand-writes
+      the controller-shaped read-back for exactly that reason, as NetworkMatchesTests does for the
+      subnet.
+  - id: grafana-dashboard
+    says: >
+      docs/plan/12 § The pattern, once, piece 6 keeps the dashboard chart-side. ⚠ IT DOES NOT APPLY TO
+      THIS TYPE, for charts/managed/kube-ovn-vpc's reason: both of piece 6's branches presuppose a
+      workload to scrape and an EIP has no pod. What a tenant would want — bytes in and out of this
+      address — is per-flow data out of Hubble into ClickHouse, docs/plan/14 § Observability, which is
+      a pipeline rather than a scrape and is docs/plan/16's rather than this provider's.
