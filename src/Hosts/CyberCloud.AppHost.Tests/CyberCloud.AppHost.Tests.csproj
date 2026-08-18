@@ -22,6 +22,17 @@
         <PackageReference Include="xunit.v3"/>
         <PackageReference Include="Shouldly"/>
         <PackageReference Include="Aspire.Hosting.Testing"/>
+        <!--
+          ⚠ THE HALF OF THE PHASE-1 ASSERTION THAT IS DELIBERATELY NOT OUR CODE.
+          ReconcileThroughTheRealHostTests reads the ConfigMap a widget produced with the raw
+          KubernetesClient, straight against the k3s API server. Reading it back through
+          IKubeClusterConnection would be asking the same code that wrote it — and the failure that
+          costs is a plural or a namespace that only our own dictionary agrees with.
+
+          KubernetesClient is otherwise confined to CyberCloud.Kubernetes on purpose; a test suite
+          that verifies that assembly's output from outside is the exception the confinement is for.
+        -->
+        <PackageReference Include="KubernetesClient"/>
     </ItemGroup>
 
     <ItemGroup>
@@ -32,6 +43,23 @@
         <ProjectReference Include="../CyberCloud.AppHost/CyberCloud.AppHost.csproj"/>
         <!-- IHelloGrain and its generated client proxy. -->
         <ProjectReference Include="../CyberCloud.Silo.Host/CyberCloud.Silo.Host.csproj"/>
+        <!--
+          ⚠ THE GATEWAY IS UNDER TEST HERE, NOT A STAND-IN FOR ONE.
+
+          docs/plan/24 § Phase 1's exit criterion is a resource driven from PUT to Succeeded, and the
+          PUT enters the platform through IResourceManager — a plain service the GATEWAY holds, not a
+          grain (see IResourceManager's remarks). ReconcileThroughTheRealHostTests therefore calls
+          GatewayComposition.BuildAsync, which is what CyberCloud.Gateway.Host's own Program.cs calls,
+          and resolves the manager from the container that produced. Constructing
+          ResourceManagerService in the test instead would let the test choose the authorizer, the
+          lock resolver and the registry — which is exactly what every conformance suite does and what
+          this one exists not to do.
+
+          It also carries CyberCloud.ResourceManager.Contracts, CyberCloud.Authorization.Contracts,
+          CyberCloud.Kubernetes.Contracts and CyberCloud.Providers.Sample.Contracts transitively, so
+          the wire types the test names come from the same build the hosts run.
+        -->
+        <ProjectReference Include="../CyberCloud.Gateway.Host/CyberCloud.Gateway.Host.csproj"/>
     </ItemGroup>
 
     <ItemGroup Label="Global usings">
