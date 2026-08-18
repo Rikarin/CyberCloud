@@ -864,9 +864,9 @@ the argument above; `securityGroups`, `publicIpAddresses`, `dnsZones`, `loadBala
 than left as a bare gap.
 
 `CyberCloud.Providers.ContainerRegistry` — `CyberCloud.ContainerRegistry/registries` on Harbor,
-[13 § Container Registry](../../docs/plan/13-compute-vm-containers.md), **M1 · 1.5 EM**. **The first
-type in the tree to declare a recovery window**, and the family whose operator turned out not to
-exist.
+[13 § Container Registry](../../docs/plan/13-compute-vm-containers.md), **M1 · 1.5 EM**. **The family whose
+operator turned out not to exist**, and the one that declared the first recovery window in the tree,
+measured it against a real API server, and took it back.
 
 ### What the twelfth provider measured
 
@@ -908,24 +908,41 @@ exist.
   once, permanently, and a *later* mint would not take effect at all. That last fact is why
   `ContainerRegistryListCredentialsHandler` reads and never mints, and it is a stronger reason than
   the one `StorageAccountListKeysHandler` gives.
-- **⚠ THE FIRST `SupportsSoftDelete` IN THE TREE, AND THE ARGUMENT IS ABOUT THE DATA RATHER THAN
-  ABOUT THE PLATFORM.** Eleven families declined it for one shared reason — the manager did not read
-  `SoftDeleteDays` — and docs/plan/08 § Soft delete is built, so the question each type owes is its
-  own. Here the answer is yes, and the mechanism is **Kubernetes' rather than this provider's**: a
-  claim created by a `volumeClaimTemplate` is not removed by deleting the `StatefulSet`, so a
-  soft-deleted registry is fifteen absent objects over three volumes that still hold every byte.
-  That is why all three volume-owning components are `StatefulSet`s rather than `Deployment`s with
-  claims beside them.
-  <br>⚠ **What the declaration buys today is smaller than the feature reads like, and it is stated
-  rather than implied.** `ResourceManagerService.RestoreAsync` and `PurgeAsync` exist and are tested;
-  **nothing in the gateway calls either**, grepped rather than assumed. So a `DELETE` parks the
-  resource, holds its name, keeps its committed quota and moves its ReBAC parent — and recovering it
-  needs a route somebody else owns. The generated document now publishes `softDeleteDays: 7` to every
-  caller, which is why the gap is named at
-  `charts/managed/harbor/conformance.yaml § owed`, `restore-and-purge-have-no-route`.
-  <br>⚠ Nothing removes the claims on a **purge** either: a purged registry returns its committed
-  quota and leaves its disks allocated. Closing that needs a purge to reach the provider, and
-  `IResourceReconciler` has no member for one.
+- **⚠ THIS ROW DECLARED THE FIRST `SupportsSoftDelete` IN THE TREE, AND DECLARING IT IS WHAT FOUND
+  THAT A SOFT-DELETED RESOURCE REBUILDS ITS ENTIRE DATA PLANE AFTER A CONVERGED TEARDOWN. THE
+  DECLARATION IS WITHDRAWN AND THE FINDING IS THE DELIVERABLE.** Eleven families declined the
+  declaration for one shared reason — the manager did not read `SoftDeleteDays` — and docs/plan/08
+  § Soft delete is built now, so the question each type owes is its own: *can the deleted thing
+  genuinely be handed back?* Here the answer is yes, and the mechanism is **Kubernetes' rather than
+  this provider's**: a claim created by a `volumeClaimTemplate` is not removed by deleting the
+  `StatefulSet`, which is why all three volume-owning components are `StatefulSet`s rather than
+  `Deployment`s with claims beside them. So the declaration went in.
+  <br>⚠ **Measured, not argued.** `ClusterConformanceTests.TheLifecycleRunsAgainstARealApiServer`
+  failed with *"is still in the real cluster after a converged teardown"*; reordering the case's
+  `Objects` showed it was not one object but **every** object, the core `Deployment` included.
+  Removing that one call and changing nothing else made the same test pass, and putting it back made
+  it fail again.
+  <br>⚠ **What it means, because it is worse than it sounds.** A tenant deletes a registry; the API
+  answers, the operation converges, the resource stops being addressable — and the workload comes
+  back and keeps running, sampled by docs/plan/22's usage pipeline, holding its quota, invisible to
+  the tenant who would delete it again. docs/plan/08 chose to **move** the resource out of the tree
+  rather than flag it in place, because a flag *"puts an 'unless deleted' clause on every read path,
+  every list, every ReBAC check and the index claim, and the feature is then only as good as the
+  least-remembered of them"*. The **index** entry moves and `ResolveAsync` refuses it — that half
+  works. The **reconcile loop's view of the resource** does not move, and on the non-soft-delete path
+  it is `ResourceGrain.CompleteDeleteAsync` clearing grain state that stops the loop — which a
+  resource that must survive for a restore cannot do. The least-remembered clause was the one the
+  document did not look at.
+  <br>⚠ **Two things had to be true at once for anyone to see it**, which is why eleven families did
+  not: a type that declares the window, and a teardown wide enough to be unmistakable.
+  `charts/managed/harbor/conformance.yaml § owed`, `a-soft-deleted-resource-undeletes-itself`,
+  carries the reproduction; the three arguments the call needs are kept, documented and asserted
+  against, so re-declaring it is one line.
+  <br>⚠ **Two smaller findings stand whatever happens to that one.** Nothing removes a
+  `PersistentVolumeClaim` on a purge, so a purged resource would return its quota and leave its disks
+  allocated; and `ResourceManagerService.RestoreAsync` and `PurgeAsync` are reachable from **no
+  gateway stage at all**, grepped rather than assumed — so even a working window would be one nobody
+  could exercise.
 - **⚠ `Matches` IS CONTAINMENT FOR A REASON THAT IS NOT MERELY FALSE HERE BUT UNAVAILABLE.** Five
   families argue it from a CRD's `+kubebuilder:default` markers or from an operator's mutating
   webhook; `KafkaClusters` and `ClickHouseClusters` found CRDs that declared none and could at least

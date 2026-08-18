@@ -48,7 +48,7 @@ Ten charts are paired today, and the split is worth reading as a ratio rather th
 | `managed/mariadb` | 27 | 14 | 13 |
 | `managed/kubernetes` | 21 | 8 | 13 |
 | `managed/kubernetes-agentpool` | 21 | 11 | 10 |
-| `managed/harbor` | 23 | 12 | 11 |
+| `managed/harbor` | 22 | 11 | 11 |
 
 ⚠ **The `@internal` count barely moves and the generated count varies by a factor of two**, which is
 the shape to expect for the rest: the hand-written tail is the platform's identity block (eight rows),

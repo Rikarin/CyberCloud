@@ -360,6 +360,69 @@ public sealed class ContainerRegistryReconcilerTests {
         connection.Deleted[0].Kind.Kind.ShouldBe("PodMonitor");
     }
 
+    // ── The shape a fake cluster echoes back and a real API server refuses ──────────────────────
+
+    [Fact]
+    public async Task EveryRenderedPodSpecIsSomethingARealApiServerCanTypeCHECK() {
+        // ⚠ THIS TEST EXISTS BECAUSE THE DOCKER-FREE SUITE WAS GREEN OVER A DEFECT THE REAL API SERVER
+        // REFUSED, AND THE GAP BETWEEN THE TWO IS THE WHOLE POINT OF IT.
+        //
+        // `ConfigVolume` returns a JsonArray, and the two call sites that needed it passed
+        // `volumes: [ConfigVolume(name)]` — a collection expression around something that is already a
+        // collection. The rendered `spec.template.spec.volumes` was therefore an ARRAY OF ARRAYS.
+        //
+        // Nothing caught it: FakeKubeCluster echoes an apply back verbatim, `Matches` compares the
+        // replica count, the image tag and the claim size and never looks at volumes, and the shared
+        // conformance suite was 32 of 32 green. The k3s suite failed four assertions with "the API
+        // server could not type-check the object the platform rendered" — which is the ONE thing this
+        // family's cluster-backed suite can prove that no other family's can, because fourteen of its
+        // fifteen objects are built-in kinds and are schema-validated for real.
+        //
+        // ⚠ So this asserts the SHAPE rather than the contents: every member of a `volumes` array, a
+        // `containers` array and a `volumeMounts` array is an object with a `name`. That is the class
+        // of mistake a JsonObject-building renderer makes, and it is invisible to every comparison
+        // this provider owns.
+        var connection = new RecordingConnection();
+        using var body = JsonDocument.Parse(ContainerRegistries.Body(ClusterId));
+
+        await Reconcile(connection, body.RootElement);
+
+        foreach (var command in connection.Applied) {
+            if (JsonNode.Parse(command.Body)!["spec"] is not JsonObject spec
+                || spec["template"] is not JsonObject template
+                || template["spec"] is not JsonObject pod) {
+                continue;
+            }
+
+            NamedObjects(pod, "containers", command.Target.Name);
+            NamedObjects(pod, "volumes", command.Target.Name);
+
+            foreach (var container in pod["containers"]!.AsArray()) {
+                NamedObjects(container!.AsObject(), "volumeMounts", command.Target.Name);
+                NamedObjects(container.AsObject(), "ports", command.Target.Name);
+            }
+        }
+    }
+
+    /// <summary>Every member of a named array is an object carrying a <c>name</c>.</summary>
+    static void NamedObjects(JsonObject parent, string member, string owner) {
+        if (parent[member] is not JsonArray array) {
+            return;
+        }
+
+        foreach (var entry in array) {
+            entry.ShouldBeOfType<JsonObject>(
+                $"'{owner}' renders a {member} entry that is not an object. A collection expression "
+                + "around something that is already a JsonArray produces an array of arrays, which a "
+                + "fake cluster echoes back happily and a real API server refuses to type-check."
+            );
+
+            entry!.AsObject()["name"]?.GetValue<string>().ShouldNotBeNullOrEmpty(
+                $"'{owner}' renders a {member} entry with no name"
+            );
+        }
+    }
+
     // ── Failure class (e), at the object: the labels a builder does not inject ───────────────────
 
     [Fact]

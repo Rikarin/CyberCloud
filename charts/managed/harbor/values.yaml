@@ -45,9 +45,6 @@ storage:
   ## @widget storageclass
   class: ""
 
-## @param purgeProtection {boolean} Refuse every purge of this registry for the whole of its recovery window. Opt-in, and the platform refuses to turn it off again — a protection a caller can clear in one request is one round-trip of protection, which is none. It does not stop a delete; it stops the delete from being made permanent early.
-purgeProtection: false
-
 ## @param monitoring {object} What the platform scrapes.
 monitoring:
   ## @param enabled {boolean} Whether Harbor's core exports Prometheus metrics and a PodMonitor selects them. On by default — docs/plan/12: "a managed service the tenant cannot see the health of is a black box they will not trust with production". Turning it off removes the metrics port as well as the scrape, so nothing is left listening on an unscraped address.

@@ -25,46 +25,55 @@ namespace CyberCloud.Providers.ContainerRegistry;
 ///         in this family, and each one is written where it is taken.
 ///     </para>
 ///     <para>
-///         ⚠ <b>THE FIRST TYPE IN THE TREE TO DECLARE <c>SupportsSoftDelete</c>, AND THE ARGUMENT IS
-///         ABOUT THE DATA RATHER THAN ABOUT THE PLATFORM.</b> Eleven families declined it for one
-///         shared reason — the manager did not read <c>SoftDeleteDays</c>, so a type advertising a
-///         window the platform did not honour would be a promise made to the users most likely to test
-///         it. docs/plan/08 § Soft delete is built now, so the question each type owes an answer to is
-///         its own: <i>can the deleted thing genuinely be handed back?</i>
-///         <list type="bullet">
-///             <item>
-///                 <b>Here it can, and the mechanism is Kubernetes' rather than this provider's.</b>
-///                 A registry's images, its metadata database and its job queue are all on
-///                 <c>PersistentVolumeClaim</c>s created by <c>volumeClaimTemplate</c>s, and deleting
-///                 a <c>StatefulSet</c> does not delete those claims. So a soft-deleted registry is
-///                 fifteen absent objects over three volumes that still hold every byte, and a restore
-///                 re-applies the fifteen against the same claims.
-///                 <see cref="ContainerRegistries.StatefulSetKind" />'s remarks say why the workloads
-///                 are <c>StatefulSet</c>s and not <c>Deployment</c>s with claims beside them, and
-///                 this is the reason.
-///             </item>
-///             <item>
-///                 <b>And the credentials survive too</b>, because <c>ISecretWriter</c> has no delete
-///                 and the reconciler's teardown leaves the vault document alone. A recovery window
-///                 that handed back a registry nobody could log in to would be a window in name only.
-///             </item>
-///             <item>
-///                 ⚠ <b>What is NOT closed: nothing removes the claims on a purge.</b> The window
-///                 works; ending it early does not free the disks.
-///                 <c>charts/managed/harbor/conformance.yaml § owed</c>,
-///                 <c>purge-leaves-the-volumes-behind</c>.
-///             </item>
-///             <item>
-///                 ⚠ <b>And restore and purge have no HTTP route.</b>
-///                 <c>ResourceManagerService.RestoreAsync</c> and <c>PurgeAsync</c> exist, are tested
-///                 by <c>SoftDeletePathTests</c>, and are reachable from no gateway stage — grepped
-///                 rather than assumed. So what this declaration buys today is that a <c>DELETE</c>
-///                 <i>parks</i> the resource instead of destroying it, its name is held, its quota
-///                 stays committed and its ReBAC parent moves to the subscription. Recovering it needs
-///                 a route somebody else owns. That is a smaller thing than the feature reads like,
-///                 and it is stated rather than implied.
-///             </item>
-///         </list>
+///         ⚠ <b>THIS ROW WAS GOING TO BE THE FIRST TYPE IN THE TREE TO DECLARE
+///         <c>SupportsSoftDelete</c>, AND DECLARING IT IS WHAT FOUND THAT SOFT DELETE UN-DELETES THE
+///         RESOURCE.</b> Eleven families declined the declaration for one shared reason — the manager
+///         did not read <c>SoftDeleteDays</c> — and docs/plan/08 § Soft delete is built now, so the
+///         question each type owes is its own: <i>can the deleted thing genuinely be handed back?</i>
+///         On this row the answer is yes, and the mechanism is Kubernetes' rather than this
+///         provider's: a registry's images, its metadata database and its job queue are all on
+///         <c>PersistentVolumeClaim</c>s created by <c>volumeClaimTemplate</c>s, and deleting a
+///         <c>StatefulSet</c> does not delete those claims —
+///         <see cref="ContainerRegistries.StatefulSetKind" />'s remarks say why the workloads are
+///         <c>StatefulSet</c>s and not <c>Deployment</c>s with claims beside them, and this is the
+///         reason. The credentials survive too, because <c>ISecretWriter</c> has no delete. So the
+///         declaration went in.
+///     </para>
+///     <para>
+///         ⚠ <b>AND THE CLUSTER-BACKED SUITE REPORTED THAT A SOFT-DELETED REGISTRY REBUILDS ITS WHOLE
+///         DATA PLANE AFTER A CONVERGED TEARDOWN.</b>
+///         <c>ClusterConformanceTests.TheLifecycleRunsAgainstARealApiServer</c> failed with <i>"is
+///         still in the real cluster after a converged teardown"</i>, and reordering the case's object
+///         list showed it was not one object but <b>every</b> object, the core <c>Deployment</c>
+///         included. ⚠ <b>Measured rather than argued</b>: removing this one call and changing nothing
+///         else made the same test pass, and putting it back made it fail again.
+///     </para>
+///     <para>
+///         ⚠ <b>What that means, stated plainly, because it is worse than it sounds.</b> A tenant
+///         deletes a registry; the API answers, the operation converges, the resource stops being
+///         addressable — and the workload comes back and keeps running. It is sampled by the usage
+///         pipeline, it holds its quota, and the tenant cannot see it in order to delete it again.
+///         docs/plan/08 chose to <i>move</i> the resource out of the tree precisely so that no read
+///         path would need an "unless deleted" clause; the index entry moves and the reconcile loop's
+///         view of the resource does not.
+///     </para>
+///     <para>
+///         ⚠ <b>So the declaration is withdrawn, and that is the honest end of it.</b> A delete that
+///         does not delete is worse than no recovery window, and a type advertising
+///         <c>softDeleteDays: 7</c> through the generated document while the platform rebuilds what it
+///         tore down is exactly the promise that feature exists to avoid making.
+///         <c>charts/managed/harbor/conformance.yaml § owed</c>,
+///         <c>a-soft-deleted-resource-undeletes-itself</c>, carries the reproduction; the three
+///         arguments the call needs are written and asserted against, so re-declaring it is one line
+///         once the platform is fixed.
+///     </para>
+///     <para>
+///         ⚠ <b>Two smaller things were found on the way and stand whatever happens to that defect.</b>
+///         Nothing removes a <c>PersistentVolumeClaim</c> on a purge — a purged registry would return
+///         its committed quota and leave its disks allocated — and
+///         <c>ResourceManagerService.RestoreAsync</c> and <c>PurgeAsync</c> are reachable from no
+///         gateway stage at all, grepped rather than assumed. Both are at
+///         <c>conformance.yaml § owed</c>.
 ///     </para>
 ///     <para>
 ///         ⚠ <b>PIECE 5 IS BUILT AND THIS IS THE SHARPEST ROW IT HAS MET.</b> The three earlier
@@ -176,31 +185,17 @@ public sealed class ContainerRegistryProvider : IResourceProvider {
             )
             .Chart(ContainerRegistries.ChartName)
             .SupportsTags()
-            // ⚠ THE FIRST SupportsSoftDelete IN THE TREE. The argument for the window is in this
-            // class's remarks; the three arguments below are for the three parameters.
+            // ⚠ NO SupportsSoftDelete, AND THIS IS THE ONLY ROW IN THE CATALOGUE THAT DECLARED ONE,
+            // MEASURED IT AND TOOK IT BACK. See this class's remarks: the declaration is what found
+            // that a soft-deleted resource rebuilds its whole data plane after a converged teardown,
+            // and a delete that does not delete is worse than no recovery window.
             //
-            //   • SEVEN DAYS, which is what docs/plan/06 § Tags, locks gives "types carrying data".
-            //     It is declared on the TYPE and is therefore immutable by construction — docs/plan/08
-            //     asks that retention be "set at creation and immutable afterwards", and a type-level
-            //     window is the stronger form of that because there is no per-resource property for a
-            //     caller to shorten.
-            //
-            //   • `purge` AND NOT `delete`. docs/plan/08 § Soft delete follows Azure in keeping
-            //     `deletedVaults/purge/action` out of Key Vault Contributor: "may delete" and "may
-            //     destroy permanently" are separable rights. Passing the delete permission here would
-            //     make the window worth nothing against exactly the caller it protects against.
-            //
-            //   • A PURGE-PROTECTION FLAG, because a registry is the type where somebody wants one.
-            //     Its images are what a tenant's production deployments pull; an accidental purge
-            //     during the window is an outage that starts at the next pod restart rather than at
-            //     the moment of the mistake. ProviderBuilder refuses this pointer unless every
-            //     api-version declares it as a boolean, which is what stops it from being a protection
-            //     that silently never engages.
-            .SupportsSoftDelete(
-                ContainerRegistries.SoftDeleteDays,
-                ContainerRegistries.PurgePermission,
-                ContainerRegistries.PurgeProtectionPointer
-            )
+            // ⚠ CLOSING IT IS THIS ONE CALL AND NOTHING ELSE ON THIS ROW. The three arguments are
+            // written, documented and asserted against — ContainerRegistries.SoftDeleteDays,
+            // .PurgePermission and .PurgeProtectionPointer — and ContainerRegistryDeclarationTests
+            // .TheRecoveryWindowIsWithheldAndTheReasonIsAPlatformDefect goes red the day somebody adds
+            // it, pointing at charts/managed/harbor/conformance.yaml § owed,
+            // `a-soft-deleted-resource-undeletes-itself`.
             .RequiresCluster(ContainerRegistries.ClusterIdPointer);
     }
 

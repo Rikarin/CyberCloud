@@ -136,18 +136,6 @@ public sealed partial class ContainerRegistryChartTests {
         }
     }
 
-    [Fact]
-    public void ThePurgeProtectionFlagReachesTheChartAsABoolean() {
-        // ⚠ THE FIRST TIME A SOFT-DELETE FLAG HAS HAD TO CROSS THIS SEAM. `ProviderBuilder` refuses the
-        // type unless every api-version declares the pointer as a boolean, and nothing checks that the
-        // GENERATED CHART agrees — a chart that carried it as a string would lint fine and would make
-        // `helm install --set purgeProtection=true` a value the API refuses.
-        var node = ChartSchema();
-
-        Node(node, "purgeProtection")!["type"]!.GetValue<string>().ShouldBe("boolean");
-        Node(node, "purgeProtection")!["default"]!.GetValue<bool>().ShouldBeFalse();
-    }
-
     // ── Reading the two files ───────────────────────────────────────────────────────────────────
 
     static string Helpers() => Embedded("harbor.helpers.tpl");
@@ -232,16 +220,6 @@ public sealed partial class ContainerRegistryChartTests {
                 }
             }
         }
-    }
-
-    static JsonObject? Node(JsonObject schema, string name) {
-        foreach (var (pointer, entry) in Leaves(schema)) {
-            if (pointer.EndsWith("/" + name, StringComparison.Ordinal)) {
-                return entry;
-            }
-        }
-
-        return null;
     }
 
     [GeneratedRegex("""^\s*"(?<preset>s1\.[a-z0-9]+)"\s*\(dict "cpu" "(?<cpu>[^"]+)"\s*"memory" "(?<memory>[^"]+)"\)""", RegexOptions.Multiline)]

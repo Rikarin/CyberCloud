@@ -143,26 +143,37 @@ public static class ContainerRegistries {
     /// </remarks>
     public const string ListCredentialsPermission = "listCredentials";
 
-    /// <summary>How long a deleted registry is recoverable for. docs/plan/06 § Tags, locks.</summary>
+    // ── The recovery window this row was going to declare, and does not ───────────────────────
+    //
+    // ⚠ THESE THREE ARE THE ARGUMENTS FOR A DECLARATION THAT IS WITHHELD, AND WITHHOLDING IT IS THE
+    // MOST VALUABLE THING THIS ROW FOUND. The full account is on ContainerRegistryProvider: declaring
+    // SupportsSoftDelete made this family the first to exercise docs/plan/08 § Soft delete end to end
+    // against a real API server, and the cluster-backed suite reported that a soft-deleted registry
+    // REBUILDS ITS ENTIRE DATA PLANE after a converged teardown. They are kept, documented and
+    // asserted-against rather than deleted, because closing the platform defect makes the declaration
+    // three arguments to one method call.
+
+    /// <summary>How long a deleted registry would be recoverable for. docs/plan/06 § Tags, locks.</summary>
     /// <remarks>
-    ///     ⚠ Seven, which is what that section gives <i>"types carrying data"</i>. The argument for
-    ///     this type being one of them is on <c>ContainerRegistryProvider</c>, and it is a claim about
-    ///     the data rather than about the platform: a deleted registry's images are still on the
-    ///     <c>PersistentVolumeClaim</c> its <c>StatefulSet</c> left behind, so the window is one the
-    ///     platform can actually honour.
+    ///     ⚠ Seven, which is what that section gives <i>"types carrying data"</i>, and the argument for
+    ///     this type being one of them is about the data rather than about the platform: a deleted
+    ///     registry's images, its metadata database and its job queue are all on
+    ///     <c>PersistentVolumeClaim</c>s that its <c>StatefulSet</c>s leave behind, so there is
+    ///     genuinely something to hand back. That half stands; see
+    ///     <c>ContainerRegistryProvider</c> for the half that does not.
     /// </remarks>
     public const int SoftDeleteDays = 7;
 
-    /// <summary>The permission a purge needs. ⚠ A fourth permission, not the delete one.</summary>
+    /// <summary>The permission a purge would need. ⚠ A fourth permission, not the delete one.</summary>
     public const string PurgePermission = SoftDeletePolicy.DefaultPurgePermission;
 
-    /// <summary>The body flag that refuses every purge of a resource for the rest of its window.</summary>
+    /// <summary>The body flag that would refuse every purge of a resource for the rest of its window.</summary>
     /// <remarks>
-    ///     ⚠ <b>Opt-in, defaulted <see langword="false" />, and the platform refuses to let it be turned
-    ///     off again</b> — <c>ResourceManagerService</c> § 4b, which is the half without which the flag
-    ///     is one PATCH away from being worthless. docs/plan/08 § Soft delete:
-    ///     <i>"purge protection is a further opt-in flag that cannot be turned off once on, which is
-    ///     the only version of it that is worth anything"</i>.
+    ///     ⚠ <b>Not declared as a property, because <c>ProviderBuilder</c> refuses a purge-protection
+    ///     pointer on a type with no window</b> — <i>"the flag would be a property callers can set and
+    ///     nothing reads"</i> — and that refusal is right. A flag published to every generated surface
+    ///     while the platform honours no window at all is the promise docs/plan/08 § Soft delete says
+    ///     is worse than promising nothing.
     /// </remarks>
     public const string PurgeProtectionPointer = "/properties/purgeProtection";
 
@@ -876,16 +887,6 @@ public static class ContainerRegistries {
                     DefaultJson = "\"\""
                 },
                 new(
-                    PurgeProtectionPointer,
-                    SchemaKind.Boolean,
-                    Description: "Refuse every purge of this registry for the whole of its recovery "
-                    + "window. Opt-in, and the platform refuses to turn it off again — a protection a "
-                    + "caller can clear in one request is one round-trip of protection, which is none. "
-                    + "It does not stop a delete; it stops the delete from being made permanent early."
-                ) {
-                    DefaultJson = "false"
-                },
-                new(
                     "/properties/monitoring",
                     SchemaKind.Nested,
                     Description: "What the platform scrapes."
@@ -979,21 +980,6 @@ public static class ContainerRegistries {
     /// <summary>Whether the desired body asks for metrics and a scrape.</summary>
     public static bool MonitoringEnabled(JsonElement desired) =>
         Flag(desired, "monitoring", "enabled", true);
-
-    /// <summary>Whether the desired body asks for purge protection.</summary>
-    /// <remarks>
-    ///     ⚠ Read by nothing in this file. The platform reads the same pointer through
-    ///     <c>ResourceTypeRegistration.PurgeProtectionPointer</c>, and this accessor exists so that the
-    ///     provider's own tests can assert on the value the way every other property is asserted on. A
-    ///     second reader that disagreed with the registry's would be the drift the pointer exists to
-    ///     remove, which is why this one is a pure read of the same pointer rather than a copy of its
-    ///     spelling.
-    /// </remarks>
-    public static bool PurgeProtection(JsonElement desired) =>
-        Root(desired, "purgeProtection") switch {
-            { ValueKind: JsonValueKind.True } => true,
-            _ => false
-        };
 
     /// <summary>
     ///     The CPU and memory the registry pod asks for: the explicit quantities when both are given,
@@ -1328,7 +1314,7 @@ public static class ContainerRegistries {
             RegistryComponent,
             replicas: 1,
             containers: [registry, controller],
-            volumes: [ConfigVolume(name)],
+            volumes: ConfigVolume(name),
             claim: ClaimTemplate(RegistryVolume, StorageSize(desired), StorageClass(desired)),
             serviceName: RegistryName(name)
         );
@@ -1471,7 +1457,7 @@ public static class ContainerRegistries {
             JobServiceComponent,
             Replicas(desired),
             [container],
-            volumes: [ConfigVolume(name)],
+            volumes: ConfigVolume(name),
             claim: null,
             serviceName: null
         );
@@ -1775,7 +1761,6 @@ public static class ContainerRegistries {
     /// <param name="replicas">How many replicas of each stateless component.</param>
     /// <param name="storageSize">The image volume's size.</param>
     /// <param name="version">The Harbor minor.</param>
-    /// <param name="purgeProtection">Whether a purge is refused for the whole window.</param>
     /// <param name="location">The region.</param>
     /// <remarks>
     ///     ⚠ Every property it writes is a <b>leaf</b>. <c>ResourceSchema.Project</c> skips a
@@ -1788,7 +1773,6 @@ public static class ContainerRegistries {
         int replicas = 2,
         string storageSize = "100Gi",
         string version = DefaultVersion,
-        bool purgeProtection = false,
         string location = "eu-central"
     ) =>
         new JsonObject {
@@ -1798,7 +1782,6 @@ public static class ContainerRegistries {
                 ["version"] = version,
                 ["replicas"] = replicas,
                 ["storage"] = new JsonObject { ["size"] = storageSize },
-                ["purgeProtection"] = purgeProtection,
                 ["monitoring"] = new JsonObject { ["enabled"] = true }
             }
         }.ToJsonString();

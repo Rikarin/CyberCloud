@@ -21,42 +21,74 @@ public sealed class ContainerRegistryDeclarationTests {
         registration.ClusterIdPointer.ShouldBe(ContainerRegistries.ClusterIdPointer);
     }
 
-    // ── The first recovery window in the tree ────────────────────────────────────────────────────
+    // ── The recovery window that was declared, measured, and taken back ─────────────────────────
 
     [Fact]
-    public void ThisIsTheFirstTypeToDeclareARecoveryWindowAndItDeclaresAllThreeParts() {
-        // ⚠ Eleven families declined SupportsSoftDelete for one shared reason — the manager did not
-        // read SoftDeleteDays. docs/plan/08 § Soft delete is built now, and this is the first type
-        // whose data can genuinely be handed back: a StatefulSet's volumeClaimTemplate claims survive
-        // the delete, so the images, the metadata database and the job queue are all still there.
-        var registration = Registration();
-
-        registration.SoftDeleteDays.ShouldBe(7);
-
-        // ⚠ `purge` AND NOT `delete`. docs/plan/08 follows Azure in keeping the purge right out of the
-        // contributor role: "may delete" and "may destroy permanently" are separable. Passing the
-        // delete permission here would make the window worth nothing against exactly the caller it
-        // protects against — the one who could already delete.
-        registration.PurgePermission.ShouldBe("purge");
-        registration.PurgePermission.ShouldNotBe(registration.DeletePermission);
-
-        registration.PurgeProtectionPointer.ShouldBe("/properties/purgeProtection");
+    public void TheRecoveryWindowIsWithheldAndTheReasonIsAPlatformDefect() {
+        // ⚠ THIS ASSERTS A NEGATIVE, WHICH IS UNUSUAL AND IS THE POINT: it goes red the day somebody
+        // adds `.SupportsSoftDelete(...)` back, which is the day the platform defect below has to have
+        // been closed.
+        //
+        // This row DID declare it. Every argument for the window holds: docs/plan/06 § Tags, locks
+        // gives seven days to "types carrying data", and a registry's images, metadata database and
+        // job queue all live on PersistentVolumeClaims that a StatefulSet's deletion leaves behind, so
+        // there is genuinely something to hand back.
+        //
+        // ⚠ AND THE CLUSTER-BACKED SUITE REPORTED THAT A SOFT-DELETED REGISTRY REBUILDS ITS WHOLE DATA
+        // PLANE AFTER A CONVERGED TEARDOWN. ClusterConformanceTests.TheLifecycleRunsAgainstARealApiServer
+        // failed with "is still in the real cluster after a converged teardown"; reordering the case's
+        // object list showed it was EVERY object rather than one. Removing this single call and
+        // changing nothing else made the test pass, and putting it back made it fail again.
+        //
+        // A delete that does not delete is worse than no recovery window: the resource stops being
+        // addressable, the workload keeps running, the quota stays held, and the tenant cannot see it
+        // in order to delete it again. See charts/managed/harbor/conformance.yaml § owed,
+        // `a-soft-deleted-resource-undeletes-itself`.
+        Registration().SoftDeleteDays.ShouldBe(
+            0,
+            "this type declares a recovery window again. That is the right end state and it is only "
+            + "safe once a soft-deleted resource stops being re-reconciled — charts/managed/harbor/"
+            + "conformance.yaml § owed, `a-soft-deleted-resource-undeletes-itself`. If that is closed, "
+            + "delete this test and say so there."
+        );
     }
 
     [Fact]
-    public void ThePurgeProtectionPointerIsADeclaredBooleanInEveryApiVersion() {
-        // ⚠ ProviderBuilder refuses the type otherwise, and the assertion is here anyway because the
-        // refusal's own message says why: a flag the platform enforces against a property no schema
-        // declares "would be a protection that fails silently open". A second api-version that forgot
-        // the property would be caught by Build — this is the positive half, and it is what says which
-        // property the platform is reading.
-        var flag = ContainerRegistries.Schema2026.Properties
-            .Single(x => x.JsonPointer == ContainerRegistries.PurgeProtectionPointer);
+    public void TheThreeArgumentsTheWindowWouldNeedAreWrittenDownAndAgreeWithDocsPlan08() {
+        // ⚠ Kept as constants rather than deleted, so that re-declaring the window is one line rather
+        // than three decisions taken again from scratch. Each is asserted here so they cannot rot
+        // while nothing calls them.
+        //
+        //   • SEVEN DAYS — docs/plan/06 § Tags, locks, "types carrying data". Declared on the TYPE and
+        //     therefore immutable by construction, which is the stronger form of docs/plan/08's
+        //     "retention is set at creation and immutable afterwards": there is no per-resource
+        //     property for a caller to shorten.
+        //
+        //   • `purge` AND NOT `delete` — docs/plan/08 follows Azure in keeping the purge right out of
+        //     the contributor role, so "may delete" and "may destroy permanently" stay separable.
+        //     Sharing the delete permission would make the window worth nothing against exactly the
+        //     caller it protects against.
+        //
+        //   • A PURGE-PROTECTION POINTER, because a registry is the type somebody wants one on: its
+        //     images are what a tenant's production deployments pull, so an accidental purge is an
+        //     outage that starts at the next pod restart rather than at the moment of the mistake.
+        ContainerRegistries.SoftDeleteDays.ShouldBe(7);
+        ContainerRegistries.PurgePermission.ShouldBe("purge");
+        ContainerRegistries.PurgePermission.ShouldNotBe(Registration().DeletePermission);
+        ContainerRegistries.PurgeProtectionPointer.ShouldBe("/properties/purgeProtection");
+    }
 
-        flag.Kind.ShouldBe(SchemaKind.Boolean);
-        flag.Required.ShouldBeFalse("purge protection is opt-in; requiring it would be a required "
-            + "field whose only honest value is the default");
-        flag.DefaultJson.ShouldBe("false");
+    [Fact]
+    public void ThePurgeProtectionFlagIsNotADeclaredPropertyWhileThereIsNoWindow() {
+        // ⚠ ProviderBuilder refuses a purge-protection pointer on a type with no window — "the flag
+        // would be a property callers can set and nothing reads" — and that refusal is right. This is
+        // the other half: the property is not in the schema either, so no generated surface offers a
+        // caller a protection that engages against nothing.
+        ContainerRegistries.Schema2026.Properties
+            .ShouldNotContain(x => x.JsonPointer == ContainerRegistries.PurgeProtectionPointer);
+
+        Registration().PurgeProtectionPointer.ShouldBeEmpty();
+        Registration().PurgePermission.ShouldBeEmpty();
     }
 
     // ── Failure class (d): a shortName collision ─────────────────────────────────────────────────
