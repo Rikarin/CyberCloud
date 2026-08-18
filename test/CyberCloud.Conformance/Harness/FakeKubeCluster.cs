@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Collections.Immutable;
+using System.Text.Json.Nodes;
 
 namespace CyberCloud.Conformance.Harness;
 
@@ -31,6 +32,15 @@ namespace CyberCloud.Conformance.Harness;
 ///         reconciler really rendered — docs/plan/23 § The architecture gates' <c>Labels</c> row asks
 ///         for exactly that, "asserted against real output", and until a provider existed there was no
 ///         real output to assert against.
+///     </para>
+///     <para>
+///         ⚠ <b>It is an echo in every respect but one: an applied body is stored with its empty
+///         collections REMOVED.</b> That one exception exists because "the fake echoes the apply" is
+///         not a harmless simplification — it makes the harness structurally blind to everything a
+///         real API server takes <i>away</i>, and a provider hung in production on exactly that. See
+///         <see cref="DropEmptyCollections" /> for what it models, why it is deliberately stricter
+///         than a real server rather than more faithful than one, and the larger half it still does
+///         not model at all.
 ///     </para>
 /// </remarks>
 public sealed class FakeKubeCluster(Guid clusterId) : IKubeClusterConnection {
@@ -172,7 +182,9 @@ public sealed class FakeKubeCluster(Guid clusterId) : IKubeClusterConnection {
         var existed = objects.ContainsKey(key);
         var unchanged = existed && hashes.TryGetValue(key, out var previous) && previous == command.ReconcileHash;
 
-        objects[key] = command.Body;
+        // ⚠ STORED WITHOUT ITS EMPTY COLLECTIONS, AND THAT IS THE ONE PLACE THIS STOPS BEING AN ECHO.
+        // See DropEmptyCollections' remarks for why, and for what it deliberately is not.
+        objects[key] = DropEmptyCollections(command.Body);
         hashes[key] = command.ReconcileHash;
 
         return Task.FromResult(
@@ -235,6 +247,85 @@ public sealed class FakeKubeCluster(Guid clusterId) : IKubeClusterConnection {
 
     static string Key(ObjectRef target) =>
         target.Kind.ApiVersion + "|" + target.Kind.Kind + "|" + target.Namespace + "|" + target.Name;
+
+    /// <summary>
+    ///     Returns the body with every empty array and empty object removed, at every depth.
+    /// </summary>
+    /// <param name="body">The body the command carried.</param>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>THIS IS STRICTNESS, NOT FIDELITY, AND THE DIFFERENCE MATTERS.</b> A real API
+    ///         server drops an empty collection when the Go field it deserialises into carries
+    ///         <c>omitempty</c> — which is <i>every</i> optional list and map on <i>every</i> built-in
+    ///         object. <c>NetworkPolicySpec.Ingress</c> is one: the empty list that spells "deny all
+    ///         ingress" comes back with no key at all, so <c>CyberCloud.Terminal/consoles</c>
+    ///         converged here and hung forever against k3s. Doing it unconditionally is what closes
+    ///         that, and it is <b>not</b> what a real server does to a <i>custom</i> resource, whose
+    ///         <c>x-kubernetes-preserve-unknown-fields</c> schema round-trips an empty array intact.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Being stricter than the real server here is the safe direction, and the reason is
+    ///         that the pattern it forces is right in both worlds.</b> A comparison written as
+    ///         <c>KubeJson.IsAbsentOrEmpty(spec["ingress"])</c> accepts the absent key a built-in
+    ///         returns AND the empty array a custom resource returns, and still refuses a list that
+    ///         grew an entry. A comparison written as <c>is JsonArray { Count: 0 }</c> is correct
+    ///         against neither and used to pass here. So the only code this refuses is code that would
+    ///         hang against k3s.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>What it does not model, so nobody reads a green run as more than it is.</b>
+    ///         <c>omitempty</c> also drops an empty string, a zero number and a <see langword="false" />
+    ///         boolean, and this drops none of those — which fields carry the tag lives in Go struct
+    ///         tags this repository does not have, and guessing would break comparisons that are
+    ///         correct. Nor does it model the other direction at all: a real server ADDS a CRD's
+    ///         <c>+kubebuilder:default</c>, a <c>status</c> and <c>managedFields</c>, and this harness
+    ///         derives its CRD stub from <c>ProviderConformanceCase.Objects</c>, so a derived stub has
+    ///         no defaults and an equality-instead-of-containment bug still passes here. That one is
+    ///         covered by <c>CyberCloud.Cluster.Conformance</c> and by
+    ///         <c>KubeJson.Contains</c>, and by nothing in this class.
+    ///     </para>
+    /// </remarks>
+    static string DropEmptyCollections(string body) {
+        if (JsonNode.Parse(body) is not JsonObject document) {
+            return body;
+        }
+
+        Strip(document);
+        return document.ToJsonString();
+    }
+
+    /// <summary>Removes every empty array and empty object under one node, depth first.</summary>
+    /// <param name="node">The node to strip in place.</param>
+    /// <remarks>
+    ///     ⚠ Depth first, so a map whose only members were themselves empty collections is itself
+    ///     empty by the time its parent looks at it — which is what a real server does, an empty
+    ///     struct being just as absent as an empty list.
+    /// </remarks>
+    static void Strip(JsonNode node) {
+        switch (node) {
+            case JsonObject map:
+                foreach (var key in map.Select(x => x.Key).ToList()) {
+                    if (map[key] is not { } child) {
+                        continue;
+                    }
+
+                    Strip(child);
+
+                    if (KubeJson.IsAbsentOrEmpty(map[key])) {
+                        map.Remove(key);
+                    }
+                }
+
+                break;
+
+            case JsonArray array:
+                foreach (var child in array.Where(x => x is not null)) {
+                    Strip(child!);
+                }
+
+                break;
+        }
+    }
 }
 
 /// <summary>
