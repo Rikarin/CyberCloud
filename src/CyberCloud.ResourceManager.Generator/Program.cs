@@ -137,7 +137,7 @@ static class Program {
                 File.WriteAllBytes(
                     report,
                     DeterministicJson.ToBytes(
-                        Render(generated, surfaces, annotations, providerAssemblies.Count)
+                        Render(registry, generated, surfaces, annotations, providerAssemblies.Count)
                     )
                 );
             }
@@ -160,6 +160,7 @@ static class Program {
     ///     The report <c>build/Build.Generate.cs</c> and <c>build/Build.Architecture.cs</c> read.
     /// </summary>
     static JsonObject Render(
+        ProviderRegistry registry,
         GenerationReport generated,
         DerivedReport surfaces,
         ChartAnnotationReport annotations,
@@ -206,7 +207,31 @@ static class Program {
             });
         }
 
+        // ⚠ EVERY DECLARED ACTION, WHETHER OR NOT IT CAN RUN — the one thing in this report that is
+        // read off the registry rather than off something emitted from it. An action reaches the
+        // OpenAPI document, the cyc verb tree, the SDK and the portal form from its declaration
+        // alone, and none of those four records whether a handler exists to serve it; a document
+        // that publishes twelve actions nothing can execute is byte-identical to one that publishes
+        // twelve that can. So the fact the Action handlers gate needs cannot be recovered from the
+        // generated surfaces, and it is carried here instead.
+        var actions = new JsonArray();
+
+        foreach (var type in registry.Types) {
+            foreach (var action in type.Actions) {
+                actions.Add(
+                    new JsonObject {
+                        ["handler"] = action.HandlerType?.FullName,
+                        ["longRunning"] = action.LongRunning,
+                        ["name"] = action.Name,
+                        ["secret"] = action.Secret,
+                        ["type"] = type.Type.ToString()
+                    }
+                );
+            }
+        }
+
         return new JsonObject {
+            ["actions"] = actions,
             ["apiVersions"] = generated.ApiVersions,
             ["assembliesScanned"] = assembliesScanned,
             // ⚠ A third array rather than a third kind of entry in `derived`: this one is gated by

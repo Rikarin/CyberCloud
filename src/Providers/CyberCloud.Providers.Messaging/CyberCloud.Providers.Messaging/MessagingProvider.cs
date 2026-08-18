@@ -254,7 +254,13 @@ public sealed class MessagingProvider : IResourceProvider {
                 ActionKind.Post,
                 RabbitmqClusters.ListKeysPermission,
                 secret: true,
-                response: RabbitmqClusters.ListKeysResponse
+                response: RabbitmqClusters.ListKeysResponse,
+                // ⚠ The one listKeys of this provider's three that can run, and the difference is not
+                // this file. The RabbitMQ cluster-operator generates a default user; Strimzi generates
+                // nothing here because no KafkaUser is rendered, and nats.conf carries no
+                // authorization block — so those two have no credential for a handler to read. They
+                // are on actions-without-handlers.txt with that reason.
+                handler: typeof(RabbitmqClusterListKeysHandler)
             )
             .Display(
                 "RabbitMQ cluster",

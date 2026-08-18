@@ -48,21 +48,27 @@ public sealed class SampleProvider : IResourceProvider {
             // no vcpu and no storage, so declaring either would bill a tenant for nothing.
             .Meters(QuotaMeter.Resources)
             .Permissions("read", "write", "delete")
-            // ⚠ The action does nothing on purpose. It is here so the conformance suite has a real
+            // ⚠ The action changes nothing on purpose. It is here so the conformance suite has a real
             // POST to drive — docs/plan/08 § The write path, end to end: POST "appears only for
             // actions on an existing resource … never for creation", and a suite with no action
             // registered cannot check the second half.
             //
             // Its request and response shapes are declared because an undeclared action is the one
             // part of the API surface with no contract: the emitted document said `schema: {}` and the
-            // manager validated nothing. Declaring them costs no behaviour here — the handler is still
-            // a no-op — and makes the action's parameters refusable and generable like everything else.
+            // manager validated nothing.
+            //
+            // ⚠ AND IT NAMES A HANDLER, WHICH IT DID NOT. "Changes nothing" and "runs nothing" are
+            // different, and this declaration used to be the second: ActionDispatcher refuses a
+            // synchronous action with no handler by name, so the provider every other provider is
+            // read from was demonstrating a 500. WidgetPingHandler is the smallest complete example
+            // of the three obligations a handler has.
             .Action(
-                "ping",
+                SampleWidgets.PingAction,
                 ActionKind.Post,
                 "write",
                 request: SampleWidgets.PingRequest,
-                response: SampleWidgets.PingResponse
+                response: SampleWidgets.PingResponse,
+                handler: typeof(WidgetPingHandler)
             )
             // What a person sees. docs/plan/21 § Grammar's alias table is generated from this rather
             // than hand-maintained in the CLI, and a portal breadcrumb has a word to draw.

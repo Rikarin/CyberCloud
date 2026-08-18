@@ -643,6 +643,16 @@ public static class MariaDbServers {
     /// <remarks>⚠ The operator's own default, for the reason on <see cref="RootSecretName" />.</remarks>
     public static string PasswordSecretName(string name) => name + "-password";
 
+    /// <summary>The key inside <see cref="PasswordSecretName" /> and <see cref="RootSecretName" />.</summary>
+    /// <remarks>
+    ///     ⚠ <b>This platform's choice rather than the operator's, which is why it is one constant and
+    ///     not two.</b> mariadb-operator takes the key name from the CR's <c>…SecretKeyRef</c> and
+    ///     generates the Secret to match when <c>generate</c> is set — so the name in
+    ///     <see cref="ServerJson" /> and the name <c>listKeys</c> reads by have to be the same string,
+    ///     and a literal in both files is a mismatch waiting for the first edit that touches one.
+    /// </remarks>
+    public const string PasswordKey = "password";
+
     /// <summary>
     ///     The Service a client connects to.
     /// </summary>
@@ -851,7 +861,7 @@ public static class MariaDbServers {
     }
 
     static JsonObject SecretRef(string secretName) =>
-        new() { ["name"] = secretName, ["key"] = "password", ["generate"] = true };
+        new() { ["name"] = secretName, ["key"] = PasswordKey, ["generate"] = true };
 
     /// <summary>
     ///     Whether an object read back from a cluster carries what the desired body asks for.

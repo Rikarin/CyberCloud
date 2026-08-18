@@ -158,7 +158,8 @@ public sealed class SearchProvider : IResourceProvider {
                 ActionKind.Post,
                 OpenSearchServices.ListKeysPermission,
                 secret: true,
-                response: OpenSearchServices.ListKeysResponse
+                response: OpenSearchServices.ListKeysResponse,
+                handler: typeof(OpenSearchServiceListKeysHandler)
             )
             .Display(
                 "OpenSearch service",

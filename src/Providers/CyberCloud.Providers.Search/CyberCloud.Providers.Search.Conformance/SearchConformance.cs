@@ -1,5 +1,6 @@
 using CyberCloud.Conformance;
 using CyberCloud.Conformance.Harness;
+using CyberCloud.Kubernetes.Contracts;
 using CyberCloud.Providers.Search.Contracts;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -87,6 +88,20 @@ public sealed class OpenSearchCase : IProviderCaseSource {
             InvalidBodyTarget = "/properties/storage/size",
             ActionName = OpenSearchServices.ListKeysAction,
             Objects = (id, ns) => [OpenSearchServices.ClusterRef(ns, id.Name)],
+            // ⚠ opensearch-operator's EnsureAdminCredentialsSecret, which runs because ClusterJson
+            // deliberately leaves `spec.security.config.adminCredentialsSecret` unset. This fixture is
+            // also the only place in the tree that asserts the NAME that helper builds — nothing here
+            // creates the object, so the expectation is worth exercising rather than only declaring.
+            OperatorWritten = (id, ns) => [
+                (KubeSecret.Ref(ns, OpenSearchServices.AdminCredentialsSecretName(id.Name)),
+                    OperatorSecret.Json(
+                        KubeSecret.Ref(ns, OpenSearchServices.AdminCredentialsSecretName(id.Name)),
+                        [
+                            (OpenSearchServices.UsernameKey, "admin"),
+                            (OpenSearchServices.PasswordKey, "a-generated-password")
+                        ]
+                    ))
+            ],
             ObjectMatchesDesired = (objectJson, desiredJson) => {
                 using var desired = JsonDocument.Parse(desiredJson);
                 return OpenSearchServices.Matches(objectJson, desired.RootElement);

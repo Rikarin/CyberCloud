@@ -927,6 +927,15 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
         var created = (await CreateAsync("actionable")).GetValueOrThrow();
         await ConvergeAsync(created);
 
+        // ⚠ AFTER CONVERGENCE AND BEFORE THE ACTION, WHICH IS WHERE THE REAL ONES APPEAR. An
+        // operator writes its generated Secret while bringing the engine up, so a handler reading one
+        // is reading something that exists by the time a caller can invoke the action and does not
+        // exist while the reconciler is still working. Placing it earlier would let a reconciler pass
+        // that depended on it; placing it later than this would test a state no caller can reach.
+        // A no-op for every type whose credential this platform mints itself — see
+        // ProviderConformanceCase.OperatorWritten.
+        PlaceOperatorObjects(created.Resource.Id, "actionable");
+
         var action = await Cluster.Manager.ActionAsync(
             new() {
                 Path = ProviderTestCluster<TSource>.Address("actionable").Path,
@@ -1253,6 +1262,24 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
     protected static ImmutableArray<ObjectRef> ObjectsOf(Guid resourceId, string name) {
         var address = ProviderTestCluster<TSource>.Address(name).WithId(resourceId);
         return Case.Objects(address, ReconcileDriver.NamespaceFor(address));
+    }
+
+    /// <summary>
+    ///     Puts the objects this type's <b>operator</b> writes into the fake cluster.
+    /// </summary>
+    /// <param name="resourceId">The resource's GUID.</param>
+    /// <param name="name">Its name.</param>
+    /// <remarks>
+    ///     ⚠ Behind the reconciler's back, because that is what an operator is — see
+    ///     <see cref="ProviderConformanceCase.OperatorWritten" />. A no-op for every type that has
+    ///     none, which is most of them.
+    /// </remarks>
+    protected void PlaceOperatorObjects(Guid resourceId, string name) {
+        var address = ProviderTestCluster<TSource>.Address(name).WithId(resourceId);
+
+        foreach (var (target, json) in Case.OperatorWritten(address, ReconcileDriver.NamespaceFor(address))) {
+            Cluster.World.MutateBehindTheirBack(target, json);
+        }
     }
 
     /// <summary>A fresh reconciler, built the way the container builds one.</summary>

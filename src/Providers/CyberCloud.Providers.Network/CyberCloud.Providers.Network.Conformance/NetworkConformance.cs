@@ -63,6 +63,10 @@ public sealed class VirtualNetworkCase : IProviderCaseSource {
             InvalidBodyTarget = "/properties/addressSpace/v4",
             ActionName = VirtualNetworks.ShowIsolationAction,
             Objects = (id, ns) => [VirtualNetworks.VpcRef(ns, id.Name)],
+            // This platform mints or computes everything this type's actions hand back, so no operator
+            // writes an object any action reads. Stated rather than defaulted — see
+            // ProviderConformanceCase.OperatorWritten.
+            OperatorWritten = static (_, _) => [],
             ObjectMatchesDesired = (objectJson, desiredJson) => {
                 using var desired = JsonDocument.Parse(desiredJson);
                 return VirtualNetworks.Matches(objectJson, desired.RootElement);
@@ -133,6 +137,10 @@ public sealed class NetworkSubnetCase : IProviderCaseSource {
             // ONE resource group each holding a subnet called `web`.
             // charts/managed/kube-ovn-subnet/conformance.yaml § owed,
             // `object-matches-desired-cannot-see-an-address`.
+            // This platform mints or computes everything this type's actions hand back, so no operator
+            // writes an object any action reads. Stated rather than defaulted — see
+            // ProviderConformanceCase.OperatorWritten.
+            OperatorWritten = static (_, _) => [],
             ObjectMatchesDesired = (objectJson, desiredJson) => {
                 using var desired = JsonDocument.Parse(desiredJson);
                 return NetworkSubnets.MatchesBody(objectJson, desired.RootElement);
@@ -197,6 +205,10 @@ public sealed class NetworkSecurityGroupCase : IProviderCaseSource {
             // which for a subnet costs the `spec.vpc` half of its comparison. A SecurityGroup has no
             // field derived from the address at all, so nothing is left out here and the shared suite
             // checks exactly what the reconciler does.
+            // This platform mints or computes everything this type's actions hand back, so no operator
+            // writes an object any action reads. Stated rather than defaulted — see
+            // ProviderConformanceCase.OperatorWritten.
+            OperatorWritten = static (_, _) => [],
             ObjectMatchesDesired = (objectJson, desiredJson) => {
                 using var desired = JsonDocument.Parse(desiredJson);
                 return NetworkSecurityGroups.Matches(objectJson, desired.RootElement);

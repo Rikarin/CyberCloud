@@ -297,6 +297,38 @@ public static class OpenSearchServices {
     /// </remarks>
     public static string ServiceName(string name) => name;
 
+    /// <summary>The <c>Secret</c> the operator generates the admin credential into.</summary>
+    /// <param name="name">The resource's own name.</param>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>The operator's name and not this platform's, which is what makes it worth writing
+    ///         down here.</b> <c>pkg/helpers/helpers.go</c>'s <c>EnsureAdminCredentialsSecret</c>
+    ///         builds it from the cluster's own name when <c>spec.security.config</c> leaves
+    ///         <c>adminCredentialsSecret</c> unset — which <see cref="ClusterJson" /> deliberately
+    ///         does, for the reason this type's remarks give. Nothing in this repository creates the
+    ///         object, so an expectation about its name is exactly the kind of fact that should be a
+    ///         named constant rather than a string inside one handler.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The prose on <see cref="ClusterJson" /> used to end "and the platform simply
+    ///         cannot hand the credential out", and that was true of the platform rather than of the
+    ///         cluster.</b> The credential is a <c>Secret</c> in the tenant's namespace and the
+    ///         reconcile path could always reach it; what did not exist was anywhere to put the read.
+    ///         <c>OpenSearchServiceListKeysHandler</c> is that place.
+    ///     </para>
+    /// </remarks>
+    public static string AdminCredentialsSecretName(string name) => name + "-admin-password";
+
+    /// <summary>The keys inside <see cref="AdminCredentialsSecretName" />.</summary>
+    /// <remarks>
+    ///     <c>EnsureAdminCredentialsSecret</c> writes both; the username is always <c>admin</c>, and
+    ///     it is read rather than assumed for the same reason the password is.
+    /// </remarks>
+    public const string UsernameKey = "username";
+
+    /// <inheritdoc cref="UsernameKey" />
+    public const string PasswordKey = "password";
+
     /// <summary>The in-cluster REST endpoint <c>listKeys</c> hands out.</summary>
     /// <param name="ns">The resource's namespace.</param>
     /// <param name="name">The resource's own name.</param>
