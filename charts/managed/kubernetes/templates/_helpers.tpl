@@ -33,11 +33,17 @@ The full Kubernetes version a minor is rendered as.
 
 ⚠ THE API TAKES A MINOR AND KAMAJI PARSES A SEMANTIC VERSION, so the patch is pinned by the platform.
 `ManagedClusters.PinnedPatch` is the same table in C# and ManagedClusterSizingTests compares them row
-for row. ⚠ Neither copy was read off a Kubernetes release page — conformance.yaml § owed,
-`pinned-patches-are-unreviewed`.
+for row.
+
+⚠ THE PATCH IS CHOSEN FROM THE NODE-IMAGE REGISTRY, NOT FROM THE KUBERNETES RELEASE PAGE, and that is
+the correction of 2026-08-18. quay.io/capk/ubuntu-2404-container-disk publishes one tag per MINOR —
+v1.31.5, v1.32.1, v1.33.5, v1.34.1 — and charts/managed/kubernetes-agentpool renders this same string
+as that tag. The previous pins, v1.32.9 and v1.33.4, are real Kubernetes releases and are not tags of
+that repository, so every worker VM pulled an image that does not exist. See ManagedClusters.PinnedPatch
+for what the choice costs, and SOURCE for what was read where.
 */}}
 {{- define "kubernetes.pinnedVersion" -}}
-{{- $patches := dict "1.32" "v1.32.9" "1.33" "v1.33.4" -}}
+{{- $patches := dict "1.32" "v1.32.1" "1.33" "v1.33.5" -}}
 {{- get $patches .Values.version | default (printf "v%s" .Values.version) -}}
 {{- end -}}
 

@@ -53,9 +53,15 @@ The full Kubernetes version a minor is rendered as.
 ⚠ THE SAME PIN THE CONTROL PLANE USES — ManagedClusters.PinnedPatch, and charts/managed/kubernetes'
 own `kubernetes.pinnedVersion`. Two tables would drift, and the drift would be a version skew nobody
 declared. ManagedClusterSizingTests compares all three copies.
+
+⚠ AND THIS CHART IS WHY THE TABLE HOLDS THE VALUES IT DOES. This string is also the TAG of
+`nodeImageRepository`, and quay.io/capk/ubuntu-2404-container-disk publishes one tag per minor rather
+than one per patch — v1.31.5, v1.32.1, v1.33.5, v1.34.1, read on 2026-08-18. A pin that is not one of
+those is a VM that never boots. SOURCE records the read; conformance.yaml § owed,
+`node-image-is-unverified`.
 */}}
 {{- define "kubernetes-agentpool.pinnedVersion" -}}
-{{- $patches := dict "1.32" "v1.32.9" "1.33" "v1.33.4" -}}
+{{- $patches := dict "1.32" "v1.32.1" "1.33" "v1.33.5" -}}
 {{- get $patches .Values.version | default (printf "v%s" .Values.version) -}}
 {{- end -}}
 
