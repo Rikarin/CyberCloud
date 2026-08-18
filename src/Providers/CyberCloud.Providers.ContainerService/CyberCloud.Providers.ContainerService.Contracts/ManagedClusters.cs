@@ -489,17 +489,47 @@ public static class ManagedClusters {
 
     /// <summary>The full version each offered minor is rendered as.</summary>
     /// <remarks>
-    ///     ⚠ <b>A PLATFORM CHOICE AND AN UNVERIFIED ONE, SAID PLAINLY.</b> These two strings were not
-    ///     read off a Kubernetes release page and they are the one thing in this file that a reviewer
-    ///     must check before the row ships — a patch that does not exist is a control plane that never
-    ///     starts, and a patch newer than the Kamaji install's bundled kubeadm is refused at admission
-    ///     with a message about a version nobody typed. <c>conformance.yaml § owed</c>,
-    ///     <c>pinned-patches-are-unreviewed</c>. ⚠ Moving one is a chart version bump rather than a new
-    ///     api-version, because a patch is not an API change and no stored body carries it.
+    ///     <para>
+    ///         ⚠ <b>REVIEWED 2026-08-18, AND BOTH STRINGS WERE WRONG — NOT AS KUBERNETES VERSIONS BUT
+    ///         AS IMAGE TAGS.</b> The previous pins were <c>v1.32.9</c> and <c>v1.33.4</c>. Both are
+    ///         real Kubernetes releases: 1.32 ended at 1.32.13 and 1.33 is at 1.33.13. Neither is a tag
+    ///         of <see cref="AgentPools.NodeImageRepository" />, which publishes exactly four —
+    ///         <c>v1.31.5</c>, <c>v1.32.1</c>, <c>v1.33.5</c>, <c>v1.34.1</c>, read off
+    ///         <c>quay.io</c> on 2026-08-18. So every worker VM in every pool pulled a tag that does
+    ///         not exist, and the reason arrived in a <c>DataVolume</c>'s events, three objects below
+    ///         anything this platform reads.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>THE NODE-IMAGE REGISTRY IS THE BINDING CONSTRAINT, NOT THE KUBERNETES RELEASE
+    ///         PAGE, AND THAT INVERTS WHAT <see cref="AgentPools.NodeImageRepository" /> ASSUMED.</b>
+    ///         That constant's remarks said the KubeVirt provider publishes an image "tagged with the
+    ///         Kubernetes version they carry", so the tag was "a function of <c>PinnedPatch</c>". It
+    ///         publishes one tag per MINOR, at whichever patch it happened to build. A pin is
+    ///         therefore only renderable if it is a patch that repository has published, which leaves
+    ///         one candidate per offered minor and these are they.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>WHAT THAT COSTS, SAID RATHER THAN HIDDEN: <c>v1.32.1</c> WAS BUILT IN JANUARY
+    ///         2025</b> and carries every fix that landed in 1.32.2 through 1.32.13. The alternative
+    ///         is a newer control plane with no bootable node image, which is a cluster with no nodes
+    ///         — a worse failure and a silent one. ⚠ And both offered minors are out of upstream
+    ///         support: 1.32 since 2026-02-28, 1.33 since 2026-06-28. Fixing THAT is a new
+    ///         api-version rather than a pin move, because <see cref="Versions" /> is an
+    ///         <c>AllowedValues</c> a stored body carries — <c>conformance.yaml § owed</c>,
+    ///         <c>offered-minors-are-out-of-support</c>.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ Still unchecked, and it needs a running management cluster rather than a registry
+    ///         read: whether a pin is newer than the Kamaji install's bundled kubeadm, which its
+    ///         version webhook refuses with a message about a version nobody typed.
+    ///         <c>conformance.yaml § owed</c>, <c>pinned-patches-are-unreviewed</c>. ⚠ Moving a pin is
+    ///         a chart version bump rather than a new api-version, because a patch is not an API
+    ///         change and no stored body carries one.
+    ///     </para>
     /// </remarks>
     public static FrozenDictionary<string, string> PinnedPatch { get; } =
         new Dictionary<string, string>(StringComparer.Ordinal) {
-            ["1.32"] = "v1.32.9", ["1.33"] = "v1.33.4"
+            ["1.32"] = "v1.32.1", ["1.33"] = "v1.33.5"
         }.ToFrozenDictionary(StringComparer.Ordinal);
 
     /// <summary>
