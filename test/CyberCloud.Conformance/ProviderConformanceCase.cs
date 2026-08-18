@@ -131,14 +131,21 @@ public sealed record ProviderConformanceCase {
     ///     <para>
     ///         The parameters are the resource's id (with its GUID resolved) and the namespace
     ///         <c>ReconcileDriver.NamespaceFor</c> derived — the same two <see cref="Objects" />
-    ///         takes. Empty by default: most types have no such object, and a provider that needs one
-    ///         is saying something specific about its engine.
+    ///         takes.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b><c>required</c> like every other member, and it was written with a default
+    ///         first.</b> <c>SuiteRejectionTests.EveryCaseFieldIsRequiredSoAPartialRegistrationDoesNotCompile</c>
+    ///         refused that within one run, and its reason applies here exactly: a member with a
+    ///         default is an assertion the suite quietly stops making for the provider that omits it,
+    ///         and the provider most likely to omit this one is the next one to grow an
+    ///         operator-generated credential — whose handler would then be tested against a cluster
+    ///         that does not contain it. Most types return an empty array, and returning it is a
+    ///         statement rather than a formality.
     ///     </para>
     /// </remarks>
-    public Func<ResourceId, string, ImmutableArray<(ObjectRef Target, string Json)>> OperatorWritten {
-        get;
-        init;
-    } = static (_, _) => [];
+    public required Func<ResourceId, string, ImmutableArray<(ObjectRef Target, string Json)>>
+        OperatorWritten { get; init; }
 
     // ── There is deliberately NO RequiredCrds member, and the reason is worth keeping ─────────────
     //

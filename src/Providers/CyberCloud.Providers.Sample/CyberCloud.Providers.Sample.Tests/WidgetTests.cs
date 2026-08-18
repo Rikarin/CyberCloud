@@ -126,6 +126,72 @@ public sealed class WidgetDeclarationTests {
         SampleWidgets.Matches("not json at all", desired.RootElement).ShouldBeFalse();
     }
 
+    [Fact]
+    public async Task PingEchoesWhatItWasSentAndFallsBackToTheDefaultTheSchemaPublishes() {
+        // ⚠ THE FALLBACK AND THE PUBLISHED DEFAULT ARE ASSERTED TO BE THE SAME STRING, AND THAT IS
+        // THE HALF NOTHING ELSE COVERS. SchemaProperty.DefaultJson reaches the OpenAPI document, the
+        // generated SDK and the portal form; the write path does NOT substitute it into a body that
+        // omitted the property, so the handler applies its own. Two defaults that disagree is a
+        // document lying about one of them, and no compiler compares a JSON string literal in the
+        // schema to a const in the handler.
+        var declared = SampleWidgets.PingRequest.Properties.Single(x => x.JsonPointer == "/echo");
+
+        declared.DefaultJson.ShouldBe(
+            $"\"{WidgetPingHandler.DefaultEcho}\"",
+            "the default the request schema publishes is not the one WidgetPingHandler applies"
+        );
+
+        var clock = new FrozenClock(new DateTimeOffset(2026, 8, 18, 9, 30, 0, TimeSpan.Zero));
+        var handler = new WidgetPingHandler(clock);
+
+        handler.Type.ShouldBe(SampleWidgets.Type);
+        handler.Action.ShouldBe(SampleWidgets.PingAction);
+
+        using var sent = JsonDocument.Parse("""{"echo":"marco"}""");
+        using var empty = JsonDocument.Parse("{}");
+
+        var echoed = await handler.InvokeAsync(Context(sent.RootElement), TestContext.Current.CancellationToken);
+        var defaulted = await handler.InvokeAsync(Context(empty.RootElement), TestContext.Current.CancellationToken);
+
+        echoed.IsSuccess.ShouldBeTrue(echoed.Error?.Message);
+        defaulted.IsSuccess.ShouldBeTrue(defaulted.Error?.Message);
+
+        using var first = JsonDocument.Parse(echoed.GetValueOrThrow());
+        using var second = JsonDocument.Parse(defaulted.GetValueOrThrow());
+
+        first.RootElement.GetProperty("echo").GetString().ShouldBe("marco");
+        second.RootElement.GetProperty("echo").GetString().ShouldBe(WidgetPingHandler.DefaultEcho);
+
+        // The clock is injected, so the timestamp is a value a test can name rather than one it can
+        // only assert the shape of — which is the point of the dependency being there at all.
+        first.RootElement.GetProperty("at").GetString().ShouldBe(clock.UtcNow.ToString("O"));
+
+        // ⚠ And both bodies validate against what the provider published, which is the check
+        // ActionDispatcher makes before either reaches a caller.
+        SampleWidgets.PingResponse.Validate(first.RootElement).IsSuccess.ShouldBeTrue();
+        SampleWidgets.PingResponse.Validate(second.RootElement).IsSuccess.ShouldBeTrue();
+    }
+
+    static ActionContext Context(JsonElement body) {
+        using var desired = JsonDocument.Parse(SampleWidgets.Body(Guid.NewGuid()));
+
+        return new(
+            Address("pingable"),
+            SampleWidgets.V2026,
+            SampleWidgets.PingAction,
+            body,
+            desired.RootElement.Clone(),
+            "cc-t-11111111",
+            null,
+            new UnavailableSecretResolver()
+        );
+    }
+
+    /// <summary>A clock that does not move, so <c>/at</c> is a value rather than a shape.</summary>
+    sealed class FrozenClock(DateTimeOffset at) : IClock {
+        public DateTimeOffset UtcNow => at;
+    }
+
     internal static ResourceId Address(string name) =>
         new(
             Guid.Parse("11111111-1111-4111-8111-111111111111"),

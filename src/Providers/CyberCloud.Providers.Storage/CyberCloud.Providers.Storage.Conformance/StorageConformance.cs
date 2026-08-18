@@ -87,6 +87,10 @@ public sealed class StorageCase : IProviderCaseSource {
                 StorageAccounts.ConfigSecretRef(ns, id.Name),
                 StorageAccounts.SeaweedRef(ns, id.Name)
             ],
+            // This platform mints or computes everything this type's actions hand back, so no operator
+            // writes an object any action reads. Stated rather than defaulted — see
+            // ProviderConformanceCase.OperatorWritten.
+            OperatorWritten = static (_, _) => [],
             ObjectMatchesDesired = (objectJson, desiredJson) => {
                 using var desired = JsonDocument.Parse(desiredJson);
                 return StorageAccounts.Matches(objectJson, desired.RootElement);
@@ -176,6 +180,10 @@ public sealed class StorageBucketCase : IProviderCaseSource {
             // a bucket called `assets`.
             // charts/managed/seaweedfs-bucket/conformance.yaml § owed,
             // `object-matches-desired-cannot-see-an-address`.
+            // This platform mints or computes everything this type's actions hand back, so no operator
+            // writes an object any action reads. Stated rather than defaulted — see
+            // ProviderConformanceCase.OperatorWritten.
+            OperatorWritten = static (_, _) => [],
             ObjectMatchesDesired = (objectJson, desiredJson) => {
                 using var desired = JsonDocument.Parse(desiredJson);
                 return StorageBuckets.MatchesBody(objectJson, desired.RootElement);

@@ -106,6 +106,10 @@ public sealed class MonitorCase : IProviderCaseSource {
             // a workspace the ingest host believes in and vmauth refuses every write to.
             // ⚠ MonitorWorkspaces.MatchesShape, NOT MonitorWorkspaces.Matches, AND THE DIFFERENCE IS
             // THE FINDING RATHER THAN A SHORTCUT. See that method's remarks, and this class's.
+            // This platform mints or computes everything this type's actions hand back, so no operator
+            // writes an object any action reads. Stated rather than defaulted — see
+            // ProviderConformanceCase.OperatorWritten.
+            OperatorWritten = static (_, _) => [],
             ObjectMatchesDesired = (objectJson, desiredJson) => {
                 using var desired = JsonDocument.Parse(desiredJson);
                 return MonitorWorkspaces.MatchesShape(objectJson, desired.RootElement);

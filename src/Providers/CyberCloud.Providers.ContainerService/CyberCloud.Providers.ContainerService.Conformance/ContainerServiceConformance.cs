@@ -243,6 +243,10 @@ public sealed class AgentPoolCase : IProviderCaseSource {
             // and `AgentPoolReconcilerTests` asserts the other against real addresses — including the
             // case this harness could never reach, two clusters in ONE resource group each holding a
             // pool called `workers`.
+            // `upgradeNodeImage` is long-running and reads nothing; the node image roll is the
+            // reconciler's work, driven through the operation grain. Stated rather than defaulted —
+            // see ProviderConformanceCase.OperatorWritten.
+            OperatorWritten = static (_, _) => [],
             ObjectMatchesDesired = (objectJson, desiredJson) => {
                 using var desired = JsonDocument.Parse(desiredJson);
                 return AgentPools.MatchesBody(objectJson, desired.RootElement);

@@ -72,6 +72,10 @@ public sealed class AnalyticsCase : IProviderCaseSource {
             // `kind` AND RETURNS FALSE FOR ONE IT DOES NOT KNOW. A Matches that defaulted to true for
             // an unrecognised document would report a Keeper that was never applied as converged, and
             // this member is the only place that shape is exercised.
+            // This platform mints or computes everything this type's actions hand back, so no operator
+            // writes an object any action reads. Stated rather than defaulted — see
+            // ProviderConformanceCase.OperatorWritten.
+            OperatorWritten = static (_, _) => [],
             ObjectMatchesDesired = (objectJson, desiredJson) => {
                 using var desired = JsonDocument.Parse(desiredJson);
                 return ClickHouseClusters.Matches(objectJson, desired.RootElement);
