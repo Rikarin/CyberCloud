@@ -135,17 +135,18 @@ public sealed class AgentPoolCase : IProviderCaseSource {
                 AgentPools.BootstrapRef(ns, id),
                 AgentPools.MachineDeploymentRef(ns, id)
             ],
-            // ⚠ THE BODY HALF ONLY — second sighting of the limit
+            // ⚠ THE WHOLE PREDICATE, INCLUDING THE MachineDeployment'S `clusterName` AND SELECTOR.
+            // Both are derived from the address, so this was `AgentPools.MatchesBody` until
+            // `MatchContext` carried one — the limit
             // charts/managed/seaweedfs-bucket/conformance.yaml records as
-            // `object-matches-desired-cannot-see-an-address`. `ObjectMatchesDesired` is
-            // `(objectJson, desiredJson) => bool` and carries no ADDRESS, and a pool's `clusterName`
-            // and selector are both derived from one. `AgentPools.MatchesBody` is the reachable half
-            // and `AgentPoolReconcilerTests` asserts the other against real addresses — including the
-            // case this harness could never reach, two clusters in ONE resource group each holding a
-            // pool called `workers`.
+            // `object-matches-desired-cannot-see-an-address`, now closed.
+            //
+            // ⚠ `AgentPoolReconcilerTests` KEEPS ITS OWN ASSERTIONS. What it covers that this still
+            // cannot is two clusters in ONE resource group each holding a pool called `workers`; the
+            // harness brings up one parent per run and cannot build the collision.
             ObjectMatchesDesired = match => {
                 using var desired = JsonDocument.Parse(match.DesiredJson);
-                return AgentPools.MatchesBody(match.ObjectJson, desired.RootElement);
+                return AgentPools.Matches(match.ObjectJson, match.Id, desired.RootElement);
             }
         };
 

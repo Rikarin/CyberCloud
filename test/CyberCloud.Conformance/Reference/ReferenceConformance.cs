@@ -326,16 +326,24 @@ public sealed class SuiteRejectionTests {
         // on every member; if somebody relaxes one to make a provider "easier to register", the suite
         // starts silently skipping whatever that member drove. This reads the type rather than the
         // instance so it fails on the relaxation, not on the first provider that uses it.
-        var optional = typeof(ProviderConformanceCase)
-            .GetProperties()
-            .Where(x => x.SetMethod is not null || x.GetMethod is not null)
-            .Where(x => x.GetCustomAttributes(typeof(System.Runtime.CompilerServices.RequiredMemberAttribute), false).Length == 0)
-            .Select(x => x.Name)
+        //
+        // ⚠ MatchContext is read too, and the rule points the other way there. On the case, an
+        // optional member is an assertion the suite stops making. On MatchContext — which the harness
+        // builds and a case only reads — an optional member is a fact the harness stops HANDING OVER,
+        // and a case cannot assert on what it was not given. That is the shape that kept every child
+        // type's suite smaller than its parent's until the record existed.
+        var optional = new[] { typeof(ProviderConformanceCase), typeof(MatchContext) }
+            .SelectMany(type => type.GetProperties().Select(x => (Type: type, Property: x)))
+            .Where(x => x.Property.SetMethod is not null || x.Property.GetMethod is not null)
+            .Where(x => x.Property.GetCustomAttributes(typeof(System.Runtime.CompilerServices.RequiredMemberAttribute), false).Length == 0)
+            .Select(x => $"{x.Type.Name}.{x.Property.Name}")
             .ToImmutableArray();
 
         optional.ShouldBeEmpty(
             "every member of a conformance case is required: an optional one is an assertion the "
-            + "suite quietly stops making for the provider that omits it"
+            + "suite quietly stops making for the provider that omits it — and every member of a "
+            + "MatchContext is required because an optional one is a fact the harness stops handing "
+            + "the case"
         );
     }
 }

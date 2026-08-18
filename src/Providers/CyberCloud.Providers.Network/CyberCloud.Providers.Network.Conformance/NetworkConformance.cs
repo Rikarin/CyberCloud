@@ -120,22 +120,27 @@ public sealed class NetworkSubnetCase : IProviderCaseSource {
             InvalidBodyTarget = "/properties/addressPrefix/v4",
             ActionName = NetworkSubnets.AddressUsageAction,
             Objects = (id, ns) => [NetworkSubnets.SubnetRef(ns, id)],
-            // ⚠ THE BODY HALF ONLY — SECOND SIGHTING OF `StorageBuckets.MatchesBody`'S FINDING, AND
-            // THE FIRST TIME IT WAS PREDICTED RATHER THAN FOUND BY A RED SUITE.
-            // `ObjectMatchesDesired` is `(objectJson, desiredJson) => bool` and carries no ADDRESS,
-            // and a subnet's `spec.vpc` is its PARENT'S name, which lives only in the address.
-            //
-            // ⚠ WHAT THE SUITE THEREFORE DOES NOT CHECK FOR A SUBNET, said out loud so nobody has to
-            // infer it: that the rendered object binds to the right Vpc. That is the single most
-            // consequential field on the object — a Subnet bound to the wrong Vpc hands out addresses
-            // inside another tenant's routing domain — and NetworkReconcilerTests asserts it
-            // against real addresses, including the case this harness cannot build: two networks in
-            // ONE resource group each holding a subnet called `web`.
-            // charts/managed/kube-ovn-subnet/conformance.yaml § owed,
+            // ⚠ THE WHOLE PREDICATE, AND `spec.vpc` IS THE FIELD IT WAS WORTH CHANGING THE HARNESS
+            // FOR. A Subnet whose `vpc` is wrong hands out addresses inside a DIFFERENT tenant's
+            // routing domain under this tenant's resource id, and `vpc` is derived from the address —
+            // so this was `NetworkSubnets.MatchesBody` while `ObjectMatchesDesired` was
+            // `(objectJson, desiredJson) => bool`. This family was the second sighting of that limit;
+            // `MatchContext` closed it. charts/managed/kube-ovn-subnet/conformance.yaml § owed,
             // `object-matches-desired-cannot-see-an-address`.
+            //
+            // ⚠ The namespace comes from `match.Target`, which is the object being compared, rather
+            // than being re-derived from the id — one fact, read from where the harness put it.
+            //
+            // ⚠ `NetworkReconcilerTests` KEEPS ITS OWN ASSERTIONS: two networks in ONE resource group
+            // each holding a subnet called `web` is a collision this harness still cannot build.
             ObjectMatchesDesired = match => {
                 using var desired = JsonDocument.Parse(match.DesiredJson);
-                return NetworkSubnets.MatchesBody(match.ObjectJson, desired.RootElement);
+                return NetworkSubnets.Matches(
+                    match.ObjectJson,
+                    match.Target.Namespace,
+                    match.Id,
+                    desired.RootElement
+                );
             }
         };
 
