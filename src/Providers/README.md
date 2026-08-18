@@ -1049,7 +1049,8 @@ first image in the tree that is not a .NET application. All of it is at
 VictoriaMetrics and ClickHouse, [16 § `CyberCloud.Monitor/workspaces`](../../docs/plan/16-observability.md),
 **M1 · 2.5 EM**, and step 7 of [24](../../docs/plan/24-roadmap.md)'s M1 exit story — *"see metrics and
 logs"*. **The first family whose product is not a workload at all**, and the first to declare
-`SupportsSoftDelete` — and then to withdraw it, for a reason it had to measure to find.
+`SupportsSoftDelete` — then to withdraw it, for a reason it had to measure to find, and then to
+declare it again once the platform closed what the measurement found.
 
 ### What the twelfth provider measured
 
@@ -1128,51 +1129,44 @@ logs"*. **The first family whose product is not a workload at all**, and the fir
   > ⚠ **AND DECLARING ONE IS THE SECOND FAMILY IN TWELVE TO NEED A CHANGE TO
   > `test/CyberCloud.Cluster.Conformance`, ON AN AXIS ELEVEN FAMILIES HAD SILENTLY AGREED ON.**
   > `ClusterConformanceTests.TheLifecycleRunsAgainstARealApiServer` asserted **unconditionally** that
-  > every rendered object is gone after a converged teardown. Its Docker-free twin has branched on
-  > `SoftDeleteDays > 0` since soft delete was built — *"handing the data back is the entire feature,
-  > so the volumes and the PVCs stay allocated until a purge"* — and the cluster-backed half never
-  > learned it, because for eleven families both branches say the same thing. This provider went
-  > **1 of 6 red against k3s while the Docker-free suite was 27 of 27 green**, which is the shape
-  > that says the *suite* is wrong rather than the provider; the failure named the surviving
-  > `Secret`, which reads as a reconciler that forgot to tear down. ⚠ **The shipping code was right
-  > the whole time** — `ResourceManagerService`'s delete path parks the index entry and leaves the
-  > data plane standing on purpose — which is exactly what `CyberCloud.Providers.Network` found
-  > about `KubeApiClient` and cluster scope. The branch is now in both halves, derived from the
-  > registry rather than declared per provider, so **nothing changes for the eleven earlier
-  > families**: none of them declares a window, and all of them take the hard-delete branch they
-  > always took.
+  > every rendered object is gone after a converged teardown, and this provider went **1 of 6 red
+  > against k3s while the Docker-free suite was 27 of 27 green** — the shape that usually says the
+  > *suite* is wrong rather than the provider. It was read that way, a `recoverable` branch was added
+  > to both halves, and **that reading was itself wrong**: what the failure reported was a real
+  > defect, and the branch encoded it as the contract. Both branches are gone again. The objects are
+  > asserted gone for every type, and the recoverable arm asserts what a window actually keeps.
 
-  > ⚠⚠ **AND THE DECLARATION HAS SINCE BEEN WITHDRAWN, WHICH IS THE ACTUAL FINDING.** Two drafts
-  > of that argument were wrong before the third was measured. `IResourceReconciler.DeleteAsync` is
-  > **never called** for a type declaring a window — `OperationGrain.DriveAsync` returns early and
-  > runs no pass — `ParkAsync` states that *"its quota stays committed until it is purged"*, and the
-  > object left standing is the **`VMUser`**, which is the one thing on this row that enforces
-  > anything, because vmauth resolves it the moment it is applied. So a soft-deleted workspace is an
-  > **authenticated, billed, open write path into a store the tenant believes is gone**: a collector
-  > nobody reconfigured keeps writing, the retention keeps accruing, and the only way to stop it is
-  > a purge behind a permission the tenant may not hold. ⚠ On a database or an object store a
-  > recovery window merely holds disk; **here it holds an open ingest endpoint**, which docs/plan/08
-  > does not anticipate because nothing before this declared a window. **A delete that does not
-  > delete is worse than no recovery window**, so it is withdrawn — the same conclusion
+  > ⚠⚠ **THE DECLARATION WAS WITHDRAWN AND IS BACK, AND THE WITHDRAWAL IS THE FINDING.** Two drafts
+  > of that argument were wrong before the third was measured. `IResourceReconciler.DeleteAsync` was
+  > **never called** for a type declaring a window — `OperationGrain.DriveAsync` returned early and
+  > ran no pass — `ParkAsync` states that *"its quota stays committed until it is purged"*, and the
+  > object left standing was the **`VMUser`**, which is the one thing on this row that enforces
+  > anything, because vmauth resolves it the moment it is applied. So a soft-deleted workspace was an
+  > **authenticated, billed, open write path into a store the tenant believed was gone**: a collector
+  > nobody reconfigured kept writing, the retention kept accruing, and the only way to stop it was a
+  > purge behind a permission the tenant may not hold. ⚠ On a database or an object store a recovery
+  > window merely holds disk; **here it held an open ingest endpoint**, which docs/plan/08 did not
+  > anticipate because nothing before this had declared a window. **A delete that does not delete is
+  > worse than no recovery window**, so it was withdrawn — the same conclusion
   > `CyberCloud.ContainerRegistry/registries` reached from its own measurement, for a reason that is
   > worse here rather than merely similar: fifteen idle Harbor objects cost money, and this costs
   > money *and* silently ingests data.
   >
-  > ⚠ **What did NOT reproduce is recorded too, because a finding that fails to replicate is worth
-  > as much as one that does.** That row measured a soft-deleted resource *reconciling its whole
-  > data plane back*; on this type that path is not reachable, checked rather than assumed. Driving
-  > the completed delete operation again returns nothing, and disabling `OperationGrain`'s
-  > soft-delete branch makes the pass run with `tearingDown` **true** — `OperationSpec.Kind` is
-  > `Delete` — so it **destroys** the objects instead, failing that experiment and the shared
-  > suite's recoverable branch in the opposite direction. The withdrawal does not rest on it.
+  > ⚠ **What did NOT reproduce is what located the fix, and it is why a failed replication is worth
+  > as much as a successful one.** That row measured a soft-deleted resource *reconciling its whole
+  > data plane back*; on this type that path was not reachable, checked rather than assumed. Driving
+  > the completed delete operation again returned nothing, and disabling `OperationGrain`'s
+  > soft-delete branch made the pass run with `tearingDown` **true** — `OperationSpec.Kind` is
+  > `Delete` — so it **destroyed** the objects instead. ⚠ **There was no re-apply anywhere.** The
+  > other row's evidence was a conformance assertion reporting an **end state**, and an end state
+  > cannot tell *never torn down* from *torn down and re-applied* — different bugs, different files.
+  > Recording the discrepancy rather than inheriting the answer is what made it findable.
   >
-  > ⚠ **Re-declaring is one line, and that is built rather than promised.** `SoftDeleteDays`, the
-  > purge-protection property the builder refuses the type without, `MonitorDeclarationTests`'
-  > coverage of both, and the conformance experiment — which **skips itself loudly** instead of
-  > being deleted — all stay. **And the cluster-backed suite's `recoverable` branch stays too**: it
-  > reads the registry, costs nothing while no type declares a window, and is what makes the one
-  > line safe when somebody restores it. `conformance.yaml § owed`,
-  > `soft-delete-is-withdrawn-not-declined`.
+  > ⚠ **And re-declaring was one line, because everything the declaration needs was kept rather than
+  > deleted**: `SoftDeleteDays`, the purge-protection property the builder refuses the type without,
+  > `MonitorDeclarationTests`' coverage of both, and the conformance experiment, which **skipped
+  > itself loudly** instead of being removed and started asserting again on the same run.
+  > `conformance.yaml § owed`, `soft-delete-was-withdrawn-and-is-declared-again`.
 
 - **⚠ A RETENTION A TENANT CAN SHORTEN IS AN IRREVERSIBLE DATA-LOSS PATH AUTHORISED BY A REQUEST THE
   PLATFORM ALREADY ANSWERED `202` TO — fifth sighting of the missing write-path predicate, and the
@@ -1307,41 +1301,48 @@ tree, measured it against a real API server, and took it back.
   once, permanently, and a *later* mint would not take effect at all. That last fact is why
   `ContainerRegistryListCredentialsHandler` reads and never mints, and it is a stronger reason than
   the one `StorageAccountListKeysHandler` gives.
-- **⚠ THIS ROW DECLARED THE FIRST `SupportsSoftDelete` IN THE TREE, AND DECLARING IT IS WHAT FOUND
-  THAT A SOFT-DELETED RESOURCE REBUILDS ITS ENTIRE DATA PLANE AFTER A CONVERGED TEARDOWN. THE
-  DECLARATION IS WITHDRAWN AND THE FINDING IS THE DELIVERABLE.** Eleven families declined the
-  declaration for one shared reason — the manager did not read `SoftDeleteDays` — and docs/plan/08
-  § Soft delete is built now, so the question each type owes is its own: *can the deleted thing
-  genuinely be handed back?* Here the answer is yes, and the mechanism is **Kubernetes' rather than
-  this provider's**: a claim created by a `volumeClaimTemplate` is not removed by deleting the
-  `StatefulSet`, which is why all three volume-owning components are `StatefulSet`s rather than
-  `Deployment`s with claims beside them. So the declaration went in.
+- **⚠ THIS ROW DECLARED THE FIRST `SupportsSoftDelete` IN THE TREE, DECLARING IT IS WHAT FOUND THAT A
+  SOFT DELETE TORE NOTHING DOWN, AND THE ROW THEN WROTE THE FINDING UP AS THE WRONG MECHANISM.**
+  Eleven families declined the declaration for one shared reason — the manager did not read
+  `SoftDeleteDays` — and docs/plan/08 § Soft delete is built, so the question each type owes is its
+  own: *can the deleted thing genuinely be handed back?* Here the answer is yes, and the mechanism is
+  **Kubernetes' rather than this provider's**: a claim created by a `volumeClaimTemplate` is not
+  removed by deleting the `StatefulSet`, which is why all three volume-owning components are
+  `StatefulSet`s rather than `Deployment`s with claims beside them. So the declaration went in.
   <br>⚠ **Measured, not argued.** `ClusterConformanceTests.TheLifecycleRunsAgainstARealApiServer`
   failed with *"is still in the real cluster after a converged teardown"*; reordering the case's
   `Objects` showed it was not one object but **every** object, the core `Deployment` included.
   Removing that one call and changing nothing else made the same test pass, and putting it back made
   it fail again.
-  <br>⚠ **What it means, because it is worse than it sounds.** A tenant deletes a registry; the API
-  answers, the operation converges, the resource stops being addressable — and the workload comes
-  back and keeps running, sampled by docs/plan/22's usage pipeline, holding its quota, invisible to
-  the tenant who would delete it again. docs/plan/08 chose to **move** the resource out of the tree
-  rather than flag it in place, because a flag *"puts an 'unless deleted' clause on every read path,
-  every list, every ReBAC check and the index claim, and the feature is then only as good as the
-  least-remembered of them"*. The **index** entry moves and `ResolveAsync` refuses it — that half
-  works. The **reconcile loop's view of the resource** does not move, and on the non-soft-delete path
-  it is `ResourceGrain.CompleteDeleteAsync` clearing grain state that stops the loop — which a
-  resource that must survive for a restore cannot do. The least-remembered clause was the one the
-  document did not look at.
-  <br>⚠ **Two things had to be true at once for anyone to see it**, which is why eleven families did
-  not: a type that declares the window, and a teardown wide enough to be unmistakable.
-  `charts/managed/harbor/conformance.yaml § owed`, `a-soft-deleted-resource-undeletes-itself`,
-  carries the reproduction; the three arguments the call needs are kept, documented and asserted
-  against, so re-declaring it is one line.
-  <br>⚠ **Two smaller findings stand whatever happens to that one.** Nothing removes a
-  `PersistentVolumeClaim` on a purge, so a purged resource would return its quota and leave its disks
-  allocated; and `ResourceManagerService.RestoreAsync` and `PurgeAsync` are reachable from **no
-  gateway stage at all**, grepped rather than assumed — so even a working window would be one nobody
-  could exercise.
+  <br>⚠⚠ **And the row recorded that as a soft-deleted resource REBUILDING its data plane — an active
+  re-apply — which it was not.** That assertion reports an **end state**: an object is present. An end
+  state cannot distinguish *never torn down* from *torn down and re-applied*, and the two are
+  different bugs in different code. It was the first: `OperationGrain.DriveAsync` returned before
+  running any pass for a soft delete, so nothing was ever asked to come down.
+  `CyberCloud.Monitor/workspaces` declared a window the same day, could not reproduce a re-apply on
+  its own row, checked three ways, and **recorded the discrepancy rather than inheriting this row's
+  answer** — which is what made the disagreement findable at all. ⚠ **The transferable lesson is about
+  evidence: a result cannot name a mechanism, and a write-up that names one anyway sends the next
+  reader to the wrong file.**
+  <br>⚠ **The defect was real either way, and it is worse than it sounds.** A tenant deletes a
+  registry; the API answers, the operation converges, the resource stops being addressable — and the
+  workload keeps running, sampled by docs/plan/22's usage pipeline, holding its quota, invisible to
+  the tenant who would delete it again. **A delete that does not delete is worse than no recovery
+  window**, so the declaration was withdrawn.
+  <br>⚠ **It is declared again, because it is closed.** A soft delete now runs the reconciler's
+  `DeleteAsync` exactly as a hard delete does, and the four things that make it soft happen after that
+  pass reads back: the name is held, the committed quota is kept, the resource grain keeps its desired
+  state, and the ReBAC parent edge moves to the subscription. The fifteen objects come down and the
+  **disks stay**, which is what makes this row's window honest and what a restore re-attaches.
+  `charts/managed/harbor/conformance.yaml § owed`,
+  `a-soft-deleted-resource-was-never-torn-down`.
+  <br>⚠ **Two smaller findings stand whatever happened to that one, and one of them grew.** Nothing
+  removes a `PersistentVolumeClaim` on a purge — and now that the objects come down at the *delete*,
+  a purge reaches the provider with nothing to do at all, so a purged registry returns its quota and
+  leaves its disks: the largest remaining gap in this row's window. And
+  `ResourceManagerService.RestoreAsync` and `PurgeAsync` are reachable from **no gateway stage at
+  all**, grepped rather than assumed, so a tenant cannot exercise the window a `DELETE` now gives
+  them.
 - **⚠ `Matches` IS CONTAINMENT FOR A REASON THAT IS NOT MERELY FALSE HERE BUT UNAVAILABLE.** Five
   families argue it from a CRD's `+kubebuilder:default` markers or from an operator's mutating
   webhook; `KafkaClusters` and `ClickHouseClusters` found CRDs that declared none and could at least
