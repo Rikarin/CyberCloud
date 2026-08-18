@@ -16,14 +16,21 @@ namespace CyberCloud.Kubernetes.Contracts;
 ///         is dropped when it is empty.
 ///     </para>
 ///     <para>
-///         ⚠ <b>The removal direction generalises past the one provider that hit it.</b>
-///         <c>NetworkPolicySpec.Ingress</c> carries <c>omitempty</c>, so the empty list that spells
-///         "deny all ingress" comes back with <b>no key at all</b> —
+///         ⚠ <b>The removal direction generalises past the one provider that hit it — across
+///         built-in objects.</b> <c>NetworkPolicySpec.Ingress</c> carries <c>omitempty</c>, so the
+///         empty list that spells "deny all ingress" comes back with <b>no key at all</b> —
 ///         <c>CyberCloud.Terminal/consoles</c> converged in the Docker-free harness and hung forever
 ///         against k3s. <i>Every</i> optional list and map on <i>every</i> built-in Kubernetes object
-///         is tagged the same way. Eleven provider families have not hit it only because they render
-///         custom resources, whose <c>x-kubernetes-preserve-unknown-fields</c> schemas round-trip an
-///         empty array intact.
+///         is tagged the same way, so use <see cref="IsAbsentOrEmpty" /> for all of them.
+///     </para>
+///     <para>
+///         ⚠ <b>A custom resource is the opposite case, and reaching for
+///         <see cref="IsAbsentOrEmpty" /> on one would discard a real distinction.</b> A CRD has no
+///         <c>omitempty</c>: its stored JSON keeps what was applied, so absent and present-but-empty
+///         are <i>different</i>, and three families rely on that — Strimzi's
+///         <c>spec.cruiseControl = {}</c> means "run Cruise Control", and Cluster API's
+///         <c>bridge = {}</c> and kube-ovn's <c>pod = {}</c> are the same idiom. This is the right
+///         tool for a built-in and the wrong one for a presence flag.
 ///     </para>
 ///     <para>
 ///         ⚠ <b>What these helpers do not model.</b> <c>omitempty</c> drops an empty
@@ -45,12 +52,20 @@ public static class KubeJson {
     ///     <see langword="false" /> when it holds at least one entry <b>or</b> is not a collection.
     /// </returns>
     /// <remarks>
-    ///     ⚠ <b>This is the whole of <c>is not JsonArray { Count: &gt; 0 }</c>, written once.</b> The
-    ///     shape it replaces is <c>is JsonArray { Count: 0 }</c>, which is true of what a provider
-    ///     applies and false of what a real API server returns, and which therefore passes every
-    ///     Docker-free suite and hangs against a real cluster. Accepting absent-or-empty is not a
-    ///     weakening: for a collection, "not there" and "there and empty" are the same statement, and
-    ///     this still refuses a list that grew an entry, which is the drift worth catching.
+    ///     <para>
+    ///         ⚠ <b>This is the whole of <c>is not JsonArray { Count: &gt; 0 }</c>, written once.</b>
+    ///         The shape it replaces is <c>is JsonArray { Count: 0 }</c>, which is true of what a
+    ///         provider applies to a built-in object and false of what a real API server returns, and
+    ///         which therefore passes a Docker-free suite and hangs against a real cluster. On a
+    ///         built-in, accepting absent-or-empty is not a weakening: "not there" and "there and
+    ///         empty" are the same statement, and this still refuses a list that grew an entry, which
+    ///         is the drift worth catching.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Do not reach for it on a custom resource whose empty object is a presence
+    ///         flag</b> — see the remarks on the type. There the two are not the same statement, and
+    ///         this would erase the difference.
+    ///     </para>
     /// </remarks>
     public static bool IsAbsentOrEmpty(JsonNode? node) =>
         node switch {

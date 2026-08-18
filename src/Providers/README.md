@@ -1444,18 +1444,25 @@ defaults**. An OpenSearch bug of exactly this shape left that suite 27 of 27 gre
 only by a hand-written unit test. Nothing in the Docker-free half can catch it; `KubeJson.Contains`
 is the shape that survives it, and `CyberCloud.Cluster.Conformance` is what proves it.
 
-**The server removes.** A field tagged `omitempty` on the Go type it deserialises into is dropped
-when it is empty — which is *every* optional list and map on *every* built-in Kubernetes object.
-`NetworkPolicySpec.Ingress` is one: the empty list that spells "deny all ingress" comes back with
-**no key at all**. `CyberCloud.Terminal/consoles` converged in the fake and hung forever against
-k3s on precisely that.
+**The server removes — from built-in objects.** A field tagged `omitempty` on the Go type it
+deserialises into is dropped when it is empty, which is *every* optional list and map on *every*
+built-in Kubernetes object. `NetworkPolicySpec.Ingress` is one: the empty list that spells "deny all
+ingress" comes back with **no key at all**. `CyberCloud.Terminal/consoles` converged in the fake and
+hung forever against k3s on precisely that.
 
-So never write `is JsonArray { Count: 0 }`. Write `KubeJson.IsAbsentOrEmpty(node)`, which accepts
-absent-or-empty and still refuses a list that grew an entry. `FakeKubeCluster` now drops empty
-collections on apply, so the strict spelling goes red in your own suite rather than in production.
-That strip is deliberately **stricter than a real server** rather than more faithful than one: a
-real server keeps the empty array on a custom resource, and stripping it anyway is what forces the
-one pattern that is correct against both.
+So on a built-in object, never write `is JsonArray { Count: 0 }`. Write
+`KubeJson.IsAbsentOrEmpty(node)`, which accepts absent-or-empty and still refuses a list that grew
+an entry. `FakeKubeCluster` drops empty collections from built-in objects on apply, so the strict
+spelling goes red in your own suite rather than in production.
+
+**A custom resource is the opposite case, and this was settled by measurement.** A CRD has no
+`omitempty`: its stored JSON keeps what was applied, so absent and present-but-empty are genuinely
+different — and three families depend on that. Strimzi's `spec.cruiseControl = {}` means "run Cruise
+Control"; Cluster API's `bridge = {}` and kube-ovn's `pod = {}` are the same idiom. The first
+version of the harness strip applied to every kind, on the theory that an empty collection never
+carries meaning; nine tests in each of Messaging, ContainerService and Network went red for a reason
+that existed only inside the fake. Do not use `IsAbsentOrEmpty` on a presence flag, and expect the
+harness to echo your custom resource exactly.
 
 **What none of this models.** `omitempty` drops an empty string, a zero and a `false` as readily as
 an empty list, and which fields carry the tag lives in Go struct tags this repository does not have.

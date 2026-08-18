@@ -162,11 +162,10 @@ public sealed class SuiteRejectionTests {
         // render custom resources, whose x-kubernetes-preserve-unknown-fields schemas round-trip an
         // empty array intact.
         //
-        // ⚠ THIS ASSERTS STRICTNESS, NOT FIDELITY, and the distinction is the reason the strip is
-        // unconditional. A real server would keep the empty array on a CUSTOM resource. Stripping it
-        // anyway forces every provider onto `KubeJson.IsAbsentOrEmpty`, which is correct against a
-        // built-in AND against a custom resource, where `is JsonArray { Count: 0 }` is correct
-        // against neither. The only comparison this refuses is one that would hang against k3s.
+        // ⚠ THE PROBE RENDERS A CORE-GROUP ConfigMap, WHICH IS WHY THE STRIP APPLIES TO IT. It is
+        // scoped to built-in groups, and the sibling test below is the calibration for the other
+        // side of that boundary — a custom resource keeps its empty collections, because a real API
+        // server keeps them and three families use an empty object as a presence flag.
         var world = new FakeKubeCluster(ConformanceIds.Cluster);
 
         var address = new ResourceId(
@@ -229,6 +228,64 @@ public sealed class SuiteRejectionTests {
         (spec["ingress"] is JsonArray { Count: 0 }).ShouldBeFalse(
             "`is JsonArray { Count: 0 }` is the shape that passed this harness and hung against k3s"
         );
+    }
+
+    [Fact]
+    public async Task ACustomResourceKeepsItsEmptyObjectBecauseThatIsAPresenceFlag() {
+        // ⚠ THE OTHER SIDE OF THE BOUNDARY, AND IT IS HERE BECAUSE THE FIRST VERSION OF THE STRIP GOT
+        // IT WRONG AND THREE FAMILIES SAID SO IN ONE RUN.
+        //
+        // The strip was unconditional at first, on the theory that an empty collection never carries
+        // meaning, so forcing the tolerant spelling everywhere was free. A custom resource has no
+        // `omitempty` — a CRD's stored JSON keeps what was applied — and Strimzi, Cluster API and
+        // kube-ovn all use an EMPTY OBJECT AS A PRESENCE FLAG: `spec.cruiseControl = {}` means "run
+        // Cruise Control", and `bridge = {}` and `pod = {}` mean the same kind of thing. Stripping
+        // those threw away a distinction a real server preserves, and no tolerant comparison can
+        // recover information the harness deleted: nine tests in each of Messaging, ContainerService
+        // and Network went red for a reason that does not exist outside FakeKubeCluster.
+        //
+        // So the strip is scoped to built-in groups, and this is what holds the scope in place.
+        var world = new FakeKubeCluster(ConformanceIds.Cluster);
+
+        var address = new ResourceId(
+            ConformanceIds.Tenant,
+            ConformanceIds.Subscription,
+            ConformanceIds.ResourceGroup,
+            Probes.Type,
+            "flagged",
+            Guid.Parse("f0f0f0f0-0000-4000-8000-0000000000e1")
+        );
+
+        var ns = ReconcileDriver.NamespaceFor(address);
+
+        var custom = new GroupVersionKind {
+            Group = "kafka.strimzi.io",
+            Version = "v1beta2",
+            Kind = "Kafka",
+            Plural = "kafkas"
+        };
+
+        var applied = await KubeCommand.For(world)
+            .WithTenantId(address.TenantId)
+            .WithResourceId(address)
+            .InNamespace(ns)
+            .WithKind(custom)
+            .WithApiVersion(Probes.V2026)
+            .ObjectJson("""{ "spec": { "cruiseControl": {}, "listeners": [] } }""")
+            .ApplyAsync(TestContext.Current.CancellationToken);
+
+        applied.IsSuccess.ShouldBeTrue(applied.Error?.Message);
+
+        var spec = JsonNode.Parse(world.Read(new() { Kind = custom, Namespace = ns, Name = address.Name })!)!
+            .AsObject()["spec"]!
+            .AsObject();
+
+        spec["cruiseControl"].ShouldNotBeNull(
+            "an empty object on a CUSTOM resource is a presence flag a real API server preserves, and "
+            + "a harness that deletes it makes a converging provider look broken"
+        );
+
+        spec["listeners"].ShouldNotBeNull("a custom resource's empty array survives for the same reason");
     }
 
     [Fact]
