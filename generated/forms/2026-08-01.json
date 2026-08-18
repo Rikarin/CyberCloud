@@ -4029,6 +4029,130 @@
         }
       ]
     },
+    "CyberCloud.Network/publicIpAddresses": {
+      "resourceType": "CyberCloud.Network/publicIpAddresses",
+      "apiVersion": "2026-08-01",
+      "title": "Public IP address",
+      "plural": "Public IP addresses",
+      "summary": "A public address allocated from the region's pool, which a load balancer or a gateway can later be given. On its own it carries no traffic.",
+      "overrideKey": "CyberCloud.Network/publicIpAddresses@2026-08-01",
+      "coveredPointers": [
+        "/location",
+        "/properties",
+        "/properties/address",
+        "/properties/address/v4",
+        "/properties/address/v6",
+        "/properties/clusterId",
+        "/tags"
+      ],
+      "supportsTags": true,
+      "requiresCluster": true,
+      "clusterIdPointer": "/properties/clusterId",
+      "softDeleteDays": 0,
+      "purgePermission": "",
+      "purgeProtectionPointer": "",
+      "fields": [
+        {
+          "jsonPointer": "/location",
+          "name": "location",
+          "label": "Location",
+          "control": "xui-region",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "The region the address is allocated in. ⚠ It must be a region whose operator has an external pool — nothing checks that, and an address in a region with none never becomes ready.",
+          "format": "cybercloud-region",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new Public IP address to change it.",
+          "placeholder": "eu-central"
+        },
+        {
+          "jsonPointer": "/properties",
+          "name": "properties",
+          "label": "Properties",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "The address's own settings."
+        },
+        {
+          "jsonPointer": "/properties/address",
+          "name": "address",
+          "label": "Address",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "A particular address to ask for, rather than whichever one is free."
+        },
+        {
+          "jsonPointer": "/properties/address/v4",
+          "name": "v4",
+          "label": "V4",
+          "control": "xui-input",
+          "type": "string",
+          "required": false,
+          "section": "address",
+          "hint": "The IPv4 address to reclaim, or empty to be given whichever one is free. ⚠ A bare address and not a prefix — 10.100.0.7, never 10.100.0.7/32. An address that is already taken is refused by the fabric rather than by the API.",
+          "pattern": "^(?:((\\d{1,3}\\.){3}\\d{1,3})?)$",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new Public IP address to change it.",
+          "default": "",
+          "placeholder": "10.100.0.7"
+        },
+        {
+          "jsonPointer": "/properties/address/v6",
+          "name": "v6",
+          "label": "V6",
+          "control": "xui-input",
+          "type": "string",
+          "required": false,
+          "section": "address",
+          "hint": "The IPv6 address to reclaim, or empty to be given whichever one is free. ⚠ Lower case only — the fabric refuses an address with an upper-case letter in it. Whether an address has a v6 half at all is decided by the pool it comes from, not here.",
+          "pattern": "^(?:([0-9A-Fa-f:.]+)?)$",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new Public IP address to change it.",
+          "default": "",
+          "placeholder": "fd00:ff::7"
+        },
+        {
+          "jsonPointer": "/properties/clusterId",
+          "name": "clusterId",
+          "label": "Cluster id",
+          "control": "xui-cluster",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "The cluster whose external pool the address is allocated from. ⚠ An address is only reachable from the fabric that announces it, so a load balancer in another cluster cannot use it.",
+          "format": "uuid",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new Public IP address to change it."
+        },
+        {
+          "jsonPointer": "/tags",
+          "name": "tags",
+          "label": "Tags",
+          "control": "xui-tag-input",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+          "maxProperties": 50
+        }
+      ],
+      "actions": [
+        {
+          "name": "showAllocation",
+          "label": "Show allocation",
+          "permission": "read",
+          "longRunning": false,
+          "secret": false,
+          "fields": [],
+          "confirmOnly": true
+        }
+      ]
+    },
     "CyberCloud.Network/virtualNetworks": {
       "resourceType": "CyberCloud.Network/virtualNetworks",
       "apiVersion": "2026-08-01",

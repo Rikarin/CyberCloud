@@ -2663,6 +2663,120 @@ public sealed partial class MonitorWorkspaceCollection {
     public partial AsyncPageable<MonitorWorkspaceResource> GetAllAsync(CancellationToken cancellationToken = default);
 }
 
+/// <summary>The body of a CyberCloud.Network/publicIpAddresses.</summary>
+/// <remarks>A public address allocated from the region's pool, which a load balancer or a gateway can later be given. On its own it carries no traffic.</remarks>
+public sealed partial class PublicIPAddressData {
+
+    /// <summary>The region the address is allocated in. ⚠ It must be a region whose operator has an external pool — nothing checks that, and an address in a region with none never becomes ready.</summary>
+    /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+    [JsonPropertyName("location")]
+    public required string Location { get; set; }
+
+    /// <summary>The IPv4 address to reclaim, or empty to be given whichever one is free. ⚠ A bare address and not a prefix — 10.100.0.7, never 10.100.0.7/32. An address that is already taken is refused by the fabric rather than by the API.</summary>
+    /// <remarks>⚠ Cannot change after create. Defaults to "" when left unset.</remarks>
+    [JsonPropertyName("v4")]
+    public string? V4 { get; set; }
+
+    /// <summary>The IPv6 address to reclaim, or empty to be given whichever one is free. ⚠ Lower case only — the fabric refuses an address with an upper-case letter in it. Whether an address has a v6 half at all is decided by the pool it comes from, not here.</summary>
+    /// <remarks>⚠ Cannot change after create. Defaults to "" when left unset.</remarks>
+    [JsonPropertyName("v6")]
+    public string? V6 { get; set; }
+
+    /// <summary>The cluster whose external pool the address is allocated from. ⚠ An address is only reachable from the fabric that announces it, so a load balancer in another cluster cannot use it.</summary>
+    /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+    [JsonPropertyName("clusterId")]
+    public required Guid ClusterId { get; set; }
+
+    /// <summary>Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.</summary>
+    [JsonPropertyName("tags")]
+    public IDictionary<string, string> Tags { get; set; } = new Dictionary<string, string>(StringComparer.Ordinal);
+}
+
+/// <summary>One Public IP address, and the operations on it.</summary>
+public sealed partial class PublicIPAddressResource {
+    /// <summary>The resource's fully qualified id.</summary>
+    public string Id { get; init; } = string.Empty;
+
+    /// <summary>The body, projected at this api-version.</summary>
+    public PublicIPAddressData Data { get; init; } = new();
+
+    /// <summary>Re-reads the resource.</summary>
+    public partial Task<Response<PublicIPAddressResource>> GetAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Amends the resource. A merge patch: what is not set is not changed.</summary>
+    public partial Task<Operation<PublicIPAddressResource>> UpdateAsync(
+        WaitUntil waitUntil,
+        PublicIPAddressData data,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Deletes the resource. ⚠ Permanent: this type declares no soft-delete window.</summary>
+    public partial Task<Operation> DeleteAsync(
+        WaitUntil waitUntil,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>What showAllocation returns.</summary>
+    public sealed partial class ShowAllocationResult {
+
+        /// <summary>The NAT rule currently using this address, or empty. ⚠ Empty means the address is allocated and carries no traffic, which in this api-version is every address — nothing can attach one yet.</summary>
+        [JsonPropertyName("attachedTo")]
+        public string? AttachedTo { get; set; }
+
+        /// <summary>The MAC address the fabric bound to it. ⚠ Reported because it is what an operator needs to find this address in an ARP table when it is unreachable.</summary>
+        [JsonPropertyName("macAddress")]
+        public string? MacAddress { get; set; }
+
+        /// <summary>Whether the fabric has finished announcing the address. ⚠ False with an address already reported is the ordinary state for a few seconds after create.</summary>
+        [JsonPropertyName("ready")]
+        public required bool Ready { get; set; }
+
+        /// <summary>When the platform read the object, RFC 3339. ⚠ The read time rather than the time the fabric wrote the figures, because the object carries no timestamp on them.</summary>
+        [JsonPropertyName("sampledAt")]
+        public required DateTimeOffset SampledAt { get; set; }
+
+        /// <summary>The IPv4 address the fabric allocated, or empty when it has not allocated one yet.</summary>
+        [JsonPropertyName("v4")]
+        public required string V4 { get; set; }
+
+        /// <summary>The IPv6 address the fabric allocated, or empty for an IPv4-only pool.</summary>
+        [JsonPropertyName("v6")]
+        public string? V6 { get; set; }
+    }
+
+    /// <summary>ShowAllocation. ⚠ An action never creates — a POST to a name that does not exist is a 404.</summary>
+    public partial Task<Response<ShowAllocationResult>> ShowAllocationAsync(
+        CancellationToken cancellationToken = default);
+}
+
+/// <summary>The Public IP addresses in one resource group.</summary>
+/// <remarks>⚠ Every write is long-running: docs/plan/08 § The write path, end to end
+/// ends in a 202 for every verb, so there is no synchronous overload to offer.</remarks>
+public sealed partial class PublicIPAddressCollection {
+    /// <summary>The resource type these address.</summary>
+    public const string ResourceType = "CyberCloud.Network/publicIpAddresses";
+
+    /// <summary>The URL template, with the api-version this file was generated at.</summary>
+    public const string PathTemplate = "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Network/publicIpAddresses/{resourceName}";
+
+    /// <inheritdoc cref="GeneratedApiVersion.Value" />
+    public const string ApiVersion = "2026-08-01";
+
+    /// <summary>Creates or replaces one Public IP address.</summary>
+    /// <remarks>⚠ Poll with GetProgressAsync() rather than only WaitForCompletionAsync():
+    /// docs/plan/21 § The .NET SDK — "Azure's LROs expose no progress; ours do and the
+    /// SDK should not hide it".</remarks>
+    public partial Task<Operation<PublicIPAddressResource>> CreateOrUpdateAsync(
+        WaitUntil waitUntil,
+        string name,
+        PublicIPAddressData data,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Reads one Public IP address by name.</summary>
+    public partial Task<Response<PublicIPAddressResource>> GetAsync(string name, CancellationToken cancellationToken = default);
+
+    /// <summary>The Public IP addresses in this group, paged.</summary>
+    public partial AsyncPageable<PublicIPAddressResource> GetAllAsync(CancellationToken cancellationToken = default);
+}
+
 /// <summary>The body of a CyberCloud.Network/virtualNetworks.</summary>
 /// <remarks>A private routing domain on Kube-OVN with its own address space. Network-layer tenant separation: a private routing domain with its own address space, on shared hardware.</remarks>
 public sealed partial class VirtualNetworkData {

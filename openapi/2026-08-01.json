@@ -4365,6 +4365,343 @@
       "x-cybercloud-resource-type": "CyberCloud.Monitor/workspaces",
       "x-cybercloud-action": "listKeys"
     },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Network/publicIpAddresses/{resourceName}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "get": {
+        "operationId": "CyberCloud_Network_publicIpAddresses_Get",
+        "summary": "Read a CyberCloud.Network/publicIpAddresses.",
+        "description": "The body is this api-version's projection of the resource: docs/plan/08 § The provider registry keeps grain state as a superset and a read at an older version drops what that version did not declare.",
+        "responses": {
+          "200": {
+            "description": "The resource.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Network.publicIpAddresses"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "read"
+      },
+      "put": {
+        "operationId": "CyberCloud_Network_publicIpAddresses_CreateOrUpdate",
+        "summary": "Create or replace a CyberCloud.Network/publicIpAddresses.",
+        "description": "A full replacement. Every property the schema marks required must be present; a read-only property is refused rather than ignored — docs/plan/08 § The write path, end to end.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CyberCloud.Network.publicIpAddresses"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "headers": {
+              "Azure-AsyncOperation": {
+                "description": "The absolute URL of the operation to poll.",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "Retry-After": {
+                "description": "Seconds to wait before the first poll.",
+                "required": true,
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "write"
+      },
+      "patch": {
+        "operationId": "CyberCloud_Network_publicIpAddresses_Update",
+        "summary": "Merge-patch a CyberCloud.Network/publicIpAddresses.",
+        "description": "A merge patch. The patch itself may omit required properties; the merged result is what is validated — see ResourceSchema.Validate.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CyberCloud.Network.publicIpAddresses"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "headers": {
+              "Azure-AsyncOperation": {
+                "description": "The absolute URL of the operation to poll.",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "Retry-After": {
+                "description": "Seconds to wait before the first poll.",
+                "required": true,
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "write"
+      },
+      "delete": {
+        "operationId": "CyberCloud_Network_publicIpAddresses_Delete",
+        "summary": "Delete a CyberCloud.Network/publicIpAddresses.",
+        "description": "The delete is permanent: this type declares no soft-delete window.",
+        "responses": {
+          "202": {
+            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "headers": {
+              "Azure-AsyncOperation": {
+                "description": "The absolute URL of the operation to poll.",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "Retry-After": {
+                "description": "Seconds to wait before the first poll.",
+                "required": true,
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "delete",
+        "x-cybercloud-soft-delete-days": 0,
+        "x-cybercloud-purge-permission": ""
+      },
+      "x-cybercloud-resource-type": "CyberCloud.Network/publicIpAddresses",
+      "x-cybercloud-display": {
+        "name": "Public IP address",
+        "plural": "Public IP addresses",
+        "alias": "publicip",
+        "summary": "A public address allocated from the region's pool, which a load balancer or a gateway can later be given. On its own it carries no traffic.",
+        "declared": true
+      },
+      "x-cybercloud-supports-tags": true,
+      "x-cybercloud-requires-cluster": true,
+      "x-cybercloud-cluster-id-pointer": "/properties/clusterId",
+      "x-cybercloud-soft-delete-days": 0,
+      "x-cybercloud-purge-permission": "",
+      "x-cybercloud-purge-protection-pointer": "",
+      "x-cybercloud-meters": [
+        {
+          "meter": "PublicIps",
+          "amountPointer": "",
+          "fallback": 1,
+          "expression": "1",
+          "reads": []
+        },
+        {
+          "meter": "Resources",
+          "amountPointer": "",
+          "fallback": 1,
+          "expression": "1",
+          "reads": []
+        }
+      ]
+    },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Network/publicIpAddresses/{resourceName}/showAllocation": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "post": {
+        "operationId": "CyberCloud_Network_publicIpAddresses_ShowAllocation",
+        "summary": "showAllocation a CyberCloud.Network/publicIpAddresses.",
+        "description": "An action never creates: a POST to a name that does not exist is a 404 — docs/plan/08 § The write path, end to end.",
+        "responses": {
+          "200": {
+            "description": "The action's result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Network.publicIpAddresses.ShowAllocationResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "read",
+        "x-cybercloud-secret": false,
+        "x-cybercloud-long-running": false
+      },
+      "x-cybercloud-resource-type": "CyberCloud.Network/publicIpAddresses",
+      "x-cybercloud-action": "showAllocation"
+    },
     "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Network/virtualNetworks/{resourceName}": {
       "parameters": [
         {
@@ -9895,6 +10232,112 @@
         "title": "CyberCloud.Monitor.workspaces.ListKeysResponse",
         "type": "object"
       },
+      "CyberCloud.Network.publicIpAddresses": {
+        "additionalProperties": false,
+        "description": "The body of a CyberCloud.Network/publicIpAddresses. Generated from the provider registry's schema, which is the same object the write path validates against — docs/plan/08 § The provider registry.",
+        "properties": {
+          "location": {
+            "description": "The region the address is allocated in. ⚠ It must be a region whose operator has an external pool — nothing checks that, and an address in a region with none never becomes ready.",
+            "example": "eu-central",
+            "format": "cybercloud-region",
+            "type": "string",
+            "x-cybercloud-immutable": true,
+            "x-cybercloud-widget": "region"
+          },
+          "properties": {
+            "additionalProperties": false,
+            "description": "The address's own settings.",
+            "properties": {
+              "address": {
+                "additionalProperties": false,
+                "description": "A particular address to ask for, rather than whichever one is free.",
+                "properties": {
+                  "v4": {
+                    "default": "",
+                    "description": "The IPv4 address to reclaim, or empty to be given whichever one is free. ⚠ A bare address and not a prefix — 10.100.0.7, never 10.100.0.7/32. An address that is already taken is refused by the fabric rather than by the API.",
+                    "example": "10.100.0.7",
+                    "pattern": "^(?:((\\d{1,3}\\.){3}\\d{1,3})?)$",
+                    "type": "string",
+                    "x-cybercloud-immutable": true
+                  },
+                  "v6": {
+                    "default": "",
+                    "description": "The IPv6 address to reclaim, or empty to be given whichever one is free. ⚠ Lower case only — the fabric refuses an address with an upper-case letter in it. Whether an address has a v6 half at all is decided by the pool it comes from, not here.",
+                    "example": "fd00:ff::7",
+                    "pattern": "^(?:([0-9A-Fa-f:.]+)?)$",
+                    "type": "string",
+                    "x-cybercloud-immutable": true
+                  }
+                },
+                "type": "object"
+              },
+              "clusterId": {
+                "description": "The cluster whose external pool the address is allocated from. ⚠ An address is only reachable from the fabric that announces it, so a load balancer in another cluster cannot use it.",
+                "format": "uuid",
+                "type": "string",
+                "x-cybercloud-immutable": true,
+                "x-cybercloud-widget": "cluster"
+              }
+            },
+            "required": [
+              "clusterId"
+            ],
+            "type": "object"
+          },
+          "tags": {
+            "type": "object",
+            "description": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "maxProperties": 50,
+            "x-cybercloud-widget": "tag-input"
+          }
+        },
+        "required": [
+          "location"
+        ],
+        "title": "CyberCloud.Network/publicIpAddresses",
+        "type": "object"
+      },
+      "CyberCloud.Network.publicIpAddresses.ShowAllocationResponse": {
+        "additionalProperties": false,
+        "description": "What CyberCloud.Network/publicIpAddresses/showAllocation returns.",
+        "properties": {
+          "attachedTo": {
+            "description": "The NAT rule currently using this address, or empty. ⚠ Empty means the address is allocated and carries no traffic, which in this api-version is every address — nothing can attach one yet.",
+            "type": "string"
+          },
+          "macAddress": {
+            "description": "The MAC address the fabric bound to it. ⚠ Reported because it is what an operator needs to find this address in an ARP table when it is unreachable.",
+            "type": "string"
+          },
+          "ready": {
+            "description": "Whether the fabric has finished announcing the address. ⚠ False with an address already reported is the ordinary state for a few seconds after create.",
+            "type": "boolean"
+          },
+          "sampledAt": {
+            "description": "When the platform read the object, RFC 3339. ⚠ The read time rather than the time the fabric wrote the figures, because the object carries no timestamp on them.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "v4": {
+            "description": "The IPv4 address the fabric allocated, or empty when it has not allocated one yet.",
+            "type": "string"
+          },
+          "v6": {
+            "description": "The IPv6 address the fabric allocated, or empty for an IPv4-only pool.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ready",
+          "sampledAt",
+          "v4"
+        ],
+        "title": "CyberCloud.Network.publicIpAddresses.ShowAllocationResponse",
+        "type": "object"
+      },
       "CyberCloud.Network.virtualNetworks": {
         "additionalProperties": false,
         "description": "The body of a CyberCloud.Network/virtualNetworks. Generated from the provider registry's schema, which is the same object the write path validates against — docs/plan/08 § The provider registry.",
@@ -11308,5 +11751,5 @@
       }
     }
   },
-  "x-cybercloud-resource-type-count": 20
+  "x-cybercloud-resource-type-count": 21
 }
