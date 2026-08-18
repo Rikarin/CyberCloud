@@ -5,6 +5,7 @@ using CyberCloud.ResourceManager.Conformance;
 using CyberCloud.ResourceManager.Reconcile;
 using System.Collections.Immutable;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 
 namespace CyberCloud.Conformance.Reference;
 
@@ -38,7 +39,7 @@ public sealed class ReferenceCase : IProviderCaseSource {
             // writes an object any action reads. Stated rather than defaulted — see
             // ProviderConformanceCase.OperatorWritten.
             OperatorWritten = static (_, _) => [],
-            ObjectMatchesDesired = Probes.Matches
+            ObjectMatchesDesired = match => Probes.Matches(match.ObjectJson, match.DesiredJson)
         };
 }
 
@@ -84,7 +85,7 @@ public sealed class ReferenceChildCase : IProviderCaseSource {
             // writes an object any action reads. Stated rather than defaulted — see
             // ProviderConformanceCase.OperatorWritten.
             OperatorWritten = static (_, _) => [],
-            ObjectMatchesDesired = Probes.Matches
+            ObjectMatchesDesired = match => Probes.Matches(match.ObjectJson, match.DesiredJson)
         };
 
     /// <inheritdoc />
@@ -156,6 +157,145 @@ public sealed class ReferenceProviderClusterSignpost()
 ///     and assert it says so.
 /// </remarks>
 public sealed class SuiteRejectionTests {
+    [Fact]
+    public async Task AnEmptyCollectionDoesNotSurviveAnApplyTheWayItUsedTo() {
+        // ⚠ THE CALIBRATION FOR THE ONE PLACE FakeKubeCluster IS NOT AN ECHO, and the instrument it
+        // calibrates is the harness rather than a reconciler.
+        //
+        // The fake stored the applied body verbatim, which made it structurally blind to everything a
+        // real API server takes AWAY. Every optional list and map on every built-in Kubernetes object
+        // carries `omitempty`: NetworkPolicySpec.Ingress is one, the empty list that spells "deny all
+        // ingress" comes back with NO KEY AT ALL, and CyberCloud.Terminal/consoles converged in this
+        // harness and hung forever against k3s. Eleven other families never hit it only because they
+        // render custom resources, whose x-kubernetes-preserve-unknown-fields schemas round-trip an
+        // empty array intact.
+        //
+        // ⚠ THE PROBE RENDERS A CORE-GROUP ConfigMap, WHICH IS WHY THE STRIP APPLIES TO IT. It is
+        // scoped to built-in groups, and the sibling test below is the calibration for the other
+        // side of that boundary — a custom resource keeps its empty collections, because a real API
+        // server keeps them and three families use an empty object as a presence flag.
+        var world = new FakeKubeCluster(ConformanceIds.Cluster);
+
+        var address = new ResourceId(
+            ConformanceIds.Tenant,
+            ConformanceIds.Subscription,
+            ConformanceIds.ResourceGroup,
+            Probes.Type,
+            "empties",
+            Guid.Parse("f0f0f0f0-0000-4000-8000-0000000000e0")
+        );
+
+        var ns = ReconcileDriver.NamespaceFor(address);
+        var target = new ObjectRef { Kind = Probes.Kind, Namespace = ns, Name = address.Name };
+
+        // ⚠ Built through KubeCommand.For rather than by hand, so this exercises the same apply path
+        // every reconciler uses. The seven labels arrive with it, which is also what lets the
+        // "removes nothing else" assertions below mean something.
+        var applied = await KubeCommand.For(world)
+            .WithTenantId(address.TenantId)
+            .WithResourceId(address)
+            .InNamespace(ns)
+            .WithKind(Probes.Kind)
+            .WithApiVersion(Probes.V2026)
+            .ObjectJson(
+                """
+                {
+                  "spec": {
+                    "ingress": [],
+                    "selector": {},
+                    "egress": [ { "to": "anywhere" } ],
+                    "nested": { "alsoEmpty": [] }
+                  }
+                }
+                """
+            )
+            .ApplyAsync(TestContext.Current.CancellationToken);
+
+        applied.IsSuccess.ShouldBeTrue(applied.Error?.Message);
+
+        var stored = JsonNode.Parse(world.Read(target)!)!.AsObject();
+        var spec = stored["spec"]!.AsObject();
+
+        spec["ingress"].ShouldBeNull("an empty list must come back as NO KEY, the way omitempty leaves it");
+        spec["selector"].ShouldBeNull("an empty map is dropped for the same reason an empty list is");
+
+        // ⚠ Depth first: `nested` held nothing but an empty list, so it is itself empty by the time
+        // its parent is considered — an empty struct being just as absent as an empty list.
+        spec["nested"].ShouldBeNull("the strip must reach every depth, not only the top of spec");
+
+        // ⚠ AND IT REMOVES NOTHING ELSE. A strip that also ate the non-empty list would make every
+        // provider's comparison unfalsifiable, which is a worse failure than the one it fixes.
+        spec["egress"]!.AsArray().Count.ShouldBe(1, "a list with entries must survive intact");
+
+        stored["metadata"]!["labels"]![KubeLabels.TenantId]!.GetValue<string>()
+            .ShouldBe(address.TenantId.ToString("D"), "the seven mandatory labels must survive the strip");
+
+        // ⚠ The tolerant pattern accepts what the store now holds; the strict one does not. This is
+        // the whole argument for the strip, asserted rather than described.
+        KubeJson.IsAbsentOrEmpty(spec["ingress"]).ShouldBeTrue();
+        (spec["ingress"] is JsonArray { Count: 0 }).ShouldBeFalse(
+            "`is JsonArray { Count: 0 }` is the shape that passed this harness and hung against k3s"
+        );
+    }
+
+    [Fact]
+    public async Task ACustomResourceKeepsItsEmptyObjectBecauseThatIsAPresenceFlag() {
+        // ⚠ THE OTHER SIDE OF THE BOUNDARY, AND IT IS HERE BECAUSE THE FIRST VERSION OF THE STRIP GOT
+        // IT WRONG AND THREE FAMILIES SAID SO IN ONE RUN.
+        //
+        // The strip was unconditional at first, on the theory that an empty collection never carries
+        // meaning, so forcing the tolerant spelling everywhere was free. A custom resource has no
+        // `omitempty` — a CRD's stored JSON keeps what was applied — and Strimzi, Cluster API and
+        // kube-ovn all use an EMPTY OBJECT AS A PRESENCE FLAG: `spec.cruiseControl = {}` means "run
+        // Cruise Control", and `bridge = {}` and `pod = {}` mean the same kind of thing. Stripping
+        // those threw away a distinction a real server preserves, and no tolerant comparison can
+        // recover information the harness deleted: nine tests in each of Messaging, ContainerService
+        // and Network went red for a reason that does not exist outside FakeKubeCluster.
+        //
+        // So the strip is scoped to built-in groups, and this is what holds the scope in place.
+        var world = new FakeKubeCluster(ConformanceIds.Cluster);
+
+        var address = new ResourceId(
+            ConformanceIds.Tenant,
+            ConformanceIds.Subscription,
+            ConformanceIds.ResourceGroup,
+            Probes.Type,
+            "flagged",
+            Guid.Parse("f0f0f0f0-0000-4000-8000-0000000000e1")
+        );
+
+        var ns = ReconcileDriver.NamespaceFor(address);
+
+        var custom = new GroupVersionKind {
+            Group = "kafka.strimzi.io",
+            Version = "v1beta2",
+            Kind = "Kafka",
+            Plural = "kafkas"
+        };
+
+        var applied = await KubeCommand.For(world)
+            .WithTenantId(address.TenantId)
+            .WithResourceId(address)
+            .InNamespace(ns)
+            .WithKind(custom)
+            .WithApiVersion(Probes.V2026)
+            .ObjectJson("""{ "spec": { "cruiseControl": {}, "listeners": [] } }""")
+            .ApplyAsync(TestContext.Current.CancellationToken);
+
+        applied.IsSuccess.ShouldBeTrue(applied.Error?.Message);
+
+        var spec = JsonNode.Parse(world.Read(new() { Kind = custom, Namespace = ns, Name = address.Name })!)!
+            .AsObject()["spec"]!
+            .AsObject();
+
+        spec["cruiseControl"].ShouldNotBeNull(
+            "an empty object on a CUSTOM resource is a presence flag a real API server preserves, and "
+            + "a harness that deletes it makes a converging provider look broken"
+        );
+
+        spec["listeners"].ShouldNotBeNull("a custom resource's empty array survives for the same reason");
+    }
+
     [Fact]
     public async Task TheSuiteRejectsAReconcilerThatRemembersInsteadOfObserving() {
         // ⚠ THE CALIBRATION. AssumingProbeReconciler applies once and then answers Converged forever.
@@ -334,16 +474,24 @@ public sealed class SuiteRejectionTests {
         // on every member; if somebody relaxes one to make a provider "easier to register", the suite
         // starts silently skipping whatever that member drove. This reads the type rather than the
         // instance so it fails on the relaxation, not on the first provider that uses it.
-        var optional = typeof(ProviderConformanceCase)
-            .GetProperties()
-            .Where(x => x.SetMethod is not null || x.GetMethod is not null)
-            .Where(x => x.GetCustomAttributes(typeof(System.Runtime.CompilerServices.RequiredMemberAttribute), false).Length == 0)
-            .Select(x => x.Name)
+        //
+        // ⚠ MatchContext is read too, and the rule points the other way there. On the case, an
+        // optional member is an assertion the suite stops making. On MatchContext — which the harness
+        // builds and a case only reads — an optional member is a fact the harness stops HANDING OVER,
+        // and a case cannot assert on what it was not given. That is the shape that kept every child
+        // type's suite smaller than its parent's until the record existed.
+        var optional = new[] { typeof(ProviderConformanceCase), typeof(MatchContext) }
+            .SelectMany(type => type.GetProperties().Select(x => (Type: type, Property: x)))
+            .Where(x => x.Property.SetMethod is not null || x.Property.GetMethod is not null)
+            .Where(x => x.Property.GetCustomAttributes(typeof(System.Runtime.CompilerServices.RequiredMemberAttribute), false).Length == 0)
+            .Select(x => $"{x.Type.Name}.{x.Property.Name}")
             .ToImmutableArray();
 
         optional.ShouldBeEmpty(
             "every member of a conformance case is required: an optional one is an assertion the "
-            + "suite quietly stops making for the provider that omits it"
+            + "suite quietly stops making for the provider that omits it — and every member of a "
+            + "MatchContext is required because an optional one is a fact the harness stops handing "
+            + "the case"
         );
     }
 }

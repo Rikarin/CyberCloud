@@ -67,9 +67,9 @@ public sealed class VirtualNetworkCase : IProviderCaseSource {
             // writes an object any action reads. Stated rather than defaulted — see
             // ProviderConformanceCase.OperatorWritten.
             OperatorWritten = static (_, _) => [],
-            ObjectMatchesDesired = (objectJson, desiredJson) => {
-                using var desired = JsonDocument.Parse(desiredJson);
-                return VirtualNetworks.Matches(objectJson, desired.RootElement);
+            ObjectMatchesDesired = match => {
+                using var desired = JsonDocument.Parse(match.DesiredJson);
+                return VirtualNetworks.Matches(match.ObjectJson, desired.RootElement);
             }
         };
 
@@ -124,26 +124,35 @@ public sealed class NetworkSubnetCase : IProviderCaseSource {
             InvalidBodyTarget = "/properties/addressPrefix/v4",
             ActionName = NetworkSubnets.AddressUsageAction,
             Objects = (id, ns) => [NetworkSubnets.SubnetRef(ns, id)],
-            // ⚠ THE BODY HALF ONLY — SECOND SIGHTING OF `StorageBuckets.MatchesBody`'S FINDING, AND
-            // THE FIRST TIME IT WAS PREDICTED RATHER THAN FOUND BY A RED SUITE.
-            // `ObjectMatchesDesired` is `(objectJson, desiredJson) => bool` and carries no ADDRESS,
-            // and a subnet's `spec.vpc` is its PARENT'S name, which lives only in the address.
-            //
-            // ⚠ WHAT THE SUITE THEREFORE DOES NOT CHECK FOR A SUBNET, said out loud so nobody has to
-            // infer it: that the rendered object binds to the right Vpc. That is the single most
-            // consequential field on the object — a Subnet bound to the wrong Vpc hands out addresses
-            // inside another tenant's routing domain — and NetworkReconcilerTests asserts it
-            // against real addresses, including the case this harness cannot build: two networks in
-            // ONE resource group each holding a subnet called `web`.
-            // charts/managed/kube-ovn-subnet/conformance.yaml § owed,
-            // `object-matches-desired-cannot-see-an-address`.
             // This platform mints or computes everything this type's actions hand back, so no operator
             // writes an object any action reads. Stated rather than defaulted — see
             // ProviderConformanceCase.OperatorWritten.
             OperatorWritten = static (_, _) => [],
-            ObjectMatchesDesired = (objectJson, desiredJson) => {
-                using var desired = JsonDocument.Parse(desiredJson);
-                return NetworkSubnets.MatchesBody(objectJson, desired.RootElement);
+            // ⚠ THE WHOLE PREDICATE, AND `spec.vpc` IS THE FIELD IT WAS WORTH CHANGING THE HARNESS
+            // FOR. A Subnet whose `vpc` is wrong hands out addresses inside a DIFFERENT tenant's
+            // routing domain under this tenant's resource id, and `vpc` is derived from the address —
+            // so this was `NetworkSubnets.MatchesBody` while `ObjectMatchesDesired` was
+            // `(objectJson, desiredJson) => bool`. This family was the second sighting of that limit;
+            // `MatchContext` closed it. charts/managed/kube-ovn-subnet/conformance.yaml § owed,
+            // `object-matches-desired-cannot-see-an-address`.
+            //
+            // ⚠ THE NAMESPACE COMES FROM `match.Namespace`, NOT FROM `match.Target.Namespace`, AND
+            // THE DIFFERENCE COST FIVE RED ASSERTIONS BEFORE IT WAS NOTICED. A kube-ovn `Subnet` is
+            // CLUSTER-SCOPED, so `SubnetRef` deliberately sets `Namespace = string.Empty` — while the
+            // derived namespace is still a NAME COMPONENT of what the object renders, because
+            // `spec.vpc` is `VirtualNetworks.ObjectNameOf(ns, parent)`. Reading it off the ObjectRef
+            // gave "" and every comparison failed.
+            //
+            // ⚠ `NetworkReconcilerTests` KEEPS ITS OWN ASSERTIONS: two networks in ONE resource group
+            // each holding a subnet called `web` is a collision this harness still cannot build.
+            ObjectMatchesDesired = match => {
+                using var desired = JsonDocument.Parse(match.DesiredJson);
+                return NetworkSubnets.Matches(
+                    match.ObjectJson,
+                    match.Namespace,
+                    match.Id,
+                    desired.RootElement
+                );
             }
         };
 
@@ -209,9 +218,9 @@ public sealed class NetworkSecurityGroupCase : IProviderCaseSource {
             // writes an object any action reads. Stated rather than defaulted — see
             // ProviderConformanceCase.OperatorWritten.
             OperatorWritten = static (_, _) => [],
-            ObjectMatchesDesired = (objectJson, desiredJson) => {
-                using var desired = JsonDocument.Parse(desiredJson);
-                return NetworkSecurityGroups.Matches(objectJson, desired.RootElement);
+            ObjectMatchesDesired = match => {
+                using var desired = JsonDocument.Parse(match.DesiredJson);
+                return NetworkSecurityGroups.Matches(match.ObjectJson, desired.RootElement);
             }
         };
 
@@ -282,18 +291,27 @@ public sealed class PublicIpAddressCase : IProviderCaseSource {
             InvalidBodyTarget = "/properties/address/v4",
             ActionName = PublicIpAddresses.AllocationAction,
             Objects = (id, ns) => [PublicIpAddresses.OvnEipRef(ns, id.Name)],
-            // ⚠ THE WHOLE PREDICATE, like the security group's and unlike the subnet's. Nothing on an
-            // OvnEip is derived from the resource's address beyond the object's own name, so
-            // ObjectMatchesDesired carrying no address costs this type nothing.
+            // ⚠ THE WHOLE PREDICATE, like the security group's and unlike the subnet's — and this
+            // type reads NOTHING off `match`'s address half, which is a fact about the type rather
+            // than a limit of the member. `PublicIpAddresses.Matches` compares `type`, `v4Ip` and
+            // `v6Ip`, all of which the BODY decides. This is a depth-1 type, so there is no parent
+            // for a spec field to point at — the subnet's `spec.vpc` problem cannot arise here.
+            //
+            // ⚠ AN OvnEip IS CLUSTER-SCOPED TOO, so `OvnEipRef` sets `Namespace = string.Empty` and
+            // the derived namespace IS a component of the object's `metadata.name`. That still buys
+            // this case nothing: the suite reads the object AT that ObjectRef, so a name rendered
+            // against the wrong namespace fails as "not in the cluster" before any comparison runs.
+            // `match.Namespace` is the right tool only where a name component reappears INSIDE the
+            // spec, which is the subnet's case and not this one.
             // ⚠ Empty, and that is a statement rather than a formality — the member's own remarks
             // say so. An OvnEip carries no credential: the address is allocated by the controller
             // into `spec.v4Ip` and there is no Secret anywhere in this type's object set. The
             // provider most likely to omit this member is the next one to grow an
             // operator-generated credential, which is why it is `required`.
             OperatorWritten = static (_, _) => [],
-            ObjectMatchesDesired = (objectJson, desiredJson) => {
-                using var desired = JsonDocument.Parse(desiredJson);
-                return PublicIpAddresses.Matches(objectJson, desired.RootElement);
+            ObjectMatchesDesired = match => {
+                using var desired = JsonDocument.Parse(match.DesiredJson);
+                return PublicIpAddresses.Matches(match.ObjectJson, desired.RootElement);
             }
         };
 }

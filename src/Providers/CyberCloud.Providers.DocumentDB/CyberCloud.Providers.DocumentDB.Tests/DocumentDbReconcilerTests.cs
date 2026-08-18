@@ -32,24 +32,26 @@ public sealed class DocumentDbReconcilerTests {
     }
 
     [Fact]
-    public void TheStructuralCheckStillMissesAReadonlyMutableCache() {
-        // ⚠ THE BLIND SPOT, PINNED AGAINST A COUNTER-EXAMPLE THAT SHOULD FAIL AND DOES NOT.
-        // ReconcilerConformance.CheckNoHiddenState skips a field that is `readonly`, and a `readonly`
-        // Dictionary is mutable forever — which is exactly the shape a per-tenant cache takes when
-        // somebody adds one for performance. THREE providers have confirmed that only the
-        // cross-tenant test below catches it; this is the fourth, and pinning it is what stops the
-        // next test looking redundant.
+    public void TheStructuralCheckCatchesAReadonlyMutableCache() {
+        // ⚠ CALIBRATION, AND IT NOW POINTS THE OTHER WAY. This test used to assert that
+        // CheckNoHiddenState MISSED the counter-example below, because it skipped every
+        // `field.IsInitOnly` — and `readonly` stops the FIELD being reassigned while stopping
+        // nothing about the dictionary, so a per-tenant cache passed clause 2 while accumulating
+        // state on a singleton every tenant shares. Seven families each pinned that blind spot
+        // and it is now closed; this is what holds it closed.
         //
-        // ⚠ AND FOUR SIGHTINGS IS THE POINT AT WHICH THIS STOPS BEING A PROVIDER'S OBSERVATION.
-        // Every provider that will ever be written pays two tests for one platform gap. Closing it is
-        // CheckNoHiddenState learning that a readonly field of a mutable collection type is state —
-        // at which point THIS test goes red and says where to delete the now-unnecessary belt, which
-        // is a better outcome than a comment nobody re-reads.
-        ReconcilerConformance.CheckNoHiddenState(new ReconcilerWithAReadonlyCache()).ShouldBeEmpty(
-            "the structural check now catches a readonly mutable collection. That is an improvement — "
-            + "delete this test and say so in ReconcilerConformance's remarks, which currently promise "
-            + "the opposite."
+        // ⚠ THE CROSS-TENANT TEST BELOW STAYS, AND IS NOT MADE REDUNDANT BY THIS. This one reads
+        // a field's declared TYPE. That one drives ONE reconciler instance through TWO tenants and
+        // compares what each got, which is the only way to catch mixing no field type could show.
+        var findings = ReconcilerConformance.CheckNoHiddenState(new ReconcilerWithAReadonlyCache());
+
+        findings.ShouldContain(
+            x => x.Clause == ReconcilerClause.NoHiddenState,
+            "a readonly field holding a mutable Dictionary is state on a shared singleton, and the "
+            + "structural check is what catches it before the behavioural test has to"
         );
+
+        findings.ShouldContain(x => x.Detail.Contains("lastRendered", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -561,13 +563,14 @@ public sealed class DocumentDbReconcilerTests {
 }
 
 /// <summary>
-///     A reconciler that <c>CheckNoHiddenState</c> passes and that is not stateless.
+///     A reconciler that <c>CheckNoHiddenState</c> reports and that is not stateless.
 /// </summary>
 /// <remarks>
-///     The field is <see langword="readonly" />, so <c>CheckNoHiddenState</c> skips it, and the
-///     dictionary it holds is mutable forever. This is the shape a per-tenant cache takes when
-///     somebody adds one for performance, and the only test in the sibling file that would catch it is
-///     the cross-tenant one.
+///     The field is <see langword="readonly" />, which stops it being reassigned and stops nothing
+///     about the dictionary it holds. That is the shape a per-tenant cache takes when somebody adds
+///     one for performance. <c>CheckNoHiddenState</c> used to skip it for being
+///     <see langword="readonly" /> and now reports it; the cross-tenant test in the sibling file is
+///     what still catches the mixing a field's declared type cannot show.
 /// </remarks>
 sealed class ReconcilerWithAReadonlyCache : IResourceReconciler {
     readonly Dictionary<string, string> lastRendered = new(StringComparer.Ordinal);

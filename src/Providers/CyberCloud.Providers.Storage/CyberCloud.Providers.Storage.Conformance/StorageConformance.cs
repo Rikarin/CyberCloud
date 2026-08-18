@@ -91,9 +91,9 @@ public sealed class StorageCase : IProviderCaseSource {
             // writes an object any action reads. Stated rather than defaulted — see
             // ProviderConformanceCase.OperatorWritten.
             OperatorWritten = static (_, _) => [],
-            ObjectMatchesDesired = (objectJson, desiredJson) => {
-                using var desired = JsonDocument.Parse(desiredJson);
-                return StorageAccounts.Matches(objectJson, desired.RootElement);
+            ObjectMatchesDesired = match => {
+                using var desired = JsonDocument.Parse(match.DesiredJson);
+                return StorageAccounts.Matches(match.ObjectJson, desired.RootElement);
             }
         };
 
@@ -165,28 +165,26 @@ public sealed class StorageBucketCase : IProviderCaseSource {
             InvalidBodyTarget = StorageBuckets.ClusterIdPointer,
             ActionName = StorageBuckets.StatsAction,
             Objects = (id, ns) => [StorageBuckets.BucketRef(ns, id)],
-            // ⚠ THE BODY HALF ONLY, AND THAT IS A FACT ABOUT THIS MEMBER RATHER THAN A WEAKENING OF
-            // THIS TYPE. `ObjectMatchesDesired` is `(objectJson, desiredJson) => bool` and carries no
-            // ADDRESS — right for the five top-level types that ship, whose whole rendered spec is a
-            // function of the body, and impossible for a child, whose `spec.name` is its own name and
-            // whose `spec.clusterRef` is its parent's. Both live in the address, and neither is
-            // reachable from here. The half that IS reachable is `StorageBuckets.MatchesBody`, whose
-            // remarks carry the argument and the two alternatives that are worse.
-            //
-            // ⚠ WHAT THE SUITE THEREFORE DOES NOT CHECK FOR A BUCKET, said out loud so nobody has to
-            // infer it: that the rendered object names the right bucket, and that it names the right
-            // account. `StorageBucketReconcilerTests` asserts both against a real address — including
-            // the case this harness could never reach, two accounts in ONE resource group each holding
-            // a bucket called `assets`.
-            // charts/managed/seaweedfs-bucket/conformance.yaml § owed,
-            // `object-matches-desired-cannot-see-an-address`.
             // This platform mints or computes everything this type's actions hand back, so no operator
             // writes an object any action reads. Stated rather than defaulted — see
             // ProviderConformanceCase.OperatorWritten.
             OperatorWritten = static (_, _) => [],
-            ObjectMatchesDesired = (objectJson, desiredJson) => {
-                using var desired = JsonDocument.Parse(desiredJson);
-                return StorageBuckets.MatchesBody(objectJson, desired.RootElement);
+            // ⚠ THE WHOLE PREDICATE, WHICH IT WAS NOT UNTIL `MatchContext` CARRIED AN ADDRESS. This
+            // used to be `StorageBuckets.MatchesBody` — the body half — because
+            // `ObjectMatchesDesired` was `(objectJson, desiredJson) => bool` and a bucket's
+            // `spec.name` is its own name while its `spec.clusterRef` is its PARENT'S, both of which
+            // live in the address. That gap is the finding
+            // charts/managed/seaweedfs-bucket/conformance.yaml § owed recorded as
+            // `object-matches-desired-cannot-see-an-address`; it is closed, and this case now checks
+            // exactly what the account's does.
+            //
+            // ⚠ `StorageBucketReconcilerTests` KEEPS ITS OWN ASSERTIONS ON BOTH FIELDS. The one they
+            // cover that this still cannot is two accounts in ONE resource group each holding a
+            // bucket called `assets` — the harness builds one parent per run, so the collision has no
+            // way to happen here however much address the case is handed.
+            ObjectMatchesDesired = match => {
+                using var desired = JsonDocument.Parse(match.DesiredJson);
+                return StorageBuckets.Matches(match.ObjectJson, match.Id, desired.RootElement);
             }
         };
 

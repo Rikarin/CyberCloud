@@ -92,9 +92,9 @@ public sealed class ManagedClusterCase : IProviderCaseSource {
                     )),
                 (ManagedClusters.ClusterRef(ns, id.Name), EndpointedCluster(ns, id.Name))
             ],
-            ObjectMatchesDesired = (objectJson, desiredJson) => {
-                using var desired = JsonDocument.Parse(desiredJson);
-                return ManagedClusters.Matches(objectJson, desired.RootElement);
+            ObjectMatchesDesired = match => {
+                using var desired = JsonDocument.Parse(match.DesiredJson);
+                return ManagedClusters.Matches(match.ObjectJson, desired.RootElement);
             }
         };
 
@@ -235,21 +235,22 @@ public sealed class AgentPoolCase : IProviderCaseSource {
                 AgentPools.BootstrapRef(ns, id),
                 AgentPools.MachineDeploymentRef(ns, id)
             ],
-            // ⚠ THE BODY HALF ONLY — second sighting of the limit
-            // charts/managed/seaweedfs-bucket/conformance.yaml records as
-            // `object-matches-desired-cannot-see-an-address`. `ObjectMatchesDesired` is
-            // `(objectJson, desiredJson) => bool` and carries no ADDRESS, and a pool's `clusterName`
-            // and selector are both derived from one. `AgentPools.MatchesBody` is the reachable half
-            // and `AgentPoolReconcilerTests` asserts the other against real addresses — including the
-            // case this harness could never reach, two clusters in ONE resource group each holding a
-            // pool called `workers`.
             // `upgradeNodeImage` is long-running and reads nothing; the node image roll is the
             // reconciler's work, driven through the operation grain. Stated rather than defaulted —
             // see ProviderConformanceCase.OperatorWritten.
             OperatorWritten = static (_, _) => [],
-            ObjectMatchesDesired = (objectJson, desiredJson) => {
-                using var desired = JsonDocument.Parse(desiredJson);
-                return AgentPools.MatchesBody(objectJson, desired.RootElement);
+            // ⚠ THE WHOLE PREDICATE, INCLUDING THE MachineDeployment'S `clusterName` AND SELECTOR.
+            // Both are derived from the address, so this was `AgentPools.MatchesBody` until
+            // `MatchContext` carried one — the limit
+            // charts/managed/seaweedfs-bucket/conformance.yaml records as
+            // `object-matches-desired-cannot-see-an-address`, now closed.
+            //
+            // ⚠ `AgentPoolReconcilerTests` KEEPS ITS OWN ASSERTIONS. What it covers that this still
+            // cannot is two clusters in ONE resource group each holding a pool called `workers`; the
+            // harness brings up one parent per run and cannot build the collision.
+            ObjectMatchesDesired = match => {
+                using var desired = JsonDocument.Parse(match.DesiredJson);
+                return AgentPools.Matches(match.ObjectJson, match.Id, desired.RootElement);
             }
         };
 

@@ -77,9 +77,9 @@ public sealed class CloudConsoleCase : IProviderCaseSource {
             // writes an object any action reads. Stated rather than defaulted — see
             // ProviderConformanceCase.OperatorWritten.
             OperatorWritten = static (_, _) => [],
-            ObjectMatchesDesired = (objectJson, desiredJson) => {
-                using var desired = JsonDocument.Parse(desiredJson);
-                return CloudConsoles.Matches(objectJson, desired.RootElement);
+            ObjectMatchesDesired = match => {
+                using var desired = JsonDocument.Parse(match.DesiredJson);
+                return CloudConsoles.Matches(match.ObjectJson, desired.RootElement);
             }
         };
 

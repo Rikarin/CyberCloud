@@ -55,9 +55,9 @@ public sealed class KafkaCase : IProviderCaseSource {
             // writes an object any action reads. Stated rather than defaulted — see
             // ProviderConformanceCase.OperatorWritten.
             OperatorWritten = static (_, _) => [],
-            ObjectMatchesDesired = (objectJson, desiredJson) => {
-                using var desired = JsonDocument.Parse(desiredJson);
-                return KafkaClusters.Matches(objectJson, desired.RootElement);
+            ObjectMatchesDesired = match => {
+                using var desired = JsonDocument.Parse(match.DesiredJson);
+                return KafkaClusters.Matches(match.ObjectJson, desired.RootElement);
             }
         };
 

@@ -247,7 +247,17 @@ public abstract class SiloKillConformanceTests<TSource>
                     $"the operation says Succeeded and '{target}' is not in the real cluster."
                 );
 
-                Case.ObjectMatchesDesired(json!, Case.Body(ClusterConformanceHarness<TSource>.ClusterId))
+                Case.ObjectMatchesDesired(
+                        new() {
+                            ObjectJson = json!,
+                            DesiredJson = Case.Body(ClusterConformanceHarness<TSource>.ClusterId),
+                            Id = ClusterConformanceHarness<TSource>.Address(name).WithId(resourceId),
+                            Target = target,
+                            Namespace = ReconcileDriver.NamespaceFor(
+                                ClusterConformanceHarness<TSource>.Address(name).WithId(resourceId)
+                            )
+                        }
+                    )
                     .ShouldBeTrue($"'{target}' is in the cluster without the desired shape.");
             }
 

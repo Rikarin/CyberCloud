@@ -198,28 +198,31 @@ owed:
       docs/plan/20's, not a provider's.
   - id: object-matches-desired-cannot-see-an-address
     says: >
-      ⚠ THE ONE PLACE THE SHARED CONFORMANCE HARNESS ASKS A CHILD TYPE FOR LESS THAN IT ASKS A
-      TOP-LEVEL ONE, FOUND BY BEING THE FIRST CHILD TO RUN IT. ProviderConformanceCase's
-      `ObjectMatchesDesired` is `(objectJson, desiredJson) => bool` and carries NO ADDRESS — which is
-      exactly right for the five top-level types that ship, whose whole rendered spec is a function of
-      the body. A bucket's is not: `spec.name` is its own name and `spec.clusterRef` is its PARENT'S,
-      and both live in the address. So the predicate the suite evaluates for a bucket
-      (`StorageBuckets.MatchesBody` — versioning and quota) is strictly smaller than the one the
-      reconciler evaluates (`StorageBuckets.Matches`), and five assertions in the shared suite —
+      ⚠ SETTLED. Kept under § owed rather than deleted because nine files cite this id, and a reader
+      who follows one of them should land on what happened rather than on nothing.
+
+      WHAT IT WAS: ProviderConformanceCase's `ObjectMatchesDesired` was
+      `(objectJson, desiredJson) => bool` and carried NO ADDRESS — exactly right for a top-level type,
+      whose whole rendered spec is a function of the body, and wrong for a child, whose `spec.name` is
+      its own name and whose `spec.clusterRef` is its PARENT'S. So the predicate the suite evaluated
+      for a bucket (`StorageBuckets.MatchesBody`) was strictly smaller than the one the reconciler
+      evaluates, and five shared assertions —
       WhatTheProviderAppliedIsInTheClusterAndMatchesTheDesiredBody, AHandEditIsOverwrittenOnTheNextPass,
       APutWithADifferentBodyReachesTheClusterAsWell, DriftIsCorrectedWhenSomebodyDeletesTheObjectsByHand
-      and TheReconcilerSatisfiesTheFourClauseContract — check less for a bucket than they would for an
-      account. ⚠ THIS WAS DISCOVERED BY THE SUITE GOING RED, NOT BY READING: the first version of this
-      case reconstructed the harness's own address inside the case object, which worked for the
-      ancestor's name and failed on the resource name, which every assertion picks differently. The
-      other tempting fix — deriving the address FROM the object, `metadata.name` minus `spec.name` —
-      would compare the object against itself, which is the shape that let an earlier provider's
-      casing sabotage stay green. ⚠ WHAT STANDS IN MEANWHILE: StorageBucketReconcilerTests asserts
-      `spec.clusterRef` and `spec.name` against real addresses, including the case the harness could
-      never build — two accounts in ONE resource group each holding a bucket called `assets`. Closing
-      it is an `ObjectMatchesDesired` overload taking the ResourceId, which is a change to
-      ProviderConformanceCase and therefore to every provider's case file, so it is recorded here
-      rather than made unilaterally by the first type that wanted it.
+      and TheReconcilerSatisfiesTheFourClauseContract — checked less for a bucket than for an account.
+      It was found by the suite going red, not by reading: the first version of this case
+      reconstructed the harness's own address inside the case object, which worked for the ancestor's
+      name and failed on the resource name that every assertion picks differently.
+
+      HOW IT WAS CLOSED: `ObjectMatchesDesired` now takes a `MatchContext` — object JSON, desired
+      JSON, the resolved ResourceId and the ObjectRef — rather than two strings. A record and not a
+      third positional parameter, because the harness builds it and a case only reads it, so the next
+      fact this needs is one edit in the three shared suites and none in the fourteen provider
+      families. This case now calls the whole `StorageBuckets.Matches`.
+
+      WHAT IS STILL NOT CHECKED HERE: two accounts in ONE resource group each holding a bucket called
+      `assets`. The harness brings up one parent per run, so no amount of address makes the collision
+      reachable; StorageBucketReconcilerTests keeps asserting it.
   - id: bucket-lifecycle-policies
     says: >
       docs/plan/15 § The resource model gives an account FOUR kinds of child — buckets, accessKeys,

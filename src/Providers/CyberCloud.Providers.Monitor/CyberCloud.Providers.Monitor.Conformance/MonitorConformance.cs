@@ -110,9 +110,9 @@ public sealed class MonitorCase : IProviderCaseSource {
             // writes an object any action reads. Stated rather than defaulted — see
             // ProviderConformanceCase.OperatorWritten.
             OperatorWritten = static (_, _) => [],
-            ObjectMatchesDesired = (objectJson, desiredJson) => {
-                using var desired = JsonDocument.Parse(desiredJson);
-                return MonitorWorkspaces.MatchesShape(objectJson, desired.RootElement);
+            ObjectMatchesDesired = match => {
+                using var desired = JsonDocument.Parse(match.DesiredJson);
+                return MonitorWorkspaces.MatchesShape(match.ObjectJson, desired.RootElement);
             }
         };
 

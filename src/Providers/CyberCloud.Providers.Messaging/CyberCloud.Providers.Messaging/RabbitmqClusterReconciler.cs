@@ -33,10 +33,11 @@ namespace CyberCloud.Providers.Messaging;
 ///             registered <b>as a singleton, by concrete type</b> (<c>AddCyberCloudProvider</c>'s
 ///             remarks), so one instance serves every tenant in the process. A field caching, say,
 ///             the last rendered <c>additionalConfig</c> would hand tenant B tenant A's default queue
-///             type — and a <c>readonly</c> field holding a mutable dictionary is the shape that gets
-///             past a structural check, because the field never reassigns.
-///             <c>RabbitmqReconcilerTests</c> asserts both halves, because
-///             <c>ReconcilerConformance.CheckNoHiddenState</c> cannot see the second.
+///             type — and a <c>readonly</c> field holding a mutable dictionary is the shape that used
+///             to get past the structural check, because the field never reassigns.
+///             <c>ReconcilerConformance.CheckNoHiddenState</c> reports it now, and
+///             <c>RabbitmqReconcilerTests</c> still asserts both halves: the check reads a field's
+///             type, and only the cross-tenant test can see mixing.
 ///         </item>
 ///         <item>
 ///             <b>Bounded.</b> One apply and one read, on the caller's token. ⚠ There is no wait for

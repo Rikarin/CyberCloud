@@ -157,7 +157,8 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
         foreach (var target in objects) {
             var json = Cluster.World.Read(target);
             json.ShouldNotBeNull($"'{target}' is not in the cluster");
-            Case.ObjectMatchesDesired(json, Body()).ShouldBeTrue($"'{target}' does not carry the desired shape");
+            MatchesDesired(accepted.Resource.Id, "world-applied", target, json, Body())
+                .ShouldBeTrue($"'{target}' does not carry the desired shape");
         }
     }
 
@@ -756,7 +757,8 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
 
         foreach (var target in objects) {
             Cluster.World.Holds(target).ShouldBeTrue($"'{target}' was not put back");
-            Case.ObjectMatchesDesired(Cluster.World.Read(target)!, Body()).ShouldBeTrue();
+            MatchesDesired(accepted.Resource.Id, "drifting", target, Cluster.World.Read(target)!, Body())
+                .ShouldBeTrue();
         }
     }
 
@@ -775,9 +777,8 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
         repaired.Kind.ShouldNotBe(ReconcileOutcomeKind.Failed, repaired.ToString());
 
         foreach (var target in ObjectsOf(accepted.Resource.Id, "hand-edited")) {
-            Case.ObjectMatchesDesired(Cluster.World.Read(target)!, Body()).ShouldBeTrue(
-                "the hand edit survived a reconcile pass"
-            );
+            MatchesDesired(accepted.Resource.Id, "hand-edited", target, Cluster.World.Read(target)!, Body())
+                .ShouldBeTrue("the hand edit survived a reconcile pass");
         }
     }
 
@@ -829,7 +830,7 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
             MatchesDesiredAsync: () => Task.FromResult(
                 objects.Length > 0
                 && objects.All(target => Cluster.World.Read(target) is { } json
-                    && Case.ObjectMatchesDesired(json, Body()))
+                    && MatchesDesired(accepted.Resource.Id, "clauses", target, json, Body()))
             )
         );
 
@@ -888,9 +889,8 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
         await ConvergeAsync(changed.GetValueOrThrow());
 
         foreach (var target in ObjectsOf(first.Resource.Id, "updated")) {
-            Case.ObjectMatchesDesired(Cluster.World.Read(target)!, ChangedBody()).ShouldBeTrue(
-                "an update that stopped at the grain is an update the tenant cannot see"
-            );
+            MatchesDesired(first.Resource.Id, "updated", target, Cluster.World.Read(target)!, ChangedBody())
+                .ShouldBeTrue("an update that stopped at the grain is an update the tenant cannot see");
         }
     }
 
@@ -1260,9 +1260,46 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
     /// <param name="resourceId">The resource's GUID.</param>
     /// <param name="name">Its name.</param>
     protected static ImmutableArray<ObjectRef> ObjectsOf(Guid resourceId, string name) {
-        var address = ProviderTestCluster<TSource>.Address(name).WithId(resourceId);
+        var address = AddressOf(resourceId, name);
         return Case.Objects(address, ReconcileDriver.NamespaceFor(address));
     }
+
+    /// <summary>The address <see cref="ObjectsOf" /> rendered for.</summary>
+    /// <param name="resourceId">The resource's GUID.</param>
+    /// <param name="name">Its name.</param>
+    protected static ResourceId AddressOf(Guid resourceId, string name) =>
+        ProviderTestCluster<TSource>.Address(name).WithId(resourceId);
+
+    /// <summary>
+    ///     Asks the case whether one object carries what a desired body asked for, <b>at a named
+    ///     address</b>.
+    /// </summary>
+    /// <param name="resourceId">The resource's GUID.</param>
+    /// <param name="name">Its name.</param>
+    /// <param name="target">Which of its objects.</param>
+    /// <param name="objectJson">The object as the cluster holds it.</param>
+    /// <param name="desiredJson">The body it should carry.</param>
+    /// <remarks>
+    ///     ⚠ The one place a <see cref="MatchContext" /> is built in this suite, so that a member
+    ///     added to that record is one edit here rather than five. That is the whole reason the record
+    ///     exists — see its remarks.
+    /// </remarks>
+    protected static bool MatchesDesired(
+        Guid resourceId,
+        string name,
+        ObjectRef target,
+        string objectJson,
+        string desiredJson
+    ) =>
+        Case.ObjectMatchesDesired(
+            new() {
+                ObjectJson = objectJson,
+                DesiredJson = desiredJson,
+                Id = AddressOf(resourceId, name),
+                Target = target,
+                Namespace = ReconcileDriver.NamespaceFor(AddressOf(resourceId, name))
+            }
+        );
 
     /// <summary>
     ///     Puts the objects this type's <b>operator</b> writes into the fake cluster.
@@ -1275,7 +1312,7 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
     ///     none, which is most of them.
     /// </remarks>
     protected void PlaceOperatorObjects(Guid resourceId, string name) {
-        var address = ProviderTestCluster<TSource>.Address(name).WithId(resourceId);
+        var address = AddressOf(resourceId, name);
 
         foreach (var (target, json) in Case.OperatorWritten(address, ReconcileDriver.NamespaceFor(address))) {
             Cluster.World.MutateBehindTheirBack(target, json);

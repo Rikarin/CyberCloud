@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Collections.Immutable;
+using System.Text.Json.Nodes;
 
 namespace CyberCloud.Conformance.Harness;
 
@@ -31,6 +32,16 @@ namespace CyberCloud.Conformance.Harness;
 ///         reconciler really rendered — docs/plan/23 § The architecture gates' <c>Labels</c> row asks
 ///         for exactly that, "asserted against real output", and until a provider existed there was no
 ///         real output to assert against.
+///     </para>
+///     <para>
+///         ⚠ <b>It is an echo in every respect but one: a BUILT-IN object is stored with its empty
+///         collections removed.</b> That exception exists because "the fake echoes the apply" is not a
+///         harmless simplification — it made the harness structurally blind to everything a real API
+///         server takes <i>away</i> under <c>omitempty</c>, and a provider hung against k3s on exactly
+///         that. A <i>custom</i> resource is still echoed, because that is what a real server does to
+///         one, and three families use an empty object as a presence flag. See
+///         <see cref="DropEmptyCollections" /> for the measurement that settled the boundary and for
+///         the larger half this still does not model at all.
 ///     </para>
 /// </remarks>
 public sealed class FakeKubeCluster(Guid clusterId) : IKubeClusterConnection {
@@ -172,7 +183,10 @@ public sealed class FakeKubeCluster(Guid clusterId) : IKubeClusterConnection {
         var existed = objects.ContainsKey(key);
         var unchanged = existed && hashes.TryGetValue(key, out var previous) && previous == command.ReconcileHash;
 
-        objects[key] = command.Body;
+        // ⚠ A BUILT-IN OBJECT IS STORED WITHOUT ITS EMPTY COLLECTIONS, AND THAT IS THE ONE PLACE THIS
+        // STOPS BEING AN ECHO. A custom resource is echoed, because that is what a real API server
+        // does to one. See DropEmptyCollections' remarks.
+        objects[key] = DropEmptyCollections(command.Target, command.Body);
         hashes[key] = command.ReconcileHash;
 
         return Task.FromResult(
@@ -235,6 +249,112 @@ public sealed class FakeKubeCluster(Guid clusterId) : IKubeClusterConnection {
 
     static string Key(ObjectRef target) =>
         target.Kind.ApiVersion + "|" + target.Kind.Kind + "|" + target.Namespace + "|" + target.Name;
+
+    /// <summary>
+    ///     Returns a <b>built-in</b> object's body with every empty array and empty object removed, at
+    ///     every depth, and a custom resource's body unchanged.
+    /// </summary>
+    /// <param name="target">Which object, whose API group decides whether the body is stripped.</param>
+    /// <param name="body">The body the command carried.</param>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>Why anything is stripped at all.</b> A real API server drops an empty collection
+    ///         when the Go field it deserialises into carries <c>omitempty</c> — which is <i>every</i>
+    ///         optional list and map on <i>every</i> built-in object.
+    ///         <c>NetworkPolicySpec.Ingress</c> is one: the empty list that spells "deny all ingress"
+    ///         comes back with no key at all, so <c>CyberCloud.Terminal/consoles</c> converged in this
+    ///         harness and hung forever against k3s. Storing the body verbatim made that undetectable
+    ///         here by construction.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Why ONLY built-ins are stripped, which was settled by measurement rather than by
+    ///         argument.</b> The first version of this stripped every kind, on the theory that an
+    ///         empty collection never carries meaning and that forcing the tolerant spelling
+    ///         everywhere was therefore free. <b>It is not, and three provider families proved it in
+    ///         one run.</b> A custom resource has no <c>omitempty</c> — a CRD's stored JSON keeps what
+    ///         was applied — and Strimzi, Cluster API and kube-ovn all use an <b>empty object as a
+    ///         presence flag</b>: <c>spec.cruiseControl = {}</c> means "run Cruise Control", and
+    ///         <c>bridge = {}</c> and <c>pod = {}</c> mean the same kind of thing. For those the
+    ///         difference between absent and present-but-empty is real, a real server preserves it,
+    ///         and no tolerant spelling can recover information the harness threw away. Stripping them
+    ///         did not make anybody's comparison better; it made nine tests in each of three families
+    ///         fail for a reason that does not exist outside this class.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The group test errs toward not stripping, which is the direction that cannot
+    ///         invent a failure.</b> Kubernetes reserves <c>k8s.io</c> for itself, so a group that is
+    ///         empty, ends in <c>.k8s.io</c>, or is one of the five legacy names is a built-in and
+    ///         nothing else can be. A built-in group missing from that set leaves today's blind spot
+    ///         in place for that kind — a gap, not a false alarm — whereas a custom group wrongly
+    ///         included would break a legitimate presence flag, which is the failure that was just
+    ///         measured.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>What it does not model, so nobody reads a green run as more than it is.</b>
+    ///         <c>omitempty</c> also drops an empty string, a zero number and a <see langword="false" />
+    ///         boolean, and this drops none of those — which fields carry the tag lives in Go struct
+    ///         tags this repository does not have, and guessing would break comparisons that are
+    ///         correct. Nor does it model the other direction at all: a real server ADDS a CRD's
+    ///         <c>+kubebuilder:default</c>, a <c>status</c> and <c>managedFields</c>, and this harness
+    ///         derives its CRD stub from <c>ProviderConformanceCase.Objects</c>, so a derived stub has
+    ///         no defaults and an equality-instead-of-containment bug still passes here. That one is
+    ///         covered by <c>CyberCloud.Cluster.Conformance</c> and by <c>KubeJson.Contains</c>, and
+    ///         by nothing in this class.
+    ///     </para>
+    /// </remarks>
+    static string DropEmptyCollections(ObjectRef target, string body) {
+        if (!IsBuiltIn(target.Kind.Group) || JsonNode.Parse(body) is not JsonObject document) {
+            return body;
+        }
+
+        Strip(document);
+        return document.ToJsonString();
+    }
+
+    /// <summary>Whether an API group is one Kubernetes itself serves.</summary>
+    /// <param name="group">The group, empty for core.</param>
+    /// <remarks>
+    ///     ⚠ The five names are the pre-<c>k8s.io</c> groups, which are a closed set — everything
+    ///     added since is under a <c>.k8s.io</c> suffix, and that suffix is reserved, so a provider's
+    ///     own CRD group cannot collide with this test.
+    /// </remarks>
+    static bool IsBuiltIn(string group) =>
+        group.Length == 0
+        || group.EndsWith(".k8s.io", StringComparison.Ordinal)
+        || group is "apps" or "batch" or "autoscaling" or "policy" or "extensions";
+
+    /// <summary>Removes every empty array and empty object under one node, depth first.</summary>
+    /// <param name="node">The node to strip in place.</param>
+    /// <remarks>
+    ///     ⚠ Depth first, so a map whose only members were themselves empty collections is itself
+    ///     empty by the time its parent looks at it — which is what a real server does, an empty
+    ///     struct being just as absent as an empty list.
+    /// </remarks>
+    static void Strip(JsonNode node) {
+        switch (node) {
+            case JsonObject map:
+                foreach (var key in map.Select(x => x.Key).ToList()) {
+                    if (map[key] is not { } child) {
+                        continue;
+                    }
+
+                    Strip(child);
+
+                    if (KubeJson.IsAbsentOrEmpty(map[key])) {
+                        map.Remove(key);
+                    }
+                }
+
+                break;
+
+            case JsonArray array:
+                foreach (var child in array.Where(x => x is not null)) {
+                    Strip(child!);
+                }
+
+                break;
+        }
+    }
 }
 
 /// <summary>

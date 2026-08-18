@@ -77,9 +77,9 @@ public sealed class RabbitmqCase : IProviderCaseSource {
                         ]
                     ))
             ],
-            ObjectMatchesDesired = (objectJson, desiredJson) => {
-                using var desired = JsonDocument.Parse(desiredJson);
-                return RabbitmqClusters.Matches(objectJson, desired.RootElement);
+            ObjectMatchesDesired = match => {
+                using var desired = JsonDocument.Parse(match.DesiredJson);
+                return RabbitmqClusters.Matches(match.ObjectJson, desired.RootElement);
             }
         };
 

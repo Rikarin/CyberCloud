@@ -29,10 +29,11 @@ namespace CyberCloud.Providers.Terminal;
 ///         <item>
 ///             <b>No hidden state.</b> The only field is the primary constructor's
 ///             <see cref="IClock" />. ⚠ A reconciler is registered <b>as a singleton, by concrete
-///             type</b>, so one instance serves every tenant in the process, and a
-///             <c>readonly</c> mutable field would pass <c>ReconcilerConformance.CheckNoHiddenState</c>
-///             — which skips <c>readonly</c> — while handing tenant B tenant A's egress posture.
-///             <c>ConsoleReconcilerTests</c> holds both checks and a demonstration of the blind spot.
+///             type</b>, so one instance serves every tenant in the process, and a <c>readonly</c>
+///             mutable field would hand tenant B tenant A's egress posture.
+///             <c>ReconcilerConformance.CheckNoHiddenState</c> reports that shape now;
+///             <c>ConsoleReconcilerTests</c> holds the structural check, the calibration that pins it
+///             and the cross-tenant test that covers what a field's type cannot show.
 ///         </item>
 ///         <item>
 ///             <b>Bounded.</b> Three applies and three reads, on the caller's token. ⚠ There is no

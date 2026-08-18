@@ -182,14 +182,14 @@ sealed class NullLog : IReconcileLog {
 }
 
 /// <summary>
-///     A reconciler that <c>CheckNoHiddenState</c> passes and that is not stateless.
+///     A reconciler that <c>CheckNoHiddenState</c> reports and that is not stateless.
 /// </summary>
 /// <remarks>
-///     The field is <see langword="readonly" />, so <c>CheckNoHiddenState</c> skips it, and the
-///     dictionary it holds is mutable forever. This is the shape a per-tenant cache takes when
-///     somebody adds one for performance, and the only test in this project that would catch it is the
-///     cross-tenant one. Six sightings across six provider families is why it is demonstrated here
-///     rather than assumed.
+///     The field is <see langword="readonly" />, which stops it being reassigned and stops nothing
+///     about the dictionary it holds. That is the shape a per-tenant cache takes when somebody adds
+///     one for performance. <c>CheckNoHiddenState</c> used to skip it for being
+///     <see langword="readonly" /> and now reports it; the cross-tenant test in the sibling file is
+///     what still catches the mixing a field's declared type cannot show.
 /// </remarks>
 sealed class ReconcilerWithAReadonlyCache : IResourceReconciler {
     readonly Dictionary<string, string> lastRendered = new(StringComparer.Ordinal);

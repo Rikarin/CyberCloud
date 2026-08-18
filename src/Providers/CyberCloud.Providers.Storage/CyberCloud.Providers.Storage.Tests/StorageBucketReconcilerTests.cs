@@ -28,23 +28,32 @@ public sealed class StorageBucketReconcilerTests {
     }
 
     [Fact]
-    public void TheStructuralCheckStillMissesAReadonlyMutableCacheOnAChildToo() {
-        // ⚠ THE BLIND SPOT, PINNED AGAINST A COUNTER-EXAMPLE THAT SHOULD FAIL AND DOES NOT — AND THIS
-        // IS THE FOURTH CONFIRMED SIGHTING. ReconcilerConformance.CheckNoHiddenState skips a field
-        // that is `readonly`, and a `readonly` Dictionary is mutable forever, which is exactly the
-        // shape a per-tenant cache takes when somebody adds one for performance.
+    public void TheStructuralCheckCatchesAReadonlyMutableCacheOnAChildToo() {
+        // ⚠ CALIBRATION, AND IT NOW POINTS THE OTHER WAY. This test used to assert that
+        // CheckNoHiddenState MISSED the counter-example below, because it skipped every
+        // `field.IsInitOnly` — and `readonly` stops the FIELD being reassigned while stopping
+        // nothing about the dictionary, so a per-tenant cache passed clause 2 while accumulating
+        // state on a singleton every tenant shares. Seven families each pinned that blind spot
+        // and it is now closed; this is what holds it closed.
         //
-        // ⚠ IT IS WORSE ON A CHILD THAN ON A TOP-LEVEL TYPE, which is why this is not a copy of the
-        // account's version of it. The obvious cache key on a child is `context.Id.Name` — the
+        // ⚠ IT IS WORSE ON A CHILD THAN ON A TOP-LEVEL TYPE, which is why this is not a copy of
+        // the account's version. The obvious cache key on a child is `context.Id.Name` — the
         // BUCKET'S name — and two accounts in one resource group may each hold a bucket called
-        // `assets`. So the same defect that leaks between tenants on the account leaks between
-        // ACCOUNTS OF ONE TENANT here, which no cross-tenant test would catch. The counter-example
-        // below keys on exactly that, and the collision test further down is what catches it.
-        ReconcilerConformance.CheckNoHiddenState(new BucketReconcilerWithAReadonlyCache()).ShouldBeEmpty(
-            "the structural check now catches a readonly mutable collection. That is an improvement — "
-            + "delete this test and say so in ReconcilerConformance's remarks, which currently promise "
-            + "the opposite."
+        // `assets`. That defect leaks between ACCOUNTS OF ONE TENANT, which no cross-tenant test
+        // would catch; the collision test further down is what catches that half.
+        //
+        // ⚠ THE CROSS-TENANT TEST BELOW STAYS, AND IS NOT MADE REDUNDANT BY THIS. This one reads
+        // a field's declared TYPE. That one drives ONE reconciler instance through TWO tenants and
+        // compares what each got, which is the only way to catch mixing no field type could show.
+        var findings = ReconcilerConformance.CheckNoHiddenState(new BucketReconcilerWithAReadonlyCache());
+
+        findings.ShouldContain(
+            x => x.Clause == ReconcilerClause.NoHiddenState,
+            "a readonly field holding a mutable Dictionary is state on a shared singleton, and the "
+            + "structural check is what catches it before the behavioural test has to"
         );
+
+        findings.ShouldContain(x => x.Detail.Contains("lastRendered", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -369,14 +378,14 @@ public sealed class StorageBucketReconcilerTests {
 }
 
 /// <summary>
-///     A bucket reconciler that <c>CheckNoHiddenState</c> passes and that is not stateless.
+///     A reconciler that <c>CheckNoHiddenState</c> reports and that is not stateless.
 /// </summary>
 /// <remarks>
-///     ⚠ <b>Keyed on the BUCKET'S own name, which is what makes this shape worse on a child than on a
-///     top-level type.</b> Two accounts in one resource group may each hold a bucket called
-///     <c>assets</c>, so this cache collides between two resources of <i>one</i> tenant — and no
-///     cross-tenant test would ever see it. The field is <see langword="readonly" />, so
-///     <c>CheckNoHiddenState</c> skips it and the dictionary is mutable forever.
+///     The field is <see langword="readonly" />, which stops it being reassigned and stops nothing
+///     about the dictionary it holds. That is the shape a per-tenant cache takes when somebody adds
+///     one for performance. <c>CheckNoHiddenState</c> used to skip it for being
+///     <see langword="readonly" /> and now reports it; the cross-tenant test in the sibling file is
+///     what still catches the mixing a field's declared type cannot show.
 /// </remarks>
 sealed class BucketReconcilerWithAReadonlyCache : IResourceReconciler {
     readonly Dictionary<string, string> lastRendered = new(StringComparer.Ordinal);

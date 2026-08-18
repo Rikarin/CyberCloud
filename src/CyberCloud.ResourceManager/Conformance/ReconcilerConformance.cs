@@ -102,13 +102,20 @@ public readonly record struct ConformanceReport(string Reconciler, ImmutableArra
 ///         There is no static check that could tell them apart.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Clause 2 is checked structurally and the check has a known blind spot.</b> Instance
-///         fields are the shape docs/plan/08 names — <i>"a reconciler with a field is a reconciler
-///         that breaks when the grain moves silo"</i> — and they are what
-///         <see cref="CheckNoHiddenState" /> finds. It cannot find state behind a <c>static</c>, an
-///         injected mutable singleton, or an <c>AsyncLocal</c>. Those are real and are left to review;
-///         the field case is the one that happens by accident, and the accident is what an automated
-///         check is for.
+///         ⚠ <b>Clause 2 is checked structurally, in two shapes.</b> Instance fields are what
+///         docs/plan/08 names — <i>"a reconciler with a field is a reconciler that breaks when the
+///         grain moves silo"</i> — and <see cref="CheckNoHiddenState" /> reports both the mutable
+///         field and the <c>readonly</c> field holding a mutable collection, which is the same
+///         accident wearing a keyword that does not stop it.
+///     </para>
+///     <para>
+///         ⚠ <b>What clause 2 still cannot reach, and why the behavioural test stays.</b> The
+///         structural check cannot find state behind a <c>static</c>, an injected mutable singleton,
+///         an <c>AsyncLocal</c>, or a collection held one level down inside an ordinary class. Those
+///         are real and are left to review — and to the cross-tenant test every provider runs, which
+///         drives ONE reconciler instance through TWO tenants and compares what each got. That test
+///         catches <i>behavioural</i> mixing, including a name collision between tenants, which no
+///         check over field types could see. The structural check is the floor, not the ceiling.
 ///     </para>
 /// </remarks>
 public static class ReconcilerConformance {
@@ -273,11 +280,34 @@ public static class ReconcilerConformance {
     ///         which is the thing that breaks when the grain moves silo.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b><see langword="readonly" /> fields are excluded for the same reason</b> — an
-    ///         injected dependency assigned once in a constructor is the normal shape and is not
-    ///         per-pass state. A <see langword="readonly" /> <i>mutable collection</i> defeats that
-    ///         exclusion and this check does not catch it; see the remarks on the type about the blind
-    ///         spot.
+    ///         ⚠ <b><see langword="readonly" /> excludes the <i>reference</i>, not what it points
+    ///         at.</b> An injected dependency assigned once in a constructor is the normal shape and is
+    ///         not per-pass state, which is why a <see langword="readonly" /> field is usually fine. A
+    ///         <see langword="readonly" /> <i>mutable collection</i> is not: <c>readonly</c> stops the
+    ///         field being reassigned and stops nothing about the dictionary it holds, so
+    ///         <c>lastRendered[id] = rendered</c> compiles and accumulates per-pass state on a
+    ///         singleton. That shape is caught by <see cref="IsMutableCollection" /> and is the second
+    ///         finding this check can report.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Immutability is decided by namespace, and the direction it errs in is the safe
+    ///         one.</b> <see langword="string" /> and everything in <c>System.Collections.Immutable</c>
+    ///         and <c>System.Collections.Frozen</c> are held to be values; every other
+    ///         <see cref="System.Collections.IEnumerable" /> is held to be an accumulator. So a
+    ///         <c>readonly IReadOnlyList&lt;T&gt;</c> lookup table — which nothing can mutate
+    ///         <i>through</i> — is reported even though it is harmless, and the fix the message asks
+    ///         for (<c>ImmutableArray</c>, <c>FrozenDictionary</c>) is one a lookup table should want
+    ///         anyway. A false positive costs a provider one keyword; a false negative costs it a
+    ///         cross-tenant cache in production.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>What it still cannot see.</b> A <see langword="readonly" /> field of an ordinary
+    ///         class that holds a dictionary <i>inside</i> itself is not an
+    ///         <see cref="System.Collections.IEnumerable" /> and is not reported — the check reads the
+    ///         field's declared type and does not walk into it. Nor can it see a mutable
+    ///         <see cref="Memory{T}" />, which is not enumerable either. Those stay where the type's
+    ///         remarks leave <c>static</c> and <c>AsyncLocal</c>: with review, and with the
+    ///         behavioural cross-tenant test that every provider also runs.
     ///     </para>
     /// </remarks>
     public static ImmutableArray<ConformanceFinding> CheckNoHiddenState(IResourceReconciler reconciler) {
@@ -288,20 +318,40 @@ public static class ReconcilerConformance {
 
         for (var current = type; current is not null && current != typeof(object); current = current.BaseType) {
             foreach (var field in current.GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly)) {
-                if (field.IsInitOnly || IsPrimaryConstructorCapture(field)) {
+                if (IsPrimaryConstructorCapture(field)) {
                     continue;
                 }
 
-                findings.Add(
-                    new(
-                        ReconcilerClause.NoHiddenState,
-                        $"'{current.Name}.{field.Name}' is a mutable instance field. Everything a "
-                        + "reconciler needs comes from ReconcileContext — a reconciler with a field is "
-                        + "a reconciler that breaks when the grain moves silo, and it breaks by "
-                        + "converging on stale state rather than by throwing. "
-                        + "docs/plan/08 § The reconcile loop, clause 2."
-                    )
-                );
+                if (!field.IsInitOnly) {
+                    findings.Add(
+                        new(
+                            ReconcilerClause.NoHiddenState,
+                            $"'{current.Name}.{field.Name}' is a mutable instance field. Everything a "
+                            + "reconciler needs comes from ReconcileContext — a reconciler with a field is "
+                            + "a reconciler that breaks when the grain moves silo, and it breaks by "
+                            + "converging on stale state rather than by throwing. "
+                            + "docs/plan/08 § The reconcile loop, clause 2."
+                        )
+                    );
+
+                    continue;
+                }
+
+                if (IsMutableCollection(field.FieldType)) {
+                    findings.Add(
+                        new(
+                            ReconcilerClause.NoHiddenState,
+                            $"'{current.Name}.{field.Name}' is a readonly field holding a mutable "
+                            + "collection. 'readonly' stops the FIELD being reassigned and "
+                            + "stops nothing about the collection, so this is per-pass state on a "
+                            + "singleton that every tenant shares — it breaks when the grain moves silo "
+                            + "and it leaks between tenants before that. Hold it in ImmutableArray, "
+                            + "ImmutableDictionary or FrozenDictionary if it is a constant, and in "
+                            + "ReconcileContext if it is not. "
+                            + "docs/plan/08 § The reconcile loop, clause 2."
+                        )
+                    );
+                }
             }
         }
 
@@ -388,6 +438,33 @@ public static class ReconcilerConformance {
     /// </remarks>
     static bool IsPrimaryConstructorCapture(FieldInfo field) =>
         field.Name.StartsWith('<') && field.Name.EndsWith(">P", StringComparison.Ordinal);
+
+    /// <summary>
+    ///     Whether a type is a collection something can accumulate into.
+    /// </summary>
+    /// <param name="type">The field's declared type.</param>
+    /// <returns><see langword="true" /> for a collection that is not immutable by construction.</returns>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>An allowlist of the immutable, not a denylist of the mutable</b>, because the
+    ///         mutable set is open — it grows every time somebody writes a collection type — and the
+    ///         immutable set is two namespaces that exist to be exactly that. A denylist would have to
+    ///         name <c>Dictionary</c>, <c>List</c>, <c>HashSet</c>, arrays, the concurrent collections
+    ///         and every interface any of them satisfy, and the first one it forgot would be a
+    ///         provider's per-tenant cache passing the check.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Nested types under those namespaces are refused, and that is
+    ///         <c>ImmutableArray&lt;T&gt;.Builder</c>.</b> A builder is a mutable accumulator that
+    ///         lives in <c>System.Collections.Immutable</c>, so a bare namespace test would bless the
+    ///         one type in that namespace this check most needs to catch. Nothing nested there is a
+    ///         value worth holding in a field, so refusing the whole nested set costs nothing.
+    ///     </para>
+    /// </remarks>
+    static bool IsMutableCollection(Type type) =>
+        typeof(System.Collections.IEnumerable).IsAssignableFrom(type)
+        && type != typeof(string)
+        && !(!type.IsNested && type.Namespace is "System.Collections.Immutable" or "System.Collections.Frozen");
 
     /// <summary>
     ///     Builds a <see cref="ReconcileContext" /> for a harness, with no cluster and no secrets.

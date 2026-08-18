@@ -102,9 +102,9 @@ public sealed class OpenSearchCase : IProviderCaseSource {
                         ]
                     ))
             ],
-            ObjectMatchesDesired = (objectJson, desiredJson) => {
-                using var desired = JsonDocument.Parse(desiredJson);
-                return OpenSearchServices.Matches(objectJson, desired.RootElement);
+            ObjectMatchesDesired = match => {
+                using var desired = JsonDocument.Parse(match.DesiredJson);
+                return OpenSearchServices.Matches(match.ObjectJson, desired.RootElement);
             }
         };
 

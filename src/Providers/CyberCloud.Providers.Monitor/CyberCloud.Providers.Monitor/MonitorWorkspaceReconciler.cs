@@ -391,8 +391,8 @@ public sealed class MonitorWorkspaceReconciler(IClock clock) : IResourceReconcil
     /// <param name="name">The resource's own name.</param>
     /// <remarks>
     ///     ⚠ Static, like <c>StorageAccounts</c>' equivalent, because a reconciler is one singleton
-    ///     across every tenant in the process — clause 2, and the blind spot
-    ///     <c>CheckNoHiddenState</c> has around a <c>readonly</c> field holding a mutable collection.
+    ///     across every tenant in the process — clause 2. Memoising this into a <c>readonly</c>
+    ///     dictionary is the shape that used to get past <c>CheckNoHiddenState</c>; it no longer does.
     /// </remarks>
     static ObjectRef[] Targets(string ns, string name) => [
         MonitorWorkspaces.KeySecretRef(ns, name),
