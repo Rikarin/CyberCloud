@@ -164,6 +164,39 @@ public sealed class ConsolePodTests {
     }
 
     [Fact]
+    public void APolicyThatComesBackWithNoIngressKeyAtAllStillMatches() {
+        // ⚠ THE BUG A REAL API SERVER FOUND AND BOTH FAKE HARNESSES HID, PINNED SO IT CANNOT COME
+        // BACK. `NetworkPolicySpec.Ingress` carries `omitempty`, so the empty rule list this provider
+        // applies comes back from a real API server as NO `ingress` KEY. `Matches` compared
+        // `is JsonArray { Count: 0 }` — true for what was applied, false for what was returned — so
+        // the console converged in the Docker-free harness (which echoes the apply back) and in every
+        // unit test here, and sat in InProgress forever against k3s. Four cluster-conformance
+        // assertions went red on the first run and nothing else in the tree would have said why.
+        //
+        // ⚠ It is the exact hazard `Matches`' own remarks predicted for built-in types — "the API
+        // server defaults them itself, in the same request" — met from the other direction: not a
+        // field added, a field REMOVED.
+        var served = JsonNode.Parse(CloudConsoles.NetworkPolicyJson("plain", Tenant, "plain-ns", Desired))!
+            .AsObject();
+
+        served["kind"] = "NetworkPolicy";
+        served["spec"]!.AsObject().Remove("ingress").ShouldBeTrue();
+
+        CloudConsoles.Matches(served.ToJsonString(), Desired).ShouldBeTrue(
+            "an ingress list the API server omitted read as a policy that had lost its ingress rules"
+        );
+
+        // And a policy that grew an actual ingress rule IS drift, which is the half that keeps the
+        // relaxation from being a hole: somebody opening a shell to inbound traffic must not read as
+        // converged.
+        served["spec"]!["ingress"] = new JsonArray { new JsonObject() };
+
+        CloudConsoles.Matches(served.ToJsonString(), Desired).ShouldBeFalse(
+            "a shell that something may now connect to reported no drift"
+        );
+    }
+
+    [Fact]
     public void TenantOnlyRemovesThePublicRuleAndLeavesTheOtherThree() {
         // The other posture, so that "four rules" above is a fact about Internet rather than about the
         // renderer.

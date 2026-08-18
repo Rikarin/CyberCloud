@@ -172,6 +172,38 @@ owed:
       ones, byte for byte, which is a claim about this provider and not about the tenant's safety.
       Closing it needs a cluster-backed test that runs two pods and asserts a connection is refused —
       which needs a CNI in the k3s bundle that enforces policy, and the bundle does not name one.
+  - id: growing-the-home-volume-needs-an-expandable-class
+    says: >
+      `home.size` is documented as growing and never shrinking, which is what the API promises: a
+      PersistentVolumeClaim refuses a decrease outright. What the API cannot promise is the increase.
+      A claim may only be resized on a StorageClass carrying `allowVolumeExpansion: true`, and k3s'
+      bundled local-path provisioner does not set it — so in the environment the cluster-conformance
+      suite and the documented bootstrap both use, raising `home.size` is accepted by this platform
+      and refused by the cluster, with the API server's own message arriving on a reconcile pass
+      rather than on the tenant's PUT. ⚠ This provider cannot check it: the storage class is the
+      cluster's and `HomeClaimJson` deliberately names none, so there is nothing in the resource body
+      to validate against. Closing it is either a class the platform installs and requires, or a
+      pre-flight read of the class's `allowVolumeExpansion` on the update path — which is a
+      cross-object validation the registry has no seam for, and the third sighting of that shape
+      after charts/managed/kafka's `replication-factor-versus-node-count` and
+      charts/managed/seaweedfs' `replication-versus-topology`.
+  - id: a-pvc-does-not-disappear-when-it-is-deleted
+    says: >
+      ⚠ A DEFECT IN THE SHARED CLUSTER SUITE THAT THIS ROW IS THE FIRST TO EXPOSE, recorded here
+      rather than fixed here because the fix is a change to test/CyberCloud.Cluster.Conformance.
+      `ClusterConformanceTests.DriftIsCorrectedAfterARealKubectlDelete` deletes every owned object
+      through the raw client and asserts, IMMEDIATELY, that reading it back returns null. That holds
+      for every object the eleven earlier families render and it is false for a
+      PersistentVolumeClaim: the API server adds `kubernetes.io/pvc-protection` to every claim on
+      admission, so a delete sets a `deletionTimestamp` and the object stays readable until the
+      pvc-protection controller removes the finalizer — which is asynchronous and, for a claim no pod
+      has ever mounted, still not instantaneous. The assertion fails with the claim's own JSON, whose
+      `deletionTimestamp` is the evidence. ⚠ It is a real property rather than a race to be slept
+      through: "deleted" and "gone" are different states for anything with a finalizer, and the suite
+      conflates them. The fix is to poll for absence with a bounded wait, which is what the same file
+      already does for CRD establishment. ⚠ AND IT HAS A MIRROR IN THE PROVIDER: this type's own
+      `DeleteAsync` converges only when all four objects are unreadable, so a console delete sits in
+      InProgress for as long as the finalizer holds — correct, and slower than every other row.
   - id: cluster-cidrs-are-assumed-private
     says: >
       The public egress rule cuts out 10/8, 172.16/12, 192.168/16, 100.64/10 and 169.254/16, which

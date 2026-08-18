@@ -392,8 +392,22 @@ public sealed class ConsoleDeclarationTests {
         // and failed on the diff — a gate two steps removed from the mistake. This is the assertion
         // that names it, and it is written over EVERY property rather than over the one that broke,
         // because the hazard is the file's ordering rather than that member.
-        foreach (var property in CloudConsoles.Schema2026.Properties.Where(x => !x.AllowedValues.IsDefault)) {
-            property.AllowedValues.ShouldNotBeEmpty(property.JsonPointer);
+        // ⚠ THE THREE POINTERS ARE NAMED RATHER THAN DERIVED, and the first draft of this test derived
+        // them — `Where(x => !x.AllowedValues.IsDefault)` — which is the mistake this test is about
+        // wearing different clothes. `ResourceSchema` normalises an unset `AllowedValues` to an EMPTY
+        // array rather than a default one, so that filter selected every property in the schema and
+        // the test failed on `/location`. A list of three that a reviewer edits when a fourth enum
+        // lands is the same trade `KubeLabels.Mandatory` and every short-name check in this tree make.
+        string[] enums = [
+            "/properties/image/variant",
+            "/properties/sizing/preset",
+            "/properties/network/egress"
+        ];
+
+        foreach (var pointer in enums) {
+            CloudConsoles.Schema2026.Properties.Single(x => x.JsonPointer == pointer)
+                .AllowedValues
+                .ShouldNotBeEmpty(pointer);
         }
 
         CloudConsoles.EgressModes.ShouldBe(["Internet", "TenantOnly"]);

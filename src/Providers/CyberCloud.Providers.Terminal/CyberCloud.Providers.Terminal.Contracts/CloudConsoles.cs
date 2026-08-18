@@ -1181,7 +1181,20 @@ public static class CloudConsoles {
 
         return declared.Contains("Ingress")
             && declared.Contains("Egress")
-            && spec["ingress"] is JsonArray { Count: 0 }
+            // ⚠ ABSENT OR EMPTY, AND THE DIFFERENCE BETWEEN THOSE TWO IS A BUG A REAL API SERVER
+            // FOUND AND BOTH FAKE HARNESSES HID. This read `is JsonArray { Count: 0 }`, which is what
+            // the provider APPLIES — and `NetworkPolicySpec.Ingress` carries `omitempty`, so an empty
+            // rule list comes back from a real API server as NO `ingress` KEY AT ALL. The console
+            // therefore converged in the Docker-free harness (which echoes the apply) and in every
+            // unit test, and sat in InProgress forever against k3s. It is the exact hazard this
+            // method's own remarks predicted for built-in types, walked into two hundred lines below
+            // the warning.
+            //
+            // ⚠ AND THE TWO REALLY ARE THE SAME THING HERE, which is why accepting both is not a
+            // weakening: "deny all ingress" is expressed by naming Ingress in `policyTypes` with no
+            // rules, and an absent list and an empty one are both no rules. The line above is what
+            // carries the meaning; this one only refuses a policy that grew a rule.
+            && spec["ingress"] is not JsonArray { Count: > 0 }
             && spec["egress"] is JsonArray egress
             && egress.Count >= ExpectedEgressRules(desired);
     }

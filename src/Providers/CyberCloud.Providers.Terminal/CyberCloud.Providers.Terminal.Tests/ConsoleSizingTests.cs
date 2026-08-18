@@ -118,13 +118,18 @@ public sealed class ConsoleSizingTests {
     static string Values() => Read("values.yaml");
 
     static string Read(string file) {
+        // ⚠ THE ANCHOR IS THE SOLUTION FILE AND NOT A `charts` DIRECTORY, and the first draft used the
+        // directory. `./build.sh Charts` runs `helm package` into `artifacts/charts/`, so after any
+        // chart run there are TWO directories named `charts` above the test assembly and the nearer
+        // one holds tarballs. The test passed on a clean tree and failed on the gate, which is the
+        // worst order to discover it in. `CyberCloud.slnx` exists exactly once and only at the root.
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
 
-        while (directory is not null && !Directory.Exists(Path.Combine(directory.FullName, "charts"))) {
+        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "CyberCloud.slnx"))) {
             directory = directory.Parent;
         }
 
-        directory.ShouldNotBeNull("no charts/ directory above the test assembly");
+        directory.ShouldNotBeNull("no CyberCloud.slnx above the test assembly");
 
         var path = Path.Combine(directory.FullName, "charts", "managed", "cloud-shell", file);
         File.Exists(path).ShouldBeTrue(path);

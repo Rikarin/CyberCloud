@@ -42,12 +42,19 @@ public sealed class CloudConsoleCase : IProviderCaseSource {
             Type = CloudConsoles.Type,
             ApiVersion = CloudConsoles.V2026,
             Body = cluster => CloudConsoles.Body(cluster),
-            // ⚠ Changes `home.size`, which the reconciler renders into the claim's
-            // `spec.resources.requests.storage` and CloudConsoles.Matches reads back. The tempting
-            // alternative — changing `session.idleTimeoutMinutes` — would pass the update test while
-            // proving nothing, because that number lives on the POD and the pod is not an object this
-            // case lists.
-            ChangedBody = cluster => CloudConsoles.Body(cluster, homeSize: "20Gi"),
+            // ⚠ Changes the EGRESS POSTURE, which the reconciler renders into the network policy's
+            // rule list and CloudConsoles.Matches reads back as a count. Two other candidates were
+            // wrong for two different reasons, and both are worth recording because both look right:
+            //
+            //   * `session.idleTimeoutMinutes` would pass the update test while proving nothing —
+            //     that number lives on the POD, and the pod is not an object this case lists.
+            //   * `home.size` would prove the update reached the cluster and would FAIL against a
+            //     real one. A PersistentVolumeClaim's size may only be changed on a StorageClass with
+            //     `allowVolumeExpansion: true`, and k3s' bundled local-path provisioner does not set
+            //     it — so the API server refuses the resize outright. The schema's "it grows and never
+            //     shrinks" is the API's promise; whether the cluster can keep it is the storage
+            //     class's. conformance.yaml § owed, `growing-the-home-volume-needs-an-expandable-class`.
+            ChangedBody = cluster => CloudConsoles.Body(cluster, egress: "TenantOnly"),
             // Drops the required `/properties/home/size`.
             // ⚠ Built from a valid body with one required property removed rather than hand-written: a
             // hand-written invalid body drifts out of date the day the schema gains a property and

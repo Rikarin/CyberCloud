@@ -362,9 +362,20 @@ public abstract class ClusterConformanceTests<TSource>(ClusterConformanceFixture
         // PARTIAL loss is a different finding, and one this suite does not yet assert. It is worth
         // having: a resource whose Kafka survives and whose node pool is gone is running and
         // unrunnable at once, and the scan reports it as neither a stray nor an orphan today.
+        // ⚠ THE ABSENCE IS WAITED FOR RATHER THAN ASSERTED, AND UNTIL CyberCloud.Terminal/consoles IT
+        // WAS ASSERTED. "Deleted" and "gone" are different states for any object carrying a finalizer,
+        // and the API server adds `kubernetes.io/pvc-protection` to EVERY PersistentVolumeClaim on
+        // admission — so a delete sets a `deletionTimestamp` and the object stays readable until the
+        // pvc-protection controller removes it. The eleven families before that one render custom
+        // resources and core objects with no finalizer, so this read came back null on the first try
+        // every time and the assumption never cost anything.
+        //
+        // ⚠ IT IS NOT A SLEEP AND IT IS NOT A RACE. The wait is bounded and its failure message is the
+        // same one the assertion gave, so a delete that genuinely does not land still fails here and
+        // still names the object. What it stops doing is calling a finalizer a bug.
         foreach (var each in owned) {
             await DeleteFromClusterAsync(harness, each, token);
-            (await ReadFromClusterAsync(harness, each, token)).ShouldBeNull($"the delete of '{each}' did not land.");
+            await WaitUntilAbsentAsync(harness, each, token);
         }
 
         // ── An orphan: a labelled object whose resource grain does not exist. Applied by somebody
@@ -778,6 +789,47 @@ public abstract class ClusterConformanceTests<TSource>(ClusterConformanceFixture
             when (ex.Response?.StatusCode == System.Net.HttpStatusCode.NotFound) {
             return null;
         }
+    }
+
+    /// <summary>Waits until an object the suite deleted has actually gone.</summary>
+    /// <param name="harness">The harness.</param>
+    /// <param name="target">Which object.</param>
+    /// <param name="cancellationToken">The test's token.</param>
+    /// <remarks>
+    ///     ⚠ <b>A delete is a request and a finalizer is a veto with a timer on it.</b> Kubernetes
+    ///     answers a delete by writing a <c>deletionTimestamp</c>; the object is removed when the last
+    ///     finalizer is cleared, by whichever controller owns it. <c>kubernetes.io/pvc-protection</c>
+    ///     is added by the API server to every <c>PersistentVolumeClaim</c>, so the first provider in
+    ///     the tree to render one — <c>CyberCloud.Terminal/consoles</c> — is the first for which
+    ///     "deleted" and "gone" are separated by a controller round trip.
+    ///     <para>
+    ///         ⚠ The budget is deliberately short. This is not waiting for a workload to drain; it is
+    ///         waiting for a controller that is already watching to remove one string. A delete that
+    ///         has genuinely not landed fails here in two seconds with the object named, which is what
+    ///         the assertion it replaced did.
+    ///     </para>
+    /// </remarks>
+    protected static async Task WaitUntilAbsentAsync(
+        ClusterConformanceHarness<TSource> harness,
+        ObjectRef target,
+        CancellationToken cancellationToken
+    ) {
+        string? json = null;
+
+        for (var attempt = 0; attempt < 20; attempt++) {
+            json = await ReadFromClusterAsync(harness, target, cancellationToken);
+
+            if (json is null) {
+                return;
+            }
+
+            await Task.Delay(TimeSpan.FromMilliseconds(100), cancellationToken);
+        }
+
+        // ⚠ The body is in the message on purpose: a `deletionTimestamp` in it says "a finalizer is
+        // holding this" and its absence says "the delete never reached the API server", and those are
+        // different bugs with the same symptom.
+        json.ShouldBeNull($"the delete of '{target}' did not land within two seconds.");
     }
 
     /// <summary>One label's value, read straight from the API server.</summary>
