@@ -96,7 +96,7 @@ partial class Build
 
     /// <summary>
     ///     The ten gates from docs/plan/23 § The architecture gates, in the order the doc lists them,
-    ///     plus one this build adds. Named here so the target's log output is the checklist, and so
+    ///     plus the four this build adds. Named here so the target's log output is the checklist, and so
     ///     adding a gate is a visible diff against the doc rather than a silent omission.
     ///     <para>
     ///         ⚠ <b>Three of the ten are enforced by the compiler instead, and this target must not
@@ -133,6 +133,7 @@ partial class Build
         ("Secrets", "no [Id] member named *Password/*Secret/*Token/*Key outside CyberCloud.Vault"),
         ("No blocking", ".Result, .Wait(), async void banned in grain assemblies"),
         ("Generated surfaces", "OpenAPI/CLI/SDK/forms regenerate byte-identically from the registry"),
+        ("Action handlers", "every synchronous declared action names an IResourceActionHandler; a long-running one must not — not in docs/plan/23"),
         ("OpenAPI compatibility", "published api-versions diffed; a breaking change fails"),
         ("Labels", "every reconciler's rendered output carries the seven cybercloud.io/* labels, asserted against real output"),
         ("Analyzer coverage", "every project under src/ references CyberCloud.Analyzers — not in docs/plan/23"),
@@ -221,7 +222,8 @@ partial class Build
         // as it goes, and those lines are unreadable above the header that says what they belong to.
         Log.Information(
             "Architecture: {Count} gates — the ten in docs/plan/23 § The architecture gates, plus "
-            + "Analyzer coverage, Plan citations and Code citations, which that table does not list",
+            + "Action handlers, Analyzer coverage, Plan citations and Code citations, which that "
+            + "table does not list",
             ArchitectureGates.Length);
 
         var outcomes = new List<GateOutcome>
@@ -234,6 +236,7 @@ partial class Build
             GateOutcome.Analyzer("Secrets", "CC1005, in full"),
             GateOutcome.Analyzer("No blocking", "CC1001 and CC1002, wider than the doc's 'grain assemblies'"),
             GeneratedSurfacesGate(),
+            ActionHandlerGate(),
             OpenApiCompatibilityGate(),
             LabelsGate(),
             AnalyzerCoverageGate(),
@@ -1214,6 +1217,176 @@ partial class Build
             + $"{Generation.Derived.Count} derived file(s) — the cyc verb tree, the .NET SDK and the "
             + "portal forms — all regenerated and compared byte-for-byte",
             violations);
+    }
+
+    /// <summary>
+    ///     Every synchronous action a provider declares names a handler. Not in docs/plan/23
+    ///     § The architecture gates; this build adds it.
+    ///     <para>
+    ///         <b>What went wrong, and why a gate rather than a fix.</b> Twelve actions across twelve
+    ///         provider namespaces were declared with no handler, including every data provider's
+    ///         <c>listKeys</c> — the call a tenant makes to obtain the credential for the thing they
+    ///         just created. <c>ActionDispatcher</c> refuses one as <c>ErrorCode.InternalError</c>,
+    ///         which is a <c>500</c>, and that refusal is correct: the caller POSTed an action this
+    ///         platform publishes in its own OpenAPI document, so the gap is ours and a <c>4xx</c>
+    ///         would send them looking at their request. Filling the twelve is a commit. Keeping a
+    ///         thirteenth from reaching four generated surfaces is this.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Here rather than in <c>ProviderBuilder.Action</c>, and the reason is what a
+    ///         refusal at registration would cost.</b> The builder is earlier, but it sees one
+    ///         declaration at a time and it cannot tell a provider's declaration from a registration
+    ///         assembled any other way — and <c>ActionRegistration.HandlerType</c> is public and
+    ///         nullable, so the dispatcher's refusal stays reachable however the builder behaves.
+    ///         Throwing there would delete the fixture that keeps that branch under test
+    ///         (<c>CyberCloud.ResourceManager.Tests</c>' <c>TestProvider</c> declares
+    ///         <c>orphaned</c> for exactly that) while leaving the branch itself in the product. This
+    ///         gate reads the whole registry — every provider assembly in the solution, loaded for
+    ///         real by the generator — and fails the build, which is earlier than any test run and
+    ///         covers every provider at once.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The long-running cell is asserted in the other direction, and the order matters
+    ///         for the same reason it does in the conformance suite.</b> A long-running action starts
+    ///         an operation and the operation grain drives the type's <i>reconciler</i>; it needs no
+    ///         handler and cannot use one, which is why <c>ProviderBuilder.Action</c> refuses the two
+    ///         together. So this gate asks <c>LongRunning</c> first: demanding a handler of
+    ///         <c>CyberCloud.ContainerService/agentPools</c>' <c>upgradeNodeImage</c> would be
+    ///         demanding a declaration the builder throws on.
+    ///     </para>
+    ///     <para>
+    ///         Counted in declared actions, so a registry with no action at all is
+    ///         <see cref="GateStatus.Vacuous" /> rather than a confident tick.
+    ///     </para>
+    /// </summary>
+    GateOutcome ActionHandlerGate()
+    {
+        var violations = new List<string>();
+        var excused = ActionsWithoutHandlers();
+        var claimed = new HashSet<string>(excused.Keys, StringComparer.OrdinalIgnoreCase);
+
+        foreach (var action in Generation.Actions)
+        {
+            var row = action.Type + " " + action.Name;
+
+            // ⚠ Asked first. See the remarks: the long-running cell is the one that is CORRECT
+            // without a handler, and testing `Handler is null` first folds it into the failure.
+            if (action.LongRunning)
+            {
+                if (action.Handler is not null)
+                {
+                    violations.Add(
+                        $"{action.Type}/{action.Name} is declared long-running and names the handler "
+                        + $"{action.Handler}. A handler runs on the synchronous action path only; a "
+                        + "long-running action starts an operation and the operation grain drives the "
+                        + "type's reconciler, so the handler would never run. ProviderBuilder.Action "
+                        + "refuses this pair at registration, so a declaration reaching here means it "
+                        + "was assembled some other way");
+                }
+
+                if (claimed.Remove(row))
+                {
+                    violations.Add(
+                        $"{ActionExemptionsFile.Name} lists {action.Type}/{action.Name} and that action "
+                        + "is long-running, which needs no handler and cannot use one. Delete the line: "
+                        + "an exemption for something that was never a gap reads as though the gap is "
+                        + "still there");
+                }
+
+                continue;
+            }
+
+            if (action.Handler is not null)
+            {
+                if (claimed.Remove(row))
+                {
+                    violations.Add(
+                        $"{ActionExemptionsFile.Name} lists {action.Type}/{action.Name} and that action "
+                        + $"now names the handler {action.Handler}. Delete the line — a debt list that "
+                        + "outlives the debt is one nobody can tell the live rows in");
+                }
+
+                continue;
+            }
+
+            if (claimed.Remove(row))
+                continue;
+
+            violations.Add(
+                $"{action.Type}/{action.Name} is a synchronous action with no handler, so every call "
+                + "to it answers 500. The declaration still reaches openapi/, the cyc verb tree, the "
+                + ".NET SDK and the portal form — four surfaces publishing a call nothing can serve. "
+                + "Name an IResourceActionHandler in the provider's Action(...) declaration, or "
+                + "declare the action longRunning: true if the work genuinely takes time and the "
+                + $"type's reconciler is what should do it. Adding a line to {ActionExemptionsFile.Name} "
+                + "is the third answer and it is a review request rather than a build fix — read the "
+                + "header there for what it is asking");
+        }
+
+        // ⚠ The other direction, and it is the half that keeps the file honest. Every row left is a
+        // line naming an action no provider declares — a rename, a withdrawal, or a typo — and a row
+        // nothing matches is standing permission for a gap that may not exist.
+        foreach (var stale in claimed.OrderBy(x => x, StringComparer.Ordinal))
+        {
+            violations.Add(
+                $"{ActionExemptionsFile.Name} line {excused[stale]} names '{stale}' and no provider "
+                + "declares that action. Either the type or the action was renamed and the line did "
+                + "not follow, or the declaration is gone and so is the reason for the line");
+        }
+
+        var secrets = Generation.Actions.Count(x => x.Secret);
+
+        return GateOutcome.From(
+            "Action handlers",
+            Generation.Actions.Count,
+            $"declared action(s) across {Generation.Actions.Select(x => x.Type).Distinct(StringComparer.Ordinal).Count()} "
+            + $"resource type(s), {secrets} of them returning secret material, "
+            + $"{excused.Count} excused by {ActionExemptionsFile.Name}",
+            violations);
+    }
+
+    /// <summary>The reviewed list of declared actions that cannot run. Its own header says why.</summary>
+    AbsolutePath ActionExemptionsFile => RootDirectory / "actions-without-handlers.txt";
+
+    /// <summary>
+    ///     Each excused action — <c>"{type} {action}"</c> — against the 1-based line it is declared on,
+    ///     so a stale row can be reported by number rather than left for the reader to find.
+    /// </summary>
+    Dictionary<string, int> ActionsWithoutHandlers()
+    {
+        Assert.FileExists(
+            ActionExemptionsFile,
+            $"{ActionExemptionsFile.Name} is missing. It is the reviewed list of declared actions that "
+            + "cannot run; without it this gate cannot tell a known gap from a new one, and treating "
+            + "every gap as new would fail the build over debt somebody already signed off.");
+
+        var rows = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        var lines = ActionExemptionsFile.ReadAllLines();
+
+        for (var i = 0; i < lines.Length; i++)
+        {
+            var line = lines[i].Trim();
+
+            if (line.Length == 0 || line.StartsWith('#'))
+                continue;
+
+            var parts = line.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+            Assert.True(
+                parts.Length == 2,
+                $"{ActionExemptionsFile.Name} line {i + 1} is '{line}'. A row is the resource type, "
+                + "whitespace, and the action name — for example "
+                + "'CyberCloud.Storage/buckets stats'.");
+
+            var row = parts[0] + " " + parts[1];
+
+            Assert.True(
+                rows.TryAdd(row, i + 1),
+                $"{ActionExemptionsFile.Name} lists '{row}' twice, on lines {rows.GetValueOrDefault(row)} "
+                + $"and {i + 1}. Two reasons for one exemption means one of them is not the reason.");
+        }
+
+        return rows;
     }
 
     /// <summary>
