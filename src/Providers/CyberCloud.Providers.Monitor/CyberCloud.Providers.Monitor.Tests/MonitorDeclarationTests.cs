@@ -28,57 +28,59 @@ public sealed class MonitorDeclarationTests {
         registration.ReconcilerType.ShouldBe(typeof(MonitorWorkspaceReconciler));
     }
 
-    // ── The recovery window: argued, built, and withdrawn ───────────────────────────────────────
+    // ── The recovery window: argued, built, withdrawn, and restored ─────────────────────────────
 
     [Fact]
-    public void TheRecoveryWindowIsWithdrawnAndEverythingItNeedsIsStillHere() {
-        // ⚠⚠ THIS TYPE WAS THE FIRST IN THE TREE TO DECLARE SupportsSoftDelete AND IT NO LONGER
-        // DOES, WHICH IS A DECISION RATHER THAN A REVERSION. What a window means on this type was
-        // measured rather than assumed: OperationGrain.DriveAsync runs NO pass for a soft delete, so
-        // every object stays; ParkAsync keeps the quota committed in as many words; and the object
-        // left standing is the VMUser, which is the one thing on this row that enforces anything —
-        // vmauth resolves it the moment it is applied. So a soft-deleted workspace is an
-        // authenticated, billed, open write path into a store the tenant believes is gone. A delete
-        // that does not delete is worse than no recovery window. MonitorProvider carries the full
-        // argument and CyberCloud.ContainerRegistry/registries reached the same conclusion from its
-        // own measurement.
+    public void TheRecoveryWindowIsDeclaredAndEverythingItNeedsIsWiredUp() {
+        // ⚠⚠ THIS TYPE WAS THE FIRST IN THE TREE TO DECLARE SupportsSoftDelete, IT WITHDREW THE
+        // DECLARATION ON 2026-08-18, AND IT DECLARES IT AGAIN. The withdrawal was not a reversion and
+        // neither is this: what a window MEANT on this type was measured rather than assumed, and it
+        // was not what the argument for a window assumed. OperationGrain.DriveAsync returned before
+        // running any pass, so every applied object stayed — and on this row the object left standing
+        // is the VMUser, which vmauth resolves the moment it is applied. A soft-deleted workspace was
+        // therefore an authenticated, billed, open write path into a store the tenant believed was
+        // gone. A delete that does not delete is worse than no recovery window.
         //
-        // ⚠ AND EVERY PART THE DECLARATION NEEDS IS DELIBERATELY KEPT, so re-declaring is ONE LINE.
-        // That is what the rest of this test pins: a purge-protection property the builder would
-        // refuse the type without, and a day count that is still the one docs/plan/06 asks for.
+        // ⚠ WHAT CLOSED IT IS A PLATFORM CHANGE AND NOT A PROVIDER ONE, which is what the withdrawal
+        // predicted. A soft delete now runs the reconciler's DeleteAsync exactly as a hard delete
+        // does, so the VMUser comes down and the write path closes; the window holds the name, the
+        // stored body, the committed quota and the tenancy's DATA, none of which a teardown removes.
+        // A restore re-applies the same three objects.
         var registry = ProviderRegistry.Build([new MonitorProvider()]);
         registry.TryGetType(MonitorWorkspaces.Type, out var registration).ShouldBeTrue();
 
         registration.SoftDeleteDays.ShouldBe(
-            0,
-            "CyberCloud.Monitor/workspaces declares a recovery window again. That is welcome IF the "
-            + "platform can now withdraw the write path when a resource is parked — check that "
-            + "OperationGrain.ParkAsync takes the VMUser down (or that ISecretWriter can revoke the "
-            + "ingest key) before believing it. If it still cannot, a soft-deleted workspace keeps "
-            + "accepting authenticated writes and keeps accruing billed retention at an address that "
-            + "answers 404. conformance.yaml § owed, `soft-delete-is-withdrawn-not-declined`."
+            MonitorProvider.SoftDeleteDays,
+            "CyberCloud.Monitor/workspaces has stopped declaring a recovery window. If that is a second "
+            + "withdrawal, say why here and in conformance.yaml § owed — the first one was measured, "
+            + "and the measurement was that a soft delete left the VMUser applied."
         );
 
-        // ⚠ THE NUMBER SURVIVES THE WITHDRAWAL, because the argument for it did. docs/plan/06
+        // ⚠ THE NUMBER, WHICH SURVIVED THE WITHDRAWAL BECAUSE THE ARGUMENT FOR IT DID. docs/plan/06
         // § Tags, locks gives 7 for a type carrying data, and a workspace holds the tenant's ONLY
         // copy of their logs — a database has a backup and an object store has versioning; telemetry
         // has neither, because the source of truth was a process that has since exited.
         MonitorProvider.SoftDeleteDays.ShouldBe(7);
 
-        // ⚠ AND SO DOES THE PURGE-PROTECTION PROPERTY, which is the half that would otherwise have
-        // to be rebuilt. IResourceTypeBuilder.SupportsSoftDelete refuses a type whose schema does
-        // not declare its purge-protection pointer as a boolean — a flag the platform enforces
-        // against a property no schema declares is a protection that silently never engages — so
-        // keeping the property is what makes re-declaring one line rather than two edits and a
-        // silo-start failure in between.
-        MonitorWorkspaces.Schema2026.Declares(MonitorWorkspaces.PurgeProtectionPointer).ShouldBeTrue(
-            "the purge-protection property was removed along with the declaration. Restoring the "
-            + "window would then fail at ProviderRegistry.Build, at silo start, naming the pointer."
-        );
+        // ⚠ AND THE PURGE-PROTECTION PROPERTY, WITHOUT WHICH THE LINE ABOVE DOES NOT BUILD.
+        // IResourceTypeBuilder.SupportsSoftDelete refuses a type whose schema does not declare its
+        // purge-protection pointer as a boolean — a flag the platform enforces against a property no
+        // schema declares is a protection that silently never engages — so removing the property
+        // fails at ProviderRegistry.Build, at silo start, naming the pointer.
+        registration.PurgeProtectionPointer.ShouldBe(MonitorWorkspaces.PurgeProtectionPointer);
+
+        MonitorWorkspaces.Schema2026.Declares(MonitorWorkspaces.PurgeProtectionPointer).ShouldBeTrue();
 
         MonitorWorkspaces.Schema2026.Properties
             .Single(x => x.JsonPointer == MonitorWorkspaces.PurgeProtectionPointer)
             .Kind.ShouldBe(SchemaKind.Boolean);
+
+        // ⚠ AND THE PURGE PERMISSION IS NOT THE DELETE PERMISSION, which is the separation the window
+        // is worth nothing without: Azure keeps deletedVaults/purge/action out of Key Vault
+        // Contributor so that "may delete" and "may destroy permanently" are separable rights, and a
+        // purge checked against DeletePermission would protect against nobody except the one caller
+        // whose delete put the resource there.
+        registration.PurgePermission.ShouldNotBe(registration.DeletePermission);
     }
 
     // ── The action, and the shape only this type and one other exercise ─────────────────────────

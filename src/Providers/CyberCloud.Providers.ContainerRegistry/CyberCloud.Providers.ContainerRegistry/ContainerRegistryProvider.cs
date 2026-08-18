@@ -185,17 +185,31 @@ public sealed class ContainerRegistryProvider : IResourceProvider {
             )
             .Chart(ContainerRegistries.ChartName)
             .SupportsTags()
-            // ⚠ NO SupportsSoftDelete, AND THIS IS THE ONLY ROW IN THE CATALOGUE THAT DECLARED ONE,
-            // MEASURED IT AND TOOK IT BACK. See this class's remarks: the declaration is what found
-            // that a soft-deleted resource rebuilds its whole data plane after a converged teardown,
-            // and a delete that does not delete is worse than no recovery window.
+            // ⚠ THE RECOVERY WINDOW, WITHDRAWN ON 2026-08-18 AND RESTORED THE SAME DAY. This row is
+            // the only one in the catalogue that declared a window, measured what it got, took it
+            // back, and got it back — and the measurement is worth keeping in both directions.
             //
-            // ⚠ CLOSING IT IS THIS ONE CALL AND NOTHING ELSE ON THIS ROW. The three arguments are
-            // written, documented and asserted against — ContainerRegistries.SoftDeleteDays,
-            // .PurgePermission and .PurgeProtectionPointer — and ContainerRegistryDeclarationTests
-            // .TheRecoveryWindowIsWithheldAndTheReasonIsAPlatformDefect goes red the day somebody adds
-            // it, pointing at charts/managed/harbor/conformance.yaml § owed,
-            // `a-soft-deleted-resource-undeletes-itself`.
+            // ⚠ WHAT WAS MEASURED, AND WHAT IT ACTUALLY WAS. Declaring the window made
+            // ClusterConformanceTests.TheLifecycleRunsAgainstARealApiServer fail with "'Secret/…' is
+            // still in the real cluster after a converged teardown", and this row recorded that as a
+            // soft-deleted resource REBUILDING its data plane — an active re-apply. It was not. The
+            // objects had never been torn down: OperationGrain.DriveAsync returned before running any
+            // pass. That assertion reports an end state, and an end state cannot tell "never removed"
+            // from "removed and re-applied" — which mattered, because the two are different bugs in
+            // different code. `CyberCloud.Monitor/workspaces` could not reproduce the re-apply on its
+            // own row and said so; its reading was the right one.
+            //
+            // ⚠ WHAT CLOSED IT IS THE PLATFORM CHANGE BOTH ROWS ASKED FOR. A soft delete now runs the
+            // reconciler's DeleteAsync, so the fifteen objects come down and nothing keeps running or
+            // being metered; what the window holds is the name, the stored body, the committed quota
+            // and the DISKS — deleting a StatefulSet does not delete its claims, which is why this row
+            // chose StatefulSets over Deployments with claims beside them, and why a restore has the
+            // images, the metadata database and the job queue to come back to.
+            .SupportsSoftDelete(
+                ContainerRegistries.SoftDeleteDays,
+                ContainerRegistries.PurgePermission,
+                ContainerRegistries.PurgeProtectionPointer
+            )
             .RequiresCluster(ContainerRegistries.ClusterIdPointer);
     }
 

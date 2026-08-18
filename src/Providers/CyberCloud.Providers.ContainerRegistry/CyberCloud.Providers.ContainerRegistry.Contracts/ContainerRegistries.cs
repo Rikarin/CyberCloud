@@ -167,13 +167,14 @@ public static class ContainerRegistries {
     /// <summary>The permission a purge would need. ⚠ A fourth permission, not the delete one.</summary>
     public const string PurgePermission = SoftDeletePolicy.DefaultPurgePermission;
 
-    /// <summary>The body flag that would refuse every purge of a resource for the rest of its window.</summary>
+    /// <summary>The body flag that refuses every purge of a resource for the rest of its window.</summary>
     /// <remarks>
-    ///     ⚠ <b>Not declared as a property, because <c>ProviderBuilder</c> refuses a purge-protection
-    ///     pointer on a type with no window</b> — <i>"the flag would be a property callers can set and
-    ///     nothing reads"</i> — and that refusal is right. A flag published to every generated surface
-    ///     while the platform honours no window at all is the promise docs/plan/08 § Soft delete says
-    ///     is worse than promising nothing.
+    ///     ⚠ <b>It was not declared as a property while the window was withdrawn, because
+    ///     <c>ProviderBuilder</c> refuses a purge-protection pointer on a type with no window</b> —
+    ///     <i>"the flag would be a property callers can set and nothing reads"</i>. Both halves move
+    ///     together, in one direction and the other: the constant lived here through the withdrawal so
+    ///     the argument would not have to be rebuilt, and the schema property came back with the
+    ///     declaration.
     /// </remarks>
     public const string PurgeProtectionPointer = "/properties/purgeProtection";
 
@@ -901,6 +902,25 @@ public static class ContainerRegistries {
                     + "left listening on an unscraped address."
                 ) {
                     DefaultJson = "true"
+                },
+
+                // ── Soft delete ──────────────────────────────────────────────────────────────
+                //
+                // ⚠ REQUIRED BY THE BUILDER RATHER THAN OPTIONAL BY CHOICE.
+                // IResourceTypeBuilder.SupportsSoftDelete refuses a type whose schema does not declare
+                // its purge-protection pointer as a boolean, because a flag the platform enforces
+                // against a property no schema declares is a protection that silently never engages —
+                // and "silently never engages" is the one failure mode a protection may not have.
+                new(
+                    PurgeProtectionPointer,
+                    SchemaKind.Boolean,
+                    Required: true,
+                    Description: "Whether this registry may be destroyed before its seven-day recovery "
+                    + "window is out. Once true it stays true for the rest of the registry's life, and "
+                    + "a purge is refused while it is set — a flag whose holder can clear it and then "
+                    + "purge is one round-trip of protection."
+                ) {
+                    DefaultJson = "false"
                 }
             ]
         );

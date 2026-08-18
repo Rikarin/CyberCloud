@@ -208,15 +208,20 @@ public sealed class MonitorProvider : IResourceProvider {
                 + "retention, quota, ingest key and read-only datasource endpoints."
             )
             .Chart(MonitorWorkspaces.ChartName)
-            // ⚠ THE RECOVERY WINDOW IS WITHDRAWN, AND RE-DECLARING IT IS THIS ONE LINE:
+            // ⚠ THE RECOVERY WINDOW, WITHDRAWN ON 2026-08-18 AND RESTORED THE SAME DAY, AND BOTH
+            // HALVES ARE WORTH KEEPING. It was withdrawn because a soft delete ran no reconcile pass
+            // at all: every applied object was left exactly as it was, and on this type the object
+            // left standing is the VMUser — the one thing on this row that enforces anything, because
+            // vmauth resolves it the moment it is applied. So a soft-deleted workspace was an
+            // authenticated, BILLED, open write path into a store the tenant believed was gone.
             //
-            //     .SupportsSoftDelete(SoftDeleteDays, purgeProtectionPointer: MonitorWorkspaces.PurgeProtectionPointer)
-            //
-            // Everything it needs is still here and still asserted — SoftDeleteDays, the
-            // purge-protection property in every api-version, and MonitorDeclarationTests' coverage
-            // of the builder refusal that would catch removing it. What is missing is a platform
-            // behaviour, not a decision, and this class's remarks carry the argument for the window
-            // so that whoever restores the line does not have to rebuild it.
+            // ⚠ WHAT CHANGED IS THE PLATFORM AND NOT THE ARGUMENT. OperationGrain.DriveAsync now runs
+            // the teardown for a soft delete, so the VMUser comes down with everything else and the
+            // write path closes; what the window holds is the name, the workspace's stored body, the
+            // committed quota and — for the stores this row is a tenancy IN — the data itself, which
+            // no teardown of a VMUser or a ConfigMap could remove. A restore re-applies the same three
+            // objects and the tenancy is back with its retention and its accountID unchanged.
+            .SupportsSoftDelete(SoftDeleteDays, purgeProtectionPointer: MonitorWorkspaces.PurgeProtectionPointer)
             .SupportsTags()
             .RequiresCluster(MonitorWorkspaces.ClusterIdPointer);
     }

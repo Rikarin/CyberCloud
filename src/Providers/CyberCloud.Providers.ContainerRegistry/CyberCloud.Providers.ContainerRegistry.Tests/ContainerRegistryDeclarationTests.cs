@@ -21,43 +21,53 @@ public sealed class ContainerRegistryDeclarationTests {
         registration.ClusterIdPointer.ShouldBe(ContainerRegistries.ClusterIdPointer);
     }
 
-    // ── The recovery window that was declared, measured, and taken back ─────────────────────────
+    // ── The recovery window that was declared, measured, taken back, and restored ───────────────
 
     [Fact]
-    public void TheRecoveryWindowIsWithheldAndTheReasonIsAPlatformDefect() {
-        // ⚠ THIS ASSERTS A NEGATIVE, WHICH IS UNUSUAL AND IS THE POINT: it goes red the day somebody
-        // adds `.SupportsSoftDelete(...)` back, which is the day the platform defect below has to have
-        // been closed.
+    public void TheRecoveryWindowIsDeclaredAndTheMeasurementThatWithdrewItIsRecordedHere() {
+        // ⚠ THIS TEST ASSERTED A NEGATIVE UNTIL 2026-08-18, AND WHAT IT WAS PROTECTING AGAINST IS
+        // WORTH KEEPING EVEN THOUGH IT IS CLOSED, BECAUSE THE ROW READ ITS OWN MEASUREMENT WRONG.
         //
-        // This row DID declare it. Every argument for the window holds: docs/plan/06 § Tags, locks
-        // gives seven days to "types carrying data", and a registry's images, metadata database and
-        // job queue all live on PersistentVolumeClaims that a StatefulSet's deletion leaves behind, so
-        // there is genuinely something to hand back.
+        // This row declared the window; ClusterConformanceTests.TheLifecycleRunsAgainstARealApiServer
+        // then failed with "'Secret/…' is still in the real cluster after a converged teardown", and
+        // reordering the case's object list showed it was EVERY object rather than one. That is the
+        // measurement, and it is sound. What was written up from it is not: the row concluded that a
+        // soft-deleted resource REBUILDS its whole data plane — an active re-apply — and that
+        // assertion only ever reported an END STATE. An end state cannot tell "never torn down" from
+        // "torn down and re-applied", and the two are different bugs in different code.
         //
-        // ⚠ AND THE CLUSTER-BACKED SUITE REPORTED THAT A SOFT-DELETED REGISTRY REBUILDS ITS WHOLE DATA
-        // PLANE AFTER A CONVERGED TEARDOWN. ClusterConformanceTests.TheLifecycleRunsAgainstARealApiServer
-        // failed with "is still in the real cluster after a converged teardown"; reordering the case's
-        // object list showed it was EVERY object rather than one. Removing this single call and
-        // changing nothing else made the test pass, and putting it back made it fail again.
+        // ⚠ IT WAS THE FIRST. OperationGrain.DriveAsync returned before running any pass for a soft
+        // delete, so nothing was ever asked to come down. `CyberCloud.Monitor/workspaces` measured its
+        // own row three ways, could not reproduce a re-apply, and recorded the discrepancy instead of
+        // inheriting this row's answer — which is what made the disagreement findable.
         //
-        // A delete that does not delete is worse than no recovery window: the resource stops being
-        // addressable, the workload keeps running, the quota stays held, and the tenant cannot see it
-        // in order to delete it again. See charts/managed/harbor/conformance.yaml § owed,
-        // `a-soft-deleted-resource-undeletes-itself`.
-        Registration().SoftDeleteDays.ShouldBe(
-            0,
-            "this type declares a recovery window again. That is the right end state and it is only "
-            + "safe once a soft-deleted resource stops being re-reconciled — charts/managed/harbor/"
-            + "conformance.yaml § owed, `a-soft-deleted-resource-undeletes-itself`. If that is closed, "
-            + "delete this test and say so there."
+        // ⚠ AND THE UNDERLYING DEFECT WAS REAL EITHER WAY, WHICH IS WHY WITHDRAWING WAS RIGHT. A
+        // delete that does not delete is worse than no recovery window: the resource stops being
+        // addressable, fifteen Harbor objects keep running and being billed, and the tenant cannot see
+        // it in order to delete it again.
+        var registration = Registration();
+
+        registration.SoftDeleteDays.ShouldBe(
+            ContainerRegistries.SoftDeleteDays,
+            "this type has stopped declaring a recovery window. If that is a second withdrawal, it "
+            + "needs its own measurement and its own entry in charts/managed/harbor/conformance.yaml "
+            + "§ owed — the first one was that a soft delete ran no teardown at all."
         );
+
+        // ⚠ AND THE WINDOW IS ONLY HONEST BECAUSE OF WHAT THE TEARDOWN LEAVES. A soft delete now runs
+        // the reconciler's DeleteAsync, so the objects come down — and the images, the metadata
+        // database and the job queue stay, because deleting a StatefulSet does not delete the
+        // PersistentVolumeClaims its volumeClaimTemplate created. That is the argument
+        // ContainerRegistries.StatefulSetKind was chosen on, and it is what a restore restores from.
+        registration.PurgePermission.ShouldBe(ContainerRegistries.PurgePermission);
+        registration.PurgeProtectionPointer.ShouldBe(ContainerRegistries.PurgeProtectionPointer);
     }
 
     [Fact]
-    public void TheThreeArgumentsTheWindowWouldNeedAreWrittenDownAndAgreeWithDocsPlan08() {
-        // ⚠ Kept as constants rather than deleted, so that re-declaring the window is one line rather
-        // than three decisions taken again from scratch. Each is asserted here so they cannot rot
-        // while nothing calls them.
+    public void TheThreeArgumentsTheWindowNeedsAreWrittenDownAndAgreeWithDocsPlan08() {
+        // ⚠ Kept as constants through the withdrawal, so that re-declaring the window was one line
+        // rather than three decisions taken again from scratch. Each is asserted here so they cannot
+        // rot.
         //
         //   • SEVEN DAYS — docs/plan/06 § Tags, locks, "types carrying data". Declared on the TYPE and
         //     therefore immutable by construction, which is the stronger form of docs/plan/08's
@@ -79,16 +89,22 @@ public sealed class ContainerRegistryDeclarationTests {
     }
 
     [Fact]
-    public void ThePurgeProtectionFlagIsNotADeclaredPropertyWhileThereIsNoWindow() {
-        // ⚠ ProviderBuilder refuses a purge-protection pointer on a type with no window — "the flag
-        // would be a property callers can set and nothing reads" — and that refusal is right. This is
-        // the other half: the property is not in the schema either, so no generated surface offers a
-        // caller a protection that engages against nothing.
-        ContainerRegistries.Schema2026.Properties
-            .ShouldNotContain(x => x.JsonPointer == ContainerRegistries.PurgeProtectionPointer);
+    public void ThePurgeProtectionFlagIsADeclaredBooleanProperty() {
+        // ⚠ THE PROPERTY AND THE DECLARATION MOVE TOGETHER, IN BOTH DIRECTIONS. ProviderBuilder
+        // refuses a purge-protection pointer on a type with no window — "the flag would be a property
+        // callers can set and nothing reads" — and refuses a window whose pointer no schema declares
+        // as a boolean, because a flag the platform enforces against a property nobody can set is a
+        // protection that fails silently open. So this property was absent while the window was
+        // withdrawn and came back with it, and neither state is expressible without the other.
+        var flag = ContainerRegistries.Schema2026.Properties
+            .Single(x => x.JsonPointer == ContainerRegistries.PurgeProtectionPointer);
 
-        Registration().PurgeProtectionPointer.ShouldBeEmpty();
-        Registration().PurgePermission.ShouldBeEmpty();
+        flag.Kind.ShouldBe(SchemaKind.Boolean);
+        flag.DefaultJson.ShouldBe(
+            "false",
+            "protection is opt-in; a default of true would make every registry unpurgeable for seven "
+            + "days with nothing a caller could do about it"
+        );
     }
 
     // ── Failure class (d): a shortName collision ─────────────────────────────────────────────────
