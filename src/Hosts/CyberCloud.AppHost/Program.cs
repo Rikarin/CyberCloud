@@ -145,10 +145,21 @@ var durableSchema = builder
 // primary-silo endpoint to the caller's own port, so two silos with distinct ports silently become
 // TWO ONE-SILO CLUSTERS — see CyberCloudClusterOptions.LocalhostPrimarySiloPort. Silo 2 names silo
 // 1 as the primary; that is the line that makes this a two-silo cluster rather than two clusters.
+// ⚠ WHAT LETS A SILO ACTUALLY REACH THE k3s ABOVE, AND WITHOUT IT THE CLUSTER IS DECORATION.
+//
+// KubeApiClientFactory needs a `ResolveKubeconfig` delegate to turn a cluster connection's
+// CredentialRef into kubeconfig bytes; with none registered it refuses every connect, so a reconcile
+// of any type declaring RequiresCluster failed at its first apply — see LocalKubeconfigFiles. The
+// silo registers the file-backed resolver when it is given a directory, and this is the directory:
+// the same bind mount `--write-kubeconfig` writes into. Production sets no such key and keeps the
+// refusal, because a production kubeconfig belongs in Vault (docs/plan/09 § Cluster connections).
+var kubeconfigRoot = Path.GetFullPath(kubeconfigDirectory);
+
 var siloOne = builder
     .AddProject<CyberCloud_Silo_Host>(CyberCloudResources.SiloOne)
     .WithCyberCloudStorage(redis, shardA, shardB, platformShard)
     .WithReference(nats)
+    .WithEnvironment("CyberCloud__Silo__KubeconfigRoot", kubeconfigRoot)
     .WithOrleansPorts(CyberCloudResources.SiloOnePort, CyberCloudResources.SiloOneGatewayPort)
     // ⚠ The endpoint is declared, not inherited. Aspire reads a project's endpoints from its
     // launchSettings.json, and this host deliberately has none: it is launched by Aspire, by
@@ -165,6 +176,7 @@ builder
     .AddProject<CyberCloud_Silo_Host>(CyberCloudResources.SiloTwo)
     .WithCyberCloudStorage(redis, shardA, shardB, platformShard)
     .WithReference(nats)
+    .WithEnvironment("CyberCloud__Silo__KubeconfigRoot", kubeconfigRoot)
     .WithOrleansPorts(CyberCloudResources.SiloTwoPort, CyberCloudResources.SiloTwoGatewayPort)
     .WithEnvironment(
         "CyberCloud__Cluster__LocalhostPrimarySiloPort",
