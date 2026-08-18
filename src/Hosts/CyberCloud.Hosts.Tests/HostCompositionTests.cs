@@ -51,6 +51,7 @@ public sealed class HostCompositionTests {
     static readonly string[] EveryProviderNamespace = [
         "CyberCloud.Analytics",
         "CyberCloud.Cache",
+        "CyberCloud.ContainerRegistry",
         "CyberCloud.ContainerService",
         "CyberCloud.DBforMySQL",
         "CyberCloud.DBforPostgreSQL",

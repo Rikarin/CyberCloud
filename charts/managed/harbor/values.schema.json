@@ -1,0 +1,230 @@
+{
+  "$id": "https://schema.cybercloud.io/charts/harbor/values.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "The configuration surface of the harbor chart. GENERATED from values.yaml by `./build.sh Charts` and diffed in CI — docs/plan/03 § charts/. Edit values.yaml, never this file. Members carrying `x-cybercloud-api: false` are chart or platform plumbing and are not part of the resource body.",
+  "properties": {
+    "credentialsSecret": {
+      "default": "",
+      "description": "Name of the Secret holding every credential. Empty means \"{release}-credentials\".",
+      "type": "string",
+      "x-cybercloud-api": false,
+      "x-cybercloud-internal-reason": "docs/plan/12 § The pattern, once, piece 5. The platform MINTS these into the tenant's vault and writes the Secret; this chart only NAMES it. ⚠ It is deliberately not a value: goharbor/harbor-helm ships `harborAdminPassword: \"Harbor12345\"` as a live default while randomising every other credential in the same template, and a values key here would be one edit away from reproducing that.",
+      "x-cybercloud-order": 7,
+      "x-cybercloud-pointer": "/properties/credentialsSecret"
+    },
+    "imageRegistry": {
+      "default": "docker.io/goharbor",
+      "description": "Where Harbor's seven images are pulled from.",
+      "type": "string",
+      "x-cybercloud-api": false,
+      "x-cybercloud-internal-reason": "A platform escape hatch for an air-gapped mirror. Not a tenant setting: a registry whose own images come from somewhere the tenant chose is a supply chain the platform cannot vouch for.",
+      "x-cybercloud-order": 6,
+      "x-cybercloud-pointer": "/properties/imageRegistry"
+    },
+    "monitoring": {
+      "additionalProperties": false,
+      "description": "What the platform scrapes.",
+      "properties": {
+        "enabled": {
+          "default": true,
+          "description": "Whether Harbor's core exports Prometheus metrics and a PodMonitor selects them. On by default — docs/plan/12: \"a managed service the tenant cannot see the health of is a black box they will not trust with production\". Turning it off removes the metrics port as well as the scrape, so nothing is left listening on an unscraped address.",
+          "type": "boolean",
+          "x-cybercloud-order": 0,
+          "x-cybercloud-pointer": "/properties/monitoring/enabled"
+        }
+      },
+      "type": "object",
+      "x-cybercloud-order": 4,
+      "x-cybercloud-pointer": "/properties/monitoring"
+    },
+    "nameOverride": {
+      "default": "",
+      "description": "Replace the generated object-name stem. Empty means derive it from the release name.",
+      "type": "string",
+      "x-cybercloud-api": false,
+      "x-cybercloud-internal-reason": "Helm plumbing. Nothing about it belongs in a resource body.",
+      "x-cybercloud-order": 8,
+      "x-cybercloud-pointer": "/properties/nameOverride"
+    },
+    "platform": {
+      "additionalProperties": false,
+      "description": "Resource identity injected by the reconciler. Not a tenant-facing setting.",
+      "properties": {
+        "apiVersion": {
+          "default": "2026-08-01",
+          "description": "The api-version the resource was last written at, rendered into the cybercloud.io/api-version label.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 5,
+          "x-cybercloud-pointer": "/properties/platform/apiVersion"
+        },
+        "managedBy": {
+          "default": "cybercloud",
+          "description": "Value of the cybercloud.io/managed-by label. Constant, and the selector every informer filters on.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 6,
+          "x-cybercloud-pointer": "/properties/platform/managedBy"
+        },
+        "resourceGroup": {
+          "default": "",
+          "description": "Resource group name, rendered into the cybercloud.io/resource-group label.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 2,
+          "x-cybercloud-pointer": "/properties/platform/resourceGroup"
+        },
+        "resourceId": {
+          "default": "",
+          "description": "Resource GUID, rendered into the cybercloud.io/resource-id label.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 3,
+          "x-cybercloud-pointer": "/properties/platform/resourceId"
+        },
+        "resourceType": {
+          "default": "CyberCloud.ContainerRegistry/registries",
+          "description": "Fully qualified resource type, rendered into the cybercloud.io/resource-type label.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 4,
+          "x-cybercloud-pointer": "/properties/platform/resourceType"
+        },
+        "subscriptionId": {
+          "default": "",
+          "description": "Subscription GUID, rendered into the cybercloud.io/subscription-id label.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 1,
+          "x-cybercloud-pointer": "/properties/platform/subscriptionId"
+        },
+        "tenantId": {
+          "default": "",
+          "description": "Tenant GUID, rendered into the cybercloud.io/tenant-id label.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 0,
+          "x-cybercloud-pointer": "/properties/platform/tenantId"
+        }
+      },
+      "type": "object",
+      "x-cybercloud-api": false,
+      "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+      "x-cybercloud-order": 5,
+      "x-cybercloud-pointer": "/properties/platform"
+    },
+    "replicas": {
+      "default": 2,
+      "description": "How many replicas of each stateless component — the API core, the web portal and the job service — run. Two is the smallest count that survives a node drain. The registry itself, the database and Redis each own a volume and run one replica whatever this says.",
+      "maximum": 10,
+      "minimum": 1,
+      "type": "integer",
+      "x-cybercloud-order": 1,
+      "x-cybercloud-pointer": "/properties/replicas"
+    },
+    "sizing": {
+      "additionalProperties": false,
+      "description": "CPU and memory for the registry pod, either by preset or explicitly. The other five components are sized by the platform and are not affected.",
+      "properties": {
+        "cpu": {
+          "default": "",
+          "description": "Explicit vCPU quantity in Kubernetes form, for example 500m or 2. Empty means take it from the preset.",
+          "pattern": "^(?:(\\d+(\\.\\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)?)$",
+          "type": "string",
+          "x-cybercloud-order": 1,
+          "x-cybercloud-pointer": "/properties/sizing/cpu"
+        },
+        "memory": {
+          "default": "",
+          "description": "Explicit memory quantity in Kubernetes form, for example 4Gi. Empty means take it from the preset.",
+          "pattern": "^(?:(\\d+(\\.\\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)?)$",
+          "type": "string",
+          "x-cybercloud-order": 2,
+          "x-cybercloud-pointer": "/properties/sizing/memory"
+        },
+        "preset": {
+          "default": "s1.small",
+          "description": "A sizing preset from docs/plan/12. The registry uses the s1 family, which is 1 vCPU to 4 GiB.",
+          "enum": [
+            "s1.2xlarge",
+            "s1.4xlarge",
+            "s1.large",
+            "s1.medium",
+            "s1.micro",
+            "s1.nano",
+            "s1.small",
+            "s1.xlarge"
+          ],
+          "type": "string",
+          "x-cybercloud-order": 0,
+          "x-cybercloud-pointer": "/properties/sizing/preset",
+          "x-cybercloud-widget": "cozy-preset"
+        }
+      },
+      "type": "object",
+      "x-cybercloud-order": 2,
+      "x-cybercloud-pointer": "/properties/sizing"
+    },
+    "storage": {
+      "additionalProperties": false,
+      "description": "Where the image layers live.",
+      "properties": {
+        "class": {
+          "default": "",
+          "description": "StorageClass name for the image volume. Empty means the cluster default.",
+          "type": "string",
+          "x-cybercloud-immutable": true,
+          "x-cybercloud-order": 1,
+          "x-cybercloud-pointer": "/properties/storage/class",
+          "x-cybercloud-widget": "storageclass"
+        },
+        "size": {
+          "default": "100Gi",
+          "description": "Image storage, in Kubernetes quantity form. Grows online; never shrinks. ⚠ This is a filesystem volume rather than the tenant's object-storage bucket, which is what docs/plan/13 asks for and what the platform cannot yet give it — see the registry's own documentation.",
+          "examples": [
+            "100Gi"
+          ],
+          "pattern": "^(?:\\d+(\\.\\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)$",
+          "type": "string",
+          "x-cybercloud-order": 0,
+          "x-cybercloud-pointer": "/properties/storage/size"
+        }
+      },
+      "required": [
+        "size"
+      ],
+      "type": "object",
+      "x-cybercloud-order": 3,
+      "x-cybercloud-pointer": "/properties/storage"
+    },
+    "version": {
+      "default": "2.15",
+      "description": "Harbor minor version. The platform pins the patch, because Harbor publishes image tags per patch and a bare minor resolves to nothing. A minor leaving support is a portal notice and a 120-day window — docs/plan/12 § Cross-cutting decisions.",
+      "enum": [
+        "2.14",
+        "2.15"
+      ],
+      "type": "string",
+      "x-cybercloud-order": 0,
+      "x-cybercloud-pointer": "/properties/version"
+    }
+  },
+  "required": [
+    "replicas",
+    "version"
+  ],
+  "title": "harbor chart values",
+  "type": "object",
+  "x-cybercloud-api-version": "2026-08-01",
+  "x-cybercloud-chart": "harbor",
+  "x-cybercloud-chart-version": "0.1.0",
+  "x-cybercloud-resource-type": "CyberCloud.ContainerRegistry/registries"
+}

@@ -1,0 +1,116 @@
+{{/*
+The six Services, in one file because they are one decision.
+
+⚠ EVERY ONE IS ClusterIP AND NONE IS A LoadBalancer. docs/plan/12 § Cross-cutting decisions requires
+an explicit CIDR allow-list on any external exposure; a Kubernetes Service HAS
+loadBalancerSourceRanges, so — unlike charts/managed/seaweedfs and charts/managed/kubernetes — the
+blocker here is NOT a missing upstream field. It is that the thing a tenant would expose is an OCI
+registry over plain HTTP whose internal auth this row could not render, and publishing that is the one
+thing that paragraph forbids in as many words. conformance.yaml § owed, `one-front-door`.
+
+⚠ THE FRONT DOOR TAKES THE RESOURCE'S OWN NAME AND SELECTS CORE. There is no nginx: core serves
+/api/, /v2/ and /service/ itself, so docker login and docker push work against it directly. What is
+lost is one address that serves both the UI and the API, which the portal's own Service stands in for.
+*/}}
+{{- $name := include "harbor.name" . -}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "harbor.platformLabels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "harbor.componentLabels" (dict "root" . "component" "core") | nindent 4 }}
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+    {{- if .Values.monitoring.enabled }}
+    - name: metrics
+      port: 8001
+      targetPort: metrics
+    {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ printf "%s-portal" $name }}
+  labels:
+    {{- include "harbor.platformLabels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "harbor.componentLabels" (dict "root" . "component" "portal") | nindent 4 }}
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ printf "%s-jobservice" $name }}
+  labels:
+    {{- include "harbor.platformLabels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "harbor.componentLabels" (dict "root" . "component" "jobservice") | nindent 4 }}
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+---
+{{/*
+⚠ This Service is also the registry StatefulSet's `serviceName`, so it has to exist for the
+registry's pod to get a DNS record at all.
+*/}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ printf "%s-registry" $name }}
+  labels:
+    {{- include "harbor.platformLabels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "harbor.componentLabels" (dict "root" . "component" "registry") | nindent 4 }}
+  ports:
+    - name: registry
+      port: 5000
+      targetPort: registry
+    - name: controller
+      port: 8080
+      targetPort: controller
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ printf "%s-database" $name }}
+  labels:
+    {{- include "harbor.platformLabels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "harbor.componentLabels" (dict "root" . "component" "database") | nindent 4 }}
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: postgres
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ printf "%s-redis" $name }}
+  labels:
+    {{- include "harbor.platformLabels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "harbor.componentLabels" (dict "root" . "component" "redis") | nindent 4 }}
+  ports:
+    - name: redis
+      port: 6379
+      targetPort: redis

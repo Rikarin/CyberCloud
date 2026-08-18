@@ -393,6 +393,31 @@
         <Project Path="src/Providers/CyberCloud.Providers.Network/CyberCloud.Providers.Network.Cluster.Conformance/CyberCloud.Providers.Network.Cluster.Conformance.csproj" />
 
         <!--
+          The thirteenth provider family — CyberCloud.ContainerRegistry/registries on Harbor.
+          docs/plan/13 § Container Registry, "M1 · 1.5 EM".
+
+          ⚠ IT IS THE FIRST TYPE IN THE TREE TO HAVE DECLARED A RECOVERY WINDOW, AND THE DECLARATION
+          IS WITHDRAWN. Eleven families declined SupportsSoftDelete because the manager did not read
+          SoftDeleteDays; docs/plan/08 § Soft delete is built now, and this row's data can genuinely be
+          handed back — a deleted registry's images survive on the StatefulSets' claims. Declaring it
+          is what found that a SOFT-DELETED RESOURCE REBUILDS ITS WHOLE DATA PLANE after a converged
+          teardown: the index entry moves out of the tree and the reconcile loop's view of the resource
+          does not. Measured against a real API server, reproduced by adding and removing the one call.
+          charts/managed/harbor/conformance.yaml § owed, `a-soft-deleted-resource-undeletes-itself`.
+
+          ⚠ ITS `feeds` SIBLING IS NOT DECLARED. docs/plan/13 § Artifact feeds is M2, is explicitly
+          "the row most likely to be underestimated", and is a .NET service rather than a Harbor
+          feature: "Harbor does OCI only". Declaring it here would be declaring three protocols nothing
+          serves.
+        -->
+        <Project Path="src/Providers/CyberCloud.Providers.ContainerRegistry/CyberCloud.Providers.ContainerRegistry.Contracts/CyberCloud.Providers.ContainerRegistry.Contracts.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.ContainerRegistry/CyberCloud.Providers.ContainerRegistry/CyberCloud.Providers.ContainerRegistry.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.ContainerRegistry/CyberCloud.Providers.ContainerRegistry.Application/CyberCloud.Providers.ContainerRegistry.Application.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.ContainerRegistry/CyberCloud.Providers.ContainerRegistry.Tests/CyberCloud.Providers.ContainerRegistry.Tests.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.ContainerRegistry/CyberCloud.Providers.ContainerRegistry.Conformance/CyberCloud.Providers.ContainerRegistry.Conformance.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.ContainerRegistry/CyberCloud.Providers.ContainerRegistry.Cluster.Conformance/CyberCloud.Providers.ContainerRegistry.Cluster.Conformance.csproj" />
+
+        <!--
           The twelfth provider family — CyberCloud.Terminal/consoles, the browser shell.
 
           docs/plan/19 § CyberCloud.Terminal/consoles, M1 · 1.5 EM, and step 6 of docs/plan/24's M1

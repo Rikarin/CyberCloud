@@ -1241,6 +1241,173 @@ single gap is that nothing consumes the ingest row**, because `CyberCloud.Ingest
 the `VMUser` half is enforced by vmauth the moment it is applied and everything else is a promise with
 a schema. Every gap is at `charts/managed/monitor-workspace/conformance.yaml § owed`.
 
+`CyberCloud.Providers.ContainerRegistry` — `CyberCloud.ContainerRegistry/registries` on Harbor,
+[13 § Container Registry](../../docs/plan/13-compute-vm-containers.md), **M1 · 1.5 EM**. **The family
+whose operator turned out not to exist**, and the one that declared the first recovery window in the
+tree, measured it against a real API server, and took it back.
+
+### What the thirteenth provider measured
+
+- **⚠ ADR-010 CLAUSE 1'S SURVEY NAMES A THIRD OPERATOR THAT CANNOT BE USED, AND THREE SIGHTINGS MAKE
+  IT A FINDING ABOUT THE CLAUSE RATHER THAN ABOUT THREE SERVICES.** `goharbor/harbor-operator`
+  answers the GitHub API with `"archived": true` and
+  `"description": "[DEPRECATED] Kubernetes operator for Harbor service components"`; its README opens
+  *"Due to low activity in maintanance this sub-project we are archiving it"*, its last **stable**
+  release is **v1.3.0, 2022-07-02**, and the only newer tag is a release candidate that never
+  shipped. Checked against the API on 2026-08-18. `charts/managed/nats` found `nats-operator`
+  archived; `SearchProvider` found `qdrant/qdrant-operator` answering `404`; `DocumentDbAccounts`
+  found the FerretDB organisation holds no operator at all. **Clause 1 calls itself *"the operator
+  selection per managed service"* and is, four rows in, a survey of *software choices* that is only
+  sometimes a survey of operators.** The correction belongs in ADR-010 and is reported rather than
+  made here.
+- **⚠ SO THE OPERATOR-LESS SHAPE IS TESTED AT THREE TIMES ITS PREVIOUS WIDTH, AND THE SHAPE HOLDS.**
+  `CyberCloud.Messaging/natsClusters` established it at five objects; this renders **fifteen** — one
+  `Secret`, one `ConfigMap`, six `Service`s, three `StatefulSet`s, three `Deployment`s and a
+  `PodMonitor` — and needed **four module edges, six projects and one `ProviderConformanceCase`**,
+  the same columns as the eleven before it. `test/CyberCloud.Conformance` was not touched. ⚠ The
+  catalogue's running claim that *"object count is not a measure of a service's size"* is now
+  bracketed at **1 and 15**, and the top of the range is a row docs/plan/13 costs at **1.5 EM**,
+  less than the three-object managed-Kubernetes row's 4.0.
+- **⚠ THE SHARPEST SIGHTING OF THE UNSAFE-DEFAULT CLASS IN THE CATALOGUE, AND IT IS NOT AN ABSENCE —
+  IT IS A PUBLISHED CONSTANT.** The three earlier sightings are things that are *unset*: SeaweedFS
+  with no identities file serves anonymous **admin**, Qdrant's chart leaves `service.api_key` unset,
+  MariaDB's operator generates a root password. `goharbor/harbor-helm`'s `values.yaml` ships
+  `harborAdminPassword: "Harbor12345"` and `templates/core/core-secret.yaml` consumes it with **no
+  generation fallback** — while, in the same file, `secret`, `CSRF_KEY`, `JOBSERVICE_SECRET` and
+  `REGISTRY_HTTP_SECRET` all end in `| default (randAlphaNum 16)`. The administrator's password is
+  the one credential in that chart that is not randomised.
+  <br>⚠ **Reading only the chart gets it wrong in the other direction as well, and all three layers
+  had to be read.** Harbor's own core gives `HARBOR_ADMIN_PASSWORD` a `DefaultValue: ""`
+  (`src/lib/config/metadata/metadatalist.go`) and seeds `('admin', '', …)`
+  (`make/migrations/postgresql/0001_initial_schema.up.sql`); the 87 occurrences of `Harbor12345` in
+  that repository are tests, tooling and `make/harbor.yml.tmpl`, and **none is in Go source**. And
+  `src/core/main.go` applies the environment value **only when the stored salt is empty**, with no
+  non-empty guard — so an unset variable seeds the administrator with the hash of the empty string,
+  once, permanently, and a *later* mint would not take effect at all. That last fact is why
+  `ContainerRegistryListCredentialsHandler` reads and never mints, and it is a stronger reason than
+  the one `StorageAccountListKeysHandler` gives.
+- **⚠ THIS ROW DECLARED THE FIRST `SupportsSoftDelete` IN THE TREE, AND DECLARING IT IS WHAT FOUND
+  THAT A SOFT-DELETED RESOURCE REBUILDS ITS ENTIRE DATA PLANE AFTER A CONVERGED TEARDOWN. THE
+  DECLARATION IS WITHDRAWN AND THE FINDING IS THE DELIVERABLE.** Eleven families declined the
+  declaration for one shared reason — the manager did not read `SoftDeleteDays` — and docs/plan/08
+  § Soft delete is built now, so the question each type owes is its own: *can the deleted thing
+  genuinely be handed back?* Here the answer is yes, and the mechanism is **Kubernetes' rather than
+  this provider's**: a claim created by a `volumeClaimTemplate` is not removed by deleting the
+  `StatefulSet`, which is why all three volume-owning components are `StatefulSet`s rather than
+  `Deployment`s with claims beside them. So the declaration went in.
+  <br>⚠ **Measured, not argued.** `ClusterConformanceTests.TheLifecycleRunsAgainstARealApiServer`
+  failed with *"is still in the real cluster after a converged teardown"*; reordering the case's
+  `Objects` showed it was not one object but **every** object, the core `Deployment` included.
+  Removing that one call and changing nothing else made the same test pass, and putting it back made
+  it fail again.
+  <br>⚠ **What it means, because it is worse than it sounds.** A tenant deletes a registry; the API
+  answers, the operation converges, the resource stops being addressable — and the workload comes
+  back and keeps running, sampled by docs/plan/22's usage pipeline, holding its quota, invisible to
+  the tenant who would delete it again. docs/plan/08 chose to **move** the resource out of the tree
+  rather than flag it in place, because a flag *"puts an 'unless deleted' clause on every read path,
+  every list, every ReBAC check and the index claim, and the feature is then only as good as the
+  least-remembered of them"*. The **index** entry moves and `ResolveAsync` refuses it — that half
+  works. The **reconcile loop's view of the resource** does not move, and on the non-soft-delete path
+  it is `ResourceGrain.CompleteDeleteAsync` clearing grain state that stops the loop — which a
+  resource that must survive for a restore cannot do. The least-remembered clause was the one the
+  document did not look at.
+  <br>⚠ **Two things had to be true at once for anyone to see it**, which is why eleven families did
+  not: a type that declares the window, and a teardown wide enough to be unmistakable.
+  `charts/managed/harbor/conformance.yaml § owed`, `a-soft-deleted-resource-undeletes-itself`,
+  carries the reproduction; the three arguments the call needs are kept, documented and asserted
+  against, so re-declaring it is one line.
+  <br>⚠ **Two smaller findings stand whatever happens to that one.** Nothing removes a
+  `PersistentVolumeClaim` on a purge, so a purged resource would return its quota and leave its disks
+  allocated; and `ResourceManagerService.RestoreAsync` and `PurgeAsync` are reachable from **no
+  gateway stage at all**, grepped rather than assumed — so even a working window would be one nobody
+  could exercise.
+- **⚠ `Matches` IS CONTAINMENT FOR A REASON THAT IS NOT MERELY FALSE HERE BUT UNAVAILABLE.** Five
+  families argue it from a CRD's `+kubebuilder:default` markers or from an operator's mutating
+  webhook; `KafkaClusters` and `ClickHouseClusters` found CRDs that declared none and could at least
+  look. There is no CRD to look at. What forces containment is that **five of the six kinds are
+  built-in**, which `NatsClusters` found first and which no family had met at this width. ⚠ Recorded
+  for whoever reaches for the operator later: it carries **both** mechanisms and carries them hard —
+  298 `+kubebuilder:default` markers across `apis/`, and a `MutatingWebhookConfiguration` whose
+  `HarborCluster` defaulter *nils out* every non-selected variant of `spec.cache`, `spec.database`
+  and `spec.storage`.
+- **⚠ A RENDERED BODY CARRIES NO `kind` AND SIX KINDS ARRIVE AT ONE `Matches`, WHICH IS A SHAPE
+  NOTHING HAD.** `KubeCommandBuilder` injects `kind` on the apply path, so every provider before this
+  one wrote `null or "TheirKind"` and meant it. Six kinds make that case mean six things at once, so
+  the fallback reads the document's own **shape** — `type` beside `data` is the `Secret`,
+  `podMetricsEndpoints` is the `PodMonitor`, `volumeClaimTemplates` separates the two workload kinds
+  — and a document matching none of them is `false`. ⚠ **Found by a test rather than by review**: the
+  first version routed the `null` case to the workload comparison, and
+  `ACredentialsSecretMissingOneFieldDoesNotMatch` went red on the *positive* half.
+- **⚠ THE THIRD FAMILY TO WANT THE SAME MISSING FIFTH MODULE EDGE, AND THE FIRST WHOSE PLAN DOCUMENT
+  ASKS FOR IT IN AS MANY WORDS.** docs/plan/13: *"Storage backend is the tenant's SeaweedFS bucket, so
+  registry storage is billed like any other blob."* That bucket is a `CyberCloud.Storage/accounts`
+  resource and `ReconcileContext` still has no resolver for another provider's. `CyberCloud.Storage`
+  wants a Postgres for its filer, `CyberCloud.Analytics` wants an S3 cold tier, and **two of the three
+  want to reach the same provider**. The registry keeps its images on a `PersistentVolumeClaim`
+  instead, which means docs/plan/13's sentence about billing is not true of what ships — and the
+  *same* seam blocks the metadata database being highly available, which is the third instance of it
+  in one row.
+- **⚠ THE QUOTA METERS ARE A SUM OVER HETEROGENEOUS COMPONENTS — THIRD SIGHTING — AND THE FIRST WHERE
+  ONE POPULATION IS MULTIPLIED BY A TENANT-SET REPLICA COUNT AND TWO ARE FIXED.** It is
+  `1 registry × preset + 3 × replicas × 250m + 2 × 250m`: three stateless components share the
+  tenant's replica count, and the database, Redis and the registry each run one replica because each
+  owns a `ReadWriteOnce` claim. A derivation copied from `natsClusters` is right about nothing; one
+  copied from `StorageAccounts` misses the ×3.
+  `ContainerRegistryQuotaTests.ChangingOnlyTheReplicaCountMovesThreeComponentsAndNotFive` is the one
+  that fails on either, and it was run red against both. ⚠ The **storage** meter deliberately does
+  not read `replicas` at all, which is the same fact from the other side.
+- **⚠ FOURTEEN OF FIFTEEN OBJECTS NEED NO CRD STUB, WHICH IS THE SECOND SIGHTING OF A SHAPE
+  `CyberCloud.Providers.Terminal` REACHED FIRST AND FROM THE OTHER END.** That family renders *only*
+  core-group objects and records that its green is therefore no evidence at all that the CRD
+  derivation works; this one renders fourteen built-in kinds and **one** custom kind, so it is the
+  first family whose suite exercises both a real schema-validating API server and the derived stub in
+  the same run.**
+  `ClusterConformanceHarness` derives a definition per *custom* kind; here the only one is
+  `monitoring.coreos.com/v1 PodMonitor`. So almost everything this family applies is checked by a
+  **real, schema-validating** API server rather than by an open-schema stub — a `Deployment` whose
+  selector does not match its own pod template is rejected there. ⚠ It still proves nothing about
+  Harbor: no image is pulled, no migration runs, and **the exhaustive correctness of the environment
+  set in `templates/control-plane.yaml` is checked by nothing.** That is the largest untested surface
+  in this family and it is named at `conformance.yaml § owed`, `converged-is-not-serving`.
+- **⚠ THE ONE GAP THIS PLATFORM CREATES RATHER THAN INHERITS, AND IT IS WORTH MORE WRITTEN DOWN THAN
+  WORKED AROUND.** `goharbor/harbor-helm` renders `auth: htpasswd` into the registry's `config.yml`
+  and computes the file with Sprig's `htpasswd`, which is **bcrypt**; `distribution`'s htpasswd
+  backend accepts bcrypt and nothing else. .NET ships none and this repository references no package
+  that does, so a reconcile pass cannot produce the hash — and a chart that rendered one the
+  reconciler could not would be the two halves of the ADR-012 pair disagreeing. So no `auth:` block
+  is rendered. What bounds it is the namespace: the registry's `Service` is `ClusterIP` in
+  `{subscriptionId:N}-{resourceGroup}`, which holds one tenant's resources, so the exposure is to the
+  tenant's own workloads rather than across tenants. What is lost is defence in depth.
+  `conformance.yaml § owed` names both closures.
+- **⚠ THE THIRD ROW TO DECLARE NO EXPOSURE AXIS, AND THE FIRST WHOSE BLOCKER IS NOT A MISSING UPSTREAM
+  FIELD.** `charts/managed/seaweedfs` and `charts/managed/kubernetes` both found a `ServiceSpec` with
+  nowhere to put a CIDR allow-list. A Kubernetes `Service` **has** `loadBalancerSourceRanges`, so the
+  list docs/plan/12 § Cross-cutting decisions requires would render fine. What stops it is that the
+  thing exposed would be an OCI registry over plain HTTP with the auth gap above — so the three rows
+  reach the same absence by three different routes, and only this one could have been closed by a
+  provider.
+- **⚠ THE FIRST TEMPLATE DUPLICATION THAT IS NOT A SIZING TABLE.** Every family's `_helpers.tpl`
+  carries a second copy of its presets, whose drift shows up as a pod of the wrong size. This one
+  also carries the **pinned patch per Harbor minor**, and its drift renders an image tag Harbor does
+  not publish — `goharbor/harbor-core:v2.15` resolves to nothing — as an `ImagePullBackOff` per pod
+  after the caller was told `202`, with nothing naming the tag.
+  `ContainerRegistryChartTests.ThePinnedPatchTableInTheChartIsTheSameTableAsTheRegistrys` diffs them.
+- **The chart-annotation emitter's output is predictable by hand — a seventh sighting.** This chart's
+  `@param` block was written to match what `ChartAnnotationEmitter` would produce and came back
+  **unchanged on the first `./build.sh Charts` run** — *"unchanged, 0 problem(s)"*. Only
+  `values.schema.json` had to be generated. Seven charts in, the alternative — a format only the
+  generator knows — is comprehensively refuted.
+
+**What landed: `registries`.** `feeds` is docs/plan/13's **M2** sibling in the same namespace and is
+**not declared**, because that document says in as many words that *"Harbor does OCI only"* and that
+the three artifact protocols are a .NET service — declaring the type would publish an API nothing
+serves. Vulnerability scanning, replication, retention policies and robot accounts are docs/plan/13's
+four bullets under this row and **none of them ships**; each is at
+`charts/managed/harbor/conformance.yaml § owed` with what blocks it, and three of the four are blocked
+by the same thing: they are configured over **Harbor's own API**, after the resource exists, by a
+caller that would have to authenticate to the thing it just created — which no reconciler in the tree
+does and which `ReconcileContext` gives no way to do.
+
 ## Planned namespaces
 
 `Platform`, `Identity`, `Compute`, `ContainerInstance`, `ContainerRegistry`,

@@ -1,5 +1,6 @@
 using CyberCloud.Providers.Analytics.Application;
 using CyberCloud.Providers.Cache.Application;
+using CyberCloud.Providers.ContainerRegistry.Application;
 using CyberCloud.Providers.ContainerService.Application;
 using CyberCloud.Providers.DBforMySQL.Application;
 using CyberCloud.Providers.DBforPostgreSQL.Application;
@@ -53,6 +54,7 @@ namespace CyberCloud.Gateway.Host;
 [DependsOn(typeof(AbpAutofacModule))]
 [DependsOn(typeof(AnalyticsApplicationModule))]
 [DependsOn(typeof(ValkeyCacheApplicationModule))]
+[DependsOn(typeof(ContainerRegistryApplicationModule))]
 [DependsOn(typeof(ContainerServiceApplicationModule))]
 [DependsOn(typeof(MariaDbApplicationModule))]
 [DependsOn(typeof(PostgresApplicationModule))]

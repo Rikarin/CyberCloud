@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      docs/plan/03 § Providers — the implementation assembly: "grains, reconcilers, the chart
+      bindings". A reconciler, an action handler and a chart binding; no grain (see the .Contracts
+      .csproj).
+
+      ⚠ ITS ENTIRE REFERENCE SET IS ITS OWN .Contracts. Everything else — IResourceReconciler,
+      IResourceActionHandler, ReconcileContext, KubeCommand, ISecretWriter — arrives through it.
+      docs/plan/07 § The enforcement seam: "Providers never call the engine." Here that is mechanical
+      rather than reviewed, because CyberCloud.ResourceManager.Contracts does not reference
+      CyberCloud.Authorization.Contracts, so ICheckGrain is not nameable from this assembly at all.
+
+      ⚠ NO KubernetesClient. docs/plan/03 § Assembly graph rules, rule 3: nothing above
+      CyberCloud.Kubernetes names a k8s.Models type. A harbor-operator `HarborCluster` has no
+      k8s.Models type anyway — it is a custom resource — and building it as JsonObject rather than as
+      a generated CRD model is what keeps that true without anyone having to remember it. It matters
+      here for the same reason it did on mariadb-operator: goharbor.io is served at v1beta1, and a
+      generated model would pin a beta shape into a compiled assembly.
+    -->
+
+    <ItemGroup>
+        <ProjectReference Include="../CyberCloud.Providers.ContainerRegistry.Contracts/CyberCloud.Providers.ContainerRegistry.Contracts.csproj"/>
+    </ItemGroup>
+
+    <ItemGroup Label="CyberCloud.Analyzers — see CyberCloud.Core.csproj for why this is not a reference">
+        <ProjectReference Include="../../../CyberCloud.Analyzers/CyberCloud.Analyzers.csproj"
+                          OutputItemType="Analyzer"
+                          ReferenceOutputAssembly="false"/>
+    </ItemGroup>
+
+</Project>

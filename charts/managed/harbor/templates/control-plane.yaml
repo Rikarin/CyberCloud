@@ -1,0 +1,228 @@
+{{/*
+The three stateless components: the API core, the web portal and the job service.
+
+⚠ EVERY CREDENTIAL ARRIVES AS A secretKeyRef AND NONE AS A LITERAL. That is what keeps these
+documents identical whatever the vault holds, which in turn is what makes a reconcile pass idempotent.
+A rendered value would also put the administrator's password into a Deployment's own spec, readable by
+anyone holding `get deployments`.
+*/}}
+{{- $name := include "harbor.name" . -}}
+{{- $secret := include "harbor.credentialsSecret" . -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ printf "%s-core" $name }}
+  labels:
+    {{- include "harbor.platformLabels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicas }}
+  selector:
+    matchLabels:
+      {{- include "harbor.componentLabels" (dict "root" . "component" "core") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "harbor.componentLabels" (dict "root" . "component" "core") | nindent 8 }}
+    spec:
+      containers:
+        - name: core
+          image: {{ include "harbor.image" (dict "root" . "repository" "harbor-core") | quote }}
+          ports:
+            - name: http
+              containerPort: 8080
+            {{- if .Values.monitoring.enabled }}
+            - name: metrics
+              containerPort: 8001
+            {{- end }}
+          env:
+            {{/*
+              ⚠ HARBOR_ADMIN_PASSWORD IS MINTED, NEVER DEFAULTED, and this is the row's sharpest
+              finding. goharbor/harbor-helm's values.yaml ships `harborAdminPassword: "Harbor12345"`
+              and its core-secret template consumes it with no generation fallback — while, in the
+              same file, `secret`, `CSRF_KEY`, `JOBSERVICE_SECRET` and `REGISTRY_HTTP_SECRET` all end
+              in `| default (randAlphaNum 16)`. The admin password is the ONE credential in that chart
+              that is not randomised.
+              ⚠ Harbor's own core does something different again: src/lib/config/metadata/
+              metadatalist.go gives HARBOR_ADMIN_PASSWORD a DefaultValue of "", and src/core/main.go
+              applies the environment value only when the stored salt is empty. So an unset variable
+              seeds the administrator with the hash of the empty string, once, permanently.
+            */}}
+            - name: HARBOR_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secret }}
+                  key: adminPassword
+            - name: CORE_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secret }}
+                  key: coreSecret
+            {{/*
+              ⚠ CSRF_KEY is exactly 32 characters and Harbor refuses to start otherwise — it is an
+              AES-256 key. A value of any other length is a core that crash-loops with a message about
+              key size, per pod, after the caller was told 202.
+            */}}
+            - name: CSRF_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secret }}
+                  key: csrfKey
+            - name: JOBSERVICE_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secret }}
+                  key: jobServiceSecret
+            - name: REGISTRY_HTTP_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secret }}
+                  key: registryHttpSecret
+            - name: POSTGRESQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secret }}
+                  key: databasePassword
+            - name: POSTGRESQL_HOST
+              value: {{ printf "%s-database" $name | quote }}
+            - name: POSTGRESQL_PORT
+              value: "5432"
+            - name: POSTGRESQL_USERNAME
+              value: "postgres"
+            - name: POSTGRESQL_DATABASE
+              value: "registry"
+            - name: POSTGRESQL_SSLMODE
+              value: "disable"
+            - name: _REDIS_URL_CORE
+              value: {{ printf "redis://%s-redis:6379/0" $name | quote }}
+            - name: _REDIS_URL_REG
+              value: {{ printf "redis://%s-redis:6379/2" $name | quote }}
+            - name: REGISTRY_URL
+              value: {{ printf "http://%s-registry:5000" $name | quote }}
+            - name: REGISTRY_CONTROLLER_URL
+              value: {{ printf "http://%s-registry:8080" $name | quote }}
+            - name: PORTAL_URL
+              value: {{ printf "http://%s-portal:8080" $name | quote }}
+            - name: JOBSERVICE_URL
+              value: {{ printf "http://%s-jobservice:8080" $name | quote }}
+            - name: TOKEN_SERVICE_URL
+              value: {{ printf "http://%s-core:8080/service/token" $name | quote }}
+            - name: CORE_URL
+              value: {{ printf "http://%s-core:8080" $name | quote }}
+            {{/*
+              ⚠ WITH_TRIVY is false and there is no property that turns it on. Vulnerability scanning
+              is docs/plan/01's M2 row ("ACR — vulnerability scanning · ⊂ registries · M2"); a flag
+              whose only honest value is false publishes a feature nobody can have.
+            */}}
+            - name: WITH_TRIVY
+              value: "false"
+            - name: LOG_LEVEL
+              value: "info"
+            - name: METRIC_ENABLE
+              value: {{ .Values.monitoring.enabled | quote }}
+            - name: METRIC_PATH
+              value: "/metrics"
+            - name: METRIC_PORT
+              value: "8001"
+          {{- include "harbor.controlPlaneResources" . | nindent 10 }}
+          {{/*
+            ⚠ /api/v2.0/ping and not /. Core answers / with a redirect before its database migration
+            has run, so a readiness probe on the root would put a core that cannot serve a single API
+            call into the Service.
+          */}}
+          readinessProbe:
+            httpGet:
+              path: /api/v2.0/ping
+              port: 8080
+            periodSeconds: 10
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /api/v2.0/ping
+              port: 8080
+            periodSeconds: 20
+            failureThreshold: 5
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ printf "%s-portal" $name }}
+  labels:
+    {{- include "harbor.platformLabels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicas }}
+  selector:
+    matchLabels:
+      {{- include "harbor.componentLabels" (dict "root" . "component" "portal") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "harbor.componentLabels" (dict "root" . "component" "portal") | nindent 8 }}
+    spec:
+      containers:
+        - name: portal
+          image: {{ include "harbor.image" (dict "root" . "repository" "harbor-portal") | quote }}
+          ports:
+            - name: http
+              containerPort: 8080
+          {{- include "harbor.controlPlaneResources" . | nindent 10 }}
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8080
+            periodSeconds: 10
+            failureThreshold: 3
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ printf "%s-jobservice" $name }}
+  labels:
+    {{- include "harbor.platformLabels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicas }}
+  selector:
+    matchLabels:
+      {{- include "harbor.componentLabels" (dict "root" . "component" "jobservice") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "harbor.componentLabels" (dict "root" . "component" "jobservice") | nindent 8 }}
+    spec:
+      containers:
+        - name: jobservice
+          image: {{ include "harbor.image" (dict "root" . "repository" "harbor-jobservice") | quote }}
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: CORE_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secret }}
+                  key: coreSecret
+            - name: JOBSERVICE_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secret }}
+                  key: jobServiceSecret
+            - name: CORE_URL
+              value: {{ printf "http://%s-core:8080" $name | quote }}
+            - name: REGISTRY_CONTROLLER_URL
+              value: {{ printf "http://%s-registry:8080" $name | quote }}
+            - name: CONFIG_PATH
+              value: /etc/jobservice/config.yml
+          volumeMounts:
+            - name: config
+              mountPath: /etc/jobservice/config.yml
+              subPath: jobservice-config.yml
+          {{- include "harbor.controlPlaneResources" . | nindent 10 }}
+          readinessProbe:
+            httpGet:
+              path: /api/v1/stats
+              port: 8080
+            periodSeconds: 10
+            failureThreshold: 3
+      volumes:
+        - name: config
+          configMap:
+            name: {{ printf "%s-config" $name }}

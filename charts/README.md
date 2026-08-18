@@ -35,7 +35,7 @@ block from the provider registry and then generates `values.schema.json` from th
 whose block or whose schema differs from the checked-in one fails CI. The `@internal` rows are
 carried through as bytes — **at every depth**, which is a correction: see § What a chart cannot say.
 
-Nine charts are paired today, and the split is worth reading as a ratio rather than as nine numbers:
+Ten charts are paired today, and the split is worth reading as a ratio rather than as ten numbers:
 
 | Chart | Rows | Generated | `@internal` |
 |---|---|---|---|
@@ -48,6 +48,7 @@ Nine charts are paired today, and the split is worth reading as a ratio rather t
 | `managed/mariadb` | 27 | 14 | 13 |
 | `managed/kubernetes` | 21 | 8 | 13 |
 | `managed/kubernetes-agentpool` | 21 | 11 | 10 |
+| `managed/harbor` | 22 | 11 | 11 |
 
 ⚠ **The `@internal` count barely moves and the generated count varies by a factor of two**, which is
 the shape to expect for the rest: the hand-written tail is the platform's identity block (eight rows),
@@ -71,6 +72,16 @@ them — see § What a chart cannot say for why they are not in any `ResourceSch
 > `@internal` because it reaches the **tenant's SQL** (`ON CLUSTER`, `Distributed()`) and so is a
 > constant with consequences rather than a setting. The prediction's shape holds: the hand-written
 > tail is still the identity block plus plumbing, and it grew by exactly the number of extra objects.
+
+> ⚠ **`managed/harbor`'s `@internal` tail is eleven and its API surface is twelve, which holds the
+> prediction over the widest chart in the tree.** That chart renders **fourteen objects** — there is
+> no Harbor operator, so the workload is the chart — and its hand-written tail is still the identity
+> block plus plumbing plus two escape hatches: the image registry, for an air-gapped mirror, and the
+> credentials-Secret **name**. ⚠ That second one is worth reading: it is a name and never a value,
+> because `goharbor/harbor-helm` ships `harborAdminPassword: "Harbor12345"` as a live default while
+> randomising every other credential in the same template, and a values key here would be one edit
+> away from reproducing it. So object count moves the tail by nothing at all — what moves it is how
+> many *escape hatches* a service needs, which is the sharper form of the prediction.
 
 > ⚠ **`managed/kubernetes` is the first chart whose API surface is SMALLER than its `@internal`
 > tail, and the reason is the row rather than the shape.** Eight API rows against thirteen

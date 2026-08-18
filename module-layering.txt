@@ -125,7 +125,7 @@ CyberCloud.Vault -> CyberCloud.ResourceManager
 # cannot grant what rule 2 refuses: cross-provider traffic goes through CyberCloud.ResourceManager
 # by resource id. A line here would fail rule 2 and be deleted, not honoured.
 #
-# ⚠ THE TEN FAMILIES BELOW HAVE IDENTICAL COLUMNS, AND THAT IS THE MEASUREMENT RATHER THAN A
+# ⚠ THE TWELVE FAMILIES BELOW HAVE IDENTICAL COLUMNS, AND THAT IS THE MEASUREMENT RATHER THAN A
 # COINCIDENCE. docs/plan/25 § R1 asks what a provider costs the platform; four edges, the same four
 # every time, is the answer for a trivial provider, for one with backup and pooling and extensions,
 # for one that does quantity arithmetic and talks to a third operator, for one with two resource
@@ -190,6 +190,23 @@ CyberCloud.Vault -> CyberCloud.ResourceManager
 # them children, rendering four Kube-OVN kinds across one API group. The fifth-edge signal has still
 # not fired from any provider's own needs.
 #
+# ⚠ AND CyberCloud.Providers.ContainerRegistry IS THE THIRD FAMILY WITH A REASON TO WANT A FIFTH, AND
+# THE FIRST WHOSE PLAN DOCUMENT ASKS FOR THE EDGE IN AS MANY WORDS. docs/plan/13 § Container Registry:
+# "Storage backend is the tenant's SeaweedFS bucket, so registry storage is billed like any other
+# blob." That bucket is a CyberCloud.Storage/accounts resource, its endpoint and access-key pair live
+# behind another provider's vault path, and ReconcileContext still carries no resolver for another
+# provider's resource. So the registry keeps its images on a PersistentVolumeClaim instead, which is
+# the shipped shape and is a smaller product than the one docs/plan/13 describes —
+# charts/managed/harbor/conformance.yaml § owed, `storage-backend-is-not-the-tenants-bucket`. The
+# line stays out.
+#
+# ⚠ THREE FAMILIES NOW WANT THE SAME MISSING LINE, FOR THREE DIFFERENT FEATURES, AND TWO OF THE THREE
+# WANT IT TO REACH CyberCloud.Storage/accounts SPECIFICALLY. Storage itself wants a Postgres for its
+# filer; Analytics wants an S3 cold tier; this one wants an S3 registry backend. That is no longer
+# "a provider might reach for this" — the sanctioned route (a resource id through
+# CyberCloud.ResourceManager) has no reader a reconciler can call, and three rows have now shipped
+# reduced because of it.
+#
 # ⚠ AND THE SAME FOUR FOR CyberCloud.Providers.Terminal, WHICH IS THE ONE THAT SHOULD HAVE BROKEN IT.
 # A cloud terminal's whole purpose is to reach the tenant's OTHER resources — docs/plan/24's M1 exit
 # story says "psql into it" in as many words — so this is the first family whose PRODUCT is
@@ -233,6 +250,10 @@ CyberCloud.Providers.Analytics -> CyberCloud.Kubernetes
 CyberCloud.Providers.Analytics -> CyberCloud.ResourceManager
 CyberCloud.Providers.Analytics -> CyberCloud.Tenancy
 CyberCloud.Providers.Cache -> CyberCloud.Core
+CyberCloud.Providers.ContainerRegistry -> CyberCloud.Core
+CyberCloud.Providers.ContainerRegistry -> CyberCloud.Kubernetes
+CyberCloud.Providers.ContainerRegistry -> CyberCloud.ResourceManager
+CyberCloud.Providers.ContainerRegistry -> CyberCloud.Tenancy
 CyberCloud.Providers.ContainerService -> CyberCloud.Core
 CyberCloud.Providers.ContainerService -> CyberCloud.Kubernetes
 CyberCloud.Providers.ContainerService -> CyberCloud.ResourceManager

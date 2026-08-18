@@ -1,0 +1,96 @@
+# Provenance — charts/README.md § `SOURCE` is required, including when nothing was forked.
+#
+# ADR-010: "Their charts are a starting point, not a dependency. Where a chart is close, fork it into
+# charts/ with the upstream commit recorded in a SOURCE file." Nothing was forked here, and
+# `vendored: none` is an answer to "where did this come from" where a missing file is not.
+
+vendored: none
+upstream: https://github.com/goharbor/harbor-helm
+
+# ⚠ THE OPERATOR ADR-010 CLAUSE 1 IMPLIES IS ARCHIVED, AND THAT IS THE MOST IMPORTANT LINE IN THIS
+# FILE. Checked against the GitHub API on 2026-08-18 rather than against a README:
+#
+#     GET /repos/goharbor/harbor-operator
+#       "archived": true
+#       "description": "[DEPRECATED] Kubernetes operator for Harbor service components"
+#       "pushed_at": "2025-08-08T09:26:29Z"
+#
+# Its README opens "Due to low activity in maintanance this sub-project we are archiving it"; its last
+# STABLE release is v1.3.0 (2022-07-02) and the only newer tag is v1.4.0-rc1 (2022-12-07), a release
+# candidate that never shipped. Of the eighteen repositories in the goharbor organisation exactly two
+# are archived and this is one of them.
+#
+# ⚠ THIRD SIGHTING. charts/managed/nats found nats-operator archived on 2025-04-10;
+# CyberCloud.Search/vectorStores found qdrant/qdrant-operator answering 404; CyberCloud.DocumentDB
+# found the FerretDB organisation holds no operator at all. ADR-010 clause 1 calls itself "the
+# operator selection per managed service" and is, four rows in, a survey of SOFTWARE CHOICES that is
+# only sometimes a survey of operators. The correction belongs in ADR-010 rather than in a provider,
+# and it is reported rather than made here.
+#
+# So this chart renders Harbor's workload directly — the operator-less shape charts/managed/nats
+# established — and `upstream` above points at goharbor/harbor-helm, which is what upstream actually
+# maintains for Kubernetes: not archived, pushed 2026-08-03, latest release tag v1.19.2 (release NAME
+# v2.15.2 — ⚠ the chart's tag and Harbor's app version are deliberately different numbers, so pin the
+# TAG).
+upstream-api: none — apps/v1, core/v1 and monitoring.coreos.com/v1 only
+
+# The engine this chart runs. ADR-011's licence table lists Harbor as Apache-2.0.
+engine: https://github.com/goharbor/harbor
+
+# Reviewed against the upstream sources on this date. A bare date rather than a SHA is a weaker claim
+# and is labelled as one.
+#
+# ⚠ WHAT THIS REVIEW ESTABLISHED, because the credential story is three different stories in three
+# layers and reading any one of them alone gets it wrong:
+#
+#   * `goharbor/harbor-helm`, `values.yaml:295` — `harborAdminPassword: "Harbor12345"`, and
+#     `templates/core/core-secret.yaml:23` consumes it with NO generation fallback. In the SAME FILE,
+#     `secret` and `CSRF_KEY` (lines 15, 32), `JOBSERVICE_SECRET` and `REGISTRY_HTTP_SECRET` all end
+#     in `| default (randAlphaNum 16)` or `(randAlphaNum 32)`. The administrator's password is the one
+#     credential in that chart that is not randomised, so a default `helm install` is a registry
+#     reachable at admin/Harbor12345 over a protocol every CI system already speaks. Opting out means
+#     setting `existingSecretAdminPassword` (values.yaml:293-294).
+#
+#   * `goharbor/harbor` core — the CODE default is the EMPTY STRING, not Harbor12345.
+#     `src/lib/config/metadata/metadatalist.go:70` gives `HARBOR_ADMIN_PASSWORD` a `DefaultValue: ""`,
+#     and `make/migrations/postgresql/0001_initial_schema.up.sql:59` seeds
+#     `('admin', '', 'system admin', …)`. The 87 occurrences of `Harbor12345` in that repository are
+#     tests, tooling and `make/harbor.yml.tmpl` — the offline installer's config template — and ZERO
+#     are in Go source.
+#
+#   * `src/core/main.go:96-105` — the environment value is applied ONLY when `user.Salt == ""`, with
+#     no non-empty guard, and the else branch logs "Admin password from config
+#     (HARBOR_ADMIN_PASSWORD) ignored: password already exists in database." So an unset variable
+#     seeds the administrator with the hash of the empty string, ONCE, PERMANENTLY — and a second mint
+#     later would not take effect at all, which is why
+#     ContainerRegistryListCredentialsHandler reads and never mints.
+#
+#   * The archived operator made `harborAdminPasswordRef` REQUIRED and generated nothing:
+#     `apis/goharbor.io/v1beta1/harbor_types.go:187-189` carries
+#     `+kubebuilder:validation:Required` on it and the only consumer,
+#     `controllers/goharbor/configuration/reconciler.go:137`, is a plain read. That is the safest of
+#     the three behaviours and it belongs to the layer that is archived.
+#
+#   * `distribution`'s htpasswd backend accepts BCRYPT AND NOTHING ELSE, which is why
+#     templates/configmap.yaml renders no `auth:` block — see conformance.yaml § owed,
+#     `registry-accepts-unauthenticated-callers-from-inside-the-namespace`.
+#
+#   * The patch each offered minor pins to was read off `goharbor/harbor`'s own releases:
+#     v2.14.4 (2026-05-11) and v2.15.2 (2026-07-02). Harbor publishes no `v2.15` tag, so a bare minor
+#     as an image reference is an ImagePullBackOff per pod.
+reviewed: 2026-08-18
+
+# ⚠ THE ARCHIVED OPERATOR'S CRDs ARE NOT INSTALLED AND ARE NOT WHAT THIS CHART RENDERS, so the
+# `Matches` containment argument every other family makes from `+kubebuilder:default` markers or a
+# mutating webhook is UNAVAILABLE here rather than merely false. Recorded because the operator does
+# carry both — 298 `+kubebuilder:default` markers across `apis/`, and a real
+# `MutatingWebhookConfiguration` whose `HarborCluster` defaulter NILS OUT every non-selected variant
+# (`apis/goharbor.io/v1beta1/harborcluster_webhook.go:38-105`) — so an author who reached for the
+# operator later would find containment forced twice over. What forces it HERE is that five of the six
+# kinds rendered are built-in, and a built-in kind is the most heavily defaulted object in Kubernetes.
+upstream-webhook: not installed — this chart renders no goharbor.io object
+
+# ⚠ Cozystack (docs/plan/02 § ADR-010) is cited by docs/plan/01 as shipping "a Harbor chart" and
+# contributed the SOFTWARE choice and the annotated-values pipeline shape, and no code. It is
+# deliberately not listed as `upstream`, because `upstream` means "there is a tree we could diff
+# against" and here there is not.

@@ -1,0 +1,83 @@
+{{/*
+The registry's and the job service's configuration.
+
+⚠ NEITHER DOCUMENT CARRIES A CREDENTIAL, which is why they can live in a ConfigMap. distribution
+reads its HTTP secret from REGISTRY_HTTP_SECRET and the job service reads its from CORE_SECRET, both
+sourced from the credentials Secret — so these two files are configuration and the Secret is the only
+object with a value in it. A credential inlined here would be readable by anyone holding
+`get configmaps`, which is a strictly weaker right than `get secrets`.
+*/}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ printf "%s-config" (include "harbor.name" .) }}
+  labels:
+    {{- include "harbor.platformLabels" . | nindent 4 }}
+data:
+  {{/*
+    ⚠ THERE IS NO `auth:` BLOCK, AND IT IS THE LARGEST KNOWN GAP IN THIS ROW. goharbor/harbor-helm
+    renders `auth: htpasswd` here and computes the file with Sprig's `htpasswd`, which is BCRYPT;
+    distribution's htpasswd backend accepts bcrypt and nothing else. .NET ships no bcrypt and this
+    repository references no package that does, so the reconciler cannot produce the hash — and a
+    chart that rendered one the reconciler could not would be the two halves of the pair disagreeing.
+    The registry therefore accepts unauthenticated requests from anything that can reach its Service,
+    which is ClusterIP inside one tenant's own namespace. conformance.yaml § owed,
+    `registry-accepts-unauthenticated-callers-from-inside-the-namespace`.
+
+    ⚠ storage.filesystem and not storage.s3. docs/plan/13 says the backend "is the tenant's SeaweedFS
+    bucket"; that bucket is another provider's resource and a reconciler has no reader for one.
+
+    ⚠ delete.enabled: true, because without it Harbor's garbage collection deletes nothing and a
+    tenant's storage only ever grows. distribution defaults it OFF, which is the kind of default an
+    operator would have supplied and there is no operator.
+  */}}
+  registry-config.yml: |
+    version: 0.1
+    log:
+      level: info
+      fields:
+        service: registry
+    storage:
+      filesystem:
+        rootdirectory: /storage
+      cache:
+        layerinfo: redis
+      maintenance:
+        uploadpurging:
+          enabled: false
+      delete:
+        enabled: true
+      redirect:
+        disable: true
+    http:
+      addr: :5000
+      relativeurls: false
+      debug:
+        addr: localhost:5001
+    health:
+      storagedriver:
+        enabled: true
+        interval: 30s
+        threshold: 3
+  {{/*
+    ⚠ job_loggers is STD_OUTPUT rather than FILE. The file logger writes into the pod's writable
+    layer, so a restart loses the logs either way; standard output at least puts them somewhere
+    docs/plan/16's collector already reads.
+  */}}
+  jobservice-config.yml: |
+    protocol: "http"
+    port: 8080
+    worker_pool:
+      workers: 10
+      backend: "redis"
+      redis_pool:
+        redis_url: "redis://{{ printf "%s-redis" (include "harbor.name" .) }}:6379/1"
+        namespace: "harbor_job_service_namespace"
+        idle_timeout_second: 3600
+    job_loggers:
+      - name: "STD_OUTPUT"
+        level: "INFO"
+    metric:
+      enabled: {{ .Values.monitoring.enabled }}
+      path: /metrics
+      port: 8001
