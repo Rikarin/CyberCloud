@@ -2586,7 +2586,7 @@ public sealed partial class MonitorWorkspaceResource {
         MonitorWorkspaceData data,
         CancellationToken cancellationToken = default);
 
-    /// <summary>Deletes the resource. ⚠ Recoverable for 7 day(s): the resource keeps its quota and its data, and its name is held. Purge to end that window early — a separate permission, 'purge'.</summary>
+    /// <summary>Deletes the resource. ⚠ Permanent: this type declares no soft-delete window.</summary>
     public partial Task<Operation> DeleteAsync(
         WaitUntil waitUntil,
         CancellationToken cancellationToken = default);

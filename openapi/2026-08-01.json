@@ -4210,7 +4210,7 @@
       "delete": {
         "operationId": "CyberCloud_Monitor_workspaces_Delete",
         "summary": "Delete a CyberCloud.Monitor/workspaces.",
-        "description": "A deleted CyberCloud.Monitor/workspaces is recoverable for 7 day(s) — docs/plan/06 § Tags, locks. It leaves its resource group and its old address answers 404; its name is held and its quota stays committed for the whole window. Restore it, or purge it to end the window early — a purge needs 'purge', which is a separate right from 'delete'.",
+        "description": "The delete is permanent: this type declares no soft-delete window.",
         "responses": {
           "202": {
             "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
@@ -4259,8 +4259,8 @@
           }
         },
         "x-cybercloud-permission": "delete",
-        "x-cybercloud-soft-delete-days": 7,
-        "x-cybercloud-purge-permission": "purge"
+        "x-cybercloud-soft-delete-days": 0,
+        "x-cybercloud-purge-permission": ""
       },
       "x-cybercloud-resource-type": "CyberCloud.Monitor/workspaces",
       "x-cybercloud-display": {
@@ -4273,9 +4273,9 @@
       "x-cybercloud-supports-tags": true,
       "x-cybercloud-requires-cluster": true,
       "x-cybercloud-cluster-id-pointer": "/properties/clusterId",
-      "x-cybercloud-soft-delete-days": 7,
-      "x-cybercloud-purge-permission": "purge",
-      "x-cybercloud-purge-protection-pointer": "/properties/purgeProtection",
+      "x-cybercloud-soft-delete-days": 0,
+      "x-cybercloud-purge-permission": "",
+      "x-cybercloud-purge-protection-pointer": "",
       "x-cybercloud-meters": [
         {
           "meter": "Resources",

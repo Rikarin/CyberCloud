@@ -5973,7 +5973,7 @@
             },
             "delete": {
               "name": "delete",
-              "summary": "Delete a Monitor workspace. Recoverable for 7 day(s); purge to end that early.",
+              "summary": "Delete a Monitor workspace. Permanent.",
               "method": "DELETE",
               "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Monitor/workspaces/{resourceName}",
               "apiVersion": "2026-08-01",

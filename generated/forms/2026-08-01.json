@@ -3768,9 +3768,9 @@
       "supportsTags": true,
       "requiresCluster": true,
       "clusterIdPointer": "/properties/clusterId",
-      "softDeleteDays": 7,
-      "purgePermission": "purge",
-      "purgeProtectionPointer": "/properties/purgeProtection",
+      "softDeleteDays": 0,
+      "purgePermission": "",
+      "purgeProtectionPointer": "",
       "fields": [
         {
           "jsonPointer": "/location",
