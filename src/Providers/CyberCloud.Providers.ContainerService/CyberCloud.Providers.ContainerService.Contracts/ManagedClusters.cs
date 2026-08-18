@@ -1,6 +1,9 @@
 using System.Collections.Frozen;
 using System.Collections.Immutable;
 using System.Globalization;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
@@ -272,6 +275,14 @@ public static class ManagedClusters {
     /// <param name="name">The resource's own name.</param>
     public static string KubeconfigSecretName(string name) => name + "-kubeconfig";
 
+    /// <summary>The single key <see cref="KubeconfigSecretName" /> carries the whole kubeconfig under.</summary>
+    /// <remarks>
+    ///     ⚠ Cluster API's name and not this platform's — the same fact
+    ///     <see cref="KubeconfigCredentialRef" />'s fragment spells, named here so the two cannot
+    ///     drift apart.
+    /// </remarks>
+    public const string KubeconfigKey = "value";
+
     /// <summary>
     ///     The scheme a cluster's credential reference is written in — a <c>Secret</c> in the
     ///     management cluster rather than a path in a vault.
@@ -311,7 +322,75 @@ public static class ManagedClusters {
     ///     </para>
     /// </remarks>
     public static string KubeconfigCredentialRef(string ns, string name) =>
-        $"{KubeconfigRefScheme}://{ns}/{KubeconfigSecretName(name)}#value";
+        $"{KubeconfigRefScheme}://{ns}/{KubeconfigSecretName(name)}#{KubeconfigKey}";
+
+    /// <summary>
+    ///     When the credential inside a kubeconfig stops working, read out of the certificate itself.
+    /// </summary>
+    /// <param name="kubeconfig">The kubeconfig YAML, exactly as Cluster API wrote it.</param>
+    /// <returns>The certificate's <c>notAfter</c>, or <see langword="null" /> when none was found.</returns>
+    /// <remarks>
+    ///     <para>
+    ///         <b>The expiry is not a fact anything hands over; it is inside the credential.</b>
+    ///         <see cref="ListCredentialsResponse" />'s <c>/expiresAt</c> exists because "a
+    ///         <c>kubectl</c> credential that expires" is part of what docs/plan/13 says a tenant is
+    ///         buying, and a credential with no stated expiry is one every caller pastes into CI and
+    ///         never rotates. Nothing in the management cluster publishes the date — Cluster API
+    ///         mints a client certificate and puts it in the kubeconfig, and the <c>notAfter</c> it
+    ///         chose is only legible by opening it.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>SCANNED FOR ONE LINE RATHER THAN PARSED AS YAML, BECAUSE THERE IS NO YAML PARSER
+    ///         IN THIS TREE.</b> Adding a package to read one field of a machine-generated document is
+    ///         a dependency the whole platform would carry; <c>client-certificate-data</c> is emitted
+    ///         by Cluster API's own writer on a single line with a base64 value, so a line scan reads
+    ///         it exactly. What that costs is stated rather than hidden: a kubeconfig using a token or
+    ///         an exec plugin instead of a certificate has no such line, and this answers
+    ///         <see langword="null" /> — which the caller must turn into a refusal rather than into a
+    ///         guessed date. A wrong expiry is worse than none: it is the number somebody schedules a
+    ///         rotation against.
+    ///     </para>
+    /// </remarks>
+    public static DateTimeOffset? CredentialExpiry(string kubeconfig) {
+        if (string.IsNullOrWhiteSpace(kubeconfig)) {
+            return null;
+        }
+
+        foreach (var line in kubeconfig.Split('\n')) {
+            var trimmed = line.Trim();
+
+            if (!trimmed.StartsWith(ClientCertificateField, StringComparison.Ordinal)) {
+                continue;
+            }
+
+            var encoded = trimmed[ClientCertificateField.Length..].Trim();
+
+            byte[] pem;
+            try {
+                pem = Convert.FromBase64String(encoded);
+            } catch (FormatException) {
+                return null;
+            }
+
+            // ⚠ PEM and not DER: a kubeconfig's certificate field is the base64 of the PEM TEXT, so
+            // one decode leaves "-----BEGIN CERTIFICATE-----…" rather than a certificate.
+            var text = Encoding.UTF8.GetString(pem);
+
+            try {
+                using var certificate = X509Certificate2.CreateFromPem(text);
+                return new DateTimeOffset(certificate.NotAfter.ToUniversalTime(), TimeSpan.Zero);
+            } catch (CryptographicException) {
+                return null;
+            } catch (ArgumentException) {
+                return null;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>The kubeconfig line <see cref="CredentialExpiry" /> reads.</summary>
+    const string ClientCertificateField = "client-certificate-data:";
 
     /// <summary>
     ///     The API server URL a ready cluster reports, or an empty string when no controller has
