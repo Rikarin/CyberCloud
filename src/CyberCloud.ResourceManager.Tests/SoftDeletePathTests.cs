@@ -397,10 +397,11 @@ public sealed class SoftDeletePathTests(ResourceManagerCluster cluster) {
             + "delete, it has implemented a slower delete"
         );
 
-        var purged = await Purge(address);
-        await Converge(purged.GetValueOrThrow());
-
-        FakeWorld.Applied.ShouldNotContainKey(resourceId, "and the purge ends it for good");
+        // ⚠ NO PURGE TAIL, AND ITS ABSENCE IS THE POINT. A restored resource is Confirmed, so a purge
+        // here answers the canonical 404 — there is nothing parked to end the window of. The purge's
+        // own behaviour is pinned by ThePurgeReturnsExactlyWhatTheCreateCommittedOnEveryMeterAndTheDeleteReturnsNothing
+        // and by the ten-cycle arithmetic; what this case owns is the round trip.
+        (await Read(address)).IsSuccess.ShouldBeTrue("and the old address answers again");
     }
 
     // ── (d): the resource is never invisible ───────────────────────────────────────────────────
