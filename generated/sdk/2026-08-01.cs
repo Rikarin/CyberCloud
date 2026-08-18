@@ -2365,6 +2365,165 @@ public sealed partial class VirtualNetworkCollection {
     public partial AsyncPageable<VirtualNetworkResource> GetAllAsync(CancellationToken cancellationToken = default);
 }
 
+/// <summary>The body of a CyberCloud.Network/virtualNetworks/securityGroups.</summary>
+/// <remarks>A deny-by-default set of allow rules that become OVN ACLs on the ports in a virtual network. A workload may carry several.</remarks>
+public sealed partial class SecurityGroupData {
+
+    /// <summary>The region the security group lives in. It must be the network's own region — nothing checks that.</summary>
+    /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+    [JsonPropertyName("location")]
+    public required string Location { get; set; }
+
+    /// <summary>Whether workloads that carry this same security group may reach each other without a rule. Off by default: it is the one setting here that permits traffic nobody wrote a rule for.</summary>
+    /// <remarks>Defaults to false when left unset.</remarks>
+    [JsonPropertyName("allowSameGroupTraffic")]
+    public bool? AllowSameGroupTraffic { get; set; }
+
+    /// <summary>The cluster whose fabric carries the security group. Must be the cluster the network is in — nothing checks that.</summary>
+    /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+    [JsonPropertyName("clusterId")]
+    public required Guid ClusterId { get; set; }
+
+    /// <summary>Whether outbound ICMP is allowed to the remotes above. Off by default.</summary>
+    /// <remarks>Defaults to false when left unset.</remarks>
+    [JsonPropertyName("allowIcmp")]
+    public bool? AllowIcmp { get; set; }
+
+    /// <summary>The IPv4 range outbound traffic may reach, or empty for no IPv4 rules at all.</summary>
+    /// <remarks>Defaults to "" when left unset.</remarks>
+    [JsonPropertyName("remoteV4")]
+    public string? RemoteV4 { get; set; }
+
+    /// <summary>The IPv6 range outbound traffic may reach, or empty for no IPv6 rules at all.</summary>
+    /// <remarks>Defaults to "" when left unset.</remarks>
+    [JsonPropertyName("remoteV6")]
+    public string? RemoteV6 { get; set; }
+
+    /// <summary>TCP ports outbound traffic may reach, in the same form as the inbound list. Empty means no outbound TCP.</summary>
+    /// <remarks>Defaults to "" when left unset.</remarks>
+    [JsonPropertyName("tcpPorts")]
+    public string? TcpPorts { get; set; }
+
+    /// <summary>UDP ports outbound traffic may reach. Empty means no outbound UDP — which includes DNS on port 53.</summary>
+    /// <remarks>Defaults to "" when left unset.</remarks>
+    [JsonPropertyName("udpPorts")]
+    public string? UdpPorts { get; set; }
+
+    /// <summary>Whether inbound ICMP is allowed from the remotes above. Off by default. ⚠ With this off, a workload in this group does not answer ping and does not receive path-MTU messages.</summary>
+    /// <remarks>Defaults to false when left unset.</remarks>
+    [JsonPropertyName("allowIcmp")]
+    public bool? AllowIcmp { get; set; }
+
+    /// <summary>The IPv4 range inbound traffic may come from, in CIDR form, or empty for no IPv4 rules at all. Use 0.0.0.0/0 for the whole internet.</summary>
+    /// <remarks>Defaults to "" when left unset.</remarks>
+    [JsonPropertyName("remoteV4")]
+    public string? RemoteV4 { get; set; }
+
+    /// <summary>The IPv6 range inbound traffic may come from, or empty for no IPv6 rules at all. ⚠ A group with only an IPv4 remote silently permits nothing over IPv6, which on a dual-stack subnet is not the same as permitting nothing.</summary>
+    /// <remarks>Defaults to "" when left unset.</remarks>
+    [JsonPropertyName("remoteV6")]
+    public string? RemoteV6 { get; set; }
+
+    /// <summary>TCP ports inbound traffic may reach, as a comma-separated list of ports and ranges — for example 80,443,8000-8100. Empty means no TCP is allowed inbound. ⚠ There is no way to say 'every protocol'; 1-65535 says 'every TCP port'.</summary>
+    /// <remarks>Defaults to "" when left unset.</remarks>
+    [JsonPropertyName("tcpPorts")]
+    public string? TcpPorts { get; set; }
+
+    /// <summary>UDP ports inbound traffic may reach, in the same form as tcpPorts. Empty means no UDP is allowed inbound.</summary>
+    /// <remarks>Defaults to "" when left unset.</remarks>
+    [JsonPropertyName("udpPorts")]
+    public string? UdpPorts { get; set; }
+
+    /// <summary>Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.</summary>
+    [JsonPropertyName("tags")]
+    public IDictionary<string, string> Tags { get; set; } = new Dictionary<string, string>(StringComparer.Ordinal);
+}
+
+/// <summary>One Security group, and the operations on it.</summary>
+public sealed partial class SecurityGroupResource {
+    /// <summary>The resource's fully qualified id.</summary>
+    public string Id { get; init; } = string.Empty;
+
+    /// <summary>The body, projected at this api-version.</summary>
+    public SecurityGroupData Data { get; init; } = new();
+
+    /// <summary>Re-reads the resource.</summary>
+    public partial Task<Response<SecurityGroupResource>> GetAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Amends the resource. A merge patch: what is not set is not changed.</summary>
+    public partial Task<Operation<SecurityGroupResource>> UpdateAsync(
+        WaitUntil waitUntil,
+        SecurityGroupData data,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Deletes the resource. ⚠ Permanent: this type declares no soft-delete window.</summary>
+    public partial Task<Operation> DeleteAsync(
+        WaitUntil waitUntil,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>What showEffectiveRules returns.</summary>
+    public sealed partial class ShowEffectiveRulesResult {
+
+        /// <summary>Whether workloads carrying this same group reach each other without a rule. ⚠ Returned because it is the one permission that is not in the list above.</summary>
+        [JsonPropertyName("allowSameGroupTraffic")]
+        public required bool AllowSameGroupTraffic { get; set; }
+
+        /// <summary>How many rules there are. ⚠ Worth reading next to the body: one port list of three entries with two remotes is six rules.</summary>
+        [JsonPropertyName("count")]
+        public required long Count { get; set; }
+
+        /// <summary>What happens to traffic no rule above matches. It is always 'drop' — the fabric installs a default-deny for every port in a security group and this resource cannot change that.</summary>
+        [JsonPropertyName("defaultAction")]
+        public required string DefaultAction { get; set; }
+
+        /// <summary>⚠ What this answer is and is not. It is what the platform asks the fabric for, derived from the resource's stored body — not a reading of the ACLs OVN currently holds.</summary>
+        [JsonPropertyName("note")]
+        public required string Note { get; set; }
+
+        /// <summary>Every rule this security group's body becomes, in the order it is written to the fabric, one sentence each. An empty list means the group permits nothing, which is a valid and fully restrictive configuration.</summary>
+        [JsonPropertyName("rules")]
+        public IList<string> Rules { get; set; } = new List<string>();
+    }
+
+    /// <summary>ShowEffectiveRules. ⚠ An action never creates — a POST to a name that does not exist is a 404.</summary>
+    public partial Task<Response<ShowEffectiveRulesResult>> ShowEffectiveRulesAsync(
+        CancellationToken cancellationToken = default);
+}
+
+/// <summary>The Security groups in one parent.</summary>
+/// <remarks>⚠ Every write is long-running: docs/plan/08 § The write path, end to end
+/// ends in a 202 for every verb, so there is no synchronous overload to offer.
+/// ⚠ The leading parameter(s) name the ancestors this type nests inside —
+/// docs/plan/12 § Child resources addresses a child
+/// '…/{parentType}/{parentName}/{childType}/{childName}', so the parent's name is
+/// part of the address rather than part of the body.</remarks>
+public sealed partial class SecurityGroupCollection {
+    /// <summary>The resource type these address.</summary>
+    public const string ResourceType = "CyberCloud.Network/virtualNetworks/securityGroups";
+
+    /// <summary>The URL template, with the api-version this file was generated at.</summary>
+    public const string PathTemplate = "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Network/virtualNetworks/{virtualNetworksName}/securityGroups/{resourceName}";
+
+    /// <inheritdoc cref="GeneratedApiVersion.Value" />
+    public const string ApiVersion = "2026-08-01";
+
+    /// <summary>Creates or replaces one Security group.</summary>
+    /// <remarks>⚠ Poll with GetProgressAsync() rather than only WaitForCompletionAsync():
+    /// docs/plan/21 § The .NET SDK — "Azure's LROs expose no progress; ours do and the
+    /// SDK should not hide it".</remarks>
+    public partial Task<Operation<SecurityGroupResource>> CreateOrUpdateAsync(
+        WaitUntil waitUntil,
+        string virtualNetworksName, string name,
+        SecurityGroupData data,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Reads one Security group by name.</summary>
+    public partial Task<Response<SecurityGroupResource>> GetAsync(string virtualNetworksName, string name, CancellationToken cancellationToken = default);
+
+    /// <summary>The Security groups in one parent, paged.</summary>
+    public partial AsyncPageable<SecurityGroupResource> GetAllAsync(string virtualNetworksName, CancellationToken cancellationToken = default);
+}
+
 /// <summary>The body of a CyberCloud.Network/virtualNetworks/subnets.</summary>
 /// <remarks>A range inside a virtual network that workloads are given addresses from, with optional outbound NAT and optional isolation from other subnets.</remarks>
 public sealed partial class SubnetData {
@@ -3160,4 +3319,211 @@ public sealed partial class BucketCollection {
 
     /// <summary>The Buckets in one parent, paged.</summary>
     public partial AsyncPageable<BucketResource> GetAllAsync(string accountsName, CancellationToken cancellationToken = default);
+}
+
+/// <summary>The values /properties/image/variant accepts. ⚠ Closed: the write path refuses anything else.</summary>
+public enum CloudTerminalVariant {
+    /// <summary>Never assigned. Not a value the API accepts.</summary>
+    Unknown = 0,
+
+    /// <summary>default</summary>
+    [JsonStringEnumMemberName("default")]
+    Default = 1,
+
+    /// <summary>minimal</summary>
+    [JsonStringEnumMemberName("minimal")]
+    Minimal = 2
+}
+
+/// <summary>The values /properties/network/egress accepts. ⚠ Closed: the write path refuses anything else.</summary>
+public enum CloudTerminalEgress {
+    /// <summary>Never assigned. Not a value the API accepts.</summary>
+    Unknown = 0,
+
+    /// <summary>Internet</summary>
+    [JsonStringEnumMemberName("Internet")]
+    Internet = 1,
+
+    /// <summary>TenantOnly</summary>
+    [JsonStringEnumMemberName("TenantOnly")]
+    TenantOnly = 2
+}
+
+/// <summary>The values /properties/sizing/preset accepts. ⚠ Closed: the write path refuses anything else.</summary>
+public enum CloudTerminalPreset {
+    /// <summary>Never assigned. Not a value the API accepts.</summary>
+    Unknown = 0,
+
+    /// <summary>c1.large</summary>
+    [JsonStringEnumMemberName("c1.large")]
+    C1Large = 1,
+
+    /// <summary>c1.medium</summary>
+    [JsonStringEnumMemberName("c1.medium")]
+    C1Medium = 2,
+
+    /// <summary>c1.small</summary>
+    [JsonStringEnumMemberName("c1.small")]
+    C1Small = 3
+}
+
+/// <summary>The body of a CyberCloud.Terminal/consoles.</summary>
+/// <remarks>A browser shell running in this subscription's own cluster, holding a managed identity, with a persistent home directory and no stored credential.</remarks>
+public sealed partial class CloudTerminalData {
+
+    /// <summary>The region the console is billed in.</summary>
+    /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+    [JsonPropertyName("location")]
+    public required string Location { get; set; }
+
+    /// <summary>Whether everything typed into and printed by this shell is recorded. ⚠ Off by default and immutable afterwards: a shell contains secrets, a keystroke log is a liability, and a recording that could be switched off mid-life would be worth nothing to the compliance requirement it exists for.</summary>
+    /// <remarks>⚠ Cannot change after create. Defaults to false when left unset.</remarks>
+    [JsonPropertyName("sessionRecording")]
+    public bool? SessionRecording { get; set; }
+
+    /// <summary>The cluster whose namespace holds the shell and its home volume.</summary>
+    /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+    [JsonPropertyName("clusterId")]
+    public required Guid ClusterId { get; set; }
+
+    /// <summary>How long $HOME is kept after the console was last attached to. ⚠ Nothing sweeps on it yet — it is carried so that a console created today is swept correctly by whatever does.</summary>
+    /// <remarks>Defaults to 90 when left unset.</remarks>
+    [JsonPropertyName("retentionDays")]
+    public long? RetentionDays { get; set; }
+
+    /// <summary>The size of $HOME. It grows and never shrinks: a PersistentVolumeClaim refuses a decrease at the API.</summary>
+    /// <remarks>Required on a create. Defaults to "5Gi" when left unset.</remarks>
+    [JsonPropertyName("size")]
+    public required string Size { get; set; }
+
+    /// <summary>The managed identity every command in this shell acts as. It may not be changed: a console whose identity moved would have an audit trail describing a shell that no longer exists.</summary>
+    /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+    [JsonPropertyName("principalId")]
+    public required Guid PrincipalId { get; set; }
+
+    /// <summary>default carries every tool in docs/plan/19's table and takes about 40 seconds to pull cold; minimal carries shells, editors, cyc and kubectl and starts in about 8. The repository and the digest are the platform's.</summary>
+    /// <remarks>Defaults to "default" when left unset.</remarks>
+    [JsonPropertyName("variant")]
+    public CloudTerminalVariant? Variant { get; set; }
+
+    /// <summary>Internet lets the shell reach public addresses as well as this subscription's own workloads and DNS — a shell that cannot git clone is not a shell. TenantOnly removes the public half and leaves the rest.</summary>
+    /// <remarks>Defaults to "Internet" when left unset.</remarks>
+    [JsonPropertyName("egress")]
+    public CloudTerminalEgress? Egress { get; set; }
+
+    /// <summary>How long a shell may sit with nobody typing into it before it is reclaimed. The home volume survives; the pod does not. ⚠ There is no value meaning never — an idle terminal is a tenant paying for something they closed.</summary>
+    /// <remarks>Defaults to 20 when left unset.</remarks>
+    [JsonPropertyName("idleTimeoutMinutes")]
+    public long? IdleTimeoutMinutes { get; set; }
+
+    /// <summary>The longest a single shell may run, busy or not. Enforced by the kubelet through the pod's own deadline, so it holds even when nothing of this platform is running.</summary>
+    /// <remarks>Defaults to 8 when left unset.</remarks>
+    [JsonPropertyName("maxDurationHours")]
+    public long? MaxDurationHours { get; set; }
+
+    /// <summary>How much a shell gets. The ladder stops at 2 vCPU and 4 GiB, which is docs/plan/19's ceiling for this row — a workload that needs more needs a cluster and a job rather than a terminal.</summary>
+    /// <remarks>Defaults to "c1.small" when left unset.</remarks>
+    [JsonPropertyName("preset")]
+    public CloudTerminalPreset? Preset { get; set; }
+
+    /// <summary>Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.</summary>
+    [JsonPropertyName("tags")]
+    public IDictionary<string, string> Tags { get; set; } = new Dictionary<string, string>(StringComparer.Ordinal);
+}
+
+/// <summary>One Cloud terminal, and the operations on it.</summary>
+public sealed partial class CloudTerminalResource {
+    /// <summary>The resource's fully qualified id.</summary>
+    public string Id { get; init; } = string.Empty;
+
+    /// <summary>The body, projected at this api-version.</summary>
+    public CloudTerminalData Data { get; init; } = new();
+
+    /// <summary>Re-reads the resource.</summary>
+    public partial Task<Response<CloudTerminalResource>> GetAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Amends the resource. A merge patch: what is not set is not changed.</summary>
+    public partial Task<Operation<CloudTerminalResource>> UpdateAsync(
+        WaitUntil waitUntil,
+        CloudTerminalData data,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Deletes the resource. ⚠ Permanent: this type declares no soft-delete window.</summary>
+    public partial Task<Operation> DeleteAsync(
+        WaitUntil waitUntil,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>What connect returns.</summary>
+    public sealed partial class ConnectResult {
+
+        /// <summary>The SignalR hub path to open. docs/plan/10 § SignalR.</summary>
+        [JsonPropertyName("hub")]
+        public required string Hub { get; set; }
+
+        /// <summary>How long this shell may sit idle before it is reclaimed. Shown to the person, because a terminal that vanishes without warning reads as a bug.</summary>
+        [JsonPropertyName("idleTimeoutSeconds")]
+        public required long IdleTimeoutSeconds { get; set; }
+
+        /// <summary>How long this shell may run in total before the kubelet stops it.</summary>
+        [JsonPropertyName("maxDurationSeconds")]
+        public required long MaxDurationSeconds { get; set; }
+
+        /// <summary>Whether this session is being recorded. ⚠ docs/plan/19 § Auditing requires the portal to be loud about this, which is why it is on the connect response rather than only on the resource body: a panel that had to fetch the resource to find out would render one frame of a terminal that lies.</summary>
+        [JsonPropertyName("recording")]
+        public required bool Recording { get; set; }
+
+        /// <summary>The session to name on the terminal hub. ⚠ It is the shell pod's own UID, so it changes when a reclaimed console is re-created — which is exactly when a client's replay buffer has become meaningless.</summary>
+        [JsonPropertyName("sessionId")]
+        public required string SessionId { get; set; }
+
+        /// <summary>Starting while the shell is still being scheduled, Ready once it is running. A client opens the hub either way and sees output when there is some.</summary>
+        [JsonPropertyName("state")]
+        public required string State { get; set; }
+    }
+
+    /// <summary>Connect. ⚠ An action never creates — a POST to a name that does not exist is a 404.</summary>
+    public partial Task<Response<ConnectResult>> ConnectAsync(
+        CancellationToken cancellationToken = default);
+
+    /// <summary>What terminate returns.</summary>
+    public sealed partial class TerminateResult {
+
+        /// <summary>True when this call stopped a running shell, false when there was none. ⚠ Both are success: the caller's goal is that no shell is running.</summary>
+        [JsonPropertyName("terminated")]
+        public required bool Terminated { get; set; }
+    }
+
+    /// <summary>Terminate. ⚠ An action never creates — a POST to a name that does not exist is a 404.</summary>
+    public partial Task<Response<TerminateResult>> TerminateAsync(
+        CancellationToken cancellationToken = default);
+}
+
+/// <summary>The Cloud terminals in one resource group.</summary>
+/// <remarks>⚠ Every write is long-running: docs/plan/08 § The write path, end to end
+/// ends in a 202 for every verb, so there is no synchronous overload to offer.</remarks>
+public sealed partial class CloudTerminalCollection {
+    /// <summary>The resource type these address.</summary>
+    public const string ResourceType = "CyberCloud.Terminal/consoles";
+
+    /// <summary>The URL template, with the api-version this file was generated at.</summary>
+    public const string PathTemplate = "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Terminal/consoles/{resourceName}";
+
+    /// <inheritdoc cref="GeneratedApiVersion.Value" />
+    public const string ApiVersion = "2026-08-01";
+
+    /// <summary>Creates or replaces one Cloud terminal.</summary>
+    /// <remarks>⚠ Poll with GetProgressAsync() rather than only WaitForCompletionAsync():
+    /// docs/plan/21 § The .NET SDK — "Azure's LROs expose no progress; ours do and the
+    /// SDK should not hide it".</remarks>
+    public partial Task<Operation<CloudTerminalResource>> CreateOrUpdateAsync(
+        WaitUntil waitUntil,
+        string name,
+        CloudTerminalData data,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Reads one Cloud terminal by name.</summary>
+    public partial Task<Response<CloudTerminalResource>> GetAsync(string name, CancellationToken cancellationToken = default);
+
+    /// <summary>The Cloud terminals in this group, paged.</summary>
+    public partial AsyncPageable<CloudTerminalResource> GetAllAsync(CancellationToken cancellationToken = default);
 }

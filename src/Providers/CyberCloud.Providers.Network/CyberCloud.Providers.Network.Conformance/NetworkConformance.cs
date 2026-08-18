@@ -152,6 +152,62 @@ public sealed class NetworkSubnetCase : IProviderCaseSource {
     }
 }
 
+/// <summary>
+///     <c>CyberCloud.Network/virtualNetworks/securityGroups</c> — the second child, registered into
+///     the same shared suite as its parent and its sibling.
+/// </summary>
+/// <remarks>
+///     <para>
+///         ⚠ <b>ONE MEMBER LONGER THAN <see cref="VirtualNetworkCase" /> AND NOTHING ELSE DIFFERS</b>
+///         — the third time that has held, and the second time it was relied on rather than
+///         discovered.
+///     </para>
+///     <para>
+///         ⚠ <b>THE INVALID BODY IS A PORT RATHER THAN A MISSING PROPERTY, AND THAT IS THE POINT OF
+///         THE TYPE.</b> Its two siblings drop a required property, because a required property is
+///         all their schemas can refuse beyond a shape. This type has <b>no</b> required rule
+///         property — an empty security group is the most restrictive one there is, so demanding a
+///         rule would be demanding that a tenant open something to create a perimeter — and it
+///         refuses <c>tcpPorts: "0"</c> at the API anyway, by
+///         <see cref="PortRange.OptionalListPattern" />, with a <c>400</c> and this pointer. That is
+///         the reshape's whole claim, run through the shared suite rather than asserted in a comment.
+///     </para>
+/// </remarks>
+public sealed class NetworkSecurityGroupCase : IProviderCaseSource {
+    /// <inheritdoc />
+    public static ProviderConformanceCase ProviderCase { get; } =
+        new() {
+            DisplayName = "CyberCloud.Network/virtualNetworks/securityGroups",
+            CreateProvider = () => new NetworkProvider(),
+            ReconcilerType = typeof(NetworkSecurityGroupReconciler),
+            CreateReconciler = clock => new NetworkSecurityGroupReconciler(clock),
+            Type = NetworkSecurityGroups.Type,
+            ApiVersion = NetworkSecurityGroups.V2026,
+            Body = cluster => NetworkSecurityGroups.Body(cluster),
+            // ⚠ Adds a port, which changes the RULE COUNT as well as the rules — the rendered object
+            // grows an element. The tempting axis is `allowSameGroupTraffic`, and it is the weaker
+            // one: it is a single boolean the renderer copies straight through, so an update test
+            // over it would pass against a renderer that never expanded a rule at all.
+            ChangedBody = cluster => NetworkSecurityGroups.Body(cluster, ingressTcpPorts: "80,443,8080"),
+            InvalidBody = cluster => NetworkSecurityGroups.Body(cluster, ingressTcpPorts: "0"),
+            InvalidBodyTarget = "/properties/ingress/tcpPorts",
+            ActionName = NetworkSecurityGroups.EffectiveRulesAction,
+            Objects = (id, ns) => [NetworkSecurityGroups.SecurityGroupRef(ns, id)],
+            // ⚠ THE WHOLE PREDICATE, UNLIKE THE SUBNET'S. `ObjectMatchesDesired` carries no address —
+            // which for a subnet costs the `spec.vpc` half of its comparison. A SecurityGroup has no
+            // field derived from the address at all, so nothing is left out here and the shared suite
+            // checks exactly what the reconciler does.
+            ObjectMatchesDesired = (objectJson, desiredJson) => {
+                using var desired = JsonDocument.Parse(desiredJson);
+                return NetworkSecurityGroups.Matches(objectJson, desired.RootElement);
+            }
+        };
+
+    /// <inheritdoc />
+    public static ImmutableArray<ProviderConformanceCase> Ancestors { get; } =
+        [VirtualNetworkCase.ProviderCase];
+}
+
 /// <summary>The shared suite, run against the virtual-network provider.</summary>
 /// <param name="cluster">The harness.</param>
 public sealed class VirtualNetworkConformance(ProviderTestCluster<VirtualNetworkCase> cluster)
@@ -170,6 +226,15 @@ public sealed class NetworkSubnetConformance(ProviderTestCluster<NetworkSubnetCa
     : ProviderConformanceTests<NetworkSubnetCase>(cluster),
         IClassFixture<ProviderTestCluster<NetworkSubnetCase>>;
 
+/// <summary>
+///     The <b>same</b> suite again, run against the security-group child type.
+/// </summary>
+/// <param name="cluster">The harness.</param>
+public sealed class NetworkSecurityGroupConformance(
+    ProviderTestCluster<NetworkSecurityGroupCase> cluster
+) : ProviderConformanceTests<NetworkSecurityGroupCase>(cluster),
+    IClassFixture<ProviderTestCluster<NetworkSecurityGroupCase>>;
+
 /// <summary>The container-backed half, skipped loudly, against the virtual-network type.</summary>
 public sealed class VirtualNetworkClusterBackedConformance()
     : ClusterBackedConformanceTests(VirtualNetworkCase.ProviderCase);
@@ -177,6 +242,10 @@ public sealed class VirtualNetworkClusterBackedConformance()
 /// <summary>The container-backed half, skipped loudly, against the subnet child type.</summary>
 public sealed class NetworkSubnetClusterBackedConformance()
     : ClusterBackedConformanceTests(NetworkSubnetCase.ProviderCase);
+
+/// <summary>The container-backed half, skipped loudly, against the security-group child type.</summary>
+public sealed class NetworkSecurityGroupClusterBackedConformance()
+    : ClusterBackedConformanceTests(NetworkSecurityGroupCase.ProviderCase);
 
 /// <summary>
 ///     What this provider's two registrations into the shared suite are <b>shaped</b> like.
@@ -196,24 +265,36 @@ public sealed class NetworkSuiteShapeTests {
             + "say which assertions it had dropped."
         );
 
+        RunnableFactsOf(typeof(NetworkSecurityGroupConformance)).ShouldBe(
+            parent,
+            "the security group runs a different set of assertions than the virtual network does."
+        );
+
         parent.Length.ShouldBeGreaterThan(20);
     }
 
     [Fact]
-    public void OnlyTheChildDescribesAnAncestorAndItIsTheNetworksOwnCaseObject() {
+    public void OnlyTheChildrenDescribeAnAncestorAndItIsTheNetworksOwnCaseObject() {
         AncestorsOf<VirtualNetworkCase>().ShouldBeEmpty();
 
-        var ancestors = AncestorsOf<NetworkSubnetCase>();
+        // ⚠ BOTH children, and the assertion is `ShouldBeSameAs` rather than an equality: an ancestor
+        // that is a SECOND DESCRIPTION of the virtual network can disagree with the network's own
+        // case object the first time either changes, and the symptom is a child suite creating a
+        // parent whose body no longer validates.
+        foreach (var ancestors in
+                 (ReadOnlySpan<ImmutableArray<ProviderConformanceCase>>)[
+                     AncestorsOf<NetworkSubnetCase>(), AncestorsOf<NetworkSecurityGroupCase>()
+                 ]) {
+            ancestors.Length.ShouldBe(1);
 
-        ancestors.Length.ShouldBe(1);
+            ancestors[0].ShouldBeSameAs(
+                VirtualNetworkCase.ProviderCase,
+                "a child's ancestor is a SECOND DESCRIPTION of the virtual network rather than the "
+                + "network's own case object."
+            );
 
-        ancestors[0].ShouldBeSameAs(
-            VirtualNetworkCase.ProviderCase,
-            "the subnet's ancestor is a SECOND DESCRIPTION of the virtual network rather than the "
-            + "network's own case object, so the two can disagree the first time either changes."
-        );
-
-        ancestors[0].Type.ShouldBe(VirtualNetworks.Type);
+            ancestors[0].Type.ShouldBe(VirtualNetworks.Type);
+        }
     }
 
     [Fact]
@@ -241,6 +322,34 @@ public sealed class NetworkSuiteShapeTests {
             "a Kube-OVN Vpc is +kubebuilder:resource:scope=\"Cluster\". An ObjectRef carrying a "
             + "namespace would make the harness install a Namespaced CRD stub, and the suite would go "
             + "green against a REST path the real substrate does not serve."
+        );
+
+        // ⚠ The security group's ObjectRef needs a PARENT to render its name at all, so it is built
+        // from a child address rather than from the network's.
+        var child = new ResourceId(
+            id.TenantId,
+            id.SubscriptionId,
+            "rg",
+            NetworkSecurityGroups.Type,
+            "web",
+            Guid.NewGuid(),
+            "net"
+        );
+
+        var group = NetworkSecurityGroupCase.ProviderCase.Objects(child, "ns");
+
+        group.Length.ShouldBe(1);
+
+        group[0].IsClusterScoped.ShouldBeTrue(
+            "a Kube-OVN SecurityGroup is +kubebuilder:resource:scope=\"Cluster\"."
+        );
+
+        group[0].Kind.Plural.ShouldBe(
+            "security-groups",
+            "the plural is HYPHENATED. ClusterConformanceHarness derives its CRD stub's path from "
+            + "GroupVersionKind.Plural, so `securitygroups` would install a definition at a path the "
+            + "apply never reaches — and the symptom is a discovery error naming a missing operator "
+            + "rather than a wrong plural."
         );
     }
 

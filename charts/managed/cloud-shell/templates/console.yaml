@@ -1,0 +1,147 @@
+{{/*
+The three objects a cloud terminal IS when nobody is attached to it.
+
+⚠ THE POD IS NOT HERE AND THAT IS THE DESIGN. A console's product is an interactive session:
+docs/plan/19 § The pod deletes the shell after twenty minutes idle and re-creates it on the next
+connect, because "a million users with an idle shell pod each is a million idle pods". So the shell is
+applied by the `connect` action — CloudConsoleSessionHandler — and never by the reconciler, which is
+what lets the idle reclaim delete it without the platform immediately putting it back. A template that
+rendered it would describe a console as something that is always running, which is the one thing it
+must not be.
+
+⚠ SO THIS CHART CANNOT RENDER ITS OWN PRODUCT. That is a real limit of the chart-as-description idea
+rather than an omission here — conformance.yaml § owed, `the-chart-cannot-render-the-product`.
+*/}}
+{{/*
+──────────────────────────────────────────────────────────────────────────────────────────────────
+The home directory. The only part of a console that survives an idle reclaim.
+
+⚠ NO storageClassName, so the cluster's default class is used. The consequence is that a console's
+delete is IRREVERSIBLE whatever this platform does: persistentVolumeReclaimPolicy lives on the
+PersistentVolume and is defaulted from the StorageClass, so a claim cannot ask for its bytes to
+outlive it. See SOURCE, and conformance.yaml § owed, `delete-takes-the-home-directory`.
+*/}}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "cloudshell.homeName" . }}
+  labels:
+    {{- include "cloudshell.platformLabels" . | nindent 4 }}
+spec:
+  {{/*
+    ⚠ ReadWriteOnce and not ReadWriteMany, because there is one pod by construction. RWX would be a
+    promise about concurrent shells this row does not make and most storage classes cannot keep.
+  */}}
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.home.size | quote }}
+---
+{{/*
+──────────────────────────────────────────────────────────────────────────────────────────────────
+The identity the shell pod runs under inside the cluster.
+
+⚠ `automountServiceAccountToken: false` IS THE WHOLE OBJECT. A pod with no serviceAccountName runs as
+the namespace's `default` account with its token mounted, and a shell containing kubectl would find it
+on the first tab-completion. This account exists in order to be empty.
+*/}}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "cloudshell.shellName" . }}
+  labels:
+    {{- include "cloudshell.platformLabels" . | nindent 4 }}
+  annotations:
+    cybercloud.io/principal-id: {{ .Values.identity.principalId | quote }}
+automountServiceAccountToken: false
+---
+{{/*
+──────────────────────────────────────────────────────────────────────────────────────────────────
+What the shell may reach, and what may reach it.
+
+⚠ docs/plan/19 ASKS FOR "a NetworkPolicy denying access to the platform's own namespaces" AND THAT IS
+NOT A POLICY THAT CAN BE WRITTEN. Egress rules are an allow-list; there is no deny. So the platform is
+excluded BY CONSTRUCTION — the tenant's own namespaces are allowed positively, and every private range
+is cut out of the public rule — rather than by an exception that cannot be spelled. SOURCE carries the
+API facts this rests on.
+*/}}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "cloudshell.shellName" . }}
+  labels:
+    {{- include "cloudshell.platformLabels" . | nindent 4 }}
+spec:
+  {{/*
+    ⚠ It selects the CONSOLE'S OWN POD rather than every pod in the namespace. A resource group's
+    namespace holds the tenant's other workloads, and a policy selecting all of them would silently
+    apply a shell's egress rules to a database.
+  */}}
+  podSelector:
+    matchLabels:
+      cybercloud.io/resource-type: {{ .Values.platform.resourceType | replace "/" "_" | lower | quote }}
+  policyTypes:
+    - Ingress
+    - Egress
+  {{/*
+    ⚠ An EMPTY list, which is not the same as no key: with Ingress in policyTypes and no rules,
+    nothing may open a connection to a shell. Every byte reaches this pod through the API server's
+    exec stream, which is not pod-network traffic and is unaffected.
+  */}}
+  ingress: []
+  egress:
+    {{/*
+      ⚠ `kubernetes.io/metadata.name` is set by the API server on every namespace and needs nobody to
+      remember it, which is the only reason this rule works today and the tenant-wide one below does
+      not.
+    */}}
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.platform.namespace | quote }}
+    {{/*
+      ⚠ THIS RULE MATCHES NOTHING TODAY. Nothing in this repository creates or labels a namespace, so
+      a shell's reach is its own resource group and no further — which means docs/plan/24's M1 exit
+      story does not work across resource groups. It fails closed, and it is rendered now so that the
+      day namespaces are labelled every existing console gains the reach with no api-version change.
+      conformance.yaml § owed, `namespaces-are-not-labelled`.
+    */}}
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              cybercloud.io/tenant-id: {{ .Values.platform.tenantId | quote }}
+    {{/*
+      ⚠ BOTH PROTOCOLS. A UDP-only rule works until a response exceeds 512 bytes and the resolver
+      retries over TCP, which presents as "curl works and dig doesn't, sometimes".
+    */}}
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+{{- if eq .Values.network.egress "Internet" }}
+    {{/*
+      ⚠ 169.254.0.0/16 IS THE ONE TO READ TWICE. It is the cloud metadata address, and a shell that
+      can reach it can usually read a node's own instance credentials. The three RFC 1918 blocks and
+      the RFC 6598 CGNAT block are what keep this rule from re-admitting the cluster.
+      ⚠ They ASSUME the cluster's own CIDRs are private — true for every cluster this platform
+      creates, unchecked for a BYO one. conformance.yaml § owed, `cluster-cidrs-are-assumed-private`.
+    */}}
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+              - 100.64.0.0/10
+              - 169.254.0.0/16
+{{- end }}

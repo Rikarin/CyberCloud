@@ -105,7 +105,43 @@ owed:
       is what a field nobody remembered costs. Closing it is an emitter that renders the chart and
       diffs it against the registry's projection, which is a seam ChartSurfaces does not have.
   - id: extension-names-are-not-library-names
+    status: closed
+    closed: 2026-08-18
     says: >
+      ⚠ CLOSED, AND THE FINDING IS KEPT BECAUSE THE FIX IS A TABLE AND THE DEFECT WAS THE ABSENCE OF
+      ONE. PostgresServers.ExtensionCatalogue and the `$catalogue` dict at the top of
+      templates/cluster.yaml now map each allowed value to the extension it installs as and the
+      library it needs preloaded, and ClusterJson reads them as two lists rather than one:
+      `pgvector` renders `CREATE EXTENSION IF NOT EXISTS vector;` and NO preload entry, `postgis`
+      likewise, and only `pg_stat_statements` and `timescaledb` reach
+      `spec.postgresql.shared_preload_libraries` — under their own names. Read upstream on
+      2026-08-18: pgvector's README says `CREATE EXTENSION vector` and asks for no preload;
+      PostgreSQL's own pg_stat_statements page says the module "must be loaded by adding
+      pg_stat_statements to shared_preload_libraries … because it requires additional shared memory";
+      timescaledb's `extension_load_without_preload` (src/extension_utils.c) raises "extension
+      \"timescaledb\" must be preloaded" with the hint "Please preload the timescaledb library via
+      shared_preload_libraries".
+      ⚠ THE TWO FAILURES WERE NOT THE SAME SIZE, which is why the preload half mattered more. A wrong
+      CREATE EXTENSION fails inside a bootstrap job and leaves a server without one feature; a
+      `shared_preload_libraries` entry with no library behind it is read by the POSTMASTER before it
+      accepts a connection, so it fails startup for every database on the instance.
+      ⚠ WHAT IS STILL OWED IS THE EVIDENCE, NOT THE FIX. `extensions-are-the-allow-list` above still
+      asks for one run per allowed value against a real cluster and nothing runs it: the
+      cluster-backed suites start a bare k3s with no CloudNativePG operator and no PostgreSQL, so
+      nothing in this tree can observe a `CREATE EXTENSION` succeed or a postmaster start. What the
+      unit suite proves is that the two spellings render the same two lists —
+      ChartRegistryPairTests.TheExtensionCatalogueIsTheChartsExtensionCatalogue diffs the tables row
+      for row, and PostgresReconcilerTests.AnExtensionNameIsNotALibraryName pins every allowed value
+      in one body, because the defect was per-value and a check naming only the value somebody
+      thought of is what let it ship.
+      ⚠ AND CyberCloud.Providers.DocumentDB NEVER HAD IT. It renders the same CloudNativePG CRD
+      independently and keeps the vocabularies apart by construction —
+      `DocumentDbAccounts.SharedPreloadLibraries` is `[pg_cron, pg_documentdb_core, pg_documentdb]`
+      and `ExtensionStatement` is `CREATE EXTENSION IF NOT EXISTS documentdb CASCADE;`, three lines
+      apart with a remark saying the prefixes differ. Its extension set is a platform constant rather
+      than a tenant allow-list, so it has one row to be right about and no list to conflate. THAT is
+      the difference: the defect here was a tenant-facing enum doing two jobs.
+      ── The finding, as recorded before the fix ────────────────────────────────────────────────
       /properties/extensions is one list used as two vocabularies: it reaches
       `bootstrap.initdb.postInitApplicationSQL` as `CREATE EXTENSION IF NOT EXISTS <value>` and
       `spec.postgresql.shared_preload_libraries` as a library name, and PostgreSQL does not agree

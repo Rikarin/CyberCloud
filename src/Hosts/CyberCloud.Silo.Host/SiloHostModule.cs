@@ -10,6 +10,7 @@ using CyberCloud.Providers.Network.Application;
 using CyberCloud.Providers.Sample.Application;
 using CyberCloud.Providers.Search.Application;
 using CyberCloud.Providers.Storage.Application;
+using CyberCloud.Providers.Terminal.Application;
 using Volo.Abp.Autofac;
 using Volo.Abp.Modularity;
 
@@ -55,4 +56,5 @@ namespace CyberCloud.Silo.Host;
 [DependsOn(typeof(SampleApplicationModule))]
 [DependsOn(typeof(SearchApplicationModule))]
 [DependsOn(typeof(StorageApplicationModule))]
+[DependsOn(typeof(TerminalApplicationModule))]
 public sealed class SiloHostModule : AbpModule;

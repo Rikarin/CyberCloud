@@ -1,0 +1,48 @@
+# A security group inside a tenant's virtual network — docs/plan/14 § Virtual networks,
+# "securityGroups/{name}", and the type VirtualNetworks.IsolationLimits' `not-a-firewall-by-default`
+# row has been telling tenants to attach since this family shipped.
+#
+# ⚠ A DIRECTORY OF ITS OWN, for the reason charts/managed/kube-ovn-subnet gives: `Build.Charts` pairs
+# a chart with a resource type through ONE `cybercloud.io/resource-type` annotation per Chart.yaml, so
+# one directory cannot be the configuration surface of two types.
+#
+# ⚠ CLUSTER-SCOPED, AND THE NAME IS DOING MORE WORK HERE THAN ON A SUBNET.
+# `NetworkSecurityGroups.ObjectNameOf` is `{namespace}-{network}-{name}`, the same three components a
+# subnet uses — but a Subnet at least carries `spec.vpc`, so a collision would be visible in the
+# object. A SecurityGroup has NO field naming its network at all, so this name is the only thing
+# separating two networks' groups called `web`, and a collision would merge two rule sets into one
+# port group with no error anywhere.
+apiVersion: v2
+name: kube-ovn-security-group
+description: A deny-by-default set of allow rules that become OVN ACLs on the ports in a virtual network. A workload may carry several.
+type: application
+
+# The chart's own version. Bumped on every change to this directory.
+version: 0.1.0
+
+# ⚠ The Kube-OVN version this chart's object shape was reviewed against — the same release the other
+# two charts in this family pin, because a SecurityGroup is reconciled by the same controller.
+appVersion: "1.16.2"
+
+kubeVersion: ">=1.31.0-0"
+
+keywords:
+  - kube-ovn
+  - security-group
+  - networking
+  - firewall
+
+home: https://kubeovn.github.io/docs/
+sources:
+  - https://github.com/kubeovn/kube-ovn
+
+maintainers:
+  - name: Cyber Cloud Platform
+
+# ⚠ The resource type carries BOTH segments — a child's type path is
+# `virtualNetworks/securityGroups`, interleaved — and the api-version is the NETWORK'S, for the
+# reasons charts/managed/kube-ovn-subnet's own annotations record.
+annotations:
+  cybercloud.io/resource-type: CyberCloud.Network/virtualNetworks/securityGroups
+  cybercloud.io/api-version: "2026-08-01"
+  cybercloud.io/operator: kube-ovn

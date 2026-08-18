@@ -81,6 +81,12 @@
       "src/Providers/CyberCloud.Providers.ContainerRegistry/CyberCloud.Providers.ContainerRegistry.Tests/CyberCloud.Providers.ContainerRegistry.Tests.csproj",
       "src/Providers/CyberCloud.Providers.ContainerRegistry/CyberCloud.Providers.ContainerRegistry.Conformance/CyberCloud.Providers.ContainerRegistry.Conformance.csproj",
       "src/Providers/CyberCloud.Providers.ContainerRegistry/CyberCloud.Providers.ContainerRegistry.Cluster.Conformance/CyberCloud.Providers.ContainerRegistry.Cluster.Conformance.csproj",
+      "src/Providers/CyberCloud.Providers.Terminal/CyberCloud.Providers.Terminal.Contracts/CyberCloud.Providers.Terminal.Contracts.csproj",
+      "src/Providers/CyberCloud.Providers.Terminal/CyberCloud.Providers.Terminal/CyberCloud.Providers.Terminal.csproj",
+      "src/Providers/CyberCloud.Providers.Terminal/CyberCloud.Providers.Terminal.Application/CyberCloud.Providers.Terminal.Application.csproj",
+      "src/Providers/CyberCloud.Providers.Terminal/CyberCloud.Providers.Terminal.Tests/CyberCloud.Providers.Terminal.Tests.csproj",
+      "src/Providers/CyberCloud.Providers.Terminal/CyberCloud.Providers.Terminal.Conformance/CyberCloud.Providers.Terminal.Conformance.csproj",
+      "src/Providers/CyberCloud.Providers.Terminal/CyberCloud.Providers.Terminal.Cluster.Conformance/CyberCloud.Providers.Terminal.Cluster.Conformance.csproj",
       "test/CyberCloud.Conformance/CyberCloud.Conformance.csproj",
       "test/CyberCloud.Cluster.Conformance/CyberCloud.Cluster.Conformance.csproj"
     ]

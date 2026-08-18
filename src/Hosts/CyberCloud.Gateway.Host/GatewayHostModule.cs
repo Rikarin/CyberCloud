@@ -10,6 +10,7 @@ using CyberCloud.Providers.Network.Application;
 using CyberCloud.Providers.Sample.Application;
 using CyberCloud.Providers.Search.Application;
 using CyberCloud.Providers.Storage.Application;
+using CyberCloud.Providers.Terminal.Application;
 using Volo.Abp.Autofac;
 using Volo.Abp.Modularity;
 
@@ -31,7 +32,7 @@ namespace CyberCloud.Gateway.Host;
 ///     </para>
 ///     <para>
 ///         ⚠ <b>The module and never the implementation</b> — docs/plan/03 § Assembly graph rules,
-///         rule 5. The eleven <c>using</c> lines above name <c>*.Application</c> assemblies; no type
+///         rule 5. The twelve <c>using</c> lines above name <c>*.Application</c> assemblies; no type
 ///         from a provider implementation is bound anywhere in this host, which is what
 ///         <c>GatewayIsolationTests</c> reads the <c>AssemblyRef</c> table for.
 ///     </para>
@@ -62,4 +63,5 @@ namespace CyberCloud.Gateway.Host;
 [DependsOn(typeof(SampleApplicationModule))]
 [DependsOn(typeof(SearchApplicationModule))]
 [DependsOn(typeof(StorageApplicationModule))]
+[DependsOn(typeof(TerminalApplicationModule))]
 public sealed class GatewayHostModule : AbpModule;

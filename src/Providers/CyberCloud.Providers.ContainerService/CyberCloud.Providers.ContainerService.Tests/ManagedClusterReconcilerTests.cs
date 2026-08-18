@@ -86,8 +86,16 @@ public sealed class ManagedClusterReconcilerTests {
         Spec(controlPlanes[2].Body)["replicas"]!.GetValue<int>()
             .ShouldBe(1, "tenant A's replica count came back as tenant B's");
 
+        // ⚠ Read out of the pin table rather than written as a literal, and that is the opposite of
+        // the rule ChartRegistryPairTests states for the CHART comparisons. There, a literal on both
+        // sides is the point, because two files have to agree about a value. Here the question is
+        // whose MINOR the rendered version came from — bob asked for 1.33 — so the table is the right
+        // side of the comparison and a literal only makes the pin unmovable. It moved on 2026-08-18.
         Spec(controlPlanes[3].Body)["version"]!.GetValue<string>()
-            .ShouldBe("v1.33.4", "tenant B's Kubernetes version came back as tenant A's");
+            .ShouldBe(
+                ManagedClusters.PinnedPatch["1.33"],
+                "tenant B's Kubernetes version came back as tenant A's"
+            );
 
         controlPlanes[0].Labels[KubeLabels.TenantId].ShouldBe(KubeLabels.GuidValue(TenantA));
         controlPlanes[1].Labels[KubeLabels.TenantId].ShouldBe(KubeLabels.GuidValue(TenantB));

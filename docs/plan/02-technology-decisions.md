@@ -432,6 +432,30 @@ progress model**, not a spinner, and the portal must be designed for that from t
    Operator, OpenSearch operator, FerretDB, Qdrant, Harbor, SeaweedFS, LINSTOR/Piraeus, KubeVirt+CDI,
    Kube-OVN, Cilium, MetalLB, Kamaji, etcd-operator, Velero. This is a survey we would otherwise
    repeat badly, and it is the single most valuable thing in that repository.
+
+   > ⚠ **AMENDED 2026-08-18, ON THE THIRD SIGHTING. This list is a survey of *software choices* and
+   > only sometimes a survey of *operators*, and the sentence above does not distinguish them.** Nine
+   > entries name an operator; some name a project that has none, and the difference is invisible
+   > until somebody sizes the work. Three rows have now found it independently:
+   >
+   > - **NATS.** `nats-io/nats-operator` was the only project that ever served a `NatsCluster`, and it
+   >   was archived on 2025-04-10. Upstream's answer is a Helm chart.
+   >   `charts/managed/nats/conformance.yaml` found this first.
+   > - **FerretDB.** There is no FerretDB operator at all; the row is a Deployment in front of a
+   >   CloudNativePG `Cluster`, which is why `CyberCloud.Providers.DocumentDB` renders that CRD a
+   >   second time. `charts/managed/ferretdb/SOURCE` found it second.
+   > - **Qdrant.** `github.com/qdrant/qdrant-operator` answers 404. The operator that exists is the
+   >   one Qdrant Managed, Hybrid and Private Cloud run and is not distributed — the organisation
+   >   publishes `qdrant/kubernetes-api`, *"API definitions for the Qdrant Kubernetes operator"*, and
+   >   not the controller. [12](12-managed-data-services.md) § Qdrant found it third.
+   >
+   > **What this costs is not a chart, it is an estimate.** Every EM figure in
+   > [12](12-managed-data-services.md) assumes the shape § The pattern, once describes: render a
+   > custom resource, let somebody else's controller converge it. A row with no operator has to own
+   > clustering, upgrade order and failover in a reconciler instead, and that is a different piece of
+   > work priced as the same one. **Reading a name off this list is not evidence that a controller
+   > exists. Check before sizing the row, and record the answer in that chart's `SOURCE`** — which is
+   > where the three findings above live, one per row, until this note.
 2. **The annotated-`values.yaml` → JSON Schema → form → docs pipeline.** Their charts carry
    `## @param {type} name - description` annotations that generate `values.schema.json`, which
    generates the dashboard form. We take the *mechanism* and reverse its *direction* — see

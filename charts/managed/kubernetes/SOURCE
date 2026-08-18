@@ -16,6 +16,20 @@ control-plane-provider: https://github.com/clastix/cluster-api-control-plane-pro
 infrastructure-provider: https://github.com/kubernetes-sigs/cluster-api-provider-kubevirt     # v0.11.2
 datastore-engine: https://github.com/clastix/kamaji
 
+# ⚠ A CONSTRAINT ON THE MANAGEMENT CLUSTER, NOT ON THIS CHART, AND IT HAD NOWHERE TO LIVE UNTIL NOW.
+# This chart's `Cluster` names its control plane and its infrastructure by {apiGroup, kind, name} and
+# Cluster API resolves the version from a `cluster.x-k8s.io/<contract>` label on the PROVIDER's CRD.
+# cluster-api-provider-kubevirt v0.11.2 is still labelled `cluster.x-k8s.io/v1beta1: v1alpha1`, so it
+# resolves only through CAPI's GetCompatibleVersions shim, which that function's own comment schedules
+# for removal in CAPI v1.16. Installing Cluster API v1.16 or later before the KubeVirt provider
+# relabels produces a Cluster whose infrastructureRef cannot be resolved at all.
+#
+# Re-checked 2026-08-18: CAPK v0.11.2 (2026-03-03) is still its newest release and still carries the
+# v1beta1 label; CAPI v1.14.0 is still the newest, so v1.16 has not shipped.
+# conformance.yaml § owed, `capk-crd-carries-the-v1beta1-contract-label`.
+max-cluster-api: "<v1.16"
+max-cluster-api-reviewed: 2026-08-18
+
 reviewed: 2026-08-12
 
 # ── What the review established, and which claims are weak ────────────────────────────────────
@@ -106,6 +120,26 @@ reviewed: 2026-08-12
 # prefers to a silent one. It is called out here for the same reason charts/managed/seaweedfs-bucket's
 # SOURCE calls out `clusterRef`.
 #
-# ⚠ ManagedClusters.PinnedPatch's TWO STRINGS WERE NOT READ OFF A KUBERNETES RELEASE PAGE.
-# conformance.yaml § owed, `pinned-patches-are-unreviewed`.
+# ── The version pins, read on 2026-08-18 ──────────────────────────────────────────────────────
+#
+# ⚠ THE BINDING PAGE IS NOT THE KUBERNETES RELEASE PAGE. `ManagedClusters.PinnedPatch` is rendered
+# both as a control-plane version here and as the node-image TAG by charts/managed/kubernetes-agentpool,
+# and quay.io/capk/ubuntu-2404-container-disk publishes one tag per MINOR: v1.31.5, v1.32.1, v1.33.5,
+# v1.34.1. So the pin is chosen from that list. 1.32 -> v1.32.1, 1.33 -> v1.33.5.
+#
+# The previous pins, v1.32.9 and v1.33.4, were real Kubernetes releases (1.32 ended at 1.32.13; 1.33
+# is at 1.33.13) and were tags of nothing, so every worker VM pulled an image that does not exist.
+#
+# ⚠ WHAT THE CHOICE COSTS, AND IT IS ON THE 1.32 ROW: v1.32.1 was built in January 2025 and carries
+# every fix from 1.32.2 to 1.32.13. A newer control plane with no bootable node image is a cluster
+# with no nodes, which is worse and quieter.
+#
+# ⚠ AND BOTH OFFERED MINORS ARE OUT OF UPSTREAM SUPPORT — 1.32 since 2026-02-28, 1.33 since
+# 2026-06-28; the supported minors that day were 1.34, 1.35 and 1.36. That is not a pin move: it is a
+# new api-version, because ManagedClusters.Versions is an AllowedValues a stored body carries.
+# conformance.yaml § owed, `offered-minors-are-out-of-support`.
+#
+# ⚠ STILL UNCHECKED, BECAUSE IT NEEDS A RUNNING KAMAJI RATHER THAN A REGISTRY: whether a pin exceeds
+# the install's bundled kubeadm, which `tcp_version.go` refuses at admission.
+pinned-patches-reviewed: 2026-08-18
 upstream-webhook: kamaji core validates the datastore, the version and the certificate SANs on the TenantControlPlane the control-plane provider creates; the control-plane provider itself ships no webhook (config/default/kustomization.yaml has ../webhook commented out); cluster-api ships both a validating and a mutating webhook for Cluster, and the mutating one is a no-op for a non-topology cluster

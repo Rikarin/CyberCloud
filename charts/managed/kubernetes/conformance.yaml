@@ -202,6 +202,18 @@ owed:
       schedules for removal in CAPI v1.16. So this platform's management cluster must pin Cluster API
       below v1.16 until the KubeVirt provider relabels, and the failure when it does not is a Cluster
       whose infrastructureRef cannot be resolved at all.
+      ⚠ RE-CHECKED 2026-08-18 AND NOTHING MOVED, WHICH IS WHY THE PIN IS NOW WRITTEN DOWN RATHER THAN
+      IMPLIED. cluster-api-provider-kubevirt's newest release is still v0.11.2 (2026-03-03) and its
+      config/crd/kustomization.yaml still labels `cluster.x-k8s.io/v1beta1: v1alpha1`. Cluster API's
+      newest release is v1.14.0 (2026-08-11), so v1.16 has not shipped and the shim is still in force.
+      The constraint has a home now — charts/managed/kubernetes/SOURCE carries `max-cluster-api` with
+      the date and the reason — because a constraint nobody wrote down is one whoever upgrades the
+      management cluster cannot honour.
+      ⚠ THE HALF THAT IS OURS IS ALREADY DELIBERATE AND ALREADY PINNED. This platform renders the
+      Cluster at v1beta2 with version-less {apiGroup, kind, name} refs instead of copying upstream's
+      v1beta1 template, and ManagedClusterDeclarationTests.TheClusterNamesTheControlPlaneAndTheInfrastructureItAlsoRenders
+      asserts that neither ref carries an apiVersion. Nothing here can fix somebody else's CRD label;
+      what it can do is not be the second thing that has to change.
   - id: datastore-is-shared-and-adr-009-says-it-should-not-be
     says: >
       ADR-009 specifies "a dedicated etcd per tenant from etcd-operator". This platform names ONE
@@ -217,14 +229,39 @@ owed:
       cluster-scoped and platform-owned that creates a DataStore per tenant cluster, which is the same
       shape of problem as `instancetypes-are-the-bundles` below and probably has the same answer.
   - id: pinned-patches-are-unreviewed
+    status: closed
+    closed: 2026-08-18
     says: >
-      ⚠ THE ONE THING IN THIS ROW A REVIEWER MUST CHECK BEFORE IT SHIPS. The API offers a Kubernetes
-      MINOR and Kamaji's version webhook parses a SEMANTIC VERSION, so the platform pins the patch —
-      ManagedClusters.PinnedPatch, and the same table in _helpers.tpl. Those two strings were NOT read
-      off a Kubernetes release page on the date this landed. A patch that does not exist is a control
-      plane that never starts; a patch newer than the Kamaji install's bundled kubeadm is refused at
-      admission with a message about a version nobody typed. Moving one is a chart version bump rather
-      than a new api-version, because a patch is not an API change and no stored body carries one.
+      ⚠ CLOSED, AND THE REVIEW REFUTED THE PREMISE IT WAS WRITTEN ON. The item said a reviewer must
+      check the pins against a Kubernetes release page. That is the wrong page. v1.32.9 and v1.33.4
+      ARE real Kubernetes releases — 1.32 ended at 1.32.13, 1.33 is at 1.33.13 — and neither is a tag
+      of quay.io/capk/ubuntu-2404-container-disk, which charts/managed/kubernetes-agentpool renders
+      this same string into. That repository publishes ONE TAG PER MINOR at whichever patch it built:
+      v1.31.5, v1.32.1, v1.33.5, v1.34.1, read on 2026-08-18. So the pins moved to v1.32.1 and
+      v1.33.5, which are the only patches per offered minor that are both a Kubernetes release and a
+      bootable node image, and the twin item `node-image-is-unverified` closed with the same read
+      rather than separately.
+      ⚠ WHAT REMAINS UNCHECKED IS THE HALF THAT NEEDS A CLUSTER: whether a pin is newer than the
+      Kamaji install's bundled kubeadm, which its version webhook refuses at admission with a message
+      about a version nobody typed. Nothing in this tree runs Kamaji — see
+      `a-green-cluster-suite-proves-the-apply-path-only` — so that is the nightly e2e's to answer.
+      ⚠ AND THE COST OF THE CHOICE IS ON THE 1.32 ROW: v1.32.1 was built in January 2025 and carries
+      every fix from 1.32.2 to 1.32.13. A newer control plane with no bootable node image is a cluster
+      with no nodes, which is worse and quieter, so this is the trade taken rather than an oversight.
+      Moving a pin is a chart version bump rather than a new api-version, because a patch is not an
+      API change and no stored body carries one.
+  - id: offered-minors-are-out-of-support
+    says: >
+      ⚠ FOUND BY THE PIN REVIEW ON 2026-08-18 AND IT IS A BIGGER ITEM THAN THE PINS WERE.
+      ManagedClusters.Versions offers 1.32 and 1.33. Kubernetes ended 1.32 on 2026-02-28 and 1.33 on
+      2026-06-28; the supported minors that day were 1.34, 1.35 and 1.36. So this type's whole
+      api-version offers a tenant a choice between two control planes upstream no longer patches, and
+      the CVE fixes a tenant would ask for do not exist to backport. ⚠ IT CANNOT BE FIXED THE WAY THE
+      PINS WERE. `Versions` is an AllowedValues a stored body carries, and docs/plan/08 § The provider
+      registry makes a published api-version immutable — a tenant whose allowed values grew or shrank
+      under them is a tenant whose stored body stopped being the body they sent. Offering 1.34 is a
+      new api-version, and quay.io/capk/ubuntu-2404-container-disk already publishes v1.34.1, so the
+      node image is not what blocks it.
   - id: version-skew-is-not-enforced
     says: >
       ⚠ docs/plan/13 SAYS "the API enforces it with a clear error, rather than letting a tenant break

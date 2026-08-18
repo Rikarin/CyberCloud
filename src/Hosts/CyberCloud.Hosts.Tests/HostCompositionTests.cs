@@ -60,7 +60,8 @@ public sealed class HostCompositionTests {
         "CyberCloud.Network",
         "CyberCloud.Sample",
         "CyberCloud.Search",
-        "CyberCloud.Storage"
+        "CyberCloud.Storage",
+        "CyberCloud.Terminal"
     ];
 
     // ── Failure class (a): a host that composes the manager and registers nothing ─────────────────

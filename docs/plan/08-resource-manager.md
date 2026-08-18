@@ -248,19 +248,56 @@ while delete is irreversible is worse than one advertising nothing. **That insti
 fix is not to make them declare it.** Honour it first. Four decisions come before any code, and each
 one decides the ones after it.
 
-**Decided: a soft-deleted resource moves to a different address, out of its resource group.**
-Azure has no ARM-wide soft delete; each provider builds its own, and Key Vault — the canonical one —
-moves the vault to `/subscriptions/{sub}/providers/Microsoft.KeyVault/locations/{loc}/deletedVaults/{name}`,
-a different resource *type* at subscription+location scope, returning `"type":
-"Microsoft.KeyVault/deletedVaults"` and keeping the original address only as a property. Follow it.
-The alternative — the resource stays where it is with a flag — puts an "unless deleted" clause on
-every read path, every list, every ReBAC check and the index claim, and the feature is then only as
-good as the least-remembered of them. Moving it out of the tree is more work once and less work
-forever, and it makes the sharpest failure — *a soft-deleted resource that is still readable at its
-old address* — unreachable by construction rather than a thing to remember. ⚠ The `404` on the old
-address must stay the **canonical** `404` § The enforcement seam in [07](07-rebac-authorization.md)
-requires: a `410 Gone` would tell an unauthorized caller that the name was taken, which is the
-enumeration oracle the status code exists to close.
+**Decided: a soft-deleted resource stops resolving at its address. It does not move to a new one,
+because this platform has no address for it to move to.**
+
+⚠ **REWRITTEN 2026-08-18, AFTER THE IMPLEMENTATION. This decision was "a soft-deleted resource moves
+to a different address, out of its resource group", following Key Vault, and it cannot be built as
+written.** The reasoning was sound and the platform it assumed is not the one that exists. Azure has
+no ARM-wide soft delete; each provider builds its own, and Key Vault — the canonical one — moves the
+vault to
+`/subscriptions/{sub}/providers/Microsoft.KeyVault/locations/{loc}/deletedVaults/{name}`, a different
+resource *type* at subscription+location scope. **There is no subscription-scoped address in
+CyberCloud at all.** `ResourceId.ParsePath` has `const int fixedPrefix = 8` and checks the literals
+`tenants`, `subscriptions`, `resourceGroups` and `providers` at fixed indices, so `resourceGroups/{rg}`
+is mandatory in every path the platform can parse and the shortest legal one is ten segments.
+`GatewayRouter.ResolveResource` and `ResolveAction` both go through it, so nothing can be *addressed*
+that it refuses; and the index grain key, the ReBAC object ids and the OpenAPI path templates all key
+on `ResourceId`, so a second address shape is four changes rather than one. Following Key Vault here
+was a decision about somebody else's identifier grammar.
+
+**What was built instead: `IndexEntryState.SoftDeleted`, and two refusals.** `IResourceIndexGrain`
+gains one state — no new mechanism, which is what the next decision already predicted — and
+`ResolveAsync` refuses it, so the resource is not addressable and the old address answers `404`; and
+`TryClaimAsync` refuses it, so the name is held. **That delivers the property the original decision
+was *for*.** Its argument against a flag was that "unless deleted" would have to be remembered on
+every read path, every list, every ReBAC check and the index claim, and the feature would be only as
+good as the least-remembered of them. One state on the index and one refusal in the resolver reaches
+the same place: everything downstream resolves a name to a resource *through* `ResolveAsync`, so
+nothing downstream ever learns that soft delete exists. It is not a flag every reader has to
+consult — it is a resolution that stops. ⚠ The `404` on the old address is the **canonical** `404`
+§ The enforcement seam in [07](07-rebac-authorization.md) requires: a `410 Gone` would tell an
+unauthorized caller that the name was taken, which is the enumeration oracle the status code exists to
+close.
+
+⚠ **What is genuinely lost, and it is not the address — it is the place a tenant lists and reaches
+what is recoverable.** Key Vault's `deletedVaults` is a collection you can `GET`, which is how an
+operator finds the thing they are about to restore. Here, the recoverable resource is by construction
+not addressable, and there is no second collection it is addressable *in*. Concretely:
+
+- **`RestoreAsync` and `PurgeAsync` exist, are implemented on `ResourceManagerService`, and are
+  covered by `SoftDeletePathTests` — and neither has an HTTP route.** `DispatchStage` calls
+  `ReadAsync`, `WriteAsync` and `DeleteAsync` and nothing else, so both verbs are reachable from
+  in-process callers and tests only.
+- **There is no list.** `IResourceIndexGrain.ResolveSoftDeletedAsync` answers "which resource was
+  parked under this name", which is the question you can only ask if you already know the name. A
+  tenant who has forgotten it has no way to enumerate the window.
+
+**Closing that is an addressing change, not a soft-delete change**, which is why it is recorded here
+rather than solved in passing: it needs either a subscription-scoped path shape that
+`ResourceId.ParsePath` can parse, or a collection endpoint that is not a `ResourceId` at all. Until
+then the recovery window is real, tested and reachable by an operator with the resource's own path —
+and invisible to the tenant it exists for.
 
 **Decided: the name is held for the whole window.** Azure holds it — *"You can't reuse the name of a
 key vault that was soft-deleted, until the retention period expires"*, DNS record included. Releasing
@@ -303,19 +340,40 @@ running them together is how this gets decided wrongly.
 The parent edge first. § The write path, end to end's step 8 writes
 `resource:{id}#parent@resourceGroup:{sub}-{rg}` so a new resource is visible to whoever holds a role
 on its group, and `DeleteTearsDownTheDataPlaneAndTheResourceIsGone` asserts that edge is gone after a
-delete. ⚠ **The first decision above already settles what happens to it, and reading the two together
-is what makes this obvious: a soft-deleted resource leaves its resource group.** So the tuple does
-not survive unchanged — while the resource is deleted, a tuple naming the resource group as its
-parent asserts a containment that is no longer true. Preserving it is not the conservative choice, it
-is the wrong one. The edge moves with the resource, to `#parent@subscription:{sub}`, and moves back on
-restore.
+delete.
 
-Two things fall out, and they are why this beats both alternatives. **The resource is never
+⚠ **REWRITTEN 2026-08-18. THE CONCLUSION SURVIVED ITS OWN IMPLEMENTATION AND THE ARGUMENT FOR IT DID
+NOT.** This paragraph read: *"The first decision above already settles what happens to it … a
+soft-deleted resource leaves its resource group. So the tuple does not survive unchanged — while the
+resource is deleted, a tuple naming the resource group as its parent asserts a containment that is no
+longer true."* **The resource does not leave its resource group.** The decision that said it would
+could not be built — see above — and what shipped keeps the `ResourceId` exactly as it was, resource
+group included. So the tuple *would* have survived unchanged, and it is re-parented anyway, for two
+reasons that never depended on the address:
+
+- **An unaddressable resource's resource-group edge grants nothing.** That edge exists so a role
+  holder on the group can reach the resource, and while the entry is `SoftDeleted` nothing resolves
+  the name, so there is nothing to reach. Leaving the edge in place would preserve a grant with no
+  object behind it — not wrong, but not load-bearing either, and a tuple that grants nothing is one
+  nobody can reason about later.
+- **Subscription-scoped visibility is the visibility a restore actually needs.** A restore is a
+  subscription-scoped operation: the caller is someone who can see across resource groups, because
+  the group's own members can no longer see the thing at all. Moving the edge to
+  `#parent@subscription:{sub}` makes the set of people who can see a deleted resource the set who
+  hold subscription-scoped rights, which is exactly who Azure gives `deletedVaults/read` and
+  `purge/action` to.
+
+So the edge moves to `#parent@subscription:{sub}` and moves back on restore —
+`SoftDeletePathTests.TheParentEdgeMovesToTheSubscriptionWhileDeletedAndBackOnRestore` pins it.
+⚠ **The lesson is about design records rather than about tuples: this argument leaned on a neighbouring
+decision instead of on its own reasons, so when that decision turned out to be unbuildable the
+conclusion was left standing on nothing.** It was still the right conclusion. Nobody reading it could
+have told.
+
+One more thing falls out, and it is why moving the edge beats dropping it. **The resource is never
 parentless**, so the failure that made the parent tuple necessary in the first place — a resource
 nobody can see, and a silo lost in that window leaving it that way — cannot happen during the
-recovery window either. And the people who can see a deleted resource become the people who hold
-subscription-scoped rights, which is exactly who Azure gives `deletedVaults/read` and
-`purge/action` to. A restore is a subscription-scoped operation; the visibility should match.
+recovery window either.
 
 Direct role assignments on the resource are a separate question with a security answer rather than a
 modelling one, and Azure's behaviour is the right one to copy: they go with the resource and

@@ -74,12 +74,22 @@ reviewed: 2026-08-12
 # fields: KubevirtClusterStatus.Ready=false, KubevirtMachineStatus.Ready=false, and
 # VirtualMachineBootstrapCheckSpec.CheckStrategy=ssh (enum: none;ssh).
 #
-# ── The weak claims ───────────────────────────────────────────────────────────────────────────
+# ── The node image, read off the registry rather than assumed ──────────────────────────────────
 #
-# ⚠ NodeImageRepository AND ITS TAG WERE NOT READ OFF A REGISTRY. `quay.io/capk/ubuntu-2404-container-disk`
-# tagged with ManagedClusters.PinnedPatch's value. A tag that does not exist is a VM that never boots,
-# with the reason in a DataVolume's events — three objects below anything this platform reads.
-# conformance.yaml § owed, `node-image-is-unverified`.
+# ⚠ `quay.io/capk/ubuntu-2404-container-disk` PUBLISHES ONE TAG PER MINOR, NOT ONE PER PATCH. Its tag
+# list on the date below is, in full: v1.31.5, v1.32.1, v1.33.5, v1.34.1. This chart renders
+# `ManagedClusters.PinnedPatch`'s value as the tag, so the pin has to be a patch this repository has
+# published — which is why 1.32 pins v1.32.1 and 1.33 pins v1.33.5 rather than the newest patch
+# Kubernetes released. The previous pins, v1.32.9 and v1.33.4, were real Kubernetes releases and were
+# not tags here, so every worker VM pulled an image that does not exist.
+#
+# ⚠ A REGISTRY READ IS NOT A RUNNING NODE. This establishes that the tag resolves. It says nothing
+# about whether the image boots, whether its kubelet is the version its tag claims, or whether the
+# bootstrap check completes — the last of which is `bootstrap-check-may-never-complete` below.
+node-image: quay.io/capk/ubuntu-2404-container-disk
+node-image-reviewed: 2026-08-18
+#
+# ── The weak claims ───────────────────────────────────────────────────────────────────────────
 #
 # ⚠ `virtualMachineBootstrapCheck` IS NOT RENDERED, SO THE CRD's `ssh` DEFAULT STANDS — which is what
 # the control-plane provider's own published KubeVirt template does. It is nonetheless the riskiest

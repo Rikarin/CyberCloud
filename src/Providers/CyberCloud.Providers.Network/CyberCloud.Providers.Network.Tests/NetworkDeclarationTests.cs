@@ -29,7 +29,13 @@ public sealed class NetworkDeclarationTests {
         "documentdb",
         "analytics",
         "dbformysql",
-        "network"
+        "network",
+        // ⚠ ADDED WHEN THE THIRD TYPE IN THIS FAMILY ARRIVED, AND IT WAS MISSING BEFORE THAT — which
+        // is exactly the failure this list's own remarks predict. `CyberCloud.ContainerService` was
+        // already in the tree and its key was never typed here, so `vnet` and `subnet` were checked
+        // against ten of eleven group keys. Neither collides, so nothing broke; the omission was luck
+        // rather than a check, and a list nobody notices is out of date is a list that proves nothing.
+        "containerservice"
     ];
 
     /// <summary>Every short name already declared in the tree, as a literal.</summary>
@@ -45,7 +51,10 @@ public sealed class NetworkDeclarationTests {
         "opensearch",
         "docdb",
         "clickhouse",
-        "mariadb"
+        "mariadb",
+        // ⚠ ContainerServiceProvider's two, absent for the same reason `containerservice` was.
+        "aks",
+        "nodepool"
     ];
 
     [Fact]
@@ -55,12 +64,58 @@ public sealed class NetworkDeclarationTests {
         // process that does not start. Running it here is what turns those into a test failure.
         var registry = Build();
 
-        registry.Types.Length.ShouldBe(2);
+        registry.Types.Length.ShouldBe(3);
 
         registry.Types.Select(x => x.Type.ToString()).ShouldBe(
-            ["CyberCloud.Network/virtualNetworks", "CyberCloud.Network/virtualNetworks/subnets"],
+            [
+                "CyberCloud.Network/virtualNetworks",
+                "CyberCloud.Network/virtualNetworks/subnets",
+                "CyberCloud.Network/virtualNetworks/securityGroups"
+            ],
             ignoreOrder: true
         );
+    }
+
+    [Fact]
+    public void EveryDeclaredActionNamesAHandlerThatServesItsOwnTypeAndAction() {
+        // ⚠ THE ASSERTION THAT WOULD HAVE CAUGHT THREE 500s. ActionDispatcher refuses a SYNCHRONOUS
+        // action whose HandlerType is null — "declares the action '…' and no handler for it, so it
+        // cannot be run", an InternalError — and this family shipped two such actions because at the
+        // time no provider in the tree had a handler and there was nowhere to put one. The
+        // declaration still reached the OpenAPI document, the SDK and the CLI, so the gap was visible
+        // only to whoever called it.
+        //
+        // ⚠ AND THE THREE FURTHER REFUSALS ARE CHECKED HERE RATHER THAN AT SILO START, because
+        // ProviderBuilder.Action checks only that the Type implements the interface — it cannot know
+        // what an INSTANCE will report. A handler whose Type or Action disagrees is a 500 on the first
+        // call, which for `showIsolation` means the first time somebody asks what the platform does
+        // not protect them from.
+        foreach (var type in Build().Types) {
+            foreach (var action in type.Actions) {
+                action.LongRunning.ShouldBeFalse(
+                    $"{type.Type}/{action.Name} — a long-running action cannot have a handler, and "
+                    + "the operation grain drives the RECONCILER for one"
+                );
+
+                action.HandlerType.ShouldNotBeNull($"{type.Type}/{action.Name}");
+
+                var handler = (IResourceActionHandler)Activator.CreateInstance(
+                    action.HandlerType,
+                    // ⚠ The one handler with a dependency takes an IClock; the others take none.
+                    action.HandlerType.GetConstructors()[0].GetParameters().Length == 0
+                        ? []
+                        : [new FixedClock()]
+                )!;
+
+                handler.Type.ShouldBe(type.Type, action.Name);
+
+                handler.Action.ShouldBe(
+                    action.Name,
+                    "a handler reporting a different action is refused by ActionDispatcher at call "
+                    + "time, which is a 500 rather than a silo-start failure"
+                );
+            }
+        }
     }
 
     [Fact]
@@ -110,8 +165,8 @@ public sealed class NetworkDeclarationTests {
     }
 
     [Fact]
-    public void TheTwoShortNamesAreDistinctFromEachOther() {
-        // ⚠ With two types in one family there are two chances to collide, including with each
+    public void TheThreeShortNamesAreDistinctFromEachOther() {
+        // ⚠ With three types in one family there are three chances to collide, including with each
         // other — and ProviderRegistry.Build DOES refuse this one, which is why the assertion is
         // cheap and worth having anyway: it names the problem where a silo-start failure would not.
         var names = ShortNames().ToList();
@@ -121,14 +176,26 @@ public sealed class NetworkDeclarationTests {
 
     [Fact]
     public void TheShortNamesAreTheOnesTheProviderMeantToDeclare() {
-        ShortNames().ShouldBe(["vnet", "subnet"], ignoreOrder: true);
+        // ⚠ `secgroup` AND NOT `sg`, WHICH IS KUBE-OVN'S OWN shortName. Two characters is a token
+        // somebody else will reach for, and the collision throws on EVERY `cyc` parse rather than on
+        // the one command that uses it.
+        ShortNames().ShouldBe(["vnet", "subnet", "secgroup"], ignoreOrder: true);
     }
 
     [Fact]
-    public void NeitherTypeDeclaresSoftDelete() {
-        // ⚠ Nothing in CyberCloud.ResourceManager reads SoftDeleteDays, so declaring a recovery
-        // window would be a promise made to the users most likely to test it. A separate agent is
-        // building the feature; this asserts the promise is not made early.
+    public void NoTypeDeclaresSoftDelete() {
+        // ⚠ THE REASON FOR THIS ASSERTION HAS CHANGED AND THE OLD ONE IS NOW FALSE. It read "nothing
+        // in CyberCloud.ResourceManager reads SoftDeleteDays". It does:
+        // ResourceManagerService.DeleteAsync branches on SoftDeleteDays > 0 and calls
+        // IResourceIndexGrain.SoftDeleteAsync instead of ReleaseAsync, the operation spec carries
+        // SoftDelete forward, and OperationGrain withholds the committed quota until a purge.
+        //
+        // ⚠ WHAT IS MISSING IS THE HALF A TENANT WOULD NEED: RestoreAsync and PurgeAsync exist on the
+        // manager and have NO HTTP ROUTE. So a window declared today parks the name AND HOLDS THE
+        // QUOTA for its whole length, with no way to recover the resource or release it early. On a
+        // security group there is a second reason: its rules ARE its content, and a group whose name
+        // is parked while its ACLs are gone is a perimeter a tenant would reasonably believe still
+        // exists.
         foreach (var type in Build().Types) {
             type.SoftDeleteDays.ShouldBe(0, type.Type.ToString());
         }
@@ -212,6 +279,16 @@ public sealed class NetworkDeclarationTests {
         );
 
         NetworkSubnets.SubnetRef("ns", id).IsClusterScoped.ShouldBeTrue();
+
+        var group = id with { Type = NetworkSecurityGroups.Type };
+
+        NetworkSecurityGroups.SecurityGroupRef("ns", group).IsClusterScoped.ShouldBeTrue();
+
+        // ⚠ HYPHENATED, AND IT IS THE ONE NAME IN THIS FAMILY A HAND-WRITTEN PLURAL WOULD GET WRONG.
+        // ClusterConformanceHarness derives its CRD stub's path from GroupVersionKind.Plural, so
+        // `securitygroups` would install a definition at a path the apply never reaches — and the
+        // symptom is a discovery error naming a missing operator rather than a wrong plural.
+        NetworkSecurityGroups.SecurityGroupKind.Plural.ShouldBe("security-groups");
     }
 
     // ── The isolation claim, which docs/plan/14 makes the named risk of this row ─────────────────

@@ -23,6 +23,27 @@ upstream-api: postgresql.cnpg.io/v1
 # and is labelled as one — see upstream-api above.
 reviewed: 2026-08-11
 
+# ⚠ THE EXTENSION ALLOW-LIST IS NOT A CLAIM ABOUT THIS CRD, so it carries its own date. Each value of
+# `/properties/extensions` was read against the extension's own upstream on 2026-08-18, for two facts
+# the CloudNativePG CRD has no opinion about: the name `CREATE EXTENSION` takes, and whether the
+# postmaster must preload a library.
+#
+#   pgvector           — pgvector/pgvector README: `CREATE EXTENSION vector`; no preload named
+#   postgis            — postgis.net getting started: `CREATE EXTENSION postgis`; no preload named
+#   pg_stat_statements — postgresql.org/docs/17/pgstatstatements: "must be loaded by adding
+#                        pg_stat_statements to shared_preload_libraries … because it requires
+#                        additional shared memory"
+#   timescaledb        — timescale/timescaledb src/extension_utils.c, extension_load_without_preload:
+#                        "extension \"timescaledb\" must be preloaded", hint "Please preload the
+#                        timescaledb library via shared_preload_libraries"
+#
+# ⚠ NOT VERIFIED, AND IT IS THE NEXT THING A REVIEWER SHOULD CHECK: whether
+# ghcr.io/cloudnative-pg/postgresql — the image this chart renders — ships any of these four at all.
+# An allowed value whose .so is not in the image is a bootstrap job that fails after the caller was
+# told 202, which is the same shape of failure as the two above and needs a registry read rather than
+# a documentation read. conformance.yaml § owed, `extensions-are-the-allow-list`.
+extensions-reviewed: 2026-08-18
+
 # ⚠ Cozystack (docs/plan/02 § ADR-010) contributed the *operator choice* and the annotated-values
 # pipeline shape to this chart, and no code. It is deliberately not listed as `upstream`, because
 # `upstream` means "there is a tree we could diff against" and here there is not.

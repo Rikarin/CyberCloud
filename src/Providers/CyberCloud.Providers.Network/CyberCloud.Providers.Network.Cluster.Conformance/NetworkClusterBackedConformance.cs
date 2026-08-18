@@ -66,3 +66,27 @@ public sealed class NetworkSubnetLifecycleConformance(
 
 /// <summary>docs/plan/24 § Phase 1's exit criterion 3, against the subnet child type.</summary>
 public sealed class NetworkSubnetSiloKillConformance : SiloKillConformanceTests<NetworkSubnetCase>;
+
+/// <summary>
+///     The same two suites against the <b>second</b> child type,
+///     <c>CyberCloud.Network/virtualNetworks/securityGroups</c>.
+/// </summary>
+/// <remarks>
+///     ⚠ <b>THE ONE THING THIS HALF PROVES THAT NOTHING ELSE IN THE TREE DOES FOR THIS TYPE: THE
+///     HYPHENATED PLURAL.</b> <c>SecurityGroup</c>'s path is <c>security-groups</c>, not
+///     <c>securitygroups</c>, and <c>ClusterConformanceHarness</c> derives its CRD stub's path from
+///     <see cref="GroupVersionKind.Plural" /> — so a guessed plural installs a definition at a path
+///     the apply never reaches and every assertion here would fail with a discovery error naming a
+///     missing operator. ⚠ It still runs no Kube-OVN controller, so <b>no ACL in this suite has ever
+///     been programmed</b> and nothing here has checked that <c>ipVersion: ipv4</c> is spelled the way
+///     <c>validateSgRule</c> wants.
+/// </remarks>
+/// <param name="fixture">The harness.</param>
+public sealed class NetworkSecurityGroupLifecycleConformance(
+    ClusterConformanceFixture<NetworkSecurityGroupCase> fixture
+) : ClusterConformanceTests<NetworkSecurityGroupCase>(fixture),
+    IClassFixture<ClusterConformanceFixture<NetworkSecurityGroupCase>>;
+
+/// <summary>docs/plan/24 § Phase 1's exit criterion 3, against the security-group child type.</summary>
+public sealed class NetworkSecurityGroupSiloKillConformance
+    : SiloKillConformanceTests<NetworkSecurityGroupCase>;

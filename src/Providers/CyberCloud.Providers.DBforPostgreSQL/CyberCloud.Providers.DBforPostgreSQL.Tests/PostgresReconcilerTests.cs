@@ -279,8 +279,7 @@ public sealed class PostgresReconcilerTests {
     public async Task TheRenderedClusterCarriesTheSizingPresetsQuantitiesAndTheExtensionsAllowList() {
         // The two places where "the body said it and the CR did not get it" would be invisible: a
         // preset that renders no `resources` block bills a tenant for a size they did not get, and an
-        // extension that reaches `postInitApplicationSQL` but not `shared_preload_libraries` installs
-        // and then does not load.
+        // extension that reaches neither the bootstrap SQL nor the preload list installs nothing.
         var connection = new RecordingConnection();
 
         var body = JsonNode.Parse(PostgresServers.Body(ClusterId))!.AsObject();
@@ -294,13 +293,79 @@ public sealed class PostgresReconcilerTests {
 
         spec["resources"]!["requests"]!["cpu"]!.GetValue<string>().ShouldBe("2");
         spec["resources"]!["limits"]!["memory"]!.GetValue<string>().ShouldBe("8Gi");
-        spec["bootstrap"]!["initdb"]!["postInitApplicationSQL"]!.AsArray().Count.ShouldBe(1);
+        // ⚠ `vector`, not `pgvector`. The allow-list value is the name of the DISTRIBUTION and
+        // `CREATE EXTENSION pgvector` fails — see AnExtensionNameIsNotALibraryName.
+        spec["bootstrap"]!["initdb"]!["postInitApplicationSQL"]!.AsArray()
+            .Select(x => x!.GetValue<string>())
+            .ShouldBe(["CREATE EXTENSION IF NOT EXISTS vector;"]);
 
-        // ⚠ Beside `parameters`, as a list. See ThePreloadLibrariesAreASiblingOfParametersInBothSpellings
-        // for why the other placement is a 422 rather than a style difference.
+        // ⚠ AND NO PRELOAD LIST AT ALL. pgvector needs no `shared_preload_libraries` entry, and a
+        // name with no library behind it fails the postmaster's startup rather than one feature.
+        spec["postgresql"]!.AsObject().ContainsKey("shared_preload_libraries").ShouldBeFalse(
+            "a body naming only pgvector rendered a shared_preload_libraries entry. There is no "
+            + "pgvector library to preload, and an unresolvable entry there stops the instance from "
+            + "starting at all."
+        );
+    }
+
+    [Fact]
+    public void AnExtensionNameIsNotALibraryName() {
+        // ⚠ /properties/extensions IS ONE LIST READ AS TWO VOCABULARIES, and until 2026-08-18 both
+        // renderings used the raw value. `CREATE EXTENSION pgvector` fails — pgvector's own README
+        // says `CREATE EXTENSION vector` — and `shared_preload_libraries: [pgvector, postgis]` names
+        // two libraries that do not exist, which the postmaster refuses at startup.
+        //
+        // The other two rows go the other way: pg_stat_statements' documentation says the module
+        // "must be loaded by adding pg_stat_statements to shared_preload_libraries", and timescaledb's
+        // extension_load_without_preload (src/extension_utils.c) raises "extension \"timescaledb\"
+        // must be preloaded". Read upstream on 2026-08-18.
+        //
+        // ⚠ THIS ASSERTS EVERY ALLOWED VALUE IN ONE BODY, because the defect was per-value: a check
+        // that named only the value somebody happened to think of is what let the first spelling ship.
+        var body = JsonNode.Parse(PostgresServers.Body(ClusterId))!.AsObject();
+        body["properties"]!.AsObject()["extensions"] =
+            new JsonArray("pgvector", "postgis", "pg_stat_statements", "timescaledb");
+
+        using var desired = JsonDocument.Parse(body.ToJsonString());
+        var spec = JsonNode.Parse(PostgresServers.ClusterJson("orders", desired.RootElement))!["spec"]!;
+
+        spec["bootstrap"]!["initdb"]!["postInitApplicationSQL"]!.AsArray()
+            .Select(x => x!.GetValue<string>())
+            .ShouldBe([
+                "CREATE EXTENSION IF NOT EXISTS vector;",
+                "CREATE EXTENSION IF NOT EXISTS postgis;",
+                "CREATE EXTENSION IF NOT EXISTS pg_stat_statements;",
+                "CREATE EXTENSION IF NOT EXISTS timescaledb;"
+            ]);
+
         spec["postgresql"]!["shared_preload_libraries"]!.AsArray()
             .Select(x => x!.GetValue<string>())
-            .ShouldBe(["pgvector"]);
+            .ShouldBe(
+                ["pg_stat_statements", "timescaledb"],
+                "the preload list is the extensions that NEED preloading, under their library names. "
+                + "pgvector and postgis need none; naming them there is a postmaster that never starts."
+            );
+    }
+
+    [Fact]
+    public void EveryValueTheAllowListPermitsHasACatalogueRow() {
+        // The other direction, and the one the renderer's fallback makes silent: a value with no row
+        // renders as itself in both vocabularies, which is exactly the defect this table closed. The
+        // fallback stays — dropping the value would be worse — so this is what stops the allow-list
+        // and the catalogue growing apart.
+        foreach (var value in PostgresServers.Schema2026.Properties
+                     .Single(x => x.JsonPointer == "/properties/extensions")
+                     .AllowedValues) {
+            PostgresServers.ExtensionCatalogue.ShouldContainKey(value);
+        }
+
+        PostgresServers.ExtensionCatalogue.Count.ShouldBe(
+            PostgresServers.Schema2026.Properties
+                .Single(x => x.JsonPointer == "/properties/extensions")
+                .AllowedValues.Length,
+            "PostgresServers.ExtensionCatalogue has a row for a value /properties/extensions does not "
+            + "allow, so a row is either dead or the allow-list lost a value"
+        );
     }
 
     [Fact]
@@ -333,9 +398,11 @@ public sealed class PostgresReconcilerTests {
         var postgresql = JsonNode.Parse(PostgresServers.ClusterJson("orders", desired.RootElement))!
             ["spec"]!["postgresql"]!.AsObject();
 
+        // ⚠ `timescaledb` alone: pgvector is in the body and needs no preload entry. Which values
+        // reach this list is AnExtensionNameIsNotALibraryName's assertion; this one is about where.
         postgresql["shared_preload_libraries"]!.AsArray()
             .Select(x => x!.GetValue<string>())
-            .ShouldBe(["pgvector", "timescaledb"]);
+            .ShouldBe(["timescaledb"]);
 
         postgresql["parameters"]!.AsObject().ContainsKey("shared_preload_libraries").ShouldBeFalse(
             "shared_preload_libraries was written under spec.postgresql.parameters, where "

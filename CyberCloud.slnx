@@ -394,7 +394,7 @@
         <Project Path="src/Providers/CyberCloud.Providers.Network/CyberCloud.Providers.Network.Cluster.Conformance/CyberCloud.Providers.Network.Cluster.Conformance.csproj" />
 
         <!--
-          The twelfth provider family — CyberCloud.ContainerRegistry/registries on Harbor.
+          The thirteenth provider family — CyberCloud.ContainerRegistry/registries on Harbor.
           docs/plan/13 § Container Registry, "M1 · 1.5 EM".
 
           ⚠ IT IS THE FIRST TYPE IN THE TREE TO HAVE DECLARED A RECOVERY WINDOW, AND THE DECLARATION
@@ -417,6 +417,32 @@
         <Project Path="src/Providers/CyberCloud.Providers.ContainerRegistry/CyberCloud.Providers.ContainerRegistry.Tests/CyberCloud.Providers.ContainerRegistry.Tests.csproj" />
         <Project Path="src/Providers/CyberCloud.Providers.ContainerRegistry/CyberCloud.Providers.ContainerRegistry.Conformance/CyberCloud.Providers.ContainerRegistry.Conformance.csproj" />
         <Project Path="src/Providers/CyberCloud.Providers.ContainerRegistry/CyberCloud.Providers.ContainerRegistry.Cluster.Conformance/CyberCloud.Providers.ContainerRegistry.Cluster.Conformance.csproj" />
+
+        <!--
+          The twelfth provider family — CyberCloud.Terminal/consoles, the browser shell.
+
+          docs/plan/19 § CyberCloud.Terminal/consoles, M1 · 1.5 EM, and step 6 of docs/plan/24's M1
+          exit story: "open the cloud terminal and psql into it using a managed identity".
+
+          ⚠ IT IS THE FIRST FAMILY WHOSE PRODUCT IS AN INTERACTIVE SESSION RATHER THAN A CONVERGED
+          OBJECT. Eleven families reconcile a resource and leave it; a console is created, attached
+          to, idled out and re-created, and the states a person cares about are "attached" and "idle".
+          What the reconciler converges is the DURABLE HALF — a home volume, an identity and a network
+          policy — and the shell itself is applied by a synchronous action, so that the idle reclaim
+          can delete a pod without the platform immediately putting it back. The argument is on
+          CloudConsoles, § What is a resource and what is a session.
+
+          ⚠ IT IS ALSO THE FIRST FAMILY THAT RENDERS ONLY CORE-GROUP OBJECTS. Every provider before it
+          renders a custom resource, so the cluster-backed harness had to derive a CRD stub before it
+          could address anything. Nothing here needs one — which makes this the one suite whose green
+          is evidence the objects are real, and no evidence at all that the derivation works.
+        -->
+        <Project Path="src/Providers/CyberCloud.Providers.Terminal/CyberCloud.Providers.Terminal.Contracts/CyberCloud.Providers.Terminal.Contracts.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.Terminal/CyberCloud.Providers.Terminal/CyberCloud.Providers.Terminal.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.Terminal/CyberCloud.Providers.Terminal.Application/CyberCloud.Providers.Terminal.Application.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.Terminal/CyberCloud.Providers.Terminal.Tests/CyberCloud.Providers.Terminal.Tests.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.Terminal/CyberCloud.Providers.Terminal.Conformance/CyberCloud.Providers.Terminal.Conformance.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.Terminal/CyberCloud.Providers.Terminal.Cluster.Conformance/CyberCloud.Providers.Terminal.Cluster.Conformance.csproj" />
     </Folder>
     <Folder Name="/src/Hosts/">
         <Project Path="src/Hosts/CyberCloud.Gateway.Host/CyberCloud.Gateway.Host.csproj" />

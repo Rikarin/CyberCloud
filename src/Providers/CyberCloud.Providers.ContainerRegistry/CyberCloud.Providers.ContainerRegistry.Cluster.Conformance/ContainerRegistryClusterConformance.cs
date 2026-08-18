@@ -15,15 +15,16 @@ namespace CyberCloud.Providers.ContainerRegistry.ClusterConformance;
 ///         description of the same provider, and the two would disagree the first time either changed.
 ///     </para>
 ///     <para>
-///         ⚠ <b>ONE CRD STUB, AND FOURTEEN OF THE FIFTEEN OBJECTS NEED NONE — WHICH IS THE REVERSE OF
-///         EVERY FAMILY BEFORE THIS ONE AND IS WORTH RECORDING.</b>
+///         ⚠ <b>ONE CRD STUB, AND FOURTEEN OF THE FIFTEEN OBJECTS NEED NONE.</b>
 ///         <c>ClusterConformanceHarness.EnsureCustomResourceDefinitionsAsync</c> derives a definition
 ///         per custom kind from the case's own <c>Objects</c>; here the only custom kind is
 ///         <c>monitoring.coreos.com/v1 PodMonitor</c>, because <c>Secret</c>, <c>ConfigMap</c>,
 ///         <c>Service</c>, <c>Deployment</c> and <c>StatefulSet</c> are all served by a bare k3s
-///         without being told. <c>charts/managed/nats</c> found the same about a four-of-five split
-///         and called it the exact reverse of the Kafka row; this is fourteen of fifteen, and it is
-///         the same measurement at the far end.
+///         without being told. <c>charts/managed/kafka</c> needed two stubs and nothing else;
+///         <c>charts/managed/nats</c> needed one of five; <c>charts/managed/cloud-shell</c> needs
+///         <b>none</b>, and records that its green is therefore no evidence the derivation works.
+///         ⚠ <b>This suite is the first that needs both</b> — fourteen built-in kinds checked by a
+///         real, schema-validating API server, and one derived stub exercised in the same run.
 ///     </para>
 ///     <para>
 ///         ⚠ <b>WHAT THIS SUITE PROVES AND WHAT IT EMPHATICALLY DOES NOT.</b> Because fourteen of the

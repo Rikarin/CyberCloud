@@ -5679,6 +5679,522 @@
           },
           "alias": "vnet"
         },
+        "virtual-networks-security-groups": {
+          "name": "virtual-networks-security-groups",
+          "resourceType": "CyberCloud.Network/virtualNetworks/securityGroups",
+          "title": "Security group",
+          "plural": "Security groups",
+          "summary": "A deny-by-default set of allow rules that become OVN ACLs on the ports in a virtual network. A workload may carry several.",
+          "verbs": {
+            "create": {
+              "name": "create",
+              "summary": "Create or replace a Security group.",
+              "method": "PUT",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Network/virtualNetworks/{virtualNetworksName}/securityGroups/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": true,
+              "flags": [
+                {
+                  "name": "--allow-same-group-traffic",
+                  "type": "switch",
+                  "required": false,
+                  "summary": "Whether workloads that carry this same security group may reach each other without a rule. Off by default: it is the one setting here that permits traffic nobody wrote a rule for.",
+                  "jsonPointer": "/properties/allowSameGroupTraffic",
+                  "default": false
+                },
+                {
+                  "name": "--cluster-id",
+                  "type": "string",
+                  "required": true,
+                  "alias": "--cluster",
+                  "summary": "The cluster whose fabric carries the security group. Must be the cluster the network is in — nothing checks that.",
+                  "jsonPointer": "/properties/clusterId",
+                  "immutable": true,
+                  "widget": "cluster"
+                },
+                {
+                  "name": "--egress-allow-icmp",
+                  "type": "switch",
+                  "required": false,
+                  "summary": "Whether outbound ICMP is allowed to the remotes above. Off by default.",
+                  "jsonPointer": "/properties/egress/allowIcmp",
+                  "default": false
+                },
+                {
+                  "name": "--egress-remote-v4",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The IPv4 range outbound traffic may reach, or empty for no IPv4 rules at all.",
+                  "jsonPointer": "/properties/egress/remoteV4",
+                  "widget": "cidr",
+                  "default": "",
+                  "example": "0.0.0.0/0"
+                },
+                {
+                  "name": "--egress-remote-v6",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The IPv6 range outbound traffic may reach, or empty for no IPv6 rules at all.",
+                  "jsonPointer": "/properties/egress/remoteV6",
+                  "widget": "cidr",
+                  "default": "",
+                  "example": "::/0"
+                },
+                {
+                  "name": "--egress-tcp-ports",
+                  "type": "string",
+                  "required": false,
+                  "summary": "TCP ports outbound traffic may reach, in the same form as the inbound list. Empty means no outbound TCP.",
+                  "jsonPointer": "/properties/egress/tcpPorts",
+                  "default": "",
+                  "example": "443"
+                },
+                {
+                  "name": "--egress-udp-ports",
+                  "type": "string",
+                  "required": false,
+                  "summary": "UDP ports outbound traffic may reach. Empty means no outbound UDP — which includes DNS on port 53.",
+                  "jsonPointer": "/properties/egress/udpPorts",
+                  "default": "",
+                  "example": "53"
+                },
+                {
+                  "name": "--ingress-allow-icmp",
+                  "type": "switch",
+                  "required": false,
+                  "summary": "Whether inbound ICMP is allowed from the remotes above. Off by default. ⚠ With this off, a workload in this group does not answer ping and does not receive path-MTU messages.",
+                  "jsonPointer": "/properties/ingress/allowIcmp",
+                  "default": false
+                },
+                {
+                  "name": "--ingress-remote-v4",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The IPv4 range inbound traffic may come from, in CIDR form, or empty for no IPv4 rules at all. Use 0.0.0.0/0 for the whole internet.",
+                  "jsonPointer": "/properties/ingress/remoteV4",
+                  "widget": "cidr",
+                  "default": "",
+                  "example": "10.20.0.0/16"
+                },
+                {
+                  "name": "--ingress-remote-v6",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The IPv6 range inbound traffic may come from, or empty for no IPv6 rules at all. ⚠ A group with only an IPv4 remote silently permits nothing over IPv6, which on a dual-stack subnet is not the same as permitting nothing.",
+                  "jsonPointer": "/properties/ingress/remoteV6",
+                  "widget": "cidr",
+                  "default": "",
+                  "example": "fd00:20::/48"
+                },
+                {
+                  "name": "--ingress-tcp-ports",
+                  "type": "string",
+                  "required": false,
+                  "summary": "TCP ports inbound traffic may reach, as a comma-separated list of ports and ranges — for example 80,443,8000-8100. Empty means no TCP is allowed inbound. ⚠ There is no way to say 'every protocol'; 1-65535 says 'every TCP port'.",
+                  "jsonPointer": "/properties/ingress/tcpPorts",
+                  "default": "",
+                  "example": "80,443"
+                },
+                {
+                  "name": "--ingress-udp-ports",
+                  "type": "string",
+                  "required": false,
+                  "summary": "UDP ports inbound traffic may reach, in the same form as tcpPorts. Empty means no UDP is allowed inbound.",
+                  "jsonPointer": "/properties/ingress/udpPorts",
+                  "default": "",
+                  "example": "53"
+                },
+                {
+                  "name": "--location",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The region the security group lives in. It must be the network's own region — nothing checks that.",
+                  "jsonPointer": "/location",
+                  "immutable": true,
+                  "widget": "region",
+                  "example": "eu-central"
+                },
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tags",
+                  "type": "keyValue",
+                  "required": false,
+                  "summary": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+                  "jsonPointer": "/tags",
+                  "widget": "tag-input"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--virtual-networks-name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The name of the parent this Security group lives inside. docs/plan/12 § Child resources: a child is addressed '…/{parentType}/{parentName}/{childType}/{childName}', so the parent's name is part of the address rather than part of the body.",
+                  "pathPlaceholder": "virtualNetworksName"
+                }
+              ],
+              "waitFlags": [
+                "--wait",
+                "--no-wait"
+              ]
+            },
+            "delete": {
+              "name": "delete",
+              "summary": "Delete a Security group. Permanent.",
+              "method": "DELETE",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Network/virtualNetworks/{virtualNetworksName}/securityGroups/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": true,
+              "flags": [
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--virtual-networks-name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The name of the parent this Security group lives inside. docs/plan/12 § Child resources: a child is addressed '…/{parentType}/{parentName}/{childType}/{childName}', so the parent's name is part of the address rather than part of the body.",
+                  "pathPlaceholder": "virtualNetworksName"
+                }
+              ],
+              "waitFlags": [
+                "--wait",
+                "--no-wait"
+              ]
+            },
+            "show": {
+              "name": "show",
+              "summary": "Read a Security group.",
+              "method": "GET",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Network/virtualNetworks/{virtualNetworksName}/securityGroups/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--virtual-networks-name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The name of the parent this Security group lives inside. docs/plan/12 § Child resources: a child is addressed '…/{parentType}/{parentName}/{childType}/{childName}', so the parent's name is part of the address rather than part of the body.",
+                  "pathPlaceholder": "virtualNetworksName"
+                }
+              ]
+            },
+            "show-effective-rules": {
+              "name": "show-effective-rules",
+              "summary": "showEffectiveRules a Security group.",
+              "method": "POST",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Network/virtualNetworks/{virtualNetworksName}/securityGroups/{resourceName}/showEffectiveRules",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--virtual-networks-name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The name of the parent this Security group lives inside. docs/plan/12 § Child resources: a child is addressed '…/{parentType}/{parentName}/{childType}/{childName}', so the parent's name is part of the address rather than part of the body.",
+                  "pathPlaceholder": "virtualNetworksName"
+                }
+              ],
+              "action": "showEffectiveRules",
+              "permission": "read",
+              "rawBody": true
+            },
+            "update": {
+              "name": "update",
+              "summary": "Amend a Security group. Only the flags given are changed.",
+              "method": "PATCH",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Network/virtualNetworks/{virtualNetworksName}/securityGroups/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": true,
+              "flags": [
+                {
+                  "name": "--allow-same-group-traffic",
+                  "type": "switch",
+                  "required": false,
+                  "summary": "Whether workloads that carry this same security group may reach each other without a rule. Off by default: it is the one setting here that permits traffic nobody wrote a rule for.",
+                  "jsonPointer": "/properties/allowSameGroupTraffic",
+                  "default": false
+                },
+                {
+                  "name": "--cluster-id",
+                  "type": "string",
+                  "required": false,
+                  "alias": "--cluster",
+                  "summary": "The cluster whose fabric carries the security group. Must be the cluster the network is in — nothing checks that.",
+                  "jsonPointer": "/properties/clusterId",
+                  "immutable": true,
+                  "widget": "cluster"
+                },
+                {
+                  "name": "--egress-allow-icmp",
+                  "type": "switch",
+                  "required": false,
+                  "summary": "Whether outbound ICMP is allowed to the remotes above. Off by default.",
+                  "jsonPointer": "/properties/egress/allowIcmp",
+                  "default": false
+                },
+                {
+                  "name": "--egress-remote-v4",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The IPv4 range outbound traffic may reach, or empty for no IPv4 rules at all.",
+                  "jsonPointer": "/properties/egress/remoteV4",
+                  "widget": "cidr",
+                  "default": "",
+                  "example": "0.0.0.0/0"
+                },
+                {
+                  "name": "--egress-remote-v6",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The IPv6 range outbound traffic may reach, or empty for no IPv6 rules at all.",
+                  "jsonPointer": "/properties/egress/remoteV6",
+                  "widget": "cidr",
+                  "default": "",
+                  "example": "::/0"
+                },
+                {
+                  "name": "--egress-tcp-ports",
+                  "type": "string",
+                  "required": false,
+                  "summary": "TCP ports outbound traffic may reach, in the same form as the inbound list. Empty means no outbound TCP.",
+                  "jsonPointer": "/properties/egress/tcpPorts",
+                  "default": "",
+                  "example": "443"
+                },
+                {
+                  "name": "--egress-udp-ports",
+                  "type": "string",
+                  "required": false,
+                  "summary": "UDP ports outbound traffic may reach. Empty means no outbound UDP — which includes DNS on port 53.",
+                  "jsonPointer": "/properties/egress/udpPorts",
+                  "default": "",
+                  "example": "53"
+                },
+                {
+                  "name": "--ingress-allow-icmp",
+                  "type": "switch",
+                  "required": false,
+                  "summary": "Whether inbound ICMP is allowed from the remotes above. Off by default. ⚠ With this off, a workload in this group does not answer ping and does not receive path-MTU messages.",
+                  "jsonPointer": "/properties/ingress/allowIcmp",
+                  "default": false
+                },
+                {
+                  "name": "--ingress-remote-v4",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The IPv4 range inbound traffic may come from, in CIDR form, or empty for no IPv4 rules at all. Use 0.0.0.0/0 for the whole internet.",
+                  "jsonPointer": "/properties/ingress/remoteV4",
+                  "widget": "cidr",
+                  "default": "",
+                  "example": "10.20.0.0/16"
+                },
+                {
+                  "name": "--ingress-remote-v6",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The IPv6 range inbound traffic may come from, or empty for no IPv6 rules at all. ⚠ A group with only an IPv4 remote silently permits nothing over IPv6, which on a dual-stack subnet is not the same as permitting nothing.",
+                  "jsonPointer": "/properties/ingress/remoteV6",
+                  "widget": "cidr",
+                  "default": "",
+                  "example": "fd00:20::/48"
+                },
+                {
+                  "name": "--ingress-tcp-ports",
+                  "type": "string",
+                  "required": false,
+                  "summary": "TCP ports inbound traffic may reach, as a comma-separated list of ports and ranges — for example 80,443,8000-8100. Empty means no TCP is allowed inbound. ⚠ There is no way to say 'every protocol'; 1-65535 says 'every TCP port'.",
+                  "jsonPointer": "/properties/ingress/tcpPorts",
+                  "default": "",
+                  "example": "80,443"
+                },
+                {
+                  "name": "--ingress-udp-ports",
+                  "type": "string",
+                  "required": false,
+                  "summary": "UDP ports inbound traffic may reach, in the same form as tcpPorts. Empty means no UDP is allowed inbound.",
+                  "jsonPointer": "/properties/ingress/udpPorts",
+                  "default": "",
+                  "example": "53"
+                },
+                {
+                  "name": "--location",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The region the security group lives in. It must be the network's own region — nothing checks that.",
+                  "jsonPointer": "/location",
+                  "immutable": true,
+                  "widget": "region",
+                  "example": "eu-central"
+                },
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tags",
+                  "type": "keyValue",
+                  "required": false,
+                  "summary": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+                  "jsonPointer": "/tags",
+                  "widget": "tag-input"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--virtual-networks-name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The name of the parent this Security group lives inside. docs/plan/12 § Child resources: a child is addressed '…/{parentType}/{parentName}/{childType}/{childName}', so the parent's name is part of the address rather than part of the body.",
+                  "pathPlaceholder": "virtualNetworksName"
+                }
+              ],
+              "waitFlags": [
+                "--wait",
+                "--no-wait"
+              ]
+            }
+          },
+          "alias": "secgroup"
+        },
         "virtual-networks-subnets": {
           "name": "virtual-networks-subnets",
           "resourceType": "CyberCloud.Network/virtualNetworks/subnets",
@@ -7838,6 +8354,512 @@
             }
           },
           "alias": "bucket"
+        }
+      }
+    },
+    "terminal": {
+      "name": "terminal",
+      "summary": "Commands for the CyberCloud.Terminal provider.",
+      "commands": {
+        "consoles": {
+          "name": "consoles",
+          "resourceType": "CyberCloud.Terminal/consoles",
+          "title": "Cloud terminal",
+          "plural": "Cloud terminals",
+          "summary": "A browser shell running in this subscription's own cluster, holding a managed identity, with a persistent home directory and no stored credential.",
+          "verbs": {
+            "connect": {
+              "name": "connect",
+              "summary": "connect a Cloud terminal.",
+              "method": "POST",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Terminal/consoles/{resourceName}/connect",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                }
+              ],
+              "action": "connect",
+              "permission": "connect",
+              "rawBody": true
+            },
+            "create": {
+              "name": "create",
+              "summary": "Create or replace a Cloud terminal.",
+              "method": "PUT",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Terminal/consoles/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": true,
+              "flags": [
+                {
+                  "name": "--cluster-id",
+                  "type": "string",
+                  "required": true,
+                  "alias": "--cluster",
+                  "summary": "The cluster whose namespace holds the shell and its home volume.",
+                  "jsonPointer": "/properties/clusterId",
+                  "immutable": true,
+                  "widget": "cluster"
+                },
+                {
+                  "name": "--egress",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Internet lets the shell reach public addresses as well as this subscription's own workloads and DNS — a shell that cannot git clone is not a shell. TenantOnly removes the public half and leaves the rest.",
+                  "jsonPointer": "/properties/network/egress",
+                  "choices": [
+                    "Internet",
+                    "TenantOnly"
+                  ],
+                  "default": "Internet"
+                },
+                {
+                  "name": "--idle-timeout-minutes",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "How long a shell may sit with nobody typing into it before it is reclaimed. The home volume survives; the pod does not. ⚠ There is no value meaning never — an idle terminal is a tenant paying for something they closed.",
+                  "jsonPointer": "/properties/session/idleTimeoutMinutes",
+                  "default": 20
+                },
+                {
+                  "name": "--location",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The region the console is billed in.",
+                  "jsonPointer": "/location",
+                  "immutable": true,
+                  "widget": "region",
+                  "example": "eu-central"
+                },
+                {
+                  "name": "--max-duration-hours",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "The longest a single shell may run, busy or not. Enforced by the kubelet through the pod's own deadline, so it holds even when nothing of this platform is running.",
+                  "jsonPointer": "/properties/session/maxDurationHours",
+                  "default": 8
+                },
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--preset",
+                  "type": "string",
+                  "required": false,
+                  "summary": "How much a shell gets. The ladder stops at 2 vCPU and 4 GiB, which is docs/plan/19's ceiling for this row — a workload that needs more needs a cluster and a job rather than a terminal.",
+                  "jsonPointer": "/properties/sizing/preset",
+                  "choices": [
+                    "c1.large",
+                    "c1.medium",
+                    "c1.small"
+                  ],
+                  "widget": "cozy-preset",
+                  "default": "c1.small"
+                },
+                {
+                  "name": "--principal-id",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The managed identity every command in this shell acts as. It may not be changed: a console whose identity moved would have an audit trail describing a shell that no longer exists.",
+                  "jsonPointer": "/properties/identity/principalId",
+                  "immutable": true
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--retention-days",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "How long $HOME is kept after the console was last attached to. ⚠ Nothing sweeps on it yet — it is carried so that a console created today is swept correctly by whatever does.",
+                  "jsonPointer": "/properties/home/retentionDays",
+                  "default": 90
+                },
+                {
+                  "name": "--session-recording",
+                  "type": "switch",
+                  "required": false,
+                  "summary": "Whether everything typed into and printed by this shell is recorded. ⚠ Off by default and immutable afterwards: a shell contains secrets, a keystroke log is a liability, and a recording that could be switched off mid-life would be worth nothing to the compliance requirement it exists for.",
+                  "jsonPointer": "/properties/audit/sessionRecording",
+                  "immutable": true,
+                  "default": false
+                },
+                {
+                  "name": "--size",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The size of $HOME. It grows and never shrinks: a PersistentVolumeClaim refuses a decrease at the API.",
+                  "jsonPointer": "/properties/home/size",
+                  "default": "5Gi",
+                  "example": "5Gi"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tags",
+                  "type": "keyValue",
+                  "required": false,
+                  "summary": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+                  "jsonPointer": "/tags",
+                  "widget": "tag-input"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--variant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "default carries every tool in docs/plan/19's table and takes about 40 seconds to pull cold; minimal carries shells, editors, cyc and kubectl and starts in about 8. The repository and the digest are the platform's.",
+                  "jsonPointer": "/properties/image/variant",
+                  "choices": [
+                    "default",
+                    "minimal"
+                  ],
+                  "default": "default"
+                }
+              ],
+              "waitFlags": [
+                "--wait",
+                "--no-wait"
+              ]
+            },
+            "delete": {
+              "name": "delete",
+              "summary": "Delete a Cloud terminal. Permanent.",
+              "method": "DELETE",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Terminal/consoles/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": true,
+              "flags": [
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                }
+              ],
+              "waitFlags": [
+                "--wait",
+                "--no-wait"
+              ]
+            },
+            "show": {
+              "name": "show",
+              "summary": "Read a Cloud terminal.",
+              "method": "GET",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Terminal/consoles/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                }
+              ]
+            },
+            "terminate": {
+              "name": "terminate",
+              "summary": "terminate a Cloud terminal.",
+              "method": "POST",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Terminal/consoles/{resourceName}/terminate",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                }
+              ],
+              "action": "terminate",
+              "permission": "connect",
+              "rawBody": true
+            },
+            "update": {
+              "name": "update",
+              "summary": "Amend a Cloud terminal. Only the flags given are changed.",
+              "method": "PATCH",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Terminal/consoles/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": true,
+              "flags": [
+                {
+                  "name": "--cluster-id",
+                  "type": "string",
+                  "required": false,
+                  "alias": "--cluster",
+                  "summary": "The cluster whose namespace holds the shell and its home volume.",
+                  "jsonPointer": "/properties/clusterId",
+                  "immutable": true,
+                  "widget": "cluster"
+                },
+                {
+                  "name": "--egress",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Internet lets the shell reach public addresses as well as this subscription's own workloads and DNS — a shell that cannot git clone is not a shell. TenantOnly removes the public half and leaves the rest.",
+                  "jsonPointer": "/properties/network/egress",
+                  "choices": [
+                    "Internet",
+                    "TenantOnly"
+                  ],
+                  "default": "Internet"
+                },
+                {
+                  "name": "--idle-timeout-minutes",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "How long a shell may sit with nobody typing into it before it is reclaimed. The home volume survives; the pod does not. ⚠ There is no value meaning never — an idle terminal is a tenant paying for something they closed.",
+                  "jsonPointer": "/properties/session/idleTimeoutMinutes",
+                  "default": 20
+                },
+                {
+                  "name": "--location",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The region the console is billed in.",
+                  "jsonPointer": "/location",
+                  "immutable": true,
+                  "widget": "region",
+                  "example": "eu-central"
+                },
+                {
+                  "name": "--max-duration-hours",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "The longest a single shell may run, busy or not. Enforced by the kubelet through the pod's own deadline, so it holds even when nothing of this platform is running.",
+                  "jsonPointer": "/properties/session/maxDurationHours",
+                  "default": 8
+                },
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--preset",
+                  "type": "string",
+                  "required": false,
+                  "summary": "How much a shell gets. The ladder stops at 2 vCPU and 4 GiB, which is docs/plan/19's ceiling for this row — a workload that needs more needs a cluster and a job rather than a terminal.",
+                  "jsonPointer": "/properties/sizing/preset",
+                  "choices": [
+                    "c1.large",
+                    "c1.medium",
+                    "c1.small"
+                  ],
+                  "widget": "cozy-preset",
+                  "default": "c1.small"
+                },
+                {
+                  "name": "--principal-id",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The managed identity every command in this shell acts as. It may not be changed: a console whose identity moved would have an audit trail describing a shell that no longer exists.",
+                  "jsonPointer": "/properties/identity/principalId",
+                  "immutable": true
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--retention-days",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "How long $HOME is kept after the console was last attached to. ⚠ Nothing sweeps on it yet — it is carried so that a console created today is swept correctly by whatever does.",
+                  "jsonPointer": "/properties/home/retentionDays",
+                  "default": 90
+                },
+                {
+                  "name": "--session-recording",
+                  "type": "switch",
+                  "required": false,
+                  "summary": "Whether everything typed into and printed by this shell is recorded. ⚠ Off by default and immutable afterwards: a shell contains secrets, a keystroke log is a liability, and a recording that could be switched off mid-life would be worth nothing to the compliance requirement it exists for.",
+                  "jsonPointer": "/properties/audit/sessionRecording",
+                  "immutable": true,
+                  "default": false
+                },
+                {
+                  "name": "--size",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The size of $HOME. It grows and never shrinks: a PersistentVolumeClaim refuses a decrease at the API.",
+                  "jsonPointer": "/properties/home/size",
+                  "default": "5Gi",
+                  "example": "5Gi"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tags",
+                  "type": "keyValue",
+                  "required": false,
+                  "summary": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+                  "jsonPointer": "/tags",
+                  "widget": "tag-input"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--variant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "default carries every tool in docs/plan/19's table and takes about 40 seconds to pull cold; minimal carries shells, editors, cyc and kubectl and starts in about 8. The repository and the digest are the platform's.",
+                  "jsonPointer": "/properties/image/variant",
+                  "choices": [
+                    "default",
+                    "minimal"
+                  ],
+                  "default": "default"
+                }
+              ],
+              "waitFlags": [
+                "--wait",
+                "--no-wait"
+              ]
+            }
+          },
+          "alias": "shell"
         }
       }
     }

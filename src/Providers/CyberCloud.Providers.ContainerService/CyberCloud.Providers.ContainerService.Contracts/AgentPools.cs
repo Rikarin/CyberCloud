@@ -257,14 +257,27 @@ public static class AgentPools {
 
     /// <summary>The container-disk image a worker VM boots.</summary>
     /// <remarks>
-    ///     ⚠ <b>UNVERIFIED, LIKE <c>ManagedClusters.PinnedPatch</c>, AND FOR THE SAME REASON IT IS
-    ///     SPELLED IN ONE PLACE.</b> The KubeVirt infrastructure provider publishes node images under
-    ///     this repository, tagged with the Kubernetes version they carry; the tag this platform
-    ///     renders is therefore a function of <c>ManagedClusters.PinnedPatch</c>. Neither the repository
-    ///     nor any tag was read off a registry on the date this shipped, and a tag that does not exist
-    ///     is a VM that never boots — with the reason in a <c>DataVolume</c>'s events, three objects
-    ///     below anything this platform reads. <c>conformance.yaml § owed</c>,
-    ///     <c>node-image-is-unverified</c>.
+    ///     <para>
+    ///         ⚠ <b>READ OFF THE REGISTRY ON 2026-08-18, AND THE REPOSITORY IS RIGHT WHILE THE TAGS
+    ///         THIS PLATFORM RENDERED WERE NOT.</b> <c>quay.io/capk/ubuntu-2404-container-disk</c>
+    ///         exists and carries exactly four tags: <c>v1.31.5</c>, <c>v1.32.1</c>, <c>v1.33.5</c>
+    ///         and <c>v1.34.1</c>. <c>ManagedClusters.PinnedPatch</c> named <c>v1.32.9</c> and
+    ///         <c>v1.33.4</c>, so every worker VM in every pool pulled a tag that does not exist.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>THE ASSUMPTION UNDER THE OLD PIN WAS THE DEFECT, NOT EITHER STRING.</b> This
+    ///         remark used to say the provider publishes an image "tagged with the Kubernetes version
+    ///         they carry", making the tag "a function of <c>ManagedClusters.PinnedPatch</c>". It
+    ///         publishes ONE TAG PER MINOR, at whichever patch it happened to build — so the
+    ///         dependency runs the other way, and the pin is now chosen from what this repository has
+    ///         published. <c>ManagedClusters.PinnedPatch</c> carries the reasoning and what it costs.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ Still true, and it is why the tag is spelled in one place: a tag that does not exist
+    ///         is a VM that never boots, with the reason in a <c>DataVolume</c>'s events — three
+    ///         objects below anything this platform reads, and invisible to a tenant who has no
+    ///         credential for the cluster.
+    ///     </para>
     /// </remarks>
     public const string NodeImageRepository = "quay.io/capk/ubuntu-2404-container-disk";
 

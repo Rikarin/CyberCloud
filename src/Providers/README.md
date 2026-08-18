@@ -863,12 +863,195 @@ the argument above; `securityGroups`, `publicIpAddresses`, `dnsZones`, `loadBala
 `vpnGateways` are **owed**, each with what was learned about it at `NetworkProvider`'s remarks rather
 than left as a bare gap.
 
-`CyberCloud.Providers.ContainerRegistry` — `CyberCloud.ContainerRegistry/registries` on Harbor,
-[13 § Container Registry](../../docs/plan/13-compute-vm-containers.md), **M1 · 1.5 EM**. **The family whose
-operator turned out not to exist**, and the one that declared the first recovery window in the tree,
-measured it against a real API server, and took it back.
+### What the eleventh provider's second pass measured
 
+⚠ **`virtualNetworks/securityGroups` landed, and the blocker it was owed for was solved by reshaping
+rather than disputed.** The blocker was real and is unchanged: `SchemaProperty.ElementKind` still
+refuses an array of objects, and Kube-OVN's `SecurityGroupRule` is one. **What changed is the
+question.** docs/plan/14 asks for a security group, not for a JSON transcription of that struct, and a
+security group is expressible in scalars once you take the substrate's own composition model
+seriously: **a group is one coherent allow-set and a port carries several** — a port's
+`…kubernetes.io/security_groups` annotation is a *comma-separated list of group names*, so the arity a
+single group needs is **one**. The remote is then a v4 slot and a v6 slot (`addressSpace`'s shape, so
+`Cidr.V4Pattern` stays declarable) and the ports are one patterned string per protocol.
+
+- ⚠ **The reshape validates MORE at the API, not less, and that is the part worth generalising.** The
+  reflex is that a string is a weaker type than an array of numbers. It is the opposite here:
+  `Minimum`/`Maximum` are **property** constraints on `SchemaProperty` and there is **no per-element
+  bounds member**, so an `Array` of `WholeNumber` could carry no range check at all — and ADR-012's
+  fifth surface refuses `@pattern` on an array outright. `PortRange.OptionalListPattern` is an exact
+  1–65535 grammar, six alternation branches with **disjoint leading digits** so it stays linear, and
+  it refuses `0`, `65536` and `99999` with a `400` and a JSON Pointer **before the write path
+  answers**. ⚠ It is deliberately *unlike* `Cidr.V4Pattern`, which is shape-only — a complete IPv6
+  grammar in one expression is a catastrophic-backtracking hazard on a request path and a bounded
+  decimal integer is not. **So this family now enforces exactly as much as each property can bear,
+  rather than one rule for all of them.** What is left after the 202 is one relation, `min <= max`.
+- ⚠ **Failure class (b) was answered from the substrate and the answer is the good one.** Read in
+  `pkg/ovs/ovn-nb-acl.go`: `CreateSgDenyAllACL` installs `outport == @{pg} && ip` and
+  `inport == @{pg} && ip` with action **drop** at `SecurityGroupDropPriority` (2003), `CreateSgBaseACL`
+  adds ARP/ICMPv6/DHCP/VRRP at 2005, every rule this type writes lands at 2004, and
+  `pkg/controller/security_group.go` has **no special case for an empty rule list**. So an empty
+  security group **permits nothing** and a tenant cannot reach "allow everything" by omission. The
+  schema therefore has no `defaultPolicy` property — there is one policy and the substrate chose it —
+  and the only field that grants unwritten traffic, `allowSameGroupTraffic`, defaults off and is sent
+  **explicitly**, because "the substrate's zero value happens to be safe" is a fact about a version of
+  Go source rather than a property of the resource.
+- ⚠ **The first object in the family whose spec the controller does NOT rewrite, and containment is
+  still right.** Every write `pkg/controller/security_group.go` makes is `patchSgStatus`, a merge patch
+  against the `"status"` subresource; there is no spec update anywhere in the file. Three files in this
+  family argue containment from "the controller writes back to `.spec`" and that argument does not
+  hold here. Containment applies anyway for the general reason, which is the more durable one.
+- ⚠ **Atomic-under-SSA is fatal for `routeTables` and harmless here, and the difference is the
+  ownership rather than the marker.** Neither `ingressRules` nor `egressRules` carries an
+  `x-kubernetes-list-type`. Two `routeTables` resources would have shared **one** `Vpc`'s array; one
+  security group owns its whole object, so there is no second writer for atomicity to hurt. **"No
+  list-type marker" is not by itself a refusal** — it is a refusal only when two resources would write
+  one array, which is worth separating because the first family to meet it wrote them down together.
+- ⚠ **THREE DECLARED ACTIONS IN THIS TREE WERE ANSWERING `500`, AND TWO OF THEM WERE THIS FAMILY'S.**
+  When these types shipped, no provider had an action handler and there was nowhere to put one. The
+  seam exists now, and `ActionDispatcher` **refuses a synchronous action whose `HandlerType` is
+  null**, by name, as an `InternalError`. So `showIsolation` — recorded at the time as *"the only
+  action in the catalogue whose content is ready and whose plumbing is not"* — was publishing a `500`
+  for the platform's own statement of what it does **not** protect a tenant from. All three now have
+  handlers, and `NetworkDeclarationTests` asserts every declared action names one **and** that the
+  instance reports its own type and action, which `ProviderBuilder.Action` cannot check because it
+  holds a `Type`.
+- ⚠ **"Nothing in the manager reads `SoftDeleteDays`" is FALSE and eleven files say it.**
+  `ResourceManagerService.DeleteAsync` branches on `SoftDeleteDays > 0` and calls
+  `IResourceIndexGrain.SoftDeleteAsync` instead of `ReleaseAsync`; `OperationSpec.SoftDelete` carries
+  it forward and `OperationGrain` **withholds the committed quota until a purge**. ⚠ **What is still
+  missing is the half a tenant needs: `RestoreAsync` and `PurgeAsync` have no HTTP route.** So a window
+  declared today parks the name *and holds the quota* for its whole length with no way to recover the
+  resource or release it early. That is now the stated reason no type here declares one — a live
+  refutation of the sentence every provider in the tree copies, and the decision it changes is
+  `publicIpAddresses`', where the meter being withheld is the platform's scarcest.
+- ⚠ **A short-name list that nobody noticed was out of date proved nothing.** `NetworkDeclarationTests`
+  checked two short names against **ten** group keys and twelve existing aliases; `containerservice`,
+  `aks` and `nodepool` had been in the tree the whole time and were never typed in. Nothing collided,
+  so nothing broke — the check was luck. All three are in now, and the list's own remarks already
+  predicted exactly this.
+- ⚠ **THE SECOND HARNESS CHANGE THIS FAMILY HAS NEEDED, AND THE SHAPE IS IDENTICAL TO THE FIRST.**
+  `ProviderTestCluster.Handlers()` and `ClusterConformanceHarness.Handlers()` each built a **bare**
+  `ServiceCollection` holding nothing but the handler types. That worked for exactly as long as every
+  handler had a parameterless constructor — one did, for one provider. The first handler to take an
+  `IClock` failed with *"Unable to resolve service for type 'CyberCloud.Core.Time.IClock' while
+  attempting to activate '…'"*, thrown from `ActionDispatcher`'s `GetService`, which names the
+  **handler** and reads as a provider bug. ⚠ **It is a harness bug, and the proof is that production
+  works**: `AddCyberCloudResourceManager` registers `IClock`, `IClusterConnectionFactory` and
+  `ISecretResolver`, and `AddCyberCloudProvider` puts the handler into *that same* container — so a
+  separate container with strictly less in it made the suite ask less than the platform provides.
+  Both harnesses now register their own doubles, so a handler reads the vault its case's reconciler
+  minted into and sees the world its reconciler applied to. ⚠ Both were fixed together on purpose: one
+  alone would have left the Docker-backed run failing later for a cause the Docker-free run had
+  already solved. **The precedent is `ClusterConformanceHarness`'s hard-coded `Scope = "Namespaced"`,
+  and the lesson generalises: the harness quietly agrees with every provider so far about whatever no
+  provider has yet had to think about.**
+- ⚠ **`QuotaMeter.PublicIps` is a FLAT meter and the "first expressible" claim is now confirmed at the
+  code.** `ResourceManagerService.AmountFor` answers `meter.Fallback ?? 1m` for a meter with an empty
+  `AmountPointer`, so `.Meters(QuotaMeter.PublicIps, …)` needs no pointer, no fallback and no
+  `MeterDerivation`. There is nothing left to solve on the quota side for `publicIpAddresses`.
+  ⚠ **And its soft-delete question is decided in advance, because it looks obvious and is backwards.**
+  "Releasing a scarce address is what a recovery window is for" — except what `SupportsSoftDelete`
+  does today is park the name **and withhold the committed quota until a purge**, and there is no
+  purge route. A window would hold a tenant's `PublicIps` allowance against addresses they deleted,
+  for its whole length, unrecoverably. It becomes right the day a purge route exists.
+- **`showEffectiveRules` is the reshape's other half rather than a third action for its own sake.** The
+  cost of six scalars is that the mapping to rules is a cross product a tenant has to do in their head;
+  the action publishes the expansion, in the order the fabric gets it, from the stored body. It is a
+  pure function and reaches no cluster, which is what lets it be synchronous.
+
+**What landed on this pass: `virtualNetworks/securityGroups`, plus handlers for all three of the
+family's actions.** `publicIpAddresses`, `dnsZones`, `loadBalancers` and `vpnGateways` remain
+**owed**; `routeTables` remains **refused**.
 ### What the twelfth provider measured
+
+`CyberCloud.Providers.Terminal` — `CyberCloud.Terminal/consoles`,
+[docs/plan/19 § `CyberCloud.Terminal/consoles`](../../docs/plan/19-cloud-terminal-and-virtual-desktop.md),
+M1 · 1.5 EM, and step 6 of [docs/plan/24](../../docs/plan/24-roadmap.md)'s M1 exit story. **The first
+row in the catalogue whose product is an interactive session rather than a converged object**, and
+that single sentence is what every finding below is downstream of.
+
+- ⚠ **`Converged` had to be redefined before anything could be built, and the pod is not in it.** The
+  reconciler applies three durable objects — a `PersistentVolumeClaim`, a `ServiceAccount` and a
+  `NetworkPolicy` — and **never a `Pod`**. The shell is applied by the `connect` action and deleted by
+  the idle reclaim, because a reconciler that applied it would re-create it on the next reminder after
+  every reclaim and the drift scanner would repair a resource working exactly as designed. So
+  `Converged` means *"the console can be attached to"*, `ObserveAsync` reports the pod in
+  `Summary` and nowhere else, and `Exists` is decided by the durable three alone.
+- ⚠ **The obvious readiness gate is unimplementable on the substrate this platform ships, which is
+  what kept this row out of `ManagedClusterReconciler`'s hole.** That reconciler is the only one whose
+  `Converged` reads a `status`, and doing so named `ClusterReadinessKind.NotReported` — an object no
+  controller has written a status onto converges, because neither harness can produce anything else.
+  A console's equivalent would be `status.phase == "Bound"` on the claim, and it **deadlocks**: k3s'
+  default StorageClass binds `WaitForFirstConsumer`, a console deliberately has no pod until somebody
+  attaches, and `connect` refuses a console that has not converged. Converge would wait for the pod
+  and the pod would wait for converge. So this row reads **no status at all** and pays for it with a
+  `Converged` that promises less — `charts/managed/cloud-shell/conformance.yaml § owed`,
+  `converged-is-not-attachable`, is the other resolution of the same shape.
+- ⚠ **The unsafe default here is a Kubernetes default, not a product's, and there were five of
+  them.** Failure class (c) has three earlier sightings — SeaweedFS' anonymous admin, Qdrant's unset
+  `api_key`, MariaDB's root password — and every one was a field an upstream product left blank. This
+  row's are the API's own: a pod with no `serviceAccountName` mounts the namespace's `default` token
+  (in an image containing `kubectl`); `allowPrivilegeEscalation` **defaults to true**; an omitted
+  `readOnlyRootFilesystem` is a writable root; an omitted `capabilities.drop` is the runtime's set,
+  including `NET_RAW`; an omitted `seccompProfile` is `Unconfined`. `ConsolePodTests` reads each off
+  a body that asks for nothing and names the default it closes.
+- ⚠ **`docs/plan/19` asks for a NetworkPolicy that cannot be written, and the correction is the
+  finding.** *"a `NetworkPolicy` denying access to the platform's own namespaces"* has no spelling: an
+  egress rule is an allow-list, there is no `deny`, and `ipBlock` may not be combined with a
+  `namespaceSelector` in one peer — so a rule allowing `0.0.0.0/0` allows the platform's pods too,
+  because their addresses are in the cluster CIDR. The requirement is met the only way it can be: the
+  tenant's namespaces are allowed **positively** and every private range is excised from the public
+  rule, so the platform is excluded by construction rather than by exception.
+- ⚠ **And the tenant-wide half of that rule matches nothing, because nothing in this repository
+  labels a namespace.** `ReconcileDriver.NamespaceFor` derives a name and every reconciler assumes it
+  exists; no component owns namespace creation. So a shell today reaches its own resource group and no
+  further, which means **docs/plan/24's M1 exit story does not work across resource groups** —
+  `psql` into a Postgres server in another group is refused by this policy. It fails closed, and the
+  rule is rendered now so that the day namespaces are labelled every existing console gains the reach
+  with no api-version change.
+- ⚠ **The first family whose product is cross-provider reach, and it still needed only four module
+  edges.** Rule 2 should have broken here — a terminal exists to reach the tenant's other resources —
+  and it did not, for a reason that is not the usual "it would have been a shortcut": what the
+  terminal renders is a policy over **label selectors**, and a label is a string. Reach expressed as a
+  selector needs no reference to the thing selected. That is cheaper than the sanctioned
+  resource-id route rather than more expensive, and `module-layering.txt` records it.
+- ⚠ **The first type for which declaring a meter would be WRONG rather than impossible.** Three
+  earlier rows report undeclarable meters — a string where a number was wanted, a conditional that
+  derives zero, a counter that only exists once traffic has flowed — and all three are registry gaps.
+  This one is not: a state-based `vcpu`/`memoryGb` reservation derived from the body would hold 2 vCPU
+  against a subscription for a terminal that was closed a week ago, which is the exact failure
+  docs/plan/19 calls the design constraint. `StorageGb` (the home volume, allocated whether anybody is
+  attached or not) and `Resources` are declared; the other two are a usage event the session grain
+  owes.
+- ⚠ **The first family that renders only core-group objects, which inverts what its cluster suite
+  proves.** Every earlier provider renders a custom resource, so `ClusterConformanceHarness` had to
+  derive a CRD stub before a single assertion could address anything. Nothing here needs one — so a
+  green run is genuine evidence the objects are real and **no** evidence the derivation works. It is
+  also the row where green proves least about the product: a `NetworkPolicy` applies and reads back
+  identically in a cluster that enforces it and in one that does not.
+- ⚠ **The structural statelessness check's blind spot, confirmed a SEVENTH time.** Both halves are in
+  `ConsoleReconcilerTests` and both were run red against the counter-example. ⚠ On this family the
+  field a cache would hold is a **security control**: the rendered `NetworkPolicy` carries the
+  tenant's own GUID in a selector, so a reconciler that remembered one would give tenant B a policy
+  naming tenant A. The cross-tenant test asserts the selector, not only the sizing.
+- **Four module edges, six projects, one `ProviderConformanceCase`** — a twelfth family with identical
+  columns, over a type the shared suite cannot see the product of. The suite was not touched.
+
+**What landed:** the resource, its four rendered objects, the `connect` and `terminate` actions, the
+chart and the auditing surface. **What is owed** is led by `the-session-grain-does-not-exist`:
+docs/plan/19's exec stream, resize channel, ring buffer and idle timer are not built, `TerminalHub`
+still refuses by name, and **nothing in this repository builds the shell image** —
+`build/Build.Images.cs` publishes .NET hosts and its header forbids a Dockerfile, and this is the
+first image in the tree that is not a .NET application. All of it is at
+`charts/managed/cloud-shell/conformance.yaml § owed`.
+
+`CyberCloud.Providers.ContainerRegistry` — `CyberCloud.ContainerRegistry/registries` on Harbor,
+[13 § Container Registry](../../docs/plan/13-compute-vm-containers.md), **M1 · 1.5 EM**. **The family
+whose operator turned out not to exist**, and the one that declared the first recovery window in the
+tree, measured it against a real API server, and took it back.
+
+### What the thirteenth provider measured
 
 - **⚠ ADR-010 CLAUSE 1'S SURVEY NAMES A THIRD OPERATOR THAT CANNOT BE USED, AND THREE SIGHTINGS MAKE
   IT A FINDING ABOUT THE CLAUSE RATHER THAN ABOUT THREE SERVICES.** `goharbor/harbor-operator`
@@ -978,8 +1161,12 @@ measured it against a real API server, and took it back.
   `ContainerRegistryQuotaTests.ChangingOnlyTheReplicaCountMovesThreeComponentsAndNotFive` is the one
   that fails on either, and it was run red against both. ⚠ The **storage** meter deliberately does
   not read `replicas` at all, which is the same fact from the other side.
-- **⚠ FOURTEEN OF FIFTEEN OBJECTS NEED NO CRD STUB, WHICH IS THE REVERSE OF EVERY FAMILY BEFORE THIS
-  ONE AND MAKES THE CLUSTER-BACKED SUITE PROVE MORE THAN ANYBODY ELSE'S.**
+- **⚠ FOURTEEN OF FIFTEEN OBJECTS NEED NO CRD STUB, WHICH IS THE SECOND SIGHTING OF A SHAPE
+  `CyberCloud.Providers.Terminal` REACHED FIRST AND FROM THE OTHER END.** That family renders *only*
+  core-group objects and records that its green is therefore no evidence at all that the CRD
+  derivation works; this one renders fourteen built-in kinds and **one** custom kind, so it is the
+  first family whose suite exercises both a real schema-validating API server and the derived stub in
+  the same run.**
   `ClusterConformanceHarness` derives a definition per *custom* kind; here the only one is
   `monitoring.coreos.com/v1 PodMonitor`. So almost everything this family applies is checked by a
   **real, schema-validating** API server rather than by an open-schema stub — a `Deployment` whose

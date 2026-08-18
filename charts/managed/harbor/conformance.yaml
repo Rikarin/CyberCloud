@@ -51,12 +51,12 @@ renders:
     kind: PodMonitor
     count: 1
 
-# ⚠ FOURTEEN OF THE FIFTEEN NEED NO CRD STUB, WHICH IS THE REVERSE OF EVERY FAMILY BEFORE THIS ONE.
-# ClusterConformanceHarness derives a definition per CUSTOM kind from the case's own Objects; here the
-# only custom kind is monitoring.coreos.com/v1 PodMonitor. charts/managed/kafka needed two stubs and
-# nothing else; charts/managed/nats needed one of five; this needs one of fifteen. The consequence is
-# that this family's cluster-backed suite runs against a real, schema-validating API server for almost
-# everything it applies, which is strictly more than an open-schema stub gives anybody else.
+# ⚠ FOURTEEN OF THE FIFTEEN NEED NO CRD STUB. ClusterConformanceHarness derives a definition per
+# CUSTOM kind from the case's own Objects; here the only custom kind is monitoring.coreos.com/v1
+# PodMonitor. charts/managed/kafka needed two stubs and nothing else; charts/managed/nats needed one of
+# five; charts/managed/cloud-shell needs NONE, and records that its green is therefore no evidence the
+# derivation works. This row is the first that needs BOTH: fourteen built-in kinds checked by a real,
+# schema-validating API server, and one derived stub exercised in the same run.
 
 # ADR-013 — every rendered object carries all seven labels. Asserted against real rendered output,
 # which is what the Labels architecture gate in docs/plan/23 § The architecture gates requires.

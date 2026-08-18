@@ -127,13 +127,25 @@ owed:
       compares the two, or a platform-owned catalogue object whose creation the same mechanism as the
       DataStore's would own.
   - id: node-image-is-unverified
+    status: closed
+    closed: 2026-08-18
     says: >
-      `quay.io/capk/ubuntu-2404-container-disk`, tagged with ManagedClusters.PinnedPatch's value.
-      Neither the repository nor any tag was read off a registry on the date this shipped. A tag that
-      does not exist is a VM that never boots, with the reason in a DataVolume's events — three objects
-      below anything this platform reads, and invisible to a tenant who has no credential for the
-      cluster. It is the twin of charts/managed/kubernetes/conformance.yaml's
-      `pinned-patches-are-unreviewed` and should be checked in the same pass.
+      ⚠ CLOSED, AND IT WAS THE HALF OF THE PAIR THAT WAS ACTUALLY BROKEN. Read off quay.io on
+      2026-08-18: `quay.io/capk/ubuntu-2404-container-disk` exists and carries exactly four tags —
+      v1.31.5, v1.32.1, v1.33.5 and v1.34.1. The repository was right. The TAG was not:
+      ManagedClusters.PinnedPatch named v1.32.9 and v1.33.4, so every worker VM in every pool pulled
+      an image that does not exist, with the reason in a DataVolume's events three objects below
+      anything this platform reads.
+      ⚠ AND THE ASSUMPTION UNDER IT WAS THE REAL DEFECT. AgentPools.NodeImageRepository's remarks said
+      the provider tags an image "with the Kubernetes version they carry", so the tag was a function
+      of the pin. It publishes one tag per MINOR, at whichever patch it happened to build — the
+      dependency runs the other way, and the pin is now chosen from what this repository publishes.
+      Both pins moved; charts/managed/kubernetes/conformance.yaml's `pinned-patches-are-unreviewed`
+      carries the reasoning and what it costs, because it was one read and one decision rather than
+      two.
+      ⚠ WHAT THIS DOES NOT ESTABLISH: that the image boots, that its kubelet matches its tag, or that
+      the bootstrap check completes — see `bootstrap-check-may-never-complete`. A tag list is a
+      registry read, not a running node.
   - id: bootstrap-check-may-never-complete
     says: >
       ⚠ THE RISKIEST DEFAULT ON THIS TYPE, AND IT IS A DEFAULT RATHER THAN A CHOICE.
