@@ -167,13 +167,14 @@ public static class ContainerRegistries {
     /// <summary>The permission a purge would need. ⚠ A fourth permission, not the delete one.</summary>
     public const string PurgePermission = SoftDeletePolicy.DefaultPurgePermission;
 
-    /// <summary>The body flag that would refuse every purge of a resource for the rest of its window.</summary>
+    /// <summary>The body flag that refuses every purge of a resource for the rest of its window.</summary>
     /// <remarks>
-    ///     ⚠ <b>Not declared as a property, because <c>ProviderBuilder</c> refuses a purge-protection
-    ///     pointer on a type with no window</b> — <i>"the flag would be a property callers can set and
-    ///     nothing reads"</i> — and that refusal is right. A flag published to every generated surface
-    ///     while the platform honours no window at all is the promise docs/plan/08 § Soft delete says
-    ///     is worse than promising nothing.
+    ///     ⚠ <b>It was not declared as a property while the window was withdrawn, because
+    ///     <c>ProviderBuilder</c> refuses a purge-protection pointer on a type with no window</b> —
+    ///     <i>"the flag would be a property callers can set and nothing reads"</i>. Both halves move
+    ///     together, in one direction and the other: the constant lived here through the withdrawal so
+    ///     the argument would not have to be rebuilt, and the schema property came back with the
+    ///     declaration.
     /// </remarks>
     public const string PurgeProtectionPointer = "/properties/purgeProtection";
 
@@ -901,6 +902,35 @@ public static class ContainerRegistries {
                     + "left listening on an unscraped address."
                 ) {
                     DefaultJson = "true"
+                },
+
+                // ── Soft delete ──────────────────────────────────────────────────────────────
+                //
+                // ⚠ DECLARED BECAUSE THE BUILDER REFUSES THE WINDOW WITHOUT IT, AND OPTIONAL BECAUSE
+                // THE BUILDER SAYS SO IN AS MANY WORDS. ProviderBuilder.CheckPurgeProtection demands
+                // that every api-version declare the pointer as a boolean — a flag the platform
+                // enforces against a property no schema declares is a protection that fails silently
+                // open — and its own remarks add that it is "optional rather than required, which is
+                // the opposite of the cluster id … requiring every caller to send false would be a
+                // required field whose only honest value is the default".
+                //
+                // ⚠ AND REQUIRED WOULD HAVE BEEN A BREAKING CHANGE TO A SHIPPED api-version, which is
+                // how the rule was rediscovered. The first draft copied CyberCloud.Monitor/workspaces
+                // and marked it required; the OpenAPI compatibility gate refused it by name —
+                // "[required-added] 'purgeProtection' was optional and is now required. Every request
+                // that was valid and omitted it is now invalid" — because 2026-08-01 is served and a
+                // new required property is a new api-version. ⚠ Monitor's IS required, which
+                // predates this and contradicts the builder's remarks; relaxing it is compatible and
+                // is not this row's to do.
+                new(
+                    PurgeProtectionPointer,
+                    SchemaKind.Boolean,
+                    Description: "Whether this registry may be destroyed before its seven-day recovery "
+                    + "window is out. Once true it stays true for the rest of the registry's life, and "
+                    + "a purge is refused while it is set — a flag whose holder can clear it and then "
+                    + "purge is one round-trip of protection."
+                ) {
+                    DefaultJson = "false"
                 }
             ]
         );
@@ -1762,6 +1792,10 @@ public static class ContainerRegistries {
     /// <param name="storageSize">The image volume's size.</param>
     /// <param name="version">The Harbor minor.</param>
     /// <param name="location">The region.</param>
+    /// <param name="purgeProtection">
+    ///     Whether the registry refuses a purge for the rest of its recovery window. ⚠ Written even
+    ///     when <see langword="false" />, because the write path stores a body as sent.
+    /// </param>
     /// <remarks>
     ///     ⚠ Every property it writes is a <b>leaf</b>. <c>ResourceSchema.Project</c> skips a
     ///     <see cref="SchemaKind.Nested" /> container and rebuilds it from whichever leaf lands first,
@@ -1773,7 +1807,8 @@ public static class ContainerRegistries {
         int replicas = 2,
         string storageSize = "100Gi",
         string version = DefaultVersion,
-        string location = "eu-central"
+        string location = "eu-central",
+        bool purgeProtection = false
     ) =>
         new JsonObject {
             ["location"] = location,
@@ -1782,7 +1817,12 @@ public static class ContainerRegistries {
                 ["version"] = version,
                 ["replicas"] = replicas,
                 ["storage"] = new JsonObject { ["size"] = storageSize },
-                ["monitoring"] = new JsonObject { ["enabled"] = true }
+                ["monitoring"] = new JsonObject { ["enabled"] = true },
+                // ⚠ Written even when false, though the property is OPTIONAL. The write path stores a
+                // body as sent and does not substitute defaults, so a helper that omitted it would
+                // produce a resource whose purge protection reads as absent rather than as off — the
+                // same value today, and a different one the day anything distinguishes them.
+                ["purgeProtection"] = purgeProtection
             }
         }.ToJsonString();
 

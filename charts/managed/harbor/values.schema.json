@@ -10,7 +10,7 @@
       "type": "string",
       "x-cybercloud-api": false,
       "x-cybercloud-internal-reason": "docs/plan/12 § The pattern, once, piece 5. The platform MINTS these into the tenant's vault and writes the Secret; this chart only NAMES it. ⚠ It is deliberately not a value: goharbor/harbor-helm ships `harborAdminPassword: \"Harbor12345\"` as a live default while randomising every other credential in the same template, and a values key here would be one edit away from reproducing that.",
-      "x-cybercloud-order": 7,
+      "x-cybercloud-order": 8,
       "x-cybercloud-pointer": "/properties/credentialsSecret"
     },
     "imageRegistry": {
@@ -19,7 +19,7 @@
       "type": "string",
       "x-cybercloud-api": false,
       "x-cybercloud-internal-reason": "A platform escape hatch for an air-gapped mirror. Not a tenant setting: a registry whose own images come from somewhere the tenant chose is a supply chain the platform cannot vouch for.",
-      "x-cybercloud-order": 6,
+      "x-cybercloud-order": 7,
       "x-cybercloud-pointer": "/properties/imageRegistry"
     },
     "monitoring": {
@@ -44,7 +44,7 @@
       "type": "string",
       "x-cybercloud-api": false,
       "x-cybercloud-internal-reason": "Helm plumbing. Nothing about it belongs in a resource body.",
-      "x-cybercloud-order": 8,
+      "x-cybercloud-order": 9,
       "x-cybercloud-pointer": "/properties/nameOverride"
     },
     "platform": {
@@ -118,8 +118,15 @@
       "type": "object",
       "x-cybercloud-api": false,
       "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
-      "x-cybercloud-order": 5,
+      "x-cybercloud-order": 6,
       "x-cybercloud-pointer": "/properties/platform"
+    },
+    "purgeProtection": {
+      "default": false,
+      "description": "Whether this registry may be destroyed before its seven-day recovery window is out. Once true it stays true for the rest of the registry's life, and a purge is refused while it is set — a flag whose holder can clear it and then purge is one round-trip of protection.",
+      "type": "boolean",
+      "x-cybercloud-order": 5,
+      "x-cybercloud-pointer": "/properties/purgeProtection"
     },
     "replicas": {
       "default": 2,

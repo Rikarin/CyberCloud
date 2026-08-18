@@ -87,24 +87,35 @@ public interface IResourceManager {
     /// <param name="request">The request. <see cref="WriteRequest.Body" /> is ignored.</param>
     /// <param name="cancellationToken">Cancels the request.</param>
     /// <returns>
-    ///     The restored snapshot, or <see cref="ErrorCode.ResourceNotFound" /> — for a name that holds
+    ///     The accepted operation, or <see cref="ErrorCode.ResourceNotFound" /> — for a name that holds
     ///     no soft-deleted resource, for one whose recovery window has passed, and for one the caller
     ///     may not see, which are the same answer on purpose.
     /// </returns>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>Not a long-running operation, and it is the one write verb that is not.</b> A
-    ///         restore does no data-plane work at all: the volumes, the PVCs and the memory were never
-    ///         released, which is the whole reason the quota stayed committed. What it changes is two
-    ///         records — the index entry and the <c>parent</c> tuple — so answering <c>202</c> and an
-    ///         operation to poll would be a poll that is finished before the caller reads the response.
+    ///         ⚠ <b>A long-running operation, and it used to answer synchronously because it did
+    ///         nothing.</b> The old contract said a restore "does no data-plane work at all: the
+    ///         volumes, the PVCs and the memory were never released" — which was true, and was true
+    ///         because a soft delete ran no teardown and left the tenant's pods running behind a name
+    ///         that answered <c>404</c>. A soft delete now tears the data plane down like any other
+    ///         delete, so a restore applies the stored desired state again through
+    ///         <see cref="OperationKind.Restore" />, and applying fifteen Kubernetes objects is not
+    ///         something to hold a request open for.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>What the window preserves is everything a teardown does not remove</b>: the name,
+    ///         the resource's stored body, the committed quota, and the volumes — deleting a
+    ///         <c>StatefulSet</c> leaves the claims its <c>volumeClaimTemplate</c> made. That is why a
+    ///         restore reserves nothing and re-derives nothing: docs/plan/08 § Soft delete keeps the
+    ///         quota committed exactly so a restore "cannot fail against an allowance the tenant has
+    ///         spent in the meantime".
     ///     </para>
     ///     <para>
     ///         ⚠ <b>Direct role assignments do not come back</b>, and that is the decision rather than a
     ///         limitation — see <see cref="IResourceRelationWriter.DropDirectRoleAssignmentsAsync" />.
     ///     </para>
     /// </remarks>
-    Task<Result<ResourceSnapshot>> RestoreAsync(WriteRequest request, CancellationToken cancellationToken = default);
+    Task<Result<WriteAccepted>> RestoreAsync(WriteRequest request, CancellationToken cancellationToken = default);
 
     /// <summary>
     ///     Ends a recovery window early: tears the resource down, releases its name and returns its

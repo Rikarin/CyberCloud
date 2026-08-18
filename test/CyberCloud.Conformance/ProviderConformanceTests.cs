@@ -290,14 +290,24 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>THREE OF THE ASSERTIONS BELOW ARE CORRECT FOR A HARD-DELETE TYPE AND WRONG FOR A
-    ///         SOFT-DELETABLE ONE</b>, and the branch is what reconciles them. The cluster objects being
-    ///         gone, the index entry going back to <c>Free</c> — <i>"the name comes back"</i> — and the
-    ///         ReBAC parent tuple being removed are all things a <c>DELETE</c> deliberately does
-    ///         <b>not</b> do when the type declares a recovery window (docs/plan/08 § Soft delete): the
-    ///         volumes are still allocated because handing the data back is the whole feature, the name
-    ///         is held so a restore has somewhere to go, and the edge moves to the subscription rather
-    ///         than being dropped so the resource is never invisible.
+    ///         ⚠ <b>TWO OF THE ASSERTIONS BELOW ARE CORRECT FOR A HARD-DELETE TYPE AND WRONG FOR A
+    ///         SOFT-DELETABLE ONE</b>, and the branch is what reconciles them. The index entry going
+    ///         back to <c>Free</c> — <i>"the name comes back"</i> — and the ReBAC parent tuple being
+    ///         removed are both things a <c>DELETE</c> deliberately does <b>not</b> do when the type
+    ///         declares a recovery window (docs/plan/08 § Soft delete): the name is held so a restore
+    ///         has somewhere to go, and the edge moves to the subscription rather than being dropped so
+    ///         the resource is never invisible.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>A THIRD ASSERTION USED TO BRANCH AND NO LONGER DOES: THE OBJECTS ARE GONE EITHER
+    ///         WAY.</b> The soft arm asserted they stayed, and two providers declared a window against
+    ///         that arm, measured what a tenant was left with — a workload still running behind an
+    ///         address answering <c>404</c>, still billed, and unreachable to delete again — and
+    ///         withdrew. A soft delete tears the data plane down like any other delete; what the
+    ///         window preserves is the name, the stored desired state, the committed quota and the
+    ///         volumes, none of which a teardown removes. The soft arm asserts the restore round trip
+    ///         instead, because without it every assertion here would also hold for a type that can
+    ///         never hand anything back.
     ///     </para>
     ///     <para>
     ///         ⚠ <b>THE BRANCH IS TAKEN FROM THE REGISTRY AND NOT FROM
@@ -325,12 +335,12 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
     ///         and pass.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The soft arm is unexercised today and that is stated rather than hidden.</b> No
-    ///         provider in the catalogue declares a window yet — docs/plan/08 § Soft delete requires
-    ///         that they do not until the whole of it is built — so every provider currently takes the
-    ///         hard arm. The soft arm is driven by
-    ///         <c>CyberCloud.ResourceManager.Tests.SoftDeletePathTests</c> against a fixture type that
-    ///         does declare one, which is where its own sabotage results were taken.
+    ///         ⚠ <b>Which providers take the soft arm is a registry fact and therefore moves without
+    ///         this file changing.</b> <c>CyberCloud.ContainerRegistry/registries</c> and
+    ///         <c>CyberCloud.Monitor/workspaces</c> declare a window;
+    ///         <c>CyberCloud.ResourceManager.Tests.SoftDeletePathTests</c> drives the same contract
+    ///         against a fixture type in isolation, which is where its own sabotage results were
+    ///         taken.
     ///     </para>
     /// </remarks>
     [Fact]
@@ -369,17 +379,30 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
 
         var entry = await Cluster.Index(ProviderTestCluster<TSource>.Address("goodbye")).GetAsync();
 
+        // ── AND WHAT BOTH CONTRACTS PROMISE SECOND: THE WORKLOAD IS DOWN ────────────────────────
+        //
+        // ⚠ THIS USED TO BRANCH, AND THE SOFT ARM ASSERTED THE OBJECTS WERE STILL THERE. That arm was
+        // written from docs/plan/08 § Soft delete's "handing the data back is the entire feature, so
+        // the volumes and the PVCs stay allocated" — a true sentence about the DATA, read as a claim
+        // about the objects. Two providers declared a window against it, measured what a tenant
+        // actually got, and withdrew: fifteen idle Harbor objects that keep costing money, and a
+        // VMUser that keeps authorising writes into a store whose address answers 404. A delete that
+        // does not delete is worse than no recovery window.
+        //
+        // ⚠ What the window preserves is what a teardown does not remove — the name, the resource's
+        // stored desired state, the committed quota, and the volumes, because deleting a StatefulSet
+        // leaves the claims its volumeClaimTemplate made. Those four are asserted below and by the
+        // restore round trip; the running half is asserted gone here, for every type.
+        foreach (var target in objects) {
+            Cluster.World.Holds(target).ShouldBeFalse(
+                $"'{target}' is still in the cluster after a converged teardown — docs/plan/06 "
+                + "§ Two-phase create: never silently gone while its pods still run and its meter "
+                + "still ticks, and never still running while the resource says it is gone"
+            );
+        }
+
         if (recoverable) {
             // ── The recovery window's contract ──────────────────────────────────────────────────
-            foreach (var target in objects) {
-                Cluster.World.Holds(target).ShouldBeTrue(
-                    $"'{target}' is gone, and this type declares a "
-                    + $"{registration.SoftDeleteDays.ToString(CultureInfo.InvariantCulture)}-day "
-                    + "recovery window — handing the data back is the entire feature, so the volumes "
-                    + "and the PVCs stay allocated until a purge. docs/plan/08 § Soft delete"
-                );
-            }
-
             entry.GetValueOrThrow().State.ShouldBe(
                 IndexEntryState.SoftDeleted,
                 "the name is held for the whole window — a name taken by somebody else leaves a "
@@ -393,18 +416,38 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
                 + "recovery window either"
             );
 
+            // ── And it comes back, which is the half that makes it a window ─────────────────────
+            //
+            // ⚠ WITHOUT THIS THE ARM ABOVE WOULD PASS FOR A SLOWER DELETE. Everything asserted so
+            // far is also true of a type that tears down, holds the name for seven days and can
+            // never hand anything back — which is not soft delete, it is destruction with a wait in
+            // front of it. The objects returning is the only assertion that separates them, and it
+            // is driven through the manager rather than by calling the reconciler, so it measures
+            // what a tenant would get rather than what the provider is capable of.
+            var restored = await RestoreAsync("goodbye");
+            restored.IsSuccess.ShouldBeTrue(restored.Error?.Message);
+
+            var back = await ConvergeAsync(restored.GetValueOrThrow());
+            back.State.ShouldBe(
+                OperationState.Succeeded,
+                $"the restore ended {back.State}: {back.Error?.Message}"
+            );
+
+            foreach (var target in objects) {
+                Cluster.World.Holds(target).ShouldBeTrue(
+                    $"'{target}' did not come back, and this type declares a "
+                    + $"{registration.SoftDeleteDays.ToString(CultureInfo.InvariantCulture)}-day "
+                    + "recovery window. A restore re-applies the desired state the park kept — "
+                    + "docs/plan/08 § Soft delete"
+                );
+            }
+
+            (await ReadAsync("goodbye")).IsSuccess.ShouldBeTrue("and the old address answers again");
+
             return;
         }
 
         // ── The hard delete's contract ──────────────────────────────────────────────────────────
-        foreach (var target in objects) {
-            Cluster.World.Holds(target).ShouldBeFalse(
-                $"'{target}' is still in the cluster after a converged teardown — docs/plan/06 "
-                + "§ Two-phase create: never silently gone while its pods still run and its meter "
-                + "still ticks, and never still running while the resource says it is gone"
-            );
-        }
-
         entry.GetValueOrThrow().State.ShouldBe(IndexEntryState.Free, "the name comes back");
 
         // ⚠ AND THE AUTHORIZATION EDGE COMES BACK TOO. docs/plan/08 § The write path, end to end's
@@ -1125,6 +1168,23 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
     /// <param name="name">The resource name.</param>
     protected Task<Result<WriteAccepted>> DeleteAsync(string name) =>
         Cluster.Manager.DeleteAsync(
+            new() {
+                Path = ProviderTestCluster<TSource>.Address(name).Path,
+                ApiVersion = Case.ApiVersion,
+                Caller = ProviderTestCluster<TSource>.Caller()
+            },
+            TestContext.Current.CancellationToken
+        );
+
+    /// <summary>Restores a soft-deleted resource.</summary>
+    /// <param name="name">The resource name.</param>
+    /// <remarks>
+    ///     ⚠ Answers <c>202</c> like every other write, because a restore re-applies the resource's
+    ///     stored desired state — a soft delete tears the data plane down, so there is something to
+    ///     apply. Drive the returned operation with <see cref="ConvergeAsync" />.
+    /// </remarks>
+    protected Task<Result<WriteAccepted>> RestoreAsync(string name) =>
+        Cluster.Manager.RestoreAsync(
             new() {
                 Path = ProviderTestCluster<TSource>.Address(name).Path,
                 ApiVersion = Case.ApiVersion,

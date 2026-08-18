@@ -126,15 +126,16 @@ sealed class RecordingResourceManager : IResourceManager {
 
     /// <inheritdoc />
     /// <remarks>
-    ///     ⚠ Answers from <see cref="OnRead" /> rather than <see cref="OnWrite" />, because a restore
-    ///     returns a snapshot and not a <c>202</c> — docs/plan/08 § Soft delete makes it the one write
-    ///     verb that is not long-running, since it moves two records and touches no data plane.
+    ///     ⚠ Answers from <see cref="OnWrite" />, because a restore is a long-running operation. It
+    ///     used to answer from <see cref="OnRead" />, when a soft delete tore nothing down and a
+    ///     restore therefore had nothing to apply; it now re-applies the resource's stored desired
+    ///     state and answers <c>202</c> like every other write.
     /// </remarks>
-    public Task<Result<ResourceSnapshot>> RestoreAsync(
+    public Task<Result<WriteAccepted>> RestoreAsync(
         WriteRequest request,
         CancellationToken cancellationToken = default
     ) =>
-        Record(request, OnRead);
+        Record(request, OnWrite);
 
     /// <inheritdoc />
     public Task<Result<WriteAccepted>> PurgeAsync(WriteRequest request, CancellationToken cancellationToken = default) =>

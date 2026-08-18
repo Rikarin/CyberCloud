@@ -291,7 +291,11 @@ not addressable, and there is no second collection it is addressable *in*. Concr
   in-process callers and tests only.
 - **There is no list.** `IResourceIndexGrain.ResolveSoftDeletedAsync` answers "which resource was
   parked under this name", which is the question you can only ask if you already know the name. A
-  tenant who has forgotten it has no way to enumerate the window.
+  tenant who has forgotten it has no way to enumerate the window. ⚠ **And the resource manager has no
+  listing of *live* resources either** — `IResourceManager` declares no `ListAsync` and nothing in
+  the tree enumerates a resource group — so this is not a hole soft delete opened. A collection
+  endpoint is a platform feature that every type needs, and the soft-deleted collection is one
+  filter over whatever answers it.
 
 **Closing that is an addressing change, not a soft-delete change**, which is why it is recorded here
 rather than solved in passing: it needs either a subscription-scoped path shape that
@@ -308,6 +312,66 @@ new mechanism: `ResolveAsync` must refuse it — so the resource is not addressa
 free, and § Deleting a parent resource that has children reads it correctly with no change — while
 `TryClaimAsync` must refuse it too, because the name is taken.
 
+**Decided: a soft delete tears the data plane down. What the window preserves is everything a
+teardown does not remove.**
+
+⚠ **ADDED 2026-08-18, AFTER TWO PROVIDERS DECLARED A WINDOW, MEASURED WHAT A TENANT GOT, AND
+WITHDREW.** This section had no paragraph about the data plane at all, and the sentence below about
+quota was read as one: *"a CyberCloud resource in its recovery window consumes plenty, because handing
+the data back is the entire feature: the volumes, the PVCs and the memory are all still allocated."*
+That is a true sentence about capacity and it was implemented as a rule about objects.
+`OperationGrain.DriveAsync` returned before running any reconcile pass for a soft delete, so a
+soft-deleted resource kept every object it had applied: the tenant's pods kept running, the meters
+kept ticking, and the address answered `404` so the tenant could not see the resource in order to
+delete it again. `CyberCloud.ContainerRegistry/registries` found it with fifteen Harbor objects and
+`CyberCloud.Monitor/workspaces` found it with a `VMUser` that vmauth resolves the moment it is applied
+— an authenticated, billed, open write path into a store the tenant believed was gone. Both withdrew,
+and both were right to: **a delete that does not delete is worse than no recovery window.**
+
+**The two claims are separable and only one of them was true.** The registry reported that the
+resource *reconciled its whole data plane back* — an active re-apply — and the workspace could not
+reproduce that on its own row and recorded the discrepancy rather than inheriting the answer. The
+workspace's reading held. The registry's evidence was a conformance assertion that reports an **end
+state**, and an end state cannot distinguish *never torn down* from *torn down and re-applied*; the
+two are different bugs in different code, and the fix went to the first. ⚠ **The lesson is about
+evidence rather than about soft delete: an assertion that observes a result cannot attribute a
+mechanism, and a write-up that names one anyway sends the next reader to the wrong file.**
+
+**So the teardown runs, with `tearingDown` true, exactly as a hard delete's does — and everything that
+makes the delete soft happens after it converges.** The name is held rather than released, the
+committed quota is kept rather than returned, the resource grain keeps its desired state rather than
+being cleared, and the ReBAC parent edge moves to the subscription. Those four are the recovery
+window. The teardown is not one of them.
+
+**What a restore restores from is the half a teardown never touches**, and it is enough:
+
+- **The disks.** Deleting a `StatefulSet` does not delete the `PersistentVolumeClaim`s its
+  `volumeClaimTemplate` created, which is Kubernetes' own behaviour rather than any provider's. A
+  registry's images, its metadata database and its job queue are all still there.
+- **The desired state.** `CompleteDeleteAsync` is what clears a resource grain and a soft delete does
+  not call it, so the body the create wrote is still exactly what a restore applies — byte for byte,
+  with no caller supplying anything.
+- **The committed quota**, which is what makes the restore total: it cannot fail against an allowance
+  the tenant has spent since.
+- **The credentials**, because `ISecretWriter` mints once and has no delete.
+
+⚠ **A restore is therefore a long-running operation and `RestoreAsync` answers `202`.** It used to
+answer synchronously and correctly, because it did nothing — a design that tears the data plane down
+and cannot put it back has not implemented soft delete, it has implemented a slower delete. It starts
+an `OperationKind.Restore` over the stored body, reserving nothing.
+
+⚠ **Two things follow that are owed rather than done, and the second is smaller than it was.** A purge
+still leaves the volumes, because ending a window has to remove exactly what a teardown keeps and
+`IResourceReconciler` has no member that asks for that — so a purged resource returns its quota and
+leaves its disks. And **nothing sweeps an expired window**: an entry past `RecoverableUntil` refuses a
+restore and holds its name and its committed quota until somebody purges it by hand. It no longer
+holds a running data plane, which is what made it urgent. ⚠ **What a sweeper needs before it can be
+built is a decision this section cannot take on its own: an expiry is not a request, so there is
+nobody to authorize it, and `PurgeAsync` checks `PurgePermission` against a caller.** Either the
+platform gains a system principal, or the purge splits into an authorized front and a mechanism the
+clock may drive. Both are decisions about who the platform is when it acts for itself, which is
+[07](07-rebac-authorization.md)'s question rather than this one's.
+
 **Decided: committed quota is NOT returned on delete for a soft-deletable type. It is returned on
 purge.** ⚠ **This is the decision most easily got wrong from Azure by analogy, because Azure does
 three different things and the pattern is not the one it looks like.** A soft-deleted Key Vault bills
@@ -317,8 +381,12 @@ Azure holds both: Managed HSM says *"These resources remain allocated even when 
 deleted state"* and bills *"at their full hourly rate until they're purged"*, and soft-deleted blob
 data is billed *"at the same rate as active data"*. **The rule is that soft delete is free exactly
 when the deleted thing consumes no reserved capacity** — and a CyberCloud resource in its recovery
-window consumes plenty, because handing the data back is the entire feature: the volumes, the PVCs
-and the memory are all still allocated. So the quota stays committed.
+window consumes plenty: its volumes are still allocated and its name is still held. ⚠ **This sentence
+used to end "the volumes, the PVCs and the memory are all still allocated", and the memory was the
+half that was wrong.** A parked resource runs nothing — the section above tears its data plane down —
+so no compute is reserved and a `vcpu` or `memoryGb` amount held through a window is an amount held
+for capacity nobody has. It is held anyway, and the reason is the paragraph below rather than this
+one: a per-meter split reintroduces the partial restore.
 
 The second reason is the one that matters more than the accounting: **quota held is what makes restore
 total.** A restore that re-reserves would fail against an allowance the tenant has spent in the
