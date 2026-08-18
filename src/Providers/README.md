@@ -943,6 +943,23 @@ logs"*. **The first family whose product is not a workload at all**, and the fir
   was a process that has since exited. Seven days, purge behind its own permission, purge protection
   as a declared boolean.
 
+  > ⚠ **AND DECLARING ONE IS THE SECOND FAMILY IN TWELVE TO NEED A CHANGE TO
+  > `test/CyberCloud.Cluster.Conformance`, ON AN AXIS ELEVEN FAMILIES HAD SILENTLY AGREED ON.**
+  > `ClusterConformanceTests.TheLifecycleRunsAgainstARealApiServer` asserted **unconditionally** that
+  > every rendered object is gone after a converged teardown. Its Docker-free twin has branched on
+  > `SoftDeleteDays > 0` since soft delete was built — *"handing the data back is the entire feature,
+  > so the volumes and the PVCs stay allocated until a purge"* — and the cluster-backed half never
+  > learned it, because for eleven families both branches say the same thing. This provider went
+  > **1 of 6 red against k3s while the Docker-free suite was 27 of 27 green**, which is the shape
+  > that says the *suite* is wrong rather than the provider; the failure named the surviving
+  > `Secret`, which reads as a reconciler that forgot to tear down. ⚠ **The shipping code was right
+  > the whole time** — `ResourceManagerService`'s delete path parks the index entry and leaves the
+  > data plane standing on purpose — which is exactly what `CyberCloud.Providers.Network` found
+  > about `KubeApiClient` and cluster scope. The branch is now in both halves, derived from the
+  > registry rather than declared per provider, so **nothing changes for the eleven earlier
+  > families**: none of them declares a window, and all of them take the hard-delete branch they
+  > always took.
+
 - **⚠ A RETENTION A TENANT CAN SHORTEN IS AN IRREVERSIBLE DATA-LOSS PATH AUTHORISED BY A REQUEST THE
   PLATFORM ALREADY ANSWERED `202` TO — fifth sighting of the missing write-path predicate, and the
   first where the consequence is destruction rather than a broken object.** docs/plan/16 prices

@@ -141,9 +141,9 @@ public sealed class MonitorDeclarationTests {
     }
 
     [Fact]
-    public void TheShortNameIsNoneOfTheFifteenShortNamesAlreadyDeclared() {
+    public void TheShortNameIsNoneOfTheSixteenShortNamesAlreadyDeclared() {
         // ⚠ ProviderRegistry.Build DOES refuse a duplicate short name — but only across the providers
-        // it is handed, and this test builds a registry holding one. The fifteen below are the ones
+        // it is handed, and this test builds a registry holding one. The sixteen below are the ones
         // shipping in src/Providers today, typed out for the reason above.
         var declared = new[] {
             "widget", "postgres", "mariadb", "valkey", "kafka", "nats", "rabbitmq", "objectstore",

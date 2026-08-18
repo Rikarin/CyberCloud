@@ -209,8 +209,43 @@ public abstract class ClusterConformanceTests<TSource>(ClusterConformanceFixture
             $"the teardown ended {teardown.State}: {teardown.Error?.Message}"
         );
 
+        // ⚠ AND WHAT "GONE" MEANS DEPENDS ON WHETHER THE TYPE DECLARES A RECOVERY WINDOW, WHICH
+        // THIS SUITE DID NOT KNOW UNTIL A TYPE DECLARED ONE.
+        //
+        // Its Docker-free twin has branched here since soft delete was built — ProviderConformanceTests
+        // § "the recovery window's contract" asserts the objects STAY for a recoverable type, because
+        // handing the data back is the entire feature and there is nothing to hand back once the
+        // volumes are gone. This half asserted the hard-delete contract unconditionally, and went green
+        // for eleven families for the same reason the namespaced-CRD assumption went green for nine:
+        // nothing had exercised the other branch. `CyberCloud.Monitor/workspaces` is the first type in
+        // the tree to declare SupportsSoftDelete, and it failed here on `TheLifecycleRunsAgainstARealApiServer`
+        // while the Docker-free suite was 27 of 27 green — which is the shape that says the suite is
+        // wrong rather than the provider.
+        //
+        // ⚠ THE SHIPPING CODE WAS RIGHT THE WHOLE TIME, exactly as KubeApiClient was about cluster
+        // scope: ResourceManagerService's delete path parks the index entry for a type declaring a
+        // window and the data plane is left standing on purpose. This is the harness learning what the
+        // manager already did.
+        harness.Registry.TryGetType(Case.Type, out var registration).ShouldBeTrue();
+
+        var recoverable = registration.SoftDeleteDays > 0;
+
         foreach (var target in objects) {
-            (await ReadFromClusterAsync(harness, target, token)).ShouldBeNull(
+            var remaining = await ReadFromClusterAsync(harness, target, token);
+
+            if (recoverable) {
+                remaining.ShouldNotBeNull(
+                    $"'{target}' is gone from the real cluster, and this type declares a "
+                    + $"{registration.SoftDeleteDays.ToString(CultureInfo.InvariantCulture)}-day "
+                    + "recovery window. docs/plan/08 § Soft delete: the resource is parked and its "
+                    + "data plane stays standing until a purge, because a restore that hands back an "
+                    + "empty resource is not a restore."
+                );
+
+                continue;
+            }
+
+            remaining.ShouldBeNull(
                 $"'{target}' is still in the real cluster after a converged teardown."
             );
         }
