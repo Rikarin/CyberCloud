@@ -27,12 +27,123 @@ public sealed class NetworkReconcilerTests {
     // ── Failure class (a): a reconciler with a field ─────────────────────────────────────────────
 
     [Fact]
-    public void NeitherReconcilerHoldsMutableState() {
+    public void NoReconcilerHoldsMutableState() {
         ReconcilerConformance.CheckNoHiddenState(new VirtualNetworkReconciler(new FixedClock()))
             .ShouldBeEmpty();
 
         ReconcilerConformance.CheckNoHiddenState(new NetworkSubnetReconciler(new FixedClock()))
             .ShouldBeEmpty();
+
+        ReconcilerConformance.CheckNoHiddenState(new NetworkSecurityGroupReconciler(new FixedClock()))
+            .ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task OneSecurityGroupReconcilerServesTwoTenantsWithoutMixingThem() {
+        // ⚠ THE ONLY TEST THAT CATCHES THE READONLY-MUTABLE-FIELD SHAPE, RUN FOR THE THIRD RECONCILER
+        // IN THIS FAMILY. CheckNoHiddenState above is structurally blind to it — six sightings in six
+        // families — and AddCyberCloudProvider registers a reconciler as a SINGLETON BY CONCRETE TYPE,
+        // so in a real silo ONE instance serves every tenant in the process.
+        //
+        // ⚠ AND ON THIS TYPE THE COLLISION IS THE WORST OF THE THREE. A SecurityGroup is
+        // cluster-scoped AND carries no field naming its network, so the rendered NAME is the only
+        // thing separating two tenants' groups called `web` — a collision would merge two rule sets
+        // into one OVN port group, which on a firewall means each tenant's ports get the other's
+        // allow list, with nothing reporting an error anywhere.
+        var reconciler = new NetworkSecurityGroupReconciler(new FixedClock());
+
+        var alice = GroupAddress("web", "net", TenantA, SubscriptionA);
+        var bob = GroupAddress("web", "net", TenantB, SubscriptionB);
+
+        var connection = new RecordingConnection();
+
+        using var aliceBody = JsonDocument.Parse(
+            NetworkSecurityGroups.Body(ClusterId, ingressTcpPorts: "443")
+        );
+
+        using var bobBody = JsonDocument.Parse(
+            NetworkSecurityGroups.Body(ClusterId, ingressTcpPorts: "5432", allowSameGroupTraffic: true)
+        );
+
+        await PassGroup(reconciler, connection, alice, aliceBody.RootElement);
+        await PassGroup(reconciler, connection, bob, bobBody.RootElement);
+        await PassGroup(reconciler, connection, alice, aliceBody.RootElement);
+        await PassGroup(reconciler, connection, bob, bobBody.RootElement);
+
+        var applied = connection.Applied;
+        applied.Count.ShouldBe(4);
+
+        // ⚠ THE THIRD AND FOURTH PASSES, not the first two. A cache populated on pass one is only
+        // visible from pass three, which is why the sequence is A, B, A, B rather than A, B.
+        Spec(applied[2].Body)["ingressRules"]![0]!["portRangeMin"]!.GetValue<int>()
+            .ShouldBe(443, "tenant A's rule came back as tenant B's");
+
+        Spec(applied[3].Body)["allowSameGroupTraffic"]!.GetValue<bool>()
+            .ShouldBeTrue("tenant B's same-group flag came back as tenant A's");
+
+        applied[0].Target.Name.ShouldNotBe(
+            applied[1].Target.Name,
+            "two subscriptions' identically-named security groups rendered ONE cluster-scoped "
+            + "SecurityGroup, so each tenant's ports would carry the other's allow list"
+        );
+    }
+
+    [Fact]
+    public async Task TwoNetworksInOneResourceGroupEachHoldAGroupOfTheSameNameWithoutColliding() {
+        // ⚠ THE CASE THE SHARED HARNESS CANNOT BUILD, AND SHARPER HERE THAN ON A SUBNET. A Subnet at
+        // least names its Vpc, so a collision would be visible in the object; a SecurityGroup names
+        // nothing at all, so the only evidence would be the wrong rules on somebody's ports.
+        var reconciler = new NetworkSecurityGroupReconciler(new FixedClock());
+        var connection = new RecordingConnection();
+
+        using var body = JsonDocument.Parse(NetworkSecurityGroups.Body(ClusterId));
+
+        await PassGroup(
+            reconciler,
+            connection,
+            GroupAddress("web", "frontend", TenantA, SubscriptionA),
+            body.RootElement
+        );
+
+        await PassGroup(
+            reconciler,
+            connection,
+            GroupAddress("web", "backend", TenantA, SubscriptionA),
+            body.RootElement
+        );
+
+        connection.Applied[0].Target.Name.ShouldNotBe(
+            connection.Applied[1].Target.Name,
+            "two networks in ONE resource group each holding a group called `web` rendered one object"
+        );
+    }
+
+    [Fact]
+    public async Task ABackwardsPortRangeIsRefusedTerminallyAndNothingIsApplied() {
+        // ⚠ THE ONE RELATION THE SCHEMA CANNOT SEE, AND FAILED RATHER THAN InProgress for the reason
+        // the address-space refusals are: `443-80` can never converge, and retrying it forever would
+        // leave the resource reading as "still working on it" rather than "your rule is backwards".
+        var reconciler = new NetworkSecurityGroupReconciler(new FixedClock());
+        var connection = new RecordingConnection();
+
+        using var body = JsonDocument.Parse(
+            NetworkSecurityGroups.Body(ClusterId, ingressTcpPorts: "443-80")
+        );
+
+        var outcome = await PassGroup(
+            reconciler,
+            connection,
+            GroupAddress("bad", "net", TenantA, SubscriptionA),
+            body.RootElement
+        );
+
+        outcome.Kind.ShouldBe(ReconcileOutcomeKind.Failed);
+        outcome.Error!.Message.ShouldContain("/properties/ingress/tcpPorts", Case.Sensitive);
+
+        // ⚠ NOTHING WAS APPLIED, AND ON THIS TYPE THAT IS A SECURITY PROPERTY. A partially-rendered
+        // security group is a perimeter with some of its rules in it, and a tenant reading Failed has
+        // no reason to believe anything was programmed at all.
+        connection.Applied.ShouldBeEmpty();
     }
 
     [Fact]
@@ -359,6 +470,37 @@ public sealed class NetworkReconcilerTests {
             VirtualNetworks.Type,
             name,
             Guid.Parse("33333333-3333-4333-8333-333333333333")
+        );
+
+    static async Task<ReconcileOutcome> PassGroup(
+        NetworkSecurityGroupReconciler reconciler,
+        RecordingConnection connection,
+        ResourceId address,
+        JsonElement desired
+    ) =>
+        await reconciler.ReconcileAsync(
+            new(
+                address,
+                NetworkSecurityGroups.V2026,
+                desired,
+                null,
+                ReconcileDriver.NamespaceFor(address),
+                connection,
+                new UnavailableSecretResolver(),
+                new NullLog()
+            ),
+            TestContext.Current.CancellationToken
+        );
+
+    static ResourceId GroupAddress(string name, string network, Guid tenant, Guid subscription) =>
+        new(
+            tenant,
+            subscription,
+            "prod",
+            NetworkSecurityGroups.Type,
+            name,
+            Guid.Parse("33333333-3333-4333-8333-333333333333"),
+            network
         );
 
     static ResourceId SubnetAddress(string name, string network, Guid tenant, Guid subscription) =>
