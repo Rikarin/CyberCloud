@@ -25,11 +25,11 @@ namespace CyberCloud.AppHost.Tests;
 ///     <para>
 ///         ⚠ <b>WHAT THIS PROVES THAT NO CONFORMANCE SUITE CAN.</b> Every suite that has ever
 ///         reconciled a widget builds its own <c>TestCluster</c>, calls
-///         <c>AddCyberCloudResourceManager</c> and <c>AddCyberCloudProvider</c> on it, substitutes the
-///         authorizer (<c>SwitchableAuthorizer</c>, <c>PermissiveAuthorizer</c>), substitutes the
-///         relation writer (<c>RecordingRelationWriter</c>), substitutes the cluster registrar, and
-///         then <b>pumps the operation by hand</b> — <c>ClusterConformanceTests.ConvergeAsync</c> is a
-///         loop over <c>IOperationGrain.DriveAsync</c>. So a green conformance run says the reconciler
+///         <c>AddCyberCloudResourceManager</c> and <c>AddCyberCloudProvider</c> on it, substitutes
+///         the authorizer (<c>SwitchableAuthorizer</c>, <c>PermissiveAuthorizer</c>) and the
+///         relation writer (<c>RecordingRelationWriter</c>), and then <b>pumps the operation by
+///         hand</b> — <c>ClusterConformanceTests.ConvergeAsync</c> is a loop over
+///         <c>IOperationGrain.DriveAsync</c>. So a green conformance run says the reconciler
 ///         is correct and says nothing at all about whether the platform reconciles. It stayed green
 ///         through the period in which <c>CyberCloud.Silo.Host</c> composed no provider, and it would
 ///         have stayed green through the two defects this file found:
@@ -235,6 +235,24 @@ public sealed class ReconcileThroughTheRealHostTests(LocalTopology topology) : I
         configMap.Metadata.Labels.ShouldNotBeNull(
             "the ConfigMap carries no labels, so nothing in the cluster records which resource owns it."
         );
+
+        foreach (var label in KubeLabels.Mandatory) {
+            configMap.Metadata.Labels.ShouldContainKey(
+                label,
+                $"the ConfigMap in the cluster is missing the mandatory label '{label}'. "
+                + "KubeCommandBuilder applies all seven; a missing one here means admission stripped "
+                + "it, which no dictionary standing in for an API server can show."
+            );
+        }
+
+        configMap.Metadata.Labels[KubeLabels.ResourceId]
+            .ShouldBe(
+                KubeLabels.GuidValue(write.Resource.Id),
+                "the object in the cluster names a different resource than the one the write path "
+                + "created."
+            );
+
+        configMap.Metadata.Annotations.ShouldContainKey(KubeLabels.ResourcePathAnnotation);
 
         // ── And the resource, read back through the same front door ─────────────────────────────
         var read = await manager.ReadAsync(
@@ -485,7 +503,7 @@ public sealed class ReconcileThroughTheRealHostTests(LocalTopology topology) : I
     /// <remarks>
     ///     ⚠ <c>GatewayComposition.BuildAsync</c> is the method <c>CyberCloud.Gateway.Host</c>'s own
     ///     <c>Program.cs</c> calls, so the <see cref="IResourceManager" /> resolved from it is the one
-    ///     that ships: the same registry built from the same twelve provider modules, the same
+    ///     that ships: the same registry built from the same fourteen provider modules, the same
     ///     <c>ReBacResourceAuthorizer</c>, the same <c>ResourceScopeLockResolver</c>. A test that
     ///     constructed <c>ResourceManagerService</c> itself would be choosing its own seams, which is
     ///     what every other suite does and what this one exists not to do.
