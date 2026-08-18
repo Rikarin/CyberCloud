@@ -97,7 +97,8 @@ public sealed class PostgresProvider : IResourceProvider {
                 ActionKind.Post,
                 PostgresServers.ListKeysPermission,
                 secret: true,
-                response: PostgresServers.ListKeysResponse
+                response: PostgresServers.ListKeysResponse,
+                handler: typeof(PostgresServerListKeysHandler)
             )
             .Display(
                 "PostgreSQL server",

@@ -628,6 +628,42 @@ public static class PostgresServers {
     /// </remarks>
     public static string CredentialSecretName(string name) => name + "-app";
 
+    /// <summary>The keys CloudNativePG files the owner's credential under.</summary>
+    /// <remarks>
+    ///     ⚠ The <c>Secret</c> is <c>kubernetes.io/basic-auth</c>, so the two names are the type's
+    ///     rather than this platform's choice. It also carries <c>uri</c>, <c>jdbc-uri</c>,
+    ///     <c>host</c>, <c>port</c> and <c>dbname</c>; <c>listKeys</c> returns none of those, because
+    ///     the ones this platform can compute from the resource's own address are better computed —
+    ///     see <see cref="Host" />, whose answer depends on the pooler and the secret's does not.
+    /// </remarks>
+    public const string UsernameKey = "username";
+
+    /// <inheritdoc cref="UsernameKey" />
+    public const string PasswordKey = "password";
+
+    /// <summary>The TCP port every PostgreSQL endpoint this platform hands out listens on.</summary>
+    /// <remarks>
+    ///     ⚠ The same number for the pooler and for the read-write service. PgBouncer is a
+    ///     transparent front end and the <c>Pooler</c>'s service publishes the wire protocol's own
+    ///     port, so a client that turned pooling off would change host and not port.
+    /// </remarks>
+    public const int Port = 5432;
+
+    /// <summary>The in-cluster DNS name a client connects to.</summary>
+    /// <param name="name">The resource's own name.</param>
+    /// <param name="desired">The validated desired body, for whether pooling is on.</param>
+    /// <remarks>
+    ///     ⚠ <b>The pooler's when pooling is on, and that is a visible consequence rather than an
+    ///     implementation detail.</b> <see cref="ListKeysResponse" />'s <c>/host</c> says so in the
+    ///     document a tenant reads: turning pooling off later changes this value, so a connection
+    ///     string built once and stored is one that stops working — which is worth knowing before
+    ///     rather than after. The read-write service is CloudNativePG's <c>{cluster}-rw</c>, which
+    ///     always exists; the pooler's service is <see cref="PoolerName" />, which exists only while
+    ///     the <c>Pooler</c> does.
+    /// </remarks>
+    public static string Host(string name, JsonElement desired) =>
+        PoolingEnabled(desired) ? PoolerName(name) : name + "-rw";
+
     // ── The desired body, read ────────────────────────────────────────────────────────────────
 
     /// <summary>Whether the desired body asks for a pooler.</summary>
@@ -644,6 +680,19 @@ public static class PostgresServers {
     /// <summary>Whether the desired body asks for backups.</summary>
     /// <param name="desired">The validated desired body.</param>
     public static bool BackupEnabled(JsonElement desired) => Flag(desired, "backup", "enabled", true);
+
+    /// <summary>The application database <c>bootstrap</c> creates.</summary>
+    /// <param name="desired">The validated desired body.</param>
+    /// <remarks>
+    ///     ⚠ Public because two callers need the same answer and used to read it separately:
+    ///     <see cref="ClusterJson" /> renders it into the <c>Cluster</c>, and <c>listKeys</c> returns
+    ///     it. The schema default is applied here for the reason <see cref="PoolingEnabled" /> gives.
+    /// </remarks>
+    public static string Database(JsonElement desired) => Text(desired, "bootstrap", "database", "app");
+
+    /// <summary>The role that owns <see cref="Database" />.</summary>
+    /// <param name="desired">The validated desired body.</param>
+    public static string Owner(JsonElement desired) => Text(desired, "bootstrap", "owner", "app");
 
     /// <summary>
     ///     The <c>Cluster</c> document a desired body becomes, ready for server-side apply.
@@ -711,8 +760,8 @@ public static class PostgresServers {
         postgresql["parameters"] = parameters;
 
         var initdb = new JsonObject {
-            ["database"] = Text(desired, "bootstrap", "database", "app"),
-            ["owner"] = Text(desired, "bootstrap", "owner", "app"),
+            ["database"] = Database(desired),
+            ["owner"] = Owner(desired),
             ["secret"] = new JsonObject { ["name"] = CredentialSecretName(name) }
         };
 
@@ -843,7 +892,7 @@ public static class PostgresServers {
         && (spec["monitoring"] as JsonObject)?["enablePodMonitor"]?.GetValue<bool>()
         == Flag(desired, "monitoring", "enabled", true)
         && ((spec["bootstrap"] as JsonObject)?["initdb"] as JsonObject)?["database"]?.GetValue<string>()
-        == Text(desired, "bootstrap", "database", "app");
+        == Database(desired);
 
     static bool MatchesPooler(JsonObject spec, JsonElement desired) =>
         spec["instances"]?.GetValue<int>() == Number(desired, "pooling", "instances", 2)

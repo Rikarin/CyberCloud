@@ -135,7 +135,8 @@ public sealed class MariaDbProvider : IResourceProvider {
                 ActionKind.Post,
                 MariaDbServers.ListKeysPermission,
                 secret: true,
-                response: MariaDbServers.ListKeysResponse
+                response: MariaDbServers.ListKeysResponse,
+                handler: typeof(MariaDbServerListKeysHandler)
             )
             .Display("MariaDB server", "MariaDB servers", shortName: ShortName, summary: Summary)
             // docs/plan/12 § The pattern, once, piece 1 — and ADR-012's fifth surface, which is the
