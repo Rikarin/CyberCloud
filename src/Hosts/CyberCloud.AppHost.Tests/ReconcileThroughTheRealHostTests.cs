@@ -314,15 +314,15 @@ public sealed class ReconcileThroughTheRealHostTests(LocalTopology topology) : I
                 + $"Its last progress was '{status.LastProgress?.Step}': "
                 + $"{status.LastProgress?.Detail}",
             _ when status.Attempts == 0 =>
-                $"the operation was still {status.State} after {ConvergenceBudget.TotalMinutes:F0} "
-                + "minutes and has never been driven — Attempts is 0. THE RECONCILE LOOP NEVER "
+                $"the operation was still {status.State} after {ConvergenceBudget} "
+                + "and has never been driven — Attempts is 0. THE RECONCILE LOOP NEVER "
                 + "STARTED: OperationGrain registers a reminder named 'reconcile' at a one-minute "
                 + "period and something fired it zero times. Look at the silo's reminder service "
                 + "(SiloComposition.ConfigureStorage wires Redis from the hot tier's connection "
                 + "string) before looking at the reconciler.",
             _ =>
-                $"the operation was still {status.State} after {ConvergenceBudget.TotalMinutes:F0} "
-                + $"minutes. IT STARTED AND DID NOT FINISH: {status.Attempts} passes ran and the last "
+                $"the operation was still {status.State} after {ConvergenceBudget}. "
+                + $"IT STARTED AND DID NOT FINISH: {status.Attempts} passes ran and the last "
                 + $"progress was '{status.LastProgress?.Step}': {status.LastProgress?.Detail}. "
                 + "That is the reconciler or the cluster, not the loop."
         };
