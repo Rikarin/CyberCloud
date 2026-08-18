@@ -1,0 +1,48 @@
+# Managed container registry — docs/plan/13 § Container Registry, "CyberCloud.ContainerRegistry/
+# registries · M1 · 1.5 EM", "Harbor, one instance per tenant".
+#
+# ⚠ THERE IS NO OPERATOR BEHIND THIS CHART, AND THAT IS THE FIRST THING TO KNOW ABOUT IT.
+# goharbor/harbor-operator is ARCHIVED — see SOURCE for the evidence — so this chart renders Harbor's
+# workload directly, the way charts/managed/nats does for NATS. It is the third chart under
+# charts/managed/ with no operator to ask, and by some distance the largest: fourteen objects here,
+# plus one credentials Secret the platform writes and this chart only names.
+apiVersion: v2
+name: harbor
+description: A private OCI container registry on Harbor — an image store, a metadata database, a job queue, an API core and a web portal.
+type: application
+
+# The chart's own version. Bumped on every change to this directory.
+version: 0.1.0
+
+# The default Harbor minor, matching values.yaml `version`. ⚠ The image tag is the PINNED PATCH of
+# this minor — see templates/_helpers.tpl — because Harbor publishes v2.15.2 and not v2.15.
+appVersion: "2.15"
+
+kubeVersion: ">=1.31.0-0"
+
+keywords:
+  - harbor
+  - registry
+  - oci
+  - container
+
+home: https://goharbor.io
+sources:
+  - https://github.com/goharbor/harbor
+  - https://github.com/goharbor/harbor-helm
+
+maintainers:
+  - name: Cyber Cloud Platform
+
+# ⚠ These three are read by `Build.Charts` and written into `values.schema.json` as `x-cybercloud-*`.
+# They are what makes the generated schema addressable as a resource type's body rather than as an
+# anonymous blob of Helm values — docs/plan/12 § The pattern, once, piece 2. A chart under
+# charts/managed/ without them fails the build.
+#
+# ⚠ `cybercloud.io/operator` says `none`, which is a legal answer and a load-bearing one: ADR-010
+# clause 1's survey names Harbor and the operator it implies does not exist. The same annotation on
+# charts/managed/nats says the same thing for the same reason.
+annotations:
+  cybercloud.io/resource-type: CyberCloud.ContainerRegistry/registries
+  cybercloud.io/api-version: "2026-08-01"
+  cybercloud.io/operator: none

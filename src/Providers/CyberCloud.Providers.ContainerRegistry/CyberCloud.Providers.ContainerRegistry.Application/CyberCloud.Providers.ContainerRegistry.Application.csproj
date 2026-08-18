@@ -1,0 +1,49 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      docs/plan/03 § Providers — the third of the five projects: "ABP application services the gateway
+      routes to".
+
+      ⚠ IT HOLDS THE ABP MODULE AND NO APPLICATION SERVICE, AND THIS IS THE SEVENTH PROVIDER TO REPORT
+      THAT. PUT, GET, DELETE and POST listCredentials are generic resource-manager verbs the gateway
+      routes from the provider registry (ADR-012), so there is nothing for a per-provider controller to
+      do.
+
+      ⚠ Rule 4 of docs/plan/03 § Assembly graph rules ("nothing references a *.Application assembly")
+      now has one more candidate. The rule as enforced is weaker than the document's —
+      Build.Architecture.cs § AssemblyGraphGate, rule 4 says so in its own report — and another
+      candidate does not fix that; it only makes the weaker rule non-vacuous in one more place.
+    -->
+
+    <ItemGroup>
+        <PackageReference Include="Volo.Abp.Ddd.Application"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../CyberCloud.Providers.ContainerRegistry.Contracts/CyberCloud.Providers.ContainerRegistry.Contracts.csproj"/>
+        <!--
+          ⚠ THE IMPLEMENTATION ASSEMBLY, AND THIS LINE IS WHAT MAKES THE MODULE BELOW WORTH LOADING.
+          docs/plan/03 § Providers: "each registers its resource types into CyberCloud.ResourceManager".
+          The provider class lives next door, so registering it means naming it, and rule 2 has nothing
+          to say about a reference inside one family. Rule 5 keeps the gateway off the implementation
+          assembly and it still holds: the gateway references THIS project, binds the module type, and
+          binds nothing from the implementation.
+        -->
+        <ProjectReference Include="../CyberCloud.Providers.ContainerRegistry/CyberCloud.Providers.ContainerRegistry.csproj"/>
+        <!--
+          ⚠ AddCyberCloudProvider LIVES IN THE IMPLEMENTATION ASSEMBLY, NOT IN .Contracts, because
+          what it registers is what the provider's Describe declared — the reconciler and handler types
+          DiscoveringProviderBuilder walks. module-layering.txt already carries this family's edge to
+          CyberCloud.ResourceManager; this line adds no module coupling that was not already declared
+          and reviewed.
+        -->
+        <ProjectReference Include="../../../CyberCloud.ResourceManager/CyberCloud.ResourceManager.csproj"/>
+    </ItemGroup>
+
+    <ItemGroup Label="CyberCloud.Analyzers — see CyberCloud.Core.csproj for why this is not a reference">
+        <ProjectReference Include="../../../CyberCloud.Analyzers/CyberCloud.Analyzers.csproj"
+                          OutputItemType="Analyzer"
+                          ReferenceOutputAssembly="false"/>
+    </ItemGroup>
+
+</Project>

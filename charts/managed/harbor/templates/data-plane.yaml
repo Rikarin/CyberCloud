@@ -1,0 +1,227 @@
+{{/*
+The three components that own a volume: the metadata database, the job queue and the image store.
+
+⚠ StatefulSets AND NOT Deployments WITH CLAIMS BESIDE THEM, and the reason is this type's recovery
+window. A claim created by a volumeClaimTemplate is named after the set and is NOT removed by deleting
+it — so a soft-deleted registry's images, database and queue are all still on disk for the seven days
+docs/plan/08 § Soft delete promises, and a restore re-applies these three against the same claims. A
+separately-applied claim would be an object the reconciler deletes, and a window with nothing behind
+it. See ContainerRegistries.StatefulSetKind.
+
+⚠ ONE REPLICA EACH, whatever `replicas` says. Each owns a ReadWriteOnce claim, so a second replica
+stays Pending forever on most storage classes; `replicas` says so in its own description rather than
+silently not applying here.
+*/}}
+{{- $name := include "harbor.name" . -}}
+{{- $secret := include "harbor.credentialsSecret" . -}}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ printf "%s-database" $name }}
+  labels:
+    {{- include "harbor.platformLabels" . | nindent 4 }}
+spec:
+  replicas: 1
+  serviceName: {{ printf "%s-database" $name }}
+  selector:
+    matchLabels:
+      {{- include "harbor.componentLabels" (dict "root" . "component" "database") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "harbor.componentLabels" (dict "root" . "component" "database") | nindent 8 }}
+    spec:
+      containers:
+        {{/*
+          ⚠ goharbor/harbor-db and NOT upstream postgres. Harbor's build carries the entrypoint that
+          creates the `registry`, `notaryserver` and `notarysigner` databases core's migration expects
+          to already exist. That is also why this type does not reach for
+          CyberCloud.DBforPostgreSQL/servers even setting rule 2 aside.
+        */}}
+        - name: database
+          image: {{ include "harbor.image" (dict "root" . "repository" "harbor-db") | quote }}
+          ports:
+            - name: postgres
+              containerPort: 5432
+          env:
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secret }}
+                  key: databasePassword
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+          {{- include "harbor.controlPlaneResources" . | nindent 10 }}
+          {{/*
+            ⚠ pg_isready and not a TCP probe. PostgreSQL binds its port before it has finished
+            recovery, so a TCP check reports a database that refuses every connection as ready — and
+            core's first action against it is a schema migration.
+          */}}
+          readinessProbe:
+            exec:
+              command:
+                - pg_isready
+                - -U
+                - postgres
+            periodSeconds: 10
+            failureThreshold: 3
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 10Gi
+        {{- if .Values.storage.class }}
+        storageClassName: {{ .Values.storage.class | quote }}
+        {{- end }}
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ printf "%s-redis" $name }}
+  labels:
+    {{- include "harbor.platformLabels" . | nindent 4 }}
+spec:
+  replicas: 1
+  serviceName: {{ printf "%s-redis" $name }}
+  selector:
+    matchLabels:
+      {{- include "harbor.componentLabels" (dict "root" . "component" "redis") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "harbor.componentLabels" (dict "root" . "component" "redis") | nindent 8 }}
+    spec:
+      containers:
+        - name: redis
+          image: {{ include "harbor.image" (dict "root" . "repository" "redis-photon") | quote }}
+          ports:
+            - name: redis
+              containerPort: 6379
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/redis
+          {{- include "harbor.controlPlaneResources" . | nindent 10 }}
+          readinessProbe:
+            tcpSocket:
+              port: 6379
+            periodSeconds: 10
+            failureThreshold: 3
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 1Gi
+        {{- if .Values.storage.class }}
+        storageClassName: {{ .Values.storage.class | quote }}
+        {{- end }}
+---
+{{/*
+⚠ TWO CONTAINERS IN ONE POD, AND THE SECOND IS WHY GARBAGE COLLECTION WORKS. registryctl is Harbor's
+control sidecar: the job service calls it to run `registry garbage-collect`, which has to happen in
+the same filesystem namespace as the registry's storage. A Deployment of its own would be a second pod
+wanting a second copy of a ReadWriteOnce volume, which does not schedule.
+*/}}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ printf "%s-registry" $name }}
+  labels:
+    {{- include "harbor.platformLabels" . | nindent 4 }}
+spec:
+  replicas: 1
+  serviceName: {{ printf "%s-registry" $name }}
+  selector:
+    matchLabels:
+      {{- include "harbor.componentLabels" (dict "root" . "component" "registry") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "harbor.componentLabels" (dict "root" . "component" "registry") | nindent 8 }}
+    spec:
+      containers:
+        - name: registry
+          image: {{ include "harbor.image" (dict "root" . "repository" "registry-photon") | quote }}
+          ports:
+            - name: registry
+              containerPort: 5000
+          env:
+            - name: REGISTRY_HTTP_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secret }}
+                  key: registryHttpSecret
+            - name: REGISTRY_REDIS_ADDR
+              value: {{ printf "%s-redis:6379" $name | quote }}
+          volumeMounts:
+            - name: config
+              mountPath: /etc/registry/config.yml
+              subPath: registry-config.yml
+            - name: storage
+              mountPath: /storage
+          {{- $cpu := include "harbor.cpu" . }}
+          {{- $memory := include "harbor.memory" . }}
+          {{- if and $cpu $memory }}
+          resources:
+            requests:
+              cpu: {{ $cpu | quote }}
+              memory: {{ $memory | quote }}
+            limits:
+              cpu: {{ $cpu | quote }}
+              memory: {{ $memory | quote }}
+          {{- end }}
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 5000
+            periodSeconds: 10
+            failureThreshold: 3
+        - name: registryctl
+          image: {{ include "harbor.image" (dict "root" . "repository" "harbor-registryctl") | quote }}
+          ports:
+            - name: controller
+              containerPort: 8080
+          env:
+            - name: CORE_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secret }}
+                  key: coreSecret
+            - name: JOBSERVICE_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secret }}
+                  key: jobServiceSecret
+          volumeMounts:
+            - name: config
+              mountPath: /etc/registry/config.yml
+              subPath: registry-config.yml
+            - name: storage
+              mountPath: /storage
+          {{- include "harbor.controlPlaneResources" . | nindent 10 }}
+      volumes:
+        - name: config
+          configMap:
+            name: {{ printf "%s-config" $name }}
+  volumeClaimTemplates:
+    - metadata:
+        name: storage
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: {{ .Values.storage.size | quote }}
+        {{- if .Values.storage.class }}
+        storageClassName: {{ .Values.storage.class | quote }}
+        {{- end }}

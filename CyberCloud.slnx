@@ -392,6 +392,31 @@
         <Project Path="src/Providers/CyberCloud.Providers.Network/CyberCloud.Providers.Network.Tests/CyberCloud.Providers.Network.Tests.csproj" />
         <Project Path="src/Providers/CyberCloud.Providers.Network/CyberCloud.Providers.Network.Conformance/CyberCloud.Providers.Network.Conformance.csproj" />
         <Project Path="src/Providers/CyberCloud.Providers.Network/CyberCloud.Providers.Network.Cluster.Conformance/CyberCloud.Providers.Network.Cluster.Conformance.csproj" />
+
+        <!--
+          The twelfth provider family — CyberCloud.ContainerRegistry/registries on Harbor.
+          docs/plan/13 § Container Registry, "M1 · 1.5 EM".
+
+          ⚠ IT IS THE FIRST TYPE IN THE TREE TO DECLARE A RECOVERY WINDOW. Eleven families declined
+          SupportsSoftDelete for one shared reason — the manager did not read SoftDeleteDays, so a type
+          advertising `softDeleteDays: 7` through the generated document while delete was irreversible
+          was worse than one advertising nothing. docs/plan/08 § Soft delete is built now, and this row
+          is the first whose data can genuinely be handed back: a deleted registry's images are still
+          in the tenant's PersistentVolumeClaims for the length of the window. What is still owed is a
+          ROUTE — ResourceManagerService.RestoreAsync and PurgeAsync exist and the gateway exposes
+          neither — and that is recorded at charts/managed/harbor/conformance.yaml § owed.
+
+          ⚠ ITS `feeds` SIBLING IS NOT DECLARED. docs/plan/13 § Artifact feeds is M2, is explicitly
+          "the row most likely to be underestimated", and is a .NET service rather than a Harbor
+          feature: "Harbor does OCI only". Declaring it here would be declaring three protocols nothing
+          serves.
+        -->
+        <Project Path="src/Providers/CyberCloud.Providers.ContainerRegistry/CyberCloud.Providers.ContainerRegistry.Contracts/CyberCloud.Providers.ContainerRegistry.Contracts.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.ContainerRegistry/CyberCloud.Providers.ContainerRegistry/CyberCloud.Providers.ContainerRegistry.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.ContainerRegistry/CyberCloud.Providers.ContainerRegistry.Application/CyberCloud.Providers.ContainerRegistry.Application.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.ContainerRegistry/CyberCloud.Providers.ContainerRegistry.Tests/CyberCloud.Providers.ContainerRegistry.Tests.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.ContainerRegistry/CyberCloud.Providers.ContainerRegistry.Conformance/CyberCloud.Providers.ContainerRegistry.Conformance.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.ContainerRegistry/CyberCloud.Providers.ContainerRegistry.Cluster.Conformance/CyberCloud.Providers.ContainerRegistry.Cluster.Conformance.csproj" />
     </Folder>
     <Folder Name="/src/Hosts/">
         <Project Path="src/Hosts/CyberCloud.Gateway.Host/CyberCloud.Gateway.Host.csproj" />

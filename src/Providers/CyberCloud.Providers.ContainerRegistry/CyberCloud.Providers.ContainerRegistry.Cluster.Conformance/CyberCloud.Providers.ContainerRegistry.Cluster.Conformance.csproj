@@ -1,0 +1,53 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      The cluster-backed half of the shared provider conformance suite, run against the managed
+      container-registry provider.
+
+      ⚠ IT CONTAINS NO ASSERTIONS AND NO INFRASTRUCTURE. Everything it runs comes from
+      test/CyberCloud.Cluster.Conformance; what lives here is two class declarations over the SAME
+      ProviderConformanceCase the Docker-free suite already uses, plus one AssemblyInfo line.
+
+      ⚠ IT IS A SEPARATE PROJECT FROM CyberCloud.Providers.ContainerRegistry.Conformance, AND THAT IS
+      THE WHOLE SPLIT. That project must keep running on a machine with no Docker — it is the per-PR
+      gate for every provider change, and Build.Architecture § LabelsGate points at it. Adding
+      Testcontainers to it would make the twelve-step write path, the verb grammar, the four
+      reconciler clauses and the cross-tenant 404 all unrunnable without a daemon.
+
+      ⚠ IT IS NOT NAMED `.Conformance.Cluster`. Directory.Build.props § Project role detection and
+      build/Build.Test.cs § SuiteOwning both classify by the SUFFIX of the project name; a name ending
+      in `.Cluster` is claimed by neither, so the project would build as a library rather than as a
+      test host.
+
+      ⚠ WHAT IT PROVES FOR THIS PROVIDER AND CANNOT PROVE. The k3s it starts has NO HARBOR OPERATOR AND
+      NO goharbor.io CRDs. So what is exercised is the apply path, ADR-013's label injection under real
+      admission, and the refusal a missing CRD produces. Everything that depends on the operator
+      running — that a HarborCluster satisfies goharbor.io's schema at all, that the admin credential
+      the platform minted is the one Harbor's core accepts, that an anonymous `docker pull` is refused
+      — is conformance.yaml's `owed` rather than this project's. The CRD stub the harness derives from
+      ProviderConformanceCase.Objects has an OPEN schema: it makes the REST path exist and validates
+      nothing.
+    -->
+
+    <ItemGroup>
+        <PackageReference Include="xunit.v3"/>
+        <PackageReference Include="Shouldly"/>
+    </ItemGroup>
+
+    <ItemGroup Label="Global usings">
+        <Using Include="Xunit"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <!--
+          ⚠ The CASE comes from the provider's Docker-free conformance project rather than being
+          declared again here. One provider, one ProviderConformanceCase: a second copy would be a
+          second description of the same provider, and the two would disagree the first time either
+          changed.
+        -->
+        <ProjectReference
+            Include="../CyberCloud.Providers.ContainerRegistry.Conformance/CyberCloud.Providers.ContainerRegistry.Conformance.csproj"/>
+        <ProjectReference Include="../../../../test/CyberCloud.Cluster.Conformance/CyberCloud.Cluster.Conformance.csproj"/>
+    </ItemGroup>
+
+</Project>

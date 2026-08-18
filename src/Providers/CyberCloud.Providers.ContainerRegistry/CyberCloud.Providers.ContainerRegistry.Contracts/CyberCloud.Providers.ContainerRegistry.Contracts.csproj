@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      docs/plan/03 § Providers — the first of the five projects: "grain interfaces, resource models,
+      the JSON Schemas". Here that is the schema, the harbor-operator `HarborCluster` projection, and
+      the vault handles the admin credential lives behind.
+
+      ⚠ NO GRAIN INTERFACES. A registry's desired state is held by CyberCloud.ResourceManager's
+      ResourceGrain. This is the SEVENTH family to need none — docs/plan/25 § R1's measurement, now
+      taken across two relational databases, a cache, two brokers, an object store, a search engine, a
+      Kubernetes control plane, a virtual network and now an OCI registry.
+
+      ⚠ ITS REFERENCE SET IS CyberCloud.ResourceManager.Contracts AND CyberCloud.Kubernetes.Contracts,
+      and nothing else. Rule 2 of docs/plan/03 § Assembly graph rules forbids a Providers.* assembly
+      referencing another, and this row has a live reason to want one: docs/plan/13 says the registry's
+      "storage backend is the tenant's SeaweedFS bucket", which is a CyberCloud.Storage/accounts
+      resource. The rule holds; what the absence costs is recorded at
+      charts/managed/harbor/conformance.yaml § owed, `storage-backend-is-not-the-tenants-bucket`, and
+      in module-layering.txt as the THIRD family asking for the same missing fifth line.
+    -->
+
+    <ItemGroup>
+        <ProjectReference Include="../../../CyberCloud.ResourceManager.Contracts/CyberCloud.ResourceManager.Contracts.csproj"/>
+        <ProjectReference Include="../../../CyberCloud.Kubernetes.Contracts/CyberCloud.Kubernetes.Contracts.csproj"/>
+    </ItemGroup>
+
+    <ItemGroup Label="CyberCloud.Analyzers — see CyberCloud.Core.csproj for why this is not a reference">
+        <ProjectReference Include="../../../CyberCloud.Analyzers/CyberCloud.Analyzers.csproj"
+                          OutputItemType="Analyzer"
+                          ReferenceOutputAssembly="false"/>
+    </ItemGroup>
+
+</Project>

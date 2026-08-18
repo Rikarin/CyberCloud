@@ -40,7 +40,7 @@ namespace CyberCloud.Hosts.Tests;
 /// </remarks>
 public sealed class HostCompositionTests {
     /// <summary>
-    ///     The eleven provider namespaces both hosts must serve, spelled out rather than counted.
+    ///     The twelve provider namespaces both hosts must serve, spelled out rather than counted.
     /// </summary>
     /// <remarks>
     ///     ⚠ <b>Typed-out literals, and a count would not do.</b> A count passes when one provider is
@@ -51,6 +51,7 @@ public sealed class HostCompositionTests {
     static readonly string[] EveryProviderNamespace = [
         "CyberCloud.Analytics",
         "CyberCloud.Cache",
+        "CyberCloud.ContainerRegistry",
         "CyberCloud.ContainerService",
         "CyberCloud.DBforMySQL",
         "CyberCloud.DBforPostgreSQL",

@@ -189,6 +189,23 @@ CyberCloud.Vault -> CyberCloud.ResourceManager
 # ⚠ FOUR EDGES, THE SAME FOUR, FOR THE TENTH FAMILY — over a family with FIVE resource types, three of
 # them children, rendering four Kube-OVN kinds across one API group. The fifth-edge signal has still
 # not fired from any provider's own needs.
+#
+# ⚠ AND CyberCloud.Providers.ContainerRegistry IS THE THIRD FAMILY WITH A REASON TO WANT A FIFTH, AND
+# THE FIRST WHOSE PLAN DOCUMENT ASKS FOR THE EDGE IN AS MANY WORDS. docs/plan/13 § Container Registry:
+# "Storage backend is the tenant's SeaweedFS bucket, so registry storage is billed like any other
+# blob." That bucket is a CyberCloud.Storage/accounts resource, its endpoint and access-key pair live
+# behind another provider's vault path, and ReconcileContext still carries no resolver for another
+# provider's resource. So the registry keeps its images on a PersistentVolumeClaim instead, which is
+# the shipped shape and is a smaller product than the one docs/plan/13 describes —
+# charts/managed/harbor/conformance.yaml § owed, `storage-backend-is-not-the-tenants-bucket`. The
+# line stays out.
+#
+# ⚠ THREE FAMILIES NOW WANT THE SAME MISSING LINE, FOR THREE DIFFERENT FEATURES, AND TWO OF THE THREE
+# WANT IT TO REACH CyberCloud.Storage/accounts SPECIFICALLY. Storage itself wants a Postgres for its
+# filer; Analytics wants an S3 cold tier; this one wants an S3 registry backend. That is no longer
+# "a provider might reach for this" — the sanctioned route (a resource id through
+# CyberCloud.ResourceManager) has no reader a reconciler can call, and three rows have now shipped
+# reduced because of it.
 CyberCloud.Providers.Analytics -> CyberCloud.Core
 CyberCloud.Providers.Analytics -> CyberCloud.Kubernetes
 CyberCloud.Providers.Analytics -> CyberCloud.ResourceManager

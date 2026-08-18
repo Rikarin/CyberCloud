@@ -1,0 +1,260 @@
+# Conformance manifest — docs/plan/12 § The pattern, once, piece 8.
+#
+# What the conformance suite asserts about CyberCloud.ContainerRegistry/registries. This file is data:
+# `Build.Charts` checks that it is present, non-empty, and names the same resource type as Chart.yaml.
+# The suite that reads the rest of it lives in test/ and does not exist yet, and the target says so in
+# its own log rather than implying otherwise.
+#
+# ⚠ THE AUTHORITY FOR THIS ROW IS docs/plan/13 § Container Registry — "CyberCloud.ContainerRegistry/
+# registries · M1 · 1.5 EM", "Harbor, one instance per tenant" — and docs/plan/01 § D — Containers and
+# registry. docs/plan/12 owns the eight pieces this file is the eighth of, and ADR-010 clause 1 owns
+# the software choice. It does NOT own the operator, because there is not one — see SOURCE.
+
+resourceType: CyberCloud.ContainerRegistry/registries
+apiVersion: "2026-08-01"
+chart: harbor
+
+# Objects the reconciler must have applied once the resource reports Succeeded.
+#
+# ⚠ FIFTEEN, WHERE THE WIDEST ROW BEFORE THIS ONE RENDERED FIVE, AND THE NUMBER IS A CONSEQUENCE
+# RATHER THAN A DESIGN. goharbor/harbor-operator is archived, so every object a controller would have
+# expanded a HarborCluster into is applied by the platform. charts/managed/seaweedfs renders ONE object
+# that becomes the largest workload in the catalogue; this renders fifteen that become a smaller one.
+# Object count is not a measure of a service's size, and the range is now bracketed at 1 and 15.
+#
+# ⚠ The credentials Secret is FIRST because it is applied first and deleted last — see
+# `credentials-outlive-the-workloads` below.
+renders:
+  - group: ""
+    version: v1
+    kind: Secret
+    count: 1
+  - group: ""
+    version: v1
+    kind: ConfigMap
+    count: 1
+  - group: ""
+    version: v1
+    kind: Service
+    count: 6
+  - group: apps
+    version: v1
+    kind: StatefulSet
+    count: 3
+  - group: apps
+    version: v1
+    kind: Deployment
+    count: 3
+  # Only when monitoring is on, which is the default.
+  - group: monitoring.coreos.com
+    version: v1
+    kind: PodMonitor
+    count: 1
+
+# ⚠ FOURTEEN OF THE FIFTEEN NEED NO CRD STUB, WHICH IS THE REVERSE OF EVERY FAMILY BEFORE THIS ONE.
+# ClusterConformanceHarness derives a definition per CUSTOM kind from the case's own Objects; here the
+# only custom kind is monitoring.coreos.com/v1 PodMonitor. charts/managed/kafka needed two stubs and
+# nothing else; charts/managed/nats needed one of five; this needs one of fifteen. The consequence is
+# that this family's cluster-backed suite runs against a real, schema-validating API server for almost
+# everything it applies, which is strictly more than an open-schema stub gives anybody else.
+
+# ADR-013 — every rendered object carries all seven labels. Asserted against real rendered output,
+# which is what the Labels architecture gate in docs/plan/23 § The architecture gates requires.
+labels:
+  required:
+    - cybercloud.io/tenant-id
+    - cybercloud.io/subscription-id
+    - cybercloud.io/resource-group
+    - cybercloud.io/resource-id
+    - cybercloud.io/resource-type
+    - cybercloud.io/api-version
+    - cybercloud.io/managed-by
+  # ⚠ Not the resource type verbatim. A `/` is not a legal label value character, so the value is
+  # lower-cased with `/` replaced by `_` — KubeLabels.ResourceTypeValue.
+  values:
+    cybercloud.io/resource-type: cybercloud.containerregistry_registries
+    cybercloud.io/managed-by: cybercloud
+
+# Behaviour a tenant is entitled to. Each is a statement the suite can fail on, not a feature list.
+assertions:
+  - id: docker-login-with-the-minted-credential
+    says: >
+      A docker client configured from listCredentials logs in, pushes an image and pulls the same
+      digest back.
+  - id: anonymous-push-is-refused
+    says: >
+      A docker client carrying no credentials is refused by core. ⚠ THIS IS THE ASSERTION THIS SERVICE
+      MOST NEEDS AND IT IS NOT DRIVEN — see `anonymous-access-is-not-driven` below. What is checked
+      today is one layer in: the reconciler mints before it applies, so there is no window in which a
+      component is running against a credential the platform has not written.
+  - id: the-published-default-password-is-never-rendered
+    says: >
+      The string Harbor12345 appears in no rendered object, in no chart value and in no test fixture.
+      goharbor/harbor-helm ships it as a live values.yaml default while randomising every other
+      credential in the same template; this platform mints all six into the tenant's vault instead.
+      ContainerRegistrySecretTests.NoRenderedObjectCarriesTheUpstreamChartsPublishedPassword is that
+      assertion and it runs today.
+  - id: credentials-outlive-the-workloads
+    says: >
+      A teardown removes the credentials Secret LAST and the vault document never. Removing the Secret
+      from under six running components would restart every one of them without the values they
+      authenticate each other with, and — because src/core/main.go applies HARBOR_ADMIN_PASSWORD only
+      when the stored salt is empty — a restarted core keeps whatever the database holds while the
+      platform loses the ability to say what that is.
+  - id: images-survive-a-soft-delete
+    says: >
+      A deleted registry's image volume, metadata database and job queue are still present for the
+      whole seven-day window, and a restore re-attaches them. This is Kubernetes' own behaviour rather
+      than this provider's — a claim created by a volumeClaimTemplate is not removed by deleting the
+      StatefulSet — and it is the reason this is the first type in the tree to declare
+      SupportsSoftDelete.
+  - id: garbage-collection-reclaims-space
+    says: >
+      Deleting every tag of a repository and running Harbor's garbage collection returns the layer
+      bytes to the volume. The registry's config.yml sets storage.delete.enabled, which distribution
+      defaults OFF and without which garbage collection deletes nothing.
+  - id: storage-grows-never-shrinks
+    says: Increasing storage.size resizes online; decreasing it is refused at the API.
+  - id: secrets-never-round-trip
+    says: >
+      A GET of the resource never returns the administrator's password, the core secret, the CSRF key,
+      the job-service secret, the registry HTTP secret or the database password in any form. The only
+      path out is the listCredentials action, and it returns exactly one of the six.
+
+# Meters the type must emit — docs/plan/12 § The pattern, once, piece 3.
+#
+# ⚠ THE PULL-BANDWIDTH METER IS NOT IN THIS LIST AND IT IS THE ONE A REGISTRY'S CUSTOMERS WOULD CARE
+# MOST ABOUT. Egress is measured at the data plane, per repository, which is a counter rather than
+# anything derivable from a resource body — the same shape docs/plan/15 § Metering records for object
+# storage, reached from a registry.
+meters:
+  - registry.storage.gb_month
+  - registry.pull.requests
+
+# ── owed ──────────────────────────────────────────────────────────────────────────────────────
+#
+# Named here rather than left to be discovered, because an absent capability that nobody wrote down is
+# indistinguishable from one nobody thought of.
+owed:
+  - id: registry-accepts-unauthenticated-callers-from-inside-the-namespace
+    says: >
+      THE LARGEST KNOWN GAP IN THIS ROW, and it is one this platform creates rather than one it
+      inherits. goharbor/harbor-helm renders `auth: htpasswd` into the registry's config.yml and
+      computes the file with Sprig's `htpasswd`, which is BCRYPT; distribution's htpasswd backend
+      accepts bcrypt and nothing else. .NET ships no bcrypt and this repository references no package
+      that does, so a reconcile pass cannot produce the hash — and a chart that rendered one the
+      reconciler could not would be the two halves of the ADR-012 pair disagreeing, which is the single
+      failure that pair exists to make impossible. So no `auth:` block is rendered at all.
+      ⚠ WHAT BOUNDS IT: the registry's Service is ClusterIP in ReconcileDriver.NamespaceFor's
+      `{subscriptionId:N}-{resourceGroup}`, which holds one tenant's resources and no other tenant's.
+      The exposure is to the tenant's own workloads rather than across tenants, and Harbor's RBAC still
+      gates every path a client reaches THROUGH core. What is genuinely lost is defence in depth: a
+      tenant workload that should only be able to pull can push, by addressing the registry directly.
+      ⚠ TWO THINGS CLOSE IT, and neither is a provider's to do alone: a bcrypt implementation the
+      platform owns (which docs/plan/11's password hashing does not supply — that is Argon2, and
+      distribution does not accept it), or a NetworkPolicy admitting only core's pods, which is a
+      sixteenth object and a decision about which CNI enforces policy in the bundle.
+  - id: one-front-door
+    says: >
+      There is no nginx and therefore no single address serving both the web UI and the API. Core
+      serves /api/, /v2/ and /service/ itself, so docker login and docker push work against the
+      resource's own Service; the portal has a Service of its own and listCredentials returns both
+      URLs. ⚠ AND THERE IS NO EXTERNAL EXPOSURE AT ALL. This is the third row in the catalogue to
+      declare no exposure axis, and the FIRST whose blocker is not a missing upstream field: a
+      Kubernetes Service carries loadBalancerSourceRanges, so the CIDR allow-list docs/plan/12
+      § Cross-cutting decisions requires would render fine. What stops it is that the thing exposed
+      would be an OCI registry over plain HTTP with the auth gap above. Both close together: an
+      ingress that terminates TLS, plus the bcrypt, plus a decision about which ingress controller the
+      bundle standardises on.
+  - id: storage-backend-is-not-the-tenants-bucket
+    says: >
+      docs/plan/13 says "storage backend is the tenant's SeaweedFS bucket, so registry storage is
+      billed like any other blob", and this row renders a PersistentVolumeClaim instead. The bucket is
+      a CyberCloud.Storage/accounts resource; its endpoint and access-key pair live behind another
+      provider's vault path; ReconcileContext carries a cluster connection and an ISecretResolver and
+      nothing that resolves another resource; and docs/plan/03 § Assembly graph rules, rule 2 forbids
+      the assembly edge. ⚠ THIRD FAMILY TO WANT THE SAME MISSING LINE — CyberCloud.Providers.Storage
+      wants a Postgres for its filer, CyberCloud.Providers.Analytics wants an S3 cold tier, and this
+      one wants an S3 registry backend; two of the three want to reach the SAME provider. Recorded in
+      module-layering.txt beside the refusal. ⚠ The consequence for billing is real and is stated:
+      registry storage draws QuotaMeter.StorageGb as a filesystem volume rather than being metered as
+      blob, so the sentence docs/plan/13 writes about billing is not true of what ships.
+  - id: vulnerability-scanning
+    says: >
+      docs/plan/13 lists "vulnerability scanning via Trivy, with results surfaced on the resource" as a
+      bullet under this M1 row. ⚠ docs/plan/01's own table puts it at M2 —
+      "ACR — vulnerability scanning · ⊂ registries · M2" — and the two documents disagree. M2 is taken,
+      because the bullet is not one property: it is a Trivy Deployment, a scanner-adapter registration
+      through Harbor's API after the resource exists, and docs/plan/18's verdict model to surface into.
+      WITH_TRIVY is rendered as `false` and no property turns it on, because a flag whose only honest
+      value is false publishes a feature nobody can have.
+  - id: replication-is-not-a-sub-resource
+    says: >
+      docs/plan/13: "replication between a tenant's registries in different regions is a Harbor feature
+      exposed as a sub-resource". Not declared, and the blocker is not the platform: child types ship
+      (CyberCloud.Storage/accounts/buckets) and the harness addresses them. It is that a replication
+      policy names a REMOTE REGISTRY — another resource of this same type, possibly in another region —
+      and a body property carrying another resource's id is the cross-provider seam again, one type
+      over. ⚠ And Harbor's replication policies are configured over Harbor's own API rather than by any
+      Kubernetes object, so the reconciler would have to authenticate to the thing it just created,
+      which no reconciler in the tree does and which ReconcileContext gives no way to do.
+  - id: retention-and-robot-accounts-are-not-declarable
+    says: >
+      docs/plan/13 names both. Neither is a field of any deployment: a retention policy is a Harbor
+      PROJECT setting and a robot account is a Harbor API object, both created after Harbor is running
+      and both requiring an authenticated call INTO the tenant's own registry. Same blocker as
+      replication, and the same shape charts/managed/nats records about NATS accounts —
+      `accounts-are-not-a-crd`. ⚠ The consequence for docs/plan/13's "robot accounts map to service
+      principals" is that they do not, yet: listCredentials hands out the ADMINISTRATOR, which is the
+      widest possible credential, and a service principal that only needs to pull gets push as well.
+      That is the most valuable single thing on this list.
+  - id: converged-is-not-serving
+    says: >
+      Converged means the fifteen objects are in the cluster carrying what this provider rendered. It
+      does not mean Harbor works: core runs a database migration on first start, and a registry whose
+      objects are all present can be a core crash-looping against a PostgreSQL that has not finished
+      recovery. This reconciler reads no status — unlike ManagedClusterReconciler, the one in the tree
+      that does — because a Deployment's availableReplicas would make convergence depend on a scheduler
+      having capacity. ⚠ AND NO SUITE IN THE TREE WOULD NOTICE. The k3s the cluster-backed suite starts
+      pulls no images; the Docker-free suite has no API server at all. So the exhaustive correctness of
+      the environment set in templates/control-plane.yaml is checked by nothing, and it is the largest
+      untested surface in this family.
+  - id: anonymous-access-is-not-driven
+    says: >
+      Neither `docker-login-with-the-minted-credential` nor `anonymous-push-is-refused` above is run.
+      Both need a live Harbor: images pulled, a database migrated, a volume provisioned, and a docker
+      client in the cluster-conformance project. What is checked today is one layer in — the reconciler
+      mints before it applies, a vault refusal leaves NOTHING applied, and the rendered objects carry a
+      secretKeyRef rather than a literal.
+  - id: purge-leaves-the-volumes-behind
+    says: >
+      The recovery window works because deleting a StatefulSet does not delete its claims. Ending the
+      window does not free them: nothing in ResourceManagerService's purge path removes a
+      PersistentVolumeClaim, and a provider is not called on purge at all. So a purged registry returns
+      its committed quota and leaves its disks allocated, which is the quota and the cluster disagreeing.
+      ⚠ Closing it needs a purge to reach the provider — there is no IResourceReconciler member for it —
+      and that is a platform seam rather than a provider's work.
+  - id: restore-and-purge-have-no-route
+    says: >
+      ResourceManagerService.RestoreAsync and PurgeAsync exist and are tested by SoftDeletePathTests;
+      NOTHING IN THE GATEWAY CALLS EITHER, grepped rather than assumed. So what this type's
+      SupportsSoftDelete declaration buys today is that a DELETE parks the resource instead of
+      destroying it, its name is held, its committed quota is kept and its ReBAC parent moves to the
+      subscription — and recovering it needs a route somebody else owns. ⚠ THAT IS A SMALLER THING THAN
+      THE FEATURE READS LIKE and it is stated rather than implied, because the generated document now
+      publishes `softDeleteDays: 7` to every caller.
+  - id: the-database-is-a-single-point-of-failure
+    says: >
+      spec.replicas is pinned at 1 on the metadata database and on Redis, because each owns a
+      ReadWriteOnce claim and goharbor/harbor-db has no replication of its own. Making the database
+      highly available means CloudNativePG, which is CyberCloud.DBforPostgreSQL/servers and therefore
+      another provider's resource — the same seam as `storage-backend-is-not-the-tenants-bucket`, for
+      the third time in one row.
+  - id: feeds-is-a-different-product
+    says: >
+      docs/plan/13 § Artifact feeds puts CyberCloud.ContainerRegistry/feeds in this same namespace at
+      M2 · 1.5 EM and says in as many words that "Harbor does OCI only" and that the three protocols
+      are "a single .NET service backed by SeaweedFS". So the type is not declared here: it shares a
+      namespace with this row and shares no implementation with it, and declaring it would publish an
+      API nothing serves. ⚠ Its dependency is the same one three items on this list already have — it
+      is "backed by SeaweedFS", which is CyberCloud.Storage/accounts.

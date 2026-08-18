@@ -1,0 +1,84 @@
+# Managed container registry — the configuration surface, once.
+#
+# ⚠ EVERY NON-`@internal` BLOCK BELOW IS GENERATED from ContainerRegistries.Schema2026 by
+# `./build.sh Charts`, and so is values.schema.json. ADR-010 § Which end authors the schema: "The C#
+# ResourceSchema is authored. The chart's @param annotations are generated from it and diffed."
+# Editing a generated row here is undone on the next run and fails the build in between; add the
+# field in C# instead.
+#
+# The `@internal` rows at the end of each level are the ones that are NOT generated. They are carried
+# through as bytes and must sit after every generated key at their own level, so that each level's
+# generated keys are one contiguous run — charts/README.md § What a chart cannot say.
+
+## @param version {string} Harbor minor version. The platform pins the patch, because Harbor publishes image tags per patch and a bare minor resolves to nothing. A minor leaving support is a portal notice and a 120-day window — docs/plan/12 § Cross-cutting decisions.
+## @required
+## @enum 2.14 | 2.15
+version: "2.15"
+
+## @param replicas {integer} How many replicas of each stateless component — the API core, the web portal and the job service — run. Two is the smallest count that survives a node drain. The registry itself, the database and Redis each own a volume and run one replica whatever this says.
+## @required
+## @range 1..10
+replicas: 2
+
+## @param sizing {object} CPU and memory for the registry pod, either by preset or explicitly. The other five components are sized by the platform and are not affected.
+sizing:
+  ## @param preset {string} A sizing preset from docs/plan/12. The registry uses the s1 family, which is 1 vCPU to 4 GiB.
+  ## @enum s1.2xlarge | s1.4xlarge | s1.large | s1.medium | s1.micro | s1.nano | s1.small | s1.xlarge
+  ## @widget cozy-preset
+  preset: s1.small
+  ## @param cpu {string} Explicit vCPU quantity in Kubernetes form, for example 500m or 2. Empty means take it from the preset.
+  ## @pattern (\d+(\.\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)?
+  cpu: ""
+  ## @param memory {string} Explicit memory quantity in Kubernetes form, for example 4Gi. Empty means take it from the preset.
+  ## @pattern (\d+(\.\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)?
+  memory: ""
+
+## @param storage {object} Where the image layers live.
+storage:
+  ## @param size {string} Image storage, in Kubernetes quantity form. Grows online; never shrinks. ⚠ This is a filesystem volume rather than the tenant's object-storage bucket, which is what docs/plan/13 asks for and what the platform cannot yet give it — see the registry's own documentation.
+  ## @required
+  ## @pattern \d+(\.\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?
+  ## @example "100Gi"
+  size: "100Gi"
+  ## @param class {string} StorageClass name for the image volume. Empty means the cluster default.
+  ## @immutable
+  ## @widget storageclass
+  class: ""
+
+## @param purgeProtection {boolean} Refuse every purge of this registry for the whole of its recovery window. Opt-in, and the platform refuses to turn it off again — a protection a caller can clear in one request is one round-trip of protection, which is none. It does not stop a delete; it stops the delete from being made permanent early.
+purgeProtection: false
+
+## @param monitoring {object} What the platform scrapes.
+monitoring:
+  ## @param enabled {boolean} Whether Harbor's core exports Prometheus metrics and a PodMonitor selects them. On by default — docs/plan/12: "a managed service the tenant cannot see the health of is a black box they will not trust with production". Turning it off removes the metrics port as well as the scrape, so nothing is left listening on an unscraped address.
+  enabled: true
+
+## @param platform {object} Resource identity injected by the reconciler. Not a tenant-facing setting.
+## @internal Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.
+platform:
+  ## @param tenantId {string} Tenant GUID, rendered into the cybercloud.io/tenant-id label.
+  tenantId: ""
+  ## @param subscriptionId {string} Subscription GUID, rendered into the cybercloud.io/subscription-id label.
+  subscriptionId: ""
+  ## @param resourceGroup {string} Resource group name, rendered into the cybercloud.io/resource-group label.
+  resourceGroup: ""
+  ## @param resourceId {string} Resource GUID, rendered into the cybercloud.io/resource-id label.
+  resourceId: ""
+  ## @param resourceType {string} Fully qualified resource type, rendered into the cybercloud.io/resource-type label.
+  resourceType: CyberCloud.ContainerRegistry/registries
+  ## @param apiVersion {string} The api-version the resource was last written at, rendered into the cybercloud.io/api-version label.
+  apiVersion: "2026-08-01"
+  ## @param managedBy {string} Value of the cybercloud.io/managed-by label. Constant, and the selector every informer filters on.
+  managedBy: cybercloud
+
+## @param imageRegistry {string} Where Harbor's seven images are pulled from.
+## @internal A platform escape hatch for an air-gapped mirror. Not a tenant setting: a registry whose own images come from somewhere the tenant chose is a supply chain the platform cannot vouch for.
+imageRegistry: docker.io/goharbor
+
+## @param credentialsSecret {string} Name of the Secret holding every credential. Empty means "{release}-credentials".
+## @internal docs/plan/12 § The pattern, once, piece 5. The platform MINTS these into the tenant's vault and writes the Secret; this chart only NAMES it. ⚠ It is deliberately not a value: goharbor/harbor-helm ships `harborAdminPassword: "Harbor12345"` as a live default while randomising every other credential in the same template, and a values key here would be one edit away from reproducing that.
+credentialsSecret: ""
+
+## @param nameOverride {string} Replace the generated object-name stem. Empty means derive it from the release name.
+## @internal Helm plumbing. Nothing about it belongs in a resource body.
+nameOverride: ""

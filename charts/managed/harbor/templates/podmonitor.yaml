@@ -1,0 +1,31 @@
+{{/*
+docs/plan/12 § The pattern, once, piece 6's SECOND branch, third sighting.
+
+The corrected piece 6 reads "ask the operator for the scrape object wherever the operator accepts the
+request, and hand-write one into the chart only when there is no operator to ask", and warns that a
+hand-written scrape hard-codes somebody else's pod labels and goes quiet when a minor release moves
+one. That hazard cannot arise here: the labels this selector matches are written by this chart onto
+pods created by this chart. Hand-writing is safe exactly when there is no operator, which is the same
+condition that forces the branch — charts/managed/nats proved it, charts/managed/ferretdb confirmed
+it, and this is the third.
+
+⚠ CORE'S PODS AND NOT EVERY COMPONENT'S. Harbor's exporter — a seventh component this chart does not
+render — is what turns the database's and the registry's internals into metrics; core exports its own
+API and job counters without it. Selecting all six would scrape five ports nothing is listening on,
+which is a PodMonitor that looks healthy and reports five targets down forever.
+*/}}
+{{- if .Values.monitoring.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: {{ include "harbor.name" . }}
+  labels:
+    {{- include "harbor.platformLabels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "harbor.componentLabels" (dict "root" . "component" "core") | nindent 6 }}
+  podMetricsEndpoints:
+    - port: metrics
+      path: /metrics
+{{- end }}
