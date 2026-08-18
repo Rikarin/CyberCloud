@@ -1,4 +1,5 @@
 using CyberCloud.Conformance;
+using CyberCloud.Core.Resources;
 using CyberCloud.Conformance.Harness;
 using CyberCloud.Providers.ContainerRegistry.Contracts;
 using Shouldly;

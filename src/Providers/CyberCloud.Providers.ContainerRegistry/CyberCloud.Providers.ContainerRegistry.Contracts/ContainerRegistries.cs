@@ -561,7 +561,7 @@ public static class ContainerRegistries {
     /// <summary>Every field one mint writes, in the order they are generated.</summary>
     /// <remarks>
     ///     ⚠ <b>Listed once so that the mint, the rendered <c>Secret</c> and the tests cannot disagree
-    ///     about the set.</b> <c>ContainerRegistrySecretTests</c> walks this array against what
+    ///     about the set.</b> <c>ContainerRegistryCredentialTests</c> walks this array against what
     ///     <see cref="GenerateCredentials" /> returns and against what
     ///     <see cref="CredentialsSecretJson" /> renders, which is what catches a seventh field added to
     ///     one of the three.

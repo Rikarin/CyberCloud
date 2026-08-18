@@ -92,7 +92,7 @@ assertions:
       The string Harbor12345 appears in no rendered object, in no chart value and in no test fixture.
       goharbor/harbor-helm ships it as a live values.yaml default while randomising every other
       credential in the same template; this platform mints all six into the tenant's vault instead.
-      ContainerRegistrySecretTests.NoRenderedObjectCarriesTheUpstreamChartsPublishedPassword is that
+      ContainerRegistryCredentialTests.NoRenderedObjectCarriesTheUpstreamChartsPublishedPassword is that
       assertion and it runs today.
   - id: credentials-outlive-the-workloads
     says: >

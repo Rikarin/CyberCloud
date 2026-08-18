@@ -211,6 +211,10 @@ CyberCloud.Providers.Analytics -> CyberCloud.Kubernetes
 CyberCloud.Providers.Analytics -> CyberCloud.ResourceManager
 CyberCloud.Providers.Analytics -> CyberCloud.Tenancy
 CyberCloud.Providers.Cache -> CyberCloud.Core
+CyberCloud.Providers.ContainerRegistry -> CyberCloud.Core
+CyberCloud.Providers.ContainerRegistry -> CyberCloud.Kubernetes
+CyberCloud.Providers.ContainerRegistry -> CyberCloud.ResourceManager
+CyberCloud.Providers.ContainerRegistry -> CyberCloud.Tenancy
 CyberCloud.Providers.ContainerService -> CyberCloud.Core
 CyberCloud.Providers.ContainerService -> CyberCloud.Kubernetes
 CyberCloud.Providers.ContainerService -> CyberCloud.ResourceManager
