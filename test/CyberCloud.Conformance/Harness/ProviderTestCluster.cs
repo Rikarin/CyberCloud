@@ -169,9 +169,40 @@ public class ProviderTestCluster<TSource> : IAsyncLifetime
     ///     be one that can disagree with it. <c>Describe</c> is pure — <see cref="IResourceProvider" />
     ///     requires it — so building the registry twice is the same arrangement
     ///     <c>AddCyberCloudProvider</c> relies on.
+    ///     <para>
+    ///         ⚠ <b>THE HARNESS'S OWN SEAMS ARE REGISTERED ALONGSIDE THE HANDLERS, AND THEY WERE NOT
+    ///         UNTIL A HANDLER FIRST DECLARED A DEPENDENCY.</b> This container held nothing but the
+    ///         handler types, which worked for exactly as long as every handler had a parameterless
+    ///         constructor — one did, for one provider. The first handler to take an
+    ///         <c>IClock</c> failed to activate with
+    ///         <i>"Unable to resolve service for type 'CyberCloud.Core.Time.IClock' while attempting
+    ///         to activate '…'"</i>, thrown from <c>ActionDispatcher</c>'s <c>GetService</c> — which
+    ///         names the handler and the harness and reads like a provider bug. ⚠ <b>And it is a
+    ///         harness bug: a real host has these.</b> <c>AddCyberCloudResourceManager</c> registers
+    ///         <c>IClock</c>, <c>IClusterConnectionFactory</c> and <c>ISecretResolver</c>, and
+    ///         <c>AddCyberCloudProvider</c> adds the handler into that <i>same</i> container. Building
+    ///         a separate one with strictly less in it made the suite ask less than the platform
+    ///         provides.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The three registered are the harness's own doubles rather than new ones</b>, on
+    ///         the same principle the shared vault follows: a handler that reads a secret the case's
+    ///         reconciler minted must read it out of <see cref="Vault" />, and a handler that reaches
+    ///         the cluster must see the objects <see cref="World" /> holds. A second set would make a
+    ///         handler's answer disagree with the reconciler's world for a reason no assertion could
+    ///         attribute. ⚠ Second harness change this family has needed, after
+    ///         <c>ClusterConformanceHarness</c>'s hard-coded <c>Scope = "Namespaced"</c>, and the
+    ///         shape is the same both times: the harness had quietly agreed with every provider so far
+    ///         about something no provider had had to think about.
+    ///     </para>
     /// </remarks>
     ServiceProvider Handlers() {
         var services = new ServiceCollection();
+
+        services.AddSingleton<IClock>(ConformanceState<TSource>.Clock);
+        services.AddSingleton<IClusterConnectionFactory>(new FakeClusterConnectionFactory(World));
+        services.AddSingleton<ISecretResolver>(Vault);
+        services.AddSingleton<ISecretWriter>(Vault);
 
         foreach (var handler in Registry.Types
             .SelectMany(x => x.Actions)

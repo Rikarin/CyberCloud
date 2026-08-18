@@ -1,0 +1,80 @@
+{{/*
+Kube-OVN `SecurityGroup` — docs/plan/14 § Virtual networks, `securityGroups/{name}`, and the type
+VirtualNetworks.IsolationLimits' `not-a-firewall-by-default` row names as what a tenant who wants a
+deny-by-default perimeter should ask for.
+
+⚠ This renders a custom resource; it does not install Kube-OVN. ADR-019 puts Kube-OVN on the cluster
+alongside Cilium as platform infrastructure — ENABLE_LB=false, ENABLE_NP=false — and a tenant's
+SecurityGroup is a row in that installation.
+
+⚠ NO `namespace:` IN metadata. `SecurityGroup` is `+kubebuilder:resource:scope="Cluster"`. The
+separation a namespace would have provided is in the object's NAME — see
+`kube-ovn-security-group.objectName`.
+
+⚠ AND NO FIELD NAMES THE NETWORK, WHICH IS THE ONE STRUCTURAL DIFFERENCE FROM THE SUBNET CHART. A
+Subnet binds to its parent through `spec.vpc`; SecurityGroupSpec has no `vpc` member at all — it is a
+global OVN port group that a PORT names, through its own
+`…kubernetes.io/security_groups` annotation. So the containment a reader infers from the resource
+address is an authorization and naming fact, not a routing one. conformance.yaml § owed,
+`the-parent-edge-is-not-enforced-by-the-fabric`.
+
+⚠ ONE object, and no Service, no Secret and no ServiceMonitor. A security group is a port group and a
+handful of ACL rows in OVN's northbound database: no pod, nothing to scrape, nothing to connect to.
+That is also why the type declares only QuotaMeter.Resources.
+*/}}
+{{- $ingress := include "kube-ovn-security-group.rules" (dict "section" .Values.ingress) -}}
+{{- $egress := include "kube-ovn-security-group.rules" (dict "section" .Values.egress) -}}
+apiVersion: kubeovn.io/v1
+kind: SecurityGroup
+metadata:
+  name: {{ include "kube-ovn-security-group.objectName" . }}
+  labels:
+    {{- include "kube-ovn-security-group.platformLabels" . | nindent 4 }}
+spec:
+  {{/*
+    ⚠ THE ONE FIELD THAT PERMITS TRAFFIC NOBODY WROTE A RULE FOR, AND IT IS OFF. Kube-OVN declares it
+    `bool` with no `+kubebuilder:default`, so an omitted field is already `false` — and it is
+    nevertheless sent EXPLICITLY, because "the substrate's zero value happens to be safe" is a fact
+    about a version of Go source rather than a property of this resource, and because
+    NetworkSecurityGroups.Matches can only compare a field that was sent.
+  */}}
+  allowSameGroupTraffic: {{ .Values.allowSameGroupTraffic }}
+
+  {{/*
+    ⚠ `[]` RATHER THAN AN OMITTED KEY WHEN A DIRECTION HAS NO RULES, and an empty list here is a
+    complete and fully restrictive configuration rather than an unfinished one. CreateSgDenyAllACL
+    installs `outport == @{portGroup} && ip` and `inport == @{portGroup} && ip` with action DROP
+    beneath everything below, and pkg/controller/security_group.go has no special case for an empty
+    rule list. So a group that declares nothing permits nothing.
+
+    ⚠ NO `tier`. SecurityGroupSpec.Tier chooses which OVN ACL tier the rules land in — 0 or 1, lower
+    evaluated first — which is how an OPERATOR layers a platform-wide policy above a tenant's own. A
+    group that elected the lower tier would evaluate ahead of a policy the platform had not yet
+    written. Omitted is 0, and every group being in one tier is what makes "whichever allow matches,
+    permits" true.
+  */}}
+  {{- if $ingress }}
+  ingressRules:
+    {{- $ingress | nindent 4 }}
+  {{- else }}
+  ingressRules: []
+  {{- end }}
+  {{- if $egress }}
+  egressRules:
+    {{- $egress | nindent 4 }}
+  {{- else }}
+  egressRules: []
+  {{- end }}
+
+  {{/*
+    ⚠ NO `remoteSecurityGroup` ON ANY RULE — a cross-resource reference with no reader (rule 2), and
+    one that would need the referenced group's RENDERED object name rather than the tenant's.
+
+    ⚠ NO `localAddress`, `sourcePortRangeMin` OR `sourcePortRangeMax`. Per-rule refinements this
+    shape has no slot for and no evidence anybody needs at M1.
+
+    ⚠ NO `policy: drop` AND NO `policy: pass`. With a default-deny base, a drop is only meaningful
+    against a broader allow at a HIGHER priority — which is an arity this shape does not have, because
+    every rule it writes sits at util.SecurityGroupPriorityMin. All four are in conformance.yaml
+    § owed.
+  */}}

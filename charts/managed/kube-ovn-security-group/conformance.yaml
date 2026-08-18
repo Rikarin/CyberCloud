@@ -1,0 +1,203 @@
+# Conformance manifest — docs/plan/12 § The pattern, once, piece 8.
+#
+# What the conformance suite asserts about CyberCloud.Network/virtualNetworks/securityGroups. This
+# file is data: `Build.Charts` checks that it is present, non-empty, and names the same resource type
+# as Chart.yaml. The suite that reads the rest of it lives in test/ and does not exist yet.
+
+resourceType: CyberCloud.Network/virtualNetworks/securityGroups
+apiVersion: "2026-08-01"
+chart: kube-ovn-security-group
+
+# Objects the reconciler must have applied once the resource reports Succeeded.
+renders:
+  - group: kubeovn.io
+    version: v1
+    kind: SecurityGroup
+    count: 1
+    clusterScoped: true
+
+# ADR-013 — every rendered object carries all seven labels.
+labels:
+  required:
+    - cybercloud.io/tenant-id
+    - cybercloud.io/subscription-id
+    - cybercloud.io/resource-group
+    - cybercloud.io/resource-id
+    - cybercloud.io/resource-type
+    - cybercloud.io/api-version
+    - cybercloud.io/managed-by
+  values:
+    cybercloud.io/resource-type: cybercloud.network_virtualnetworks_securitygroups
+    cybercloud.io/managed-by: cybercloud
+
+# Behaviour a tenant is entitled to. Each is a statement the suite can fail on, not a feature list.
+assertions:
+  - id: an-empty-security-group-permits-nothing
+    says: >
+      A security group created with no remotes and no ports renders a SecurityGroup with empty
+      ingressRules and egressRules, and a workload carrying it can neither be reached nor reach
+      anything. ⚠ THIS IS THE ASSERTION THE TYPE MOST NEEDED TO GET RIGHT, and it was established from
+      the substrate rather than assumed: pkg/ovs/ovn-nb-acl.go's CreateSgDenyAllACL installs
+      `outport == @{pg} && ip` and `inport == @{pg} && ip` with action DROP at
+      util.SecurityGroupDropPriority (2003), CreateSgBaseACL adds ARP/ICMPv6/DHCP/VRRP exceptions at
+      2005, every rule this type writes lands at 2004, and pkg/controller/security_group.go has NO
+      special case for an empty rule list. So the empty body is the SAFE body and a tenant cannot
+      reach "allow everything" by omission — which is the opposite of how this class of question
+      usually fails. NetworkSecurityGroupTests asserts the rendered manifest, which is the half this
+      repository can check.
+  - id: a-body-becomes-exactly-the-rules-it-says
+    says: >
+      The rules are a CROSS PRODUCT of remotes against port entries, in a fixed order: v4 before v6,
+      TCP before UDP before ICMP, entries in declaration order. Two remotes with `tcpPorts: 80,443`
+      is four rules. ⚠ The order is not cosmetic — both arrays carry no `x-kubernetes-list-type` and
+      are therefore ATOMIC under server-side apply, and NetworkSecurityGroups.Matches compares them
+      element by element, so a renderer that sorted or de-duplicated would report drift on a converged
+      group forever. `POST …/showEffectiveRules` publishes the same expansion so a tenant does not have
+      to do the arithmetic in their head.
+  - id: the-rules-are-lowercase-ipv4-and-allow-not-deny
+    says: >
+      Every rendered rule carries `ipVersion: ipv4` or `ipv6` — LOWER CASE, the opposite spelling to
+      Subnet.spec.protocol's IPv4/IPv6/Dual in the same API group on an adjacent object — and
+      `policy: allow`, whose siblings are `drop` and `pass` and NOT `deny`. Both are enforced by
+      Kube-OVN's validateSgRule in the CONTROLLER, long after this platform has reported Succeeded, so
+      both are constants in NetworkSecurityGroups rather than literals at the call site and
+      NetworkSecurityGroupTests pins them.
+  - id: two-networks-may-hold-the-same-group-name
+    says: >
+      Two virtual networks in ONE resource group each hold a security group called `web`, and the two
+      are different groups with different rules. ⚠ SHARPER HERE THAN ON A SUBNET. A SecurityGroup is
+      cluster-scoped AND carries no field naming its network, so the rendered object name is the only
+      thing separating them — a collision would merge two rule sets into one OVN port group with
+      nothing reporting an error anywhere. NetworkReconcilerTests asserts it, including the
+      cross-tenant case.
+  - id: a-backwards-port-range-is-refused
+    says: >
+      `tcpPorts: "443-80"` is refused, and the refusal names the range. ⚠ Everything else that can be
+      wrong with a port list — a non-number, a 0, a 65536, a stray character — is refused at the API
+      by PortRange.OptionalListPattern with a 400 and a JSON Pointer BEFORE the write path answers.
+      See § owed for the one relation that is not.
+  - id: deleting-a-group-does-not-delete-what-it-protected
+    says: >
+      Deleting a security group removes the SecurityGroup object and nothing else. ⚠ What that COSTS
+      is the inverse of the usual delete hazard — see § owed,
+      `deleting-a-group-removes-the-deny-with-it`.
+
+# Meters the type must emit.
+#
+# ⚠ ONE, and for the family's reason rather than a copy of it: a SecurityGroup is an OVN port group
+# and a handful of ACL rows. No pod, no disk, nothing attributable — and unlike a subnet there is not
+# even a tempting wrong answer, because nothing about a rule list is a quantity of anything scarce.
+meters:
+  - resources
+
+# ── owed ──────────────────────────────────────────────────────────────────────────────────────────
+owed:
+  - id: one-group-cannot-pair-different-ports-with-different-remotes
+    says: >
+      ⚠ THE HEADLINE COST OF THE RESHAPE, STATED FIRST BECAUSE IT IS THE ONE A USER MEETS. A single
+      security group cannot say "allow 443 from A and 5432 from B" — the remote is one v4 slot and one
+      v6 slot per direction, so a group's ports apply to all of its remotes. That is two groups, and
+      a workload may carry both: a port's `…kubernetes.io/security_groups` annotation is a
+      comma-separated list of names, which is why "one group per purpose, several groups per
+      workload" is Kube-OVN's own grain rather than this platform's excuse. It is nevertheless a real
+      difference from what a reader of docs/plan/14 expects, and it is here rather than only in a
+      description. ⚠ WHAT WOULD CLOSE IT is the same thing that would close
+      `an-array-of-objects-is-not-expressible`: SchemaProperty.ElementKind admitting a nested element,
+      which docs/plan/20 § The shape that makes 100 resource types affordable maps onto
+      @xui/data-table and calls "the api-version that will need the tree".
+  - id: protocol-all-is-not-expressible
+    says: >
+      Kube-OVN's SgProtocolALL ("all") matches every IP protocol and this type never emits it. What
+      the schema reaches is TCP, UDP and ICMP; "every TCP port" is spelled `1-65535` and SCTP, GRE and
+      ESP are unreachable. ⚠ The reason is a safety one rather than an expressiveness one: the natural
+      place to put "all" is the case where a remote is set and no ports are, and reading a HALF-TYPED
+      body as the most permissive rule the type can express is the failure this whole file is
+      organised around not having. Closing it needs an explicit property whose name cannot be typed by
+      accident.
+  - id: a-security-group-cannot-be-a-remote
+    says: >
+      SecurityGroupRule.RemoteType may be `securityGroup` rather than `address`, which is how "allow
+      the web tier to reach the database tier" is said without naming addresses — and it is the shape
+      most users of a cloud security group reach for first. It is not declared: it is a cross-resource
+      reference, which rule 2 routes through CyberCloud.ResourceManager by resource id, and the value
+      the object needs is the OTHER group's RENDERED object name — which this provider can derive only
+      from that group's address, which it cannot resolve. It is the same shape as
+      `nothing-can-join-a-network-yet` and it wants the same reader.
+  - id: drop-and-pass-rules-are-not-expressible
+    says: >
+      Every rule this type writes is `policy: allow` at util.SecurityGroupPriorityMin. A `drop` rule
+      is only meaningful against a broader `allow` at a HIGHER priority — "allow 0.0.0.0/0 except
+      10.0.0.0/8" — and a `pass` rule hands evaluation to the next ACL tier. Both need a priority a
+      tenant can set and an ordering they can reason about, which is an arity this shape does not
+      have. ⚠ Not a gap in the substrate: it is the same one-rule-per-group ceiling as
+      `one-group-cannot-pair-different-ports-with-different-remotes`.
+  - id: a-backwards-port-range-is-refused-after-202
+    says: >
+      ⚠ THE FAMILY'S RECURRING DEFECT, AT ITS NARROWEST YET, AND IT IS WORTH SAYING HOW MUCH NARROWER.
+      charts/managed/kube-ovn-vpc's `address-space-is-validated-after-202` records that ResourceSchema
+      compares one value against constants and that there is no provider predicate anywhere on
+      ResourceManagerService's write path, so a whole reserved-range table is re-checked in the
+      reconciler. Here the schema reaches almost everything: PortRange.OptionalListPattern is an
+      EXACT 1–65535 grammar, six alternation branches with disjoint leading digits, so `0`, `65536`,
+      `99999` and every malformed entry are refused with a 400 and a JSON Pointer before the write
+      path answers. What is left over is exactly `min <= max`, which compares two numbers INSIDE one
+      string. ⚠ WHY THE PATTERN IS EXACT HERE AND DELIBERATELY LOOSE ON A CIDR: a complete IPv6
+      grammar in one regular expression is a known catastrophic-backtracking hazard on a request path
+      with a 100 ms budget, and a bounded decimal integer is not. Closing the remainder is the same
+      one seam: `IResourceTypeBuilder.Validates(Func<JsonElement, string, Result>)`.
+  - id: the-parent-edge-is-not-enforced-by-the-fabric
+    says: >
+      ⚠ A STRUCTURAL DIFFERENCE FROM `virtualNetworks/subnets` THAT A READER WILL NOT EXPECT. A Subnet
+      binds to its network through `spec.vpc`, so the containment the address implies is also a fact
+      about the object. SecurityGroupSpec has NO `vpc` field — a SecurityGroup is a cluster-global OVN
+      port group that a PORT names, through its own `…kubernetes.io/security_groups` annotation. So
+      NetworkSecurityGroups.ObjectNameOf folds the network's name in for NAMING, and nothing in the
+      fabric confines the group to that network. ⚠ What it does not cost: it cannot leak, because the
+      rendered name is `{namespace}-{network}-{group}` and the platform resolves a workload's
+      reference by resource id when docs/plan/13's workloads arrive. What it means: the containment is
+      an authorization and naming fact, not a routing one, and a future workload provider must not
+      assume the fabric is checking it.
+  - id: deleting-a-group-removes-the-deny-with-it
+    says: >
+      ⚠ THE INVERSE OF THE USUAL DELETE HAZARD, AND THE REASON IT IS HERE RATHER THAN INFERRED. Every
+      other type in this family strands something on delete; this one strands nothing and the danger
+      is exactly that. A port's security groups are named from its own annotation, so deleting the
+      object removes the port group AND the default-deny that came with it — a workload that was
+      behind this perimeter is behind NO perimeter rather than behind a closed one. docs/plan/08's
+      per-parent child counter does not help, because the dependants are PORTS rather than child
+      resources, and no such port exists yet (`nothing-can-join-a-network-yet`). What would close it
+      is the workload provider refusing to delete a group a live port names.
+  - id: tier-local-address-and-source-ports-are-not-declared
+    says: >
+      SecurityGroupSpec.Tier (0 or 1, lower evaluated first) is an OPERATOR'S layering control and is
+      deliberately unreachable from a tenant body: a group that elected the lower tier would evaluate
+      ahead of a platform policy nobody had written yet. SecurityGroupRule.LocalAddress and the source
+      port range are per-rule refinements this shape has no slot for and no evidence anybody needs at
+      M1. Recorded rather than silently omitted.
+  - id: an-array-of-objects-is-not-expressible
+    says: >
+      The response half, met for a fourth time in this family. NetworkSecurityGroups.SecurityRule is
+      five fields and `POST …/showEffectiveRules` returns `/rules` as an ARRAY OF SENTENCES, because
+      SchemaProperty.ElementKind refuses an array of objects on a response schema exactly as on a
+      request one. ⚠ It is the cheapest of the four places: a sentence is the form a human auditing a
+      firewall wants anyway, and a client that needs the columns can split. The request half is NOT
+      met here — that is the whole subject of this type and it was reshaped rather than surrendered.
+  - id: the-cluster-backed-suite-proves-less-than-it-looks
+    says: >
+      ⚠ WIDER ON THIS TYPE THAN ON ITS TWO SIBLINGS. The k3s the cluster suite starts has no Kube-OVN
+      and no CRDs for it, so the derived stub's schema is x-kubernetes-preserve-unknown-fields and a
+      rule Kube-OVN would refuse is accepted here. What it proves: a cluster-scoped apply reaches the
+      right REST path under the HYPHENATED plural `security-groups`, ADR-013 labels survive real
+      admission, and server-side apply works on an object whose only interesting fields are two atomic
+      arrays. What it does NOT prove: that a single ACL is ever programmed, that the default deny
+      exists, or that `ipVersion: ipv4` is spelled the way the controller wants — every one of those
+      is validateSgRule's, in a controller that is not running. NetworkSecurityGroupTests asserts the
+      rendered manifest, which is the half this repository can check.
+  - id: grafana-dashboard
+    says: >
+      docs/plan/12 § The pattern, once, piece 6 keeps the dashboard chart-side. ⚠ IT DOES NOT APPLY TO
+      THIS TYPE, for charts/managed/kube-ovn-vpc's reason: both of piece 6's branches presuppose a
+      workload to scrape and a SecurityGroup has no pod. What a tenant would want — how many packets
+      each rule dropped — is per-flow data out of Hubble into ClickHouse, docs/plan/14
+      § Observability, which is a pipeline rather than a scrape and is docs/plan/16's rather than this
+      provider's.
