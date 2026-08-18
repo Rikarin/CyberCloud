@@ -960,6 +960,17 @@ logs"*. **The first family whose product is not a workload at all**, and the fir
   > families**: none of them declares a window, and all of them take the hard-delete branch they
   > always took.
 
+  > ⚠ **AND THE SAME MEASUREMENT CORRECTED THIS PROVIDER'S OWN ACCOUNT OF WHAT A WINDOW MEANS.**
+  > `MonitorProvider`'s first draft said a soft-deleted workspace is one whose `VMUser` is gone,
+  > *"so nothing can write to it"*. It is not: **`IResourceReconciler.DeleteAsync` is not called at
+  > all for a type declaring a window**, so the routing object stays, the ingest key still
+  > authenticates, and a collector nobody reconfigured keeps writing into a workspace whose address
+  > answers `404`. ⚠ On a database or an object store a recovery window merely holds disk; **on a
+  > telemetry workspace it holds an open write path**, which is a difference docs/plan/08 does not
+  > anticipate because nothing before this declared a window. The declaration is still right — the
+  > alternative is destroying the tenant's only copy of their logs on a mistaken `DELETE` — and the
+  > gap is at `conformance.yaml § owed`, `a-soft-deleted-workspace-still-accepts-writes`.
+
 - **⚠ A RETENTION A TENANT CAN SHORTEN IS AN IRREVERSIBLE DATA-LOSS PATH AUTHORISED BY A REQUEST THE
   PLATFORM ALREADY ANSWERED `202` TO — fifth sighting of the missing write-path predicate, and the
   first where the consequence is destruction rather than a broken object.** docs/plan/16 prices

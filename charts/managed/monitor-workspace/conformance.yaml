@@ -104,10 +104,12 @@ assertions:
       is still in effect afterwards and every record it held is still readable.
   - id: secrets-never-round-trip
     says: A GET of the resource never returns the ingest key in any form. The only path out is the listKeys action.
-  - id: a-soft-deleted-workspace-stops-accepting-and-keeps-its-data
+  - id: a-soft-deleted-workspace-keeps-its-data-and-a-restore-hands-it-back
     says: >
-      After DELETE, the ingest key authenticates nothing and the old address answers 404 — and a
-      restore inside the seven-day window brings back every record the workspace held.
+      After DELETE the old address answers the canonical 404 and a restore inside the seven-day
+      window brings back every record the workspace held. ⚠ The data plane is deliberately still
+      standing: docs/plan/08 § Soft delete parks the index entry and tears nothing down, because a
+      restore that hands back an empty resource is not a restore.
 
 # ── Owed ────────────────────────────────────────────────────────────────────────────────────────
 #
@@ -183,6 +185,19 @@ owed:
       the blocker CyberCloud.Storage/accounts records against regenerateKeys, and the first where it
       decides a whole resource type rather than one action.
     closes: A two-slot secret shape in ISecretWriter — current and previous, with an expiry on previous.
+  - id: a-soft-deleted-workspace-still-accepts-writes
+    says: >
+      ⚠ Found by declaring the tree's first recovery window rather than reasoned about in advance.
+      A soft delete parks the index entry and leaves the data plane standing — which is right, and
+      which on THIS type means the workspace's VMUser is still in the cluster and its ingest key
+      still authenticates. So a collector nobody reconfigured keeps writing into a workspace whose
+      address answers 404, and the tenant is still billed for the retention. On a database or an
+      object store the same window merely holds disk; here it holds an OPEN WRITE PATH.
+    closes: >
+      Withdrawing the VMUser on the soft delete and restoring it on the restore — which needs a
+      provider seam the reconciler does not have, because DeleteAsync is not called for a
+      soft-deletable type at all. Until then the window is honest about the data and silent about
+      the writes.
   - id: no-external-endpoint
     says: >
       Every endpoint listKeys returns is in-cluster. docs/plan/12 § Cross-cutting decisions requires an

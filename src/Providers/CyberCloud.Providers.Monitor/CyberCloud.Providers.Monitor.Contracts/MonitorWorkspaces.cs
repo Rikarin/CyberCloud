@@ -69,10 +69,11 @@ namespace CyberCloud.Providers.Monitor.Contracts;
 ///         </item>
 ///         <item>
 ///             <b>Soft delete decides the same way.</b> On the shared reading a soft-deleted
-///             workspace is a tenancy whose keys stop authenticating while its partitions sit on
-///             disk until purge: cheap, reversible, and honest. On the deployment reading a recovery
-///             window either keeps a whole cluster running for seven days or is a promise the
-///             platform cannot keep. See <c>MonitorProvider</c>, which declares the window.
+///             workspace is a tenancy whose partitions sit on disk until purge: cheap, reversible
+///             and honest. On the deployment reading a recovery window either keeps a whole cluster
+///             running for seven days or is a promise the platform cannot keep. See
+///             <c>MonitorProvider</c>, which declares the window — and which records what declaring
+///             one turned out to mean, because the first account of it here was wrong.
 ///         </item>
 ///     </list>
 ///     <para>

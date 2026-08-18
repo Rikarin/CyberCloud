@@ -53,11 +53,27 @@ namespace CyberCloud.Providers.Monitor;
 ///     </para>
 ///     <para>
 ///         ⚠ <b>AND THE RECOVERY WINDOW IS CHEAP HERE FOR THE SAME REASON THE TYPE IS NOT A
-///         DEPLOYMENT.</b> A soft-deleted workspace is a tenancy whose <c>VMUser</c> is gone — so
-///         nothing can write to it — while its partitions age out under their existing retention. It
-///         costs disk that was already reserved and no compute at all. On the deployment-shaped
-///         reading, the same window would mean keeping a cluster running for a week per deleted
-///         workspace, and somebody would have quietly made it a soft delete that deletes.
+///         DEPLOYMENT.</b> A soft-deleted workspace keeps its partitions and costs disk that was
+///         already reserved and no compute at all. On the deployment-shaped reading, the same window
+///         would mean keeping a cluster running for a week per deleted workspace, and somebody would
+///         have quietly made it a soft delete that deletes.
+///     </para>
+///     <para>
+///         ⚠ <b>WHAT DECLARING IT ACTUALLY MEANS WAS MEASURED RATHER THAN ASSUMED, AND THE FIRST
+///         VERSION OF THIS PARAGRAPH WAS WRONG.</b> It said a soft-deleted workspace is one whose
+///         <c>VMUser</c> is gone, <i>"so nothing can write to it"</i>. It is not:
+///         <c>ResourceManagerService</c>'s delete path parks the index entry and <b>tears nothing
+///         down</b> — <c>IResourceReconciler.DeleteAsync</c> is not called for a type declaring a
+///         window at all, which is what the shared suite's own recoverable branch asserts and what
+///         the cluster-backed half had to learn. So the routing object stays, the ingest key still
+///         authenticates, and a collector nobody reconfigured keeps writing into a workspace whose
+///         address answers <c>404</c>. ⚠ <b>On a database or an object store the same window merely
+///         holds disk; on this type it holds an OPEN WRITE PATH</b>, which is a difference nothing in
+///         docs/plan/08 anticipates because nothing before this declared a window.
+///         <c>conformance.yaml § owed</c>, <c>a-soft-deleted-workspace-still-accepts-writes</c>.
+///         The window is still the right declaration — the alternative is destroying the tenant's
+///         only copy of their logs on a mistaken <c>DELETE</c> — and the gap is named rather than
+///         traded away.
 ///     </para>
 ///     <para>
 ///         ⚠ <b>What is deliberately NOT declared, each with its reason.</b> No
