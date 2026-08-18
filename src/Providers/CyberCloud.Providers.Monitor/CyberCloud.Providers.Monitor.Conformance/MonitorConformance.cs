@@ -5,6 +5,10 @@ using CyberCloud.Conformance.Harness;
 // one, for the reason MonitorCase.HarnessAddress records.
 using CyberCloud.Core.Resources;
 using CyberCloud.Providers.Monitor.Contracts;
+// ⚠ For OperationState and Shouldly, which only the soft-delete experiment below needs. Every other
+// provider's conformance project is two class declarations and a case, and needs neither.
+using CyberCloud.ResourceManager.Contracts;
+using Shouldly;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
@@ -120,7 +124,97 @@ public sealed class MonitorCase : IProviderCaseSource {
 /// <summary>The shared suite, run against the monitor-workspace provider.</summary>
 /// <param name="cluster">The harness.</param>
 public sealed class MonitorWorkspaceConformance(ProviderTestCluster<MonitorCase> cluster)
-    : ProviderConformanceTests<MonitorCase>(cluster), IClassFixture<ProviderTestCluster<MonitorCase>>;
+    : ProviderConformanceTests<MonitorCase>(cluster), IClassFixture<ProviderTestCluster<MonitorCase>> {
+    /// <summary>
+    ///     A soft-deleted workspace is left standing and is <b>not</b> reconciled back.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>THE QUESTION <c>CyberCloud.ContainerRegistry/registries</c> RAISED, ASKED OF THIS
+    ///         TYPE RATHER THAN INHERITED FROM ITS ANSWER.</b> That row declared a window, measured a
+    ///         soft-deleted resource reconciling its whole data plane back, and withdrew the
+    ///         declaration. The two claims are separable: <i>"the teardown is skipped"</i> is
+    ///         documented behaviour and is what the shared suite's recoverable branch asserts;
+    ///         <i>"and the desired state keeps being applied"</i> is a different statement, and on
+    ///         this type it decides whether a soft delete leaves an <b>authenticated, billed write
+    ///         path</b> to a store the tenant believes is gone.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>WHAT IT DRIVES, AND WHY THAT IS THE HONEST POKE.</b>
+    ///         <c>ProviderConformanceTests.ReconcileOnceAsync</c> calls the reconciler <i>directly</i>,
+    ///         so it would put the objects back for any provider and prove nothing about whether the
+    ///         platform would ever call it. What this drives is the resource's own delete operation,
+    ///         a second time, which is what a stray Orleans reminder or a re-drive after a silo move
+    ///         does. That is the only path in the shipping tree that could re-apply a soft-deleted
+    ///         resource, and <c>OperationGrain.DriveAsync</c>'s soft-delete branch is what stops it —
+    ///         its own remarks say a pass with <c>tearingDown</c> false <i>"would RE-APPLY the desired
+    ///         state of a resource the caller has just deleted"</i>. This test is what makes deleting
+    ///         that branch fail loudly on this type instead of silently un-deleting a tenant's
+    ///         telemetry tenancy.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>It removes the objects behind the platform's back first, because otherwise the
+    ///         assertion is vacuous.</b> The recovery window's own contract is that the objects stay,
+    ///         so "the objects are present afterwards" is true whether or not anything re-applied
+    ///         them. Taking them away first is what makes their <i>return</i> the only thing being
+    ///         measured.
+    ///     </para>
+    /// </remarks>
+    [Fact]
+    public async Task ASoftDeletedWorkspaceIsNotReconciledBackByAStrayDriveOfItsDeleteOperation() {
+        ProviderTestCluster<MonitorCase>.Reset();
+
+        // ⚠ THE DECLARATION IS WITHDRAWN TODAY, AND THIS TEST IS KEPT ARMED RATHER THAN DELETED —
+        // which is the other half of "re-declaring is one line". With no window a DELETE is a hard
+        // delete, so there is no parked resource to poke and the experiment has no subject; it says
+        // so out loud rather than passing over a premise that is not true. Restore
+        // .SupportsSoftDelete on MonitorProvider and this starts asserting again on the same run.
+        if (Cluster.Registry.TryGetType(MonitorWorkspaces.Type, out var registration)
+            && registration.SoftDeleteDays <= 0) {
+            Assert.Skip(
+                "SKIPPED — CyberCloud.Monitor/workspaces declares no recovery window, so a DELETE "
+                + "tears the data plane down and there is nothing parked to drive again. The "
+                + "withdrawal is deliberate and its argument is on MonitorProvider; this experiment "
+                + "is kept so that restoring the declaration restores the assertion with it. "
+                + "conformance.yaml § owed, `soft-delete-is-withdrawn-not-declined`."
+            );
+        }
+
+        var accepted = (await CreateAsync("recoverable")).GetValueOrThrow();
+        await ConvergeAsync(accepted);
+
+        var objects = ObjectsOf(accepted.Resource.Id, "recoverable");
+        objects.Length.ShouldBe(3);
+
+        var deleted = (await DeleteAsync("recoverable")).GetValueOrThrow();
+        (await ConvergeAsync(deleted)).State.ShouldBe(OperationState.Succeeded);
+
+        // The recovery window's own contract, restated here only to establish the starting state.
+        foreach (var target in objects) {
+            Cluster.World.Holds(target).ShouldBeTrue($"'{target}' is gone before the experiment starts");
+        }
+
+        foreach (var target in objects) {
+            Cluster.World.RemoveBehindTheirBack(target).ShouldBeTrue();
+        }
+
+        // ⚠ THE POKE. A completed delete operation, driven again.
+        await Cluster.Operation(ConformanceIds.Tenant, deleted.OperationId).DriveAsync();
+
+        foreach (var target in objects) {
+            Cluster.World.Holds(target).ShouldBeFalse(
+                $"'{target}' came back after the workspace was soft-deleted. On this type that is not "
+                + "an idle resource being maintained: the VMUser is what vmauth authorises writes "
+                + "against, so the tenant's ingest key still works, telemetry keeps landing in a "
+                + "tenancy whose address answers 404, and the retention it accrues is still billed. "
+                + "OperationGrain.DriveAsync's soft-delete branch is what prevents this — if it has "
+                + "been removed or narrowed, withdraw .SupportsSoftDelete from MonitorProvider as "
+                + "CyberCloud.ContainerRegistry/registries did, because a delete that does not delete "
+                + "is worse than no recovery window."
+            );
+        }
+    }
+}
 
 /// <summary>The container-backed half, skipped loudly, against the monitor-workspace provider.</summary>
 public sealed class MonitorWorkspaceBackedConformance()

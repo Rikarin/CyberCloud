@@ -1049,7 +1049,7 @@ first image in the tree that is not a .NET application. All of it is at
 VictoriaMetrics and ClickHouse, [16 § `CyberCloud.Monitor/workspaces`](../../docs/plan/16-observability.md),
 **M1 · 2.5 EM**, and step 7 of [24](../../docs/plan/24-roadmap.md)'s M1 exit story — *"see metrics and
 logs"*. **The first family whose product is not a workload at all**, and the first to declare
-`SupportsSoftDelete`.
+`SupportsSoftDelete` — and then to withdraw it, for a reason it had to measure to find.
 
 ### What the twelfth provider measured
 
@@ -1142,16 +1142,37 @@ logs"*. **The first family whose product is not a workload at all**, and the fir
   > families**: none of them declares a window, and all of them take the hard-delete branch they
   > always took.
 
-  > ⚠ **AND THE SAME MEASUREMENT CORRECTED THIS PROVIDER'S OWN ACCOUNT OF WHAT A WINDOW MEANS.**
-  > `MonitorProvider`'s first draft said a soft-deleted workspace is one whose `VMUser` is gone,
-  > *"so nothing can write to it"*. It is not: **`IResourceReconciler.DeleteAsync` is not called at
-  > all for a type declaring a window**, so the routing object stays, the ingest key still
-  > authenticates, and a collector nobody reconfigured keeps writing into a workspace whose address
-  > answers `404`. ⚠ On a database or an object store a recovery window merely holds disk; **on a
-  > telemetry workspace it holds an open write path**, which is a difference docs/plan/08 does not
-  > anticipate because nothing before this declared a window. The declaration is still right — the
-  > alternative is destroying the tenant's only copy of their logs on a mistaken `DELETE` — and the
-  > gap is at `conformance.yaml § owed`, `a-soft-deleted-workspace-still-accepts-writes`.
+  > ⚠⚠ **AND THE DECLARATION HAS SINCE BEEN WITHDRAWN, WHICH IS THE ACTUAL FINDING.** Two drafts
+  > of that argument were wrong before the third was measured. `IResourceReconciler.DeleteAsync` is
+  > **never called** for a type declaring a window — `OperationGrain.DriveAsync` returns early and
+  > runs no pass — `ParkAsync` states that *"its quota stays committed until it is purged"*, and the
+  > object left standing is the **`VMUser`**, which is the one thing on this row that enforces
+  > anything, because vmauth resolves it the moment it is applied. So a soft-deleted workspace is an
+  > **authenticated, billed, open write path into a store the tenant believes is gone**: a collector
+  > nobody reconfigured keeps writing, the retention keeps accruing, and the only way to stop it is
+  > a purge behind a permission the tenant may not hold. ⚠ On a database or an object store a
+  > recovery window merely holds disk; **here it holds an open ingest endpoint**, which docs/plan/08
+  > does not anticipate because nothing before this declared a window. **A delete that does not
+  > delete is worse than no recovery window**, so it is withdrawn — the same conclusion
+  > `CyberCloud.ContainerRegistry/registries` reached from its own measurement, for a reason that is
+  > worse here rather than merely similar: fifteen idle Harbor objects cost money, and this costs
+  > money *and* silently ingests data.
+  >
+  > ⚠ **What did NOT reproduce is recorded too, because a finding that fails to replicate is worth
+  > as much as one that does.** That row measured a soft-deleted resource *reconciling its whole
+  > data plane back*; on this type that path is not reachable, checked rather than assumed. Driving
+  > the completed delete operation again returns nothing, and disabling `OperationGrain`'s
+  > soft-delete branch makes the pass run with `tearingDown` **true** — `OperationSpec.Kind` is
+  > `Delete` — so it **destroys** the objects instead, failing that experiment and the shared
+  > suite's recoverable branch in the opposite direction. The withdrawal does not rest on it.
+  >
+  > ⚠ **Re-declaring is one line, and that is built rather than promised.** `SoftDeleteDays`, the
+  > purge-protection property the builder refuses the type without, `MonitorDeclarationTests`'
+  > coverage of both, and the conformance experiment — which **skips itself loudly** instead of
+  > being deleted — all stay. **And the cluster-backed suite's `recoverable` branch stays too**: it
+  > reads the registry, costs nothing while no type declares a window, and is what makes the one
+  > line safe when somebody restores it. `conformance.yaml § owed`,
+  > `soft-delete-is-withdrawn-not-declined`.
 
 - **⚠ A RETENTION A TENANT CAN SHORTEN IS AN IRREVERSIBLE DATA-LOSS PATH AUTHORISED BY A REQUEST THE
   PLATFORM ALREADY ANSWERED `202` TO — fifth sighting of the missing write-path predicate, and the

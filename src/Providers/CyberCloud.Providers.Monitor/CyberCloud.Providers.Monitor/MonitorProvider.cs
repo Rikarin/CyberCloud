@@ -36,8 +36,8 @@ namespace CyberCloud.Providers.Monitor;
 ///         it needed no fifth module edge and no seventh project.
 ///     </para>
 ///     <para>
-///         ⚠ <b>IT IS THE FIRST TYPE IN THE TREE TO DECLARE <c>SupportsSoftDelete</c>, AND THAT IS A
-///         DECISION RATHER THAN A DEFAULT.</b> Eleven families declined, each with the same stated
+///         ⚠ <b>IT WAS THE FIRST TYPE IN THE TREE TO DECLARE <c>SupportsSoftDelete</c>, AND THE CASE
+///         FOR THE WINDOW IS RECORDED HERE BECAUSE IT SURVIVES THE WITHDRAWAL BELOW.</b> Eleven families declined, each with the same stated
 ///         reason — the manager did not honour a window — and docs/plan/08 § Soft delete endorsed
 ///         the instinct and ended <i>"the declaration is the last step, not the first"</i>. The
 ///         manager honours it now, so what is left is the provider's own question: <i>does the data
@@ -59,21 +59,63 @@ namespace CyberCloud.Providers.Monitor;
 ///         have quietly made it a soft delete that deletes.
 ///     </para>
 ///     <para>
-///         ⚠ <b>WHAT DECLARING IT ACTUALLY MEANS WAS MEASURED RATHER THAN ASSUMED, AND THE FIRST
-///         VERSION OF THIS PARAGRAPH WAS WRONG.</b> It said a soft-deleted workspace is one whose
-///         <c>VMUser</c> is gone, <i>"so nothing can write to it"</i>. It is not:
-///         <c>ResourceManagerService</c>'s delete path parks the index entry and <b>tears nothing
-///         down</b> — <c>IResourceReconciler.DeleteAsync</c> is not called for a type declaring a
-///         window at all, which is what the shared suite's own recoverable branch asserts and what
-///         the cluster-backed half had to learn. So the routing object stays, the ingest key still
-///         authenticates, and a collector nobody reconfigured keeps writing into a workspace whose
-///         address answers <c>404</c>. ⚠ <b>On a database or an object store the same window merely
-///         holds disk; on this type it holds an OPEN WRITE PATH</b>, which is a difference nothing in
-///         docs/plan/08 anticipates because nothing before this declared a window.
-///         <c>conformance.yaml § owed</c>, <c>a-soft-deleted-workspace-still-accepts-writes</c>.
-///         The window is still the right declaration — the alternative is destroying the tenant's
-///         only copy of their logs on a mistaken <c>DELETE</c> — and the gap is named rather than
-///         traded away.
+///         ⚠⚠ <b>AND THE DECLARATION IS NEVERTHELESS WITHDRAWN, BECAUSE WHAT A WINDOW MEANS ON
+///         THIS TYPE WAS MEASURED AND IS NOT WHAT THE ARGUMENT ABOVE ASSUMES.</b> Two drafts of
+///         this paragraph were wrong before the third was checked. The first said a soft-deleted
+///         workspace is one whose <c>VMUser</c> is gone, <i>"so nothing can write to it"</i>; the
+///         second kept the declaration and filed the gap as owed. Both understated it. The facts,
+///         each read in the shipping source rather than inferred:
+///     </para>
+///     <list type="bullet">
+///         <item>
+///             <c>OperationGrain.DriveAsync</c> returns early for a soft delete and runs <b>no pass
+///             at all</b> — so <c>IResourceReconciler.DeleteAsync</c> is never called and every
+///             object this provider applied is left exactly as it was.
+///         </item>
+///         <item>
+///             <c>ParkAsync</c> says the rest in as many words: <i>"Its quota stays committed until
+///             it is purged."</i> The storage this workspace's retention and allowances draw is
+///             still reserved against the subscription.
+///         </item>
+///         <item>
+///             ⚠ <b>And the object left standing is the one that is NOT inert.</b> The
+///             <c>ConfigMap</c> is read by nothing, because <c>CyberCloud.Ingest.Host</c> does not
+///             exist — for it, "maintained" and "deleted" genuinely are the same state today. The
+///             <c>VMUser</c> is the opposite: vmauth resolves it the moment it is applied, and it is
+///             the one thing on this row that enforces anything at all.
+///         </item>
+///     </list>
+///     <para>
+///         Together those make a soft-deleted workspace an <b>authenticated, billed, open write path
+///         into a store the tenant believes is gone</b>: a collector nobody reconfigured keeps
+///         writing, the data keeps landing in a tenancy whose address answers <c>404</c>, the
+///         retention keeps accruing against quota, and the tenant can see none of it — the only way
+///         to stop it is a purge, which sits behind a permission they may not hold. ⚠ On a database
+///         or an object store a recovery window merely holds disk; here it holds an open ingest
+///         endpoint, which is a difference docs/plan/08 does not anticipate because nothing before
+///         this declared a window. <b>A delete that does not delete is worse than no recovery
+///         window</b>, so the declaration is withdrawn until the platform can withdraw the write
+///         path on park — the same conclusion <c>CyberCloud.ContainerRegistry/registries</c> reached
+///         from its own measurement, for a reason that is worse here rather than merely similar.
+///     </para>
+///     <para>
+///         ⚠ <b>What did NOT reproduce, recorded because a finding that fails to replicate is worth
+///         as much as one that does.</b> That row measured a soft-deleted resource <i>reconciling
+///         its whole data plane back</i>. On this type that path is not reachable, and it was
+///         checked rather than assumed:
+///         <c>MonitorWorkspaceConformance.ASoftDeletedWorkspaceIsNotReconciledBackByAStrayDriveOfItsDeleteOperation</c>
+///         drives the completed delete operation again and nothing returns; and disabling
+///         <c>OperationGrain.DriveAsync</c>'s soft-delete branch makes the pass run with
+///         <c>tearingDown</c> <b>true</b> — <c>OperationSpec.Kind</c> is <c>Delete</c>, so it
+///         <i>destroys</i> the objects rather than re-applying them, failing that test and the
+///         shared suite's recoverable branch in the opposite direction. Whatever produced the
+///         undelete on that row, it is not this path, and this withdrawal does not rest on it.
+///     </para>
+///     <para>
+///         ⚠ <b>The window is still the right declaration for this data</b> — the alternative is
+///         destroying the tenant's only copy of their logs on a mistaken <c>DELETE</c> — which is
+///         why everything it needs is kept rather than removed and re-declaring it is one line.
+///         <c>conformance.yaml § owed</c>, <c>soft-delete-is-withdrawn-not-declined</c>.
 ///     </para>
 ///     <para>
 ///         ⚠ <b>What is deliberately NOT declared, each with its reason.</b> No
@@ -166,14 +208,15 @@ public sealed class MonitorProvider : IResourceProvider {
                 + "retention, quota, ingest key and read-only datasource endpoints."
             )
             .Chart(MonitorWorkspaces.ChartName)
-            // ⚠ SEVEN DAYS, AND THE ARGUMENT IS IN THIS CLASS'S REMARKS RATHER THAN HERE.
-            // `purgeProtection` must be a declared boolean in every api-version or the builder
-            // refuses the type — a flag enforced against a property no schema declares is a
-            // protection that silently never engages.
-            .SupportsSoftDelete(
-                SoftDeleteDays,
-                purgeProtectionPointer: MonitorWorkspaces.PurgeProtectionPointer
-            )
+            // ⚠ THE RECOVERY WINDOW IS WITHDRAWN, AND RE-DECLARING IT IS THIS ONE LINE:
+            //
+            //     .SupportsSoftDelete(SoftDeleteDays, purgeProtectionPointer: MonitorWorkspaces.PurgeProtectionPointer)
+            //
+            // Everything it needs is still here and still asserted — SoftDeleteDays, the
+            // purge-protection property in every api-version, and MonitorDeclarationTests' coverage
+            // of the builder refusal that would catch removing it. What is missing is a platform
+            // behaviour, not a decision, and this class's remarks carry the argument for the window
+            // so that whoever restores the line does not have to rebuild it.
             .SupportsTags()
             .RequiresCluster(MonitorWorkspaces.ClusterIdPointer);
     }
