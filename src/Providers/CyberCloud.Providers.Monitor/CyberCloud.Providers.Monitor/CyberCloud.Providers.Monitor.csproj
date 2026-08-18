@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      docs/plan/03 § Providers — the implementation assembly: "grains, reconcilers, the chart
+      bindings". A reconciler, an action handler and a chart binding; no grain, for the reason the
+      .Contracts .csproj gives.
+
+      ⚠ ITS ENTIRE REFERENCE SET IS ITS OWN .Contracts. Everything else — IResourceReconciler,
+      IResourceActionHandler, ReconcileContext, KubeCommand — arrives through it. docs/plan/07 § The
+      enforcement seam: "Providers never call the engine", which here is mechanical rather than
+      reviewed, because CyberCloud.ResourceManager.Contracts does not reference
+      CyberCloud.Authorization.Contracts and ICheckGrain is therefore not nameable from this assembly.
+
+      ⚠ NO KubernetesClient. docs/plan/03 § Assembly graph rules, rule 3: nothing above
+      CyberCloud.Kubernetes names a k8s.Models type. Two of this type's three objects are core kinds
+      that DO have generated models, which makes this the family most tempted to reach for them —
+      building a ConfigMap and a Secret as JsonObject rather than as V1ConfigMap and V1Secret is what
+      keeps the rule true without anyone having to remember it, and it is also what lets the render
+      write its own `kind` (see MonitorWorkspaces.Matches).
+    -->
+
+    <ItemGroup>
+        <ProjectReference Include="../CyberCloud.Providers.Monitor.Contracts/CyberCloud.Providers.Monitor.Contracts.csproj"/>
+    </ItemGroup>
+
+    <ItemGroup Label="CyberCloud.Analyzers — see CyberCloud.Core.csproj for why this is not a reference">
+        <ProjectReference Include="../../../CyberCloud.Analyzers/CyberCloud.Analyzers.csproj"
+                          OutputItemType="Analyzer"
+                          ReferenceOutputAssembly="false"/>
+    </ItemGroup>
+
+</Project>

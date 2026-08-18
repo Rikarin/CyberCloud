@@ -1,0 +1,57 @@
+# Monitor workspace — docs/plan/16 § CyberCloud.Monitor/workspaces, "M1 · 2.5 EM. The tenant-facing
+# resource. Owns retention, quota, ingest keys, and the datasource wiring."
+#
+# ⚠ THIS CHART DEPLOYS NOTHING. Every other chart under charts/managed/ renders a workload — an
+# operator's custom resource, or the StatefulSets and Services an operator would have made. This one
+# renders two pieces of CONFIGURATION for stores the platform already runs: a vmauth routing rule
+# that pins one tenant to one VictoriaMetrics accountID, and a row that tells the region's ingest
+# host that a workspace exists and what its retention, quota and caps are.
+#
+# ⚠ A WORKSPACE IS A TENANCY, NOT A DEPLOYMENT, and that is the decision this whole row turns on.
+# docs/plan/16 § Ingest routes to "VictoriaMetrics (accountID) | ClickHouse (per-tenant database)" —
+# coordinates inside one store rather than stores — and docs/plan/05 § Every store gives each store
+# one row per region. Decisively, docs/plan/16 puts PLATFORM telemetry "under a platform workspace.
+# No separate stack", so a workspace that provisioned its own store would make the control plane's
+# own reconcile depend on the store that reconcile creates. CyberCloud.Ingest.Host is deliberately
+# not an Orleans client to keep that cycle broken. See MonitorWorkspaces for the five-part argument.
+apiVersion: v2
+name: monitor-workspace
+description: A tenancy in the platform's metrics, logs and traces stores — its own retention tier, daily allowances, cardinality caps, ingest key and read-only datasource endpoints.
+type: application
+
+# The chart's own version. Bumped on every change to this directory.
+version: 0.1.0
+
+# ⚠ THERE IS NO ENGINE TO VERSION. Every other chart's appVersion is the thing it runs; this one runs
+# nothing, so it tracks the api-version of the resource type instead, which is the only version a
+# reader of this chart could act on.
+appVersion: "2026-08-01"
+
+kubeVersion: ">=1.31.0-0"
+
+keywords:
+  - observability
+  - metrics
+  - logs
+  - traces
+  - multitenancy
+
+home: https://docs.victoriametrics.com
+sources:
+  - https://github.com/VictoriaMetrics/operator
+  - https://github.com/VictoriaMetrics/VictoriaMetrics
+
+maintainers:
+  - name: Cyber Cloud Platform
+
+# ⚠ These three are read by `Build.Charts` and written into `values.schema.json` as
+# `x-cybercloud-*`. They are what makes the generated schema addressable as a resource type's
+# body rather than as an anonymous blob of Helm values — docs/plan/12 § The pattern, once, piece 2.
+# A chart under charts/managed/ without them fails the build.
+annotations:
+  cybercloud.io/resource-type: CyberCloud.Monitor/workspaces
+  cybercloud.io/api-version: "2026-08-01"
+  # ⚠ The operator is named because one of the two rendered objects is its CRD — but note that the
+  # operator manages the STORE, which this chart does not create. It is here so a reader knows which
+  # CRD has to be installed for a workspace to converge, not because this chart installs anything.
+  cybercloud.io/operator: victoria-metrics-operator

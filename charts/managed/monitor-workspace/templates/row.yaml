@@ -1,0 +1,64 @@
+{{/*
+The ingest map row — everything CyberCloud.Ingest.Host needs to accept, label, cap and route one
+tenant's telemetry, in one object.
+
+⚠ IT IS A ConfigMap BECAUSE THE READER CANNOT BE AN ORLEANS CLIENT. docs/plan/16 § Ingest describes
+"an ingest key resolved to (tenant, workspace) from a cached map" and does not say how the map is
+filled. The one constraint that decides it is docs/plan/03 § Hosts: CyberCloud.Ingest.Host is
+deliberately NOT an Orleans client, so the control plane cannot tell it anything by grain call. The
+publication has to go through a store the ingest host can read without the control plane, and the
+only such store the platform already operates is Kubernetes. That is a forced design rather than a
+stylistic one — and it is the same argument that keeps the telemetry store from being a resource
+type, read from the other end.
+
+⚠ APPLIED LAST, WHICH IS WHY IT IS THE ONE THE RECONCILER OBSERVES. It names the Secret and depends
+on the VMUser, so a row that appeared first would advertise a workspace as ready while every write to
+it was refused.
+
+⚠ RETENTION IS WRITTEN AS DAYS AND NOT AS THE TIER NAME. The tier is the priced thing and the day
+count is the operational thing; a data plane that had to know the tier table would be a second copy
+of MonitorWorkspaces.RetentionDays, and the two would disagree the first time either moved.
+
+⚠ NOTHING READS THIS YET. CyberCloud.Ingest.Host does not exist — src/Hosts holds four hosts and not
+that one. So every cap and allowance below reaches the meter, the published schema and the cluster,
+and is enforced by nobody. conformance.yaml § owed, `nothing-consumes-the-row`.
+
+⚠ NO CREDENTIAL IS IN HERE. A ConfigMap is readable by anything with a namespace-scoped role, so the
+key stays in the Secret and this carries only the name it is under.
+*/}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "monitorWorkspace.rowName" . }}
+  labels:
+    {{- include "monitorWorkspace.platformLabels" . | nindent 4 }}
+    {{/*
+      ⚠ NOT one of ADR-013's seven, and it is here because the seven cannot answer this question. A
+      watcher wants the ROWS — across every namespace in the region — and `resource-type` is on the
+      Secret and the VMUser too. Encoding "the one whose kind is ConfigMap" as a rule about our label
+      scheme would make the ingest host depend on this provider's object list.
+    */}}
+    cybercloud.io/telemetry-row: workspace
+data:
+  tenantId: {{ .Values.platform.tenantId | quote }}
+  workspaceId: {{ .Values.platform.resourceId | quote }}
+  workspace: {{ include "monitorWorkspace.name" . | quote }}
+  accountId: {{ .Values.workspace.accountId | quote }}
+  database: {{ .Values.workspace.database | quote }}
+  ingestKeySecret: {{ include "monitorWorkspace.keySecretName" . | quote }}
+  retentionMetricsDays: {{ include "monitorWorkspace.metricsDays" . | quote }}
+  retentionLogsDays: {{ include "monitorWorkspace.logsDays" . | quote }}
+  retentionTracesDays: {{ include "monitorWorkspace.tracesDays" . | quote }}
+  quotaMetricsGbPerDay: {{ .Values.quota.metricsGbPerDay | quote }}
+  quotaLogsGbPerDay: {{ .Values.quota.logsGbPerDay | quote }}
+  quotaTracesGbPerDay: {{ .Values.quota.tracesGbPerDay | quote }}
+  seriesCap: {{ .Values.quota.seriesCap | quote }}
+  cardinalityCap: {{ .Values.quota.cardinalityCap | quote }}
+  {{/*
+    ⚠ A CONSTANT, AND IT IS docs/plan/16'S SECOND FAILURE MODE MADE UNREPRESENTABLE. "Silently
+    dropping" is prevented "by making over-quota behaviour sampling with a visible rate rather than a
+    drop". There is therefore no `drop` to write here — the behaviour is not a setting, only the rate
+    is, and the schema's Minimum of 1 stops the rate being a drop under another name.
+  */}}
+  overQuotaBehaviour: "sample"
+  overQuotaSampleRate: {{ .Values.quota.overQuotaSampleRate | quote }}

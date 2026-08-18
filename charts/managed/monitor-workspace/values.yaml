@@ -1,0 +1,94 @@
+# Monitor workspace — the configuration surface, once.
+#
+# ⚠ EVERY NON-`@internal` BLOCK BELOW IS GENERATED from MonitorWorkspaces.Schema2026 by
+# `./build.sh Charts`, and so is values.schema.json. ADR-010 § Which end authors the schema: "The C#
+# ResourceSchema is authored. The chart's @param annotations are generated from it and diffed."
+# Editing a generated row here is undone on the next run and fails the build in between; add the
+# field in C# instead.
+#
+# The `@internal` rows at the end of each level are the ones that are NOT generated. They are
+# carried through as bytes and must sit after every generated key at their own level, so that each
+# level's generated keys are one contiguous run — charts/README.md § What a chart cannot say.
+
+## @param retention {object} How long each signal is kept. Priced per tier — docs/plan/16 § Cost and retention honesty.
+retention:
+  ## @param metrics {string} Metrics retention tier: short is 15 days, standard 90, extended 400. ⚠ Shortening this under an existing workspace destroys the samples already outside the new window, and the reconciler refuses the change rather than applying it.
+  ## @required
+  ## @enum short | standard | extended
+  ## @widget sku
+  metrics: short
+  ## @param logs {string} Logs retention tier: short is 7 days, standard 30, extended 90. ⚠ Shortening this under an existing workspace destroys the lines already outside the new window, and the reconciler refuses the change rather than applying it.
+  ## @required
+  ## @enum short | standard | extended
+  ## @widget sku
+  logs: short
+  ## @param traces {string} Traces retention tier: short is 3 days, standard 14, extended 30. ⚠ Shortening this under an existing workspace destroys the spans already outside the new window, and the reconciler refuses the change rather than applying it.
+  ## @required
+  ## @enum short | standard | extended
+  ## @widget sku
+  traces: short
+
+## @param quota {object} What the workspace may take in per day, and what happens when it takes in more.
+quota:
+  ## @param metricsGbPerDay {integer} Metric samples accepted per day, in gibibytes. This is the first factor of what the workspace draws against the subscription's storage quota; the second is the retention tier.
+  ## @required
+  ## @range 1..10000
+  metricsGbPerDay: 5
+  ## @param logsGbPerDay {integer} Log lines accepted per day, in gibibytes.
+  ## @required
+  ## @range 1..10000
+  logsGbPerDay: 10
+  ## @param tracesGbPerDay {integer} Spans accepted per day, in gibibytes.
+  ## @required
+  ## @range 1..10000
+  tracesGbPerDay: 5
+  ## @param seriesCap {integer} Active metric series the workspace may hold at once. One tenant putting a request id in a metric label is how a shared time-series database dies, so this is a ceiling rather than a guideline.
+  ## @required
+  ## @range 1000..50000000
+  seriesCap: 1000000
+  ## @param cardinalityCap {integer} Distinct values one metric label may take before the series carrying it are rejected. The rejection names the offending label — docs/plan/16 § Ingest — because a rejection nobody can diagnose is one the client just retries.
+  ## @required
+  ## @range 100..1000000
+  cardinalityCap: 20000
+  ## @param overQuotaSampleRate {integer} The percentage of data still accepted once a signal is over its daily allowance. ⚠ It cannot be zero: docs/plan/16 requires that going over quota samples at a visible rate rather than dropping silently, and zero is a silent drop spelled as a rate.
+  ## @required
+  ## @range 1..100
+  overQuotaSampleRate: 10
+
+## @param purgeProtection {boolean} Whether this workspace may be destroyed before its seven-day recovery window is out. Once true it stays true for the rest of the workspace's life, and a purge is refused while it is set.
+## @required
+purgeProtection: false
+
+## @param platform {object} Resource identity injected by the reconciler. Not a tenant-facing setting.
+## @internal Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.
+platform:
+  ## @param tenantId {string} Tenant GUID, rendered into the cybercloud.io/tenant-id label.
+  tenantId: ""
+  ## @param subscriptionId {string} Subscription GUID, rendered into the cybercloud.io/subscription-id label.
+  subscriptionId: ""
+  ## @param resourceGroup {string} Resource group name, rendered into the cybercloud.io/resource-group label.
+  resourceGroup: ""
+  ## @param resourceId {string} Resource GUID, rendered into the cybercloud.io/resource-id label.
+  resourceId: ""
+  ## @param resourceType {string} Fully qualified resource type, rendered into the cybercloud.io/resource-type label.
+  resourceType: CyberCloud.Monitor/workspaces
+  ## @param apiVersion {string} The api-version the resource was last written at, rendered into the cybercloud.io/api-version label.
+  apiVersion: "2026-08-01"
+  ## @param managedBy {string} Value of the cybercloud.io/managed-by label. Constant, and the selector every informer filters on.
+  managedBy: cybercloud
+
+## @param workspace {object} The tenancy coordinates, which are pure functions of the resource's own id.
+## @internal Derived by MonitorWorkspaces.AccountId and MonitorWorkspaces.Database from the resource GUID. A tenant cannot set either — an accountID a tenant could choose is another tenant's metrics.
+workspace:
+  ## @param accountId {string} The VictoriaMetrics accountID this workspace's metrics are written and read under.
+  accountId: ""
+  ## @param database {string} The ClickHouse database this workspace's logs, traces and events live in.
+  database: ""
+
+## @param telemetryNamespace {string} The namespace the region's telemetry stack runs in.
+## @internal Where the platform bundle installs the stores. Not a tenant setting, and nothing in this repository verifies it — a wrong value renders a VMUser that converges and routes to a VMCluster that is not there. See conformance.yaml § owed, `vmcluster-is-named-not-resolved`.
+telemetryNamespace: cybercloud-telemetry
+
+## @param nameOverride {string} Replace the generated object-name stem. Empty means derive it from the release name.
+## @internal Helm plumbing. Nothing about it belongs in a resource body.
+nameOverride: ""

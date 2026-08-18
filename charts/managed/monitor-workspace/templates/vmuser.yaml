@@ -1,0 +1,57 @@
+{{/*
+The VictoriaMetrics operator's `VMUser` — vmauth's routing-and-credential object, and the only thing
+this chart renders that ENFORCES anything.
+
+⚠ THE `target_path_suffix` IS WHAT MAKES TENANCY REAL FOR METRICS. docs/plan/16 § Ingest's first
+load-bearing rule is that "the tenant label is injected by us and overwrites anything the client
+sent". Here nothing is overwritten because nothing is sent: a collector writes to `/api/v1/write`,
+vmauth authenticates the credential, resolves this object, and prefixes the account itself. A tenant
+cannot reach another tenant's account by asking for one.
+
+⚠ SNAKE_CASE, AND IT IS THE GO TAG RATHER THAN THE OPERATOR'S PROSE. `api/operator/v1beta1/
+vmuser_types.go` tags TargetRef's field `target_path_suffix`; the operator's own documentation calls
+it "targetPathSuffix". A document written from the prose applies cleanly — the CRD's schema does not
+refuse an unknown key here — and is IGNORED by vmauth, which is a workspace whose metrics land in
+whatever tenant the url_prefix defaulted to. Nothing in an apply, a read-back or an admission check
+would notice.
+
+⚠ IT NAMES A VMCluster IT DOES NOT CREATE. The three per-tier VMClusters are the region's, installed
+by charts/bundle/. See _helpers.tpl's `monitorWorkspace.metricsCluster` for why there are three of
+them and why the retention tier is what picks one.
+
+⚠ NO LOGS OR TRACES EQUIVALENT EXISTS. ClickHouse has no CRD for "a database with a TTL", so the
+logs half of this workspace is published in the row next door and applied by nothing.
+conformance.yaml § owed, `clickhouse-ttl-is-published-not-applied`.
+*/}}
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMUser
+metadata:
+  name: {{ include "monitorWorkspace.rowName" . }}
+  labels:
+    {{- include "monitorWorkspace.platformLabels" . | nindent 4 }}
+spec:
+  name: {{ include "monitorWorkspace.name" . | quote }}
+  username: {{ include "monitorWorkspace.rowName" . | quote }}
+  {{/*
+    ⚠ passwordRef, NOT password. The credential belongs in the Secret the reconciler writes;
+    inlining it would put a live ingest key into an object that is not a Secret and into the
+    desired-state document the drift scanner keeps.
+  */}}
+  passwordRef:
+    name: {{ include "monitorWorkspace.keySecretName" . }}
+    key: ingestKey
+  targetRefs:
+    - crd:
+        kind: VMCluster/vminsert
+        name: {{ include "monitorWorkspace.metricsCluster" . }}
+        namespace: {{ .Values.telemetryNamespace }}
+      paths:
+        - /
+      target_path_suffix: {{ printf "/insert/%s/prometheus" .Values.workspace.accountId | quote }}
+    - crd:
+        kind: VMCluster/vmselect
+        name: {{ include "monitorWorkspace.metricsCluster" . }}
+        namespace: {{ .Values.telemetryNamespace }}
+      paths:
+        - /
+      target_path_suffix: {{ printf "/select/%s/prometheus" .Values.workspace.accountId | quote }}

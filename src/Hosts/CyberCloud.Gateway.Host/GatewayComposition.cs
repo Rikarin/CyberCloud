@@ -89,7 +89,7 @@ public static class GatewayComposition {
         // O(interested) rather than O(pods).
         builder.Services.AddSignalR();
 
-        // ⚠ THE ELEVEN PROVIDER MODULES ARRIVE HERE, and until they did this host's IProviderRegistry
+        // ⚠ THE TWELVE PROVIDER MODULES ARRIVE HERE, and until they did this host's IProviderRegistry
         // was built from an empty set. GatewayHostModule's [DependsOn] list is what registers them;
         // AddCyberCloudGateway above is what registers the registry that reads them, and the order does
         // not matter because the registry is a factory resolved after all wiring.

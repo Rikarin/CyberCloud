@@ -202,6 +202,32 @@ CyberCloud.Vault -> CyberCloud.ResourceManager
 # ⚠ What it costs is that the selector is unverifiable from here: the tenant-wide rule matches
 # namespaces nothing in this repository labels. See
 # charts/managed/cloud-shell/conformance.yaml § owed, `namespaces-are-not-labelled`.
+# ⚠ AND CyberCloud.Providers.Monitor IS THE FAMILY MOST OBVIOUSLY OWED A FIFTH LINE AND TAKES NONE,
+# WHICH IS WORTH MORE THAN THE TEN AGREEMENTS ABOVE IT. docs/plan/16 makes the platform its own first
+# customer — platform telemetry runs "under a platform workspace. No separate stack." — so the naive
+# reading is that every module reaches CyberCloud.Providers.Monitor to emit, and that this family
+# reaches CyberCloud.Metering to bill. NEITHER LINE EXISTS AND NEITHER MAY:
+#
+#   * NOTHING REACHES THIS FAMILY TO EMIT TELEMETRY. Emission goes to CyberCloud.Ingest.Host over
+#     OTLP, which docs/plan/03 § Hosts makes deliberately NOT an Orleans client. If a module
+#     referenced this one to publish a metric, telemetry would run through the control plane, and the
+#     control plane's own reconcile would depend on a resource type whose reconcile emits telemetry.
+#     That is the dependency cycle MonitorWorkspaces' clause 4 exists to refuse, and the empty column
+#     here is what keeps it refused at compile time rather than by memory.
+#   * THIS FAMILY REACHES NOTHING TO BILL. Retention and quota reach billing the way every other
+#     provider's amounts do — through a declared MeterDerivation the resource manager reads — which is
+#     an edge to CyberCloud.ResourceManager that line 4 below already grants.
+#
+# ⚠ WHAT IT DOES SHARE WITH CyberCloud.Providers.Network IS BEING A FAMILY OTHERS WILL WANT A LINE
+# **TO**. docs/plan/16 § What the platform monitors about itself lists ten platform signals — grain
+# call latency, reconcile queue depth, ReBAC check p99 — every one of which is produced by a module in
+# this file. The route for all ten is the same and is not an assembly edge: OpenTelemetry through
+# CyberCloud.ServiceDefaults, which every module already reaches, into a host that is not in this
+# file's scope. Recorded BEFORE the first platform dashboard exists, so that whoever wires the tenth
+# signal finds the refusal and the alternative rather than discovering the edge is easy.
+#
+# ⚠ FOUR EDGES, THE SAME FOUR, FOR THE TWELFTH FAMILY — over the first resource type in the catalogue
+# whose product is not a workload at all.
 CyberCloud.Providers.Analytics -> CyberCloud.Core
 CyberCloud.Providers.Analytics -> CyberCloud.Kubernetes
 CyberCloud.Providers.Analytics -> CyberCloud.ResourceManager
@@ -230,6 +256,10 @@ CyberCloud.Providers.Messaging -> CyberCloud.Core
 CyberCloud.Providers.Messaging -> CyberCloud.Kubernetes
 CyberCloud.Providers.Messaging -> CyberCloud.ResourceManager
 CyberCloud.Providers.Messaging -> CyberCloud.Tenancy
+CyberCloud.Providers.Monitor -> CyberCloud.Core
+CyberCloud.Providers.Monitor -> CyberCloud.Kubernetes
+CyberCloud.Providers.Monitor -> CyberCloud.ResourceManager
+CyberCloud.Providers.Monitor -> CyberCloud.Tenancy
 CyberCloud.Providers.Network -> CyberCloud.Core
 CyberCloud.Providers.Network -> CyberCloud.Kubernetes
 CyberCloud.Providers.Network -> CyberCloud.ResourceManager

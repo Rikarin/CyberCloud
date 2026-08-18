@@ -18,7 +18,7 @@
         CyberCloud.Tenancy              TenantDirectoryCache — the in-process snapshot stage 3 reads.
         CyberCloud.ResourceManager      Stage 8 dispatches to it. docs/plan/08 calls it "a service
                                         held by the gateway".
-        Providers.*.Application         ⚠ ELEVEN OF THEM, AND RULE 5 IS WHAT MAKES THEM LEGAL —
+        Providers.*.Application         ⚠ TWELVE OF THEM, AND RULE 5 IS WHAT MAKES THEM LEGAL —
                                         "the gateway references no provider IMPLEMENTATION assembly,
                                         only .Contracts and .Application". Stage 6 resolves a path
                                         against IProviderRegistry, the registry is built from the
@@ -99,7 +99,7 @@
     </ItemGroup>
 
     <!--
-      ── Every provider module, the same eleven the silo loads ───────────────────────────────────
+      ── Every provider module, the same twelve the silo loads ───────────────────────────────────
 
       ⚠ THE .Application PROJECT AND NEVER THE IMPLEMENTATION, which is rule 5 stated as a build
       graph. Each of these references its own provider implementation, so the implementations do end
@@ -122,6 +122,7 @@
         <ProjectReference Include="../../Providers/CyberCloud.Providers.DBforPostgreSQL/CyberCloud.Providers.DBforPostgreSQL.Application/CyberCloud.Providers.DBforPostgreSQL.Application.csproj"/>
         <ProjectReference Include="../../Providers/CyberCloud.Providers.DocumentDB/CyberCloud.Providers.DocumentDB.Application/CyberCloud.Providers.DocumentDB.Application.csproj"/>
         <ProjectReference Include="../../Providers/CyberCloud.Providers.Messaging/CyberCloud.Providers.Messaging.Application/CyberCloud.Providers.Messaging.Application.csproj"/>
+        <ProjectReference Include="../../Providers/CyberCloud.Providers.Monitor/CyberCloud.Providers.Monitor.Application/CyberCloud.Providers.Monitor.Application.csproj"/>
         <ProjectReference Include="../../Providers/CyberCloud.Providers.Network/CyberCloud.Providers.Network.Application/CyberCloud.Providers.Network.Application.csproj"/>
         <ProjectReference Include="../../Providers/CyberCloud.Providers.Sample/CyberCloud.Providers.Sample.Application/CyberCloud.Providers.Sample.Application.csproj"/>
         <ProjectReference Include="../../Providers/CyberCloud.Providers.Search/CyberCloud.Providers.Search.Application/CyberCloud.Providers.Search.Application.csproj"/>

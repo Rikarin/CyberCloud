@@ -5,6 +5,7 @@ using CyberCloud.Providers.DBforMySQL.Application;
 using CyberCloud.Providers.DBforPostgreSQL.Application;
 using CyberCloud.Providers.DocumentDB.Application;
 using CyberCloud.Providers.Messaging.Application;
+using CyberCloud.Providers.Monitor.Application;
 using CyberCloud.Providers.Network.Application;
 using CyberCloud.Providers.Sample.Application;
 using CyberCloud.Providers.Search.Application;
@@ -50,6 +51,7 @@ namespace CyberCloud.Silo.Host;
 [DependsOn(typeof(PostgresApplicationModule))]
 [DependsOn(typeof(DocumentDbApplicationModule))]
 [DependsOn(typeof(MessagingApplicationModule))]
+[DependsOn(typeof(MonitorApplicationModule))]
 [DependsOn(typeof(NetworkApplicationModule))]
 [DependsOn(typeof(SampleApplicationModule))]
 [DependsOn(typeof(SearchApplicationModule))]
