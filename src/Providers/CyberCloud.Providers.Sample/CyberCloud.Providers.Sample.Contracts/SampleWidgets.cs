@@ -178,6 +178,14 @@ public static class SampleWidgets {
             ]
         );
 
+    /// <summary>The action a widget declares.</summary>
+    /// <remarks>
+    ///     ⚠ A constant rather than the literal the provider used to pass, because
+    ///     <c>WidgetPingHandler.Action</c> has to report the same string and the dispatcher refuses
+    ///     the two if they disagree. A literal in two files is a refusal waiting for the first typo.
+    /// </remarks>
+    public const string PingAction = "ping";
+
     /// <summary>
     ///     What a <c>POST …/ping</c> carries.
     /// </summary>
