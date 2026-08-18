@@ -51,7 +51,6 @@ monitoring:
   enabled: true
 
 ## @param purgeProtection {boolean} Whether this registry may be destroyed before its seven-day recovery window is out. Once true it stays true for the rest of the registry's life, and a purge is refused while it is set — a flag whose holder can clear it and then purge is one round-trip of protection.
-## @required
 purgeProtection: false
 
 ## @param platform {object} Resource identity injected by the reconciler. Not a tenant-facing setting.

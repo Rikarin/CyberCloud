@@ -906,15 +906,25 @@ public static class ContainerRegistries {
 
                 // ── Soft delete ──────────────────────────────────────────────────────────────
                 //
-                // ⚠ REQUIRED BY THE BUILDER RATHER THAN OPTIONAL BY CHOICE.
-                // IResourceTypeBuilder.SupportsSoftDelete refuses a type whose schema does not declare
-                // its purge-protection pointer as a boolean, because a flag the platform enforces
-                // against a property no schema declares is a protection that silently never engages —
-                // and "silently never engages" is the one failure mode a protection may not have.
+                // ⚠ DECLARED BECAUSE THE BUILDER REFUSES THE WINDOW WITHOUT IT, AND OPTIONAL BECAUSE
+                // THE BUILDER SAYS SO IN AS MANY WORDS. ProviderBuilder.CheckPurgeProtection demands
+                // that every api-version declare the pointer as a boolean — a flag the platform
+                // enforces against a property no schema declares is a protection that fails silently
+                // open — and its own remarks add that it is "optional rather than required, which is
+                // the opposite of the cluster id … requiring every caller to send false would be a
+                // required field whose only honest value is the default".
+                //
+                // ⚠ AND REQUIRED WOULD HAVE BEEN A BREAKING CHANGE TO A SHIPPED api-version, which is
+                // how the rule was rediscovered. The first draft copied CyberCloud.Monitor/workspaces
+                // and marked it required; the OpenAPI compatibility gate refused it by name —
+                // "[required-added] 'purgeProtection' was optional and is now required. Every request
+                // that was valid and omitted it is now invalid" — because 2026-08-01 is served and a
+                // new required property is a new api-version. ⚠ Monitor's IS required, which
+                // predates this and contradicts the builder's remarks; relaxing it is compatible and
+                // is not this row's to do.
                 new(
                     PurgeProtectionPointer,
                     SchemaKind.Boolean,
-                    Required: true,
                     Description: "Whether this registry may be destroyed before its seven-day recovery "
                     + "window is out. Once true it stays true for the rest of the registry's life, and "
                     + "a purge is refused while it is set — a flag whose holder can clear it and then "
@@ -1784,7 +1794,7 @@ public static class ContainerRegistries {
     /// <param name="location">The region.</param>
     /// <param name="purgeProtection">
     ///     Whether the registry refuses a purge for the rest of its recovery window. ⚠ Written even
-    ///     when <see langword="false" />, because the schema makes it required.
+    ///     when <see langword="false" />, because the write path stores a body as sent.
     /// </param>
     /// <remarks>
     ///     ⚠ Every property it writes is a <b>leaf</b>. <c>ResourceSchema.Project</c> skips a
@@ -1808,12 +1818,10 @@ public static class ContainerRegistries {
                 ["replicas"] = replicas,
                 ["storage"] = new JsonObject { ["size"] = storageSize },
                 ["monitoring"] = new JsonObject { ["enabled"] = true },
-                // ⚠ Present rather than omitted, because the property is REQUIRED — the builder
-                // refuses a recovery window whose purge-protection pointer is optional, since an
-                // absent flag would be read as "off" and a protection that defaults to off silently
-                // is one nobody can tell from one that never engages. The write path stores a body as
-                // sent and does not substitute defaults, so every helper that builds one has to say
-                // it.
+                // ⚠ Written even when false, though the property is OPTIONAL. The write path stores a
+                // body as sent and does not substitute defaults, so a helper that omitted it would
+                // produce a resource whose purge protection reads as absent rather than as off — the
+                // same value today, and a different one the day anything distinguishes them.
                 ["purgeProtection"] = purgeProtection
             }
         }.ToJsonString();
