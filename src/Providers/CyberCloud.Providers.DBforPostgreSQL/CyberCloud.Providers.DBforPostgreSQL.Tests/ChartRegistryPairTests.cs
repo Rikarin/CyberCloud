@@ -151,10 +151,18 @@ public sealed partial class ChartRegistryPairTests {
             + "`parameters` rather than inside it."
         );
 
-        // ⚠ It ranges over the SAME property the schema's allow-list constrains and that
-        // PostgresServers.Extensions reads, so the two spellings render the same libraries and not
-        // only the same shape.
-        block.Groups[1].Value.ShouldContain("range .Values.extensions");
+        // ⚠ It ranges over `$libraries` — the list this template DERIVES from `.Values.extensions`
+        // through the catalogue at the top of the file — and not over the allow-list itself. Ranging
+        // over `.Values.extensions` here is what asked the postmaster to preload `pgvector` and
+        // `postgis`, neither of which is a library. TheExtensionCatalogueIsTheChartsExtensionCatalogue
+        // checks the table the derivation reads.
+        block.Groups[1].Value.ShouldContain(
+            "range $libraries",
+            customMessage: "the chart's shared_preload_libraries list is built from something other "
+            + "than the derived $libraries. If it ranges over .Values.extensions it names every "
+            + "allowed value as a library, and pgvector and postgis are not libraries — an entry with "
+            + "nothing behind it stops the postmaster from starting."
+        );
 
         var parameters = Regex.Match(
             cluster,
@@ -178,7 +186,74 @@ public sealed partial class ChartRegistryPairTests {
         parameters.Groups[1].Value.ShouldContain("max_connections");
     }
 
+    [Fact]
+    public void TheExtensionCatalogueIsTheChartsExtensionCatalogue() {
+        // ⚠ THE SECOND LOOKUP TABLE THIS PAIR CARRIES TWICE, and it is the one whose drift is
+        // invisible from either side. PostgresServers.ExtensionCatalogue and the `$catalogue` dict at
+        // the top of templates/cluster.yaml both map an allow-list value to the EXTENSION it installs
+        // as and the LIBRARY it needs preloaded, and those are different strings — `pgvector` installs
+        // as `vector` and preloads nothing.
+        //
+        // Getting one row wrong in one spelling produces either a CREATE EXTENSION that fails inside a
+        // bootstrap job, or a shared_preload_libraries entry with no library behind it — which the
+        // postmaster refuses at startup, for every database on the instance. Neither failure reaches
+        // the resource, and no emitter reads a Helm template, so this comparison is what holds them
+        // together. Same reason as TheSizingTableIsTheChartsSizingTable, higher price.
+        var chart = HelperExtensions();
+
+        chart.Count.ShouldBe(
+            PostgresServers.ExtensionCatalogue.Count,
+            "the `$catalogue` dict in templates/cluster.yaml and PostgresServers.ExtensionCatalogue "
+            + "are different sizes"
+        );
+
+        foreach (var (value, names) in chart) {
+            PostgresServers.ExtensionCatalogue.TryGetValue(value, out var mine).ShouldBeTrue(
+                $"'{value}' is in templates/cluster.yaml's `$catalogue` and not in "
+                + "PostgresServers.ExtensionCatalogue"
+            );
+
+            mine.ShouldBe(names, value);
+        }
+    }
+
     // ── Reading the chart ─────────────────────────────────────────────────────────────────────
+
+    /// <summary>The <c>$catalogue</c> extension table, read out of <c>templates/cluster.yaml</c>.</summary>
+    /// <remarks>
+    ///     ⚠ In <c>cluster.yaml</c> rather than <c>_helpers.tpl</c> because a <c>define</c> returns a
+    ///     string and not a <c>dict</c>, so splitting the table across two helpers — one per
+    ///     vocabulary — would have been the same duplication one file lower down. A regular expression
+    ///     over the template rather than a <c>helm template</c> render, for
+    ///     <see cref="HelperPresets" />'s reason.
+    /// </remarks>
+    static ImmutableDictionary<string, (string ExtensionName, string PreloadLibrary)> HelperExtensions() {
+        var found = ImmutableDictionary.CreateBuilder<string, (string, string)>(StringComparer.Ordinal);
+
+        foreach (var line in Embedded("postgres.cluster.yaml").Split('\n')) {
+            var match = CatalogueLine.Match(line);
+
+            if (match.Success) {
+                found[match.Groups["value"].Value] =
+                    (match.Groups["extension"].Value, match.Groups["preload"].Value);
+            }
+        }
+
+        return found.ToImmutable();
+    }
+
+    /// <remarks>
+    ///     ⚠ <c>\s+</c> between every field, and <c>[^"]*</c> rather than <c>[^"]+</c> for the preload
+    ///     name — <c>""</c> is a legal and load-bearing value there, meaning "this extension needs no
+    ///     preload entry", and a pattern demanding one character would have silently skipped exactly
+    ///     the two rows the defect was about. The count assertion in
+    ///     <see cref="TheExtensionCatalogueIsTheChartsExtensionCatalogue" /> is what catches a rewrite
+    ///     this stops matching.
+    /// </remarks>
+    [GeneratedRegex(
+        """^\s*"(?<value>[^"]+)"\s+\(dict\s+"extension"\s+"(?<extension>[^"]+)"\s+"preload"\s+"(?<preload>[^"]*)"\)"""
+    )]
+    private static partial Regex CatalogueLine { get; }
 
     /// <summary>Every <c>pattern</c> keyword in the generated schema, with the pointer carrying it.</summary>
     static IEnumerable<(string Pointer, string Pattern)> Patterns(JsonObject node) {

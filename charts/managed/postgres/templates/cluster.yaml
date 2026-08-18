@@ -4,6 +4,35 @@ CloudNativePG `Cluster` — docs/plan/12 § The catalogue, PostgreSQL.
 ⚠ This renders a custom resource; it does not install the operator. The operator is
 charts/bundle/'s job, which is why this chart has no CRD directory and no operator Deployment.
 */}}
+{{/*
+The extension allow-list, mapped to the two names PostgreSQL knows each value by.
+
+⚠ ONE LIST, TWO VOCABULARIES. `.Values.extensions` reaches `CREATE EXTENSION` as an EXTENSION name
+and `shared_preload_libraries` as a LIBRARY name, and those are not the same string. `pgvector`
+installs as the extension `vector`; `pgvector` and `postgis` need no preload entry at all, while
+`timescaledb` and `pg_stat_statements` refuse to work without one. Rendering the raw value into both
+produced a `CREATE EXTENSION pgvector` that fails and asked the postmaster to preload two libraries
+that do not exist — and a `shared_preload_libraries` entry with no library behind it fails STARTUP,
+for every database on the instance.
+
+⚠ PostgresServers.ExtensionCatalogue is the same table in C# and
+ChartRegistryPairTests.TheExtensionCatalogueIsTheChartsExtensionCatalogue compares them row for row.
+A value with no row here renders as itself, which is what values.schema.json's enum makes
+unreachable — see conformance.yaml § owed, `extension-names-are-not-library-names`.
+*/}}
+{{- $catalogue := dict
+  "pgvector"           (dict "extension" "vector"             "preload" "")
+  "postgis"            (dict "extension" "postgis"            "preload" "")
+  "pg_stat_statements" (dict "extension" "pg_stat_statements" "preload" "pg_stat_statements")
+  "timescaledb"        (dict "extension" "timescaledb"        "preload" "timescaledb") -}}
+{{- $libraries := list -}}
+{{- range .Values.extensions -}}
+{{- $row := get $catalogue . | default dict -}}
+{{- with get $row "preload" -}}
+{{- $libraries = append $libraries . -}}
+{{- end -}}
+{{- end -}}
+{{- $libraries = uniq $libraries -}}
 apiVersion: postgresql.cnpg.io/v1
 kind: Cluster
 metadata:
@@ -34,10 +63,13 @@ spec:
       IncludingSharedPreloadLibraries. So no non-empty list could ever have passed. The default here
       is `[]`, which is why nothing noticed. See conformance.yaml § owed,
       `shared-preload-libraries-is-not-a-parameter`.
+
+      ⚠ AND THE LIST IS `$libraries`, NOT `.Values.extensions` — the header of this file explains why
+      the two are different lists. A body naming only pgvector renders no key here at all.
     */}}
-    {{- if .Values.extensions }}
+    {{- if $libraries }}
     shared_preload_libraries:
-      {{- range .Values.extensions }}
+      {{- range $libraries }}
       - {{ . }}
       {{- end }}
     {{- end }}
@@ -65,9 +97,15 @@ spec:
         name: {{ include "postgres.name" . }}-app
       {{- end }}
       {{- if .Values.extensions }}
+      {{/*
+        ⚠ The EXTENSION name from the catalogue at the top of this file, not the allow-list value.
+        `CREATE EXTENSION pgvector` fails — the control file is named `vector` — and the failure lands
+        in the bootstrap job rather than on the resource, so the server comes up without the feature.
+      */}}
       postInitApplicationSQL:
         {{- range .Values.extensions }}
-        - CREATE EXTENSION IF NOT EXISTS {{ . }};
+        {{- $row := get $catalogue . | default (dict "extension" .) }}
+        - CREATE EXTENSION IF NOT EXISTS {{ get $row "extension" }};
         {{- end }}
       {{- end }}
 

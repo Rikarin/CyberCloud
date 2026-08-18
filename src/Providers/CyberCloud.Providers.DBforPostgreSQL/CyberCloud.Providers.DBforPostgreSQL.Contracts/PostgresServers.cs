@@ -534,6 +534,66 @@ public static class PostgresServers {
             ["s1.4xlarge"] = ("16", "64Gi")
         }.ToFrozenDictionary(StringComparer.Ordinal);
 
+    /// <summary>
+    ///     Each allowed value of <c>/properties/extensions</c>, and the two names PostgreSQL knows it
+    ///     by: the extension <c>CREATE EXTENSION</c> installs, and the library the postmaster must
+    ///     preload — <c>""</c> when there is none.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>THE ALLOW-LIST IS ONE LIST AND POSTGRESQL READS IT AS TWO VOCABULARIES.</b>
+    ///         <c>/properties/extensions</c> reaches <c>bootstrap.initdb.postInitApplicationSQL</c> as
+    ///         an extension name and <c>spec.postgresql.shared_preload_libraries</c> as a library name,
+    ///         and for two of the four values those are different strings — or, for two others, there
+    ///         is no library at all. Rendering the raw value into both produced a <c>CREATE
+    ///         EXTENSION pgvector</c> that fails, and asked the postmaster to preload <c>pgvector</c>
+    ///         and <c>postgis</c>, neither of which is a library. <c>conformance.yaml § owed</c>,
+    ///         <c>extension-names-are-not-library-names</c>.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>A failed preload is a cluster that never starts, not an extension that is
+    ///         missing.</b> <c>shared_preload_libraries</c> is read by the postmaster before it accepts
+    ///         a connection, so a name with no library behind it fails startup for every database on
+    ///         the instance rather than for the one feature that wanted it.
+    ///     </para>
+    ///     <para>
+    ///         Each row was read at the version this chart's <c>/properties/version</c> offers, on
+    ///         2026-08-18:
+    ///         <list type="bullet">
+    ///             <item>
+    ///                 <c>pgvector</c> installs as <c>vector</c> — the project's own README says
+    ///                 <c>CREATE EXTENSION vector</c> — and names no preload requirement.
+    ///             </item>
+    ///             <item><c>postgis</c> installs as <c>postgis</c> and names no preload requirement.</item>
+    ///             <item>
+    ///                 <c>pg_stat_statements</c> is a contrib module whose documentation says it
+    ///                 <i>"must be loaded by adding pg_stat_statements to shared_preload_libraries …
+    ///                 because it requires additional shared memory"</i>, and the library is spelled
+    ///                 the same as the extension.
+    ///             </item>
+    ///             <item>
+    ///                 <c>timescaledb</c> refuses to install unpreloaded:
+    ///                 <c>extension_load_without_preload</c> in <c>src/extension_utils.c</c> raises
+    ///                 <i>"extension \"timescaledb\" must be preloaded"</i> with the hint
+    ///                 <i>"Please preload the timescaledb library via shared_preload_libraries"</i>.
+    ///             </item>
+    ///         </list>
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>This is the same shape as <see cref="Presets" /> and it has the same second copy:</b>
+    ///         <c>charts/managed/postgres/templates/cluster.yaml</c> carries the table too, because no
+    ///         emitter reads a Helm template. <c>ChartRegistryPairTests.TheExtensionCatalogueIsTheChartsExtensionCatalogue</c>
+    ///         diffs them row for row, which is the check the placement defect did not have.
+    ///     </para>
+    /// </remarks>
+    public static FrozenDictionary<string, (string ExtensionName, string PreloadLibrary)> ExtensionCatalogue { get; } =
+        new Dictionary<string, (string, string)>(StringComparer.Ordinal) {
+            ["pgvector"] = ("vector", ""),
+            ["postgis"] = ("postgis", ""),
+            ["pg_stat_statements"] = ("pg_stat_statements", "pg_stat_statements"),
+            ["timescaledb"] = ("timescaledb", "timescaledb")
+        }.ToFrozenDictionary(StringComparer.Ordinal);
+
     /// <summary>The pointers <see cref="Schema2026" /> declares, in declaration order.</summary>
     public static ImmutableArray<string> Pointers2026 { get; } =
         [.. Schema2026.Properties.Select(x => x.JsonPointer)];
@@ -615,7 +675,8 @@ public static class PostgresServers {
         ArgumentException.ThrowIfNullOrEmpty(name);
 
         var (cpu, memory) = Resources(desired);
-        var extensions = Extensions(desired);
+        var extensionNames = ExtensionNames(desired);
+        var libraries = PreloadLibraries(desired);
 
         // ⚠ `shared_preload_libraries` is a SIBLING of `parameters`, not a key inside it, and it is a
         // LIST rather than a comma-joined string. api/v1/cluster_types.go declares
@@ -630,16 +691,21 @@ public static class PostgresServers {
         // IncludingSharedPreloadLibraries, so the sanitized value stays at the default settings'
         // empty string and every non-empty list this renderer could produce differs from it. See
         // charts/managed/postgres/conformance.yaml § owed, `shared-preload-libraries-is-not-a-parameter`.
+        //
+        // ⚠ AND THE LIST IS NOT THE ALLOW-LIST. A library name is not an extension name — see
+        // `ExtensionCatalogue`. `pgvector` and `postgis` need no preload entry at all, so a body
+        // asking only for those renders no `shared_preload_libraries` key; `timescaledb` and
+        // `pg_stat_statements` do, under those exact names.
         var parameters = new JsonObject { ["max_connections"] = "200" };
         var postgresql = new JsonObject();
 
-        if (extensions.Length > 0) {
-            var libraries = new JsonArray();
-            foreach (var extension in extensions) {
-                libraries.Add(extension);
+        if (libraries.Length > 0) {
+            var declared = new JsonArray();
+            foreach (var library in libraries) {
+                declared.Add(library);
             }
 
-            postgresql["shared_preload_libraries"] = libraries;
+            postgresql["shared_preload_libraries"] = declared;
         }
 
         postgresql["parameters"] = parameters;
@@ -650,9 +716,12 @@ public static class PostgresServers {
             ["secret"] = new JsonObject { ["name"] = CredentialSecretName(name) }
         };
 
-        if (extensions.Length > 0) {
+        // ⚠ The EXTENSION name, which for pgvector is `vector`. `CREATE EXTENSION pgvector` fails —
+        // there is no control file by that name — and the failure lands in the bootstrap job rather
+        // than on the resource, so the server comes up without the feature the tenant asked for.
+        if (extensionNames.Length > 0) {
             var statements = new JsonArray();
-            foreach (var extension in extensions) {
+            foreach (var extension in extensionNames) {
                 statements.Add("CREATE EXTENSION IF NOT EXISTS " + extension + ";");
             }
 
@@ -840,6 +909,50 @@ public static class PostgresServers {
         foreach (var element in array.EnumerateArray()) {
             if (element.ValueKind is JsonValueKind.String && element.GetString() is { Length: > 0 } text) {
                 found.Add(text);
+            }
+        }
+
+        return found.ToImmutable();
+    }
+
+    /// <summary>
+    ///     The extension names <c>CREATE EXTENSION</c> installs, one per value the body listed and in
+    ///     that order.
+    /// </summary>
+    /// <param name="desired">The validated desired body.</param>
+    /// <remarks>
+    ///     ⚠ A value with no row in <see cref="ExtensionCatalogue" /> renders as itself. The schema's
+    ///     <c>AllowedValues</c> makes that unreachable through the API — and a renderer that dropped
+    ///     the value instead would turn a catalogue row somebody forgot to add into an extension that
+    ///     silently never installs, which is the failure this whole table exists to end.
+    /// </remarks>
+    public static ImmutableArray<string> ExtensionNames(JsonElement desired) {
+        var found = ImmutableArray.CreateBuilder<string>();
+        foreach (var extension in Extensions(desired)) {
+            found.Add(ExtensionCatalogue.TryGetValue(extension, out var row) ? row.ExtensionName : extension);
+        }
+
+        return found.ToImmutable();
+    }
+
+    /// <summary>
+    ///     The libraries <c>spec.postgresql.shared_preload_libraries</c> must carry for the extensions
+    ///     a body asks for, in the order the body listed them and without repeats.
+    /// </summary>
+    /// <param name="desired">The validated desired body.</param>
+    /// <returns>
+    ///     Empty when nothing the body asked for needs preloading — which is the case for a body that
+    ///     names only <c>pgvector</c>, <c>postgis</c>, or neither. ⚠ Empty means the key is not
+    ///     rendered at all rather than rendered empty, because <c>shared_preload_libraries</c> is a
+    ///     field this provider owns under server-side apply for as long as it writes it.
+    /// </returns>
+    public static ImmutableArray<string> PreloadLibraries(JsonElement desired) {
+        var found = ImmutableArray.CreateBuilder<string>();
+        foreach (var extension in Extensions(desired)) {
+            if (ExtensionCatalogue.TryGetValue(extension, out var row)
+                && row.PreloadLibrary.Length > 0
+                && !found.Contains(row.PreloadLibrary)) {
+                found.Add(row.PreloadLibrary);
             }
         }
 
