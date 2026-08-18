@@ -310,21 +310,45 @@ public sealed class SoftDeletePathTests(ResourceManagerCluster cluster) {
         (await quota.GetUsageAsync(QuotaMeter.Resources)).GetValueOrThrow().Committed.ShouldBe(countBefore);
     }
 
-    // ── The data plane stays up, which is what the quota is holding ─────────────────────────────
+    // ── The data plane comes down, and the restore puts it back ────────────────────────────────
 
     /// <summary>
-    ///     ⚠ <b>A soft delete tears nothing down, and the purge is what does.</b>
+    ///     ⚠ <b>A soft delete tears the data plane down, and a restore applies it again from the body
+    ///     the delete did not throw away.</b>
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>This is the assertion the quota decision rests on.</b> docs/plan/08 § Soft delete's
-    ///     rule is that <i>"soft delete is free exactly when the deleted thing consumes no reserved
-    ///     capacity"</i>, and holds the quota because a CyberCloud resource's volumes, PVCs and memory
-    ///     are all still allocated during the window. If a soft delete <i>did</i> tear the data plane
-    ///     down, holding the quota would be charging for nothing and the whole third decision would be
-    ///     wrong. So the two are one fact and are asserted together.
+    ///     <para>
+    ///         ⚠ <b>THIS CASE ASSERTED THE OPPOSITE UNTIL 2026-08-18, AND IT IS THE DEFECT TWO
+    ///         PROVIDERS WITHDREW THEIR RECOVERY WINDOWS OVER.</b> It read
+    ///         <c>ASoftDeleteLeavesTheDataPlaneUpAndOnlyThePurgeTakesItDown</c> and pinned
+    ///         <c>OperationGrain.DriveAsync</c> returning before it ran a pass, on the argument that a
+    ///         resource in its window <i>"consumes plenty, because handing the data back is the entire
+    ///         feature: the volumes, the PVCs and the memory are all still allocated"</i>. The premise
+    ///         is true and the conclusion did not follow: what a restore has to hand back is the DATA,
+    ///         and a Kubernetes teardown does not remove data — deleting a <c>StatefulSet</c> leaves
+    ///         the claims its <c>volumeClaimTemplate</c> made. What the teardown removes is the running
+    ///         half, and leaving THAT standing is a resource "silently gone while its pods still run
+    ///         and its meter still ticks", which docs/plan/06 § Two-phase create forbids by name.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The quota decision survives the inversion, and it is worth saying why, because the
+    ///         old case claimed the two were one fact.</b> docs/plan/08 § Soft delete's rule is that
+    ///         soft delete is free exactly when the deleted thing consumes no reserved capacity — and a
+    ///         parked resource still does: its volumes are allocated and its name is held. The second
+    ///         reason is the one that never depended on the data plane at all: quota held is what makes
+    ///         restore total, because a restore that re-reserved would fail against an allowance the
+    ///         tenant has spent in the meantime.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The restore half is what makes this a recovery window rather than a slow delete.</b>
+    ///         A teardown with no way back is not soft delete under another name; it is the same
+    ///         destruction with a wait in front of it. So the objects coming back is asserted here
+    ///         rather than left to <see cref="ARestoreBringsTheResourceBackAtItsOldAddressWithWhatWasWritten" />,
+    ///         which asks about the address rather than about the data plane.
+    ///     </para>
     /// </remarks>
     [Fact]
-    public async Task ASoftDeleteLeavesTheDataPlaneUpAndOnlyThePurgeTakesItDown() {
+    public async Task ASoftDeleteTakesTheDataPlaneDownAndARestorePutsItBack() {
         ResourceManagerCluster.ResetDoubles();
         var address = VaultAddress("still-running");
 
@@ -337,26 +361,46 @@ public sealed class SoftDeletePathTests(ResourceManagerCluster cluster) {
         var deleted = await Delete(address);
         await Converge(deleted.GetValueOrThrow());
 
-        FakeWorld.Applied.ShouldContainKey(
+        FakeWorld.Applied.ShouldNotContainKey(
             resourceId,
-            "handing the data back is the entire feature, so the volumes and the PVCs stay allocated "
-            + "for the whole window — docs/plan/08 § Soft delete"
+            "a delete the tenant was told converged must not leave the workload running — "
+            + "docs/plan/06 § Two-phase create, 'never silently gone while its pods still run and its "
+            + "meter still ticks'"
         );
 
-        // ⚠ And no teardown pass was even attempted. A reconciler that was asked to delete and
-        // declined would leave the objects there too, so "the objects are still there" alone would
-        // pass over an implementation that tried and failed — which would be Deleting-forever rather
-        // than parked.
-        FakeWorld.Deletes.ShouldNotContainKey(
+        // ⚠ And the teardown was DRIVEN rather than the objects merely being absent. A pass that was
+        // never asked for and a pass that ran are indistinguishable from the applied set alone on a
+        // resource that had converged, so the reconciler's own delete is what is asserted.
+        FakeWorld.Deletes.ShouldContainKey(
             resourceId,
-            "a soft delete must run no teardown pass at all"
+            "a soft delete runs the reconciler's DeleteAsync, exactly as a hard delete does"
+        );
+
+        // ⚠ AND THE QUOTA IS STILL COMMITTED, WHICH IS WHAT SEPARATES THIS FROM A HARD DELETE.
+        // TenCreateSoftDeletePurgeCyclesLeaveTheMetersWhereTheyStarted pins the arithmetic; this pins
+        // that the teardown did not drag the return forward with it.
+        var quota = cluster.Quota(ResourceManagerCluster.Tenant, Subscription);
+        (await quota.GetUsageAsync(QuotaMeter.Resources)).GetValueOrThrow()
+            .Committed.ShouldBeGreaterThan(
+                0,
+                "the window holds the committed quota until the purge, and tearing the data plane down "
+                + "does not end the window"
+            );
+
+        // ── And back it comes, from the desired state the park kept ──────────────────────────────
+        var restored = await RestoreAndConverge(address);
+        restored.IsSuccess.ShouldBeTrue(restored.Error?.Message);
+
+        FakeWorld.Applied.ShouldContainKey(
+            resourceId,
+            "a design that tears the data plane down and cannot put it back has not implemented soft "
+            + "delete, it has implemented a slower delete"
         );
 
         var purged = await Purge(address);
         await Converge(purged.GetValueOrThrow());
 
-        FakeWorld.Applied.ShouldNotContainKey(resourceId, "the purge is the teardown the delete deferred");
-        FakeWorld.Deletes.ShouldContainKey(resourceId);
+        FakeWorld.Applied.ShouldNotContainKey(resourceId, "and the purge ends it for good");
     }
 
     // ── (d): the resource is never invisible ───────────────────────────────────────────────────
@@ -411,7 +455,7 @@ public sealed class SoftDeletePathTests(ResourceManagerCluster cluster) {
             + "exactly who Azure gives deletedVaults/read and purge/action to"
         );
 
-        var restored = await Restore(address);
+        var restored = await RestoreAndConverge(address);
         restored.IsSuccess.ShouldBeTrue(restored.Error?.Message);
 
         RecordingRelationWriter.Edges[resourceId].ShouldBe(
@@ -477,7 +521,7 @@ public sealed class SoftDeletePathTests(ResourceManagerCluster cluster) {
             + "behaviour, and docs/plan/08 § Soft delete takes it"
         );
 
-        var restored = await Restore(address);
+        var restored = await RestoreAndConverge(address);
         restored.IsSuccess.ShouldBeTrue(restored.Error?.Message);
 
         RecordingRelationWriter.Assignments.ShouldNotContainKey(
@@ -508,11 +552,20 @@ public sealed class SoftDeletePathTests(ResourceManagerCluster cluster) {
 
         (await Read(address)).IsFailure.ShouldBeTrue();
 
-        var restored = await Restore(address);
+        var restored = await RestoreAndConverge(address);
         restored.IsSuccess.ShouldBeTrue(restored.Error?.Message);
-        restored.GetValueOrThrow().ProvisioningState.ShouldBe(ProvisioningState.Succeeded);
+
+        // ⚠ THE ACCEPT IS `Updating`, NOT `Succeeded`, AND THAT IS THE CONTRACT CHANGING RATHER THAN
+        // A WEAKER ASSERTION. A restore re-applies the resource's stored desired state, so it is a
+        // long-running operation like every other write and its 202 carries the resource mid-flight.
+        // `Succeeded` is asserted below, off the READ, once the operation has converged.
+        restored.GetValueOrThrow().Resource.ProvisioningState.ShouldBe(ProvisioningState.Updating);
 
         var read = await Read(address);
+        read.GetValueOrThrow().ProvisioningState.ShouldBe(
+            ProvisioningState.Succeeded,
+            "the restore's reconcile pass converged"
+        );
         read.IsSuccess.ShouldBeTrue("the old address answers again");
         read.GetValueOrThrow().Id.ShouldBe(
             created.GetValueOrThrow().Resource.Id,
@@ -549,7 +602,7 @@ public sealed class SoftDeletePathTests(ResourceManagerCluster cluster) {
         // ⚠ SIX DAYS IN IT STILL WORKS, AND THAT HALF IS WHAT MAKES THE REFUSAL BELOW MEAN THE
         // DEADLINE RATHER THAN A RESTORE THAT NEVER WORKS.
         TestClock.Instance.Advance(TimeSpan.FromDays(6));
-        var early = await Restore(address);
+        var early = await RestoreAndConverge(address);
         early.IsSuccess.ShouldBeTrue($"six days into a seven-day window: {early.Error?.Message}");
 
         // Park it again, and let the whole window pass this time.
@@ -735,7 +788,7 @@ public sealed class SoftDeletePathTests(ResourceManagerCluster cluster) {
         // released the index before checking protection would leave the name free and the resource
         // unrestorable, which is the worst of both.
         (await cluster.Index(address).GetAsync()).GetValueOrThrow().State.ShouldBe(IndexEntryState.SoftDeleted);
-        (await Restore(address)).IsSuccess.ShouldBeTrue("the refused purge changed nothing");
+        (await RestoreAndConverge(address)).IsSuccess.ShouldBeTrue("the refused purge changed nothing");
     }
 
     /// <summary>
@@ -846,8 +899,23 @@ public sealed class SoftDeletePathTests(ResourceManagerCluster cluster) {
     Task<Result<WriteAccepted>> Delete(ResourceId address) =>
         cluster.Manager.DeleteAsync(Request(address), TestContext.Current.CancellationToken);
 
-    Task<Result<ResourceSnapshot>> Restore(ResourceId address) =>
+    Task<Result<WriteAccepted>> Restore(ResourceId address) =>
         cluster.Manager.RestoreAsync(Request(address), TestContext.Current.CancellationToken);
+
+    /// <summary>Restores and drives the restore's operation to a terminal state.</summary>
+    /// <remarks>
+    ///     ⚠ A restore is a long-running operation now that a soft delete tears the data plane down,
+    ///     so a case that only called <c>Restore</c> would assert against a resource still in
+    ///     <c>Updating</c> with nothing applied — green for the wrong reason on every one of them.
+    /// </remarks>
+    async Task<Result<WriteAccepted>> RestoreAndConverge(ResourceId address) {
+        var restored = await Restore(address);
+        if (restored.IsSuccess) {
+            await Converge(restored.GetValueOrThrow());
+        }
+
+        return restored;
+    }
 
     Task<Result<WriteAccepted>> Purge(ResourceId address) =>
         cluster.Manager.PurgeAsync(Request(address), TestContext.Current.CancellationToken);

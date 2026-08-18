@@ -161,17 +161,17 @@ public enum OperationKind {
     Action = 4,
 
     /// <summary>
-    ///     The end of a recovery window: a soft-deleted resource is torn down and its name released,
-    ///     irreversibly.
+    ///     The end of a recovery window: a soft-deleted resource has its name released and its
+    ///     committed quota returned, irreversibly.
     /// </summary>
     /// <remarks>
     ///     <para>
     ///         ⚠ <b>A separate kind and not a <see cref="Delete" /> with a flag, because it is the
     ///         half of a delete that a soft-deletable type did not do.</b> docs/plan/08 § Soft delete
-    ///         defers the data-plane teardown, the index release and the committed-quota return to
-    ///         here; a <see cref="Delete" /> on such a type parks the resource and does none of them.
-    ///         Two kinds means the operation record says which of the two happened, and a caller
-    ///         reading an operation history can tell "it was deleted" from "it was destroyed".
+    ///         defers the index release and the committed-quota return to here; a <see cref="Delete" />
+    ///         on such a type parks the resource and does neither. Two kinds means the operation record
+    ///         says which of the two happened, and a caller reading an operation history can tell "it
+    ///         was deleted" from "it was destroyed".
     ///     </para>
     ///     <para>
     ///         ⚠ <b>It carries its own permission</b> —
@@ -180,7 +180,33 @@ public enum OperationKind {
     ///         delete" without "may destroy permanently".
     ///     </para>
     /// </remarks>
-    Purge = 5
+    Purge = 5,
+
+    /// <summary>
+    ///     A soft-deleted resource being brought back: its desired state is applied again, from the
+    ///     body the delete never threw away.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>This kind exists because a restore has work to do, and until it did the recovery
+    ///         window was not one.</b> A soft delete tears the data plane down — that is what makes a
+    ///         delete a delete, and what stops the pods, the write paths and the meters that a tenant
+    ///         believes they stopped. What the window preserves is everything a teardown does not
+    ///         remove: the name, the committed quota, the resource's stored desired state, and the
+    ///         volumes the objects were mounted on. Putting the resource back is therefore a reconcile
+    ///         pass over that stored body, not a label change, and a reconcile pass is a long-running
+    ///         operation like any other.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Not an <see cref="Update" />, for the reason <see cref="Purge" /> is not a
+    ///         <see cref="Delete" />.</b> Nothing about the desired body changed — the caller supplied
+    ///         none — so an operation history reading <c>Update</c> would describe a write nobody made.
+    ///         It also reserves no quota: the amounts stayed committed through the whole window
+    ///         precisely so that a restore cannot fail against an allowance the tenant has spent since,
+    ///         which docs/plan/08 § Soft delete calls the thing that "makes restore total".
+    ///     </para>
+    /// </remarks>
+    Restore = 6
 }
 
 /// <summary>

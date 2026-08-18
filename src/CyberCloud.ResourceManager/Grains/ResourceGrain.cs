@@ -252,6 +252,43 @@ public sealed class ResourceGrain(
     }
 
     /// <inheritdoc />
+    public async Task<Result<ResourceSnapshot>> BeginRestoreAsync(Guid operationId) {
+        if (!state.State.Exists) {
+            // ⚠ The canonical NotFound, and it is reachable rather than defensive: a restore is
+            // authorized against the index's soft-deleted side, and a resource whose purge cleared
+            // this grain between that read and this call is exactly a resource that is gone.
+            return NotFound<ResourceSnapshot>();
+        }
+
+        if (state.State.ProvisioningState != ProvisioningState.Deleting) {
+            return Result<ResourceSnapshot>.Failure(
+                ErrorCode.Conflict,
+                $"'{state.State.Path}' is {state.State.ProvisioningState} and only a Deleting resource "
+                + "can be restored. A resource that is not parked has nothing to come back from — "
+                + "docs/plan/08 § Soft delete."
+            );
+        }
+
+        // ⚠ NO SINGLE-WRITER GUARD HERE, AND THE ABSENCE IS DELIBERATE RATHER THAN AN OVERSIGHT.
+        // A parked resource is Deleting and its OperationId names the delete that parked it, so a
+        // guard reading "another operation holds this resource" would refuse EVERY first restore.
+        // The guard that actually matters — "that delete is still tearing the data plane down" —
+        // needs the operation's status, which this grain cannot see, so
+        // ResourceManagerService.RestoreAsync applies it before calling here. Same shape as the
+        // OperationInProgress read the delete path performs before releasing the index, and for the
+        // same reason: the refusal has to happen before anything irreversible.
+        state.State.ProvisioningState = ProvisioningState.Updating;
+        state.State.OperationId = operationId;
+        state.State.LastFailure = string.Empty;
+        state.State.ModifiedAt = clock.UtcNow;
+        state.State.Version++;
+        state.State.Etag = NextEtag();
+
+        await state.WriteStateAsync();
+        return Result<ResourceSnapshot>.Success(Snapshot(state.State.ApiVersion, []));
+    }
+
+    /// <inheritdoc />
     public async Task<Result<ResourceSnapshot>> CompleteAsync(ProvisioningState terminal, Error? failure) {
         if (!state.State.Exists) {
             return NotFound<ResourceSnapshot>();

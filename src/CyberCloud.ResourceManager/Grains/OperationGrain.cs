@@ -199,23 +199,39 @@ public sealed class OperationGrain(
         state.State.Status = Contracts.OperationState.Running;
         state.State.Attempts++;
 
-        // ── A SOFT DELETE RUNS NO RECONCILE PASS, AND THAT IS THE POINT OF IT ────────────────────
+        // ── A SOFT DELETE TEARS THE DATA PLANE DOWN, AND EVERY OTHER PART OF IT IS WHAT MAKES THE
+        //    WINDOW A WINDOW ──────────────────────────────────────────────────────────────────────
         //
-        // ⚠ docs/plan/08 § Soft delete: a resource in its recovery window "consumes plenty, because
-        // handing the data back is the entire feature: the volumes, the PVCs and the memory are all
-        // still allocated". So there is nothing to tear down — and running the driver anyway would do
-        // the opposite of nothing in both directions: with tearingDown TRUE it would destroy exactly
-        // the data the window exists to hand back, and with it FALSE it would RE-APPLY the desired
-        // state of a resource the caller has just deleted. Neither is a pass worth taking, so the
-        // teardown-and-return half is skipped and the parking half runs on its own.
-        if (spec.Kind == OperationKind.Delete && spec.SoftDelete) {
-            await ParkAsync(spec);
-            return Result<OperationStatus>.Success(Status());
-        }
-
-        // ⚠ A PURGE TEARS DOWN. It is the half of the delete this type deferred — see
-        // OperationKind.Purge — so it is the one kind other than Delete that drives the reconciler's
-        // DeleteAsync rather than its ReconcileAsync.
+        // ⚠ THIS BRANCH USED TO RETURN HERE WITHOUT RUNNING A PASS, AND THAT WAS THE DEFECT TWO
+        // PROVIDERS WITHDREW THEIR RECOVERY WINDOWS OVER. Its argument was that a resource in its
+        // window "consumes plenty, because handing the data back is the entire feature: the volumes,
+        // the PVCs and the memory are all still allocated", so there was nothing to tear down. The
+        // first clause is true and the conclusion does not follow from it. What a restore needs back
+        // is the DATA, and a Kubernetes teardown does not remove the data: deleting a StatefulSet
+        // leaves the PersistentVolumeClaims its volumeClaimTemplate created, which is Kubernetes' own
+        // behaviour and is why ContainerRegistryReconciler.DeleteAsync can say in as many words that
+        // a soft-deleted registry's layers, database and job queue are all still on disk. What a
+        // teardown DOES remove is the running half — the pods, the Services, the credentials Secret
+        // and, on CyberCloud.Monitor/workspaces, the VMUser that vmauth authorises tenant writes
+        // against. Leaving those standing is what docs/plan/06 § Two-phase create forbids in as many
+        // words: a resource must never be "silently gone while its pods still run and its meter still
+        // ticks", and a parked resource is silently gone by construction, because ResolveAsync
+        // refuses it and the tenant cannot see it in order to delete it again.
+        //
+        // ⚠ SO THE PASS RUNS WITH tearingDown TRUE, EXACTLY AS A HARD DELETE'S DOES, and the four
+        // things a soft delete does differently all happen AFTER it converges — see ConvergedAsync:
+        // the name is held rather than released (ResourceManagerService.DeleteAsync parked the index
+        // on the request path), the committed quota is kept rather than returned, the resource grain
+        // keeps its desired state rather than being cleared, and the ReBAC parent edge moves to the
+        // subscription. Those four are the recovery window. The teardown is not one of them.
+        //
+        // ⚠ AND A RESTORE IS THE OTHER HALF: OperationKind.Restore drives ReconcileAsync over the
+        // body the grain still holds, which is why nothing above may clear it.
+        //
+        // ⚠ A PURGE TEARS DOWN TOO, and by then there is usually nothing left to remove — the soft
+        // delete already did it and the reconciler is idempotent, so the pass converges on the first
+        // read-back. It is still driven rather than skipped, because a purge must also converge for a
+        // resource whose soft-delete teardown never finished.
         var tearingDown = spec.Kind is OperationKind.Delete or OperationKind.Purge
             || state.State.CancelRequested;
 
@@ -278,6 +294,17 @@ public sealed class OperationGrain(
             await ReleaseAsync(spec);
             await FinishResourceAsync(spec, ProvisioningState.Canceled, null);
             await TerminateAsync(Contracts.OperationState.Canceled, null);
+            return;
+        }
+
+        // ⚠ A SOFT DELETE'S TEARDOWN CONVERGED, AND NOW EVERYTHING THE HARD DELETE DOES NEXT IS
+        // SKIPPED. That list is the recovery window itself: CompleteDeleteAsync would throw away the
+        // desired state a restore re-applies, the unlink would remove the edge ParkAsync is about to
+        // move, the child-count decrement would let a parent be deleted out from under a resource
+        // that can still come back, and ReturnCommittedQuotaAsync would hand back an allowance the
+        // purge is going to hand back again — failure class (a), quota returned twice.
+        if (spec.Kind == OperationKind.Delete && spec.SoftDelete) {
+            await ParkAsync(spec);
             return;
         }
 
@@ -378,10 +405,17 @@ public sealed class OperationGrain(
     }
 
     /// <summary>
-    ///     The soft delete's whole convergence: re-parent the resource, drop its direct role
-    ///     assignments, and stop.
+    ///     What a soft delete does once its teardown has converged: re-parent the resource, drop its
+    ///     direct role assignments, and stop short of everything that would make the delete
+    ///     irreversible.
     /// </summary>
     /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>Reached from <see cref="ConvergedAsync" /> and therefore only after the data plane
+    ///         is down, read back.</b> Parking before the teardown converged would be the defect this
+    ///         path was built to close, one step later: the resource would stop being addressable while
+    ///         its pods were still running, and nothing would be driving them down.
+    ///     </para>
     ///     <para>
     ///         ⚠ <b>Here rather than in <c>ResourceManagerService.DeleteAsync</c>, and for the two
     ///         reasons the unlink beside it lives here.</b> Both writes can fail, and this grain is the
@@ -395,9 +429,10 @@ public sealed class OperationGrain(
     ///         ⚠ <b>Neither call returns quota, and neither clears the resource.</b> docs/plan/08
     ///         § Soft delete moves the committed-quota return to the purge, whole —
     ///         <c>QuotaMeter.Resources</c> included, because a per-meter split reintroduces the partial
-    ///         restore — and the resource grain keeps its state because the restore hands it back. A
-    ///         <c>CompleteDeleteAsync</c> here would be the delete this operation deliberately did not
-    ///         do.
+    ///         restore — and the resource grain keeps its state because that stored body is what
+    ///         <see cref="OperationKind.Restore" /> applies again. A <c>CompleteDeleteAsync</c> here
+    ///         would be the delete this operation deliberately did not do, and it would leave a restore
+    ///         with nothing to restore <i>from</i>.
     ///     </para>
     ///     <para>
     ///         ⚠ <b>The re-parent goes first and the assignment drop second, and both are retried as a
@@ -432,11 +467,12 @@ public sealed class OperationGrain(
         Append(
             Progress(
                 "parked",
-                $"'{spec.ResourcePath}' is soft-deleted: it is no longer addressable, its name is held "
-                + "for its recovery window, its parent edge names its subscription and "
+                $"'{spec.ResourcePath}' is soft-deleted: its data plane is down, it is no longer "
+                + "addressable, its name is held for its recovery window, its parent edge names its "
+                + "subscription and "
                 + dropped.GetValueOrThrow().ToString(CultureInfo.InvariantCulture)
-                + " direct role assignment(s) were dropped. Its quota stays committed until it is "
-                + "purged."
+                + " direct role assignment(s) were dropped. Its desired state and its committed quota "
+                + "are kept so that a restore can apply it again; both end at the purge."
             )
         );
 
