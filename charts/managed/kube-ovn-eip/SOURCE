@@ -1,0 +1,49 @@
+# Provenance — charts/README.md § `SOURCE` is required, including when nothing was forked.
+#
+# ADR-010: "Their charts are a starting point, not a dependency. Where a chart is close, fork it into
+# charts/ with the upstream commit recorded in a SOURCE file." Nothing was forked here — Kube-OVN is
+# platform infrastructure installed once per cluster (ADR-019) and what this chart renders is a
+# tenant's row in that installation — and `vendored: none` is an answer to "where did this come from"
+# where a missing file is not.
+
+vendored: none
+upstream: https://github.com/kubeovn/kube-ovn
+
+# The upstream API this chart's template targets. ⚠ An API group/version, not a commit: nothing is
+# vendored, so there is no upstream tree to pin.
+upstream-api: kubeovn.io/v1
+
+engine: https://github.com/ovn-org/ovn
+
+See ../kube-ovn-vpc/SOURCE for the family's shared review of the Kube-OVN CRD set and the
+controller's habit of writing back to `.spec`. What was read at tag v1.16.2 for THIS chart, and the
+facts that bear hardest on it:
+
+  * pkg/apis/kubeovn/v1/ovn-eip.go —
+    `+kubebuilder:resource:scope="Cluster",shortName="oeip",path="ovn-eips",singular="ovn-eip"`.
+    CLUSTER-SCOPED and the plural is HYPHENATED, which is the same trap security-groups carried:
+    ClusterConformanceHarness derives its CRD stub's path from GroupVersionKind.Plural.
+  * OvnEipSpec is five OPTIONAL strings — externalSubnet, v4Ip, v6Ip, macAddress, type. Checked in
+    the CRD the chart installs: `spec` declares NO `required:` list and NO `default:` for any member,
+    so a spec carrying only the fields this chart means is a valid object.
+  * pkg/controller/ovn_eip.go `createOrUpdateOvnEipCR` issues a full `OvnEips().Update(...)` that
+    writes spec.macAddress, spec.v4Ip, spec.v6Ip and spec.type — THE CONTROLLER WRITES BACK TO
+    `.spec`, which is this family's third defaulting mechanism and the one it keeps meeting. It is
+    why Matches is containment and why this chart emits `v4Ip`/`v6Ip` only when a tenant asked for a
+    particular address: an applied `v4Ip: ""` claims a field the controller then sets to the
+    allocated address, and every later apply answers a field-manager conflict.
+  * `handleAddOvnEip` falls back to `c.config.ExternalGatewaySwitch` when spec.externalSubnet is
+    empty, and the resolved name is written into the spec. That is why this chart does NOT send the
+    pool: it is the operator's `--external-gateway-switch` and this repository cannot know its name.
+    ⚠ THE OPPOSITE OF THE SUBNET CHART'S `spec.vpc` DECISION, and deliberately — there the default is
+    wrong, here it is the only right answer available.
+  * `handleUpdateOvnEip` refuses a changed v4Ip, v6Ip, macAddress and type, one error each, every one
+    beginning "not support change"; `handleAddOvnEip` returns early once status.macAddress is set. AN
+    OvnEip IS WHOLLY IMMUTABLE ONCE READY. conformance.yaml § owed,
+    `an-allocated-address-cannot-be-changed`.
+  * The deletion path in `handleUpdateOvnEip` refuses to drop the finalizer while a NAT rule names
+    the address — "is still being used by NAT rules … waiting for them to be deleted" — so a delete
+    can legitimately not finish. Nothing can attach an address in this api-version, so it cannot
+    happen yet.
+  * OvnEipStatus carries v4Ip, v6Ip, macAddress, ready, nat and conditions[]. `POST …/showAllocation`
+    reads exactly those; the allocated address exists NOWHERE ELSE.

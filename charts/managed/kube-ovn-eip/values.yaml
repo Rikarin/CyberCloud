@@ -1,0 +1,59 @@
+# One public address allocated from a region's external pool — the configuration surface, once.
+#
+# ⚠ EVERY NON-`@internal` BLOCK BELOW IS GENERATED from PublicIpAddresses.Schema2026 by
+# `./build.sh Charts`, and so is values.schema.json. ADR-010 § Which end authors the schema: "The C#
+# ResourceSchema is authored. The chart's @param annotations are generated from it and diffed."
+# Editing a generated row here is undone on the next run and fails the build in between; add the
+# field in C# instead.
+#
+# ⚠ THE SMALLEST CONFIGURATION SURFACE IN THE CATALOGUE, AND THAT IS THE TYPE RATHER THAN AN
+# UNFINISHED CHART. A public address is an allocation: the tenant asks for one and the fabric picks
+# it. The only thing there is to say is "give me this particular address back", which is what the two
+# properties below are for, and almost every request leaves both empty.
+#
+# ⚠ NO `externalSubnet`. The pool an EIP comes from is the operator's `--external-gateway-switch` and
+# this repository cannot know its name; handleAddOvnEip falls back to it and writes the resolved name
+# into the spec. ⚠ THE OPPOSITE OF kube-ovn-subnet's `spec.vpc` DECISION, deliberately: there the
+# substrate's default is the platform's own VPC and is wrong, here the substrate's default is the
+# operator's own pool and is the only right answer available. SOURCE records both.
+#
+# ⚠ NO `ipVersion`. Which families an address gets is the external pool's business —
+# acquireIPAddress hands back whatever that subnet carries — so the property would be a control the
+# substrate ignores. It is also what keeps the quota meter honest: a tenant who could ask for an
+# IPv6-only address would be asking for a resource that draws ZERO scarce addresses, and
+# QuotaGrain.TryReserveAsync refuses a non-positive reservation by name.
+
+## @param address {object} A particular address to ask for, rather than whichever one is free.
+address:
+  ## @param v4 {string} The IPv4 address to reclaim, or empty to be given whichever one is free. ⚠ A bare address and not a prefix — 10.100.0.7, never 10.100.0.7/32. An address that is already taken is refused by the fabric rather than by the API.
+  ## @immutable
+  ## @pattern ((\d{1,3}\.){3}\d{1,3})?
+  ## @example "10.100.0.7"
+  v4: ""
+  ## @param v6 {string} The IPv6 address to reclaim, or empty to be given whichever one is free. ⚠ Lower case only — the fabric refuses an address with an upper-case letter in it. Whether an address has a v6 half at all is decided by the pool it comes from, not here.
+  ## @immutable
+  ## @pattern ([0-9A-Fa-f:.]+)?
+  ## @example "fd00:ff::7"
+  v6: ""
+
+## @param platform {object} Resource identity injected by the reconciler. Not a tenant-facing setting.
+## @internal Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.
+platform:
+  ## @param tenantId {string} Tenant GUID, rendered into the cybercloud.io/tenant-id label.
+  tenantId: ""
+  ## @param subscriptionId {string} Subscription GUID, rendered into the cybercloud.io/subscription-id label.
+  subscriptionId: ""
+  ## @param resourceGroup {string} Resource group name, rendered into the cybercloud.io/resource-group label.
+  resourceGroup: ""
+  ## @param resourceId {string} Resource GUID, rendered into the cybercloud.io/resource-id label.
+  resourceId: ""
+  ## @param resourceType {string} Fully qualified resource type, rendered into the cybercloud.io/resource-type label.
+  resourceType: CyberCloud.Network/publicIpAddresses
+  ## @param apiVersion {string} The api-version the resource was last written at, rendered into the cybercloud.io/api-version label.
+  apiVersion: "2026-08-01"
+  ## @param managedBy {string} Value of the cybercloud.io/managed-by label. Constant, and the selector every informer filters on.
+  managedBy: cybercloud
+
+## @param nameOverride {string} Replace the generated object-name stem. Empty means derive it from the release name.
+## @internal Helm plumbing. Nothing about it belongs in a resource body.
+nameOverride: ""

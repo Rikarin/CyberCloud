@@ -1,0 +1,51 @@
+# One public address allocated from a region's external pool — docs/plan/14 § Everything else,
+# `publicIpAddresses`: "a metered, quota'd, allocatable resource in its own right — because IPv4 is
+# scarce and must be accounted".
+#
+# ⚠ A DIRECTORY OF ITS OWN, for the reason charts/managed/kube-ovn-subnet gives: `Build.Charts` pairs
+# a chart with a resource type through ONE `cybercloud.io/resource-type` annotation per Chart.yaml, so
+# one directory cannot be the configuration surface of two types.
+#
+# ⚠ THE ONLY CHART IN THIS FAMILY WHOSE RESOURCE TYPE IS NOT INSIDE A VIRTUAL NETWORK. An OvnEip
+# names no VPC: it is allocated from the OPERATOR'S external subnet and attached to a tenant's routing
+# domain later, by a separate OvnFip/OvnDnatRule/OvnSnatRule object that names it. So the resource
+# type below carries one segment where the other two children carry two.
+#
+# ⚠ CLUSTER-SCOPED, and the name is the whole of the separation. `PublicIpAddresses.ObjectNameOf` is
+# `{namespace}-{name}`. A collision here costs more than anywhere else in the family, because the
+# object is an ALLOCATION: two tenants would be handed the same address and the second tenant's
+# traffic would arrive at the first tenant's NAT rule.
+apiVersion: v2
+name: kube-ovn-eip
+description: A public address allocated from the region's pool, which a load balancer or a gateway can later be given. On its own it carries no traffic.
+type: application
+
+# The chart's own version. Bumped on every change to this directory.
+version: 0.1.0
+
+# ⚠ The Kube-OVN version this chart's object shape was reviewed against — the same release the other
+# three charts in this family pin. The OvnEip type, its CRD and pkg/controller/ovn_eip.go were all
+# read at this tag; see SOURCE.
+appVersion: "1.16.2"
+
+kubeVersion: ">=1.31.0-0"
+
+keywords:
+  - kube-ovn
+  - public-ip
+  - eip
+  - networking
+
+home: https://kubeovn.github.io/docs/
+sources:
+  - https://github.com/kubeovn/kube-ovn
+
+maintainers:
+  - name: Cyber Cloud Platform
+
+# ⚠ ONE segment in the resource type, unlike this family's other two additions — see above. The
+# api-version is the family's, because every type in it moves together.
+annotations:
+  cybercloud.io/resource-type: CyberCloud.Network/publicIpAddresses
+  cybercloud.io/api-version: "2026-08-01"
+  cybercloud.io/operator: kube-ovn

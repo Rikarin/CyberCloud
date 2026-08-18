@@ -63,40 +63,71 @@ namespace CyberCloud.Providers.Network;
 ///             cannot pair different ports with different remotes.
 ///         </item>
 ///         <item>
-///             <b><c>publicIpAddresses</c>, <c>dnsZones</c>, <c>loadBalancers</c>,
-///             <c>vpnGateways</c> — owed.</b> Each is M1 in docs/plan/14 and none is declared.
-///             ⚠ <c>publicIpAddresses</c> is the one whose absence costs the most and it is recorded
-///             with what was learned about it rather than as a bare gap: it is the first type in the
-///             platform that would draw <c>QuotaMeter.PublicIps</c>, which no shipping type has ever
-///             drawn — every provider that reached for it found
-///             <c>QuotaGrain.TryReserveAsync</c> refusing a non-positive amount for a
-///             <i>conditional</i> meter. <b>An address resource does not have that problem</b>: it
-///             draws exactly one, unconditionally, which is the first body in the tree for which that
-///             meter is expressible at all. ⚠ <b>That is now confirmed at the code rather than
-///             argued</b>: <c>ResourceManagerService.AmountFor</c> answers
-///             <c>meter.Fallback ?? 1m</c> for a meter with an empty <c>AmountPointer</c>, so
-///             <c>.Meters(QuotaMeter.PublicIps, QuotaMeter.Resources)</c> is a <b>flat</b> meter of one
-///             and needs no pointer, no fallback and no <c>MeterDerivation</c>. There is nothing left
-///             to solve on the quota side. ⚠ And doc 14 § Load balancing names the real design
-///             hazard, which was verified: the allocator depends on where the address lives —
-///             Cilium LB-IPAM for the platform fabric, a Kube-OVN <c>IptablesEIP</c>/<c>OvnEip</c>
-///             bound to the VPC's router for a tenant address — and both surface as one resource
-///             type. Both objects exist and are cluster-scoped.
+///             <b><c>publicIpAddresses</c> — SHIPPED, and it is the first type in the platform that
+///             draws <see cref="QuotaMeter.PublicIps" />.</b> That meter has existed since
+///             <c>QuotaGrain</c>'s defaults — 20 per subscription — and nothing had ever drawn it,
+///             because every provider that reached for it wanted a <i>conditional</i> draw and
+///             <c>QuotaGrain.TryReserveAsync</c> refuses a non-positive amount by name. An address
+///             resource draws exactly one, unconditionally, and
+///             <c>ResourceManagerService.AmountFor</c> answers <c>meter.Fallback ?? 1m</c> for an
+///             empty <c>AmountPointer</c>, so <c>.Meters(QuotaMeter.PublicIps, QuotaMeter.Resources)</c>
+///             is <b>flat</b> — no pointer, no fallback, no <c>MeterDerivation</c>.
+///             ⚠ <b>What keeps it unconditional is an absence</b>: there is no <c>ipVersion</c>
+///             property, because the families an EIP gets are the external pool's rather than the
+///             tenant's, so a body that drew <i>zero</i> scarce addresses is not expressible.
 ///             <para>
-///                 ⚠ <b>AND THE SOFT-DELETE QUESTION IS DECIDED IN ADVANCE, BECAUSE IT IS THE ONE
-///                 THAT LOOKS OBVIOUS AND IS BACKWARDS.</b> The tempting reading is that releasing a
-///                 scarce address is exactly what a recovery window is for. What
-///                 <c>SupportsSoftDelete</c> <i>does</i> today is park the name in the index
-///                 <b>and withhold the committed quota until a purge</b> —
+///                 ⚠ <b>IT IS THE FIRST TYPE IN THIS FAMILY THAT IS NOT A CHILD, AND THE SUBSTRATE
+///                 IS WHY.</b> An <c>OvnEip</c> names no VPC: it is allocated from the operator's
+///                 external subnet and attached to a tenant's routing domain later, by a separate NAT
+///                 object. So an unattached address is <b>inert</b>, which is this type's answer to
+///                 the "what does an empty body expose" question — the second time in this family
+///                 that answer has come back safe.
+///             </para>
+///             <para>
+///                 ⚠ <b>AND IT IS THE FIRST TYPE IN THE TREE WITH NO MUTABLE PROPERTY.</b> Read
+///                 firsthand in <c>pkg/controller/ovn_eip.go</c> at <c>v1.16.2</c>:
+///                 <c>handleUpdateOvnEip</c> refuses a changed <c>v4Ip</c>, <c>v6Ip</c>,
+///                 <c>macAddress</c> and <c>type</c> — four errors, one per field, each beginning
+///                 <i>"not support change"</i> — and <c>handleAddOvnEip</c> returns early once
+///                 <c>status.macAddress</c> is set. The shared conformance suite requires a
+///                 <c>ChangedBody</c> that reaches the cluster and cannot express a type that has
+///                 none; what that costs is
+///                 <c>charts/managed/kube-ovn-eip/conformance.yaml § owed</c>,
+///                 <c>an-allocated-address-cannot-be-changed</c>.
+///             </para>
+///             <para>
+///                 ⚠ <b>NO SOFT-DELETE WINDOW, BECAUSE THE OBVIOUS READING IS BACKWARDS.</b> The
+///                 tempting sentence is that releasing a scarce address is exactly what a recovery
+///                 window is for. What <c>SupportsSoftDelete</c> <i>does</i> today is park the name in
+///                 the index <b>and withhold the committed quota until a purge</b> —
 ///                 <c>OperationGrain</c> returns <c>CommittedQuota</c> only when the operation is a
 ///                 delete that is <i>not</i> soft — while <c>RestoreAsync</c> and <c>PurgeAsync</c>
-///                 have <b>no HTTP route</b>. So a window on this type would hold a tenant's
+///                 have <b>no HTTP route</b>. So a window here would hold a tenant's
 ///                 <c>PublicIps</c> allowance — 20 by default — against addresses they deleted, for
 ///                 the whole window, with no way to recover one and no way to release one early. That
-///                 is a one-way quota leak on the platform's scarcest meter, and it is the opposite
-///                 of what the feature is for. <b>The window becomes right the day a purge route
-///                 exists</b>, and not before.
+///                 is a one-way quota leak on the platform's scarcest meter. <b>The window becomes
+///                 right the day a purge route exists</b>, and not before.
 ///             </para>
+///         </item>
+///         <item>
+///             <b><c>dnsZones</c>, <c>loadBalancers</c>, <c>vpnGateways</c> — owed.</b> Each is M1 in
+///             docs/plan/14 and none is declared. ⚠ <c>dnsZones</c> is the one whose absence is least
+///             about software: docs/plan/14 is explicit that <i>"the provider is 1.5 EM; the
+///             operations are the cost"</i> — anycast nameservers, DDoS absorption, and being the
+///             reason a customer's whole business is offline when it breaks — and that <b>the decision
+///             whether the platform runs authoritative DNS or fronts a wholesale provider has not been
+///             taken</b>. A resource type declared before that decision would pick it by accident.
+///             ⚠ <c>loadBalancers</c> and <c>vpnGateways</c> both need the reshape
+///             <see cref="NetworkSecurityGroups" /> established — a backend set and a peer list are
+///             both arrays of objects, which <c>SchemaProperty.ElementKind</c> refuses — and
+///             <c>loadBalancers</c> additionally needs a <b>reader</b>: docs/plan/14 has its backend
+///             pools <i>"reference resource ids (a VM, a scale set, a cluster's node pool), resolved
+///             by the reconciler into endpoints"</i>, and rule 2 routes a cross-resource reference
+///             through <c>CyberCloud.ResourceManager</c>, which a reconciler cannot reach. It is the
+///             same shape as <c>a-security-group-cannot-be-a-remote</c> and it wants the same reader.
+///             ⚠ <c>publicIpAddresses</c> shipping is nevertheless the half of
+///             docs/plan/14 § Load balancing that could be built alone: the address exists now and
+///             something can be given it.
 ///         </item>
 ///     </list>
 ///     <para>
@@ -281,6 +312,63 @@ public sealed class NetworkProvider : IResourceProvider {
             )
             .Chart(NetworkSecurityGroups.ChartName)
             .SupportsTags()
-            .RequiresCluster(NetworkSecurityGroups.ClusterIdPointer);
+            .RequiresCluster(NetworkSecurityGroups.ClusterIdPointer)
+            // ── The fourth type, and the first that is NOT a child — docs/plan/14 § Everything else ─
+            //
+            // ⚠ TOP LEVEL, WHICH IS THE OPPOSITE OF WHERE A READER OF THIS FAMILY WOULD PUT IT. Its
+            // three siblings are a network and two things inside one. An OvnEip is inside nothing: it
+            // is allocated from the OPERATOR'S external subnet and attached to a tenant's routing
+            // domain later, by a separate OvnFip/OvnDnatRule/OvnSnatRule object that names it.
+            // docs/plan/14 § Load balancing spells the type `CyberCloud.Network/publicIpAddresses`,
+            // with no network segment in the path, and the substrate agrees.
+            .ResourceType(PublicIpAddresses.TypePath)
+            .ApiVersion(PublicIpAddresses.V2026, PublicIpAddresses.Schema2026)
+            .Reconciler<PublicIpAddressReconciler>()
+            // ⚠ THE FIRST TYPE IN THE PLATFORM THAT DRAWS QuotaMeter.PublicIps, AND THE MEASURE OF
+            // WHY IT TOOK ELEVEN PROVIDERS. That meter has existed since QuotaGrain's defaults — 20
+            // per subscription — and nothing has ever drawn it, because every provider that reached
+            // for it wanted a CONDITIONAL draw (an address only when a body asked for external
+            // exposure) and QuotaGrain.TryReserveAsync refuses a non-positive amount by name: "A
+            // reservation must be positive; 0 is not." An address resource draws exactly one,
+            // unconditionally, for its whole life.
+            //
+            // ⚠ AND IT IS A FLAT METER: ResourceManagerService.AmountFor answers `meter.Fallback ?? 1m`
+            // for a meter with an empty AmountPointer, so this needs no pointer, no fallback and no
+            // MeterDerivation. `Meters(...)` supplies 1m for every one of them.
+            //
+            // ⚠ WHAT KEEPS IT UNCONDITIONAL is that this type has no `ipVersion` property — see
+            // PublicIpAddresses' remarks. A tenant who could ask for an IPv6-only address would be
+            // asking for a resource that draws ZERO scarce addresses, and a zero draw is the exact
+            // thing TryReserveAsync refuses. IPv6 rides along on a dual-stack pool and costs nothing,
+            // which is right: PublicIps counts the scarce half.
+            .Meters(QuotaMeter.PublicIps, QuotaMeter.Resources)
+            .Permissions("read", "write", "delete")
+            .Action(
+                PublicIpAddresses.AllocationAction,
+                ActionKind.Post,
+                PublicIpAddresses.AllocationPermission,
+                response: PublicIpAddresses.AllocationResponse,
+                handler: typeof(ShowAllocationHandler)
+            )
+            // ⚠ `publicip` — checked against the fourteen group keys (sample, dbforpostgresql, cache,
+            // messaging, storage, search, documentdb, analytics, dbformysql, network,
+            // containerservice, monitor, terminal, containerregistry) and against every existing short
+            // name (widget, postgres, valkey, kafka, nats, rabbitmq, objectstore, bucket, opensearch,
+            // docdb, clickhouse, mariadb, aks, nodepool, workspace, shell, registry), as literals, and
+            // against this family's own `vnet`, `subnet` and `secgroup`. NOT `pip` and NOT `eip`:
+            // three characters is a prefix somebody will collide with, `eip` is the substrate's word
+            // rather than the product's, and System.CommandLine's ValidTokens is ONE dictionary of
+            // every command token and alias in the tree — a collision throws `ArgumentException` on
+            // the first parse of ANY command line, naming neither the provider nor the string.
+            .Display(
+                "Public IP address",
+                "Public IP addresses",
+                shortName: "publicip",
+                summary: "A public address allocated from the region's pool, which a load balancer or "
+                + "a gateway can later be given. On its own it carries no traffic."
+            )
+            .Chart(PublicIpAddresses.ChartName)
+            .SupportsTags()
+            .RequiresCluster(PublicIpAddresses.ClusterIdPointer);
     }
 }
