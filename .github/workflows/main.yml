@@ -92,9 +92,9 @@ jobs:
 
       - name: ./build.sh Images
         run: |
-          ./build.sh Images \
+          .github/scripts/run-build.sh "$RUNNER_TEMP/images.log" Images \
             --container-registry "$CONTAINER_REGISTRY" \
-            --container-image-tag "${GITHUB_SHA::7}" 2>&1 | tee "$RUNNER_TEMP/images.log"
+            --container-image-tag "${GITHUB_SHA::7}"
 
       # Build.Images.cs prints "inspected 0 host project(s) … ○, not ✔" and returns success when
       # src/Hosts holds nothing publishable. docs/plan/03 § Hosts lists four hosts and the tree has

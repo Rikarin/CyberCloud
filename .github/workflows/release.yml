@@ -147,13 +147,13 @@ jobs:
               ;;
           esac
           echo "Publishing $version from $GITHUB_REF_NAME"
-          ./build.sh Publish \
+          .github/scripts/run-build.sh "$RUNNER_TEMP/publish.log" Publish \
             --version "$version" \
             --container-registry "$CONTAINER_REGISTRY" \
             --container-image-tag "$version" \
             --nuget-feed "$NUGET_FEED" \
             --nuget-api-key "$NUGET_API_KEY" \
-            --chart-registry "$CHART_REGISTRY" 2>&1 | tee "$RUNNER_TEMP/publish.log"
+            --chart-registry "$CHART_REGISTRY"
 
       # ⚠ `Publish` reports zero npm packages and carries on, deliberately — docs/plan/21 § Other
       # SDKs says the TypeScript client is not written. It does NOT tolerate zero of the other
