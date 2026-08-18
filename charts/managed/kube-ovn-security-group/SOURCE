@@ -1,0 +1,156 @@
+# Provenance — charts/README.md § `SOURCE` is required, including when nothing was forked.
+#
+# Nothing was forked. Kube-OVN is platform infrastructure installed once per cluster (ADR-019) and
+# what this chart renders is a tenant's row in that installation. `vendored: none` is an answer to
+# "where did this come from" where a missing file is not.
+
+vendored: none
+upstream: https://github.com/kubeovn/kube-ovn
+
+# The upstream API this chart's template targets. ⚠ An API group/version, not a commit: nothing is
+# vendored, so there is no upstream tree to pin.
+upstream-api: kubeovn.io/v1
+
+engine: https://github.com/ovn-org/ovn
+
+Kube-OVN security groups — what was read, where, and on what date.
+
+⚠ EVERY FACT BELOW COMES FROM THE GO TYPES OR THE CONTROLLER, NOT FROM THE DOCUMENTATION SITE.
+charts/managed/kube-ovn-vpc/SOURCE records why. Read on 2026-08-18 against `master`.
+
+  https://github.com/kubeovn/kube-ovn
+    pkg/apis/kubeovn/v1/security-group.go
+    pkg/controller/security_group.go
+    pkg/ovs/ovn-nb-acl.go
+    pkg/util/const.go
+
+── Scope and naming ──────────────────────────────────────────────────────────────────────────────
+
+    // +genclient
+    // +genclient:nonNamespaced
+    // +resourceName=security-groups
+    // +kubebuilder:resource:scope="Cluster",shortName="sg",path="security-groups",singular="security-group"
+    // +kubebuilder:subresource:status
+
+⚠ THE PLURAL IS `security-groups`, HYPHENATED. ClusterConformanceHarness derives its CRD stub's path
+from GroupVersionKind.Plural, so a guessed `securitygroups` installs a definition at a path the apply
+never reaches — and the symptom is a discovery error naming a missing operator.
+
+── The spec ──────────────────────────────────────────────────────────────────────────────────────
+
+    type SecurityGroupSpec struct {
+        IngressRules          []SecurityGroupRule `json:"ingressRules,omitempty"`
+        EgressRules           []SecurityGroupRule `json:"egressRules,omitempty"`
+        AllowSameGroupTraffic bool                `json:"allowSameGroupTraffic,omitempty"`
+        Tier                  int                 `json:"tier,omitempty"`
+    }
+
+    type SecurityGroupRule struct {
+        IPVersion           string       `json:"ipVersion"`
+        Protocol            SgProtocol   `json:"protocol,omitempty"`
+        Priority            int          `json:"priority,omitempty"`
+        RemoteType          SgRemoteType `json:"remoteType"`
+        RemoteAddress       string       `json:"remoteAddress,omitempty"`
+        RemoteSecurityGroup string       `json:"remoteSecurityGroup,omitempty"`
+        PortRangeMin        int          `json:"portRangeMin,omitempty"`
+        PortRangeMax        int          `json:"portRangeMax,omitempty"`
+        LocalAddress        string       `json:"localAddress,omitempty"`
+        SourcePortRangeMin  int          `json:"sourcePortRangeMin,omitempty"`
+        SourcePortRangeMax  int          `json:"sourcePortRangeMax,omitempty"`
+        Policy              SgPolicy     `json:"policy"`
+    }
+
+⚠ `ipVersion` IS `ipv4` / `ipv6`, LOWER CASE — the OPPOSITE spelling to `Subnet.spec.protocol`'s
+`IPv4`/`IPv6`/`Dual`, in the same API group, on an adjacent object. validateSgRule:
+
+    if rule.IPVersion != "ipv4" && rule.IPVersion != "ipv6" {
+        return errors.New("IPVersion should be 'ipv4' or 'ipv6'")
+    }
+
+⚠ `policy` IS `allow` / `drop` / `pass`, NOT `deny`. The doc comment in the Go source says "allow,
+pass or deny" and the constants are SgPolicyAllow / SgPolicyDrop / SgPolicyPass bound to OVN ACL
+actions. A third README-versus-code disagreement for this tree.
+
+Protocol constants: SgProtocolALL "all", SgProtocolICMP "icmp", SgProtocolTCP "tcp", SgProtocolUDP
+"udp". Remote types: SgRemoteTypeAddress "address", SgRemoteTypeSg "securityGroup".
+
+⚠ ZERO `+kubebuilder:default`, ZERO `required:` and ZERO `enum:` in this CRD's schema — the same as
+Subnet, IptablesEIP and OvnEip. Client-side validation is the only validation before the controller.
+
+── Default deny: established rather than assumed ─────────────────────────────────────────────────
+
+THIS IS THE FINDING THIS TYPE MOST NEEDED. pkg/ovs/ovn-nb-acl.go:
+
+  CreateSgDenyAllACL   installs "outport == @{pgName} && ip" and "inport == @{pgName} && ip" with
+                       action DROP, at util.SecurityGroupDropPriority
+  CreateSgBaseACL      adds ARP, ICMPv6, DHCP and VRRP exceptions at SecurityGroupBasePriority
+  UpdateSgACL          clears one direction, then writes same-group and per-rule ACLs
+  newSgRuleACL         one ACL per rule, at SecurityGroupAllowPriority
+
+pkg/util/const.go:
+
+  SecurityGroupBasePriority   = "2005"
+  SecurityGroupAllowPriority  = "2004"
+  SecurityGroupDropPriority   = "2003"
+  SecurityGroupHighestPriority = "18484"
+  SecurityGroupPriorityMax    = 16384
+  SecurityGroupPriorityMin    = 1
+  SecurityGroupOvnTierBase    = 2
+  SecurityGroupAPITierMinimum = 0
+  SecurityGroupAPITierMaximum = 1
+  DenyAllSecurityGroup        = "kubeovn_deny_all"
+  SecurityGroupAnnotationTemplate = "%s.kubernetes.io/security_groups"
+
+⚠ SO UNMATCHED TRAFFIC IS DROPPED, AND AN EMPTY RULE SET PERMITS NOTHING. pkg/controller/
+security_group.go has NO special case for empty ingressRules/egressRules — the port group and the
+base ACLs are created regardless. The empty body is the SAFE body, and a tenant cannot arrive at
+"allow everything" by omission.
+
+⚠ THE PORT ANNOTATION IS A COMMA-SEPARATED LIST OF GROUP NAMES, which is why "one group per purpose,
+several groups per workload" is the substrate's own composition model and why this platform's schema
+gives a single group the arity of one.
+
+── The controller writes STATUS ONLY ─────────────────────────────────────────────────────────────
+
+⚠ THE FIRST OBJECT IN THIS FAMILY FOR WHICH THAT IS TRUE. Every write pkg/controller/
+security_group.go makes goes through patchSgStatus:
+
+    Patch(ctx, sg.Name, types.MergePatchType, bytes, metav1.PatchOptions{}, "status")
+
+— a merge patch against the "status" subresource, which the object declares with
++kubebuilder:subresource:status. There is no SecurityGroups().Update(...) of a spec anywhere in the
+file. So the argument charts/managed/kube-ovn-vpc and charts/managed/kube-ovn-subnet use for
+containment — "the controller rewrites .spec" — does NOT hold here, and NetworkSecurityGroups.Matches
+is containment for the general reason instead.
+
+── Validation the controller does, after the apply ───────────────────────────────────────────────
+
+validateSgRule rejects: an IPVersion outside {ipv4, ipv6}; a priority outside
+SecurityGroupPriorityMin..Max; a `pass` policy at the maximum tier; a malformed RemoteAddress or
+LocalAddress; a RemoteSecurityGroup that does not exist; a port outside 1..65535 or min > max; and a
+source port range without a LocalAddress.
+
+⚠ EVERY ONE OF THOSE EXCEPT `min > max` IS ALSO REFUSED AT THIS PLATFORM'S API, by
+PortRange.OptionalListPattern and Cidr.OptionalV4Pattern, before the write path answers 202. That is
+the whole reason the port list is a patterned string rather than an array of numbers: bounds are
+PROPERTY constraints on SchemaProperty and there is no per-element bounds member, so an array of
+WholeNumber could carry no range check at all.
+
+── Server-side apply: both rule arrays are ATOMIC, and here that is harmless ──────────────────────
+
+Neither SecurityGroup.spec.ingressRules nor .egressRules carries an `x-kubernetes-list-type` or
+`x-kubernetes-list-map-keys` marker, so both default to ATOMIC under SSA and the last applier owns
+the whole list.
+
+⚠ THAT IS FATAL FOR `routeTables` AND HARMLESS HERE, AND THE DIFFERENCE IS WORTH STATING. Two
+routeTables resources would have shared ONE Vpc's staticRoutes array and each would have converged by
+erasing the other. One security group owns its whole SecurityGroup object, so there is no second
+writer for atomicity to hurt.
+
+── What this platform does not reach ─────────────────────────────────────────────────────────────
+
+`tier` (an operator's layering control, not a tenant's), `remoteSecurityGroup` (a cross-resource
+reference with no reader — rule 2), `localAddress` and the source port range (per-rule refinements
+this shape has no slot for), and `policy: drop` / `policy: pass` (only meaningful against a broader
+allow at a higher priority, which is an arity this shape does not have). All are recorded in
+conformance.yaml § owed.

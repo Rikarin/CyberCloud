@@ -41,16 +41,26 @@ namespace CyberCloud.Providers.Network;
 ///             two instances silently delete each other is worse than that, so it is not declared.
 ///         </item>
 ///         <item>
-///             <b><c>virtualNetworks/securityGroups</c> — owed, and buildable.</b> Unlike route
-///             tables it has a real object: <c>SecurityGroup</c>, cluster-scoped, plural
-///             <b><c>security-groups</c></b> (hyphenated — a detail the CRD-stub derivation reads and
-///             a hand-written plural would get wrong). Its rule shape is
+///             <b><c>virtualNetworks/securityGroups</c> — SHIPPED, and the blocker it was owed for is
+///             solved by reshaping rather than disputed.</b> The blocker was real:
+///             <c>SecurityGroupSpec</c> is <c>ingressRules</c>/<c>egressRules</c> of
 ///             <c>SecurityGroupRule{ipVersion, protocol, priority, remoteType, remoteAddress,
-///             portRangeMin, portRangeMax, policy}</c> — an <b>array of objects</b>, which is the
-///             same <c>ElementKind</c> refusal static routes meet. So it is owed <i>and</i> it has a
-///             blocker, and the blocker is the platform's rather than the substrate's. See
-///             <c>charts/managed/kube-ovn-vpc/conformance.yaml § owed</c>,
-///             <c>security-group-rules-are-arrays-of-objects</c>.
+///             portRangeMin, portRangeMax, policy}</c> — an <b>array of objects</b>, which
+///             <c>SchemaProperty.ElementKind</c> still refuses and which this type does not send
+///             through a schema. What changed is the question. docs/plan/14 asks for a security group,
+///             not for a JSON transcription of Kube-OVN's rule struct, and a security group is
+///             expressible in scalars: <b>a group is one coherent allow-set and a port carries
+///             several</b>, which is the substrate's own composition model — a port's
+///             <c>…kubernetes.io/security_groups</c> annotation is a comma-separated list of group
+///             names. So the arity a single group needs is one, the remote is a v4 slot and a v6 slot
+///             (<c>addressSpace</c>'s shape, so <c>Cidr.V4Pattern</c> stays declarable), and the ports
+///             are one patterned string per protocol — which validates <i>more</i> at the API than an
+///             array of numbers could, because bounds are property constraints and there is no
+///             element-bounds member. ⚠ <b>The costs are real and are written down</b> on
+///             <see cref="NetworkSecurityGroups" /> and at
+///             <c>charts/managed/kube-ovn-security-group/conformance.yaml § owed</c>: no
+///             <c>protocol: all</c>, no security-group remote, no <c>drop</c> rule, and one group
+///             cannot pair different ports with different remotes.
 ///         </item>
 ///         <item>
 ///             <b><c>publicIpAddresses</c>, <c>dnsZones</c>, <c>loadBalancers</c>,
@@ -91,8 +101,32 @@ namespace CyberCloud.Providers.Network;
 ///         owed and this family is the second and third type to have to satisfy it by hand.
 ///     </para>
 ///     <para>
-///         ⚠ <b>No <c>SupportsSoftDelete</c> on either type</b>, for the reason every provider before
-///         this one gives: nothing in the manager reads <c>SoftDeleteDays</c>.
+///         ⚠ <b>NO <c>SupportsSoftDelete</c> ON ANY OF THE THREE — AND THE REASON EVERY PROVIDER IN
+///         THE TREE GIVES FOR THAT IS NOW FALSE.</b> Eleven files, this one included, said
+///         <i>"nothing in the manager reads <c>SoftDeleteDays</c>"</i>. It does:
+///         <c>ResourceManagerService.DeleteAsync</c> branches on
+///         <c>target.Registration.SoftDeleteDays &gt; 0</c> and calls
+///         <c>IResourceIndexGrain.SoftDeleteAsync</c> instead of <c>ReleaseAsync</c>, the operation
+///         spec carries <c>SoftDelete</c> forward, and <c>OperationGrain</c> withholds the committed
+///         quota until a purge. ⚠ <b>What is still missing is the half that matters to a tenant:
+///         <c>RestoreAsync</c> and <c>PurgeAsync</c> exist on the manager and have NO HTTP ROUTE.</b>
+///         So declaring a window today parks the name and <i>holds the quota</i> for the whole window,
+///         with no way for a tenant to recover the resource or to release it early. That is the wrong
+///         trade for every type here and is stated as the actual reason rather than the stale one.
+///         The type it would matter most for is <c>publicIpAddresses</c>, which is owed — see that
+///         entry.
+///     </para>
+///     <para>
+///         ⚠ <b>THE THREE ACTIONS ALL HAVE HANDLERS NOW, AND BEFORE THEY DID NOT THEY WERE
+///         <c>500</c>s.</b> When this family shipped, no provider in the tree had an action handler
+///         and there was nowhere to put one. The seam exists (<c>IResourceActionHandler</c>,
+///         <c>ActionDispatcher</c>), and a <b>synchronous action with no handler is refused by
+///         name</b> — <i>"declares the action '…' and no handler for it, so it cannot be run"</i>, an
+///         <c>InternalError</c>. So <c>showIsolation</c>, the one action in the catalogue whose
+///         content was ready, was publishing a <c>500</c> for the platform's own statement of what it
+///         does not protect a tenant from. All three are <see cref="ActionKind.Post" />, synchronous
+///         and handler-backed; none is <c>longRunning</c>, which <c>ProviderBuilder.Action</c> refuses
+///         to combine with a handler at silo start.
 ///     </para>
 /// </remarks>
 public sealed class NetworkProvider : IResourceProvider {
@@ -125,7 +159,11 @@ public sealed class NetworkProvider : IResourceProvider {
                 VirtualNetworks.ShowIsolationAction,
                 ActionKind.Post,
                 VirtualNetworks.ShowIsolationPermission,
-                response: VirtualNetworks.ShowIsolationResponse
+                response: VirtualNetworks.ShowIsolationResponse,
+                // ⚠ WITHOUT THIS THE ACTION IS A 500. ActionDispatcher refuses a synchronous action
+                // whose HandlerType is null, by name, as an InternalError — and this is the action
+                // that publishes what the platform does NOT protect a tenant from.
+                handler: typeof(ShowIsolationHandler)
             )
             // ⚠ `vnet`, which is docs/plan/21 § Grammar's own alias for this type and is neither a
             // group key nor an existing short name — see this class's remarks for the full check and
@@ -164,7 +202,8 @@ public sealed class NetworkProvider : IResourceProvider {
                 NetworkSubnets.AddressUsageAction,
                 ActionKind.Post,
                 NetworkSubnets.AddressUsagePermission,
-                response: NetworkSubnets.AddressUsageResponse
+                response: NetworkSubnets.AddressUsageResponse,
+                handler: typeof(ListAddressUsageHandler)
             )
             // ⚠ `subnet` — neither a group key (sample, dbforpostgresql, cache, messaging, storage,
             // search, documentdb, analytics, dbformysql, network) nor any existing short name
@@ -180,6 +219,48 @@ public sealed class NetworkProvider : IResourceProvider {
             )
             .Chart(NetworkSubnets.ChartName)
             .SupportsTags()
-            .RequiresCluster(NetworkSubnets.ClusterIdPointer);
+            .RequiresCluster(NetworkSubnets.ClusterIdPointer)
+            // ── The second child, docs/plan/14 § Virtual networks' `securityGroups/{name}` ─────
+            //
+            // ⚠ THE TYPE THE `not-a-firewall-by-default` ISOLATION LIMIT HAS BEEN POINTING AT SINCE
+            // THIS FAMILY SHIPPED. VirtualNetworks.IsolationLimits tells a tenant who wants a
+            // deny-by-default perimeter to "attach a securityGroups child, whose rules become OVN
+            // ACLs on the ports in the network" — and until now that row named a type that did not
+            // exist, which is the one kind of documentation defect a forbidden-word test cannot see.
+            .ResourceType(NetworkSecurityGroups.TypePath)
+            .ApiVersion(NetworkSecurityGroups.V2026, NetworkSecurityGroups.Schema2026)
+            .Reconciler<NetworkSecurityGroupReconciler>()
+            // ⚠ `Resources`, and the reasoning is the family's rather than a copy of it: a
+            // SecurityGroup is an OVN port group and a handful of ACL rows. No pod, no disk — and
+            // unlike a subnet there is not even a tempting wrong answer, because nothing about a rule
+            // list is a quantity of anything scarce. What limits how many a tenant may have is the
+            // count.
+            .Meters(QuotaMeter.Resources)
+            .Permissions("read", "write", "delete")
+            .Action(
+                NetworkSecurityGroups.EffectiveRulesAction,
+                ActionKind.Post,
+                NetworkSecurityGroups.EffectiveRulesPermission,
+                response: NetworkSecurityGroups.EffectiveRulesResponse,
+                handler: typeof(ShowEffectiveRulesHandler)
+            )
+            // ⚠ `secgroup` — checked against the eleven group keys (sample, dbforpostgresql, cache,
+            // messaging, storage, search, documentdb, analytics, dbformysql, network,
+            // containerservice) and against every existing short name, as literals, and against
+            // `vnet` and `subnet`. NOT `sg`, which is Kube-OVN's own shortName: two characters is a
+            // prefix somebody will collide with, and System.CommandLine's ValidTokens is ONE
+            // dictionary of every command token and alias in the tree, so a collision throws
+            // `ArgumentException` on the first parse of ANY command line, naming neither the provider
+            // nor the string. NetworkDeclarationTests asserts it.
+            .Display(
+                "Security group",
+                "Security groups",
+                shortName: "secgroup",
+                summary: "A deny-by-default set of allow rules that become OVN ACLs on the ports in a "
+                + "virtual network. A workload may carry several."
+            )
+            .Chart(NetworkSecurityGroups.ChartName)
+            .SupportsTags()
+            .RequiresCluster(NetworkSecurityGroups.ClusterIdPointer);
     }
 }

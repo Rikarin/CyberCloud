@@ -863,6 +863,82 @@ the argument above; `securityGroups`, `publicIpAddresses`, `dnsZones`, `loadBala
 `vpnGateways` are **owed**, each with what was learned about it at `NetworkProvider`'s remarks rather
 than left as a bare gap.
 
+### What the eleventh provider's second pass measured
+
+⚠ **`virtualNetworks/securityGroups` landed, and the blocker it was owed for was solved by reshaping
+rather than disputed.** The blocker was real and is unchanged: `SchemaProperty.ElementKind` still
+refuses an array of objects, and Kube-OVN's `SecurityGroupRule` is one. **What changed is the
+question.** docs/plan/14 asks for a security group, not for a JSON transcription of that struct, and a
+security group is expressible in scalars once you take the substrate's own composition model
+seriously: **a group is one coherent allow-set and a port carries several** — a port's
+`…kubernetes.io/security_groups` annotation is a *comma-separated list of group names*, so the arity a
+single group needs is **one**. The remote is then a v4 slot and a v6 slot (`addressSpace`'s shape, so
+`Cidr.V4Pattern` stays declarable) and the ports are one patterned string per protocol.
+
+- ⚠ **The reshape validates MORE at the API, not less, and that is the part worth generalising.** The
+  reflex is that a string is a weaker type than an array of numbers. It is the opposite here:
+  `Minimum`/`Maximum` are **property** constraints on `SchemaProperty` and there is **no per-element
+  bounds member**, so an `Array` of `WholeNumber` could carry no range check at all — and ADR-012's
+  fifth surface refuses `@pattern` on an array outright. `PortRange.OptionalListPattern` is an exact
+  1–65535 grammar, six alternation branches with **disjoint leading digits** so it stays linear, and
+  it refuses `0`, `65536` and `99999` with a `400` and a JSON Pointer **before the write path
+  answers**. ⚠ It is deliberately *unlike* `Cidr.V4Pattern`, which is shape-only — a complete IPv6
+  grammar in one expression is a catastrophic-backtracking hazard on a request path and a bounded
+  decimal integer is not. **So this family now enforces exactly as much as each property can bear,
+  rather than one rule for all of them.** What is left after the 202 is one relation, `min <= max`.
+- ⚠ **Failure class (b) was answered from the substrate and the answer is the good one.** Read in
+  `pkg/ovs/ovn-nb-acl.go`: `CreateSgDenyAllACL` installs `outport == @{pg} && ip` and
+  `inport == @{pg} && ip` with action **drop** at `SecurityGroupDropPriority` (2003), `CreateSgBaseACL`
+  adds ARP/ICMPv6/DHCP/VRRP at 2005, every rule this type writes lands at 2004, and
+  `pkg/controller/security_group.go` has **no special case for an empty rule list**. So an empty
+  security group **permits nothing** and a tenant cannot reach "allow everything" by omission. The
+  schema therefore has no `defaultPolicy` property — there is one policy and the substrate chose it —
+  and the only field that grants unwritten traffic, `allowSameGroupTraffic`, defaults off and is sent
+  **explicitly**, because "the substrate's zero value happens to be safe" is a fact about a version of
+  Go source rather than a property of the resource.
+- ⚠ **The first object in the family whose spec the controller does NOT rewrite, and containment is
+  still right.** Every write `pkg/controller/security_group.go` makes is `patchSgStatus`, a merge patch
+  against the `"status"` subresource; there is no spec update anywhere in the file. Three files in this
+  family argue containment from "the controller writes back to `.spec`" and that argument does not
+  hold here. Containment applies anyway for the general reason, which is the more durable one.
+- ⚠ **Atomic-under-SSA is fatal for `routeTables` and harmless here, and the difference is the
+  ownership rather than the marker.** Neither `ingressRules` nor `egressRules` carries an
+  `x-kubernetes-list-type`. Two `routeTables` resources would have shared **one** `Vpc`'s array; one
+  security group owns its whole object, so there is no second writer for atomicity to hurt. **"No
+  list-type marker" is not by itself a refusal** — it is a refusal only when two resources would write
+  one array, which is worth separating because the first family to meet it wrote them down together.
+- ⚠ **THREE DECLARED ACTIONS IN THIS TREE WERE ANSWERING `500`, AND TWO OF THEM WERE THIS FAMILY'S.**
+  When these types shipped, no provider had an action handler and there was nowhere to put one. The
+  seam exists now, and `ActionDispatcher` **refuses a synchronous action whose `HandlerType` is
+  null**, by name, as an `InternalError`. So `showIsolation` — recorded at the time as *"the only
+  action in the catalogue whose content is ready and whose plumbing is not"* — was publishing a `500`
+  for the platform's own statement of what it does **not** protect a tenant from. All three now have
+  handlers, and `NetworkDeclarationTests` asserts every declared action names one **and** that the
+  instance reports its own type and action, which `ProviderBuilder.Action` cannot check because it
+  holds a `Type`.
+- ⚠ **"Nothing in the manager reads `SoftDeleteDays`" is FALSE and eleven files say it.**
+  `ResourceManagerService.DeleteAsync` branches on `SoftDeleteDays > 0` and calls
+  `IResourceIndexGrain.SoftDeleteAsync` instead of `ReleaseAsync`; `OperationSpec.SoftDelete` carries
+  it forward and `OperationGrain` **withholds the committed quota until a purge**. ⚠ **What is still
+  missing is the half a tenant needs: `RestoreAsync` and `PurgeAsync` have no HTTP route.** So a window
+  declared today parks the name *and holds the quota* for its whole length with no way to recover the
+  resource or release it early. That is now the stated reason no type here declares one — a live
+  refutation of the sentence every provider in the tree copies, and the decision it changes is
+  `publicIpAddresses`', where the meter being withheld is the platform's scarcest.
+- ⚠ **A short-name list that nobody noticed was out of date proved nothing.** `NetworkDeclarationTests`
+  checked two short names against **ten** group keys and twelve existing aliases; `containerservice`,
+  `aks` and `nodepool` had been in the tree the whole time and were never typed in. Nothing collided,
+  so nothing broke — the check was luck. All three are in now, and the list's own remarks already
+  predicted exactly this.
+- **`showEffectiveRules` is the reshape's other half rather than a third action for its own sake.** The
+  cost of six scalars is that the mapping to rules is a cross product a tenant has to do in their head;
+  the action publishes the expansion, in the order the fabric gets it, from the stored body. It is a
+  pure function and reaches no cluster, which is what lets it be synchronous.
+
+**What landed on this pass: `virtualNetworks/securityGroups`, plus handlers for all three of the
+family's actions.** `publicIpAddresses`, `dnsZones`, `loadBalancers` and `vpnGateways` remain
+**owed**; `routeTables` remains **refused**.
+
 ## Planned namespaces
 
 `Platform`, `Identity`, `Compute`, `ContainerInstance`, `ContainerRegistry`,
