@@ -92,9 +92,9 @@ jobs:
         run: |
           context="${{ secrets.STAGING_KUBE_CONTEXT }}"
           [ -n "$context" ] || context="$(kubectl config current-context)"
-          ./build.sh E2E \
+          .github/scripts/run-build.sh "$RUNNER_TEMP/e2e.log" E2E \
             --e2e-base-url "$E2E_BASE_URL" \
-            --kube-context "$context" 2>&1 | tee "$RUNNER_TEMP/e2e.log"
+            --kube-context "$context"
 
       - name: The bootstrap half ran, whatever the suite did
         if: always()
@@ -145,9 +145,9 @@ jobs:
 
       - name: ./build.sh E2E against the kind cluster
         run: |
-          ./build.sh E2E \
+          .github/scripts/run-build.sh "$RUNNER_TEMP/cluster-e2e.log" E2E \
             --e2e-base-url "http://cluster-e2e.invalid" \
-            --kube-context kind-cluster-e2e 2>&1 | tee "$RUNNER_TEMP/cluster-e2e.log"
+            --kube-context kind-cluster-e2e
 
       # ⚠ The step that stops this job from being a cluster nobody talked to. `./build.sh E2E` above
       # is expected to end red on its missing-suite precondition, so without this the log would be
@@ -187,10 +187,9 @@ jobs:
 
       - name: ./build.sh E2E against the ${{ matrix.leg }} cluster
         run: |
-          ./build.sh E2E \
+          .github/scripts/run-build.sh "$RUNNER_TEMP/hostile.log" E2E \
             --e2e-base-url "http://hostile-${{ matrix.leg }}.invalid" \
-            --kube-context "kind-hostile-${{ matrix.leg }}" 2>&1 \
-            | tee "$RUNNER_TEMP/hostile.log"
+            --kube-context "kind-hostile-${{ matrix.leg }}"
 
       - name: The dry-run reached the hostile API server
         if: always()
@@ -277,10 +276,14 @@ jobs:
       # ⚠ The whole history, not the diff. A secret that was committed and then removed is still on
       # every clone and still valid; the per-PR scan cannot see it, because by then it is not in any
       # diff under review.
+      # ⚠ No `--fail` in extra_args. The action's own entrypoint already passes it, and trufflehog
+      # rejects the repeat outright — "error: flag 'fail' cannot be repeated" — which is how this
+      # step failed every night: not on a finding, but before scanning anything at all. The failing
+      # behaviour the flag asks for is the action's default and is unchanged by dropping it.
       - name: Secret scan, full history
         uses: trufflesecurity/trufflehog@6f3c981e7b77f235fd2702dd74af25fc4b72bf11 # v3.96.0
         with:
-          extra_args: --results=verified,unknown --fail
+          extra_args: --results=verified,unknown
 
       # Re-run nightly as well as per-PR: advisories are published against packages nobody touched,
       # so a repository with no PRs for a week is a repository whose audit is a week old.
