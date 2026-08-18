@@ -373,6 +373,28 @@ public abstract class ClusterConformanceTests<TSource>(ClusterConformanceFixture
         // ⚠ IT IS NOT A SLEEP AND IT IS NOT A RACE. The wait is bounded and its failure message is the
         // same one the assertion gave, so a delete that genuinely does not land still fails here and
         // still names the object. What it stops doing is calling a finalizer a bug.
+        // ⚠ THE ORPHAN'S SPEC IS COPIED FROM A REAL OBJECT, AND IT IS READ BEFORE THE DELETE.
+        //
+        // The orphan below used to be applied as apiVersion + kind + metadata and nothing else. That
+        // is a valid object for a custom resource — a CRD stub with
+        // `x-kubernetes-preserve-unknown-fields` requires nothing — and it is an INVALID object for a
+        // built-in with required spec fields. `CyberCloud.Terminal/consoles` is the first family to
+        // render one, and the API server refused the metadata-only apply outright:
+        //
+        //   PersistentVolumeClaim "real-drift-orphan" is invalid:
+        //     spec.accessModes: Required value: at least 1 access mode is required,
+        //     spec.resources[storage]: Required value
+        //
+        // Copying the spec off an object the provider really converged is generic — it works for a
+        // CRD and a built-in alike, it needs no new member on ProviderConformanceCase, and it is the
+        // more faithful fake: a rival controller creating a lookalike creates a VALID one. The read
+        // has to happen here, before the loop below deletes everything it could have read.
+        var orphanSpec =
+            JsonNode.Parse(await ReadFromClusterAsync(harness, target, token) ?? "{}") is JsonObject real
+            && real.TryGetPropertyValue("spec", out var spec)
+                ? spec?.DeepClone()
+                : null;
+
         foreach (var each in owned) {
             await DeleteFromClusterAsync(harness, each, token);
             await WaitUntilAbsentAsync(harness, each, token);
@@ -383,27 +405,33 @@ public abstract class ClusterConformanceTests<TSource>(ClusterConformanceFixture
         var orphanId = Guid.Parse("0a0a0a0a-0000-4000-8000-00000000000a");
         var orphanTarget = target with { Name = "real-drift-orphan" };
 
-        await RivalApplyAsync(
-            harness,
-            orphanTarget,
-            "someone-elses-controller",
-            new JsonObject {
-                ["apiVersion"] = ApiVersionOf(target.Kind),
-                ["kind"] = target.Kind.Kind,
-                ["metadata"] = new JsonObject {
-                    ["name"] = orphanTarget.Name,
-                    ["namespace"] = orphanTarget.Namespace,
-                    ["labels"] = new JsonObject {
-                        [KubeLabels.ManagedBy] = KubeLabels.ManagedByValue,
-                        [KubeLabels.ResourceId] = KubeLabels.GuidValue(orphanId)
-                    },
-                    ["annotations"] = new JsonObject {
-                        [KubeLabels.ResourcePathAnnotation] = "/orphaned/by/nobody"
-                    }
+        var orphanBody = new JsonObject {
+            ["apiVersion"] = ApiVersionOf(target.Kind),
+            ["kind"] = target.Kind.Kind,
+            ["metadata"] = new JsonObject {
+                ["name"] = orphanTarget.Name,
+                ["namespace"] = orphanTarget.Namespace,
+                ["labels"] = new JsonObject {
+                    [KubeLabels.ManagedBy] = KubeLabels.ManagedByValue,
+                    [KubeLabels.ResourceId] = KubeLabels.GuidValue(orphanId)
+                },
+                ["annotations"] = new JsonObject {
+                    [KubeLabels.ResourcePathAnnotation] = "/orphaned/by/nobody"
                 }
-            }.ToJsonString(),
-            token
-        );
+            }
+        };
+
+        // ⚠ ADDED only when there is one, never assigned. `orphanBody["spec"] = null` writes
+        // `"spec": null`, and a kind with no spec at all refuses that outright —
+        // `CyberCloud.Storage/accounts` renders a Secret and the API server answered
+        // 500 "failed to create typed patch object … .spec: field not declared in schema".
+        // A kind with no spec must get a body with no spec key, which is exactly what the eleven
+        // families that render custom resources always sent.
+        if (orphanSpec is not null) {
+            orphanBody["spec"] = orphanSpec;
+        }
+
+        await RivalApplyAsync(harness, orphanTarget, "someone-elses-controller", orphanBody.ToJsonString(), token);
 
         // ── THE SCAN. A real LIST against the real API server, filtered by the selector
         //    docs/plan/09 § Observing specifies, joined on the resource-id label ADR-013 puts there
