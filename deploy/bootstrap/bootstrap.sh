@@ -137,7 +137,18 @@ step "2/5  Orleans membership CRDs (cluster-scoped)"
 # that grows past 262 144 bytes turns a working `apply` into a hard failure on a later, unrelated
 # edit. These two are tiny today. The habit is what matters, because the fix after the fact is
 # `kubectl replace`.
-"${APPLY[@]}" --server-side --field-manager=cybercloud-bootstrap -f "$RENDERED/10-orleans-crds.yaml"
+#
+# ⚠ AND `--dry-run=server` RATHER THAN THE `--dry-run=client` IN "${APPLY[@]}", ON THIS STEP ONLY.
+# kubectl refuses the pair outright — "error: --dry-run=client doesn't work with --server-side" —
+# so with --dry-run this line did not perform a weaker check, it exited 1 and took the whole script
+# with it. Every nightly cluster-e2e and all four hostile-byo legs died here, three steps into a
+# dry run they had built a cluster for. Server-side apply's dry run is the coherent partner
+# anyway: it is the same admission path the real apply takes, minus the write.
+CRD_APPLY=("${APPLY[@]}")
+if [ "$DRY_RUN" = "true" ]; then
+    CRD_APPLY=("${KUBECTL[@]}" apply --dry-run=server)
+fi
+"${CRD_APPLY[@]}" --server-side --field-manager=cybercloud-bootstrap -f "$RENDERED/10-orleans-crds.yaml"
 
 if [ "$DRY_RUN" != "true" ]; then
     # Established, not merely created: the API server has to accept `orleans.dot.net/v1` before a silo

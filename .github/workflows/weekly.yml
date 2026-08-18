@@ -64,7 +64,7 @@ jobs:
       # is unenforceable and "the budgets alone would pass a release that got five times slower
       # while staying under them".
       - name: ./build.sh Load
-        run: ./build.sh Load --e2e-base-url "$E2E_BASE_URL" 2>&1 | tee "$RUNNER_TEMP/load.log"
+        run: .github/scripts/run-build.sh "$RUNNER_TEMP/load.log" Load --e2e-base-url "$E2E_BASE_URL"
 
       - name: Upload the load results
         if: always()
@@ -123,9 +123,9 @@ jobs:
 
       - name: ./build.sh Licence
         run: |
-          ./build.sh Licence \
+          .github/scripts/run-build.sh "$RUNNER_TEMP/licence.log" Licence \
             --container-registry "$CONTAINER_REGISTRY" \
-            --container-image-tag "weekly-${GITHUB_SHA::7}" 2>&1 | tee "$RUNNER_TEMP/licence.log"
+            --container-image-tag "weekly-${GITHUB_SHA::7}"
 
       # The moment there is something to scan, a stub that scans it is no longer an acceptable pass.
       - name: Licence is not a stub over real artefacts
