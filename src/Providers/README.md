@@ -930,6 +930,31 @@ single group needs is **one**. The remote is then a v4 slot and a v6 slot (`addr
   `aks` and `nodepool` had been in the tree the whole time and were never typed in. Nothing collided,
   so nothing broke — the check was luck. All three are in now, and the list's own remarks already
   predicted exactly this.
+- ⚠ **THE SECOND HARNESS CHANGE THIS FAMILY HAS NEEDED, AND THE SHAPE IS IDENTICAL TO THE FIRST.**
+  `ProviderTestCluster.Handlers()` and `ClusterConformanceHarness.Handlers()` each built a **bare**
+  `ServiceCollection` holding nothing but the handler types. That worked for exactly as long as every
+  handler had a parameterless constructor — one did, for one provider. The first handler to take an
+  `IClock` failed with *"Unable to resolve service for type 'CyberCloud.Core.Time.IClock' while
+  attempting to activate '…'"*, thrown from `ActionDispatcher`'s `GetService`, which names the
+  **handler** and reads as a provider bug. ⚠ **It is a harness bug, and the proof is that production
+  works**: `AddCyberCloudResourceManager` registers `IClock`, `IClusterConnectionFactory` and
+  `ISecretResolver`, and `AddCyberCloudProvider` puts the handler into *that same* container — so a
+  separate container with strictly less in it made the suite ask less than the platform provides.
+  Both harnesses now register their own doubles, so a handler reads the vault its case's reconciler
+  minted into and sees the world its reconciler applied to. ⚠ Both were fixed together on purpose: one
+  alone would have left the Docker-backed run failing later for a cause the Docker-free run had
+  already solved. **The precedent is `ClusterConformanceHarness`'s hard-coded `Scope = "Namespaced"`,
+  and the lesson generalises: the harness quietly agrees with every provider so far about whatever no
+  provider has yet had to think about.**
+- ⚠ **`QuotaMeter.PublicIps` is a FLAT meter and the "first expressible" claim is now confirmed at the
+  code.** `ResourceManagerService.AmountFor` answers `meter.Fallback ?? 1m` for a meter with an empty
+  `AmountPointer`, so `.Meters(QuotaMeter.PublicIps, …)` needs no pointer, no fallback and no
+  `MeterDerivation`. There is nothing left to solve on the quota side for `publicIpAddresses`.
+  ⚠ **And its soft-delete question is decided in advance, because it looks obvious and is backwards.**
+  "Releasing a scarce address is what a recovery window is for" — except what `SupportsSoftDelete`
+  does today is park the name **and withhold the committed quota until a purge**, and there is no
+  purge route. A window would hold a tenant's `PublicIps` allowance against addresses they deleted,
+  for its whole length, unrecoverably. It becomes right the day a purge route exists.
 - **`showEffectiveRules` is the reshape's other half rather than a third action for its own sake.** The
   cost of six scalars is that the mapping to rules is a cross product a tenant has to do in their head;
   the action publishes the expansion, in the order the fabric gets it, from the stored body. It is a

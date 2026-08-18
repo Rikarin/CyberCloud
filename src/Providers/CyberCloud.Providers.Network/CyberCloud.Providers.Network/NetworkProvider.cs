@@ -72,11 +72,31 @@ namespace CyberCloud.Providers.Network;
 ///             <c>QuotaGrain.TryReserveAsync</c> refusing a non-positive amount for a
 ///             <i>conditional</i> meter. <b>An address resource does not have that problem</b>: it
 ///             draws exactly one, unconditionally, which is the first body in the tree for which that
-///             meter is expressible at all. ⚠ And doc 14 § Load balancing names the real design
+///             meter is expressible at all. ⚠ <b>That is now confirmed at the code rather than
+///             argued</b>: <c>ResourceManagerService.AmountFor</c> answers
+///             <c>meter.Fallback ?? 1m</c> for a meter with an empty <c>AmountPointer</c>, so
+///             <c>.Meters(QuotaMeter.PublicIps, QuotaMeter.Resources)</c> is a <b>flat</b> meter of one
+///             and needs no pointer, no fallback and no <c>MeterDerivation</c>. There is nothing left
+///             to solve on the quota side. ⚠ And doc 14 § Load balancing names the real design
 ///             hazard, which was verified: the allocator depends on where the address lives —
 ///             Cilium LB-IPAM for the platform fabric, a Kube-OVN <c>IptablesEIP</c>/<c>OvnEip</c>
 ///             bound to the VPC's router for a tenant address — and both surface as one resource
 ///             type. Both objects exist and are cluster-scoped.
+///             <para>
+///                 ⚠ <b>AND THE SOFT-DELETE QUESTION IS DECIDED IN ADVANCE, BECAUSE IT IS THE ONE
+///                 THAT LOOKS OBVIOUS AND IS BACKWARDS.</b> The tempting reading is that releasing a
+///                 scarce address is exactly what a recovery window is for. What
+///                 <c>SupportsSoftDelete</c> <i>does</i> today is park the name in the index
+///                 <b>and withhold the committed quota until a purge</b> —
+///                 <c>OperationGrain</c> returns <c>CommittedQuota</c> only when the operation is a
+///                 delete that is <i>not</i> soft — while <c>RestoreAsync</c> and <c>PurgeAsync</c>
+///                 have <b>no HTTP route</b>. So a window on this type would hold a tenant's
+///                 <c>PublicIps</c> allowance — 20 by default — against addresses they deleted, for
+///                 the whole window, with no way to recover one and no way to release one early. That
+///                 is a one-way quota leak on the platform's scarcest meter, and it is the opposite
+///                 of what the feature is for. <b>The window becomes right the day a purge route
+///                 exists</b>, and not before.
+///             </para>
 ///         </item>
 ///     </list>
 ///     <para>

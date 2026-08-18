@@ -121,9 +121,25 @@ public sealed class ClusterConformanceHarness<TSource> : IAsyncDisposable
     /// <remarks>
     ///     ⚠ Built from the registry rather than from a member on the case — the provider already
     ///     says which handler serves which action, and a second declaration is one that can disagree.
+    ///     <para>
+    ///         ⚠ <b>THE SEAMS ARE REGISTERED ALONGSIDE, FOR THE REASON
+    ///         <c>ProviderTestCluster.Handlers</c> RECORDS IN FULL.</b> This container held only the
+    ///         handler types, which worked for exactly as long as every handler had a parameterless
+    ///         constructor. A handler taking an <c>IClock</c> fails to activate with a message naming
+    ///         the handler, thrown from <c>ActionDispatcher</c>'s <c>GetService</c> — and it is a
+    ///         harness bug rather than a provider one, because
+    ///         <c>AddCyberCloudResourceManager</c> registers these and
+    ///         <c>AddCyberCloudProvider</c> puts the handler in that same container. ⚠ The two
+    ///         harnesses are fixed together deliberately: a fix in one would leave the other failing
+    ///         later, on a Docker-backed run, for a reason the Docker-free run had already solved.
+    ///     </para>
     /// </remarks>
     ServiceProvider Handlers() {
         var services = new ServiceCollection();
+
+        services.AddSingleton<IClock>(ClusterConformanceState<TSource>.Clock);
+        services.AddSingleton<ISecretResolver>(ClusterConformanceState<TSource>.Vault);
+        services.AddSingleton<ISecretWriter>(ClusterConformanceState<TSource>.Vault);
 
         foreach (var handler in Registry.Types
             .SelectMany(x => x.Actions)
