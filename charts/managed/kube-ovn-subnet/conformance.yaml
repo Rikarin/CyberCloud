@@ -95,19 +95,26 @@ meters:
 owed:
   - id: object-matches-desired-cannot-see-an-address
     says: >
-      ⚠ SECOND SIGHTING OF charts/managed/seaweedfs-bucket'S FINDING, AND THE FIRST TIME IT WAS
-      PREDICTED RATHER THAN DISCOVERED BY A RED SUITE. ProviderConformanceCase.ObjectMatchesDesired is
-      `(objectJson, desiredJson) => bool` and carries NO ADDRESS, which is exactly right for the
-      top-level types whose whole rendered spec is a function of the body. A subnet's is not:
-      `spec.vpc` is its PARENT'S object name and lives only in the address. So the predicate the shared
-      suite evaluates (NetworkSubnets.MatchesBody — the CIDR, natOutgoing, private, enableDHCP) is
-      strictly smaller than the one the reconciler evaluates (NetworkSubnets.Matches, which adds
-      spec.vpc), and the same five assertions the bucket names check less for a subnet than they would
-      for a network. ⚠ WHAT STANDS IN: NetworkReconcilerTests asserts spec.vpc against real addresses,
-      including two networks in ONE resource group each holding a subnet called `web`. Closing it is an
-      ObjectMatchesDesired overload taking the ResourceId — a change to ProviderConformanceCase and
-      therefore to every provider's case file, so it is recorded rather than made unilaterally by the
-      second type that wanted it. ⚠ Two sightings now; the third should probably just make the change.
+      ⚠ SETTLED — this was the second sighting, and the note asking the third to make the change
+      rather than record it again is what got it made. Kept under § owed rather than deleted because
+      several files cite this id.
+
+      WHAT IT WAS: ProviderConformanceCase.ObjectMatchesDesired was `(objectJson, desiredJson) => bool`
+      and carried NO ADDRESS. A subnet's `spec.vpc` is its PARENT'S object name and lives only in the
+      address, so the predicate the shared suite evaluated (NetworkSubnets.MatchesBody — the CIDR,
+      natOutgoing, private, enableDHCP) was strictly smaller than NetworkSubnets.Matches, and the same
+      five assertions the bucket names checked less for a subnet than for a network. That mattered
+      more here than anywhere: a Subnet whose `vpc` is wrong hands out addresses inside a DIFFERENT
+      tenant's routing domain under this tenant's resource id.
+
+      HOW IT WAS CLOSED: ObjectMatchesDesired now takes a `MatchContext` carrying the resolved
+      ResourceId and the ObjectRef. This case calls the whole NetworkSubnets.Matches, taking the
+      namespace from `match.Target` rather than re-deriving it. Sabotaged and confirmed: rendering a
+      constant `vpc` turns WhatTheProviderAppliedIsInTheClusterAndMatchesTheDesiredBody red for the
+      subnet and leaves the network and security-group cases green.
+
+      WHAT IS STILL NOT CHECKED HERE: two networks in ONE resource group each holding a subnet called
+      `web`. The harness brings up one parent per run; NetworkReconcilerTests keeps asserting it.
   - id: subnets-are-not-checked-against-the-address-space
     says: >
       Nothing compares this subnet's `addressPrefix` to its parent's declared `addressSpace`, so a
