@@ -1119,7 +1119,7 @@ public static class CloudConsoles {
     ///         back and the cluster-backed harness derives an open CRD stub with no defaults, so an
     ///         equality bug on this type would be green in both suites and red only against a real API
     ///         server — which <c>CyberCloud.Providers.Search</c> measured at 27 of 27 green over
-    ///         exactly that. <c>ConsoleMatchesTests</c> is the hand-written test that catches it and
+    ///         exactly that. <c>ConsolePodTests</c> is the hand-written suite that catches it and
     ///         it is the only thing that can.
     ///     </para>
     ///     <para>
