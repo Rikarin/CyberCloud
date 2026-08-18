@@ -110,24 +110,62 @@ namespace CyberCloud.Providers.Network;
 ///             </para>
 ///         </item>
 ///         <item>
-///             <b><c>dnsZones</c>, <c>loadBalancers</c>, <c>vpnGateways</c> — owed.</b> Each is M1 in
-///             docs/plan/14 and none is declared. ⚠ <c>dnsZones</c> is the one whose absence is least
-///             about software: docs/plan/14 is explicit that <i>"the provider is 1.5 EM; the
-///             operations are the cost"</i> — anycast nameservers, DDoS absorption, and being the
-///             reason a customer's whole business is offline when it breaks — and that <b>the decision
-///             whether the platform runs authoritative DNS or fronts a wholesale provider has not been
-///             taken</b>. A resource type declared before that decision would pick it by accident.
-///             ⚠ <c>loadBalancers</c> and <c>vpnGateways</c> both need the reshape
-///             <see cref="NetworkSecurityGroups" /> established — a backend set and a peer list are
-///             both arrays of objects, which <c>SchemaProperty.ElementKind</c> refuses — and
-///             <c>loadBalancers</c> additionally needs a <b>reader</b>: docs/plan/14 has its backend
-///             pools <i>"reference resource ids (a VM, a scale set, a cluster's node pool), resolved
-///             by the reconciler into endpoints"</i>, and rule 2 routes a cross-resource reference
-///             through <c>CyberCloud.ResourceManager</c>, which a reconciler cannot reach. It is the
-///             same shape as <c>a-security-group-cannot-be-a-remote</c> and it wants the same reader.
-///             ⚠ <c>publicIpAddresses</c> shipping is nevertheless the half of
-///             docs/plan/14 § Load balancing that could be built alone: the address exists now and
-///             something can be given it.
+///             ⚠ <b><c>dnsZones</c> — OWED, AND THE BLOCKER IS NOT THE PROVIDER.</b> docs/plan/14
+///             § DNS asks for <i>"public authoritative and private zones, one resource type,
+///             <c>zoneType</c> distinguishes them"</i> over PowerDNS <i>"with a custom backend reading
+///             from a grain-fed projection"</i>. Three things were checked before deciding not to
+///             declare it, and each of them alone is enough:
+///             <list type="number">
+///                 <item>
+///                     <b>There is no DNS server anywhere in this repository.</b> No chart in
+///                     <c>charts/managed</c> and no provider serves one, so a <c>dnsZones</c>
+///                     reconciler would have nothing to converge onto — <i>"a type in the registry
+///                     with no reconciler answers 202 and converges nothing"</i>, one step worse.
+///                 </item>
+///                 <item>
+///                     <b>Global apex uniqueness has no seam, and docs/plan/14 knows it.</b> That
+///                     document requires <i>"zone apex uniqueness is global, which makes
+///                     <c>IDnsZoneIndexGrain</c> a null-tenant index grain in the global cluster —
+///                     one of very few things that genuinely must be"</i>. <c>IResourceIndexGrain</c>
+///                     is keyed on <c>GrainKeys.PathIndex(address)</c> and is reached through
+///                     <c>ForTenant</c>, so every uniqueness it can enforce is <i>within</i> a
+///                     tenant. <c>IEmailIndexGrain</c> is the shape a global one would take and it
+///                     does not exist for zones. Adding it is <c>CyberCloud.Tenancy</c> and
+///                     <c>CyberCloud.ResourceManager</c> surface, which is platform rather than a
+///                     provider's — the same boundary <see cref="NetworkAddressing" /> records for
+///                     <c>Validates(...)</c>.
+///                 </item>
+///                 <item>
+///                     ⚠ <b>A decision the platform has not taken would be taken by accident.</b>
+///                     docs/plan/14: <i>"the provider is 1.5 EM; the operations are the cost … the
+///                     decision to make before M1 is whether we run it or front a wholesale
+///                     provider — and either is defensible, but pretending the software is the whole
+///                     job is not"</i>. Running public authoritative DNS means anycast nameservers,
+///                     DDoS absorption, and being the reason a customer's whole business is offline.
+///                     A shipped <c>zoneType: public</c> is that decision, made in a schema.
+///             </item>
+///             </list>
+///             ⚠ <b>What is NOT a blocker, and is worth recording because it looks like one</b>: the
+///             address model already carries record sets. <c>ResourceIdTests</c> round-trips
+///             <c>dnsZones/recordSets/a</c> — a <b>three-segment</b> type path — so
+///             <c>…/dnsZones/{zone}/recordSets/{name}/a/{record}</c> needs nothing from
+///             <c>ResourceId</c>.
+///         </item>
+///         <item>
+///             <b><c>loadBalancers</c>, <c>vpnGateways</c> — owed.</b> Both need the reshape
+///             <see cref="NetworkSecurityGroups" /> established, because a backend set and a peer list
+///             are both arrays of objects and <c>SchemaProperty.ElementKind</c> refuses one — and both
+///             are harder to reshape than a rule list was, because a backend and a peer each carry a
+///             <i>reference</i> rather than only scalars. ⚠ <c>loadBalancers</c> additionally needs a
+///             <b>reader</b>: docs/plan/14 has its backend pools <i>"reference resource ids (a VM, a
+///             scale set, a cluster's node pool), resolved by the reconciler into endpoints"</i>, and
+///             <c>ReconcileContext</c> carries a cluster connection, an <c>ISecretResolver</c> and
+///             nothing else. It is the same shape as <c>a-security-group-cannot-be-a-remote</c> and it
+///             wants the same reader. ⚠ <b><c>publicIpAddresses</c> shipping is nevertheless the half
+///             of docs/plan/14 § Load balancing that could be built alone</b>: the address exists now,
+///             it is metered, and the object a load balancer would attach to it — an <c>OvnFip</c> or
+///             an <c>OvnDnatRule</c> naming <see cref="PublicIpAddresses.ObjectNameOf" />'s output —
+///             is derivable from a resource id, so nothing here forecloses it.
 ///         </item>
 ///     </list>
 ///     <para>

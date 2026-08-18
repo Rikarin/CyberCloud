@@ -963,6 +963,106 @@ single group needs is **one**. The remote is then a v4 slot and a v6 slot (`addr
 **What landed on this pass: `virtualNetworks/securityGroups`, plus handlers for all three of the
 family's actions.** `publicIpAddresses`, `dnsZones`, `loadBalancers` and `vpnGateways` remain
 **owed**; `routeTables` remains **refused**.
+
+### What the eleventh provider's third pass measured
+
+⚠ **`publicIpAddresses` landed, and it is the first type in the platform that draws
+`QuotaMeter.PublicIps`.** That meter has been in `QuotaGrain`'s defaults — 20 per subscription — since
+before this family existed and **nothing had ever drawn it**. The reason was recorded on the previous
+pass and held: every provider that reached for it wanted a *conditional* draw (an address only when a
+body asked for external exposure) and `QuotaGrain.TryReserveAsync` refuses a non-positive amount by
+name. An address resource draws exactly one, unconditionally, and `ResourceManagerService.AmountFor`
+answers `meter.Fallback ?? 1m` for an empty `AmountPointer`, so `.Meters(PublicIps, Resources)` is
+**flat** — no pointer, no fallback, no `MeterDerivation`.
+
+- ⚠ **What keeps the draw unconditional is an ABSENCE, and it is the finding that generalises.** The
+  obvious property to add is `ipVersion`, and it must not be added — twice over. First, for
+  `NetworkSubnets`' `protocol` reason: the families an EIP gets are decided by the **external pool**
+  it comes from (`acquireIPAddress` returns whatever that subnet carries), so the control would be one
+  the substrate ignores. Second, and harder: **a tenant who could ask for an IPv6-only address would
+  be asking for a resource that draws zero scarce addresses**, and a zero draw is the exact thing
+  `TryReserveAsync` refuses. So "a meter that may draw zero" is the seam an IPv6-only address wants,
+  and it is `CyberCloud.Tenancy`'s rather than a provider's. **The absence of a property is what makes
+  a meter expressible** — recorded because the reflex is to add the property and discover the refusal
+  from a 500.
+- ⚠ **THE FIRST TYPE IN THIS FAMILY THAT IS NOT A CHILD, AND THE SUBSTRATE DECIDED IT.** Three of the
+  four types here are a network and two things inside one, and a fourth reads as though it should be
+  too. **An `OvnEip` names no VPC**: it is allocated from the *operator's* external subnet and attached
+  to a tenant's routing domain later, by a separate `OvnFip`/`OvnDnatRule`/`OvnSnatRule` object that
+  names it. docs/plan/14 § Load balancing spells the type `CyberCloud.Network/publicIpAddresses`, with
+  no network segment, and the substrate agrees. ⚠ The consequence is the safety answer: **an unattached
+  address is inert**, structurally rather than by a default, which is the second time in this family
+  that failure class (b) has come back safe.
+- ⚠ **AN EMPTY STRING IS NOT AN ABSENT KEY, ON A SCALAR, AND HERE IT IS A DEADLOCK.**
+  `CyberCloud.Terminal/consoles` found this on lists — every optional list on a built-in object is
+  `omitempty`, so an empty list applied comes back with no key. This is the same shape one level down
+  and with a worse symptom: `createOrUpdateOvnEipCR` writes the **allocated** address into
+  `spec.v4Ip` through a full `OvnEips().Update(...)`, taking field-manager ownership of it, so an
+  apply carrying `v4Ip: ""` claims the same field at a different value and **every later apply answers
+  `ApplyResult.Conflict`** — the resource sits in `InProgress` forever on an address that was
+  allocated correctly the first time. The renderer emits `v4Ip`/`v6Ip` **only when the body asked for
+  a particular address**, in both the C# and the Helm halves, and `NetworkPublicIpTests` pins both.
+- ⚠ **`Matches` met the family's canonicalisation trap in its SECOND shape, and the two are worth
+  distinguishing.** `NetworkSubnets.Matches` compares parsed networks because the controller
+  **rewrites what it was sent**. Here the controller **fills in what it was not**: a body that asked
+  for no particular address will always disagree with the object on `spec.v4Ip`, and a comparison that
+  insisted would report drift on an address allocated exactly as asked, forever. So an address is
+  compared **only when one was requested**. Both directions are run in `NetworkPublicIpTests` against
+  a hand-written controller-shaped read-back, because there is no Kube-OVN in any harness here.
+- ⚠ **THE FAMILY'S "SEND IT EXPLICITLY" RULE INVERTED ONCE, AND THE DIFFERENCE IS WHOSE DEFAULT IT
+  IS.** `NetworkSubnets.SubnetJson` sends `spec.vpc` because letting it default binds the subnet to
+  the *platform's own* VPC. This chart deliberately does **not** send `spec.externalSubnet`, because
+  `handleAddOvnEip` falls back to `c.config.ExternalGatewaySwitch` — the operator's
+  `--external-gateway-switch` — and that name is a property of the **deployment** which this
+  repository cannot know. **There the substrate's default is wrong; here it is the only right answer
+  available.** A compiled-in guess would be a pool that does not exist in the first region whose
+  operator named theirs something else. `charts/managed/kube-ovn-eip/conformance.yaml § owed`,
+  `the-external-pool-is-the-operators-default` — the same shape as `reserved-list-is-compiled-in`.
+- ⚠ **THE FIRST TYPE IN THE TREE WITH NO MUTABLE PROPERTY, AND THE SHARED SUITE CANNOT SAY SO.** Read
+  firsthand in `pkg/controller/ovn_eip.go` at `v1.16.2`: `handleUpdateOvnEip` refuses a changed
+  `v4Ip`, `v6Ip`, `macAddress` and `type` — four errors, one per field, every one beginning *"not
+  support change"* — and `handleAddOvnEip` returns early once `status.macAddress` is set. **An
+  `OvnEip` is wholly immutable once ready.** `ProviderConformanceCase.ChangedBody` is `required` and
+  must "change something the reconciler applies", so the case varies the requested address: that
+  proves the renderer reaches the cluster and **cannot** prove the update takes effect. ⚠ It compounds
+  with a platform gap that is already written down — `SchemaProperty.Immutable` is *a declaration with
+  no enforcement*, by its own remarks — so the platform accepts the PUT and reports `Succeeded` while
+  the fabric logs a refusal nobody sees. Named as a defect at
+  `charts/managed/kube-ovn-eip/conformance.yaml § owed`, `an-allocated-address-cannot-be-changed`.
+  **This is the first case in the tree where a provider needed the suite to admit a type with no
+  update axis, and the suite was left alone rather than changed under four other agents.**
+- ⚠ **A SECOND HYPHENATED PLURAL, WHICH KILLS THE RULE THE FIRST ONE SUGGESTED.**
+  `+kubebuilder:resource:...path="ovn-eips",singular="ovn-eip"`, read firsthand and confirmed in the
+  CRD Kube-OVN's own chart installs. Two of the four kinds this family renders hyphenate and two do
+  not, so *"Kube-OVN pluralises by lower-casing the kind"* is wrong half the time — and
+  `ClusterConformanceHarness` derives its CRD stub's path from `GroupVersionKind.Plural`, so a guess
+  installs a definition at a path the apply never reaches and the symptom is a **discovery error
+  naming a missing operator**.
+- ⚠ **THE SHORT-NAME LIST WAS OUT OF DATE AGAIN, AND FOR THE SECOND CONSECUTIVE PASS NOTHING COLLIDED
+  BY LUCK.** The previous pass added `containerservice`, `aks` and `nodepool` and wrote down that a
+  list nobody notices is stale proves nothing. Three more group keys (`monitor`, `terminal`,
+  `containerregistry`) and three more short names (`workspace`, `shell`, `registry`) had landed since,
+  so `vnet`, `subnet` and `secgroup` were being checked against **eleven of fourteen**. ⚠ Two of the
+  three missing short names are declared through a `const string ShortName` rather than a literal at
+  the call site, **so a `grep 'shortName: "'` misses them** — which is exactly how the list went stale
+  twice. `publicip` is checked against all fourteen keys and all seventeen names, as literals.
+- ⚠ **The only action in the catalogue that returns the resource's own reason for existing.** Every
+  other declared action reports a refinement — how full a subnet is, what a rule set expands to, what
+  an isolation claim does not cover. `POST …/showAllocation` returns **the address**, which is not in
+  the body (the body is what was *asked* for), is derivable from nothing, and lives on
+  `OvnEip.status.v4Ip` and nowhere else. It carries `ready` alongside it, because the controller
+  writes the address as soon as IPAM allocates and `ready` only after a separate
+  `patchOvnEipStatus(key, true)`, and an address without the flag is one a tenant points DNS at a few
+  seconds too early.
+
+**What landed on this pass: `publicIpAddresses`.** `dnsZones`, `loadBalancers` and `vpnGateways`
+remain **owed** — each with what was learned about it at `NetworkProvider`'s remarks — and
+`routeTables` remains **refused**. ⚠ **`dnsZones` is owed for a reason that is not software**:
+docs/plan/14 is explicit that *"the provider is 1.5 EM; the operations are the cost"* and that **the
+decision whether the platform runs authoritative DNS or fronts a wholesale provider has not been
+taken**. A resource type declared before that decision would take it by accident, and the row that
+would take it is `zoneType: public`.
+
 ### What the twelfth provider measured
 
 `CyberCloud.Providers.Terminal` — `CyberCloud.Terminal/consoles`,
