@@ -1429,6 +1429,39 @@ by the same thing: they are configured over **Harbor's own API**, after the reso
 caller that would have to authenticate to the thing it just created — which no reconciler in the tree
 does and which `ReconcileContext` gives no way to do.
 
+## Comparing an object you read back: containment, never equality
+
+An object read out of a cluster is never byte-equal to the object you applied, and it differs in
+both directions. Write every comparison — in a reconciler's `ObserveAsync`, in a contract's
+`Matches`, in a conformance case's `ObjectMatchesDesired` — as *containment*: the object must carry
+at least what you asked for.
+
+**The server adds.** A CRD's `+kubebuilder:default` fills in fields nobody applied, and so do
+`status`, `managedFields`, `creationTimestamp` and a defaulted `protocol` on every port. An
+equality comparison fails against a real cluster and passes everywhere else, because the Docker-free
+harness derives its CRD stub from `ProviderConformanceCase.Objects` and **a derived stub has no
+defaults**. An OpenSearch bug of exactly this shape left that suite 27 of 27 green and was caught
+only by a hand-written unit test. Nothing in the Docker-free half can catch it; `KubeJson.Contains`
+is the shape that survives it, and `CyberCloud.Cluster.Conformance` is what proves it.
+
+**The server removes.** A field tagged `omitempty` on the Go type it deserialises into is dropped
+when it is empty — which is *every* optional list and map on *every* built-in Kubernetes object.
+`NetworkPolicySpec.Ingress` is one: the empty list that spells "deny all ingress" comes back with
+**no key at all**. `CyberCloud.Terminal/consoles` converged in the fake and hung forever against
+k3s on precisely that.
+
+So never write `is JsonArray { Count: 0 }`. Write `KubeJson.IsAbsentOrEmpty(node)`, which accepts
+absent-or-empty and still refuses a list that grew an entry. `FakeKubeCluster` now drops empty
+collections on apply, so the strict spelling goes red in your own suite rather than in production.
+That strip is deliberately **stricter than a real server** rather than more faithful than one: a
+real server keeps the empty array on a custom resource, and stripping it anyway is what forces the
+one pattern that is correct against both.
+
+**What none of this models.** `omitempty` drops an empty string, a zero and a `false` as readily as
+an empty list, and which fields carry the tag lives in Go struct tags this repository does not have.
+Read the built-in type's Go definition before asserting that a zero-valued scalar survives a round
+trip.
+
 ## Planned namespaces
 
 `Platform`, `Identity`, `Compute`, `ContainerInstance`, `ContainerRegistry`,

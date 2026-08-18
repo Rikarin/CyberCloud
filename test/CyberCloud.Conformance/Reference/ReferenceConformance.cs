@@ -5,6 +5,7 @@ using CyberCloud.ResourceManager.Conformance;
 using CyberCloud.ResourceManager.Reconcile;
 using System.Collections.Immutable;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 
 namespace CyberCloud.Conformance.Reference;
 
@@ -148,6 +149,88 @@ public sealed class ReferenceProviderClusterSignpost()
 ///     and assert it says so.
 /// </remarks>
 public sealed class SuiteRejectionTests {
+    [Fact]
+    public async Task AnEmptyCollectionDoesNotSurviveAnApplyTheWayItUsedTo() {
+        // ⚠ THE CALIBRATION FOR THE ONE PLACE FakeKubeCluster IS NOT AN ECHO, and the instrument it
+        // calibrates is the harness rather than a reconciler.
+        //
+        // The fake stored the applied body verbatim, which made it structurally blind to everything a
+        // real API server takes AWAY. Every optional list and map on every built-in Kubernetes object
+        // carries `omitempty`: NetworkPolicySpec.Ingress is one, the empty list that spells "deny all
+        // ingress" comes back with NO KEY AT ALL, and CyberCloud.Terminal/consoles converged in this
+        // harness and hung forever against k3s. Eleven other families never hit it only because they
+        // render custom resources, whose x-kubernetes-preserve-unknown-fields schemas round-trip an
+        // empty array intact.
+        //
+        // ⚠ THIS ASSERTS STRICTNESS, NOT FIDELITY, and the distinction is the reason the strip is
+        // unconditional. A real server would keep the empty array on a CUSTOM resource. Stripping it
+        // anyway forces every provider onto `KubeJson.IsAbsentOrEmpty`, which is correct against a
+        // built-in AND against a custom resource, where `is JsonArray { Count: 0 }` is correct
+        // against neither. The only comparison this refuses is one that would hang against k3s.
+        var world = new FakeKubeCluster(ConformanceIds.Cluster);
+
+        var address = new ResourceId(
+            ConformanceIds.Tenant,
+            ConformanceIds.Subscription,
+            ConformanceIds.ResourceGroup,
+            Probes.Type,
+            "empties",
+            Guid.Parse("f0f0f0f0-0000-4000-8000-0000000000e0")
+        );
+
+        var ns = ReconcileDriver.NamespaceFor(address);
+        var target = new ObjectRef { Kind = Probes.Kind, Namespace = ns, Name = address.Name };
+
+        // ⚠ Built through KubeCommand.For rather than by hand, so this exercises the same apply path
+        // every reconciler uses. The seven labels arrive with it, which is also what lets the
+        // "removes nothing else" assertions below mean something.
+        var applied = await KubeCommand.For(world)
+            .WithTenantId(address.TenantId)
+            .WithResourceId(address)
+            .InNamespace(ns)
+            .WithKind(Probes.Kind)
+            .WithApiVersion(Probes.V2026)
+            .ObjectJson(
+                """
+                {
+                  "spec": {
+                    "ingress": [],
+                    "selector": {},
+                    "egress": [ { "to": "anywhere" } ],
+                    "nested": { "alsoEmpty": [] }
+                  }
+                }
+                """
+            )
+            .ApplyAsync(TestContext.Current.CancellationToken);
+
+        applied.IsSuccess.ShouldBeTrue(applied.Error?.Message);
+
+        var stored = JsonNode.Parse(world.Read(target)!)!.AsObject();
+        var spec = stored["spec"]!.AsObject();
+
+        spec["ingress"].ShouldBeNull("an empty list must come back as NO KEY, the way omitempty leaves it");
+        spec["selector"].ShouldBeNull("an empty map is dropped for the same reason an empty list is");
+
+        // ⚠ Depth first: `nested` held nothing but an empty list, so it is itself empty by the time
+        // its parent is considered — an empty struct being just as absent as an empty list.
+        spec["nested"].ShouldBeNull("the strip must reach every depth, not only the top of spec");
+
+        // ⚠ AND IT REMOVES NOTHING ELSE. A strip that also ate the non-empty list would make every
+        // provider's comparison unfalsifiable, which is a worse failure than the one it fixes.
+        spec["egress"]!.AsArray().Count.ShouldBe(1, "a list with entries must survive intact");
+
+        stored["metadata"]!["labels"]![KubeLabels.TenantId]!.GetValue<string>()
+            .ShouldBe(address.TenantId.ToString("D"), "the seven mandatory labels must survive the strip");
+
+        // ⚠ The tolerant pattern accepts what the store now holds; the strict one does not. This is
+        // the whole argument for the strip, asserted rather than described.
+        KubeJson.IsAbsentOrEmpty(spec["ingress"]).ShouldBeTrue();
+        (spec["ingress"] is JsonArray { Count: 0 }).ShouldBeFalse(
+            "`is JsonArray { Count: 0 }` is the shape that passed this harness and hung against k3s"
+        );
+    }
+
     [Fact]
     public async Task TheSuiteRejectsAReconcilerThatRemembersInsteadOfObserving() {
         // ⚠ THE CALIBRATION. AssumingProbeReconciler applies once and then answers Converged forever.
