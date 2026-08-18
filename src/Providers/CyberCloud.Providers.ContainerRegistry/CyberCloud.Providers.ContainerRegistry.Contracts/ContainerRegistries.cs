@@ -1782,6 +1782,10 @@ public static class ContainerRegistries {
     /// <param name="storageSize">The image volume's size.</param>
     /// <param name="version">The Harbor minor.</param>
     /// <param name="location">The region.</param>
+    /// <param name="purgeProtection">
+    ///     Whether the registry refuses a purge for the rest of its recovery window. ⚠ Written even
+    ///     when <see langword="false" />, because the schema makes it required.
+    /// </param>
     /// <remarks>
     ///     ⚠ Every property it writes is a <b>leaf</b>. <c>ResourceSchema.Project</c> skips a
     ///     <see cref="SchemaKind.Nested" /> container and rebuilds it from whichever leaf lands first,
@@ -1793,7 +1797,8 @@ public static class ContainerRegistries {
         int replicas = 2,
         string storageSize = "100Gi",
         string version = DefaultVersion,
-        string location = "eu-central"
+        string location = "eu-central",
+        bool purgeProtection = false
     ) =>
         new JsonObject {
             ["location"] = location,
@@ -1802,7 +1807,14 @@ public static class ContainerRegistries {
                 ["version"] = version,
                 ["replicas"] = replicas,
                 ["storage"] = new JsonObject { ["size"] = storageSize },
-                ["monitoring"] = new JsonObject { ["enabled"] = true }
+                ["monitoring"] = new JsonObject { ["enabled"] = true },
+                // ⚠ Present rather than omitted, because the property is REQUIRED — the builder
+                // refuses a recovery window whose purge-protection pointer is optional, since an
+                // absent flag would be read as "off" and a protection that defaults to off silently
+                // is one nobody can tell from one that never engages. The write path stores a body as
+                // sent and does not substitute defaults, so every helper that builds one has to say
+                // it.
+                ["purgeProtection"] = purgeProtection
             }
         }.ToJsonString();
 

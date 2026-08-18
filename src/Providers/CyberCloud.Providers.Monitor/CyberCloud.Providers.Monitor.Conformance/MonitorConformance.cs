@@ -126,57 +126,59 @@ public sealed class MonitorCase : IProviderCaseSource {
 public sealed class MonitorWorkspaceConformance(ProviderTestCluster<MonitorCase> cluster)
     : ProviderConformanceTests<MonitorCase>(cluster), IClassFixture<ProviderTestCluster<MonitorCase>> {
     /// <summary>
-    ///     A soft-deleted workspace is left standing and is <b>not</b> reconciled back.
+    ///     A soft-deleted workspace's write path is closed, and no stray drive reopens it.
     /// </summary>
     /// <remarks>
     ///     <para>
     ///         ⚠ <b>THE QUESTION <c>CyberCloud.ContainerRegistry/registries</c> RAISED, ASKED OF THIS
-    ///         TYPE RATHER THAN INHERITED FROM ITS ANSWER.</b> That row declared a window, measured a
-    ///         soft-deleted resource reconciling its whole data plane back, and withdrew the
-    ///         declaration. The two claims are separable: <i>"the teardown is skipped"</i> is
-    ///         documented behaviour and is what the shared suite's recoverable branch asserts;
-    ///         <i>"and the desired state keeps being applied"</i> is a different statement, and on
-    ///         this type it decides whether a soft delete leaves an <b>authenticated, billed write
-    ///         path</b> to a store the tenant believes is gone.
+    ///         TYPE RATHER THAN INHERITED FROM ITS ANSWER — AND THE ANSWER SETTLED A DISAGREEMENT.</b>
+    ///         That row declared a window, reported a soft-deleted resource <i>reconciling its whole
+    ///         data plane back</i>, and withdrew. This type could not reproduce the re-apply, and the
+    ///         reason is that there never was one: a soft delete ran no reconcile pass at all, so the
+    ///         objects were never torn down. The other row's evidence was a conformance assertion that
+    ///         reports an end state, and an end state cannot tell "never removed" from "removed and
+    ///         re-applied".
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>WHAT THE FIX MADE THIS TEST ASK.</b> A soft delete now tears the data plane down,
+    ///         so on this row the VMUser comes down with it and vmauth stops resolving the tenant's
+    ///         ingest key the moment it is gone — which is the whole reason this type's window was
+    ///         withdrawn and the whole reason it is back. What is left to defend is the other
+    ///         direction: that nothing puts the objects back while the resource is parked. A
+    ///         soft-deleted workspace that quietly re-applied its VMUser would be an authenticated,
+    ///         billed write path into a store whose address answers <c>404</c>, and the tenant could
+    ///         not see it in order to stop it.
     ///     </para>
     ///     <para>
     ///         ⚠ <b>WHAT IT DRIVES, AND WHY THAT IS THE HONEST POKE.</b>
     ///         <c>ProviderConformanceTests.ReconcileOnceAsync</c> calls the reconciler <i>directly</i>,
     ///         so it would put the objects back for any provider and prove nothing about whether the
-    ///         platform would ever call it. What this drives is the resource's own delete operation,
-    ///         a second time, which is what a stray Orleans reminder or a re-drive after a silo move
-    ///         does. That is the only path in the shipping tree that could re-apply a soft-deleted
-    ///         resource, and <c>OperationGrain.DriveAsync</c>'s soft-delete branch is what stops it —
-    ///         its own remarks say a pass with <c>tearingDown</c> false <i>"would RE-APPLY the desired
-    ///         state of a resource the caller has just deleted"</i>. This test is what makes deleting
-    ///         that branch fail loudly on this type instead of silently un-deleting a tenant's
-    ///         telemetry tenancy.
+    ///         platform would ever call it. What this drives is the resource's own delete operation, a
+    ///         second time, which is what a stray Orleans reminder or a re-drive after a silo move
+    ///         does. That is the only path in the shipping tree that could re-apply a parked resource.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>It removes the objects behind the platform's back first, because otherwise the
-    ///         assertion is vacuous.</b> The recovery window's own contract is that the objects stay,
-    ///         so "the objects are present afterwards" is true whether or not anything re-applied
-    ///         them. Taking them away first is what makes their <i>return</i> the only thing being
-    ///         measured.
+    ///         ⚠ <b>And then the restore, which is what separates a window from a slower delete.</b>
+    ///         The shared suite asserts the round trip for every recoverable type; this asserts it on
+    ///         the object that matters here by name, because "the workspace came back" and "the VMUser
+    ///         came back" are the same sentence only on a row whose enforcement IS an object.
     ///     </para>
     /// </remarks>
     [Fact]
-    public async Task ASoftDeletedWorkspaceIsNotReconciledBackByAStrayDriveOfItsDeleteOperation() {
+    public async Task ASoftDeletedWorkspacesWritePathIsClosedAndNoStrayDriveReopensIt() {
         ProviderTestCluster<MonitorCase>.Reset();
 
-        // ⚠ THE DECLARATION IS WITHDRAWN TODAY, AND THIS TEST IS KEPT ARMED RATHER THAN DELETED —
-        // which is the other half of "re-declaring is one line". With no window a DELETE is a hard
-        // delete, so there is no parked resource to poke and the experiment has no subject; it says
-        // so out loud rather than passing over a premise that is not true. Restore
-        // .SupportsSoftDelete on MonitorProvider and this starts asserting again on the same run.
+        // ⚠ THE DECLARATION WAS WITHDRAWN FOR PART OF 2026-08-18 AND THIS TEST WAS KEPT ARMED RATHER
+        // THAN DELETED, WHICH IS WHAT MADE RESTORING IT ONE LINE. With no window a DELETE is a hard
+        // delete, so there is no parked resource to poke and the experiment has no subject; it says so
+        // out loud rather than passing over a premise that is not true.
         if (Cluster.Registry.TryGetType(MonitorWorkspaces.Type, out var registration)
             && registration.SoftDeleteDays <= 0) {
             Assert.Skip(
                 "SKIPPED — CyberCloud.Monitor/workspaces declares no recovery window, so a DELETE "
-                + "tears the data plane down and there is nothing parked to drive again. The "
-                + "withdrawal is deliberate and its argument is on MonitorProvider; this experiment "
-                + "is kept so that restoring the declaration restores the assertion with it. "
-                + "conformance.yaml § owed, `soft-delete-is-withdrawn-not-declined`."
+                + "tears the data plane down with no way back and there is nothing parked to drive "
+                + "again. If that is a second withdrawal it needs its own measurement — see "
+                + "conformance.yaml § owed."
             );
         }
 
@@ -189,28 +191,40 @@ public sealed class MonitorWorkspaceConformance(ProviderTestCluster<MonitorCase>
         var deleted = (await DeleteAsync("recoverable")).GetValueOrThrow();
         (await ConvergeAsync(deleted)).State.ShouldBe(OperationState.Succeeded);
 
-        // The recovery window's own contract, restated here only to establish the starting state.
+        // ── The write path is closed, which is the withdrawal's own condition for coming back ────
         foreach (var target in objects) {
-            Cluster.World.Holds(target).ShouldBeTrue($"'{target}' is gone before the experiment starts");
+            Cluster.World.Holds(target).ShouldBeFalse(
+                $"'{target}' survived a converged soft delete. On this type that is not an idle "
+                + "resource being kept warm: the VMUser is what vmauth authorises writes against, so "
+                + "the tenant's ingest key still works, telemetry keeps landing in a tenancy whose "
+                + "address answers 404, and the retention it accrues is still billed. That is the "
+                + "measurement this row withdrew its recovery window over."
+            );
         }
 
-        foreach (var target in objects) {
-            Cluster.World.RemoveBehindTheirBack(target).ShouldBeTrue();
-        }
-
-        // ⚠ THE POKE. A completed delete operation, driven again.
+        // ⚠ THE POKE. A completed delete operation, driven again — a stray reminder, or a re-drive
+        // after a silo move.
         await Cluster.Operation(ConformanceIds.Tenant, deleted.OperationId).DriveAsync();
 
         foreach (var target in objects) {
             Cluster.World.Holds(target).ShouldBeFalse(
-                $"'{target}' came back after the workspace was soft-deleted. On this type that is not "
-                + "an idle resource being maintained: the VMUser is what vmauth authorises writes "
-                + "against, so the tenant's ingest key still works, telemetry keeps landing in a "
-                + "tenancy whose address answers 404, and the retention it accrues is still billed. "
-                + "OperationGrain.DriveAsync's soft-delete branch is what prevents this — if it has "
-                + "been removed or narrowed, withdraw .SupportsSoftDelete from MonitorProvider as "
-                + "CyberCloud.ContainerRegistry/registries did, because a delete that does not delete "
-                + "is worse than no recovery window."
+                $"'{target}' came back after the workspace was soft-deleted, from a stray drive of its "
+                + "own delete operation. A parked resource must not re-apply itself: nobody can see it "
+                + "in order to stop it, and on this row what comes back is an open, authenticated, "
+                + "billed write path."
+            );
+        }
+
+        // ── And a restore puts it back, which is the half that makes it a window ─────────────────
+        var restored = await RestoreAsync("recoverable");
+        restored.IsSuccess.ShouldBeTrue(restored.Error?.Message);
+        (await ConvergeAsync(restored.GetValueOrThrow())).State.ShouldBe(OperationState.Succeeded);
+
+        foreach (var target in objects) {
+            Cluster.World.Holds(target).ShouldBeTrue(
+                $"'{target}' did not come back from the restore. A teardown with no way back is not a "
+                + "recovery window, it is a slower delete — and on this row it would be a tenancy the "
+                + "tenant can no longer write to and no longer read from."
             );
         }
     }

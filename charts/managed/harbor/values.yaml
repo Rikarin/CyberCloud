@@ -50,6 +50,10 @@ monitoring:
   ## @param enabled {boolean} Whether Harbor's core exports Prometheus metrics and a PodMonitor selects them. On by default — docs/plan/12: "a managed service the tenant cannot see the health of is a black box they will not trust with production". Turning it off removes the metrics port as well as the scrape, so nothing is left listening on an unscraped address.
   enabled: true
 
+## @param purgeProtection {boolean} Whether this registry may be destroyed before its seven-day recovery window is out. Once true it stays true for the rest of the registry's life, and a purge is refused while it is set — a flag whose holder can clear it and then purge is one round-trip of protection.
+## @required
+purgeProtection: false
+
 ## @param platform {object} Resource identity injected by the reconciler. Not a tenant-facing setting.
 ## @internal Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.
 platform:

@@ -121,6 +121,13 @@
       "x-cybercloud-order": 5,
       "x-cybercloud-pointer": "/properties/platform"
     },
+    "purgeProtection": {
+      "default": false,
+      "description": "Whether this registry may be destroyed before its seven-day recovery window is out. Once true it stays true for the rest of the registry's life, and a purge is refused while it is set — a flag whose holder can clear it and then purge is one round-trip of protection.",
+      "type": "boolean",
+      "x-cybercloud-order": 9,
+      "x-cybercloud-pointer": "/properties/purgeProtection"
+    },
     "replicas": {
       "default": 2,
       "description": "How many replicas of each stateless component — the API core, the web portal and the job service — run. Two is the smallest count that survives a node drain. The registry itself, the database and Redis each own a volume and run one replica whatever this says.",
@@ -218,6 +225,7 @@
     }
   },
   "required": [
+    "purgeProtection",
     "replicas",
     "version"
   ],
