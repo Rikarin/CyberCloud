@@ -348,8 +348,24 @@ node roles, ISM policies, snapshot repository into the tenant's bucket.
 
 ### Qdrant — `CyberCloud.Search/vectorStores` · M3 · 0.6 EM
 
-Not an Azure row. A 2026 catalogue without a vector store is dated on arrival, and Qdrant's operator
-model is simple enough that this is the cheapest M3 item.
+Not an Azure row. A 2026 catalogue without a vector store is dated on arrival.
+
+⚠ **CORRECTED 2026-08-18. This row said "Qdrant's operator model is simple enough that this is the
+cheapest M3 item", and there is no operator to have a model.** `github.com/qdrant/qdrant-operator`
+answers 404. The operator that exists is the one Qdrant Managed, Hybrid and Private Cloud run, and it
+is not distributed — what the organisation publishes of it is `qdrant/kubernetes-api`, described as
+*"API definitions for the Qdrant Kubernetes operator"*, which is the CRD types without the controller
+that serves them. The deployable path upstream offers is `qdrant/qdrant-helm`, a chart around a
+StatefulSet.
+
+**So the 0.6 EM is the estimate of a row that does not exist, and this type is not the cheapest M3
+item — it is the one M3 item with no controller behind it.** Every other row in this document renders
+custom resources and lets somebody else's operator converge them; this one would have to own
+clustering, sharding, replica placement, upgrade order and backup itself, in a reconciler, against a
+StatefulSet. § The pattern, once is a pattern for the first shape and has nothing to say about the
+second. **Nothing here should be built until that estimate is redone against the work it is actually
+naming** — see [02](02-technology-decisions.md) § ADR-010, clause 1's note, which is where the
+recurring version of this mistake now lives.
 
 ## Cross-cutting decisions
 
