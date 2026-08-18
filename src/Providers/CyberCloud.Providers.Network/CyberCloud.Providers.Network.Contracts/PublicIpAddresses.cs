@@ -225,12 +225,26 @@ public static class IpAddresses {
 ///         default binds the subnet to the platform's own VPC. This one deliberately does <b>not</b>
 ///         send <c>spec.externalSubnet</c>, because <c>handleAddOvnEip</c> falls back to
 ///         <c>c.config.ExternalGatewaySwitch</c> — the operator's <c>--external-gateway-switch</c>
-///         flag — and that name is a property of the <i>deployment</i> which this repository cannot
-///         know. A compiled-in guess would be a pool that does not exist in the first region whose
-///         operator named theirs something else, and the symptom would be an EIP that never becomes
-///         ready. <b>The difference from the subnet case is that there the default is wrong and here
-///         the default is the only right answer available.</b> ⚠ The cost — a tenant cannot choose
-///         between two pools — is <c>§ owed</c>, <c>the-external-pool-is-the-operators-default</c>.
+///         flag, whose default is <c>external</c> and which exists precisely so a deployment can name
+///         its provider bridge something else. A compiled-in guess would be a pool that does not
+///         exist in the first region whose operator renamed theirs, and the symptom would be an EIP
+///         that never becomes ready. <b>The difference from the subnet case is that there the
+///         substrate's default is the platform's own VPC and is wrong, and here it is the operator's
+///         own pool and is the only right answer available.</b>
+///         <para>
+///             ⚠ <b>THE ONE HAZARD THAT ARGUMENT HAS TO SURVIVE WAS CHECKED RATHER THAN WAVED AT, AND
+///             THE ANSWER IS THAT UPSTREAM HANDLES IT.</b> Both delete paths release the address with
+///             <c>c.ipam.ReleaseAddressByPod(eip.Name, eip.Spec.ExternalSubnet)</c> — passing a field
+///             this provider leaves <b>empty</b>, which reads like an address that is never returned
+///             to the pool. <c>pkg/ipam/ipam.go</c> branches on it: a non-empty name releases from
+///             that subnet, and an <b>empty name releases from every subnet</b>. So the empty field is
+///             a superset rather than a no-op and nothing leaks. ⚠ <b>And the pool the fabric chose
+///             is still observable</b>, on the <c>ovn.kubernetes.io/subnet</c> label
+///             <c>createOrUpdateOvnEipCR</c> writes — which is a different label namespace from
+///             ADR-013's seven, so the two do not fight.
+///         </para>
+///         ⚠ The remaining cost — a tenant cannot choose between two pools — is <c>§ owed</c>,
+///         <c>the-external-pool-is-the-operators-default</c>.
 ///     </para>
 ///     <para>
 ///         ⚠ <b>NO <c>SupportsSoftDelete</c>, AND ON THIS TYPE THE OBVIOUS READING IS BACKWARDS.</b>
@@ -573,9 +587,10 @@ public static class PublicIpAddresses {
     ///     <para>
     ///         ⚠ <b>NO <c>externalSubnet</c>, NO <c>macAddress</c>.</b> The pool is the operator's
     ///         <c>--external-gateway-switch</c> and this repository cannot know its name — see this
-    ///         class's remarks. The MAC is the fabric's to choose and is written back to the spec, so
-    ///         sending one would be a value overwritten one pass later while the resource reported it
-    ///         as desired.
+    ///         class's remarks, including the check that leaving it empty does not strand the address
+    ///         in IPAM. The MAC is the fabric's to choose and is written back to the spec, so sending
+    ///         one would be a value overwritten one pass later while the resource reported it as
+    ///         desired.
     ///     </para>
     ///     <para>
     ///         ⚠ No labels, no annotations and no namespace here — ADR-013's seven labels and two
@@ -619,9 +634,12 @@ public static class PublicIpAddresses {
     ///         ⚠ Containment rather than equality, as everywhere in this family, and here the
     ///         controller's write-back is emphatic: <c>createOrUpdateOvnEipCR</c> issues a full
     ///         <c>OvnEips().Update(...)</c> that sets <c>spec.macAddress</c>, <c>spec.v4Ip</c>,
-    ///         <c>spec.v6Ip</c> and <c>spec.type</c>, and <c>handleAddOvnEip</c> fills
-    ///         <c>spec.externalSubnet</c> from the operator's flag. An equality comparison would never
-    ///         converge on any of them.
+    ///         <c>spec.v6Ip</c> and <c>spec.type</c> — four fields, on an object this provider
+    ///         applied — and adds four <c>ovn.kubernetes.io/*</c> labels beside ADR-013's seven. An
+    ///         equality comparison would never converge on any of them. ⚠ <b><c>spec.externalSubnet</c>
+    ///         is <i>not</i> among them</b>, which is easy to assume and wrong: the update branch
+    ///         leaves it exactly as it was applied, so on this platform's objects it stays empty and
+    ///         the pool is visible only on the <c>ovn.kubernetes.io/subnet</c> label.
     ///     </para>
     /// </remarks>
     public static bool Matches(string objectJson, JsonElement desired) {

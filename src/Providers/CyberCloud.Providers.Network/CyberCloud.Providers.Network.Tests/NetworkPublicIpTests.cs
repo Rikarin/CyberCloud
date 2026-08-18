@@ -321,17 +321,26 @@ public sealed class NetworkPublicIpTests {
     /// <param name="allocated">The address the fabric handed out.</param>
     /// <remarks>
     ///     ⚠ <b>Hand-written, because there is no controller in any harness this repository runs.</b>
-    ///     Every field below is one <c>createOrUpdateOvnEipCR</c> or <c>handleAddOvnEip</c> writes:
-    ///     the address and the MAC into <c>.spec</c> through a full <c>Update()</c>,
-    ///     <c>externalSubnet</c> from the operator's flag, and the same values again into
-    ///     <c>.status</c> through a merge patch on the status subresource.
+    ///     Every field below is one <c>createOrUpdateOvnEipCR</c> writes on an object this platform
+    ///     applied: the address, the MAC and the type into <c>.spec</c> through a full
+    ///     <c>Update()</c>, and the same values again into <c>.status</c> through a merge patch on the
+    ///     status subresource.
+    ///     <para>
+    ///         ⚠ <b><c>spec.externalSubnet</c> stays EMPTY here on purpose, and getting that wrong
+    ///         would have made this fixture flatter than the truth.</b> Only
+    ///         <c>createOrUpdateOvnEipCR</c>'s <i>create</i> branch — for EIPs the controller makes
+    ///         itself — sets that field; the update branch leaves it exactly as it was applied. So on
+    ///         an object this provider owns the pool is visible on the
+    ///         <c>ovn.kubernetes.io/subnet</c> label rather than in the spec, and a fixture that
+    ///         filled the spec field in would be asserting against a shape that never occurs.
+    ///     </para>
     /// </remarks>
     static string AfterTheController(string allocated) =>
         new JsonObject {
             ["kind"] = "OvnEip",
             ["metadata"] = new JsonObject { ["name"] = "ns-edge" },
             ["spec"] = new JsonObject {
-                ["externalSubnet"] = "external",
+                ["externalSubnet"] = string.Empty,
                 ["v4Ip"] = allocated,
                 ["v6Ip"] = string.Empty,
                 ["macAddress"] = "00:00:00:1A:2B:3C",

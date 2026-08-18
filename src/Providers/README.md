@@ -1013,10 +1013,16 @@ answers `meter.Fallback ?? 1m` for an empty `AmountPointer`, so `.Meters(PublicI
   IS.** `NetworkSubnets.SubnetJson` sends `spec.vpc` because letting it default binds the subnet to
   the *platform's own* VPC. This chart deliberately does **not** send `spec.externalSubnet`, because
   `handleAddOvnEip` falls back to `c.config.ExternalGatewaySwitch` — the operator's
-  `--external-gateway-switch` — and that name is a property of the **deployment** which this
-  repository cannot know. **There the substrate's default is wrong; here it is the only right answer
-  available.** A compiled-in guess would be a pool that does not exist in the first region whose
-  operator named theirs something else. `charts/managed/kube-ovn-eip/conformance.yaml § owed`,
+  `--external-gateway-switch`, default `external` — and that name is a property of the **deployment**
+  which this repository cannot know. **There the substrate's default is wrong; here it is the only
+  right answer available.** ⚠ **The hazard that argument had to survive was checked rather than waved
+  at**: both delete paths call `ReleaseAddressByPod(eip.Name, eip.Spec.ExternalSubnet)` with the field
+  left empty, which reads like an address that never returns to the pool — and `pkg/ipam/ipam.go`
+  releases from **every** subnet when the name is empty, so it is a superset rather than a no-op.
+  ⚠ **And the field is not written back** on an object this platform applied: only the controller's
+  *create* branch sets it, so the pool it chose is observable on the `ovn.kubernetes.io/subnet` label
+  instead — a different label namespace from ADR-013's seven, so the two do not fight.
+  `charts/managed/kube-ovn-eip/conformance.yaml § owed`,
   `the-external-pool-is-the-operators-default` — the same shape as `reserved-list-is-compiled-in`.
 - ⚠ **THE FIRST TYPE IN THE TREE WITH NO MUTABLE PROPERTY, AND THE SHARED SUITE CANNOT SAY SO.** Read
   firsthand in `pkg/controller/ovn_eip.go` at `v1.16.2`: `handleUpdateOvnEip` refuses a changed

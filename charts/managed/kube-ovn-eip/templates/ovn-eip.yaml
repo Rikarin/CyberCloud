@@ -52,9 +52,12 @@ spec:
     a SCALAR instead of a list, and with a worse symptom. PublicIpAddresses.OvnEipJson does the same
     omission on the C# side and NetworkPublicIpTests pins both halves.
 
-    ⚠ NO `externalSubnet` and NO `macAddress` for the same family of reason: the pool is the
-    operator's `--external-gateway-switch` and the MAC is IPAM's, and both are written back to the
-    spec by the controller. SOURCE records the difference from kube-ovn-subnet's `spec.vpc`.
+    ⚠ NO `externalSubnet` and NO `macAddress`, for two different reasons. The MAC is IPAM's and IS
+    written back to the spec, so sending one would be a value overwritten a pass later. The pool is
+    the operator's `--external-gateway-switch` (default "external") and is NOT written back on an
+    object this platform applied — the controller resolves it into a local variable and records its
+    choice on the `ovn.kubernetes.io/subnet` label instead. SOURCE records the difference from
+    kube-ovn-subnet's `spec.vpc`, and the check that an empty field still releases the address.
   */}}
   {{- if .Values.address.v4 }}
   v4Ip: {{ .Values.address.v4 | quote }}

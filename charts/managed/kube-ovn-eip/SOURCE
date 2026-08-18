@@ -33,10 +33,21 @@ facts that bear hardest on it:
     particular address: an applied `v4Ip: ""` claims a field the controller then sets to the
     allocated address, and every later apply answers a field-manager conflict.
   * `handleAddOvnEip` falls back to `c.config.ExternalGatewaySwitch` when spec.externalSubnet is
-    empty, and the resolved name is written into the spec. That is why this chart does NOT send the
-    pool: it is the operator's `--external-gateway-switch` and this repository cannot know its name.
-    ⚠ THE OPPOSITE OF THE SUBNET CHART'S `spec.vpc` DECISION, and deliberately — there the default is
-    wrong, here it is the only right answer available.
+    empty. That flag is `--external-gateway-switch`, its default is "external" (pkg/controller/
+    config.go) and it exists so a deployment can name its provider bridge something else — so this
+    chart does NOT send the pool. ⚠ THE OPPOSITE OF THE SUBNET CHART'S `spec.vpc` DECISION, and
+    deliberately: there the substrate's default is the platform's own VPC and is wrong, here it is
+    the operator's own pool and is the only right answer available.
+  * ⚠ AND THE FIELD IS **NOT** WRITTEN BACK on an object this platform applied, which is easy to
+    assume and wrong. `createOrUpdateOvnEipCR`'s update branch touches macAddress, v4Ip, v6Ip and
+    type and leaves externalSubnet alone; only its CREATE branch — for EIPs the controller makes
+    itself — sets it. The pool the fabric chose is observable on the `ovn.kubernetes.io/subnet` label
+    the same function writes, which is a different label namespace from ADR-013's seven.
+  * ⚠ THE HAZARD THAT ARGUMENT HAD TO SURVIVE, CHECKED: both delete paths call
+    `c.ipam.ReleaseAddressByPod(eip.Name, eip.Spec.ExternalSubnet)` with the field this chart leaves
+    empty, which reads like an address that is never returned to the pool. pkg/ipam/ipam.go branches
+    on it — a non-empty name releases from that subnet, an EMPTY name releases from EVERY subnet. So
+    the empty field is a superset rather than a no-op and nothing leaks.
   * `handleUpdateOvnEip` refuses a changed v4Ip, v6Ip, macAddress and type, one error each, every one
     beginning "not support change"; `handleAddOvnEip` returns early once status.macAddress is set. AN
     OvnEip IS WHOLLY IMMUTABLE ONCE READY. conformance.yaml § owed,

@@ -108,10 +108,9 @@ public sealed class PublicIpAddressReconciler(IClock clock) : IResourceReconcile
             case ApplyResult.Conflict:
                 // ⚠ THE OTHER FIELD MANAGER IS THE KUBE-OVN CONTROLLER AND FORCING WOULD TAKE A FIELD
                 // THIS PROVIDER CANNOT SUPPLY A VALUE FOR. createOrUpdateOvnEipCR writes back
-                // spec.v4Ip, spec.v6Ip, spec.macAddress and spec.type, and handleAddOvnEip fills
-                // spec.externalSubnet from the operator's flag. Forcing would overwrite an allocated
-                // address with an empty string and the fabric would have handed out an address this
-                // object no longer names.
+                // spec.v4Ip, spec.v6Ip, spec.macAddress and spec.type on an object this provider
+                // applied. Forcing would overwrite an allocated address with an empty string, and the
+                // fabric would have handed out an address this object no longer names.
                 context.Log.Report("conflict", outcome.Drift?.Describe() ?? outcome.Message);
 
                 return ReconcileOutcome.InProgress(

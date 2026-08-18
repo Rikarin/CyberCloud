@@ -47,7 +47,8 @@ assertions:
       A body that asks for no particular address converges, and stays converged, after the controller
       writes the allocated address into spec.v4Ip. ⚠ THE SINGLE MOST LIKELY BUG IN THIS TYPE.
       createOrUpdateOvnEipCR issues a full OvnEips().Update(...) that sets spec.v4Ip, spec.v6Ip,
-      spec.macAddress and spec.type; a Matches that compared spec.v4Ip against the body's empty string
+      spec.macAddress and spec.type — four fields, and NOT spec.externalSubnet, which its update
+      branch leaves alone; a Matches that compared spec.v4Ip against the body's empty string
       would report drift on an address allocated exactly as asked, forever, and the resource would
       never leave InProgress. It is NetworkSubnets.Matches' canonicalisation trap in its second shape
       — there the controller REWRITES what it was sent, here it FILLS IN what it was not.
@@ -120,16 +121,22 @@ owed:
     says: >
       A tenant cannot choose which pool an address comes from, and an operator cannot offer two.
       spec.externalSubnet is deliberately not sent: handleAddOvnEip falls back to
-      c.config.ExternalGatewaySwitch — the operator's `--external-gateway-switch` flag — and that name
-      is a property of the DEPLOYMENT, which this repository cannot know. ⚠ THE OPPOSITE OF
-      kube-ovn-subnet's spec.vpc DECISION, and the difference is worth stating: there the substrate's
-      default is the PLATFORM'S OWN VPC and is wrong, so the field is sent; here the substrate's
-      default is the operator's own pool and is the only right answer available. A compiled-in guess
-      would be a pool that does not exist in the first region whose operator named theirs something
-      else, and the symptom would be an address that never becomes ready. It is the same shape as
+      c.config.ExternalGatewaySwitch — the operator's `--external-gateway-switch` flag, default
+      "external" — and that name is a property of the DEPLOYMENT, which this repository cannot know.
+      ⚠ THE OPPOSITE OF kube-ovn-subnet's spec.vpc DECISION, and the difference is worth stating:
+      there the substrate's default is the PLATFORM'S OWN VPC and is wrong, so the field is sent; here
+      the substrate's default is the operator's own pool and is the only right answer available. A
+      compiled-in guess would be a pool that does not exist in the first region whose operator renamed
+      theirs, and the symptom would be an address that never becomes ready. It is the same shape as
       charts/managed/kube-ovn-vpc's `reserved-list-is-compiled-in`: configuration that has no seam to
       reach a provider through, because ReconcileContext carries a cluster connection, an
-      ISecretResolver and nothing else.
+      ISecretResolver and nothing else. ⚠ THE HAZARD THIS HAD TO SURVIVE WAS CHECKED RATHER THAN WAVED
+      AT: both delete paths call c.ipam.ReleaseAddressByPod(eip.Name, eip.Spec.ExternalSubnet) with
+      the field left empty, which reads like an address that is never returned to the pool — and
+      pkg/ipam/ipam.go releases from EVERY subnet when the name is empty, so it is a superset rather
+      than a no-op. ⚠ The field is also NOT written back on an object this platform applied: only
+      createOrUpdateOvnEipCR's CREATE branch sets it, so the pool the fabric chose is observable on
+      the `ovn.kubernetes.io/subnet` label rather than in the spec.
   - id: an-ipv6-only-address-is-not-expressible
     says: >
       Whether an address has a v6 half is decided by the external pool, not by the tenant, and there
