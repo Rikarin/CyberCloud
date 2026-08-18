@@ -1,0 +1,44 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      docs/plan/03 § Providers — the fourth project: "TestCluster + k3s".
+
+      ⚠ NEITHER, HERE. The TestCluster half is test/CyberCloud.Conformance's and the k3s half is this
+      provider's *.Cluster.Conformance project. What is left is what only THIS provider can be wrong
+      about — and on this row that list is longer than usual, because most of what a cloud terminal is
+      never reaches the shared suite at all:
+
+        * the POD, which the reconciler does not apply and no conformance case can therefore list;
+        * the NetworkPolicy's rules, which apply and read back identically in a cluster that enforces
+          them and in one that does not;
+        * the idle and hard-cap policy, whose only mechanical half is a field on that pod;
+        * the console's reach BY DEFAULT, which is the failure class this row was told to check for
+          and which is a property of rendered YAML rather than of intent.
+
+      ⚠ IT EMBEDS ONE FILE FROM charts/managed/cloud-shell/ AND NOT TWO. `./build.sh Charts` generates
+      the chart's @param block from the registry and byte-diffs it, so the row-by-row schema
+      comparison is the build's. What generation does not reach is templates/, which ChartSurfaces
+      filters out on purpose, so the preset table and the security context stay here.
+    -->
+
+    <ItemGroup>
+        <PackageReference Include="xunit.v3"/>
+        <PackageReference Include="Shouldly"/>
+    </ItemGroup>
+
+    <ItemGroup Label="Global usings">
+        <Using Include="Xunit"/>
+    </ItemGroup>
+
+    <ItemGroup Label="The half generation does not reach — see the header">
+        <EmbeddedResource Include="../../../../charts/managed/cloud-shell/templates/_helpers.tpl"
+                          LogicalName="cloudshell.helpers.tpl"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../CyberCloud.Providers.Terminal/CyberCloud.Providers.Terminal.csproj"/>
+        <!-- ProviderRegistry.Build, so the declaration is checked the way a silo checks it at start. -->
+        <ProjectReference Include="../../../CyberCloud.ResourceManager/CyberCloud.ResourceManager.csproj"/>
+    </ItemGroup>
+
+</Project>

@@ -189,6 +189,19 @@ CyberCloud.Vault -> CyberCloud.ResourceManager
 # ⚠ FOUR EDGES, THE SAME FOUR, FOR THE TENTH FAMILY — over a family with FIVE resource types, three of
 # them children, rendering four Kube-OVN kinds across one API group. The fifth-edge signal has still
 # not fired from any provider's own needs.
+#
+# ⚠ AND THE SAME FOUR FOR CyberCloud.Providers.Terminal, WHICH IS THE ONE THAT SHOULD HAVE BROKEN IT.
+# A cloud terminal's whole purpose is to reach the tenant's OTHER resources — docs/plan/24's M1 exit
+# story says "psql into it" in as many words — so this is the first family whose PRODUCT is
+# cross-provider reach, and the obvious fifth line is to whatever knows where a tenant's databases
+# live. It is not here, and the reason it was not needed is worth recording because it is not the
+# usual "it would have been a shortcut": what the terminal renders is a NetworkPolicy over LABEL
+# SELECTORS, and a label is a string. Reach expressed as a selector needs no reference to the thing
+# selected. That is the first instance in this tree of rule 2 being satisfied by a MECHANISM rather
+# than by a resource id, and it is cheaper than the sanctioned route rather than more expensive.
+# ⚠ What it costs is that the selector is unverifiable from here: the tenant-wide rule matches
+# namespaces nothing in this repository labels. See
+# charts/managed/cloud-shell/conformance.yaml § owed, `namespaces-are-not-labelled`.
 CyberCloud.Providers.Analytics -> CyberCloud.Core
 CyberCloud.Providers.Analytics -> CyberCloud.Kubernetes
 CyberCloud.Providers.Analytics -> CyberCloud.ResourceManager
@@ -233,3 +246,7 @@ CyberCloud.Providers.Storage -> CyberCloud.Core
 CyberCloud.Providers.Storage -> CyberCloud.Kubernetes
 CyberCloud.Providers.Storage -> CyberCloud.ResourceManager
 CyberCloud.Providers.Storage -> CyberCloud.Tenancy
+CyberCloud.Providers.Terminal -> CyberCloud.Core
+CyberCloud.Providers.Terminal -> CyberCloud.Kubernetes
+CyberCloud.Providers.Terminal -> CyberCloud.ResourceManager
+CyberCloud.Providers.Terminal -> CyberCloud.Tenancy

@@ -863,6 +863,89 @@ the argument above; `securityGroups`, `publicIpAddresses`, `dnsZones`, `loadBala
 `vpnGateways` are **owed**, each with what was learned about it at `NetworkProvider`'s remarks rather
 than left as a bare gap.
 
+### What the twelfth provider measured
+
+`CyberCloud.Providers.Terminal` — `CyberCloud.Terminal/consoles`,
+[docs/plan/19 § `CyberCloud.Terminal/consoles`](../../docs/plan/19-cloud-terminal-and-virtual-desktop.md),
+M1 · 1.5 EM, and step 6 of [docs/plan/24](../../docs/plan/24-roadmap.md)'s M1 exit story. **The first
+row in the catalogue whose product is an interactive session rather than a converged object**, and
+that single sentence is what every finding below is downstream of.
+
+- ⚠ **`Converged` had to be redefined before anything could be built, and the pod is not in it.** The
+  reconciler applies three durable objects — a `PersistentVolumeClaim`, a `ServiceAccount` and a
+  `NetworkPolicy` — and **never a `Pod`**. The shell is applied by the `connect` action and deleted by
+  the idle reclaim, because a reconciler that applied it would re-create it on the next reminder after
+  every reclaim and the drift scanner would repair a resource working exactly as designed. So
+  `Converged` means *"the console can be attached to"*, `ObserveAsync` reports the pod in
+  `Summary` and nowhere else, and `Exists` is decided by the durable three alone.
+- ⚠ **The obvious readiness gate is unimplementable on the substrate this platform ships, which is
+  what kept this row out of `ManagedClusterReconciler`'s hole.** That reconciler is the only one whose
+  `Converged` reads a `status`, and doing so named `ClusterReadinessKind.NotReported` — an object no
+  controller has written a status onto converges, because neither harness can produce anything else.
+  A console's equivalent would be `status.phase == "Bound"` on the claim, and it **deadlocks**: k3s'
+  default StorageClass binds `WaitForFirstConsumer`, a console deliberately has no pod until somebody
+  attaches, and `connect` refuses a console that has not converged. Converge would wait for the pod
+  and the pod would wait for converge. So this row reads **no status at all** and pays for it with a
+  `Converged` that promises less — `charts/managed/cloud-shell/conformance.yaml § owed`,
+  `converged-is-not-attachable`, is the other resolution of the same shape.
+- ⚠ **The unsafe default here is a Kubernetes default, not a product's, and there were five of
+  them.** Failure class (c) has three earlier sightings — SeaweedFS' anonymous admin, Qdrant's unset
+  `api_key`, MariaDB's root password — and every one was a field an upstream product left blank. This
+  row's are the API's own: a pod with no `serviceAccountName` mounts the namespace's `default` token
+  (in an image containing `kubectl`); `allowPrivilegeEscalation` **defaults to true**; an omitted
+  `readOnlyRootFilesystem` is a writable root; an omitted `capabilities.drop` is the runtime's set,
+  including `NET_RAW`; an omitted `seccompProfile` is `Unconfined`. `ConsolePodTests` reads each off
+  a body that asks for nothing and names the default it closes.
+- ⚠ **`docs/plan/19` asks for a NetworkPolicy that cannot be written, and the correction is the
+  finding.** *"a `NetworkPolicy` denying access to the platform's own namespaces"* has no spelling: an
+  egress rule is an allow-list, there is no `deny`, and `ipBlock` may not be combined with a
+  `namespaceSelector` in one peer — so a rule allowing `0.0.0.0/0` allows the platform's pods too,
+  because their addresses are in the cluster CIDR. The requirement is met the only way it can be: the
+  tenant's namespaces are allowed **positively** and every private range is excised from the public
+  rule, so the platform is excluded by construction rather than by exception.
+- ⚠ **And the tenant-wide half of that rule matches nothing, because nothing in this repository
+  labels a namespace.** `ReconcileDriver.NamespaceFor` derives a name and every reconciler assumes it
+  exists; no component owns namespace creation. So a shell today reaches its own resource group and no
+  further, which means **docs/plan/24's M1 exit story does not work across resource groups** —
+  `psql` into a Postgres server in another group is refused by this policy. It fails closed, and the
+  rule is rendered now so that the day namespaces are labelled every existing console gains the reach
+  with no api-version change.
+- ⚠ **The first family whose product is cross-provider reach, and it still needed only four module
+  edges.** Rule 2 should have broken here — a terminal exists to reach the tenant's other resources —
+  and it did not, for a reason that is not the usual "it would have been a shortcut": what the
+  terminal renders is a policy over **label selectors**, and a label is a string. Reach expressed as a
+  selector needs no reference to the thing selected. That is cheaper than the sanctioned
+  resource-id route rather than more expensive, and `module-layering.txt` records it.
+- ⚠ **The first type for which declaring a meter would be WRONG rather than impossible.** Three
+  earlier rows report undeclarable meters — a string where a number was wanted, a conditional that
+  derives zero, a counter that only exists once traffic has flowed — and all three are registry gaps.
+  This one is not: a state-based `vcpu`/`memoryGb` reservation derived from the body would hold 2 vCPU
+  against a subscription for a terminal that was closed a week ago, which is the exact failure
+  docs/plan/19 calls the design constraint. `StorageGb` (the home volume, allocated whether anybody is
+  attached or not) and `Resources` are declared; the other two are a usage event the session grain
+  owes.
+- ⚠ **The first family that renders only core-group objects, which inverts what its cluster suite
+  proves.** Every earlier provider renders a custom resource, so `ClusterConformanceHarness` had to
+  derive a CRD stub before a single assertion could address anything. Nothing here needs one — so a
+  green run is genuine evidence the objects are real and **no** evidence the derivation works. It is
+  also the row where green proves least about the product: a `NetworkPolicy` applies and reads back
+  identically in a cluster that enforces it and in one that does not.
+- ⚠ **The structural statelessness check's blind spot, confirmed a SEVENTH time.** Both halves are in
+  `ConsoleReconcilerTests` and both were run red against the counter-example. ⚠ On this family the
+  field a cache would hold is a **security control**: the rendered `NetworkPolicy` carries the
+  tenant's own GUID in a selector, so a reconciler that remembered one would give tenant B a policy
+  naming tenant A. The cross-tenant test asserts the selector, not only the sizing.
+- **Four module edges, six projects, one `ProviderConformanceCase`** — a twelfth family with identical
+  columns, over a type the shared suite cannot see the product of. The suite was not touched.
+
+**What landed:** the resource, its four rendered objects, the `connect` and `terminate` actions, the
+chart and the auditing surface. **What is owed** is led by `the-session-grain-does-not-exist`:
+docs/plan/19's exec stream, resize channel, ring buffer and idle timer are not built, `TerminalHub`
+still refuses by name, and **nothing in this repository builds the shell image** —
+`build/Build.Images.cs` publishes .NET hosts and its header forbids a Dockerfile, and this is the
+first image in the tree that is not a .NET application. All of it is at
+`charts/managed/cloud-shell/conformance.yaml § owed`.
+
 ## Planned namespaces
 
 `Platform`, `Identity`, `Compute`, `ContainerInstance`, `ContainerRegistry`,

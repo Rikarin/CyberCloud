@@ -1,0 +1,77 @@
+# Provenance — charts/README.md § `SOURCE` is required, including when nothing was forked.
+#
+# ⚠ THIS IS THE FIRST CHART IN charts/managed/ WITH NO UPSTREAM AT ALL, AND THE FILE IS HERE ANYWAY
+# BECAUSE ITS ABSENCE WOULD BE INDISTINGUISHABLE FROM AN OVERSIGHT. Build.Charts' own remarks make
+# that argument: "there is no SOURCE file" is a legal state only if it is written down. Every other
+# chart here wraps somebody else's operator and records which commit it read; this one renders four
+# built-in Kubernetes objects and an image the platform builds itself, so the provenance that matters
+# is the API contract, not a third party's release.
+
+vendored: none
+upstream: none
+
+# ⚠ WHAT WAS ACTUALLY READ, AND WHAT IS ASSUMED. Every claim below is about the Kubernetes API, which
+# is the only upstream this row has.
+upstream-api: v1 (PersistentVolumeClaim, ServiceAccount, Pod), networking.k8s.io/v1 (NetworkPolicy)
+
+reviewed: 2026-08-18
+
+# ── What the review established ───────────────────────────────────────────────────────────────
+#
+# ⚠ A NetworkPolicy HAS NO `deny` RULE AND docs/plan/19 ASKS FOR ONE. That document's § The pod wants
+# "a NetworkPolicy denying access to the platform's own namespaces". `NetworkPolicyEgressRule` is an
+# allow-list: a policy selects pods and lists what they MAY reach, and a pod selected by any policy is
+# denied everything not listed. So "everything except namespace X" has no spelling — a rule allowing
+# 0.0.0.0/0 allows the platform's pods too, because their addresses are in the cluster CIDR. The
+# requirement is met by allowing the tenant's own namespaces positively and cutting every private
+# range out of the public rule, so the platform is excluded by construction. Recorded here because the
+# natural reading of that sentence produces a policy that silently allows what it was written to
+# forbid.
+#
+# ⚠ `ipBlock` MAY NOT BE COMBINED WITH A `namespaceSelector` IN ONE PEER. NetworkPolicyPeer's own API
+# reference: ipBlock "cannot be used with namespaceSelector or podSelector". That is why the rendered
+# policy has four separate egress rules rather than one rule with four peers, and it is why the count
+# is what CloudConsoles.Matches compares.
+#
+# ⚠ `kubernetes.io/metadata.name` IS SET BY THE API SERVER ON EVERY NAMESPACE. The NamespaceDefaultLabelName
+# feature went GA in Kubernetes 1.22 and the label is applied by the apiserver's namespace strategy,
+# not by whoever created the namespace. That is the only reason the "reach my own namespace" rule works
+# today: `cybercloud.io/tenant-id` on a namespace is applied by NOTHING in this repository — see
+# conformance.yaml § owed, `namespaces-are-not-labelled`.
+#
+# ⚠ `persistentVolumeReclaimPolicy` IS A PersistentVolume FIELD, NOT A PersistentVolumeClaim ONE, and
+# it is defaulted from the StorageClass. A claim therefore CANNOT ask for its bytes to outlive it. That
+# is why this type's delete is irreversible whatever the provider does, and it is the counter-argument
+# to declining soft delete — conformance.yaml § owed, `delete-takes-the-home-directory`.
+#
+# ⚠ THE DEFAULT StorageClass IN k3s BINDS WITH `volumeBindingMode: WaitForFirstConsumer`. local-path
+# is k3s' bundled provisioner and its StorageClass carries that mode, so a claim with no pod scheduled
+# against it stays Pending indefinitely — correctly. A console deliberately has no pod until somebody
+# attaches, so a readiness gate on `status.phase == "Bound"` would deadlock: converge waits for the
+# pod, and the pod is refused until converge. This is the single fact that decides what Converged means
+# on this row.
+#
+# ⚠ `allowPrivilegeEscalation` DEFAULTS TO TRUE. SecurityContext's own API reference: "Defaults to
+# true", except when runAsNonRoot is true AND the container is privileged, which is not this pod's
+# shape. It is written explicitly for that reason and not for symmetry.
+#
+# ⚠ A POD WITH NO `serviceAccountName` RUNS AS `default` WITH ITS TOKEN MOUNTED. That is the unsafe
+# default this row had to close, and a shell containing kubectl is the worst possible place to leave it
+# open. `automountServiceAccountToken: false` is set on BOTH the ServiceAccount and the Pod, because
+# the pod-level field is the one that binds and the account-level one is the one an auditor reads.
+#
+# ⚠ `activeDeadlineSeconds` IS ENFORCED BY THE KUBELET AND IS THE ONLY HALF OF docs/plan/19's SESSION
+# POLICY THAT ANYTHING ENFORCES TODAY. The idle timeout is a keystroke question and is carried as an
+# annotation for a reaper that does not exist yet.
+#
+# ── The weak claims, named ────────────────────────────────────────────────────────────────────
+#
+# ⚠ THE PRIVATE-RANGE EXCEPTIONS ASSUME THE CLUSTER'S OWN CIDRs ARE PRIVATE. True for every cluster
+# CyberCloud.ContainerService/managedClusters creates (10.244.0.0/16 and 10.96.0.0/12) and NOT
+# checked for a BYO cluster. conformance.yaml § owed, `cluster-cidrs-are-assumed-private`.
+#
+# ⚠ NOBODY HAS CONFIRMED THAT THE SHELL IMAGE'S TOOLS WORK UNDER `readOnlyRootFilesystem: true` WITH
+# ONLY $HOME AND /tmp WRITABLE. There is no image to try it against. Several of docs/plan/19's tools
+# write outside both by default — helm to ~/.cache (covered), npm to a prefix that may not be, and
+# anything using /var/tmp is not. conformance.yaml § owed, `no-image-pipeline`.
+upstream-webhook: none — no admission webhook is installed for any of these kinds; what refuses this pod in a hardened cluster is Pod Security admission, which the rendered securityContext is written to satisfy at the `restricted` level

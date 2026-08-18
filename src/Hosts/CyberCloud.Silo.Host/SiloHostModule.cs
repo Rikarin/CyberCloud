@@ -9,6 +9,7 @@ using CyberCloud.Providers.Network.Application;
 using CyberCloud.Providers.Sample.Application;
 using CyberCloud.Providers.Search.Application;
 using CyberCloud.Providers.Storage.Application;
+using CyberCloud.Providers.Terminal.Application;
 using Volo.Abp.Autofac;
 using Volo.Abp.Modularity;
 
@@ -19,7 +20,7 @@ namespace CyberCloud.Silo.Host;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>The eleven lines below are the platform's API surface, and until they existed this
+///         ⚠ <b>The twelve lines below are the platform's API surface, and until they existed this
 ///         module depended on Autofac's and nothing else.</b> Each provider module's
 ///         <c>ConfigureServices</c> registers its <c>IResourceProvider</c>, its reconcilers and its
 ///         action handlers; <c>ProviderRegistry</c> is then built from the union at first resolve. A
@@ -53,4 +54,5 @@ namespace CyberCloud.Silo.Host;
 [DependsOn(typeof(SampleApplicationModule))]
 [DependsOn(typeof(SearchApplicationModule))]
 [DependsOn(typeof(StorageApplicationModule))]
+[DependsOn(typeof(TerminalApplicationModule))]
 public sealed class SiloHostModule : AbpModule;

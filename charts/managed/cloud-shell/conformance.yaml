@@ -1,0 +1,321 @@
+# Conformance manifest — docs/plan/12 § The pattern, once, piece 8.
+#
+# What the conformance suite asserts about CyberCloud.Terminal/consoles. This file is data:
+# `Build.Charts` checks that it is present, non-empty, and names the same resource type as Chart.yaml.
+#
+# ⚠ THE TYPE IS docs/plan/19's, NOT docs/plan/12's, AND UNLIKE charts/managed/seaweedfs IT IS NOT A
+# MANAGED SERVICE AT ALL. Every other manifest in this directory describes somebody else's operator
+# wrapped as a catalogue row. This one describes four built-in Kubernetes objects and an image the
+# platform owes itself. It is here because it owes the same eighth piece and because a chart outside
+# charts/managed/ quietly owes none — the argument charts/managed/kubernetes made first.
+
+resourceType: CyberCloud.Terminal/consoles
+apiVersion: "2026-08-01"
+chart: cloud-shell
+
+# Objects the reconciler must have applied once the resource reports Succeeded.
+#
+# ⚠ THREE, AND THE FOURTH — THE POD — IS THE PRODUCT AND IS DELIBERATELY ABSENT. A console's shell is
+# applied by the `connect` action and deleted by the idle reclaim, so "the objects a converged
+# resource owns" does not include it: a console with no pod is the correct, billable-to-nobody state
+# of a terminal nobody is using. Listing it here would make the suite demand the very thing
+# docs/plan/19 § The pod says the design exists to avoid.
+#
+# ⚠ AND THEY ARE ALL CORE-GROUP, WHICH IS A FIRST. Every family before this one renders a custom
+# resource, so ClusterConformanceHarness had to derive a CRD stub from this list before a single
+# assertion could address anything. Nothing here needs one — which makes this the one suite whose
+# green is evidence the objects are real, and no evidence at all that the derivation works.
+renders:
+  - group: ""
+    version: v1
+    kind: PersistentVolumeClaim
+    count: 1
+  - group: ""
+    version: v1
+    kind: ServiceAccount
+    count: 1
+  - group: networking.k8s.io
+    version: v1
+    kind: NetworkPolicy
+    count: 1
+
+# ADR-013 — every rendered object carries all seven labels. Asserted against real rendered output,
+# which is what the Labels architecture gate in docs/plan/23 § The architecture gates requires.
+#
+# ⚠ THE POD CARRIES THEM TOO AND NO SUITE CHECKS IT. It goes through the same KubeCommand injection,
+# because CloudConsoleSessionHandler applies it through the builder like everything else — and it has
+# to, because cybercloud.io/resource-type is the label the console's OWN NetworkPolicy selects on. A
+# pod applied by any other route would be a shell no policy governs.
+# `ConsolePodTests.ThePodCarriesTheLabelItsOwnNetworkPolicySelectsOn` is what checks it.
+labels:
+  required:
+    - cybercloud.io/tenant-id
+    - cybercloud.io/subscription-id
+    - cybercloud.io/resource-group
+    - cybercloud.io/resource-id
+    - cybercloud.io/resource-type
+    - cybercloud.io/api-version
+    - cybercloud.io/managed-by
+  # ⚠ Not the resource type verbatim. A `/` is not a legal label value character, so the value is
+  # lower-cased with `/` replaced by `_` — KubeLabels.ResourceTypeValue.
+  values:
+    cybercloud.io/resource-type: cybercloud.terminal_consoles
+    cybercloud.io/managed-by: cybercloud
+
+# Behaviour a tenant is entitled to. Each is a statement the suite can fail on, not a feature list.
+assertions:
+  - id: a-shell-opens-and-echoes
+    says: >
+      A connect against a converged console produces a running pod, and bytes written to the terminal
+      hub for the returned sessionId come back as terminal output. ⚠ THE SECOND HALF IS NOT DRIVEN BY
+      ANYTHING — see `the-session-grain-does-not-exist`.
+  - id: reconnect-rejoins-rather-than-restarts
+    says: >
+      A second connect while a shell is running returns the SAME sessionId and does not restart the
+      process. The pod's name is derived from the console's and the session id is the pod's own UID,
+      so this holds by construction rather than by bookkeeping.
+  - id: the-shell-runs-as-the-consoles-identity
+    says: >
+      Every command in the shell acts as properties.identity.principalId and no credential is stored
+      anywhere in the image or the pod. ⚠ The managed-identity half exists; what is not enforced is
+      that the CALLER of connect is that principal — see `connect-cannot-see-its-caller`.
+  - id: nothing-can-reach-the-shell
+    says: >
+      No pod, in any namespace, can open a connection to a console's pod. The policy declares Ingress
+      with an empty rule list, which denies rather than permits.
+  - id: the-shell-cannot-reach-the-platform
+    says: >
+      A shell cannot open a connection to any namespace the platform runs in, and cannot reach
+      169.254.169.254. ⚠ Not driven — see
+      `a-networkpolicy-that-nothing-enforces-still-reads-back`.
+  - id: an-idle-shell-goes-away
+    says: >
+      A shell with no input for idleTimeoutMinutes is deleted and its home volume is not. The next
+      connect starts a new pod that finds the same $HOME. ⚠ Not driven — see `no-idle-reaper`.
+  - id: a-shell-stops-at-its-hard-cap
+    says: >
+      A shell running for maxDurationHours is stopped whether or not it is busy, and whether or not
+      any part of this platform is running. This is the one half of the session policy something
+      other than us enforces: activeDeadlineSeconds is the kubelet's.
+  - id: the-home-directory-survives-a-reclaim
+    says: >
+      A file written in $HOME is present after an idle reclaim and a reconnect, and after the console
+      is updated to a larger home size.
+  - id: recording-is-off-and-cannot-be-turned-off-quietly
+    says: >
+      A console created with no audit block records no command content, and audit.sessionRecording is
+      immutable, so a recorded console cannot be silently un-recorded mid-life. ⚠ docs/plan/19 makes
+      the opt-in PER SUBSCRIPTION and this is per console — see `recording-is-per-console`.
+  - id: session-metadata-is-always-recorded
+    says: >
+      Who, when, from where, which subscription, which cluster and for how long is recorded for every
+      session regardless of audit.sessionRecording, and command content is not. ⚠ Not driven — there
+      is no audit sink; see `no-audit-sink`.
+
+# Meters the type must emit.
+#
+# ⚠ ONE, AND THE TWO THAT ARE MISSING ARE THE FINDING. See TerminalProvider.Describe: a state-based
+# vcpu/memoryGb reservation derived from the body would hold 2 vCPU against a subscription for a
+# terminal that was closed a week ago, which is the exact failure docs/plan/19 calls the design
+# constraint. See `session-hours-are-not-a-state-meter`.
+meters:
+  - storage.home.gb_month
+
+# ── owed ──────────────────────────────────────────────────────────────────────────────────────
+#
+# Named here rather than left to be discovered, because an absent capability that nobody wrote down
+# is indistinguishable from one nobody thought of.
+owed:
+  - id: the-session-grain-does-not-exist
+    says: >
+      docs/plan/19 § Architecture's ITerminalSessionGrain — the exec stream, the resize channel, the
+      output ring buffer for reconnect and the idle timer — is NOT BUILT, and it is the largest single
+      thing this row owes. What exists today is: the gateway maps /hubs/terminal and TerminalHub.SendAsync
+      throws by name; this provider's connect action starts the pod and returns the sessionId and hub
+      path a client needs. So a caller can obtain a running shell and a hub that refuses it. ⚠ THE
+      REFUSAL IS DELIBERATE AND IS BETTER THAN THE ALTERNATIVE — that hub's own remarks say "a terminal
+      that silently swallows input is worse than one that is closed" — but it means docs/plan/24's M1
+      exit story step 6 is not passable end to end. Closing it is a grain that speaks the Kubernetes
+      exec protocol (SPDY/WebSocket) through the cluster connection, plus the hub method that pumps
+      bytes into it.
+  - id: connect-cannot-see-its-caller
+    says: >
+      A console's whole security argument is "the shell runs as YOU", and nothing checks that the
+      caller of connect is properties.identity.principalId. ActionContext carries no CallerContext —
+      deliberately, per its own remarks, because an action reads facts about a resource rather than
+      making an authorization decision — so a handler cannot compare them and this provider's
+      assembly could not name a CallerContext if it wanted to. What DOES hold is the `connect`
+      permission through ReBAC, which is a separate permission from `read` for exactly this reason. So
+      the honest posture is: ANYONE WHO MAY CONNECT TO A CONSOLE GETS A SHELL HOLDING THAT CONSOLE'S
+      IDENTITY. Two routes close it: a CallerContext on ActionContext (a manager change, which
+      docs/plan/25 § R1 counts), or a policy at the enforcement seam that reads the body's principal —
+      which is where docs/plan/07 says such a check belongs anyway.
+  - id: namespaces-are-not-labelled
+    says: >
+      The network policy's tenant-wide egress rule selects namespaces carrying cybercloud.io/tenant-id
+      and NOTHING IN THIS REPOSITORY CREATES OR LABELS A NAMESPACE. ReconcileDriver.NamespaceFor
+      derives `{subscriptionId:N}-{resourceGroup}` and every reconciler assumes it exists. So a
+      shell's reach today is its OWN resource group's namespace and no further — which means
+      docs/plan/24's M1 exit story does not work across resource groups: psql into a Postgres server
+      in a different group is refused by this policy. ⚠ IT FAILS CLOSED, which is the right direction
+      to be wrong in, and the rule is rendered now so that the day namespaces are labelled every
+      existing console gains the reach with no api-version change. Closing it is one label at
+      namespace creation, wherever that eventually lives — and that "wherever" is itself a gap: no
+      component owns namespace creation today.
+  - id: a-networkpolicy-that-nothing-enforces-still-reads-back
+    says: >
+      This is failure class (e) for this row, stated plainly. A NetworkPolicy applies, reads back and
+      satisfies CloudConsoles.Matches identically in a cluster that enforces it and in one that does
+      not — enforcement belongs to the CNI, and a cluster with a CNI that ignores NetworkPolicy accepts
+      the object silently. So EVERY assertion in this file's suite can pass over a console whose shell
+      reaches the whole cluster. What the tests do prove is that the rendered rules are the intended
+      ones, byte for byte, which is a claim about this provider and not about the tenant's safety.
+      Closing it needs a cluster-backed test that runs two pods and asserts a connection is refused —
+      which needs a CNI in the k3s bundle that enforces policy, and the bundle does not name one.
+  - id: cluster-cidrs-are-assumed-private
+    says: >
+      The public egress rule cuts out 10/8, 172.16/12, 192.168/16, 100.64/10 and 169.254/16, which
+      keeps it from re-admitting the cluster ONLY IF the cluster's pod and service CIDRs are inside
+      those ranges. They are for every cluster CyberCloud.ContainerService/managedClusters creates
+      (10.244.0.0/16, 10.96.0.0/12) and they are not checked for a BYO cluster on a public or unusual
+      range. This provider cannot read those CIDRs: they belong to another provider's resource and
+      src/Providers/README.md § Hard rule forbids the reference. The sanctioned route — a resource id
+      in the body, resolved by the reconciler — would work and no provider has ever done it; it is
+      the same seam charts/managed/seaweedfs' filer-is-a-single-point-of-failure needs.
+  - id: no-image-pipeline
+    says: >
+      docs/plan/19 § The image specifies a ~2.5 GB image with psql, kubectl, opentofu, six language
+      runtimes and tcpdump, plus a ~400 MB minimal variant. NOTHING IN THIS REPOSITORY BUILDS EITHER,
+      and this is a platform gap rather than a provider one. build/Build.Images.cs publishes everything
+      under src/Hosts through `dotnet publish -t:PublishContainer`, and its header says in as many
+      words: "THERE IS NO DOCKERFILE IN THIS REPOSITORY, AND THERE MUST NOT BE ONE." That rule was
+      written about .NET host images and is right about them; this is the FIRST IMAGE IN THE TREE THAT
+      IS NOT A .NET APPLICATION, and the SDK's container tooling composes layers from a published .NET
+      output and can express none of it. So the digests in CloudConsoles.ImageDigests are visible
+      placeholders — all-zeroes and all-ones, asserted to stay that way by
+      ConsoleDeclarationTests.TheImageDigestsAreVisiblyPlaceholders — and a second build route is a
+      decision somebody has to make: a Dockerfile with the rule amended to say what it is really about,
+      or a declarative builder (apko/melange, buildpacks) that is not a Dockerfile and satisfies it as
+      written. ⚠ Two consequences follow and neither is checkable until it exists: the terraform BUSL
+      question docs/plan/19 flags is unanswerable without an image to license, and nobody has confirmed
+      the tools work under readOnlyRootFilesystem with only $HOME and /tmp writable.
+  - id: no-idle-reaper
+    says: >
+      docs/plan/19's twenty-minute idle timeout has NO ENFORCER. The number is validated, stored,
+      returned on connect and rendered onto the pod as cybercloud.io/idle-timeout-seconds — carried on
+      the OBJECT rather than looked up, so that whatever eventually sweeps needs only kubectl and not
+      the resource manager — and nothing reads it. The hard cap IS enforced, by the kubelet through
+      activeDeadlineSeconds, which is why the two numbers are enforced in two different places and
+      only one of them is real. Until the reaper exists the only way to stop paying early is the
+      `terminate` action, which is why that action exists. ⚠ THE IDLE HALF CANNOT BE EXPRESSED AS A
+      POD FIELD — a kubelet cannot know about keystrokes — so it is genuinely the session grain's, and
+      it is the second thing `the-session-grain-does-not-exist` blocks.
+  - id: home-retention-is-not-swept
+    says: >
+      home.retentionDays is docs/plan/19's "retained 90 days after last use" and nothing sweeps on it,
+      nor is "last use" recorded anywhere. It is carried so that a console created today is swept
+      correctly by whatever eventually does, and so that the number is the tenant's rather than a
+      constant somebody picks later. It is also half of this type's answer to soft delete — see
+      `delete-takes-the-home-directory`.
+  - id: delete-takes-the-home-directory
+    says: >
+      This type declines SupportsSoftDelete, and TerminalProvider's remarks argue it both ways: the
+      session is genuinely unrecoverable, but the home volume is DATA and docs/plan/06 § Tags, locks
+      asks for seven days on resources carrying data. The argument that decides it is that the volume
+      already has a better retention policy of its own — visible in the body, chosen by the tenant,
+      and starting from last use rather than from a delete — and two retention mechanisms over one
+      volume is two things that can disagree. ⚠ WHAT MAKES THAT ARGUMENT WEAK TODAY IS THAT NEITHER
+      MECHANISM RUNS: `home-retention-is-not-swept` is open, so a delete takes the home directory
+      immediately and permanently. ⚠ AND THE OBVIOUS MITIGATION IS NOT AVAILABLE:
+      persistentVolumeReclaimPolicy is a PersistentVolume field defaulted from the StorageClass, so a
+      claim cannot ask for its bytes to outlive it. Revisit when the sweeper lands; if it does not,
+      seven days of soft delete becomes the better answer rather than the redundant one.
+  - id: recording-is-per-console
+    says: >
+      docs/plan/19 § Auditing makes full-session recording "an opt-in PER SUBSCRIPTION for tenants
+      with a compliance requirement". It is declared here as a per-console property, because the
+      resource model has no per-subscription policy surface at all — and that is a real weakening
+      rather than a spelling difference: AN AUDIT CONTROL THE AUDITED PARTY CAN DECLINE IS NOT AN
+      AUDIT CONTROL, and a user who does not want to be recorded creates a console with recording
+      off. Two things make the gap smaller and neither closes it: the property is IMMUTABLE, so a
+      recorded console cannot be quietly un-recorded mid-life, and it is on the connect response so
+      the portal can be loud about it. Closing it needs the effective value to be
+      `subscriptionPolicy OR consoleProperty`, which needs a policy surface — docs/plan's phase 4
+      policy engine — and until then the per-console default of false is the honest one, because a
+      default of true would record shells nobody asked to record.
+  - id: no-audit-sink
+    says: >
+      "Every session records: who, when, from where, which subscription, which cluster, duration" has
+      nowhere to be written. There is no audit event type, no sink and no retention for one. What
+      exists is the in-cluster half — the ServiceAccount carries cybercloud.io/principal-id and the
+      pod carries cybercloud.io/session-recording, so an operator with kubectl can see whose shell a
+      pod is and whether it is recorded without resolving a resource id through an API they may not
+      have. The platform-side record belongs with the session grain, because duration is a fact only
+      it holds.
+  - id: session-hours-are-not-a-state-meter
+    says: >
+      This type declares QuotaMeter.StorageGb and QuotaMeter.Resources and deliberately NOT Vcpu or
+      MemoryGb. A quota meter is reserved at write time from a pure function of the body, which fits a
+      home volume exactly and fits a shell exactly backwards: a console's pod exists only while
+      somebody is typing into it, so a state-based reservation would hold 2 vCPU and 4 GiB against a
+      subscription for a terminal that was closed a week ago. ⚠ FOURTH SIGHTING OF AN UNDECLARABLE
+      METER AND THE FIRST WHERE DECLARING IT WOULD BE WRONG RATHER THAN IMPOSSIBLE —
+      charts/managed/kafka's was a string where a number was wanted, charts/managed/nats' derives zero,
+      charts/managed/seaweedfs' egress is a counter that only exists once traffic has flowed. Those
+      three are registry gaps. This one is a case where the registry's shape is right and the
+      resource's is not. What a console actually burns is attached-session hours, which is
+      BillingMeter.VCpuHours driven from a usage event the session grain emits — docs/plan/22's usage
+      pipeline, MeterKind.EventBased — and is therefore a fourth thing
+      `the-session-grain-does-not-exist` blocks.
+  - id: converged-is-not-attachable
+    says: >
+      Converged on this type means the three durable objects read back carrying the desired spec. It
+      does NOT mean the home volume is bound, and it deliberately cannot: k3s' default StorageClass
+      binds with volumeBindingMode WaitForFirstConsumer, so a claim with no pod scheduled against it
+      stays Pending forever — correctly — and a console has no pod until somebody attaches. A
+      `status.phase == "Bound"` gate would therefore deadlock, because connect refuses a console that
+      has not converged. ⚠ THIS IS THE SAME SHAPE AS charts/managed/kubernetes' `converged-is-not-ready`
+      AND THE OPPOSITE RESOLUTION, which is why it is worth reading beside it: that type reads a status
+      and names ClusterReadinessKind.NotReported as a hole because neither harness can produce a
+      controller. This one reads no status at all, so it has no such hole — and pays for that with a
+      Converged that promises less. What is left unproven is the first attach: a console whose storage
+      class cannot satisfy the claim converges, and the failure surfaces at connect as a pod that never
+      schedules. Closing it needs connect to report a pending claim as a distinct state rather than as
+      "Starting".
+  - id: session-state-is-a-sentence
+    says: >
+      ObserveAsync reports whether a shell is running in ObservedState.Summary and nowhere else,
+      because there is no field on that wire type for it and adding one for one provider would be this
+      row spending the manager's budget. The consequence is that "is anybody attached" is not
+      queryable, not filterable and not usable by anything mechanical — a portal list of consoles
+      cannot show which are live without a GET per row plus string matching. Closing it is either a
+      structured member on ObservedState or the session grain publishing to the resources hub.
+  - id: the-suite-never-attaches
+    says: >
+      What the shared conformance suite proves about this row, stated so that green is not misread. It
+      proves the twelve-step write path, the verb grammar, the four reconciler clauses, the
+      cross-tenant 404, the seven labels and the delete-read-back, over a PersistentVolumeClaim, a
+      ServiceAccount and a NetworkPolicy. It proves nothing about whether a shell starts, whether the
+      policy constrains anything, whether the idle timeout is honoured, or whether a person can type
+      into the result — because ProviderConformanceCase describes only the durable half and the
+      product is the other one. Every claim about the pod is a hand-written test in
+      CyberCloud.Providers.Terminal.Tests instead, and those tests assert what is RENDERED, which is
+      one layer short of what happens.
+  - id: the-chart-cannot-render-the-product
+    says: >
+      charts/managed/cloud-shell renders the three durable objects and not the pod, for the same
+      reason the reconciler does not. That makes it the first chart in this directory that cannot
+      express its own catalogue row, and it is a real limit of the chart-as-description idea rather
+      than an omission: Helm has no shape for "an object that exists while somebody is typing". The
+      pod is rendered in C# by CloudConsoles.PodJson, which means the security context — the part most
+      worth reviewing in YAML — is only reviewable as a JsonObject literal.
+  - id: the-minimal-variant-is-a-second-image-nobody-costed
+    says: >
+      Two variants means two images, two SBOMs, two signatures and two per-region mirrors —
+      docs/plan/19 § Shared machinery's fourth item — and the 1.5 EM for this row does not obviously
+      contain that. The schema offers both because the argument for `minimal` is about people rather
+      than bytes ("a 40-second cold start for someone who wants to run one command is the wrong
+      trade") and because adding an enum value to a published api-version later is a new date on the
+      type. If the pipeline lands with one image, `minimal` must resolve to the same digest as
+      `default` rather than to nothing — CloudConsoles.ImageVariant falls back for an unknown variant
+      and would not catch a missing one.

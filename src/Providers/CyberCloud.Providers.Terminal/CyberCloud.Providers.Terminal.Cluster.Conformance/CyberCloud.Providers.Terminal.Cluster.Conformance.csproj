@@ -1,0 +1,46 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      The cluster-backed half of the shared provider conformance suite, run against the cloud-terminal
+      provider.
+
+      ⚠ IT CONTAINS NO ASSERTIONS AND NO INFRASTRUCTURE. Everything it runs comes from
+      test/CyberCloud.Cluster.Conformance; what lives here is two class declarations over the SAME
+      ProviderConformanceCase the Docker-free suite already uses, plus one AssemblyInfo line.
+
+      ⚠ AND ON THIS ROW IT IS THE FIRST SUITE IN THE TREE THAT ADDRESSES ONLY CORE-GROUP OBJECTS. A
+      PersistentVolumeClaim, a ServiceAccount and a NetworkPolicy are served by a bare k3s with no CRD
+      stub derived for them at all, so the harness's CRD derivation — built because "a bare k3s serves
+      no REST path for a custom resource" — has nothing to do here. That makes this the one suite in
+      which a green run is NOT evidence that the derivation works, and the one in which a green run IS
+      evidence that the objects are real. See conformance.yaml § owed,
+      `a-networkpolicy-that-nothing-enforces-still-reads-back`.
+
+      ⚠ IT IS NOT NAMED `.Conformance.Cluster`. Directory.Build.props § Project role detection and
+      build/Build.Test.cs § SuiteOwning both classify by the SUFFIX of the project name; a name ending
+      in `.Cluster` is claimed by neither, so the project would build as a library rather than as a
+      test host.
+    -->
+
+    <ItemGroup>
+        <PackageReference Include="xunit.v3"/>
+        <PackageReference Include="Shouldly"/>
+    </ItemGroup>
+
+    <ItemGroup Label="Global usings">
+        <Using Include="Xunit"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <!--
+          ⚠ The CASE comes from the provider's Docker-free conformance project rather than being
+          declared again here. One provider, one ProviderConformanceCase: a second copy would be a
+          second description of the same provider, and the two would disagree the first time either
+          changed.
+        -->
+        <ProjectReference
+            Include="../CyberCloud.Providers.Terminal.Conformance/CyberCloud.Providers.Terminal.Conformance.csproj"/>
+        <ProjectReference Include="../../../../test/CyberCloud.Cluster.Conformance/CyberCloud.Cluster.Conformance.csproj"/>
+    </ItemGroup>
+
+</Project>

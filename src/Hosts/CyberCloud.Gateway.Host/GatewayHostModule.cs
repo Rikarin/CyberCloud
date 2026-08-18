@@ -9,6 +9,7 @@ using CyberCloud.Providers.Network.Application;
 using CyberCloud.Providers.Sample.Application;
 using CyberCloud.Providers.Search.Application;
 using CyberCloud.Providers.Storage.Application;
+using CyberCloud.Providers.Terminal.Application;
 using Volo.Abp.Autofac;
 using Volo.Abp.Modularity;
 
@@ -19,7 +20,7 @@ namespace CyberCloud.Gateway.Host;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>The same eleven provider modules the silo loads, and the gateway needs them for a
+///         ⚠ <b>The same twelve provider modules the silo loads, and the gateway needs them for a
 ///         different reason.</b> The silo loads them to run reconcilers; this host loads them to have
 ///         an <c>IProviderRegistry</c> with anything in it. Stage 6 resolves a request path against
 ///         that registry, so a gateway with no providers routes nothing — it answers the canonical
@@ -30,7 +31,7 @@ namespace CyberCloud.Gateway.Host;
 ///     </para>
 ///     <para>
 ///         ⚠ <b>The module and never the implementation</b> — docs/plan/03 § Assembly graph rules,
-///         rule 5. The eleven <c>using</c> lines above name <c>*.Application</c> assemblies; no type
+///         rule 5. The twelve <c>using</c> lines above name <c>*.Application</c> assemblies; no type
 ///         from a provider implementation is bound anywhere in this host, which is what
 ///         <c>GatewayIsolationTests</c> reads the <c>AssemblyRef</c> table for.
 ///     </para>
@@ -60,4 +61,5 @@ namespace CyberCloud.Gateway.Host;
 [DependsOn(typeof(SampleApplicationModule))]
 [DependsOn(typeof(SearchApplicationModule))]
 [DependsOn(typeof(StorageApplicationModule))]
+[DependsOn(typeof(TerminalApplicationModule))]
 public sealed class GatewayHostModule : AbpModule;
