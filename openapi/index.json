@@ -187,7 +187,8 @@
     "CyberCloud.Network",
     "CyberCloud.Sample",
     "CyberCloud.Search",
-    "CyberCloud.Storage"
+    "CyberCloud.Storage",
+    "CyberCloud.Terminal"
   ],
   "x-cybercloud-resource-types": [
     {
@@ -408,6 +409,19 @@
         "plural": "Buckets",
         "alias": "bucket",
         "summary": "An S3 bucket inside a managed object-storage account, with an optional size limit and optional object versioning.",
+        "declared": true
+      }
+    },
+    {
+      "type": "CyberCloud.Terminal/consoles",
+      "apiVersions": [
+        "2026-08-01"
+      ],
+      "display": {
+        "name": "Cloud terminal",
+        "plural": "Cloud terminals",
+        "alias": "shell",
+        "summary": "A browser shell running in this subscription's own cluster, holding a managed identity, with a persistent home directory and no stored credential.",
         "declared": true
       }
     }

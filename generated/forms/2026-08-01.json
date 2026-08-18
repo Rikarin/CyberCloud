@@ -4942,6 +4942,327 @@
           "confirmOnly": true
         }
       ]
+    },
+    "CyberCloud.Terminal/consoles": {
+      "resourceType": "CyberCloud.Terminal/consoles",
+      "apiVersion": "2026-08-01",
+      "title": "Cloud terminal",
+      "plural": "Cloud terminals",
+      "summary": "A browser shell running in this subscription's own cluster, holding a managed identity, with a persistent home directory and no stored credential.",
+      "overrideKey": "CyberCloud.Terminal/consoles@2026-08-01",
+      "coveredPointers": [
+        "/location",
+        "/properties",
+        "/properties/audit",
+        "/properties/audit/sessionRecording",
+        "/properties/clusterId",
+        "/properties/home",
+        "/properties/home/retentionDays",
+        "/properties/home/size",
+        "/properties/identity",
+        "/properties/identity/principalId",
+        "/properties/image",
+        "/properties/image/variant",
+        "/properties/network",
+        "/properties/network/egress",
+        "/properties/session",
+        "/properties/session/idleTimeoutMinutes",
+        "/properties/session/maxDurationHours",
+        "/properties/sizing",
+        "/properties/sizing/preset",
+        "/tags"
+      ],
+      "supportsTags": true,
+      "requiresCluster": true,
+      "clusterIdPointer": "/properties/clusterId",
+      "softDeleteDays": 0,
+      "purgePermission": "",
+      "purgeProtectionPointer": "",
+      "fields": [
+        {
+          "jsonPointer": "/location",
+          "name": "location",
+          "label": "Location",
+          "control": "xui-region",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "The region the console is billed in.",
+          "format": "cybercloud-region",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new Cloud terminal to change it.",
+          "placeholder": "eu-central"
+        },
+        {
+          "jsonPointer": "/properties",
+          "name": "properties",
+          "label": "Properties",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "The console's own settings."
+        },
+        {
+          "jsonPointer": "/properties/audit",
+          "name": "audit",
+          "label": "Audit",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "docs/plan/19 § Auditing. Who, when, from where, which subscription and for how long is always recorded and is not a setting."
+        },
+        {
+          "jsonPointer": "/properties/audit/sessionRecording",
+          "name": "sessionRecording",
+          "label": "Session recording",
+          "control": "xui-switch",
+          "type": "boolean",
+          "required": false,
+          "section": "audit",
+          "hint": "Whether everything typed into and printed by this shell is recorded. ⚠ Off by default and immutable afterwards: a shell contains secrets, a keystroke log is a liability, and a recording that could be switched off mid-life would be worth nothing to the compliance requirement it exists for.",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new Cloud terminal to change it.",
+          "default": false
+        },
+        {
+          "jsonPointer": "/properties/clusterId",
+          "name": "clusterId",
+          "label": "Cluster id",
+          "control": "xui-cluster",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "The cluster whose namespace holds the shell and its home volume.",
+          "format": "uuid",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new Cloud terminal to change it."
+        },
+        {
+          "jsonPointer": "/properties/home",
+          "name": "home",
+          "label": "Home",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "The persistent home directory. The only part of a console that survives an idle reclaim."
+        },
+        {
+          "jsonPointer": "/properties/home/retentionDays",
+          "name": "retentionDays",
+          "label": "Retention days",
+          "control": "xui-slider",
+          "type": "integer",
+          "required": false,
+          "section": "home",
+          "hint": "How long $HOME is kept after the console was last attached to. ⚠ Nothing sweeps on it yet — it is carried so that a console created today is swept correctly by whatever does.",
+          "minimum": 1,
+          "maximum": 365,
+          "default": 90
+        },
+        {
+          "jsonPointer": "/properties/home/size",
+          "name": "size",
+          "label": "Size",
+          "control": "xui-input",
+          "type": "string",
+          "required": true,
+          "section": "home",
+          "hint": "The size of $HOME. It grows and never shrinks: a PersistentVolumeClaim refuses a decrease at the API.",
+          "pattern": "^(?:\\d+(\\.\\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)$",
+          "default": "5Gi",
+          "placeholder": "5Gi"
+        },
+        {
+          "jsonPointer": "/properties/identity",
+          "name": "identity",
+          "label": "Identity",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "Who the shell runs as."
+        },
+        {
+          "jsonPointer": "/properties/identity/principalId",
+          "name": "principalId",
+          "label": "Principal id",
+          "control": "xui-input",
+          "type": "string",
+          "required": true,
+          "section": "identity",
+          "hint": "The managed identity every command in this shell acts as. It may not be changed: a console whose identity moved would have an audit trail describing a shell that no longer exists.",
+          "format": "uuid",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new Cloud terminal to change it."
+        },
+        {
+          "jsonPointer": "/properties/image",
+          "name": "image",
+          "label": "Image",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "Which shell image to run."
+        },
+        {
+          "jsonPointer": "/properties/image/variant",
+          "name": "variant",
+          "label": "Variant",
+          "control": "xui-select",
+          "type": "string",
+          "required": false,
+          "section": "image",
+          "hint": "default carries every tool in docs/plan/19's table and takes about 40 seconds to pull cold; minimal carries shells, editors, cyc and kubectl and starts in about 8. The repository and the digest are the platform's.",
+          "choices": [
+            {
+              "value": "default",
+              "label": "Default"
+            },
+            {
+              "value": "minimal",
+              "label": "Minimal"
+            }
+          ],
+          "default": "default"
+        },
+        {
+          "jsonPointer": "/properties/network",
+          "name": "network",
+          "label": "Network",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "What the shell may reach. Nothing may ever reach the shell."
+        },
+        {
+          "jsonPointer": "/properties/network/egress",
+          "name": "egress",
+          "label": "Egress",
+          "control": "xui-select",
+          "type": "string",
+          "required": false,
+          "section": "network",
+          "hint": "Internet lets the shell reach public addresses as well as this subscription's own workloads and DNS — a shell that cannot git clone is not a shell. TenantOnly removes the public half and leaves the rest.",
+          "choices": [
+            {
+              "value": "Internet",
+              "label": "Internet"
+            },
+            {
+              "value": "TenantOnly",
+              "label": "Tenant only"
+            }
+          ],
+          "default": "Internet"
+        },
+        {
+          "jsonPointer": "/properties/session",
+          "name": "session",
+          "label": "Session",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "When a shell stops. Both numbers are ceilings a tenant may lower and neither may be turned off."
+        },
+        {
+          "jsonPointer": "/properties/session/idleTimeoutMinutes",
+          "name": "idleTimeoutMinutes",
+          "label": "Idle timeout minutes",
+          "control": "xui-slider",
+          "type": "integer",
+          "required": false,
+          "section": "session",
+          "hint": "How long a shell may sit with nobody typing into it before it is reclaimed. The home volume survives; the pod does not. ⚠ There is no value meaning never — an idle terminal is a tenant paying for something they closed.",
+          "minimum": 5,
+          "maximum": 120,
+          "default": 20
+        },
+        {
+          "jsonPointer": "/properties/session/maxDurationHours",
+          "name": "maxDurationHours",
+          "label": "Max duration hours",
+          "control": "xui-slider",
+          "type": "integer",
+          "required": false,
+          "section": "session",
+          "hint": "The longest a single shell may run, busy or not. Enforced by the kubelet through the pod's own deadline, so it holds even when nothing of this platform is running.",
+          "minimum": 1,
+          "maximum": 24,
+          "default": 8
+        },
+        {
+          "jsonPointer": "/properties/sizing",
+          "name": "sizing",
+          "label": "Sizing",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "CPU and memory for the shell."
+        },
+        {
+          "jsonPointer": "/properties/sizing/preset",
+          "name": "preset",
+          "label": "Preset",
+          "control": "xui-cozy-preset",
+          "type": "string",
+          "required": false,
+          "section": "sizing",
+          "hint": "How much a shell gets. The ladder stops at 2 vCPU and 4 GiB, which is docs/plan/19's ceiling for this row — a workload that needs more needs a cluster and a job rather than a terminal.",
+          "choices": [
+            {
+              "value": "c1.large",
+              "label": "C1 large"
+            },
+            {
+              "value": "c1.medium",
+              "label": "C1 medium"
+            },
+            {
+              "value": "c1.small",
+              "label": "C1 small"
+            }
+          ],
+          "default": "c1.small"
+        },
+        {
+          "jsonPointer": "/tags",
+          "name": "tags",
+          "label": "Tags",
+          "control": "xui-tag-input",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+          "maxProperties": 50
+        }
+      ],
+      "actions": [
+        {
+          "name": "connect",
+          "label": "Connect",
+          "permission": "connect",
+          "longRunning": false,
+          "secret": false,
+          "fields": [],
+          "confirmOnly": true
+        },
+        {
+          "name": "terminate",
+          "label": "Terminate",
+          "permission": "connect",
+          "longRunning": false,
+          "secret": false,
+          "fields": [],
+          "confirmOnly": true
+        }
+      ]
     }
   }
 }
