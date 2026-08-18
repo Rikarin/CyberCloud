@@ -36,20 +36,21 @@ namespace CyberCloud.Providers.Monitor;
 ///         it needed no fifth module edge and no seventh project.
 ///     </para>
 ///     <para>
-///         ⚠ <b>IT WAS THE FIRST TYPE IN THE TREE TO DECLARE <c>SupportsSoftDelete</c>, AND THE CASE
-///         FOR THE WINDOW IS RECORDED HERE BECAUSE IT SURVIVES THE WITHDRAWAL BELOW.</b> Eleven families declined, each with the same stated
-///         reason — the manager did not honour a window — and docs/plan/08 § Soft delete endorsed
-///         the instinct and ended <i>"the declaration is the last step, not the first"</i>. The
-///         manager honours it now, so what is left is the provider's own question: <i>does the data
-///         this type carries deserve a recovery window, and how long</i>. On this type the answer is
-///         the least ambiguous in the catalogue. A workspace is the tenant's <b>only</b> copy of
-///         their logs — a database has a backup, an object store has versioning, and telemetry has
-///         neither, because the source of truth was a process that has since exited. docs/plan/16's
-///         closing sentence is <i>"a monitoring product that quietly loses data is worse than no
-///         monitoring product, because it is trusted"</i>, and a delete with no window is the
-///         loudest possible version of that. Seven days, which is docs/plan/06 § Tags, locks'
-///         number for a type carrying data, with purge behind its own permission and a
-///         purge-protection flag on the body.
+///         ⚠ <b>IT WAS THE FIRST TYPE IN THE TREE TO DECLARE <c>SupportsSoftDelete</c>, IT WITHDREW
+///         THE DECLARATION, AND IT DECLARES IT AGAIN — ALL ON 2026-08-18.</b> The case for the window
+///         is recorded here because it survived the withdrawal unchanged, and the withdrawal is
+///         recorded here because it is what closed the defect. Eleven families declined, each with
+///         the same stated reason — the manager did not honour a window — and docs/plan/08 § Soft
+///         delete endorsed the instinct and ended <i>"the declaration is the last step, not the
+///         first"</i>. What is left is the provider's own question: <i>does the data this type
+///         carries deserve a recovery window, and how long</i>. On this type the answer is the least
+///         ambiguous in the catalogue. A workspace is the tenant's <b>only</b> copy of their logs — a
+///         database has a backup, an object store has versioning, and telemetry has neither, because
+///         the source of truth was a process that has since exited. docs/plan/16's closing sentence
+///         is <i>"a monitoring product that quietly loses data is worse than no monitoring product,
+///         because it is trusted"</i>, and a delete with no window is the loudest possible version of
+///         that. Seven days, which is docs/plan/06 § Tags, locks' number for a type carrying data,
+///         with purge behind its own permission and a purge-protection flag on the body.
 ///     </para>
 ///     <para>
 ///         ⚠ <b>AND THE RECOVERY WINDOW IS CHEAP HERE FOR THE SAME REASON THE TYPE IS NOT A
@@ -59,26 +60,25 @@ namespace CyberCloud.Providers.Monitor;
 ///         have quietly made it a soft delete that deletes.
 ///     </para>
 ///     <para>
-///         ⚠⚠ <b>AND THE DECLARATION IS NEVERTHELESS WITHDRAWN, BECAUSE WHAT A WINDOW MEANS ON
-///         THIS TYPE WAS MEASURED AND IS NOT WHAT THE ARGUMENT ABOVE ASSUMES.</b> Two drafts of
-///         this paragraph were wrong before the third was checked. The first said a soft-deleted
-///         workspace is one whose <c>VMUser</c> is gone, <i>"so nothing can write to it"</i>; the
-///         second kept the declaration and filed the gap as owed. Both understated it. The facts,
-///         each read in the shipping source rather than inferred:
+///         ⚠⚠ <b>THE WITHDRAWAL, KEPT IN FULL, BECAUSE IT IS THE MEASUREMENT THAT FIXED THE
+///         PLATFORM.</b> Two drafts of this paragraph were wrong before the third was checked. The
+///         first said a soft-deleted workspace is one whose <c>VMUser</c> is gone, <i>"so nothing can
+///         write to it"</i>; the second kept the declaration and filed the gap as owed. Both
+///         understated it. The facts, each read in the shipping source rather than inferred:
 ///     </para>
 ///     <list type="bullet">
 ///         <item>
-///             <c>OperationGrain.DriveAsync</c> returns early for a soft delete and runs <b>no pass
-///             at all</b> — so <c>IResourceReconciler.DeleteAsync</c> is never called and every
-///             object this provider applied is left exactly as it was.
+///             <c>OperationGrain.DriveAsync</c> returned early for a soft delete and ran <b>no pass
+///             at all</b> — so <c>IResourceReconciler.DeleteAsync</c> was never called and every
+///             object this provider applied was left exactly as it was.
 ///         </item>
 ///         <item>
-///             <c>ParkAsync</c> says the rest in as many words: <i>"Its quota stays committed until
-///             it is purged."</i> The storage this workspace's retention and allowances draw is
+///             <c>ParkAsync</c> said the rest in as many words: <i>"Its quota stays committed until
+///             it is purged."</i> The storage this workspace's retention and allowances draw was
 ///             still reserved against the subscription.
 ///         </item>
 ///         <item>
-///             ⚠ <b>And the object left standing is the one that is NOT inert.</b> The
+///             ⚠ <b>And the object left standing was the one that is NOT inert.</b> The
 ///             <c>ConfigMap</c> is read by nothing, because <c>CyberCloud.Ingest.Host</c> does not
 ///             exist — for it, "maintained" and "deleted" genuinely are the same state today. The
 ///             <c>VMUser</c> is the opposite: vmauth resolves it the moment it is applied, and it is
@@ -86,36 +86,43 @@ namespace CyberCloud.Providers.Monitor;
 ///         </item>
 ///     </list>
 ///     <para>
-///         Together those make a soft-deleted workspace an <b>authenticated, billed, open write path
-///         into a store the tenant believes is gone</b>: a collector nobody reconfigured keeps
-///         writing, the data keeps landing in a tenancy whose address answers <c>404</c>, the
-///         retention keeps accruing against quota, and the tenant can see none of it — the only way
-///         to stop it is a purge, which sits behind a permission they may not hold. ⚠ On a database
-///         or an object store a recovery window merely holds disk; here it holds an open ingest
-///         endpoint, which is a difference docs/plan/08 does not anticipate because nothing before
-///         this declared a window. <b>A delete that does not delete is worse than no recovery
-///         window</b>, so the declaration is withdrawn until the platform can withdraw the write
+///         Together those made a soft-deleted workspace an <b>authenticated, billed, open write path
+///         into a store the tenant believed was gone</b>: a collector nobody reconfigured kept
+///         writing, the data kept landing in a tenancy whose address answered <c>404</c>, the
+///         retention kept accruing against quota, and the tenant could see none of it — the only way
+///         to stop it was a purge, which sits behind a permission they may not hold. ⚠ On a database
+///         or an object store a recovery window merely holds disk; here it held an open ingest
+///         endpoint, which is a difference docs/plan/08 did not anticipate because nothing before
+///         this had declared a window. <b>A delete that does not delete is worse than no recovery
+///         window</b>, so the declaration was withdrawn until the platform could withdraw the write
 ///         path on park — the same conclusion <c>CyberCloud.ContainerRegistry/registries</c> reached
 ///         from its own measurement, for a reason that is worse here rather than merely similar.
 ///     </para>
 ///     <para>
 ///         ⚠ <b>What did NOT reproduce, recorded because a finding that fails to replicate is worth
-///         as much as one that does.</b> That row measured a soft-deleted resource <i>reconciling
-///         its whole data plane back</i>. On this type that path is not reachable, and it was
-///         checked rather than assumed:
-///         <c>MonitorWorkspaceConformance.ASoftDeletedWorkspaceIsNotReconciledBackByAStrayDriveOfItsDeleteOperation</c>
-///         drives the completed delete operation again and nothing returns; and disabling
-///         <c>OperationGrain.DriveAsync</c>'s soft-delete branch makes the pass run with
-///         <c>tearingDown</c> <b>true</b> — <c>OperationSpec.Kind</c> is <c>Delete</c>, so it
-///         <i>destroys</i> the objects rather than re-applying them, failing that test and the
-///         shared suite's recoverable branch in the opposite direction. Whatever produced the
-///         undelete on that row, it is not this path, and this withdrawal does not rest on it.
+///         as much as one that does — and this one decided where the fix belonged.</b> That row
+///         measured a soft-deleted resource <i>reconciling its whole data plane back</i>. On this type
+///         that path was not reachable, and it was checked rather than assumed: driving the completed
+///         delete operation again returned nothing, and disabling <c>OperationGrain.DriveAsync</c>'s
+///         soft-delete branch made the pass run with <c>tearingDown</c> <b>true</b> —
+///         <c>OperationSpec.Kind</c> is <c>Delete</c>, so it <i>destroyed</i> the objects rather than
+///         re-applying them. ⚠ <b>There was no re-apply anywhere.</b> The other row's evidence was a
+///         conformance assertion reporting an END STATE, and an end state cannot tell "never torn
+///         down" from "torn down and re-applied" — which mattered, because the two are different bugs
+///         in different code and only one of them existed.
 ///     </para>
 ///     <para>
-///         ⚠ <b>The window is still the right declaration for this data</b> — the alternative is
-///         destroying the tenant's only copy of their logs on a mistaken <c>DELETE</c> — which is
-///         why everything it needs is kept rather than removed and re-declaring it is one line.
-///         <c>conformance.yaml § owed</c>, <c>soft-delete-is-withdrawn-not-declined</c>.
+///         ⚠ <b>WHAT CLOSED IT, AND WHY THE DECLARATION IS BACK.</b> A soft delete now runs the
+///         teardown exactly as a hard delete does, so the <c>VMUser</c> comes down with everything
+///         else and the write path closes on convergence rather than at a purge nobody may be able to
+///         authorise. What the window holds is what a teardown does not remove: the name, the
+///         workspace's stored body, the committed quota, and — for the stores this row is a tenancy
+///         <i>in</i> — the tenant's data, which no teardown of a <c>VMUser</c> or a <c>ConfigMap</c>
+///         could have removed in the first place. A restore re-applies the same three objects through
+///         <c>OperationKind.Restore</c> and the tenancy is back with its retention and its accountID
+///         unchanged. <c>MonitorWorkspaceConformance.ASoftDeletedWorkspacesWritePathIsClosedAndNoStrayDriveReopensIt</c>
+///         asserts all three halves; <c>conformance.yaml § owed</c>,
+///         <c>soft-delete-was-withdrawn-and-is-declared-again</c>.
 ///     </para>
 ///     <para>
 ///         ⚠ <b>What is deliberately NOT declared, each with its reason.</b> No

@@ -105,17 +105,23 @@ assertions:
     says: >
       Once the delete operation reports Succeeded, none of the fifteen objects is in the cluster and
       none of them comes back. ⚠ THIS ASSERTION IS ORDINARY EVERYWHERE ELSE IN THE CATALOGUE AND IS
-      LISTED HERE BECAUSE THIS ROW FOUND IT FAILING — see `a-soft-deleted-resource-undeletes-itself`
-      below. It runs today, as ClusterConformanceTests.TheLifecycleRunsAgainstARealApiServer, and it
-      passes only because the recovery window is withheld.
+      LISTED HERE BECAUSE THIS ROW FOUND IT FAILING — see
+      `a-soft-deleted-resource-was-never-torn-down` below. It runs today, as
+      ClusterConformanceTests.TheLifecycleRunsAgainstARealApiServer, WITH the seven-day recovery
+      window declared, which is the combination that used to fail: a soft delete tears the data plane
+      down like any other delete, and what the window keeps is the disks.
   - id: images-survive-a-recovery-window
     says: >
       A deleted registry's image volume, metadata database and job queue are still present for the
       whole window, and a restore re-attaches them. This is Kubernetes' own behaviour rather than
       this provider's — a claim created by a volumeClaimTemplate is not removed by deleting the
-      StatefulSet — and it is why this row is a good candidate for the first recovery window in the
-      tree. ⚠ NOT DRIVEN, because there is no window: see
-      `a-soft-deleted-resource-undeletes-itself`.
+      StatefulSet — and it is why this row was the right place for the first recovery window in the
+      tree. ⚠ THE RESTORE HALF IS DRIVEN: ProviderConformanceTests.DeleteTearsDownTheDataPlaneAndThe
+      ResourceIsGone's recoverable arm soft-deletes, asserts the objects are gone, restores through
+      the manager and asserts they come back. ⚠ THE CLAIMS THEMSELVES ARE NOT, because no suite in the
+      tree provisions a volume — the k3s the cluster-backed suite starts pulls no images and the
+      Docker-free suite has no API server. So "the images are still there" is upstream's documented
+      behaviour rather than this row's measurement, and it is the load-bearing half.
   - id: garbage-collection-reclaims-space
     says: >
       Deleting every tag of a repository and running Harbor's garbage collection returns the layer
@@ -234,58 +240,62 @@ owed:
       client in the cluster-conformance project. What is checked today is one layer in — the reconciler
       mints before it applies, a vault refusal leaves NOTHING applied, and the rendered objects carry a
       secretKeyRef rather than a literal.
-  - id: a-soft-deleted-resource-undeletes-itself
+  - id: a-soft-deleted-resource-was-never-torn-down
     says: >
-      ⚠ THE MOST IMPORTANT ITEM ON THIS LIST, AND IT IS A PLATFORM DEFECT RATHER THAN A PROVIDER GAP.
-      This row declared SupportsSoftDelete(7, "purge", "/properties/purgeProtection") — the first type
-      in the tree to declare a recovery window at all — and doing so is what found that A SOFT-DELETED
-      RESOURCE REBUILDS ITS ENTIRE DATA PLANE AFTER A CONVERGED TEARDOWN.
-      ⚠ REPRODUCTION, so nobody has to rediscover it. Add the call back and run
-      CyberCloud.Providers.ContainerRegistry.Cluster.Conformance. TheLifecycleRunsAgainstARealApiServer
-      fails with "'Secret/{ns}/{name}-credentials' is still in the real cluster after a converged
-      teardown". Reorder ContainerRegistryCase.ProviderCase.Objects so the ConfigMap is first and the
-      message names the ConfigMap; put the core Deployment first and it names the Deployment. It is
-      not one object, it is EVERY object. Remove the SupportsSoftDelete call and change nothing else
-      and the same test passes; put it back and it fails again. Measured on 2026-08-18.
-      ⚠ WHAT IT MEANS. A tenant deletes a registry; the API answers, the operation converges, the
-      resource stops being addressable — and the workload comes back and keeps running. It is sampled
-      by docs/plan/22's usage pipeline, it holds its committed quota (which docs/plan/08 says is
-      deliberate during a window), and the tenant cannot see it in order to delete it again. That is
-      strictly worse than no recovery window.
-      ⚠ WHERE TO LOOK. docs/plan/08 § Soft delete decides to MOVE the resource out of the tree rather
-      than flag it in place, because a flag "puts an 'unless deleted' clause on every read path, every
-      list, every ReBAC check and the index claim, and the feature is then only as good as the
-      least-remembered of them". IndexEntryState.SoftDeleted moves the INDEX entry and
-      ResolveAsync refuses it — that half works, and is why the resource stops being addressable. What
-      does not move is the reconcile loop's view: on the non-soft-delete path ResourceGrain
-      .CompleteDeleteAsync clears the grain state, and a resource that must survive for a restore
-      cannot have its state cleared. So the "least-remembered clause" the document was avoiding turns
-      out to be the one place it did not look.
-      ⚠ WHY THIS FAMILY FOUND IT AND ELEVEN OTHERS DID NOT. It is the first type to declare the
-      window at all, and it renders fifteen objects rather than one or two — so both the window and a
-      wide teardown had to exist before anything could see it.
-      ⚠ CLOSING IT is one line in this provider once the platform is fixed:
-      ContainerRegistries.SoftDeleteDays, .PurgePermission and .PurgeProtectionPointer are written,
-      documented and asserted against, and ContainerRegistryDeclarationTests
-      .TheRecoveryWindowIsWithheldAndTheReasonIsAPlatformDefect goes red the day the call comes back.
+      ⚠ CLOSED ON 2026-08-18, AND THE ENTRY IS KEPT BECAUSE THIS ROW READ ITS OWN MEASUREMENT WRONG
+      AND THE MISREADING IS MORE INSTRUCTIVE THAN THE DEFECT. It read: "A SOFT-DELETED RESOURCE
+      REBUILDS ITS ENTIRE DATA PLANE AFTER A CONVERGED TEARDOWN", an active re-apply.
+      ⚠ WHAT THE MEASUREMENT ACTUALLY SHOWED. This row declared SupportsSoftDelete, and
+      CyberCloud.Providers.ContainerRegistry.Cluster.Conformance.TheLifecycleRunsAgainstARealApiServer
+      failed with "'Secret/{ns}/{name}-credentials' is still in the real cluster after a converged
+      teardown"; reordering ContainerRegistryCase.ProviderCase.Objects moved the name in the message,
+      so it was every object rather than one. All true. But that assertion reports an END STATE — an
+      object is PRESENT — and an end state cannot distinguish "never torn down" from "torn down and
+      re-applied". The two are different bugs in different code, and the second one did not exist:
+      OperationGrain.DriveAsync returned before running any pass for a soft delete, so nothing was
+      ever asked to come down. CyberCloud.Monitor/workspaces reached the same conclusion from three
+      independent checks on its own row and recorded the discrepancy rather than inheriting this
+      row's answer, which is what made it findable.
+      ⚠ WHAT WAS TRUE EITHER WAY, AND WHY WITHDRAWING WAS RIGHT. A tenant deleted a registry; the API
+      answered, the operation converged, the resource stopped being addressable — and fifteen Harbor
+      objects kept running, kept being sampled by docs/plan/22's usage pipeline, kept the committed
+      quota held, and the tenant could not see the resource in order to delete it again. That is
+      strictly worse than no recovery window, and both rows withdrew for it.
+      ⚠ HOW IT WAS CLOSED. A soft delete now runs the reconciler's DeleteAsync exactly as a hard
+      delete does, and the four things that make it soft moved to OperationGrain.ConvergedAsync so
+      they happen AFTER the teardown reads back: the name is held rather than released, the committed
+      quota is kept, the resource grain keeps its desired state, and the ReBAC parent edge moves to
+      the subscription. ResourceManagerService.RestoreAsync therefore has work to do and is no longer
+      a label move — it starts an OperationKind.Restore over the body the park kept, and answers 202.
+      ⚠ WHAT MAKES THE WINDOW HONEST ON THIS ROW SPECIFICALLY: deleting a StatefulSet does not delete
+      the PersistentVolumeClaims its volumeClaimTemplate created, so the images, the metadata
+      database and the job queue are all still on disk for a restore to come back to. That is the
+      argument ContainerRegistries.StatefulSetKind was chosen on, and it is why this row could
+      re-declare rather than merely stop being wrong.
   - id: purge-leaves-the-volumes-behind
     says: >
-      A recovery window would work because deleting a StatefulSet does not delete its claims. Ending
-      the window would not free them: nothing in ResourceManagerService's purge path removes a
-      PersistentVolumeClaim, and a provider is not called on purge at all. So a purged registry would
-      return its committed quota and leave its disks allocated, which is the quota and the cluster
-      disagreeing. ⚠ Closing it needs a purge to reach the provider — there is no IResourceReconciler
-      member for it — and that is a platform seam rather than a provider's work. Blocked behind
-      `a-soft-deleted-resource-undeletes-itself` rather than beside it.
+      A recovery window works because deleting a StatefulSet does not delete its claims. Ending the
+      window does not free them: nothing in ResourceManagerService's purge path removes a
+      PersistentVolumeClaim, and a provider is not called on purge with anything to do — the objects
+      came down at the soft delete and the purge's teardown pass converges on the first read-back. So
+      a purged registry returns its committed quota and leaves its disks allocated, which is the
+      quota and the cluster disagreeing. ⚠ Closing it needs a purge to reach the provider with a
+      DIFFERENT question from a delete's — "remove what a teardown deliberately keeps" — and there is
+      no IResourceReconciler member for it. ⚠ THIS IS NOW THE LARGEST GAP IN THIS ROW'S RECOVERY
+      WINDOW, because the one it was blocked behind is closed.
   - id: restore-and-purge-have-no-route
     says: >
-      ResourceManagerService.RestoreAsync and PurgeAsync exist and are tested by SoftDeletePathTests;
-      NOTHING IN THE GATEWAY CALLS EITHER, grepped rather than assumed. So even with the defect above
-      closed, what a SupportsSoftDelete declaration would buy is that a DELETE parks the resource
-      instead of destroying it, its name is held, its committed quota is kept and its ReBAC parent
-      moves to the subscription — and recovering it would need a route somebody else owns. ⚠ THAT IS A
-      SMALLER THING THAN THE FEATURE READS LIKE, and it is worth knowing before the first type
-      publishes `softDeleteDays` to every caller through the generated document.
+      ResourceManagerService.RestoreAsync and PurgeAsync exist and are tested by SoftDeletePathTests
+      and by the shared provider suite's recoverable arm; NOTHING IN THE GATEWAY CALLS EITHER,
+      grepped rather than assumed — DispatchStage calls ReadAsync, WriteAsync and DeleteAsync and
+      nothing else. So what this row's declaration buys today is that a DELETE stops the workload
+      without destroying the disks, holds the name, keeps the committed quota and moves the ReBAC
+      parent to the subscription — and recovering it needs a route in src/Hosts, which is somebody
+      else's file. ⚠ AND THERE IS STILL NO LIST. IResourceIndexGrain.ResolveSoftDeletedAsync answers
+      "which resource was parked under this name", which is the question you can only ask if you
+      already know the name. That is not a soft-delete gap: the resource manager has no listing of
+      LIVE resources either, so a collection endpoint is a platform feature rather than a change to
+      this path. docs/plan/08 § Soft delete scopes it.
   - id: the-database-is-a-single-point-of-failure
     says: >
       spec.replicas is pinned at 1 on the metadata database and on Redis, because each owns a

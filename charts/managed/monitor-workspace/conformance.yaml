@@ -107,9 +107,12 @@ assertions:
   - id: a-delete-takes-the-tenancy-down-and-stops-the-writes
     says: >
       After DELETE the old address answers the canonical 404, the VMUser is gone, the ingest key
-      authenticates nothing, and no further telemetry is accepted or billed. ⚠ There is no recovery
-      window today and that is deliberate — see § owed, `soft-delete-is-withdrawn-not-declined`, for
-      why a window on THIS type would have left the write path open instead.
+      authenticates nothing, and no further telemetry is accepted or billed. ⚠ ALL FOUR HOLD WITH A
+      SEVEN-DAY RECOVERY WINDOW DECLARED, and that combination is what the window was withdrawn over
+      and re-declared for: a soft delete tears the data plane down, so the write path closes at the
+      delete rather than at a purge, and what the window holds is the name, the stored body, the
+      committed quota and the tenant's data in the stores this row is a tenancy in. See § owed,
+      `soft-delete-was-withdrawn-and-is-declared-again`.
 
 # ── Owed ────────────────────────────────────────────────────────────────────────────────────────
 #
@@ -185,38 +188,35 @@ owed:
       the blocker CyberCloud.Storage/accounts records against regenerateKeys, and the first where it
       decides a whole resource type rather than one action.
     closes: A two-slot secret shape in ISecretWriter — current and previous, with an expiry on previous.
-  - id: soft-delete-is-withdrawn-not-declined
+  - id: soft-delete-was-withdrawn-and-is-declared-again
     says: >
-      ⚠⚠ THIS TYPE WAS THE FIRST IN THE TREE TO DECLARE SupportsSoftDelete AND IT NO LONGER DOES.
-      The argument for a window is unchanged and is the strongest in the catalogue — a workspace is
-      the tenant's only copy of their logs, where a database has a backup and an object store has
-      versioning — but what a window MEANS on this type was measured rather than assumed, and it is
-      not what the argument assumes. Three facts, each read in the shipping source:
-      OperationGrain.DriveAsync returns early for a soft delete and runs NO pass, so every applied
-      object is left exactly as it was; ParkAsync states that the quota stays committed until purge;
-      and the object left standing is the VMUser, which is the ONE thing on this row that enforces
-      anything, because vmauth resolves it the moment it is applied. So a soft-deleted workspace is
-      an authenticated, BILLED, open write path into a store the tenant believes is gone — a
-      collector nobody reconfigured keeps writing, the retention keeps accruing, and the only way to
-      stop it is a purge behind a permission the tenant may not hold. A delete that does not delete
-      is worse than no recovery window. Same conclusion CyberCloud.ContainerRegistry/registries
-      reached from its own measurement, for a reason that is worse here rather than merely similar:
-      fifteen idle Harbor objects cost money, and this costs money AND silently ingests data.
-      ⚠ What did NOT reproduce is recorded too: that row measured a soft-deleted resource
-      RECONCILING ITS DATA PLANE BACK, and on this type that path is not reachable. Driving the
-      completed delete operation again returns nothing
-      (MonitorWorkspaceConformance.ASoftDeletedWorkspaceIsNotReconciledBackByAStrayDriveOfItsDeleteOperation),
-      and disabling OperationGrain's soft-delete branch makes the pass run with tearingDown TRUE —
-      OperationSpec.Kind is Delete — so it DESTROYS the objects instead, failing that test and the
-      shared suite's recoverable branch in the opposite direction. The withdrawal does not rest on
-      that finding.
-    closes: >
-      ParkAsync withdrawing the write path — taking the VMUser down, or revoking the ingest key
-      through ISecretWriter — and a restore putting it back. Re-declaring is then ONE LINE:
-      MonitorProvider keeps SoftDeleteDays and the purge-protection property (which
-      IProviderBuilder.SupportsSoftDelete refuses the type without), MonitorDeclarationTests pins
-      both, and the conformance experiment above skips itself rather than being deleted, so it
-      starts asserting again on the same run.
+      ⚠⚠ THIS TYPE WAS THE FIRST IN THE TREE TO DECLARE SupportsSoftDelete, IT WITHDREW THE
+      DECLARATION ON 2026-08-18, AND IT DECLARES IT AGAIN. The entry is kept rather than deleted
+      because the withdrawal was a measurement and the measurement is what closed the defect.
+      ⚠ WHAT WAS MEASURED, in the shipping source, three ways: OperationGrain.DriveAsync returned
+      early for a soft delete and ran NO pass, so every applied object was left exactly as it was;
+      ParkAsync stated that the quota stays committed until purge; and the object left standing was
+      the VMUser, which is the ONE thing on this row that enforces anything, because vmauth resolves
+      it the moment it is applied. So a soft-deleted workspace was an authenticated, BILLED, open
+      write path into a store the tenant believed was gone — a collector nobody reconfigured kept
+      writing, the retention kept accruing, and the only way to stop it was a purge behind a
+      permission the tenant may not hold. A delete that does not delete is worse than no recovery
+      window.
+      ⚠ AND WHAT DID NOT REPRODUCE IS WHY THE FIX LANDED WHERE IT DID.
+      CyberCloud.ContainerRegistry/registries reported a soft-deleted resource RECONCILING ITS DATA
+      PLANE BACK — an active re-apply — and on this type that path was not reachable: driving the
+      completed delete operation again returned nothing, and disabling OperationGrain's soft-delete
+      branch made the pass run with tearingDown TRUE, so it DESTROYED the objects rather than
+      re-applying them. Recording the disagreement instead of inheriting the other row's answer is
+      what made it findable. That row's evidence was a conformance assertion reporting an END STATE,
+      and an end state cannot tell "never torn down" from "torn down and re-applied".
+      ⚠ HOW IT WAS CLOSED, WHICH IS EXACTLY WHAT THIS ENTRY ASKED FOR. A soft delete now runs the
+      teardown, so the VMUser comes down and the write path closes; the window holds the name, the
+      workspace's stored body, the committed quota and — for the stores this row is a tenancy IN —
+      the data, which no teardown of a VMUser or a ConfigMap could remove. A restore re-applies the
+      same three objects through OperationKind.Restore, and the conformance experiment above asserts
+      all three halves: the write path closed, no stray drive reopening it, and the restore putting
+      it back.
   - id: no-external-endpoint
     says: >
       Every endpoint listKeys returns is in-cluster. docs/plan/12 § Cross-cutting decisions requires an

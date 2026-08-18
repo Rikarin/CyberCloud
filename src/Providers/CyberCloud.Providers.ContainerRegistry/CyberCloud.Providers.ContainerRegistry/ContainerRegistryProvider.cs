@@ -25,13 +25,13 @@ namespace CyberCloud.Providers.ContainerRegistry;
 ///         in this family, and each one is written where it is taken.
 ///     </para>
 ///     <para>
-///         ⚠ <b>THIS ROW WAS GOING TO BE THE FIRST TYPE IN THE TREE TO DECLARE
-///         <c>SupportsSoftDelete</c>, AND DECLARING IT IS WHAT FOUND THAT SOFT DELETE UN-DELETES THE
-///         RESOURCE.</b> Eleven families declined the declaration for one shared reason — the manager
-///         did not read <c>SoftDeleteDays</c> — and docs/plan/08 § Soft delete is built now, so the
-///         question each type owes is its own: <i>can the deleted thing genuinely be handed back?</i>
-///         On this row the answer is yes, and the mechanism is Kubernetes' rather than this
-///         provider's: a registry's images, its metadata database and its job queue are all on
+///         ⚠ <b>THIS ROW WAS THE FIRST TYPE IN THE TREE TO DECLARE <c>SupportsSoftDelete</c>, AND
+///         DECLARING IT IS WHAT FOUND THAT A SOFT DELETE TORE NOTHING DOWN.</b> Eleven families
+///         declined the declaration for one shared reason — the manager did not read
+///         <c>SoftDeleteDays</c> — and docs/plan/08 § Soft delete is built, so the question each type
+///         owes is its own: <i>can the deleted thing genuinely be handed back?</i> On this row the
+///         answer is yes, and the mechanism is Kubernetes' rather than this provider's: a registry's
+///         images, its metadata database and its job queue are all on
 ///         <c>PersistentVolumeClaim</c>s created by <c>volumeClaimTemplate</c>s, and deleting a
 ///         <c>StatefulSet</c> does not delete those claims —
 ///         <see cref="ContainerRegistries.StatefulSetKind" />'s remarks say why the workloads are
@@ -40,8 +40,8 @@ namespace CyberCloud.Providers.ContainerRegistry;
 ///         declaration went in.
 ///     </para>
 ///     <para>
-///         ⚠ <b>AND THE CLUSTER-BACKED SUITE REPORTED THAT A SOFT-DELETED REGISTRY REBUILDS ITS WHOLE
-///         DATA PLANE AFTER A CONVERGED TEARDOWN.</b>
+///         ⚠ <b>AND THE CLUSTER-BACKED SUITE FAILED: EVERY OBJECT WAS STILL IN THE CLUSTER AFTER A
+///         CONVERGED TEARDOWN.</b>
 ///         <c>ClusterConformanceTests.TheLifecycleRunsAgainstARealApiServer</c> failed with <i>"is
 ///         still in the real cluster after a converged teardown"</i>, and reordering the case's object
 ///         list showed it was not one object but <b>every</b> object, the core <c>Deployment</c>
@@ -49,28 +49,39 @@ namespace CyberCloud.Providers.ContainerRegistry;
 ///         else made the same test pass, and putting it back made it fail again.
 ///     </para>
 ///     <para>
-///         ⚠ <b>What that means, stated plainly, because it is worse than it sounds.</b> A tenant
-///         deletes a registry; the API answers, the operation converges, the resource stops being
-///         addressable — and the workload comes back and keeps running. It is sampled by the usage
-///         pipeline, it holds its quota, and the tenant cannot see it in order to delete it again.
-///         docs/plan/08 chose to <i>move</i> the resource out of the tree precisely so that no read
-///         path would need an "unless deleted" clause; the index entry moves and the reconcile loop's
-///         view of the resource does not.
+///         ⚠⚠ <b>AND THIS ROW WROTE THAT UP AS AN ACTIVE RE-APPLY, WHICH IT WAS NOT, AND THE
+///         MISREADING IS KEPT HERE BECAUSE IT IS THE MORE USEFUL HALF.</b> The conclusion recorded was
+///         that a soft-deleted resource <i>rebuilds its entire data plane</i>. That assertion reports
+///         an END STATE — an object is present — and an end state cannot distinguish <i>never torn
+///         down</i> from <i>torn down and re-applied</i>. The two are different bugs in different code:
+///         one is a missing teardown, the other a stray reconcile. It was the first.
+///         <c>OperationGrain.DriveAsync</c> returned before running any pass for a soft delete, so
+///         nothing was ever asked to come down. <c>CyberCloud.Monitor/workspaces</c> declared a window
+///         on the same day, could not reproduce a re-apply on its own row, checked three ways, and
+///         recorded the discrepancy rather than inheriting this row's answer — which is what made the
+///         disagreement findable at all.
 ///     </para>
 ///     <para>
-///         ⚠ <b>So the declaration is withdrawn, and that is the honest end of it.</b> A delete that
-///         does not delete is worse than no recovery window, and a type advertising
-///         <c>softDeleteDays: 7</c> through the generated document while the platform rebuilds what it
-///         tore down is exactly the promise that feature exists to avoid making.
-///         <c>charts/managed/harbor/conformance.yaml § owed</c>,
-///         <c>a-soft-deleted-resource-undeletes-itself</c>, carries the reproduction; the three
-///         arguments the call needs are written and asserted against, so re-declaring it is one line
-///         once the platform is fixed.
+///         ⚠ <b>What the defect meant, stated plainly, because it was worse than it sounds and it was
+///         real either way.</b> A tenant deletes a registry; the API answers, the operation converges,
+///         the resource stops being addressable — and the workload keeps running. It is sampled by the
+///         usage pipeline, it holds its quota, and the tenant cannot see it in order to delete it
+///         again. A delete that does not delete is worse than no recovery window, so the declaration
+///         was withdrawn until the platform could close it.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Two smaller things were found on the way and stand whatever happens to that defect.</b>
-///         Nothing removes a <c>PersistentVolumeClaim</c> on a purge — a purged registry would return
-///         its committed quota and leave its disks allocated — and
+///         ⚠ <b>AND IT IS DECLARED AGAIN, BECAUSE IT IS CLOSED.</b> A soft delete now runs the
+///         reconciler's <c>DeleteAsync</c> exactly as a hard delete does, and the four things that
+///         make it soft happen after that pass reads back: the name is held, the committed quota is
+///         kept, the resource grain keeps its desired state, and the ReBAC parent edge moves to the
+///         subscription. So the fifteen objects come down and nothing keeps running or being billed
+///         for compute — while the disks stay, which is what makes this row's window honest and what
+///         a restore re-attaches when it applies the stored body again.
+///     </para>
+///     <para>
+///         ⚠ <b>Two smaller things were found on the way and stand whatever happened to that
+///         defect.</b> Nothing removes a <c>PersistentVolumeClaim</c> on a purge — a purged registry
+///         returns its committed quota and leaves its disks allocated — and
 ///         <c>ResourceManagerService.RestoreAsync</c> and <c>PurgeAsync</c> are reachable from no
 ///         gateway stage at all, grepped rather than assumed. Both are at
 ///         <c>conformance.yaml § owed</c>.
