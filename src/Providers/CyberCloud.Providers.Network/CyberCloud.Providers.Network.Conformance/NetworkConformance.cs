@@ -128,8 +128,12 @@ public sealed class NetworkSubnetCase : IProviderCaseSource {
             // `MatchContext` closed it. charts/managed/kube-ovn-subnet/conformance.yaml § owed,
             // `object-matches-desired-cannot-see-an-address`.
             //
-            // ⚠ The namespace comes from `match.Target`, which is the object being compared, rather
-            // than being re-derived from the id — one fact, read from where the harness put it.
+            // ⚠ THE NAMESPACE COMES FROM `match.Namespace`, NOT FROM `match.Target.Namespace`, AND
+            // THE DIFFERENCE COST FIVE RED ASSERTIONS BEFORE IT WAS NOTICED. A kube-ovn `Subnet` is
+            // CLUSTER-SCOPED, so `SubnetRef` deliberately sets `Namespace = string.Empty` — while the
+            // derived namespace is still a NAME COMPONENT of what the object renders, because
+            // `spec.vpc` is `VirtualNetworks.ObjectNameOf(ns, parent)`. Reading it off the ObjectRef
+            // gave "" and every comparison failed.
             //
             // ⚠ `NetworkReconcilerTests` KEEPS ITS OWN ASSERTIONS: two networks in ONE resource group
             // each holding a subnet called `web` is a collision this harness still cannot build.
@@ -137,7 +141,7 @@ public sealed class NetworkSubnetCase : IProviderCaseSource {
                 using var desired = JsonDocument.Parse(match.DesiredJson);
                 return NetworkSubnets.Matches(
                     match.ObjectJson,
-                    match.Target.Namespace,
+                    match.Namespace,
                     match.Id,
                     desired.RootElement
                 );

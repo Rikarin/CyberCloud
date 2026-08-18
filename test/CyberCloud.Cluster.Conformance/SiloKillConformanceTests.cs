@@ -252,7 +252,10 @@ public abstract class SiloKillConformanceTests<TSource>
                             ObjectJson = json!,
                             DesiredJson = Case.Body(ClusterConformanceHarness<TSource>.ClusterId),
                             Id = ClusterConformanceHarness<TSource>.Address(name).WithId(resourceId),
-                            Target = target
+                            Target = target,
+                            Namespace = ReconcileDriver.NamespaceFor(
+                                ClusterConformanceHarness<TSource>.Address(name).WithId(resourceId)
+                            )
                         }
                     )
                     .ShouldBeTrue($"'{target}' is in the cluster without the desired shape.");

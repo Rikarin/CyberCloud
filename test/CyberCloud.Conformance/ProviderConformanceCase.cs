@@ -199,10 +199,25 @@ public sealed record MatchContext {
     /// <summary>Which of the resource's objects this is.</summary>
     /// <remarks>
     ///     A case that renders several kinds can dispatch on <c>Target.Kind</c> rather than sniffing
-    ///     <c>kind</c> out of <see cref="ObjectJson" />, and <c>Target.Namespace</c> saves it
-    ///     re-deriving what <c>ReconcileDriver.NamespaceFor</c> already computed.
+    ///     <c>kind</c> out of <see cref="ObjectJson" />.
     /// </remarks>
     public required ObjectRef Target { get; init; }
+
+    /// <summary>
+    ///     The namespace <c>ReconcileDriver.NamespaceFor</c> derived — the same one
+    ///     <see cref="ProviderConformanceCase.Objects" /> was handed.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Carried in its own right, and <c>Target.Namespace</c> is NOT a substitute for it.</b>
+    ///     A cluster-scoped object has no namespace, so <c>ObjectRef.Namespace</c> is deliberately the
+    ///     empty string for one — <c>NetworkSubnets.SubnetRef</c> sets exactly that, because a
+    ///     kube-ovn <c>Subnet</c> is cluster-scoped. But the namespace is still a <i>name component</i>
+    ///     of what such an object renders: a subnet's <c>spec.vpc</c> is
+    ///     <c>VirtualNetworks.ObjectNameOf(ns, parent)</c>, which needs the derived namespace and not
+    ///     the object's own. Reading it off <see cref="Target" /> gave the empty string and turned
+    ///     five of that case's assertions red, which is how this member came to exist.
+    /// </remarks>
+    public required string Namespace { get; init; }
 }
 
 /// <summary>

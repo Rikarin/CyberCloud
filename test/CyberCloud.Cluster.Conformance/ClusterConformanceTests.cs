@@ -718,7 +718,8 @@ public abstract class ClusterConformanceTests<TSource>(ClusterConformanceFixture
                 ObjectJson = objectJson,
                 DesiredJson = desiredJson,
                 Id = AddressOf(resourceId, name),
-                Target = target
+                Target = target,
+                Namespace = ReconcileDriver.NamespaceFor(AddressOf(resourceId, name))
             }
         );
 
