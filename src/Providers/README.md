@@ -863,6 +863,174 @@ the argument above; `securityGroups`, `publicIpAddresses`, `dnsZones`, `loadBala
 `vpnGateways` are **owed**, each with what was learned about it at `NetworkProvider`'s remarks rather
 than left as a bare gap.
 
+`CyberCloud.Providers.Monitor` — `CyberCloud.Monitor/workspaces` over the platform's own
+VictoriaMetrics and ClickHouse, [16 § `CyberCloud.Monitor/workspaces`](../../docs/plan/16-observability.md),
+**M1 · 2.5 EM**, and step 7 of [24](../../docs/plan/24-roadmap.md)'s M1 exit story — *"see metrics and
+logs"*. **The first family whose product is not a workload at all**, and the first to declare
+`SupportsSoftDelete`.
+
+### What the twelfth provider measured
+
+- **⚠ A WORKSPACE IS A TENANCY IN A STORE THE PLATFORM ALREADY RUNS, NOT A DEPLOYMENT — and this row
+  is the other half of the sentence `CyberCloud.Providers.Analytics` started.** That family
+  established that the platform's ClickHouse is *not* `CyberCloud.Analytics/clickhouseClusters`. This
+  one establishes what it *is*: the platform's ClickHouse and VictoriaMetrics are reached **through**
+  `CyberCloud.Monitor/workspaces`, and this type provisions neither of them. Five facts decide it and
+  the fourth is the one that makes it a correctness question rather than a modelling preference:
+  docs/plan/16 § Ingest routes to *"VictoriaMetrics (accountID) | ClickHouse (per-tenant database)"* —
+  coordinates inside one store; docs/plan/05 § Every store gives each store **one row per region**;
+  the deployment-shaped reading is a product the catalogue already sells under another name;
+  ⚠ **docs/plan/16 puts PLATFORM telemetry *"under a platform workspace. No separate stack"*, so the
+  platform workspace IS a resource of this type** — and if a resource of this type provisioned the
+  store, reconciling the platform's own workspace would provision the store that every reconcile,
+  including that one, emits into. `CyberCloud.Ingest.Host` is deliberately not an Orleans client to
+  keep that cycle broken; **both halves have to be true at once — the platform workspace is one of
+  these, and the platform's stores are not — and only the shared-store reading makes them
+  compatible.** And soft delete decides the same way: a soft-deleted tenancy costs disk that was
+  already reserved, where a soft-deleted *deployment* would mean keeping a cluster running for a week.
+
+- **⚠ WHAT A TYPE THAT PROVISIONS NOTHING CONVERGES IS FORCED BY THE SAME CONSTRAINT, FROM THE OTHER
+  END.** The store exists before any workspace; what a workspace must make true is that the **data
+  plane** knows the tenancy. docs/plan/16 calls that *"a cached map"* and does not say how it is
+  filled — and `CyberCloud.Ingest.Host` not being an Orleans client means **the control plane cannot
+  tell it anything by grain call**. The only store the ingest host can read without the control plane
+  and that the platform already operates is Kubernetes. So the three objects are a credential, a
+  routing rule and a **row**, and this is the first family in the catalogue whose applied objects are
+  *configuration for a data plane* rather than a description of a workload. It needed no fifth module
+  edge and no seventh project.
+
+- **⚠⚠ docs/plan/16'S PRICED PER-SIGNAL METRICS RETENTION IS NOT A SETTING OPEN-SOURCE
+  VICTORIAMETRICS HAS, AND THIS IS A REFUTATION RATHER THAN A DEFERRAL.** Checked in upstream's
+  source and its own enterprise page rather than a blog: `app/vmstorage/main.go` declares
+  `-retentionPeriod` **once, per vmstorage node**, and the per-tenant form — `-retentionFilter`, with
+  its `{vm_account_id=~"…"}` selectors — is on `docs.victoriametrics.com/enterprise/`'s feature list,
+  as is `-downsampling.period`. **An open-source VictoriaMetrics cluster cannot give two accountIDs
+  two retention periods.** ADR-016 chose the engine for *"native multi-tenancy"*, which is real and is
+  about isolation, not retention. Upstream's own open-source answer — *"separate logic groups of
+  storages … with individual `-retentionPeriod` settings"* — is what this row takes: **one vmstorage
+  group per tier, and a workspace's retention tier decides which group it is routed to.** Which is
+  also why the body carries a tier *name*: a day count would have had nowhere to go.
+  <br>⚠ The same review found per-tenant **cardinality and rate limits** are enterprise too
+  (vmgateway), which *confirms* docs/plan/16's ingest design rather than refuting it — those caps have
+  to be enforced in `CyberCloud.Ingest.Host` and cannot be delegated to the store.
+
+- **⚠ A DISCRETE NUMERIC TIER SET IS INEXPRESSIBLE IN `ResourceSchema`, AND HERE THE INEXPRESSIBLE
+  CONSTRAINT IS THE PRICE.** `SchemaProperty.AllowedValues` is legal on `SchemaKind.Text` and nowhere
+  else, and its own remarks say a numeric enumeration *"is expressible as `Minimum`/`Maximum` or is a
+  modelling mistake"* — but a range accepts 399 days, which no price list has a row for and which the
+  storage meter would then reserve against. **Sixth family to record a rule `ResourceSchema` cannot
+  state**, and the first where what it cannot state is what the tenant is charged. What it forces —
+  a tier name over a platform-owned table — turns out to be better than what it forbids, and is the
+  same shape the whole catalogue already uses for sizing.
+
+- **⚠ THE QUOTA METER IS A FIFTH SHAPE, AND THE NEW PART IS THAT ONE FACTOR IS NOT IN THE BODY.**
+  `CyberCloud.DBforPostgreSQL/servers` found an amount is a quantity *string*; `natsClusters`, a
+  *product* of a replica count and one figure; `CyberCloud.Storage/accounts`, a *sum* over
+  heterogeneous components; `clickhouseClusters`, a product **and** a sum. Here it is a sum over three
+  signals of `(retention tier's days) × (that signal's GiB/day)` — and the derivation reads
+  `/properties/retention/logs` and gets back the string `"standard"`, with the number 30 coming from a
+  platform table. **A derivation that read the pointer and expected a number would derive nothing.**
+  This is also the line where docs/plan/16 § Cost and retention honesty's *"retention is a paid
+  property"* stops being a sentence: `MonitorQuotaTests.MovingOnlyTheRetentionTierMovesTheStorageAmount`
+  is what fails if somebody simplifies the meter to GiB/day alone.
+
+- **⚠ THE FIRST TYPE IN THE TREE TO DECLARE `SupportsSoftDelete`.** Eleven families declined with the
+  same stated reason and docs/plan/08 § Soft delete endorsed the instinct, ending *"the declaration is
+  the last step, not the first"*. The manager honours a window now, so what was left is the provider's
+  own question — *does the data this type carries deserve one* — and on this type it is the least
+  ambiguous case in the catalogue: **a workspace is the tenant's only copy of their logs.** A database
+  has a backup and an object store has versioning; telemetry has neither, because the source of truth
+  was a process that has since exited. Seven days, purge behind its own permission, purge protection
+  as a declared boolean.
+
+- **⚠ A RETENTION A TENANT CAN SHORTEN IS AN IRREVERSIBLE DATA-LOSS PATH AUTHORISED BY A REQUEST THE
+  PLATFORM ALREADY ANSWERED `202` TO — fifth sighting of the missing write-path predicate, and the
+  first where the consequence is destruction rather than a broken object.** docs/plan/16 prices
+  retention, so it must be settable; ClickHouse expires shortened TTLs at the next merge and schedules
+  an off-schedule merge when it detects expired data. The API cannot refuse it: `ResourceSchema`
+  validates one body against constants with no access to the previous body, and `IResourceTypeBuilder`
+  declares no validator. So `MonitorWorkspaceReconciler` reads the existing row **before it applies
+  anything** and fails the pass with both day counts in the message; a refused shrink changes nothing
+  and a `PUT` of the old tier reverses it. `MonitorRetentionTests.ShorteningARetentionIsExpressibleInABodyTheSchemaAccepts`
+  pins *why* the check is where it is, so that whoever closes the seam finds it and can delete it.
+
+- **⚠ `Matches` IS CONTAINMENT FOR A FOURTH MECHANISM — the API server itself — AND IT IS THE FIRST
+  ONE THE CONFORMANCE HARNESS IS NOT BLIND TO.** The three known mechanisms are CRD defaulting, a
+  mutating webhook, and a controller writing back into `.spec`. Two of this type's three objects are
+  **core kinds**: no CRD, no operator, no webhook. What forces containment is `metadata.uid`,
+  `resourceVersion`, `creationTimestamp`, `managedFields` and the seven labels `KubeCommandBuilder`
+  injects. ⚠ Measured on both halves: the equality mistake fails the cluster-backed suite *and* the
+  Docker-free one, because the builder has already added the labels by the time `FakeKubeCluster`
+  echoes the apply back. **The hole `CyberCloud.Providers.Search` records — every family whose
+  operator's CRD carries defaults — does not exist here.**
+
+- **⚠ `ProviderConformanceCase.ObjectMatchesDesired` CARRYING NO ADDRESS IS A STRUCTURAL GAP ON THIS
+  TYPE RATHER THAN AN INCONVENIENCE, AND IT WAS MEASURED.** `StorageBuckets` recorded the limit and
+  `AgentPools` demonstrated it; here **identity is not one field of the output, it is the output** —
+  the accountID in the `VMUser`'s path suffix, the database name, all three object names. The first
+  version of the case closed over a fixed address and ran **5 of 29 red**. Handing it a made-up
+  address makes the suite green and the comparison meaningless, so the case calls a second,
+  deliberately weaker `MonitorWorkspaces.MatchesShape` that checks the address-independent half and
+  says so in its name. ⚠ **What that leaves uncovered is the worst bug this type can have** — every
+  workspace on one accountID, which is every tenant reading every other tenant's metrics — and
+  `MonitorReconcilerTests.TwoWorkspacesInTwoTenantsGetTwoAccountIdsAndTwoDatabases` is the hand-written
+  test that covers it.
+
+- **⚠ THE `accountID` IS FOLDED RATHER THAN ALLOCATED, WHICH IS WHY THIS TYPE NEEDS NO GRAIN AND IS A
+  NAMED LIMIT RATHER THAN A SAFE DERIVATION.** VictoriaMetrics' accountID is a 32-bit integer in a URL
+  path, so the resource GUID folded to 32 bits is stable, recomputable anywhere and needs nothing
+  remembered — which is the twelfth family to report no grain and the first where the temptation was
+  a real allocator. A fold is not a bijection: the birthday bound is a coin-flip around 77 000
+  workspaces, inside target scale, and a collision is two tenants sharing metrics. `accountID:projectID`
+  is accepted by VictoriaMetrics and makes the space 64 bits, which closes it without durable state.
+  `charts/managed/monitor-workspace/conformance.yaml § owed`, `accountid-is-folded-not-allocated`.
+
+- **⚠ THE FIRST PROVIDER-SUPPLIED LABEL IN THE TREE.** ADR-013's seven identify a *resource*; the
+  ingest host needs to select every workspace's **row** across every namespace in a region, and
+  `cybercloud.io/resource-type` is on the `Secret` and the `VMUser` too. Encoding "the one whose kind
+  is ConfigMap" would make the data plane depend on this provider's object list, so the row carries
+  `cybercloud.io/telemetry-row: workspace`. Nothing above a provider validates such a label, which is
+  why `MonitorOpenApiCasingTests` runs it through `LabelSyntax` — an illegal one is refused at apply
+  time, per object, rather than at build time.
+
+- **⚠ THE MIXED-CASE UPSTREAM FIELD THAT NOTHING WOULD CATCH.** `VMUserSpec`'s JSON tags are camelCase
+  (`targetRefs`, `passwordRef`) and a `TargetRef`'s are snake_case (`target_path_suffix`,
+  `query_args`) — checked in `api/operator/v1beta1/vmuser_types.go`. The operator's own **prose** calls
+  the last one *"targetPathSuffix"*. A document written from the prose applies cleanly, reads back
+  cleanly, converges, and is **ignored by vmauth** — which means the workspace's writes land on
+  whatever tenant the `url_prefix` defaulted to. The cluster-backed harness installs an *open* CRD
+  stub, so it cannot catch it either; `MonitorReconcilerTests.TheTargetPathSuffixIsSpelledTheWayTheGoTagSpellsIt`
+  is a unit test against a literal, and it is the only thing in the tree that does.
+
+- **⚠ THE `Secret` IS RENDERED IN C# ONLY, WHICH IS `charts/managed/seaweedfs`' OMISSION ON ITS SECOND
+  SIGHTING.** Its content is a credential the reconciler reads out of the vault inside one pass, and
+  the body has no property carrying it. A Helm template for it would either publish an empty key that
+  `helm lint` accepts and vmauth refuses, or put a live credential in a values file. Second action
+  handler in the tree, and the first where the synchronous-with-handler shape is the *only* one that
+  works: `longRunning` would answer `202` and re-run the reconciler.
+
+- **⚠ THE STRUCTURAL STATELESSNESS CHECK'S BLIND SPOT, CONFIRMED A SEVENTH TIME**, in a seventh
+  family. Both halves are in `MonitorReconcilerTests` and both were run red against the
+  counter-example.
+
+- **The chart-annotation emitter's output is predictable by hand — a seventh sighting.** This chart's
+  `@param` block was written to match what `ChartAnnotationEmitter` would produce and came back
+  **unchanged on the first `./build.sh Charts` run** — *"unchanged, 0 problem(s)"*. Only
+  `values.schema.json` had to be generated.
+
+- **Four module edges, six projects, one `ProviderConformanceCase`** — a twelfth family with identical
+  columns, over a resource that provisions nothing. ⚠ It is also the family most obviously *owed* a
+  fifth line and taking none, and `module-layering.txt` records why **both** directions are refused:
+  nothing may reach this family to emit telemetry (that is the dependency cycle), and this family
+  reaches nothing to bill (that is a `MeterDerivation` the manager already reads).
+
+**What landed: `workspaces`.** `collectors` and `alertRules` are M2 and out of scope;
+`workspaces/ingestKeys` is **owed** with the reason — docs/plan/16 wants rotation *"with a grace
+period"*, which is two live credentials at once, and `ISecretWriter` mints once. ⚠ **The largest
+single gap is that nothing consumes the ingest row**, because `CyberCloud.Ingest.Host` does not exist;
+the `VMUser` half is enforced by vmauth the moment it is applied and everything else is a promise with
+a schema. Every gap is at `charts/managed/monitor-workspace/conformance.yaml § owed`.
+
 ## Planned namespaces
 
 `Platform`, `Identity`, `Compute`, `ContainerInstance`, `ContainerRegistry`,

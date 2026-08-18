@@ -392,6 +392,41 @@
         <Project Path="src/Providers/CyberCloud.Providers.Network/CyberCloud.Providers.Network.Tests/CyberCloud.Providers.Network.Tests.csproj" />
         <Project Path="src/Providers/CyberCloud.Providers.Network/CyberCloud.Providers.Network.Conformance/CyberCloud.Providers.Network.Conformance.csproj" />
         <Project Path="src/Providers/CyberCloud.Providers.Network/CyberCloud.Providers.Network.Cluster.Conformance/CyberCloud.Providers.Network.Cluster.Conformance.csproj" />
+
+        <!--
+          The twelfth provider family — CyberCloud.Monitor/workspaces, docs/plan/16
+          § CyberCloud.Monitor/workspaces, M1 · 2.5 EM, and step 7 of docs/plan/24's M1 exit story
+          ("see metrics and logs").
+
+          ⚠ A WORKSPACE IS A TENANCY IN THE PLATFORM'S OWN STORES AND NOT A DEPLOYMENT, WHICH IS THE
+          MIRROR IMAGE OF THE QUESTION CyberCloud.Providers.Analytics HAD TO SETTLE. That family
+          established that the platform's ClickHouse is not CyberCloud.Analytics/clickhouseClusters;
+          this one is the other half of the sentence — the platform's ClickHouse and VictoriaMetrics
+          are reached THROUGH this type, and this type provisions neither. docs/plan/16 § Ingest
+          routes to an accountID and a database rather than to a store, docs/plan/05 § Every store
+          gives each store one row per region, and — decisively — docs/plan/16 puts PLATFORM telemetry
+          under a workspace of this type, so a type that provisioned the store would put the control
+          plane's own reconcile on the store its reconcile creates. CyberCloud.Ingest.Host is
+          deliberately not an Orleans client to keep that cycle broken; this type is shaped to keep it
+          broken from the other end. The five-part argument is on MonitorWorkspaces.
+
+          ⚠ IT IS THE FIRST TYPE IN THE TREE TO DECLARE SupportsSoftDelete. Eleven families declined
+          with the same stated reason and docs/plan/08 § Soft delete endorsed the instinct; the
+          manager honours a window now, and a workspace holding a tenant's only copy of their logs is
+          the least ambiguous case in the catalogue. Seven days.
+
+          ⚠ AND IT REFUTES ONE ROW OF docs/plan/16. That document prices per-signal metrics retention
+          per workspace; per-tenant retention in VictoriaMetrics is `-retentionFilter`, which is an
+          ENTERPRISE feature — open-source `-retentionPeriod` is one global flag per vmstorage node.
+          Upstream's own answer is one storage group per retention tier, which is why a tier here is a
+          NAME that selects a routing target rather than a number sent to a store.
+        -->
+        <Project Path="src/Providers/CyberCloud.Providers.Monitor/CyberCloud.Providers.Monitor.Contracts/CyberCloud.Providers.Monitor.Contracts.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.Monitor/CyberCloud.Providers.Monitor/CyberCloud.Providers.Monitor.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.Monitor/CyberCloud.Providers.Monitor.Application/CyberCloud.Providers.Monitor.Application.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.Monitor/CyberCloud.Providers.Monitor.Tests/CyberCloud.Providers.Monitor.Tests.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.Monitor/CyberCloud.Providers.Monitor.Conformance/CyberCloud.Providers.Monitor.Conformance.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.Monitor/CyberCloud.Providers.Monitor.Cluster.Conformance/CyberCloud.Providers.Monitor.Cluster.Conformance.csproj" />
     </Folder>
     <Folder Name="/src/Hosts/">
         <Project Path="src/Hosts/CyberCloud.Gateway.Host/CyberCloud.Gateway.Host.csproj" />

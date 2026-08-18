@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      docs/plan/03 § Providers — the first of the five projects: "grain interfaces, resource models,
+      the JSON Schemas". This one is the schema, the retention tables and the three objects a
+      workspace's tenancy becomes.
+
+      ⚠ NO GRAIN INTERFACES, AND THIS IS THE TWELFTH TYPE TO REPORT THAT. What is different here is
+      that this type has the strongest case for one in the catalogue and still does not need it: a
+      workspace owns a VictoriaMetrics accountID and a ClickHouse database name, both of which look
+      like allocations somebody has to remember. Both are PURE FUNCTIONS of the resource's own id —
+      MonitorWorkspaces.AccountId and MonitorWorkspaces.Database — so there is nothing to remember
+      between passes and no allocator to keep consistent across silos.
+
+      ⚠ IT REFERENCES ONLY CyberCloud.ResourceManager.Contracts AND CyberCloud.Kubernetes.Contracts —
+      the whole reference set docs/plan/03 § The .Contracts split allows a provider, and rule 2 of
+      § Assembly graph rules forbids the rest.
+    -->
+
+    <ItemGroup>
+        <ProjectReference Include="../../../CyberCloud.ResourceManager.Contracts/CyberCloud.ResourceManager.Contracts.csproj"/>
+        <ProjectReference Include="../../../CyberCloud.Kubernetes.Contracts/CyberCloud.Kubernetes.Contracts.csproj"/>
+    </ItemGroup>
+
+    <ItemGroup Label="CyberCloud.Analyzers — see CyberCloud.Core.csproj for why this is not a reference">
+        <ProjectReference Include="../../../CyberCloud.Analyzers/CyberCloud.Analyzers.csproj"
+                          OutputItemType="Analyzer"
+                          ReferenceOutputAssembly="false"/>
+    </ItemGroup>
+
+</Project>

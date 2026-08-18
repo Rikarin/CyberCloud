@@ -1,0 +1,269 @@
+{
+  "$id": "https://schema.cybercloud.io/charts/monitor-workspace/values.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "The configuration surface of the monitor-workspace chart. GENERATED from values.yaml by `./build.sh Charts` and diffed in CI — docs/plan/03 § charts/. Edit values.yaml, never this file. Members carrying `x-cybercloud-api: false` are chart or platform plumbing and are not part of the resource body.",
+  "properties": {
+    "nameOverride": {
+      "default": "",
+      "description": "Replace the generated object-name stem. Empty means derive it from the release name.",
+      "type": "string",
+      "x-cybercloud-api": false,
+      "x-cybercloud-internal-reason": "Helm plumbing. Nothing about it belongs in a resource body.",
+      "x-cybercloud-order": 6,
+      "x-cybercloud-pointer": "/properties/nameOverride"
+    },
+    "platform": {
+      "additionalProperties": false,
+      "description": "Resource identity injected by the reconciler. Not a tenant-facing setting.",
+      "properties": {
+        "apiVersion": {
+          "default": "2026-08-01",
+          "description": "The api-version the resource was last written at, rendered into the cybercloud.io/api-version label.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 5,
+          "x-cybercloud-pointer": "/properties/platform/apiVersion"
+        },
+        "managedBy": {
+          "default": "cybercloud",
+          "description": "Value of the cybercloud.io/managed-by label. Constant, and the selector every informer filters on.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 6,
+          "x-cybercloud-pointer": "/properties/platform/managedBy"
+        },
+        "resourceGroup": {
+          "default": "",
+          "description": "Resource group name, rendered into the cybercloud.io/resource-group label.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 2,
+          "x-cybercloud-pointer": "/properties/platform/resourceGroup"
+        },
+        "resourceId": {
+          "default": "",
+          "description": "Resource GUID, rendered into the cybercloud.io/resource-id label.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 3,
+          "x-cybercloud-pointer": "/properties/platform/resourceId"
+        },
+        "resourceType": {
+          "default": "CyberCloud.Monitor/workspaces",
+          "description": "Fully qualified resource type, rendered into the cybercloud.io/resource-type label.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 4,
+          "x-cybercloud-pointer": "/properties/platform/resourceType"
+        },
+        "subscriptionId": {
+          "default": "",
+          "description": "Subscription GUID, rendered into the cybercloud.io/subscription-id label.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 1,
+          "x-cybercloud-pointer": "/properties/platform/subscriptionId"
+        },
+        "tenantId": {
+          "default": "",
+          "description": "Tenant GUID, rendered into the cybercloud.io/tenant-id label.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 0,
+          "x-cybercloud-pointer": "/properties/platform/tenantId"
+        }
+      },
+      "type": "object",
+      "x-cybercloud-api": false,
+      "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+      "x-cybercloud-order": 3,
+      "x-cybercloud-pointer": "/properties/platform"
+    },
+    "purgeProtection": {
+      "default": false,
+      "description": "Whether this workspace may be destroyed before its seven-day recovery window is out. Once true it stays true for the rest of the workspace's life, and a purge is refused while it is set.",
+      "type": "boolean",
+      "x-cybercloud-order": 2,
+      "x-cybercloud-pointer": "/properties/purgeProtection"
+    },
+    "quota": {
+      "additionalProperties": false,
+      "description": "What the workspace may take in per day, and what happens when it takes in more.",
+      "properties": {
+        "cardinalityCap": {
+          "default": 20000,
+          "description": "Distinct values one metric label may take before the series carrying it are rejected. The rejection names the offending label — docs/plan/16 § Ingest — because a rejection nobody can diagnose is one the client just retries.",
+          "maximum": 1000000,
+          "minimum": 100,
+          "type": "integer",
+          "x-cybercloud-order": 4,
+          "x-cybercloud-pointer": "/properties/quota/cardinalityCap"
+        },
+        "logsGbPerDay": {
+          "default": 10,
+          "description": "Log lines accepted per day, in gibibytes.",
+          "maximum": 10000,
+          "minimum": 1,
+          "type": "integer",
+          "x-cybercloud-order": 1,
+          "x-cybercloud-pointer": "/properties/quota/logsGbPerDay"
+        },
+        "metricsGbPerDay": {
+          "default": 5,
+          "description": "Metric samples accepted per day, in gibibytes. This is the first factor of what the workspace draws against the subscription's storage quota; the second is the retention tier.",
+          "maximum": 10000,
+          "minimum": 1,
+          "type": "integer",
+          "x-cybercloud-order": 0,
+          "x-cybercloud-pointer": "/properties/quota/metricsGbPerDay"
+        },
+        "overQuotaSampleRate": {
+          "default": 10,
+          "description": "The percentage of data still accepted once a signal is over its daily allowance. ⚠ It cannot be zero: docs/plan/16 requires that going over quota samples at a visible rate rather than dropping silently, and zero is a silent drop spelled as a rate.",
+          "maximum": 100,
+          "minimum": 1,
+          "type": "integer",
+          "x-cybercloud-order": 5,
+          "x-cybercloud-pointer": "/properties/quota/overQuotaSampleRate"
+        },
+        "seriesCap": {
+          "default": 1000000,
+          "description": "Active metric series the workspace may hold at once. One tenant putting a request id in a metric label is how a shared time-series database dies, so this is a ceiling rather than a guideline.",
+          "maximum": 50000000,
+          "minimum": 1000,
+          "type": "integer",
+          "x-cybercloud-order": 3,
+          "x-cybercloud-pointer": "/properties/quota/seriesCap"
+        },
+        "tracesGbPerDay": {
+          "default": 5,
+          "description": "Spans accepted per day, in gibibytes.",
+          "maximum": 10000,
+          "minimum": 1,
+          "type": "integer",
+          "x-cybercloud-order": 2,
+          "x-cybercloud-pointer": "/properties/quota/tracesGbPerDay"
+        }
+      },
+      "required": [
+        "cardinalityCap",
+        "logsGbPerDay",
+        "metricsGbPerDay",
+        "overQuotaSampleRate",
+        "seriesCap",
+        "tracesGbPerDay"
+      ],
+      "type": "object",
+      "x-cybercloud-order": 1,
+      "x-cybercloud-pointer": "/properties/quota"
+    },
+    "retention": {
+      "additionalProperties": false,
+      "description": "How long each signal is kept. Priced per tier — docs/plan/16 § Cost and retention honesty.",
+      "properties": {
+        "logs": {
+          "default": "short",
+          "description": "Logs retention tier: short is 7 days, standard 30, extended 90. ⚠ Shortening this under an existing workspace destroys the lines already outside the new window, and the reconciler refuses the change rather than applying it.",
+          "enum": [
+            "short",
+            "standard",
+            "extended"
+          ],
+          "type": "string",
+          "x-cybercloud-order": 1,
+          "x-cybercloud-pointer": "/properties/retention/logs",
+          "x-cybercloud-widget": "sku"
+        },
+        "metrics": {
+          "default": "short",
+          "description": "Metrics retention tier: short is 15 days, standard 90, extended 400. ⚠ Shortening this under an existing workspace destroys the samples already outside the new window, and the reconciler refuses the change rather than applying it.",
+          "enum": [
+            "short",
+            "standard",
+            "extended"
+          ],
+          "type": "string",
+          "x-cybercloud-order": 0,
+          "x-cybercloud-pointer": "/properties/retention/metrics",
+          "x-cybercloud-widget": "sku"
+        },
+        "traces": {
+          "default": "short",
+          "description": "Traces retention tier: short is 3 days, standard 14, extended 30. ⚠ Shortening this under an existing workspace destroys the spans already outside the new window, and the reconciler refuses the change rather than applying it.",
+          "enum": [
+            "short",
+            "standard",
+            "extended"
+          ],
+          "type": "string",
+          "x-cybercloud-order": 2,
+          "x-cybercloud-pointer": "/properties/retention/traces",
+          "x-cybercloud-widget": "sku"
+        }
+      },
+      "required": [
+        "logs",
+        "metrics",
+        "traces"
+      ],
+      "type": "object",
+      "x-cybercloud-order": 0,
+      "x-cybercloud-pointer": "/properties/retention"
+    },
+    "telemetryNamespace": {
+      "default": "cybercloud-telemetry",
+      "description": "The namespace the region's telemetry stack runs in.",
+      "type": "string",
+      "x-cybercloud-api": false,
+      "x-cybercloud-internal-reason": "Where the platform bundle installs the stores. Not a tenant setting, and nothing in this repository verifies it — a wrong value renders a VMUser that converges and routes to a VMCluster that is not there. See conformance.yaml § owed, `vmcluster-is-named-not-resolved`.",
+      "x-cybercloud-order": 5,
+      "x-cybercloud-pointer": "/properties/telemetryNamespace"
+    },
+    "workspace": {
+      "additionalProperties": false,
+      "description": "The tenancy coordinates, which are pure functions of the resource's own id.",
+      "properties": {
+        "accountId": {
+          "default": "",
+          "description": "The VictoriaMetrics accountID this workspace's metrics are written and read under.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Derived by MonitorWorkspaces.AccountId and MonitorWorkspaces.Database from the resource GUID. A tenant cannot set either — an accountID a tenant could choose is another tenant's metrics.",
+          "x-cybercloud-order": 0,
+          "x-cybercloud-pointer": "/properties/workspace/accountId"
+        },
+        "database": {
+          "default": "",
+          "description": "The ClickHouse database this workspace's logs, traces and events live in.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Derived by MonitorWorkspaces.AccountId and MonitorWorkspaces.Database from the resource GUID. A tenant cannot set either — an accountID a tenant could choose is another tenant's metrics.",
+          "x-cybercloud-order": 1,
+          "x-cybercloud-pointer": "/properties/workspace/database"
+        }
+      },
+      "type": "object",
+      "x-cybercloud-api": false,
+      "x-cybercloud-internal-reason": "Derived by MonitorWorkspaces.AccountId and MonitorWorkspaces.Database from the resource GUID. A tenant cannot set either — an accountID a tenant could choose is another tenant's metrics.",
+      "x-cybercloud-order": 4,
+      "x-cybercloud-pointer": "/properties/workspace"
+    }
+  },
+  "required": [
+    "purgeProtection"
+  ],
+  "title": "monitor-workspace chart values",
+  "type": "object",
+  "x-cybercloud-api-version": "2026-08-01",
+  "x-cybercloud-chart": "monitor-workspace",
+  "x-cybercloud-chart-version": "0.1.0",
+  "x-cybercloud-resource-type": "CyberCloud.Monitor/workspaces"
+}

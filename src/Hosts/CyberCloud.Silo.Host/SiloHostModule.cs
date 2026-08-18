@@ -5,6 +5,7 @@ using CyberCloud.Providers.DBforMySQL.Application;
 using CyberCloud.Providers.DBforPostgreSQL.Application;
 using CyberCloud.Providers.DocumentDB.Application;
 using CyberCloud.Providers.Messaging.Application;
+using CyberCloud.Providers.Monitor.Application;
 using CyberCloud.Providers.Network.Application;
 using CyberCloud.Providers.Sample.Application;
 using CyberCloud.Providers.Search.Application;
@@ -19,7 +20,7 @@ namespace CyberCloud.Silo.Host;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>The eleven lines below are the platform's API surface, and until they existed this
+///         ⚠ <b>The twelve lines below are the platform's API surface, and until they existed this
 ///         module depended on Autofac's and nothing else.</b> Each provider module's
 ///         <c>ConfigureServices</c> registers its <c>IResourceProvider</c>, its reconcilers and its
 ///         action handlers; <c>ProviderRegistry</c> is then built from the union at first resolve. A
@@ -49,6 +50,7 @@ namespace CyberCloud.Silo.Host;
 [DependsOn(typeof(PostgresApplicationModule))]
 [DependsOn(typeof(DocumentDbApplicationModule))]
 [DependsOn(typeof(MessagingApplicationModule))]
+[DependsOn(typeof(MonitorApplicationModule))]
 [DependsOn(typeof(NetworkApplicationModule))]
 [DependsOn(typeof(SampleApplicationModule))]
 [DependsOn(typeof(SearchApplicationModule))]

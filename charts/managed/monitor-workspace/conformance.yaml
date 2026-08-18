@@ -1,0 +1,202 @@
+# Conformance manifest — docs/plan/12 § The pattern, once, piece 8.
+#
+# What the conformance suite asserts about CyberCloud.Monitor/workspaces. This file is data:
+# `Build.Charts` checks that it is present, non-empty, and names the same resource type as
+# Chart.yaml. The suite that reads the rest of it lives in test/ and does not exist yet, and the
+# target says so in its own log rather than implying otherwise.
+
+resourceType: CyberCloud.Monitor/workspaces
+apiVersion: "2026-08-01"
+chart: monitor-workspace
+
+# Objects the reconciler must have applied once the resource reports Succeeded, in apply order.
+#
+# ⚠ THREE, TWO CORE KINDS AND ONE CUSTOM, AND NONE OF THEM BECOMES A POD. Every other row in this
+# directory renders a workload. A workspace is a tenancy in stores the platform already runs, so what
+# it renders is a credential, a routing rule and a row. The Secret is applied first because the
+# VMUser names it in passwordRef; the row is applied LAST because it is what announces the workspace
+# to the region's ingest, and a row that appeared before its key and routing would advertise a
+# workspace as ready while every write to it was refused.
+renders:
+  # ⚠ The platform writes this rather than any operator, and it is the second object in the catalogue
+  # whose CONTENT is a credential (charts/managed/seaweedfs' identities file was the first). It is
+  # built from what the tenant's vault returned, inside one reconcile pass, and the workspace's body
+  # has no property that carries it — which is why this directory has no template for it.
+  - group: ""
+    version: v1
+    kind: Secret
+    count: 1
+  - group: operator.victoriametrics.com
+    version: v1beta1
+    kind: VMUser
+    count: 1
+  - group: ""
+    version: v1
+    kind: ConfigMap
+    count: 1
+
+# ⚠ THERE IS NO `requiredCrds:` BLOCK HERE, AND ITS ABSENCE IS CORRECT.
+# `ProviderConformanceCase` has no `RequiredCrds` member and never had one — the harness DERIVES the
+# definitions from the case's own `Objects`, which already carries group, version, kind and plural.
+# What is new here: this is the first case where the derivation has to produce a stub for SOME of the
+# kinds and not others. A bare k3s serves /api/v1/.../configmaps and /secrets without being told and
+# serves no path for operator.victoriametrics.com/v1beta1.
+
+# ADR-013 — every rendered object carries all seven labels. Asserted against real rendered output,
+# which is what the Labels architecture gate in docs/plan/23 § The architecture gates requires.
+labels:
+  required:
+    - cybercloud.io/tenant-id
+    - cybercloud.io/subscription-id
+    - cybercloud.io/resource-group
+    - cybercloud.io/resource-id
+    - cybercloud.io/resource-type
+    - cybercloud.io/api-version
+    - cybercloud.io/managed-by
+  # ⚠ Not the resource type verbatim. A `/` is not a legal label value character, so the value is
+  # lower-cased with `/` replaced by `_` — KubeLabels.ResourceTypeValue.
+  values:
+    cybercloud.io/resource-type: cybercloud.monitor_workspaces
+    cybercloud.io/managed-by: cybercloud
+  # ⚠ AN EIGHTH LABEL, ON ONE OBJECT OF THE THREE, AND IT IS THE FIRST TIME A PROVIDER HAS ADDED ONE.
+  # The seven identify a resource; this one says what an object IS, so that a watcher can select
+  # every workspace's row across every namespace in a region without encoding "the one whose kind is
+  # ConfigMap" as a rule about this provider's object list.
+  additional:
+    cybercloud.io/telemetry-row: workspace
+
+# Behaviour a tenant is entitled to. Each is a statement the suite can fail on, not a feature list.
+assertions:
+  - id: metrics-round-trip
+    says: >
+      A Prometheus remote-write to the endpoint listKeys returned, authenticated with the key
+      listKeys returned, is queryable back through the PromQL endpoint listKeys returned.
+  - id: one-workspace-cannot-read-anothers-metrics
+    says: >
+      A client holding workspace A's ingest key cannot write to or read from workspace B's accountID
+      by any request it can construct — including one that spells an accountID in its own path.
+      ⚠ THE SINGLE MOST IMPORTANT ASSERTION ON THIS TYPE. It is what the VMUser's
+      `target_path_suffix` exists for, it is the one thing this type sells, and no unit test can make
+      it because it is a property of vmauth's routing rather than of the rendered document.
+  - id: logs-round-trip
+    says: >
+      An OTLP log record sent to the OTLP endpoint appears in a SELECT against the database listKeys
+      returned, and does not appear in any other workspace's database.
+  - id: over-quota-samples-and-says-so
+    says: >
+      A workspace pushed past its daily allowance keeps accepting at the declared sample rate, the
+      accepted fraction is reported on the blade, and NOTHING IS DROPPED SILENTLY — docs/plan/16
+      § Cost and retention honesty. A workspace at 100% over quota that stops accepting entirely
+      fails this.
+  - id: a-cardinality-bomb-is-refused-by-name
+    says: >
+      A metric carrying a request id in a label is rejected once the workspace's cardinalityCap is
+      crossed, and the rejection NAMES THE OFFENDING LABEL. A rejection that says only "too many
+      series" fails this, because the client will just retry.
+  - id: retention-is-honoured-per-signal
+    says: >
+      Data older than the tier's day count is gone and data younger than it is present, for each of
+      the three signals independently. ⚠ On metrics this is a property of WHICH vmstorage group the
+      workspace was routed to, not of any per-tenant setting — see SOURCE.
+  - id: retention-shortens-nothing
+    says: >
+      A PUT that lowers any retention tier is refused and destroys no data. The workspace's old tier
+      is still in effect afterwards and every record it held is still readable.
+  - id: secrets-never-round-trip
+    says: A GET of the resource never returns the ingest key in any form. The only path out is the listKeys action.
+  - id: a-soft-deleted-workspace-stops-accepting-and-keeps-its-data
+    says: >
+      After DELETE, the ingest key authenticates nothing and the old address answers 404 — and a
+      restore inside the seven-day window brings back every record the workspace held.
+
+# ── Owed ────────────────────────────────────────────────────────────────────────────────────────
+#
+# What this row does NOT do, each with what closes it. A gap that is written down is a decision; a
+# gap that is not is a defect somebody rediscovers.
+owed:
+  - id: nothing-consumes-the-row
+    says: >
+      CyberCloud.Ingest.Host does not exist — docs/plan/03 § Hosts plans it, src/Hosts holds four
+      hosts and not that one. So the ConfigMap is published and read by nobody, and with it go the
+      logs and traces retention, all three daily allowances, the series cap, the cardinality cap and
+      the over-quota sample rate. ⚠ THIS IS THE LARGEST SINGLE GAP ON THE ROW and it is deliberately
+      not hidden behind the half that does work: the VMUser is enforced by vmauth the moment it is
+      applied, and everything else here is a promise with a schema.
+    closes: The ingest host, watching ConfigMaps labelled cybercloud.io/telemetry-row across the region.
+  - id: clickhouse-ttl-is-published-not-applied
+    says: >
+      A per-workspace logs and traces retention IS expressible in ClickHouse — `TTL expr + INTERVAL n
+      DAY` per table, alterable with `ALTER TABLE … MODIFY TTL` — and nothing in this catalogue
+      applies SQL. So the database this row names is never created and its tables never get a TTL.
+      ⚠ This is the reverse of the VictoriaMetrics limit below: the store CAN do it and the platform
+      has no way to ask.
+    closes: A schema step on the ingest host, which is the only component holding a ClickHouse connection.
+  - id: metrics-retention-is-routing-because-per-tenant-retention-is-enterprise
+    says: >
+      docs/plan/16 prices per-signal metrics retention per workspace. Open-source VictoriaMetrics has
+      one `-retentionPeriod` per vmstorage node; `-retentionFilter` and `-downsampling.period` are
+      enterprise. This row takes upstream's own open-source answer — one vmstorage group per tier,
+      selected by routing — which means the three per-tier VMClusters must exist in every region and
+      must be provisioned with the day counts in MonitorWorkspaces.RetentionDays. NOTHING CHECKS
+      THAT, and a mismatch is a workspace billed for 400 days of metrics that are deleted after 30.
+    closes: charts/bundle/ rendering the three VMClusters from the same table, plus a gate comparing them.
+  - id: vmcluster-is-named-not-resolved
+    says: >
+      The VMUser names a VMCluster by name and namespace and nothing verifies either exists. A wrong
+      telemetryNamespace or a missing tier group produces an object that applies cleanly, reads back
+      cleanly and converges, and routes to nothing — which vmauth reports to the tenant's collector
+      as a bad gateway and reports to us not at all. Same shape as charts/managed/clickhouse's Keeper
+      Service name, second sighting.
+    closes: A reconciler-side existence check, or an admission policy in the bundle.
+  - id: suffix-is-inferred-from-two-halves
+    says: >
+      `target_path_suffix: /insert/{accountID}/prometheus` is assembled from two separately verified
+      upstream facts — the operator's own example, which stops at `/insert/1`, and VictoriaMetrics'
+      cluster URL grammar, which spells `/insert/<accountID>/prometheus/api/v1/write`. No upstream
+      example spells the combination. It is the string that makes cross-tenant reads impossible, so
+      inference is not good enough forever.
+    closes: The `one-workspace-cannot-read-anothers-metrics` assertion above, against a real vmauth.
+  - id: accountid-is-folded-not-allocated
+    says: >
+      MonitorWorkspaces.AccountId folds the resource GUID to 32 bits because VictoriaMetrics'
+      accountID is a 32-bit integer and a derived value needs no allocator and no grain. A fold is not
+      a bijection: the birthday bound puts a collision at even odds around 77 000 workspaces, which is
+      inside target scale, and two workspaces sharing an accountID read each other's metrics. ⚠ The
+      first thing to consume this value is the thing that enforces isolation.
+    closes: >
+      An allocator — either an accountID grain per region, or `accountID:projectID` (VictoriaMetrics
+      accepts both as arbitrary 32-bit integers), which makes the space 64 bits and the collision
+      negligible without adding durable state.
+  - id: retention-shrink-is-refused-after-202
+    says: >
+      Shortening a retention destroys data, and the refusal is in the reconciler because it cannot be
+      at the API: ResourceSchema validates one body against constants with no access to the previous
+      body, and IResourceTypeBuilder declares no provider-supplied validator. So the caller is told
+      202 and then the operation fails. Fifth sighting of that seam after virtualNetworks' address
+      overlap, ContainerService's version skew, seaweedfs-bucket's cluster and clickhouse's volume
+      shrink — and the first where the consequence is irreversible destruction of tenant data.
+    closes: A provider-supplied predicate on ResourceManagerService's write path, taking the previous body.
+  - id: ingest-keys-are-not-a-child-type
+    says: >
+      docs/plan/16 makes ingestKeys a sub-resource, "rotatable with a grace period". A grace period is
+      two live credentials at once; ISecretWriter mints once and does not replace. Second sighting of
+      the blocker CyberCloud.Storage/accounts records against regenerateKeys, and the first where it
+      decides a whole resource type rather than one action.
+    closes: A two-slot secret shape in ISecretWriter — current and previous, with an expiry on previous.
+  - id: no-external-endpoint
+    says: >
+      Every endpoint listKeys returns is in-cluster. docs/plan/12 § Cross-cutting decisions requires an
+      explicit CIDR allow-list on any exposure, and this type declares no exposure property at all —
+      the same decision charts/managed/kubernetes took, and for the same reason: a property that
+      renders nothing is worse than the absence.
+    closes: An ingress with a source-range list, once the exposure axis exists platform-wide.
+
+# Meters the type must emit — docs/plan/12 § The pattern, once, piece 3.
+#
+# ⚠ NO vcpu AND NO memory METER, because a workspace runs nothing. The one derived meter is storage,
+# and its two factors are the retention tier and the daily allowance — which is where docs/plan/16
+# § Cost and retention honesty's "retention is a paid property" stops being a sentence and becomes an
+# amount reserved against a subscription.
+meters:
+  - monitor.ingest.gib
+  - monitor.retained.gib.hours

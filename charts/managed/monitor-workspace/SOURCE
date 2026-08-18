@@ -1,0 +1,88 @@
+# Where this chart's shape comes from — ADR-010 § "Their charts are a starting point, not a
+# dependency. Where a chart is close, fork it into charts/ with the upstream commit recorded in a
+# SOURCE file."
+#
+# Nothing was forked here, and `vendored: none` is an answer to "where did this come from" where a
+# missing file is not.
+
+vendored: none
+upstream: https://github.com/VictoriaMetrics/operator
+
+# The upstream API this chart's VMUser targets.
+upstream-api: operator.victoriametrics.com/v1beta1
+
+# The engines. ADR-016 chose both; ADR-011 clears both by licence.
+engine-metrics: https://github.com/VictoriaMetrics/VictoriaMetrics
+engine-logs: https://github.com/ClickHouse/ClickHouse
+
+# Reviewed against the upstream sources on this date — api/operator/v1beta1/vmuser_types.go,
+# docs/auth.md, the cluster and vmauth documents, and the enterprise feature list. Checked against the
+# GitHub API rather than a README: VictoriaMetrics/operator is not archived and was pushed to on the
+# review date. A bare date rather than a SHA is a weaker claim and is labelled as one.
+#
+# ⚠ WHAT THIS REVIEW ESTABLISHED, because two of the four contradict docs/plan/16 and one of those
+# two changes what this chart renders:
+#
+#   * ⚠⚠ A PER-TENANT RETENTION PERIOD IS AN ENTERPRISE FEATURE OF VICTORIAMETRICS, AND
+#     docs/plan/16 PRICES ONE. app/vmstorage/main.go declares `-retentionPeriod` exactly once, per
+#     vmstorage NODE — "Data with timestamps outside the retentionPeriod is automatically deleted …
+#     See also -retentionFilter" — and `-retentionFilter`, whose `{vm_account_id=~"42.*"}:1d`
+#     selectors are the per-tenant form, is on docs.victoriametrics.com/enterprise/'s feature list.
+#     So is `-downsampling.period`. docs/plan/16 § workspaces says "retention: Per signal: metrics
+#     15/90/400 days … Priced", and on the open-source cluster ADR-016 chose, that is not a setting
+#     the store has.
+#
+#     Upstream's own answer is the one this chart takes:
+#     docs.victoriametrics.com/guides/guide-vmcluster-multiple-retention-setup/ — run "separate logic
+#     groups of storages … with individual -retentionPeriod settings, while still providing a single
+#     unified write and read path". One vmstorage group per tier, and a workspace's tier decides
+#     WHICH GROUP IT IS ROUTED TO. That is why templates/vmuser.yaml names
+#     `telemetry-{{ .Values.retention.metrics }}` rather than writing a day count anywhere, and why
+#     the resource body carries a tier NAME rather than a number. A retention expressed as a number
+#     would have had nowhere to go.
+#
+#   * ⚠ PER-TENANT CARDINALITY AND RATE LIMITS ARE ALSO ENTERPRISE, WHICH CONFIRMS docs/plan/16'S
+#     INGEST DESIGN RATHER THAN REFUTING IT. `-maxLabelsPerTimeseries` and `-maxLabelValueLen` are
+#     global vminsert flags; `-storage.maxHourlySeries` and `-storage.maxDailySeries` are per
+#     vmstorage NODE, so the cluster-level limit is N times the per-node one; genuinely per-tenant
+#     limits (`type: active_series`, `account_id`) are vmgateway, which "is a part of enterprise
+#     package". Open-source vmauth gives `max_concurrent_requests` per user, which is concurrency
+#     rather than volume. docs/plan/16 § Ingest already puts cardinality caps in CyberCloud.Ingest.Host
+#     — "cardinality caps are enforced at ingest, per workspace, with the offending label named in the
+#     rejection" — so the caps this chart's row publishes have to be enforced there and CANNOT be
+#     delegated to the store. conformance.yaml § owed, `nothing-consumes-the-row`.
+#
+#   * api/operator/v1beta1/vmuser_types.go — THE FIELD SPELLINGS, AND THE CASING IS MIXED UPSTREAM.
+#     VMUserSpec's JSON tags are camelCase (`targetRefs`, `bearerToken`, `passwordRef`); a TargetRef's
+#     are snake_case (`target_path_suffix`, `query_args`). The operator's prose calls the last one
+#     "targetPathSuffix". A document written from the prose applies cleanly against a permissive
+#     schema and is ignored by vmauth, which is a workspace whose metrics land in whatever tenant the
+#     url_prefix defaulted to. Its doc comment is the design statement for this whole object: the
+#     suffix exists to "hide tenant configuration from user with crd as ref".
+#
+#   * docs/auth.md — THE WORKED EXAMPLE THIS CHART IS BUILT TO. Two targetRefs against one VMCluster,
+#     `crd.kind: VMCluster/vminsert` with `target_path_suffix: "/insert/1"` and
+#     `VMCluster/vmselect` with `"/select/1"`. ⚠ Upstream's example stops at the tenant id; the
+#     `/prometheus` segment after it is VictoriaMetrics' own cluster URL grammar
+#     (`/insert/<accountID>/prometheus/api/v1/write`, `/select/<accountID>/prometheus/api/v1/query`),
+#     and the vmauth document shows the assembled form — "Requests to /api/v1/write are proxied to
+#     http://vminsert:8480/insert/42/prometheus/". The COMBINATION is inferred from those two
+#     verified halves rather than copied from one upstream example, and it is the single most
+#     load-bearing string in this chart: it is what makes a tenant unable to write to another
+#     tenant's account. conformance.yaml § owed, `suffix-is-inferred-from-two-halves`.
+
+reviewed: 2026-08-18
+
+# ⚠ NO SECRET TEMPLATE, AND THE OMISSION IS THE SAME ONE charts/managed/seaweedfs MAKES. The ingest
+# key's Secret is rendered in C# only, because its CONTENT is a credential the reconciler reads out
+# of the tenant's vault inside one pass and the resource body has no property that carries it. A Helm
+# template for it would either publish an empty key that `helm lint` accepts and vmauth refuses, or
+# put a live credential in a values file. conformance.yaml's `renders:` lists the object; this
+# directory does not render it.
+
+# ⚠ NO WEBHOOK ASSUMPTION EITHER WAY. Two of this type's three objects are core kinds, so the API
+# server's own defaulting is what makes Matches containment rather than equality — a ConfigMap read
+# back carries creationTimestamp, uid, resourceVersion, managedFields and the seven labels
+# KubeCommandBuilder injects, none of which the render writes. That is a different mechanism from
+# every earlier family's CRD defaults or mutating webhook, and unlike theirs the conformance harness
+# is NOT blind to it.

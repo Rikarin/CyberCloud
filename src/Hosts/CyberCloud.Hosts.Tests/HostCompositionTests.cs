@@ -40,7 +40,7 @@ namespace CyberCloud.Hosts.Tests;
 /// </remarks>
 public sealed class HostCompositionTests {
     /// <summary>
-    ///     The eleven provider namespaces both hosts must serve, spelled out rather than counted.
+    ///     The twelve provider namespaces both hosts must serve, spelled out rather than counted.
     /// </summary>
     /// <remarks>
     ///     ⚠ <b>Typed-out literals, and a count would not do.</b> A count passes when one provider is
@@ -56,6 +56,7 @@ public sealed class HostCompositionTests {
         "CyberCloud.DBforPostgreSQL",
         "CyberCloud.DocumentDB",
         "CyberCloud.Messaging",
+        "CyberCloud.Monitor",
         "CyberCloud.Network",
         "CyberCloud.Sample",
         "CyberCloud.Search",
@@ -261,7 +262,7 @@ public sealed class HostCompositionTests {
     /// <remarks>
     ///     <para>
     ///         <b>Every other test in this file passed while <c>CyberCloud.Silo.Host</c> could not
-    ///         start at all.</b> Loading the eleven provider modules brings
+    ///         start at all.</b> Loading the twelve provider modules brings
     ///         <c>AbpDddApplicationModule</c>'s graph in, and with it enough of ASP.NET Core's
     ///         authorization surface that <c>WebApplication</c> inserts <c>UseAuthorization</c> into
     ///         the pipeline by itself. That middleware then looks for the marker only
