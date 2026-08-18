@@ -196,8 +196,10 @@ public interface IResourceIndexGrain : IGrainWithStringKey {
     ///     <para>
     ///         ⚠ <b>A <see cref="IndexEntryState.SoftDeleted" /> binding does not resolve either, and
     ///         that single fact is what makes soft delete's <c>404</c> free.</b> docs/plan/08 § Soft
-    ///         delete: the resource leaves its resource group, its old address answers the
-    ///         <i>canonical</i> absence, and a <c>410 Gone</c> is forbidden because it would tell an
+    ///         delete: the resource stops resolving at its address — it does not move to another one,
+    ///         because <c>ResourceId.ParsePath</c> has no subscription-scoped path shape — so its old
+    ///         address answers the <i>canonical</i> absence, and a <c>410 Gone</c> is forbidden
+    ///         because it would tell an
     ///         unauthorized caller the name was taken — the enumeration oracle docs/plan/07 § The
     ///         enforcement seam exists to close. Every caller of this method inherits that answer
     ///         without knowing soft delete exists.
