@@ -285,6 +285,12 @@ public sealed class PublicIpAddressCase : IProviderCaseSource {
             // ⚠ THE WHOLE PREDICATE, like the security group's and unlike the subnet's. Nothing on an
             // OvnEip is derived from the resource's address beyond the object's own name, so
             // ObjectMatchesDesired carrying no address costs this type nothing.
+            // ⚠ Empty, and that is a statement rather than a formality — the member's own remarks
+            // say so. An OvnEip carries no credential: the address is allocated by the controller
+            // into `spec.v4Ip` and there is no Secret anywhere in this type's object set. The
+            // provider most likely to omit this member is the next one to grow an
+            // operator-generated credential, which is why it is `required`.
+            OperatorWritten = static (_, _) => [],
             ObjectMatchesDesired = (objectJson, desiredJson) => {
                 using var desired = JsonDocument.Parse(desiredJson);
                 return PublicIpAddresses.Matches(objectJson, desired.RootElement);
