@@ -29,35 +29,27 @@ namespace CyberCloud.Providers.DBforMySQL;
 ///         reconciler, and declaring one with no reconciler puts a type in the registry that answers
 ///         <c>202</c> and converges nothing; no <c>regenerateKeys</c>, for the reason on
 ///         <c>MariaDbServers.ListKeysAction</c>; no <c>replicas</c> property, for the reason on
-///         <c>MariaDbServers.GaleraReplicas</c>; and no <c>SupportsSoftDelete</c>.
+///         <c>MariaDbServers.GaleraReplicas</c>. <c>SupportsSoftDelete</c> <b>is</b> declared now — see
+///         below for what changed.
 ///     </para>
 ///     <para>
-///         ⚠ <b><c>SupportsSoftDelete</c> is what docs/plan/06 § Tags, locks asks for on a type carrying
-///         data</b> — <i>"a dropped production database is not a support ticket you want to have to say no
-///         to"</i>, with 7 days named. It is not declared because the manager did not read
-///         <c>SoftDeleteDays</c>, and declaring a recovery window the platform does not honour would be a
-///         promise made to the one kind of type whose users would test it. This is the second data-carrying
-///         provider to report the same gap, which is what turns the PostgreSQL row's observation into a
-///         measurement — docs/plan/25 § R1. ⚠ <b>THAT REASON HAS EXPIRED AND THE DECLARATION IS NOW A
-///         ONE-LINE DECISION RATHER THAN A BLOCKED ONE.</b> docs/plan/08 § Soft delete is built: a
-///         <c>DELETE</c> of a type declaring a window parks the resource at
-///         <c>IndexEntryState.SoftDeleted</c> so its old address answers the canonical <c>404</c>, holds
-///         its name, keeps its committed quota, moves its ReBAC parent edge to the subscription and drops
-///         its direct role assignments; a restore reverses it and a purge — under its own permission — ends
-///         it. So the question this type still owes an answer to is the provider's own: <i>does the data
-///         this type carries deserve a recovery window, and how long</i>, which is a claim about the data
-///         and not about the platform.
+///         ⚠ <b><c>SupportsSoftDelete(7)</c>, matching <c>CyberCloud.DBforPostgreSQL/servers</c>, and
+///         the match is the point rather than a copy.</b> docs/plan/06 § Tags, locks asks for a window on
+///         a type carrying data — <i>"a dropped production database is not a support ticket you want to
+///         have to say no to"</i>, with 7 days named — and two managed relational databases that gave a
+///         tenant different recovery windows would be a difference the tenant has to look up. It went
+///         undeclared while the manager did not read <c>SoftDeleteDays</c>; docs/plan/08 § Soft delete is
+///         now built, so the declaration is the type's own claim about its data.
 ///     </para>
 ///     <para>
-///         ⚠ <b>That reasoning has since been read back and endorsed rather than overruled, which is
-///         worth knowing before "fixing" it.</b> docs/plan/08 § Soft delete now records that all the
-///         providers before this one declined for the same stated reason, calls the instinct right,
-///         and ends: <i>"No provider should declare <c>SupportsSoftDelete</c> until the above is
-///         built. The five stated reasons in the tree are correct and stay correct; the declaration is
-///         the last step, not the first."</i> So this absence is a sixth instance of a decision, not a
-///         sixth oversight — and what it now waits on is a named design (a deleted resource moving to
-///         a different address, a separate purge permission, retention immutable after create) rather
-///         than on nobody having got round to it.
+///         ⚠ <b>What a restored server gets back.</b> The teardown runs, so the Galera
+///         <c>StatefulSet</c> and its pods go; deleting a <c>StatefulSet</c> does not delete the
+///         <c>PersistentVolumeClaim</c>s its <c>volumeClaimTemplate</c> made, so every node's copy of the
+///         data is still on disk. The stored body is what the restore re-applies and the committed quota
+///         is held rather than returned, so the restore cannot fail against an allowance the tenant spent
+///         in the meantime. ⚠ <b>Galera makes one detail worth naming:</b> a restored cluster
+///         bootstraps from the PVCs it left behind rather than from an empty volume, which is the same
+///         path a full cluster restart takes and not a new one this feature invents.
 ///     </para>
 /// </remarks>
 public sealed class MariaDbProvider : IResourceProvider {
@@ -142,6 +134,9 @@ public sealed class MariaDbProvider : IResourceProvider {
             // docs/plan/12 § The pattern, once, piece 1 — and ADR-012's fifth surface, which is the
             // one binding that ties this registration to charts/managed/mariadb.
             .Chart(MariaDbServers.ChartName)
+            // ⚠ The same seven days CyberCloud.DBforPostgreSQL/servers claims. Two managed relational
+            // databases whose recovery windows differed would be a difference a tenant has to look up.
+            .SupportsSoftDelete(MariaDbServers.SoftDeleteDays)
             .SupportsTags()
             .RequiresCluster(MariaDbServers.ClusterIdPointer);
     }

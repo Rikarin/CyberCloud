@@ -112,6 +112,18 @@ public static class StorageAccounts {
     /// <summary>The chart this type is the configuration surface of.</summary>
     public const string ChartName = "managed/seaweedfs";
 
+    /// <summary>How long a deleted account can be restored for. docs/plan/06 § Tags, locks.</summary>
+    /// <remarks>
+    ///     ⚠ <b>Seven days, and this is the type docs/plan/06 § Tags, locks names first</b> — <i>"7 days
+    ///     for resources carrying data (Vault, Storage, databases)"</i>. An object-storage account
+    ///     carries more of it than anything else in the catalogue. What the window preserves is what the
+    ///     teardown leaves: deleting the volume servers' <c>StatefulSet</c> does not delete the
+    ///     <c>PersistentVolumeClaim</c>s its <c>volumeClaimTemplate</c> made, so the objects are still on
+    ///     disk; and <c>ISecretWriter</c> mints once and has no delete, so the restored account answers to
+    ///     the same access-key pair <see cref="ListKeysAction" /> handed out before the delete.
+    /// </remarks>
+    public const int SoftDeleteDays = 7;
+
     /// <summary>The pointer <c>RequiresCluster</c> names. docs/plan/06 § The hierarchy.</summary>
     public const string ClusterIdPointer = ClusterPlacement.DefaultPointer;
 

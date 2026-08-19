@@ -166,4 +166,84 @@ public sealed class ActionRoutingTests {
         response.Header("Azure-AsyncOperation").ShouldNotBeEmpty();
         response.Header("Retry-After").ShouldNotBeEmpty();
     }
+
+    // ── Soft delete's two verbs, which had no route at all ─────────────────────────────────────
+
+    /// <summary>
+    ///     ⚠ <b>A <c>POST</c> to <c>restore</c> or <c>purge</c> reaches the manager, which is what
+    ///     docs/plan/08 § Soft delete recorded as missing.</b>
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         That section says <c>RestoreAsync</c> and <c>PurgeAsync</c> <i>"exist, are implemented
+    ///         on <c>ResourceManagerService</c>, and are covered by <c>SoftDeletePathTests</c> — and
+    ///         neither has an HTTP route"</i>. These two cases are the route.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Asserted on <c>Actions</c> rather than on the status, for the reason the
+    ///         <c>listKeys</c> cases above give.</b> The fake manager answers <c>202</c> to every write,
+    ///         so a status assertion would hold for a gateway that had routed this to <c>DELETE</c>.
+    ///         The only evidence that dispatch was reached with this action name is the name arriving.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>What this deliberately does NOT prove:</b> that a restore restores. The fork from
+    ///         <c>ActionAsync</c> to <c>RestoreAsync</c> is inside the manager — see the remarks on
+    ///         <c>SoftDeletePolicy.RestoreAction</c> for why it is there and not in
+    ///         <c>DispatchStage</c> — and this suite substitutes the manager.
+    ///         <c>SoftDeletePathTests.TheRestoreAndPurgeActionsReachTheSoftDeletePath</c> drives the
+    ///         real one through the same method this test proves the gateway calls.
+    ///     </para>
+    /// </remarks>
+    /// <param name="action">The reserved action name.</param>
+    [Theory]
+    [InlineData("restore")]
+    [InlineData("purge")]
+    public async Task SoftDeletesTwoVerbsAreReachableOnPost(string action) {
+        var gateway = new GatewayHarness();
+
+        var response = await gateway.SendAsync(
+            "POST",
+            GatewayHarness.ResourcePath(GatewayHarness.TenantA) + "/" + action,
+            gateway.Token(GatewayHarness.TenantA)
+        );
+
+        gateway.Manager.Actions.ShouldContain(
+            action,
+            $"the router did not bind POST …/{action} to the action path, so soft delete's "
+            + "recovery window is still reachable from in-process callers only."
+        );
+
+        response.Status.ShouldBe(StatusCodes.Status202Accepted, response.Body);
+    }
+
+    /// <summary>
+    ///     ⚠ <b>The gateway knows nothing about soft delete, and this is the assertion that keeps it
+    ///     that way.</b>
+    /// </summary>
+    /// <remarks>
+    ///     The two names above route because <see cref="IProviderRegistry" /> declares them —
+    ///     <c>RouteStage</c> answers the canonical <c>404</c> to any action
+    ///     <c>ResourceTypeRegistration.TryGetAction</c> does not know, and <c>ProviderBuilder</c> is
+    ///     what puts them there for a type with a window. <c>undelete</c> is spelled like a soft-delete
+    ///     verb and is declared by nothing, so it must be refused. If somebody later moves the fork
+    ///     into <c>DispatchStage</c> as a name test, this case is what goes red — and the defect it
+    ///     names is that a type with <b>no</b> recovery window would advertise one.
+    /// </remarks>
+    [Fact]
+    public async Task AnActionSpelledLikeASoftDeleteVerbAndDeclaredByNothingIsStillTheCanonical404() {
+        var gateway = new GatewayHarness();
+
+        var response = await gateway.SendAsync(
+            "POST",
+            GatewayHarness.ResourcePath(GatewayHarness.TenantA) + "/undelete",
+            gateway.Token(GatewayHarness.TenantA)
+        );
+
+        response.Status.ShouldBe(StatusCodes.Status404NotFound, response.Body);
+
+        gateway.Manager.Actions.ShouldBeEmpty(
+            "an action the registry does not declare reached the manager. The registry is the only "
+            + "list of what a type can be asked to do — docs/plan/08 § The provider registry."
+        );
+    }
 }

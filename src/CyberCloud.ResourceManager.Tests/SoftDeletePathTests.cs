@@ -880,7 +880,143 @@ public sealed class SoftDeletePathTests(ResourceManagerCluster cluster) {
         (await Purge(address)).IsSuccess.ShouldBeTrue();
     }
 
+    // ── The way in, which is the half docs/plan/08 recorded as owed ────────────────────────────
+
+    /// <summary>
+    ///     ⚠ <b>The two verbs reached through <c>ActionAsync</c> — the method the gateway calls —
+    ///     rather than through <c>RestoreAsync</c> and <c>PurgeAsync</c> directly.</b>
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         docs/plan/08 § Soft delete: <i>"<c>RestoreAsync</c> and <c>PurgeAsync</c> exist, are
+    ///         implemented on <c>ResourceManagerService</c>, and are covered by
+    ///         <c>SoftDeletePathTests</c> — and neither has an HTTP route."</i> Every other case in this
+    ///         file calls the two methods directly, which is exactly why that stayed true while the file
+    ///         stayed green: a suite that only calls the method cannot notice that nothing else does.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>This is the join, and it is the one assertion here that a gateway test cannot
+    ///         make.</b> <c>ActionRoutingTests.SoftDeletesTwoVerbsAreReachableOnPost</c> proves the
+    ///         gateway dispatches <c>POST …/restore</c> to <c>IResourceManager.ActionAsync</c> against a
+    ///         <i>substituted</i> manager; this proves the real one answers that call by restoring.
+    ///         Neither half is worth anything alone — a route to a method that refuses, or a method
+    ///         nothing routes to, is what was already shipped.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>What would have to break for this to go red:</b> the fork in <c>ActionAsync</c>
+    ///         going away, which sends the request down the ordinary action path — where step 1's index
+    ///         resolve refuses a parked binding and the answer is the canonical <c>404</c>. So the
+    ///         assertion is the <i>success</i>, and the resource being addressable again afterwards; a
+    ///         status-only assertion would pass for a manager that answered <c>202</c> and did nothing.
+    ///     </para>
+    /// </remarks>
+    [Fact]
+    public async Task TheRestoreAndPurgeActionsReachTheSoftDeletePath() {
+        ResourceManagerCluster.ResetDoubles();
+        var address = VaultAddress("through-the-front-door");
+
+        var created = await Create(address, size: 6);
+        await Converge(created.GetValueOrThrow());
+
+        var deleted = await Delete(address);
+        await Converge(deleted.GetValueOrThrow());
+
+        (await Read(address)).IsFailure.ShouldBeTrue("the parked resource is not addressable");
+
+        var restored = await Action(address, SoftDeletePolicy.RestoreAction);
+        restored.IsSuccess.ShouldBeTrue(
+            $"POST …/{SoftDeletePolicy.RestoreAction} did not reach RestoreAsync: "
+            + $"{restored.Error?.Code} — {restored.Error?.Message}. A ResourceNotFound here is the "
+            + "ordinary action path answering for a resource whose index binding is parked, which is "
+            + "what happens when ActionAsync stops forking."
+        );
+
+        await Converge(restored.GetValueOrThrow());
+
+        var read = await Read(address);
+        read.IsSuccess.ShouldBeTrue("the restore put the resource back at its old address");
+        read.GetValueOrThrow().Id.ShouldBe(
+            created.GetValueOrThrow().Resource.Id,
+            "the same resource came back — the GUID is the identity"
+        );
+
+        // ⚠ The size the CREATE wrote, not one the action supplied — the restore re-applies the stored
+        // body, so the POST carried no desired state of its own and could not have.
+        read.GetValueOrThrow().Properties.ShouldContain("\"size\":6");
+
+        // ── And the other verb, on the same resource, from the same door ────────────────────────
+        var deletedAgain = await Delete(address);
+        await Converge(deletedAgain.GetValueOrThrow());
+
+        var purged = await Action(address, SoftDeletePolicy.PurgeAction);
+        purged.IsSuccess.ShouldBeTrue(
+            $"POST …/{SoftDeletePolicy.PurgeAction} did not reach PurgeAsync: {purged.Error?.Message}"
+        );
+
+        await Converge(purged.GetValueOrThrow());
+
+        // ⚠ The name is free again, which is the only observable that separates a purge from a
+        // second soft delete. The index is asked rather than the resource, because a purged resource
+        // answers 404 either way.
+        (await cluster.Index(address).GetAsync()).GetValueOrThrow()
+            .State.ShouldBe(
+                IndexEntryState.Free,
+                "the purge ended the window, so the name is reusable — docs/plan/08 § Soft delete."
+            );
+    }
+
+    /// <summary>
+    ///     ⚠ <b>A type with no recovery window declares neither verb, so neither has a route.</b>
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>The registry is what gates the route, and this is the assertion that says so.</b>
+    ///     <c>RouteStage</c> answers the canonical <c>404</c> to an action
+    ///     <c>ResourceTypeRegistration.TryGetAction</c> does not know, so the two names being absent
+    ///     here is the whole reason <c>POST …/restore</c> on a hard-delete type is refused at the
+    ///     gateway. Asserting it on the registration rather than over HTTP is deliberate: this is the
+    ///     fact the gateway reads, and it is the one that changes if <c>ProviderBuilder</c> ever
+    ///     synthesises the pair unconditionally.
+    /// </remarks>
+    [Fact]
+    public void AHardDeleteTypeDeclaresNeitherReservedActionAndASoftDeleteTypeDeclaresBoth() {
+        cluster.Registry.TryGetType(ConformingReconciler.TypeName, out var hardDelete).ShouldBeTrue();
+
+        hardDelete.SoftDeleteDays.ShouldBe(0, "the widget is the hard-delete half of this file's pair");
+        hardDelete.TryGetAction(SoftDeletePolicy.RestoreAction, out _).ShouldBeFalse();
+        hardDelete.TryGetAction(SoftDeletePolicy.PurgeAction, out _).ShouldBeFalse();
+
+        cluster.Registry.TryGetType(TestingProvider.VaultTypeName, out var softDelete).ShouldBeTrue();
+
+        softDelete.TryGetAction(SoftDeletePolicy.RestoreAction, out var restore).ShouldBeTrue();
+        softDelete.TryGetAction(SoftDeletePolicy.PurgeAction, out var purge).ShouldBeTrue();
+
+        // ⚠ DIFFERENT PERMISSIONS, WHICH IS THE SEPARATION THE WINDOW IS MADE OF. A purge published
+        // under `delete` would advertise a right every deleter already holds — the caller the window
+        // exists to protect against, because they are the one whose delete parked the resource.
+        restore.Permission.ShouldBe(softDelete.WritePermission);
+        purge.Permission.ShouldBe(softDelete.PurgePermission);
+        purge.Permission.ShouldNotBe(softDelete.DeletePermission);
+
+        // Both answer 202, so the generated document pairs Azure-AsyncOperation with Retry-After.
+        restore.LongRunning.ShouldBeTrue();
+        purge.LongRunning.ShouldBeTrue();
+
+        // ⚠ And neither names a handler, which ProviderBuilder.Action refuses alongside longRunning.
+        // A handler here would be one nothing invokes: ActionAsync forks before it resolves anything.
+        restore.HandlerType.ShouldBeNull();
+        purge.HandlerType.ShouldBeNull();
+    }
+
     // ── Helpers ────────────────────────────────────────────────────────────────────────────────
+
+    /// <summary>Invokes an action the way <c>DispatchStage</c> does.</summary>
+    /// <param name="address">The resource.</param>
+    /// <param name="action">The action name, as the URL's last segment spells it.</param>
+    Task<Result<WriteAccepted>> Action(ResourceId address, string action) =>
+        cluster.Manager.ActionAsync(
+            Request(address) with { Verb = WriteVerb.Post, Action = action },
+            TestContext.Current.CancellationToken
+        );
 
     Task<Result<WriteAccepted>> Create(ResourceId address, int size = 2, bool? purgeProtection = null) =>
         cluster.Manager.WriteAsync(

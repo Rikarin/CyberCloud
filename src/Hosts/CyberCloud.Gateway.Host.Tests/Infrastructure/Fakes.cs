@@ -40,8 +40,22 @@ sealed class OneTypeRegistry : IProviderRegistry {
                 // ⚠ A synchronous, secret-carrying action, because the 200-versus-202 branch and the
                 // no-store header only exist for one. `restart` above stays long-running-shaped so
                 // both branches of DispatchStage.ActionAsync are covered by real declarations.
-                new("listKeys", ActionKind.Post, "listKeys", true)
-            ]
+                new("listKeys", ActionKind.Post, "listKeys", true),
+                // ⚠ THE TWO THE PLATFORM SYNTHESISES, COPIED HERE RATHER THAN BUILT HERE, AND THE
+                // COPY IS WHAT THIS FIXTURE CAN HONESTLY OFFER. ProviderBuilder.SoftDeleteActionsOf
+                // appends exactly these two to every type declaring SupportsSoftDelete; this
+                // assembly holds no ProviderBuilder — GatewayIsolationTests is why — so the fixture
+                // states the same shape by hand. What that means for a reader: a gateway case using
+                // these proves the ROUTE (stage 6 admits a declared action, dispatch forwards it),
+                // and proves nothing about whether the registry declares them. That half is
+                // RegistryDeclarationTests, and the two meet at ResourceTypeRegistration.Actions.
+                new(SoftDeletePolicy.RestoreAction, ActionKind.Post, "write", false) { LongRunning = true },
+                new(SoftDeletePolicy.PurgeAction, ActionKind.Post, SoftDeletePolicy.DefaultPurgePermission, false) {
+                    LongRunning = true
+                }
+            ],
+            SoftDeleteDays = 7,
+            PurgePermission = SoftDeletePolicy.DefaultPurgePermission
         }
     ];
 

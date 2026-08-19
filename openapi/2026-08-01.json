@@ -1122,6 +1122,158 @@
       "x-cybercloud-resource-type": "CyberCloud.ContainerRegistry/registries",
       "x-cybercloud-action": "listCredentials"
     },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.ContainerRegistry/registries/{resourceName}/purge": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "post": {
+        "operationId": "CyberCloud_ContainerRegistry_registries_Purge",
+        "summary": "purge a CyberCloud.ContainerRegistry/registries.",
+        "description": "An action never creates: a POST to a name that does not exist is a 404 — docs/plan/08 § The write path, end to end. This action is long-running: it answers 202 and an operation to poll, like every other write.",
+        "responses": {
+          "202": {
+            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "headers": {
+              "Azure-AsyncOperation": {
+                "description": "The absolute URL of the operation to poll.",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "Retry-After": {
+                "description": "Seconds to wait before the first poll.",
+                "required": true,
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "purge",
+        "x-cybercloud-secret": false,
+        "x-cybercloud-long-running": true
+      },
+      "x-cybercloud-resource-type": "CyberCloud.ContainerRegistry/registries",
+      "x-cybercloud-action": "purge"
+    },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.ContainerRegistry/registries/{resourceName}/restore": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "post": {
+        "operationId": "CyberCloud_ContainerRegistry_registries_Restore",
+        "summary": "restore a CyberCloud.ContainerRegistry/registries.",
+        "description": "An action never creates: a POST to a name that does not exist is a 404 — docs/plan/08 § The write path, end to end. This action is long-running: it answers 202 and an operation to poll, like every other write.",
+        "responses": {
+          "202": {
+            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "headers": {
+              "Azure-AsyncOperation": {
+                "description": "The absolute URL of the operation to poll.",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "Retry-After": {
+                "description": "Seconds to wait before the first poll.",
+                "required": true,
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "write",
+        "x-cybercloud-secret": false,
+        "x-cybercloud-long-running": true
+      },
+      "x-cybercloud-resource-type": "CyberCloud.ContainerRegistry/registries",
+      "x-cybercloud-action": "restore"
+    },
     "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.ContainerService/managedClusters/{managedClustersName}/agentPools/{resourceName}": {
       "parameters": [
         {
@@ -2067,7 +2219,7 @@
       "delete": {
         "operationId": "CyberCloud_DBforMySQL_servers_Delete",
         "summary": "Delete a CyberCloud.DBforMySQL/servers.",
-        "description": "The delete is permanent: this type declares no soft-delete window.",
+        "description": "A deleted CyberCloud.DBforMySQL/servers is recoverable for 7 day(s) — docs/plan/06 § Tags, locks. Its data plane is torn down, so nothing keeps running and nothing keeps being metered for compute; its stored state and its volumes are kept, so a restore re-applies exactly what was there. Its old address answers 404 for the whole window, its name is held, and its quota stays committed so that a restore cannot fail against an allowance spent since. Restore it, or purge it to end the window early — a purge needs 'purge', which is a separate right from 'delete'.",
         "responses": {
           "202": {
             "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
@@ -2116,8 +2268,8 @@
           }
         },
         "x-cybercloud-permission": "delete",
-        "x-cybercloud-soft-delete-days": 0,
-        "x-cybercloud-purge-permission": ""
+        "x-cybercloud-soft-delete-days": 7,
+        "x-cybercloud-purge-permission": "purge"
       },
       "x-cybercloud-resource-type": "CyberCloud.DBforMySQL/servers",
       "x-cybercloud-display": {
@@ -2130,8 +2282,8 @@
       "x-cybercloud-supports-tags": true,
       "x-cybercloud-requires-cluster": true,
       "x-cybercloud-cluster-id-pointer": "/properties/clusterId",
-      "x-cybercloud-soft-delete-days": 0,
-      "x-cybercloud-purge-permission": "",
+      "x-cybercloud-soft-delete-days": 7,
+      "x-cybercloud-purge-permission": "purge",
       "x-cybercloud-purge-protection-pointer": "",
       "x-cybercloud-meters": [
         {
@@ -2239,6 +2391,158 @@
       },
       "x-cybercloud-resource-type": "CyberCloud.DBforMySQL/servers",
       "x-cybercloud-action": "listKeys"
+    },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.DBforMySQL/servers/{resourceName}/purge": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "post": {
+        "operationId": "CyberCloud_DBforMySQL_servers_Purge",
+        "summary": "purge a CyberCloud.DBforMySQL/servers.",
+        "description": "An action never creates: a POST to a name that does not exist is a 404 — docs/plan/08 § The write path, end to end. This action is long-running: it answers 202 and an operation to poll, like every other write.",
+        "responses": {
+          "202": {
+            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "headers": {
+              "Azure-AsyncOperation": {
+                "description": "The absolute URL of the operation to poll.",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "Retry-After": {
+                "description": "Seconds to wait before the first poll.",
+                "required": true,
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "purge",
+        "x-cybercloud-secret": false,
+        "x-cybercloud-long-running": true
+      },
+      "x-cybercloud-resource-type": "CyberCloud.DBforMySQL/servers",
+      "x-cybercloud-action": "purge"
+    },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.DBforMySQL/servers/{resourceName}/restore": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "post": {
+        "operationId": "CyberCloud_DBforMySQL_servers_Restore",
+        "summary": "restore a CyberCloud.DBforMySQL/servers.",
+        "description": "An action never creates: a POST to a name that does not exist is a 404 — docs/plan/08 § The write path, end to end. This action is long-running: it answers 202 and an operation to poll, like every other write.",
+        "responses": {
+          "202": {
+            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "headers": {
+              "Azure-AsyncOperation": {
+                "description": "The absolute URL of the operation to poll.",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "Retry-After": {
+                "description": "Seconds to wait before the first poll.",
+                "required": true,
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "write",
+        "x-cybercloud-secret": false,
+        "x-cybercloud-long-running": true
+      },
+      "x-cybercloud-resource-type": "CyberCloud.DBforMySQL/servers",
+      "x-cybercloud-action": "restore"
     },
     "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.DBforPostgreSQL/servers/{resourceName}": {
       "parameters": [
@@ -2429,7 +2733,7 @@
       "delete": {
         "operationId": "CyberCloud_DBforPostgreSQL_servers_Delete",
         "summary": "Delete a CyberCloud.DBforPostgreSQL/servers.",
-        "description": "The delete is permanent: this type declares no soft-delete window.",
+        "description": "A deleted CyberCloud.DBforPostgreSQL/servers is recoverable for 7 day(s) — docs/plan/06 § Tags, locks. Its data plane is torn down, so nothing keeps running and nothing keeps being metered for compute; its stored state and its volumes are kept, so a restore re-applies exactly what was there. Its old address answers 404 for the whole window, its name is held, and its quota stays committed so that a restore cannot fail against an allowance spent since. Restore it, or purge it to end the window early — a purge needs 'purge', which is a separate right from 'delete'.",
         "responses": {
           "202": {
             "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
@@ -2478,8 +2782,8 @@
           }
         },
         "x-cybercloud-permission": "delete",
-        "x-cybercloud-soft-delete-days": 0,
-        "x-cybercloud-purge-permission": ""
+        "x-cybercloud-soft-delete-days": 7,
+        "x-cybercloud-purge-permission": "purge"
       },
       "x-cybercloud-resource-type": "CyberCloud.DBforPostgreSQL/servers",
       "x-cybercloud-display": {
@@ -2492,8 +2796,8 @@
       "x-cybercloud-supports-tags": true,
       "x-cybercloud-requires-cluster": true,
       "x-cybercloud-cluster-id-pointer": "/properties/clusterId",
-      "x-cybercloud-soft-delete-days": 0,
-      "x-cybercloud-purge-permission": "",
+      "x-cybercloud-soft-delete-days": 7,
+      "x-cybercloud-purge-permission": "purge",
       "x-cybercloud-purge-protection-pointer": "",
       "x-cybercloud-meters": [
         {
@@ -2602,6 +2906,158 @@
       },
       "x-cybercloud-resource-type": "CyberCloud.DBforPostgreSQL/servers",
       "x-cybercloud-action": "listKeys"
+    },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.DBforPostgreSQL/servers/{resourceName}/purge": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "post": {
+        "operationId": "CyberCloud_DBforPostgreSQL_servers_Purge",
+        "summary": "purge a CyberCloud.DBforPostgreSQL/servers.",
+        "description": "An action never creates: a POST to a name that does not exist is a 404 — docs/plan/08 § The write path, end to end. This action is long-running: it answers 202 and an operation to poll, like every other write.",
+        "responses": {
+          "202": {
+            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "headers": {
+              "Azure-AsyncOperation": {
+                "description": "The absolute URL of the operation to poll.",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "Retry-After": {
+                "description": "Seconds to wait before the first poll.",
+                "required": true,
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "purge",
+        "x-cybercloud-secret": false,
+        "x-cybercloud-long-running": true
+      },
+      "x-cybercloud-resource-type": "CyberCloud.DBforPostgreSQL/servers",
+      "x-cybercloud-action": "purge"
+    },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.DBforPostgreSQL/servers/{resourceName}/restore": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "post": {
+        "operationId": "CyberCloud_DBforPostgreSQL_servers_Restore",
+        "summary": "restore a CyberCloud.DBforPostgreSQL/servers.",
+        "description": "An action never creates: a POST to a name that does not exist is a 404 — docs/plan/08 § The write path, end to end. This action is long-running: it answers 202 and an operation to poll, like every other write.",
+        "responses": {
+          "202": {
+            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "headers": {
+              "Azure-AsyncOperation": {
+                "description": "The absolute URL of the operation to poll.",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "Retry-After": {
+                "description": "Seconds to wait before the first poll.",
+                "required": true,
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "write",
+        "x-cybercloud-secret": false,
+        "x-cybercloud-long-running": true
+      },
+      "x-cybercloud-resource-type": "CyberCloud.DBforPostgreSQL/servers",
+      "x-cybercloud-action": "restore"
     },
     "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.DocumentDB/accounts/{resourceName}": {
       "parameters": [
@@ -4364,6 +4820,158 @@
       },
       "x-cybercloud-resource-type": "CyberCloud.Monitor/workspaces",
       "x-cybercloud-action": "listKeys"
+    },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Monitor/workspaces/{resourceName}/purge": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "post": {
+        "operationId": "CyberCloud_Monitor_workspaces_Purge",
+        "summary": "purge a CyberCloud.Monitor/workspaces.",
+        "description": "An action never creates: a POST to a name that does not exist is a 404 — docs/plan/08 § The write path, end to end. This action is long-running: it answers 202 and an operation to poll, like every other write.",
+        "responses": {
+          "202": {
+            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "headers": {
+              "Azure-AsyncOperation": {
+                "description": "The absolute URL of the operation to poll.",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "Retry-After": {
+                "description": "Seconds to wait before the first poll.",
+                "required": true,
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "purge",
+        "x-cybercloud-secret": false,
+        "x-cybercloud-long-running": true
+      },
+      "x-cybercloud-resource-type": "CyberCloud.Monitor/workspaces",
+      "x-cybercloud-action": "purge"
+    },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Monitor/workspaces/{resourceName}/restore": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "post": {
+        "operationId": "CyberCloud_Monitor_workspaces_Restore",
+        "summary": "restore a CyberCloud.Monitor/workspaces.",
+        "description": "An action never creates: a POST to a name that does not exist is a 404 — docs/plan/08 § The write path, end to end. This action is long-running: it answers 202 and an operation to poll, like every other write.",
+        "responses": {
+          "202": {
+            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "headers": {
+              "Azure-AsyncOperation": {
+                "description": "The absolute URL of the operation to poll.",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "Retry-After": {
+                "description": "Seconds to wait before the first poll.",
+                "required": true,
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "write",
+        "x-cybercloud-secret": false,
+        "x-cybercloud-long-running": true
+      },
+      "x-cybercloud-resource-type": "CyberCloud.Monitor/workspaces",
+      "x-cybercloud-action": "restore"
     },
     "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Network/publicIpAddresses/{resourceName}": {
       "parameters": [
@@ -6991,7 +7599,7 @@
       "delete": {
         "operationId": "CyberCloud_Storage_accounts_Delete",
         "summary": "Delete a CyberCloud.Storage/accounts.",
-        "description": "The delete is permanent: this type declares no soft-delete window.",
+        "description": "A deleted CyberCloud.Storage/accounts is recoverable for 7 day(s) — docs/plan/06 § Tags, locks. Its data plane is torn down, so nothing keeps running and nothing keeps being metered for compute; its stored state and its volumes are kept, so a restore re-applies exactly what was there. Its old address answers 404 for the whole window, its name is held, and its quota stays committed so that a restore cannot fail against an allowance spent since. Restore it, or purge it to end the window early — a purge needs 'purge', which is a separate right from 'delete'.",
         "responses": {
           "202": {
             "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
@@ -7040,8 +7648,8 @@
           }
         },
         "x-cybercloud-permission": "delete",
-        "x-cybercloud-soft-delete-days": 0,
-        "x-cybercloud-purge-permission": ""
+        "x-cybercloud-soft-delete-days": 7,
+        "x-cybercloud-purge-permission": "purge"
       },
       "x-cybercloud-resource-type": "CyberCloud.Storage/accounts",
       "x-cybercloud-display": {
@@ -7054,8 +7662,8 @@
       "x-cybercloud-supports-tags": true,
       "x-cybercloud-requires-cluster": true,
       "x-cybercloud-cluster-id-pointer": "/properties/clusterId",
-      "x-cybercloud-soft-delete-days": 0,
-      "x-cybercloud-purge-permission": "",
+      "x-cybercloud-soft-delete-days": 7,
+      "x-cybercloud-purge-permission": "purge",
       "x-cybercloud-purge-protection-pointer": "",
       "x-cybercloud-meters": [
         {
@@ -7167,6 +7775,158 @@
       },
       "x-cybercloud-resource-type": "CyberCloud.Storage/accounts",
       "x-cybercloud-action": "listKeys"
+    },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Storage/accounts/{resourceName}/purge": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "post": {
+        "operationId": "CyberCloud_Storage_accounts_Purge",
+        "summary": "purge a CyberCloud.Storage/accounts.",
+        "description": "An action never creates: a POST to a name that does not exist is a 404 — docs/plan/08 § The write path, end to end. This action is long-running: it answers 202 and an operation to poll, like every other write.",
+        "responses": {
+          "202": {
+            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "headers": {
+              "Azure-AsyncOperation": {
+                "description": "The absolute URL of the operation to poll.",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "Retry-After": {
+                "description": "Seconds to wait before the first poll.",
+                "required": true,
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "purge",
+        "x-cybercloud-secret": false,
+        "x-cybercloud-long-running": true
+      },
+      "x-cybercloud-resource-type": "CyberCloud.Storage/accounts",
+      "x-cybercloud-action": "purge"
+    },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Storage/accounts/{resourceName}/restore": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "post": {
+        "operationId": "CyberCloud_Storage_accounts_Restore",
+        "summary": "restore a CyberCloud.Storage/accounts.",
+        "description": "An action never creates: a POST to a name that does not exist is a 404 — docs/plan/08 § The write path, end to end. This action is long-running: it answers 202 and an operation to poll, like every other write.",
+        "responses": {
+          "202": {
+            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "headers": {
+              "Azure-AsyncOperation": {
+                "description": "The absolute URL of the operation to poll.",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "Retry-After": {
+                "description": "Seconds to wait before the first poll.",
+                "required": true,
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "write",
+        "x-cybercloud-secret": false,
+        "x-cybercloud-long-running": true
+      },
+      "x-cybercloud-resource-type": "CyberCloud.Storage/accounts",
+      "x-cybercloud-action": "restore"
     },
     "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Terminal/consoles/{resourceName}": {
       "parameters": [

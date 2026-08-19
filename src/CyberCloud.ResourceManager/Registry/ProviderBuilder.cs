@@ -185,6 +185,28 @@ sealed class ProviderBuilder(string providerNamespace) : IResourceTypeBuilder {
             );
         }
 
+        // ⚠ THE TWO NAMES THE PLATFORM OWNS, REFUSED HERE RATHER THAN OVERWRITTEN IN Build.
+        //
+        // `restore` and `purge` are synthesised for every type that declares a window (see Build), and
+        // ResourceManagerService.ActionAsync hands both to RestoreAsync/PurgeAsync instead of running
+        // the ordinary action path. A provider that declared its own `restore` would therefore ship an
+        // action whose declared permission, body and handler are all ignored — the same silent trap the
+        // long-running-handler refusal above exists for, with the extra edge that the two declarations
+        // would be indistinguishable in the generated document. So it is a silo-start failure with a
+        // sentence in it, and it is refused for EVERY type rather than only for the ones with a window:
+        // a type that declares `restore` today and adds SupportsSoftDelete tomorrow would otherwise
+        // break on the second change, which is not where anybody would look.
+        if (SoftDeletePolicy.IsReserved(name)) {
+            throw new ArgumentException(
+                $"'{name}' is reserved. The platform declares '{SoftDeletePolicy.RestoreAction}' and "
+                + $"'{SoftDeletePolicy.PurgeAction}' on every type that declares SupportsSoftDelete, and "
+                + "the resource manager dispatches both to its own soft-delete path rather than to an "
+                + "action handler — so a provider's declaration of either would publish a permission, a "
+                + "body and a handler that nothing reads. docs/plan/08 § Soft delete.",
+                nameof(name)
+            );
+        }
+
         var draft = Open(nameof(Action));
 
         foreach (var existing in draft.Actions) {
@@ -318,7 +340,7 @@ sealed class ProviderBuilder(string providerNamespace) : IResourceTypeBuilder {
                     ApiVersions = [.. draft.ApiVersions.OrderBy(x => x.Version)],
                     ReconcilerType = draft.ReconcilerType,
                     Meters = [.. draft.Meters],
-                    Actions = [.. draft.Actions],
+                    Actions = SoftDeleteActionsOf(draft),
                     ReadPermission = draft.ReadPermission,
                     WritePermission = draft.WritePermission,
                     DeletePermission = draft.DeletePermission,
@@ -341,6 +363,62 @@ sealed class ProviderBuilder(string providerNamespace) : IResourceTypeBuilder {
         }
 
         return built.DrainToImmutable();
+    }
+
+    /// <summary>
+    ///     The type's declared actions, plus <c>restore</c> and <c>purge</c> when it declares a window.
+    /// </summary>
+    /// <param name="draft">The type being frozen.</param>
+    /// <returns>The declared actions unchanged, or those actions followed by the two.</returns>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>THIS IS THE WHOLE OF THE HTTP BINDING FOR SOFT DELETE, AND IT IS A REGISTRY FACT
+    ///         RATHER THAN A ROUTE.</b> docs/plan/08 § Soft delete records that
+    ///         <c>RestoreAsync</c> and <c>PurgeAsync</c> <i>"exist, are implemented on
+    ///         <c>ResourceManagerService</c>, and are covered by <c>SoftDeletePathTests</c> — and
+    ///         neither has an HTTP route"</i>. Two lines here give them one, because a <c>POST</c> to
+    ///         <c>{resource}/{action}</c> already routes: <c>GatewayRouter.ResolveAction</c> parses the
+    ///         path, <c>RouteStage</c> answers <c>404</c> unless
+    ///         <see cref="ResourceTypeRegistration.TryGetAction" /> knows the name, and
+    ///         <c>DispatchStage</c> hands it to <c>IResourceManager.ActionAsync</c>. Declaring the
+    ///         names is what opens all three, for exactly the types that have a window.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>And it reaches ADR-012's four surfaces without any of them learning what soft
+    ///         delete is.</b> <c>OpenApiEmitter</c> emits one path per entry in this array,
+    ///         <c>DocumentReader</c> reads them back off <c>x-cybercloud-action</c>, and the CLI verb,
+    ///         the SDK method and the portal's action button follow. Adding paths to a published
+    ///         api-version is additive, so the compatibility gate has nothing to say — it refuses
+    ///         removals, not additions.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Both are long-running and neither names a handler, which is what
+    ///         <see cref="Action" />'s own refusal requires.</b> A restore starts an
+    ///         <c>OperationKind.Restore</c> over the stored body and a purge starts an
+    ///         <c>OperationKind.Purge</c>; both answer <c>202</c> with an operation to poll. There is no
+    ///         handler to name because neither runs on the action path at all — see
+    ///         <see cref="SoftDeletePolicy.RestoreAction" />.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The permissions are the type's own and are deliberately different from each
+    ///         other.</b> A restore takes <c>WritePermission</c> — it puts a resource back — and a purge
+    ///         takes <c>PurgePermission</c>, which
+    ///         <see cref="SoftDeletePolicy.DefaultPurgePermission" /> keeps out of <c>delete</c> so that
+    ///         the window protects against the caller who could already delete. Publishing them under
+    ///         one permission would make the generated document describe a separation the manager
+    ///         enforces and the surfaces deny.
+    ///     </para>
+    /// </remarks>
+    static ImmutableArray<ActionRegistration> SoftDeleteActionsOf(TypeDraft draft) {
+        if (draft.SoftDeleteDays <= 0) {
+            return [.. draft.Actions];
+        }
+
+        return [
+            .. draft.Actions,
+            new(SoftDeletePolicy.RestoreAction, ActionKind.Post, draft.WritePermission, false) { LongRunning = true },
+            new(SoftDeletePolicy.PurgeAction, ActionKind.Post, draft.PurgePermission, false) { LongRunning = true }
+        ];
     }
 
     /// <summary>

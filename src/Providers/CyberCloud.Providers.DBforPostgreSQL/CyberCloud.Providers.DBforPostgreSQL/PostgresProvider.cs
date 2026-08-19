@@ -32,26 +32,38 @@ namespace CyberCloud.Providers.DBforPostgreSQL;
 ///         <c>servers/roles</c> or <c>servers/firewallRules</c> — each is its own type with its own
 ///         reconciler, and declaring one with no reconciler puts a type in the registry that answers
 ///         <c>202</c> and converges nothing; no <c>regenerateKeys</c>, for the reason on
-///         <c>PostgresServers.ListKeysAction</c>; and no <c>SupportsSoftDelete</c>, which is the one
-///         omission this type has an argument against — see below.
+///         <c>PostgresServers.ListKeysAction</c>. <c>SupportsSoftDelete</c> <b>is</b> declared now — see
+///         below for what changed.
 ///     </para>
 ///     <para>
-///         ⚠ <b><c>SupportsSoftDelete</c> is exactly what docs/plan/06 § Tags, locks asks for on a type
-///         carrying data</b> — <i>"a dropped production database is not a support ticket you want to have
-///         to say no to"</i>, with 7 days named. It is not declared because the manager did not read
-///         <c>SoftDeleteDays</c>: <c>DeleteTearsDownTheDataPlaneAndTheResourceIsGone</c> asserts the
-///         objects are gone and the name is released, and no recovery path exists to restore them from.
-///         Declaring a recovery window the platform does not honour would be a promise made to the one type
-///         whose users would test it. This is a <c>CyberCloud.ResourceManager</c> gap that the first
-///         data-carrying provider surfaces, which is the measurement docs/plan/25 § R1 asks a provider to
-///         produce. ⚠ <b>THAT REASON HAS EXPIRED AND THE DECLARATION IS NOW A ONE-LINE DECISION RATHER THAN
-///         A BLOCKED ONE.</b> docs/plan/08 § Soft delete is built: a <c>DELETE</c> of a type declaring a
-///         window parks the resource at <c>IndexEntryState.SoftDeleted</c> so its old address answers the
-///         canonical <c>404</c>, holds its name, keeps its committed quota, moves its ReBAC parent edge to
-///         the subscription and drops its direct role assignments; a restore reverses it and a purge —
-///         under its own permission — ends it. So the question this type still owes an answer to is the
-///         provider's own: <i>does the data this type carries deserve a recovery window, and how long</i>,
-///         which is a claim about the data and not about the platform.
+///         ⚠ <b><c>SupportsSoftDelete(7)</c>, and the seven days are this type's own claim about its
+///         data rather than a platform default.</b> docs/plan/06 § Tags, locks asks for exactly this on a
+///         type carrying data — <i>"a dropped production database is not a support ticket you want to have
+///         to say no to"</i>, with 7 days named. It went undeclared while the manager did not read
+///         <c>SoftDeleteDays</c>, because a recovery window the platform does not honour is a promise made
+///         to the one type whose users would test it. docs/plan/08 § Soft delete is now built: a
+///         <c>DELETE</c> of a type declaring a window parks the resource at
+///         <c>IndexEntryState.SoftDeleted</c> so its old address answers the canonical <c>404</c>, holds
+///         its name, keeps its committed quota, moves its ReBAC parent edge to the subscription and drops
+///         its direct role assignments; a restore re-applies the stored desired state and a purge — under
+///         its own <c>purge</c> permission, which no role holding <c>delete</c> gets for free — ends it.
+///     </para>
+///     <para>
+///         ⚠ <b>What a restored server gets back, and it is the whole reason the answer is yes.</b> The
+///         teardown runs, so the <c>Cluster</c> and its pods go; what it does not remove is what a restore
+///         is made of. Deleting a CloudNativePG <c>Cluster</c> leaves the
+///         <c>PersistentVolumeClaim</c>s its instances were given, so the tables are still on disk; the
+///         resource grain keeps the body the create wrote, so the restore re-applies it byte for byte; and
+///         the committed quota is held rather than returned, so a restore cannot fail against an allowance
+///         the tenant has spent in the meantime. A tenant who drops production here is charged for the
+///         disks for seven days and can have the database back, which is the trade docs/plan/06 named.
+///     </para>
+///     <para>
+///         ⚠ <b>No <c>purgeProtectionPointer</c>, which is a decision and not an omission.</b> Purge
+///         protection is a flag that cannot be turned off once on, so it has to be a property of this
+///         type's body in every published api-version. <c>PostgresServers.Schema2026</c> declares none,
+///         and adding one to a published api-version is a schema change rather than a registry one. A
+///         server is therefore purgeable by a holder of <c>purge</c> before its window ends.
 ///     </para>
 /// </remarks>
 public sealed class PostgresProvider : IResourceProvider {
@@ -111,6 +123,10 @@ public sealed class PostgresProvider : IResourceProvider {
             // one binding that ties this registration to charts/managed/postgres. See the remarks on
             // PostgresServers.ChartName for why this is a declaration and not a render path.
             .Chart(PostgresServers.ChartName)
+            // ⚠ docs/plan/06 § Tags, locks' seven days, claimed by the type that carries the data. The
+            // window costs the tenant the PVCs the teardown leaves behind and the quota this type keeps
+            // committed — see the remarks on this class for why that is the right price for a database.
+            .SupportsSoftDelete(PostgresServers.SoftDeleteDays)
             .SupportsTags()
             .RequiresCluster(PostgresServers.ClusterIdPointer);
     }

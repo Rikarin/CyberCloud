@@ -945,6 +945,24 @@
           "secret": true,
           "fields": [],
           "confirmOnly": true
+        },
+        {
+          "name": "purge",
+          "label": "Purge",
+          "permission": "purge",
+          "longRunning": true,
+          "secret": false,
+          "fields": [],
+          "confirmOnly": true
+        },
+        {
+          "name": "restore",
+          "label": "Restore",
+          "permission": "write",
+          "longRunning": true,
+          "secret": false,
+          "fields": [],
+          "confirmOnly": true
         }
       ]
     },
@@ -1443,8 +1461,8 @@
       "supportsTags": true,
       "requiresCluster": true,
       "clusterIdPointer": "/properties/clusterId",
-      "softDeleteDays": 0,
-      "purgePermission": "",
+      "softDeleteDays": 7,
+      "purgePermission": "purge",
       "purgeProtectionPointer": "",
       "fields": [
         {
@@ -1727,6 +1745,24 @@
           "secret": true,
           "fields": [],
           "confirmOnly": true
+        },
+        {
+          "name": "purge",
+          "label": "Purge",
+          "permission": "purge",
+          "longRunning": true,
+          "secret": false,
+          "fields": [],
+          "confirmOnly": true
+        },
+        {
+          "name": "restore",
+          "label": "Restore",
+          "permission": "write",
+          "longRunning": true,
+          "secret": false,
+          "fields": [],
+          "confirmOnly": true
         }
       ]
     },
@@ -1771,8 +1807,8 @@
       "supportsTags": true,
       "requiresCluster": true,
       "clusterIdPointer": "/properties/clusterId",
-      "softDeleteDays": 0,
-      "purgePermission": "",
+      "softDeleteDays": 7,
+      "purgePermission": "purge",
       "purgeProtectionPointer": "",
       "fields": [
         {
@@ -2204,6 +2240,24 @@
           "permission": "listKeys",
           "longRunning": false,
           "secret": true,
+          "fields": [],
+          "confirmOnly": true
+        },
+        {
+          "name": "purge",
+          "label": "Purge",
+          "permission": "purge",
+          "longRunning": true,
+          "secret": false,
+          "fields": [],
+          "confirmOnly": true
+        },
+        {
+          "name": "restore",
+          "label": "Restore",
+          "permission": "write",
+          "longRunning": true,
+          "secret": false,
           "fields": [],
           "confirmOnly": true
         }
@@ -4026,6 +4080,24 @@
           "secret": true,
           "fields": [],
           "confirmOnly": true
+        },
+        {
+          "name": "purge",
+          "label": "Purge",
+          "permission": "purge",
+          "longRunning": true,
+          "secret": false,
+          "fields": [],
+          "confirmOnly": true
+        },
+        {
+          "name": "restore",
+          "label": "Restore",
+          "permission": "write",
+          "longRunning": true,
+          "secret": false,
+          "fields": [],
+          "confirmOnly": true
         }
       ]
     },
@@ -5198,8 +5270,8 @@
       "supportsTags": true,
       "requiresCluster": true,
       "clusterIdPointer": "/properties/clusterId",
-      "softDeleteDays": 0,
-      "purgePermission": "",
+      "softDeleteDays": 7,
+      "purgePermission": "purge",
       "purgeProtectionPointer": "",
       "fields": [
         {
@@ -5495,6 +5567,24 @@
           "permission": "listKeys",
           "longRunning": false,
           "secret": true,
+          "fields": [],
+          "confirmOnly": true
+        },
+        {
+          "name": "purge",
+          "label": "Purge",
+          "permission": "purge",
+          "longRunning": true,
+          "secret": false,
+          "fields": [],
+          "confirmOnly": true
+        },
+        {
+          "name": "restore",
+          "label": "Restore",
+          "permission": "write",
+          "longRunning": true,
+          "secret": false,
           "fields": [],
           "confirmOnly": true
         }

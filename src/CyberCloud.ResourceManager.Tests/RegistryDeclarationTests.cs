@@ -208,4 +208,85 @@ public sealed class RegistryDeclarationTests {
         restart.Request.ShouldBeNull();
         restart.LongRunning.ShouldBeFalse();
     }
+
+    // ── The two action names the platform owns ─────────────────────────────────────────────────
+
+    /// <summary>
+    ///     ⚠ <b>A provider that declares <c>restore</c> or <c>purge</c> is refused at silo start.</b>
+    /// </summary>
+    /// <remarks>
+    ///     The platform synthesises both for every type with a window and
+    ///     <c>ResourceManagerService.ActionAsync</c> dispatches them to its own soft-delete path, so a
+    ///     provider's declaration would publish a permission, a request shape and a handler that
+    ///     nothing reads — a declaration that is documentation of a behaviour it does not control. The
+    ///     refusal covers a type with <b>no</b> window too: a type that declared <c>restore</c> today
+    ///     and added <c>SupportsSoftDelete</c> tomorrow would otherwise break on the second change,
+    ///     which is not where anybody would look for the cause.
+    /// </remarks>
+    /// <param name="reserved">The reserved name, in the spelling a provider might try.</param>
+    [Theory]
+    [InlineData("restore")]
+    [InlineData("purge")]
+    [InlineData("Restore")]
+    public void AProviderMayNotDeclareEitherOfTheTwoActionsThePlatformOwns(string reserved) =>
+        Should.Throw<ArgumentException>(
+                () => Build(b => b
+                    .ResourceType("reserving")
+                    .ApiVersion("2026-08-01", ResourceSchema.Of([new("/location", SchemaKind.Text)]))
+                    .Action(reserved, ActionKind.Post, "write"))
+            )
+            .Message.ShouldContain("is reserved");
+
+    /// <summary>
+    ///     ⚠ <b>Declaring a window is what gives the type its two actions — and therefore its two
+    ///     HTTP routes.</b>
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         docs/plan/08 § Soft delete recorded <c>RestoreAsync</c> and <c>PurgeAsync</c> as
+    ///         reachable <i>"from in-process callers and tests only"</i>. The gateway's stage 6 answers
+    ///         the canonical <c>404</c> to any action
+    ///         <see cref="ResourceTypeRegistration.TryGetAction" /> does not know, so this array is the
+    ///         route: it is also what <c>OpenApiEmitter</c> turns into a published path and what the
+    ///         <c>cyc</c> verb, the SDK method and the portal button are generated from.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The declaration order matters and is asserted.</b> The two are appended after the
+    ///         provider's own, so a type that already published actions keeps their positions — the
+    ///         emitters sort by name, but <c>Actions</c> itself is what a reader of the registry sees.
+    ///     </para>
+    /// </remarks>
+    [Fact]
+    public void ATypeWithAWindowGetsRestoreAndPurgeAndATypeWithoutOneGetsNeither() {
+        var withWindow = Build(b => b
+            .ResourceType("parkable")
+            .ApiVersion("2026-08-01", ResourceSchema.Of([new("/location", SchemaKind.Text)]))
+            .Permissions("look", "change", "remove")
+            .Action("restart", ActionKind.Post, "change")
+            .SupportsSoftDelete(7, "destroy"));
+
+        withWindow.TryGetType(new("CyberCloud.Declaring", "parkable"), out var parkable).ShouldBeTrue();
+
+        parkable.Actions.Select(x => x.Name).ShouldBe(["restart", "restore", "purge"]);
+
+        parkable.TryGetAction("restore", out var restore).ShouldBeTrue();
+        restore.Permission.ShouldBe("change", "a restore puts a resource back, so it takes write");
+        restore.LongRunning.ShouldBeTrue();
+
+        parkable.TryGetAction("purge", out var purge).ShouldBeTrue();
+
+        // ⚠ THE PERMISSION THE TYPE NAMED, NOT THE DEFAULT AND NOT `remove`. A purge published under
+        // the delete permission would advertise a right every deleter already holds, and the window
+        // exists to protect against exactly that caller — the one whose delete parked the resource.
+        purge.Permission.ShouldBe("destroy");
+        purge.LongRunning.ShouldBeTrue();
+
+        var without = Build(b => b
+            .ResourceType("goesForGood")
+            .ApiVersion("2026-08-01", ResourceSchema.Of([new("/location", SchemaKind.Text)]))
+            .Action("restart", ActionKind.Post, "write"));
+
+        without.TryGetType(new("CyberCloud.Declaring", "goesForGood"), out var gone).ShouldBeTrue();
+        gone.Actions.Select(x => x.Name).ShouldBe(["restart"]);
+    }
 }

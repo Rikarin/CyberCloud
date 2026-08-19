@@ -248,6 +248,18 @@ while delete is irreversible is worse than one advertising nothing. **That insti
 fix is not to make them declare it.** Honour it first. Four decisions come before any code, and each
 one decides the ones after it.
 
+⚠ **STATUS, BECAUSE THE PARAGRAPH ABOVE IS THE PROBLEM STATEMENT AND NOT THE STATE OF THE TREE.** The
+mechanism is built and the manager reads `SoftDeleteDays`, so the reason to decline has expired.
+Four types now declare a window, all at seven days: `CyberCloud.DBforPostgreSQL/servers`,
+`CyberCloud.DBforMySQL/servers`, `CyberCloud.Storage/accounts` and
+`CyberCloud.ContainerRegistry/registries`, plus `CyberCloud.Monitor/workspaces`, which also declares a
+purge-protection pointer. Two declines stand and are decisions rather than omissions:
+`CyberCloud.Cache/redis`, because a Valkey cache's data is reconstructible from its source of truth
+and a window would charge a tenant for a recovery nobody asked for; and
+`CyberCloud.ContainerService/managedClusters`, whose own refusal reads *"a soft-deleted cluster whose
+worker VMs are gone is not a cluster anybody can be handed back."* `CyberCloud.KeyVault/vaults` is
+the strongest case in the catalogue and does not exist yet.
+
 **Decided: a soft-deleted resource stops resolving at its address. It does not move to a new one,
 because this platform has no address for it to move to.**
 
@@ -286,9 +298,36 @@ operator finds the thing they are about to restore. Here, the recoverable resour
 not addressable, and there is no second collection it is addressable *in*. Concretely:
 
 - **`RestoreAsync` and `PurgeAsync` exist, are implemented on `ResourceManagerService`, and are
-  covered by `SoftDeletePathTests` — and neither has an HTTP route.** `DispatchStage` calls
-  `ReadAsync`, `WriteAsync` and `DeleteAsync` and nothing else, so both verbs are reachable from
-  in-process callers and tests only.
+  covered by `SoftDeletePathTests` — and neither had an HTTP route.** `DispatchStage` called
+  `ReadAsync`, `WriteAsync` and `DeleteAsync` and nothing else, so both verbs were reachable from
+  in-process callers and tests only. ⚠ **CLOSED, and the fix was a registry fact rather than a
+  route.** `POST {resource}/restore` and `POST {resource}/purge` now reach them, and no file in
+  `CyberCloud.Gateway.Host` changed to make that true. `ProviderBuilder.Build` appends two
+  `ActionRegistration`s to every type that declares `SupportsSoftDelete` —
+  `SoftDeletePolicy.RestoreAction` and `PurgeAction`, both long-running, under the type's *write* and
+  *purge* permissions respectively — and three things follow from that one array. The gateway's stage
+  6 already answers the canonical `404` to an action `TryGetAction` does not know, so the route opens
+  for exactly the types with a window and for no others; `DispatchStage` already forwards a declared
+  action to `IResourceManager.ActionAsync`; and ADR-012's four surfaces already emit one path per
+  declared action, so the OpenAPI path, the `cyc` verb, the SDK method and the portal's action button
+  all appeared without an emitter learning what soft delete is. Ten paths were added to `2026-08-01`
+  and the compatibility gate reported nothing, because it refuses removals rather than additions.
+
+  ⚠ **The fork lives in `ResourceManagerService.ActionAsync`, above its own step 1 and below the
+  gateway**, and both halves of that placement are load-bearing. Above step 1 because step 1 reads
+  `IResourceIndexGrain.ResolveAsync`, which refuses a parked binding — for exactly the resources these
+  two verbs exist to act on, resolution answers "not found", and that refusal is the canonical `404`
+  and must not be relaxed. Below the gateway because the two test suites meet at `IResourceManager`:
+  a fork in `DispatchStage` would bind the route for HTTP callers only and would be provable only
+  against the *substituted* manager. `ActionRoutingTests.SoftDeletesTwoVerbsAreReachableOnPost` proves
+  the gateway calls `ActionAsync` with the name; `SoftDeletePathTests.TheRestoreAndPurgeActionsReach`
+  `TheSoftDeletePath` proves the real manager answers that call by restoring the resource at its old
+  address from the body the create wrote. Deleting the fork turns the second one red and nothing else.
+
+  ⚠ **A provider may not declare either name** — `ProviderBuilder.Action` throws. A provider's
+  `restore` would publish a permission, a request shape and a handler that nothing reads, and the two
+  declarations would be indistinguishable in the generated document. The refusal covers types with no
+  window too, so that adding `SupportsSoftDelete` to an existing type is never the change that breaks.
 - **There is no list.** `IResourceIndexGrain.ResolveSoftDeletedAsync` answers "which resource was
   parked under this name", which is the question you can only ask if you already know the name. A
   tenant who has forgotten it has no way to enumerate the window. ⚠ **And the resource manager has no
@@ -302,6 +341,35 @@ rather than solved in passing: it needs either a subscription-scoped path shape 
 `ResourceId.ParsePath` can parse, or a collection endpoint that is not a `ResourceId` at all. Until
 then the recovery window is real, tested and reachable by an operator with the resource's own path —
 and invisible to the tenant it exists for.
+
+⚠ **AND THE ENUMERATION SOURCE A `ListAsync` WOULD READ DOES NOT EXIST EITHER, WHICH IS THE FINDING
+THE NEXT ATTEMPT NEEDS BEFORE IT STARTS.** The obvious source is `IResourceGroupGrain`, which owns
+membership and declares `ListAsync`, `BeginCreateAsync`, `CompleteCreateAsync`, `BeginDeleteAsync`,
+`CompleteDeleteAsync` and `ListOrphansAsync` — the resource-group half of § Two-phase create in
+[06](06-tenancy-and-resource-model.md), fully implemented and covered by `TwoPhaseCreateTests` and
+`DeleteOrderingTests`. **Nothing in production calls any of them.** `CyberCloud.ResourceManager`
+touches that grain in exactly one place, `Defaults.cs`, and only for `GetAsync` to read the group's
+lock; the write path claims the index, links the ReBAC parent edge and submits desired state without
+ever recording the resource as a member. So a `ListAsync` built over the group's inventory today
+would answer with an empty collection for every group in the platform, and it would answer *correctly*
+— which is the worst shape a listing can have, because an empty list is indistinguishable from a
+group with nothing in it. The reaper reminder § Two-phase create describes is in the same position:
+`ListOrphansAsync` is what it reads and nothing reads it.
+
+**So `ListAsync` is two changes and only one of them is a listing.** The first is wiring the
+membership choreography into the write path and the operation grain — `BeginCreateAsync` alongside the
+index claim, `CompleteCreateAsync` at the terminal state, `BeginDeleteAsync` at the delete's accept,
+`CompleteDeleteAsync` where the hard delete and the purge already clear the resource grain. That is a
+new failure mode rather than a new method: a write to a resource group that was never created would
+start being refused, which is Azure's behaviour and is not today's. The second is the collection
+endpoint itself, and it needs an authorization filter built from `Check` per member — ReBAC's
+`ListObjects` is M2, [24](24-roadmap.md) § Phase 3 — or the listing becomes a way to read another
+tenant's resource names. **A third cost is worth stating because it is invisible from the manager:**
+a collection path reaches ADR-012's surfaces and none of them can carry it. `DocumentReader.TypesOf`
+keys a resource type on `x-cybercloud-resource-type` with no `x-cybercloud-action`, so a collection
+path item carrying that extension reads as a *second* type with the same name — `CliEmitter` throws on
+the duplicate command, `SdkEmitter` throws on the duplicate model. The reserved-action route above
+needed no emitter change precisely because it is an action; a list is not.
 
 **Decided: the name is held for the whole window.** Azure holds it — *"You can't reuse the name of a
 key vault that was soft-deleted, until the retention period expires"*, DNS record included. Releasing
