@@ -681,6 +681,16 @@ public sealed partial class ContainerRegistryResource {
     /// <summary>ListCredentials. ⚠ An action never creates — a POST to a name that does not exist is a 404. ⚠ The response carries secret material and is always audited.</summary>
     public partial Task<Response<ListCredentialsResult>> ListCredentialsAsync(
         CancellationToken cancellationToken = default);
+
+    /// <summary>Purge. ⚠ An action never creates — a POST to a name that does not exist is a 404.</summary>
+    public partial Task<Operation<System.Text.Json.JsonElement>> PurgeAsync(
+        WaitUntil waitUntil,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Restore. ⚠ An action never creates — a POST to a name that does not exist is a 404.</summary>
+    public partial Task<Operation<System.Text.Json.JsonElement>> RestoreAsync(
+        WaitUntil waitUntil,
+        CancellationToken cancellationToken = default);
 }
 
 /// <summary>The Container registries in one resource group.</summary>
@@ -1178,7 +1188,7 @@ public sealed partial class MariaDBServerResource {
         MariaDBServerData data,
         CancellationToken cancellationToken = default);
 
-    /// <summary>Deletes the resource. ⚠ Permanent: this type declares no soft-delete window.</summary>
+    /// <summary>Deletes the resource. ⚠ Recoverable for 7 day(s): the resource keeps its quota and its data, and its name is held. Purge to end that window early — a separate permission, 'purge'.</summary>
     public partial Task<Operation> DeleteAsync(
         WaitUntil waitUntil,
         CancellationToken cancellationToken = default);
@@ -1213,6 +1223,16 @@ public sealed partial class MariaDBServerResource {
 
     /// <summary>ListKeys. ⚠ An action never creates — a POST to a name that does not exist is a 404. ⚠ The response carries secret material and is always audited.</summary>
     public partial Task<Response<ListKeysResult>> ListKeysAsync(
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Purge. ⚠ An action never creates — a POST to a name that does not exist is a 404.</summary>
+    public partial Task<Operation<System.Text.Json.JsonElement>> PurgeAsync(
+        WaitUntil waitUntil,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Restore. ⚠ An action never creates — a POST to a name that does not exist is a 404.</summary>
+    public partial Task<Operation<System.Text.Json.JsonElement>> RestoreAsync(
+        WaitUntil waitUntil,
         CancellationToken cancellationToken = default);
 }
 
@@ -1473,7 +1493,7 @@ public sealed partial class PostgreSQLServerResource {
         PostgreSQLServerData data,
         CancellationToken cancellationToken = default);
 
-    /// <summary>Deletes the resource. ⚠ Permanent: this type declares no soft-delete window.</summary>
+    /// <summary>Deletes the resource. ⚠ Recoverable for 7 day(s): the resource keeps its quota and its data, and its name is held. Purge to end that window early — a separate permission, 'purge'.</summary>
     public partial Task<Operation> DeleteAsync(
         WaitUntil waitUntil,
         CancellationToken cancellationToken = default);
@@ -1504,6 +1524,16 @@ public sealed partial class PostgreSQLServerResource {
 
     /// <summary>ListKeys. ⚠ An action never creates — a POST to a name that does not exist is a 404. ⚠ The response carries secret material and is always audited.</summary>
     public partial Task<Response<ListKeysResult>> ListKeysAsync(
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Purge. ⚠ An action never creates — a POST to a name that does not exist is a 404.</summary>
+    public partial Task<Operation<System.Text.Json.JsonElement>> PurgeAsync(
+        WaitUntil waitUntil,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Restore. ⚠ An action never creates — a POST to a name that does not exist is a 404.</summary>
+    public partial Task<Operation<System.Text.Json.JsonElement>> RestoreAsync(
+        WaitUntil waitUntil,
         CancellationToken cancellationToken = default);
 }
 
@@ -2631,6 +2661,16 @@ public sealed partial class MonitorWorkspaceResource {
     /// <summary>ListKeys. ⚠ An action never creates — a POST to a name that does not exist is a 404. ⚠ The response carries secret material and is always audited.</summary>
     public partial Task<Response<ListKeysResult>> ListKeysAsync(
         CancellationToken cancellationToken = default);
+
+    /// <summary>Purge. ⚠ An action never creates — a POST to a name that does not exist is a 404.</summary>
+    public partial Task<Operation<System.Text.Json.JsonElement>> PurgeAsync(
+        WaitUntil waitUntil,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Restore. ⚠ An action never creates — a POST to a name that does not exist is a 404.</summary>
+    public partial Task<Operation<System.Text.Json.JsonElement>> RestoreAsync(
+        WaitUntil waitUntil,
+        CancellationToken cancellationToken = default);
 }
 
 /// <summary>The Monitor workspaces in one resource group.</summary>
@@ -3674,7 +3714,7 @@ public sealed partial class StorageAccountResource {
         StorageAccountData data,
         CancellationToken cancellationToken = default);
 
-    /// <summary>Deletes the resource. ⚠ Permanent: this type declares no soft-delete window.</summary>
+    /// <summary>Deletes the resource. ⚠ Recoverable for 7 day(s): the resource keeps its quota and its data, and its name is held. Purge to end that window early — a separate permission, 'purge'.</summary>
     public partial Task<Operation> DeleteAsync(
         WaitUntil waitUntil,
         CancellationToken cancellationToken = default);
@@ -3701,6 +3741,16 @@ public sealed partial class StorageAccountResource {
 
     /// <summary>ListKeys. ⚠ An action never creates — a POST to a name that does not exist is a 404. ⚠ The response carries secret material and is always audited.</summary>
     public partial Task<Response<ListKeysResult>> ListKeysAsync(
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Purge. ⚠ An action never creates — a POST to a name that does not exist is a 404.</summary>
+    public partial Task<Operation<System.Text.Json.JsonElement>> PurgeAsync(
+        WaitUntil waitUntil,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Restore. ⚠ An action never creates — a POST to a name that does not exist is a 404.</summary>
+    public partial Task<Operation<System.Text.Json.JsonElement>> RestoreAsync(
+        WaitUntil waitUntil,
         CancellationToken cancellationToken = default);
 }
 

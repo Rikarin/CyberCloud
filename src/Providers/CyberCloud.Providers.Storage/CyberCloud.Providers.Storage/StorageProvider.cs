@@ -185,6 +185,10 @@ public sealed class StorageProvider : IResourceProvider {
                 + "servers, a filer and a scalable S3 gateway."
             )
             .Chart(StorageAccounts.ChartName)
+            // ⚠ docs/plan/06 § Tags, locks names Storage first among the types carrying data. What the
+            // window costs the tenant is the volume servers' PVCs and this type's committed quota; what
+            // it buys is every object still on disk. See the remarks on this class.
+            .SupportsSoftDelete(StorageAccounts.SoftDeleteDays)
             .SupportsTags()
             .RequiresCluster(StorageAccounts.ClusterIdPointer)
             // ── The child, docs/plan/15 § The three kinds' other half ─────────────────────────
