@@ -39,16 +39,28 @@ public sealed class ValkeyCase : IProviderCaseSource {
             InvalidBody = cluster => WithoutVersion(ValkeyCaches.Body(cluster)),
             InvalidBodyTarget = "/properties/version",
             ActionName = ValkeyCaches.ListKeysAction,
-            // ⚠ ONE OBJECT, and the count is a fact about the operator rather than about this suite. A
-            // RedisFailover expands into a StatefulSet, a Deployment, three Services and two
-            // ConfigMaps; none of them is applied by this provider, so none of them belongs here. A
-            // case listing an object the provider does not apply fails every world-facing assertion for
-            // the case's reason rather than the provider's.
-            Objects = (id, ns) => [ValkeyCaches.FailoverRef(ns, id.Name)],
+            // ⚠ TWO OBJECTS, and the count is a fact about the operator rather than about this suite.
+            // A RedisFailover expands into a StatefulSet, a Deployment, three Services and two
+            // ConfigMaps; none of them is applied by this provider, so none of them belongs here. The
+            // Secret does, because spotahome generates nothing and this platform mints the
+            // requirepass — see ValkeyCacheReconciler. A case listing an object the provider does not
+            // apply fails every world-facing assertion for the case's reason rather than the
+            // provider's; a case OMITTING one it does apply stops asserting anything about it, which is
+            // how a Secret nobody wrote went unnoticed for the life of this type.
+            // ⚠ In apply order, which is also the order the cluster-backed half derives its CRD stubs
+            // from — the Secret is core-group and needs none.
+            Objects = (id, ns) => [
+                ValkeyCaches.CredentialSecretRef(ns, id.Name),
+                ValkeyCaches.FailoverRef(ns, id.Name)
+            ],
             // This platform mints or computes everything this type's actions hand back, so no operator
             // writes an object any action reads. Stated rather than defaulted — see
             // ProviderConformanceCase.OperatorWritten.
             OperatorWritten = static (_, _) => [],
+            // ⚠ ONE FUNCTION OVER TWO KINDS, WHICH IS WHY ValkeyCaches.Matches DISPATCHES ON `kind`
+            // AND RETURNS FALSE FOR ONE IT DOES NOT KNOW. A Matches that defaulted to true for an
+            // unrecognised document would report a Secret that was never applied as converged — which
+            // is a cache the platform calls ready and the operator cannot start a pod for.
             ObjectMatchesDesired = match => {
                 using var desired = JsonDocument.Parse(match.DesiredJson);
                 return ValkeyCaches.Matches(match.ObjectJson, desired.RootElement);
