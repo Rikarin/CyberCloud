@@ -139,6 +139,7 @@ partial class Build
         ("Analyzer coverage", "every project under src/ references CyberCloud.Analyzers — not in docs/plan/23"),
         ("Plan citations", "no docs/plan/NN:LINE citation in a tracked file — docs/code-documentation-style.md § Citing the plan"),
         ("Code citations", "every <c>…Tests</c> and <c>…Tests.Method</c> in a tracked file names something this repository compiles — not in docs/plan/23"),
+        ("Bundle", "every charts/bundle/ component declares a complete pin on ADR-011's allow-list, and every group/version charts/managed/ renders is served by exactly one of them — not in docs/plan/23"),
     ];
 
     // ── The assemblies the gates read ─────────────────────────────────────────────────────────
@@ -222,8 +223,8 @@ partial class Build
         // as it goes, and those lines are unreadable above the header that says what they belong to.
         Log.Information(
             "Architecture: {Count} gates — the ten in docs/plan/23 § The architecture gates, plus "
-            + "Action handlers, Analyzer coverage, Plan citations and Code citations, which that "
-            + "table does not list",
+            + "Action handlers, Analyzer coverage, Plan citations, Code citations and Bundle, which "
+            + "that table does not list",
             ArchitectureGates.Length);
 
         var outcomes = new List<GateOutcome>
@@ -242,6 +243,7 @@ partial class Build
             AnalyzerCoverageGate(),
             PlanCitationGate(),
             CodeCitationGate(),
+            BundleGate(),
         };
 
         Report(outcomes);
