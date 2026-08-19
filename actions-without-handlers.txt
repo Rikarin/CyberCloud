@@ -36,7 +36,7 @@
 
 # ── The credential does not exist, because nothing mints one ───────────────────────────────────
 #
-# These four declare `listKeys` and there is no key. The engine is deployed with no authentication
+# These three declare `listKeys` and there is no key. The engine is deployed with no authentication
 # configured at all, so there is nothing for a handler to read and nothing it could honestly return:
 # a handler that answered with an empty `password` against a schema saying the field is required
 # would publish a credential that authenticates nothing, which is worse than the refusal. Closing
@@ -58,13 +58,17 @@ CyberCloud.Messaging/kafkaClusters            listKeys
 # it and there is no user and no password — recorded in charts/managed/nats/conformance.yaml § owed.
 CyberCloud.Messaging/natsClusters             listKeys
 
-# ⚠ THE ONE ON THIS LIST WHERE THE MISSING SECRET IS ALSO A LIVE DEFECT. The RedisFailover this
-# provider applies sets `auth.secretPath` to `{name}-auth` and NOTHING WRITES THAT SECRET — not the
-# reconciler, not the operator, which generates nothing. So the cache never comes up and the resource
-# sits InProgress; `listKeys` having no key to read is the second symptom rather than the problem.
-# Closing it is the same reconciler change as the three above and it is worth more than they are,
-# because it is the difference between the type working and not.
-CyberCloud.Cache/redis                        listKeys
+# ⚠ CyberCloud.Cache/redis CLOSED THIS ROW AND THE OTHER THREE ARE NOT LIKE IT. It was the one entry
+# here where the missing Secret was also a live defect: the RedisFailover sets `auth.secretPath` to
+# `{name}-auth`, nothing wrote that Secret, and spotahome generates nothing — so the cache never came
+# up and the resource sat InProgress while the platform called it converged. Closing it took the
+# reconciler minting through ISecretWriter and rendering the Secret from what the vault returned,
+# which is the one place in the tree this platform mints a data service's credential rather than
+# reading the operator's. The three above are the opposite shape: their engines are deployed with no
+# authentication configured at all, so the reconciler change each needs is to CONFIGURE a user first
+# — a `spec.configuration.users`, a `KafkaUser` and a listener change, an `authorization` block — and
+# only then mint. That is a change every already-connected client can see, which is why none of them
+# is a copy of the Valkey row.
 
 # ── The reading the action returns comes from a pipeline that is not built ──────────────────────
 

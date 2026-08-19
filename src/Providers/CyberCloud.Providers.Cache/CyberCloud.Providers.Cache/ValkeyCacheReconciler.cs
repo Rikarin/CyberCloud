@@ -1,3 +1,7 @@
+// ⚠ For `Result<string>`, which EnsurePasswordAsync returns. `CyberCloud.Core.Resources` is global
+// here and `CyberCloud.Core` itself is not; the `ErrorCode` alias in GlobalUsings still wins over the
+// `Orleans.ErrorCode` this import would otherwise put back in play.
+using CyberCloud.Core;
 using CyberCloud.Core.Time;
 
 namespace CyberCloud.Providers.Cache;
@@ -24,7 +28,8 @@ namespace CyberCloud.Providers.Cache;
 ///             one, and the cross-tenant one that catches what the structural one cannot.
 ///         </item>
 ///         <item>
-///             <b>Bounded.</b> One apply and one read, on the caller's token. ⚠ There is no wait for
+///             <b>Bounded.</b> One vault round trip, two applies and two reads, on the caller's
+///             token. ⚠ There is no wait for
 ///             the cache to be <i>ready</i>: the operator has a StatefulSet, three Sentinels and a
 ///             failover election to run, and clause 3's budget is thirty seconds, so readiness is
 ///             <see cref="ReconcileOutcome.InProgress" /> and the reminder comes back.
@@ -44,12 +49,30 @@ namespace CyberCloud.Providers.Cache;
 ///         where that is written down as owed.
 ///     </para>
 ///     <para>
-///         ⚠ <b>One object, where the first provider had two, and the difference is worth stating.</b>
-///         A <c>RedisFailover</c> expands into a StatefulSet, a Deployment, three Services and two
-///         ConfigMaps — all of them the operator's, none of them this provider's. The reconciler
-///         applies the one object it owns and reads back the one object it owns; the rest is the
-///         operator's business and is exactly what <see cref="ReconcileOutcome.Converged" /> is
+///         ⚠ <b>Two objects, and one of them is the reason the other works.</b> A
+///         <c>RedisFailover</c> expands into a StatefulSet, a Deployment, three Services and two
+///         ConfigMaps — all of them the operator's, none of them this provider's. What this provider
+///         owns is the CR and the <c>Secret</c> the CR's <c>spec.auth.secretPath</c> names; the rest is
+///         the operator's business and is exactly what <see cref="ReconcileOutcome.Converged" /> is
 ///         careful not to claim.
+///     </para>
+///     <para>
+///         ⚠ <b>THE <c>Secret</c> IS APPLIED FIRST, AND IT IS NOT AN ORDERING PREFERENCE.</b>
+///         spotahome generates nothing: <c>service/k8s/util.go</c>'s <c>GetRedisPassword</c> reads
+///         <c>secret.Data["password"]</c> out of the namespace and returns an error when the object is
+///         not there, so a <c>RedisFailover</c> applied ahead of its <c>Secret</c> is a cache whose
+///         pods fail from the first reconcile the operator performs. This is <b>the one data type in
+///         the tree whose credential this platform mints</b> rather than reads back from an operator —
+///         see <c>ValkeyCaches.RedisFailoverJson</c> for why the exception is spotahome's doing.
+///     </para>
+///     <para>
+///         ⚠ <b>A SECOND PASS MUST NOT ROTATE THE PASSWORD, AND THAT IS WHAT
+///         <see cref="EnsurePasswordAsync" /> IS FOR.</b> <see cref="ValkeyCaches.GeneratePassword" />
+///         answers differently every call; what reaches the rendered <c>Secret</c> is never that value
+///         but what <see cref="ISecretResolver.ResolveAsync" /> returns afterwards, which is the value
+///         the <i>first</i> pass minted, on every pass. A reconciler that rendered its own candidate
+///         would hand a running Valkey a <c>requirepass</c> its clients have never been told, once per
+///         reminder, forever — and every surface would report success.
 ///     </para>
 ///     <para>
 ///         ⚠ <b>An <see cref="ApplyResult.Conflict" /> is reported and retried rather than failed and
@@ -82,21 +105,161 @@ public sealed class ValkeyCacheReconciler(IClock clock) : IResourceReconciler {
         }
 
         var name = context.Id.Name;
-        var target = ValkeyCaches.FailoverRef(context.Namespace, name);
+
+        // ── The credential, BEFORE the CR that names it. See the remarks. ──────────────────────
+        var password = await EnsurePasswordAsync(context, cancellationToken);
+
+        if (password.TryGetError(out var passwordError)) {
+            return ReconcileOutcome.FromFailure(passwordError);
+        }
+
+        context.Log.Report(
+            "applying-credential",
+            $"applying the requirepass of '{name}' to {context.Namespace}",
+            20
+        );
+
+        if (await Apply(
+                context,
+                cluster,
+                ValkeyCaches.SecretKind,
+                ValkeyCaches.CredentialSecretJson(name, password.GetValueOrThrow()),
+                "the credential Secret",
+                cancellationToken
+            ) is { } credentialProblem) {
+            return credentialProblem;
+        }
 
         context.Log.Report(
             "applying",
             $"applying the RedisFailover '{name}' to {context.Namespace}",
-            40
+            50
         );
 
+        if (await Apply(
+                context,
+                cluster,
+                ValkeyCaches.FailoverKind,
+                ValkeyCaches.RedisFailoverJson(name, context.Desired),
+                "the RedisFailover",
+                cancellationToken
+            ) is { } failoverProblem) {
+            return failoverProblem;
+        }
+
+        // ── Clause 4. Everything above this line is a claim; this is the reading. ───────────────
+        //
+        // ⚠ BOTH. A read-back of the RedisFailover alone would report Converged for a cache whose
+        // Secret apply was silently swallowed — which is precisely the state this whole change exists
+        // to end: a resource the platform calls done and an operator that cannot start a single pod.
+        foreach (var target in Targets(context.Namespace, name)) {
+            var read = await cluster.GetAsync(target, cancellationToken);
+
+            if (read.TryGetError(out var readError)) {
+                return readError.Code == ErrorCode.ResourceNotFound
+                    ? ReconcileOutcome.InProgress(
+                        $"'{target}' was applied and is not readable back yet",
+                        TimeSpan.FromSeconds(5)
+                    )
+                    : ReconcileOutcome.FromFailure(readError);
+            }
+
+            if (!ValkeyCaches.Matches(read.GetValueOrThrow().Json, context.Desired)) {
+                return ReconcileOutcome.InProgress(
+                    $"'{target}' is readable and does not yet carry the desired spec",
+                    TimeSpan.FromSeconds(5)
+                );
+            }
+        }
+
+        context.Log.Report("ready", $"the objects of '{name}' read back as desired", 100);
+
+        return ReconcileOutcome.Converged;
+    }
+
+    /// <summary>
+    ///     Puts a <c>requirepass</c> in the vault if there is not one there, and reads back whichever
+    ///     one is now authoritative.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>THE MINT AND THE READ ARE BOTH HERE, AND THE READ IS WHAT MAKES THE PASS
+    ///         IDEMPOTENT.</b> <see cref="ValkeyCaches.GeneratePassword" /> produces a different value
+    ///         every call — it has to, or a credential would be derivable from a resource id. What
+    ///         reaches the rendered <c>Secret</c> is never that value: it is what
+    ///         <see cref="ISecretResolver.ResolveAsync" /> returns afterwards, which is the password
+    ///         the <i>first</i> pass minted, on every pass. So the rendered document is byte-stable
+    ///         across passes and clause 1 holds over a generator that is not.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>On this type that property is load-bearing rather than tidy.</b> Everywhere else a
+    ///         re-minted credential produces a <c>listKeys</c> that hands out the wrong value;
+    ///         here it would also <i>overwrite</i> the <c>Secret</c> a running Valkey read its
+    ///         <c>requirepass</c> from at start-up, so every already-connected client keeps working,
+    ///         every new one is rejected, and nothing in the platform reports anything but success.
+    ///         <c>ISecretWriter.MintAsync</c>'s <c>cas=0</c> is the vault-side half of that and this
+    ///         resolve is the reconciler-side half; neither alone is enough.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>One field, so one mint and one resolve.</b> <c>ContainerRegistryReconciler</c>'s
+    ///         remarks record that <c>cas=0</c> is per <i>path</i>, so a credential set has to be one
+    ///         document; a cache has exactly one secret and the question does not arise.
+    ///     </para>
+    /// </remarks>
+    static async Task<Result<string>> EnsurePasswordAsync(
+        ReconcileContext context,
+        CancellationToken cancellationToken
+    ) {
+        var minted = await context.SecretWriter.MintAsync(
+            ValkeyCaches.SecretPath(context.Id),
+            new Dictionary<string, string>(StringComparer.Ordinal) {
+                [ValkeyCaches.PasswordField] = ValkeyCaches.GeneratePassword()
+            },
+            cancellationToken
+        );
+
+        if (minted.TryGetError(out var mintError)) {
+            return Result<string>.Failure(mintError);
+        }
+
+        if (minted.GetValueOrThrow().Minted) {
+            context.Log.Report(
+                "minting",
+                $"a new requirepass was written to the vault for '{context.Id.Name}'"
+            );
+        }
+
+        return await context.Secrets.ResolveAsync(
+            ValkeyCaches.PasswordRef(context.Id),
+            cancellationToken
+        );
+    }
+
+    /// <summary>
+    ///     Applies one object and turns anything that did not land into the outcome that comes back
+    ///     for it, or <see langword="null" /> when it landed.
+    /// </summary>
+    /// <param name="context">The pass, for its address, its api-version and its log.</param>
+    /// <param name="cluster">The connection.</param>
+    /// <param name="kind">The kind being applied.</param>
+    /// <param name="objectJson">The rendered document.</param>
+    /// <param name="what">The object, named in the message a tenant reads.</param>
+    /// <param name="cancellationToken">Cancels the apply.</param>
+    static async Task<ReconcileOutcome?> Apply(
+        ReconcileContext context,
+        IKubeClusterConnection cluster,
+        GroupVersionKind kind,
+        string objectJson,
+        string what,
+        CancellationToken cancellationToken
+    ) {
         var applied = await KubeCommand.For(cluster)
             .WithTenantId(context.Id.TenantId)
             .WithResourceId(context.Id)
             .InNamespace(context.Namespace)
-            .WithKind(ValkeyCaches.FailoverKind)
+            .WithKind(kind)
             .WithApiVersion(context.ApiVersion)
-            .ObjectJson(ValkeyCaches.RedisFailoverJson(name, context.Desired))
+            .ObjectJson(objectJson)
             .ApplyAsync(cancellationToken);
 
         if (applied.TryGetError(out var applyError)) {
@@ -131,37 +294,27 @@ public sealed class ValkeyCacheReconciler(IClock clock) : IResourceReconciler {
 
                 return ReconcileOutcome.InProgress(
                     outcome.Drift?.Describe()
-                    ?? "another field manager owns part of the RedisFailover and it was not overwritten",
+                    ?? $"another field manager owns part of {what} and it was not overwritten",
                     TimeSpan.FromSeconds(30)
                 );
 
             default:
-                break;
+                return null;
         }
-
-        // ── Clause 4. Everything above this line is a claim; this is the reading. ───────────────
-        var read = await cluster.GetAsync(target, cancellationToken);
-
-        if (read.TryGetError(out var readError)) {
-            return readError.Code == ErrorCode.ResourceNotFound
-                ? ReconcileOutcome.InProgress(
-                    $"'{target}' was applied and is not readable back yet",
-                    TimeSpan.FromSeconds(5)
-                )
-                : ReconcileOutcome.FromFailure(readError);
-        }
-
-        if (!ValkeyCaches.Matches(read.GetValueOrThrow().Json, context.Desired)) {
-            return ReconcileOutcome.InProgress(
-                $"'{target}' is readable and does not yet carry the desired spec",
-                TimeSpan.FromSeconds(5)
-            );
-        }
-
-        context.Log.Report("ready", $"the RedisFailover '{name}' reads back as desired", 100);
-
-        return ReconcileOutcome.Converged;
     }
+
+    /// <summary>Every object a cache owns, in apply order.</summary>
+    /// <param name="ns">The resource's namespace.</param>
+    /// <param name="name">The resource's own name.</param>
+    /// <remarks>
+    ///     ⚠ Static, and rebuilt on every call, because a reconciler is one singleton across every
+    ///     tenant in the process — clause 2. Memoising this into a <c>readonly</c> field is the shape
+    ///     that gets past a structural no-hidden-state check and hands tenant B tenant A's namespace.
+    /// </remarks>
+    static ObjectRef[] Targets(string ns, string name) => [
+        ValkeyCaches.CredentialSecretRef(ns, name),
+        ValkeyCaches.FailoverRef(ns, name)
+    ];
 
     /// <inheritdoc />
     public async Task<ReconcileOutcome> DeleteAsync(
@@ -176,45 +329,85 @@ public sealed class ValkeyCacheReconciler(IClock clock) : IResourceReconciler {
         }
 
         var name = context.Id.Name;
-        var target = ValkeyCaches.FailoverRef(context.Namespace, name);
 
         context.Log.Report("deleting", $"deleting the RedisFailover '{name}'");
 
-        var deleted = await KubeCommand.For(cluster)
-            .WithTenantId(context.Id.TenantId)
-            .WithResourceId(context.Id)
-            .InNamespace(context.Namespace)
-            .WithKind(ValkeyCaches.FailoverKind)
-            .WithApiVersion(context.ApiVersion)
-            .ObjectJson(ValkeyCaches.RedisFailoverJson(name, context.Desired))
-            // ⚠ Foreground rather than Background, and this is the one place this provider differs from
-            // the first on a platform default. The operator's StatefulSet, Deployment, Services and
-            // ConfigMaps are the RedisFailover's OWNED children, and `keepAfterDeletion` on the volume
-            // claim means the claim outlives them by design. A background cascade returns as soon as
-            // the CR is gone, so the teardown below would read "not found" while the pods were still
-            // running — and a resource that stops being billed while it is still serving traffic is the
-            // failure the read-back exists to prevent.
-            .DeleteAsync(CascadePolicy.Foreground, cancellationToken);
+        // ⚠ THE REVERSE OF THE APPLY ORDER, AND IT IS THE SAME ARGUMENT. The CR goes first, so the
+        // operator is still able to read the password it authenticates to the pods with while it tears
+        // them down — spotahome's checker calls GetRedisPassword on every loop, and a Secret removed
+        // underneath a live RedisFailover makes the controller error out mid-teardown against an object
+        // it is trying to remove.
+        //
+        // ⚠ THE VAULT ENTRY IS NOT DELETED, AND THAT IS ISecretWriter's RULE RATHER THAN AN OVERSIGHT.
+        // It mints and does not delete: a teardown that failed halfway and is retried must not be able
+        // to hand the next pass a different credential from the one already rendered.
+        foreach (var (kind, json, cascade) in new[] {
+                     (
+                         ValkeyCaches.FailoverKind,
+                         ValkeyCaches.RedisFailoverJson(name, context.Desired),
+                         // ⚠ Foreground rather than Background, and this is the one place this provider
+                         // differs from the first on a platform default. The operator's StatefulSet,
+                         // Deployment, Services and ConfigMaps are the RedisFailover's OWNED children,
+                         // and `keepAfterDeletion` on the volume claim means the claim outlives them by
+                         // design. A background cascade returns as soon as the CR is gone, so the
+                         // teardown below would read "not found" while the pods were still running —
+                         // and a resource that stops being billed while it is still serving traffic is
+                         // the failure the read-back exists to prevent.
+                         CascadePolicy.Foreground
+                     ),
+                     (
+                         ValkeyCaches.SecretKind,
+                         ValkeyCaches.CredentialSecretJson(name, Placeholder),
+                         // ⚠ Background, because a Secret owns nothing. A Foreground cascade here would
+                         // block on a dependent set that is always empty.
+                         CascadePolicy.Background
+                     )
+                 }) {
+            var deleted = await KubeCommand.For(cluster)
+                .WithTenantId(context.Id.TenantId)
+                .WithResourceId(context.Id)
+                .InNamespace(context.Namespace)
+                .WithKind(kind)
+                .WithApiVersion(context.ApiVersion)
+                .ObjectJson(json)
+                .DeleteAsync(cascade, cancellationToken);
 
-        if (deleted.TryGetError(out var deleteError) && deleteError.Code != ErrorCode.ResourceNotFound) {
-            return ReconcileOutcome.FromFailure(deleteError);
+            if (deleted.TryGetError(out var deleteError)
+                && deleteError.Code != ErrorCode.ResourceNotFound) {
+                return ReconcileOutcome.FromFailure(deleteError);
+            }
         }
 
-        // ⚠ Converged once the object is GONE, read back — not once the delete was issued.
-        var read = await cluster.GetAsync(target, cancellationToken);
+        // ⚠ Converged once the objects are GONE, read back — not once the deletes were issued.
+        foreach (var target in Targets(context.Namespace, name)) {
+            var read = await cluster.GetAsync(target, cancellationToken);
 
-        if (read.IsSuccess) {
-            return ReconcileOutcome.InProgress($"'{target}' is still readable", TimeSpan.FromSeconds(5));
+            if (read.IsSuccess) {
+                return ReconcileOutcome.InProgress(
+                    $"'{target}' is still readable",
+                    TimeSpan.FromSeconds(5)
+                );
+            }
+
+            if (read.Error!.Code != ErrorCode.ResourceNotFound) {
+                return ReconcileOutcome.FromFailure(read.Error);
+            }
         }
 
-        if (read.Error!.Code != ErrorCode.ResourceNotFound) {
-            return ReconcileOutcome.FromFailure(read.Error);
-        }
-
-        context.Log.Report("deleted", $"the RedisFailover '{name}' is gone", 100);
+        context.Log.Report("deleted", $"the objects of '{name}' are gone", 100);
 
         return ReconcileOutcome.Converged;
     }
+
+    /// <summary>A non-empty stand-in for the <c>requirepass</c> on the delete path.</summary>
+    /// <remarks>
+    ///     ⚠ <b>A delete addresses an object; it does not need the object's contents.</b>
+    ///     <c>KubeCommand</c> takes a body on every path, and reaching into the vault to fill one in
+    ///     would make a teardown fail for a cache whose vault entry is already unreachable — which is
+    ///     exactly the cache most likely to be being torn down. The value is never sent: the builder
+    ///     addresses by kind, namespace and name.
+    /// </remarks>
+    const string Placeholder = "deleting";
 
     /// <inheritdoc />
     public async Task<ObservedState> ObserveAsync(
@@ -225,6 +418,9 @@ public sealed class ValkeyCacheReconciler(IClock clock) : IResourceReconciler {
             return ObservedState.Absent;
         }
 
+        // ⚠ THE RedisFailover IS THE OBSERVATION, because it is applied LAST — so a cache whose CR is
+        // present is one whose credential was applied on some pass. Observing the Secret instead would
+        // report a half-built cache as existing.
         var read = await cluster.GetAsync(
             ValkeyCaches.FailoverRef(context.Namespace, context.Id.Name),
             cancellationToken
@@ -239,14 +435,29 @@ public sealed class ValkeyCacheReconciler(IClock clock) : IResourceReconciler {
         var found = read.GetValueOrThrow();
         var matches = ValkeyCaches.Matches(found.Json, context.Desired);
 
+        // ⚠ THE CREDENTIAL IS OBSERVED TOO, AND ITS ABSENCE IS DRIFT RATHER THAN ABSENCE. A cache
+        // whose Secret was deleted out from under it still exists and is still billed, and the next
+        // pod the operator restarts comes up unable to read a requirepass — which is the state drift
+        // detection is for, and the exact failure this type shipped with before the reconciler minted.
+        var credential = await cluster.GetAsync(
+            ValkeyCaches.CredentialSecretRef(context.Namespace, context.Id.Name),
+            cancellationToken
+        );
+
+        var authenticated = credential.IsSuccess
+            && ValkeyCaches.Matches(credential.GetValueOrThrow().Json, context.Desired);
+
         return new() {
             Exists = true,
             Json = found.Json,
             ObservedAt = clock.UtcNow,
             Revision = found.ResourceVersion,
-            Summary = matches
-                ? "the RedisFailover carries the desired spec"
-                : "the RedisFailover has drifted"
+            Summary = (matches, authenticated) switch {
+                (true, true) => "the RedisFailover carries the desired spec",
+                (true, false) => "the RedisFailover carries the desired spec and its requirepass "
+                    + "Secret is missing, so the operator cannot start a pod",
+                _ => "the RedisFailover has drifted"
+            }
         };
     }
 }

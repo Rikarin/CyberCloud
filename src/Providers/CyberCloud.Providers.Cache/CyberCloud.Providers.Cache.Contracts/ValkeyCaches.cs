@@ -1,6 +1,12 @@
+// ⚠ For SecretRef. It lives in CyberCloud.Core.Contracts rather than in
+// CyberCloud.ResourceManager.Contracts where it started — see its own remarks on why the [Alias]
+// stayed put through the move.
+using CyberCloud.Core.Contracts;
 using System.Collections.Frozen;
 using System.Collections.Immutable;
 using System.Globalization;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
@@ -69,7 +75,9 @@ namespace CyberCloud.Providers.Cache.Contracts;
 ///         desired state (<see cref="SchemaProperty" />'s own remarks say so), so a declared secret
 ///         would be a plaintext password in durable state. <c>spec.auth.secretPath</c> is the seam:
 ///         the operator reads the password out of a <c>Secret</c> in the namespace, so the CR carries a
-///         name and never a value. See <see cref="RedisFailoverJson" /> for what that costs today.
+///         name and never a value. The value itself is minted into the tenant's vault and rendered
+///         into <see cref="CredentialSecretJson" /> from what the vault returned; <c>listKeys</c> is
+///         the only way it leaves the platform.
 ///     </para>
 /// </remarks>
 public static class ValkeyCaches {
@@ -143,6 +151,17 @@ public static class ValkeyCaches {
             Kind = "RedisFailover",
             Plural = "redisfailovers"
         };
+
+    /// <summary>
+    ///     The core <c>Secret</c> the <c>requirepass</c> is carried in.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>The only object this provider applies that is not the operator's.</b> It is core-group,
+    ///     so every cluster serves it — unlike <see cref="FailoverKind" />, whose CRD nothing in this
+    ///     repository installs.
+    /// </remarks>
+    public static GroupVersionKind SecretKind { get; } =
+        new() { Group = "", Version = "v1", Kind = "Secret", Plural = "secrets" };
 
     // ── The two constraint vocabularies, now shared by code rather than by shape ──
     //
@@ -424,10 +443,11 @@ public static class ValkeyCaches {
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>Declared even though no handler serves it</b>, for the reason
+    ///         ⚠ <b>Declared before a handler existed</b>, for the reason
     ///         <c>CyberCloud.Providers.Sample</c> gives about <c>ping</c>: an undeclared response is the
     ///         one part of an API surface with no contract, and what leaves the platform through a
     ///         <c>secret: true</c> action is exactly the thing to write down before it leaves.
+    ///         <c>ValkeyCacheListKeysHandler</c> serves it now, and the shape did not change.
     ///     </para>
     ///     <para>
     ///         ⚠ <b>A Sentinel endpoint and a master group name, not a host and a port to a server.</b>
@@ -525,6 +545,160 @@ public static class ValkeyCaches {
     /// </remarks>
     public static string CredentialSecretName(string name) => name + "-auth";
 
+    /// <summary>The <c>Secret</c> a cache's <c>requirepass</c> lives in.</summary>
+    /// <param name="ns">The resource's namespace.</param>
+    /// <param name="name">The resource's own name.</param>
+    /// <remarks>
+    ///     ⚠ <b>The operator looks for it in the <c>RedisFailover</c>'s OWN namespace and nowhere
+    ///     else</b> — <c>service/k8s/util.go</c>'s <c>GetRedisPassword</c> calls
+    ///     <c>GetSecret(rf.ObjectMeta.Namespace, rf.Spec.Auth.SecretPath)</c>. <c>secretPath</c> is a
+    ///     name despite what it is called; there is no path grammar and no cross-namespace form.
+    /// </remarks>
+    public static ObjectRef CredentialSecretRef(string ns, string name) =>
+        new() { Kind = SecretKind, Namespace = ns, Name = CredentialSecretName(name) };
+
+    // ── The credential: where it lives, what it is called, and how one is made ────────────────
+    //
+    // ⚠ THIS BLOCK IS docs/plan/12 § The pattern, once, PIECE 5, AND WITHOUT IT THIS TYPE DOES NOT
+    // WORK AT ALL. spotahome generates nothing: with `auth.secretPath` set and no Secret, every pod
+    // the operator brings up fails to read a password and the cache never serves. That is a harder
+    // failure than the one CyberCloud.Storage/accounts had before its own piece 5 landed, where the
+    // data plane came up and answered every request as an administrator.
+
+    /// <summary>
+    ///     The key inside the <c>Secret</c> the operator reads the password from.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b><c>password</c>, AND IT IS UPSTREAM'S CHOICE RATHER THAN THIS PLATFORM'S.</b>
+    ///         <c>service/k8s/util.go</c>:
+    ///         <c>if password, ok := secret.Data["password"]; ok { return string(password), nil }</c>,
+    ///         and the <c>else</c> branch is
+    ///         <c>secret "%s" does not have a password field</c>. The generator wires the same key into
+    ///         the pods — <c>SecretKeySelector{ LocalObjectReference{ Name: rf.Spec.Auth.SecretPath },
+    ///         Key: "password" }</c> becomes <c>REDIS_PASSWORD</c>.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>A <c>Secret</c> under any other key applies cleanly, reads back cleanly and
+    ///         converges</b> — the API server has no opinion about the keys in an <c>Opaque</c>
+    ///         document — <b>and the cache still never comes up</b>, because the operator's read of it
+    ///         fails. That is the whole reason this constant carries a citation rather than a
+    ///         convention: nothing inside this repository can tell the two apart.
+    ///     </para>
+    /// </remarks>
+    public const string PasswordField = "password";
+
+    /// <summary>Where a cache's credentials live in the tenant's vault.</summary>
+    /// <param name="id">The resource, with its GUID resolved.</param>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>KEYED ON THE RESOURCE GUID AND NOT ON ITS NAME.</b> docs/plan/06 § Identifiers
+    ///         makes a name reusable the moment the index entry is released, so a path built from the
+    ///         name would hand a brand-new cache the password of the cache somebody deleted an hour
+    ///         ago — and <see cref="ISecretWriter" />'s mint-once rule would make that permanent. The
+    ///         same argument <c>StorageAccounts.SecretPath</c> makes, for the same reason.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ The tenant is the first segment because docs/plan/18 scopes vault policy per tenant.
+    ///     </para>
+    /// </remarks>
+    public static string SecretPath(ResourceId id) {
+        ArgumentNullException.ThrowIfNull(id.Path);
+
+        return string.Create(
+            CultureInfo.InvariantCulture,
+            $"tenants/{id.TenantId:D}/{ProviderNamespace}/{TypePath}/{id.Id:D}"
+        );
+    }
+
+    /// <summary>The handle that reads a cache's <c>requirepass</c> back.</summary>
+    /// <param name="id">The resource, with its GUID resolved.</param>
+    /// <remarks>
+    ///     ⚠ Built here rather than at the two call sites, so that the vault address is spelled once.
+    ///     A reconciler and an action handler that each composed their own would be two spellings of
+    ///     one address, and the failure — the handler reading a path the reconciler never wrote — is a
+    ///     <c>listKeys</c> that answers "not found" on a cache that works.
+    /// </remarks>
+    public static SecretRef PasswordRef(ResourceId id) =>
+        new() { Path = SecretPath(id), Field = PasswordField };
+
+    /// <summary>The symbols a generated <c>requirepass</c> is drawn from.</summary>
+    /// <remarks>
+    ///     ⚠ <b>Alphanumeric only, and that is a protocol constraint rather than timidity.</b> A
+    ///     <c>requirepass</c> reaches the server through <c>redis.conf</c>, where a value containing
+    ///     whitespace, <c>"</c> or <c>#</c> either terminates the directive early or starts a comment;
+    ///     the operator also passes the same value on an <c>AUTH</c> command line. 62 symbols over
+    ///     <see cref="PasswordLength" /> characters is ~190 bits, which is far past the point where the
+    ///     password is the weakest thing about a cache reachable inside a namespace.
+    /// </remarks>
+    public const string PasswordAlphabet =
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+
+    /// <summary>How many characters a generated <c>requirepass</c> has.</summary>
+    public const int PasswordLength = 32;
+
+    /// <summary>Mints one <c>requirepass</c>.</summary>
+    /// <remarks>
+    ///     ⚠ <b>NOT IDEMPOTENT, AND THE PASS THAT CALLS IT STILL IS.</b> This returns a different
+    ///     value every call, which reads like a violation of docs/plan/08 § The reconcile loop's
+    ///     clause 1 and is not: <c>ValkeyCacheReconciler</c> offers it to
+    ///     <see cref="ISecretWriter.MintAsync" />, whose <c>cas=0</c> keeps the first value and
+    ///     discards every later candidate, and then <i>resolves</i> what the vault actually holds
+    ///     before rendering anything. The alternative — deriving a password from the resource id so
+    ///     that it is reproducible — is a credential anybody who can read the resource can compute.
+    ///     <para>
+    ///         ⚠ <see cref="RandomNumberGenerator.GetString" /> and not <c>Random.Shared</c>. This is a
+    ///         credential; a non-cryptographic generator seeded from a clock is the classic way to make
+    ///         one guessable.
+    ///     </para>
+    /// </remarks>
+    public static string GeneratePassword() =>
+        RandomNumberGenerator.GetString(PasswordAlphabet, PasswordLength);
+
+    /// <summary>
+    ///     The <c>Secret</c> document a cache's <c>requirepass</c> becomes, ready for server-side
+    ///     apply.
+    /// </summary>
+    /// <param name="name">The resource's own name.</param>
+    /// <param name="password">The password, <b>as read back from the vault</b>.</param>
+    /// <returns>The JSON <c>templates/redisfailover.yaml</c>'s second document renders.</returns>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>THE ONE OBJECT THIS PROVIDER RENDERS THAT CARRIES A SECRET VALUE, AND IT IS BUILT
+    ///         FROM WHAT THE VAULT RETURNED RATHER THAN FROM DESIRED STATE.</b> The cache's body has no
+    ///         credential property and must not grow one: docs/plan/00 § Non-negotiables keeps secrets
+    ///         out of grain state, and a body is grain state. The value exists in a local inside one
+    ///         reconcile pass, goes into this document, and is gone when the pass returns.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b><c>data</c> with the base64 written out, rather than the <c>stringData</c>
+    ///         convenience field, and the reason is the read-back.</b> <c>stringData</c> is write-only:
+    ///         the API server folds it into <c>data</c> and never returns it, so an object applied with
+    ///         one field and read back with another is an object <see cref="Matches" /> would have to
+    ///         accept in two shapes — one of which no real cluster ever produces. It is also the field
+    ///         the operator reads: <c>secret.Data["password"]</c>, never <c>StringData</c>, which on a
+    ///         fetched object is always empty.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <c>type: Opaque</c> and not one of the built-in types. <c>kubernetes.io/basic-auth</c>
+    ///         looks tempting and would require a <c>username</c> key beside the password; Valkey's
+    ///         <c>requirepass</c> has no user, and the operator would not read it either way.
+    ///     </para>
+    /// </remarks>
+    public static string CredentialSecretJson(string name, string password) {
+        ArgumentException.ThrowIfNullOrEmpty(name);
+        ArgumentException.ThrowIfNullOrEmpty(password);
+
+        return new JsonObject {
+            ["kind"] = SecretKind.Kind,
+            ["metadata"] = new JsonObject { ["name"] = CredentialSecretName(name) },
+            ["type"] = "Opaque",
+            ["data"] = new JsonObject {
+                [PasswordField] = Convert.ToBase64String(Encoding.UTF8.GetBytes(password))
+            }
+        }.ToJsonString();
+    }
+
     /// <summary>
     ///     The Sentinel <c>Service</c> a client connects to — the operator's own naming.
     /// </summary>
@@ -537,6 +711,27 @@ public static class ValkeyCaches {
     ///     a connection string that resolves to nothing.
     /// </remarks>
     public static string SentinelServiceName(string name) => "rfs-" + name;
+
+    /// <summary>The in-cluster Sentinel host <c>listKeys</c> hands out.</summary>
+    /// <param name="ns">The resource's namespace.</param>
+    /// <param name="name">The resource's own name.</param>
+    /// <remarks>
+    ///     ⚠ <b>A bare DNS name and no scheme, because a client library takes a host rather than a
+    ///     URL.</b> <c>StorageAccounts.Endpoint</c> hands out <c>http://…</c> because an S3 client
+    ///     wants one; a Sentinel-aware Valkey client is given <c>(host, port, masterName)</c> as three
+    ///     arguments, and a scheme prefixed here would end up inside a resolver's hostname.
+    ///     <para>
+    ///         ⚠ Namespace-qualified rather than bare. The caller is a tenant's workload, which may be
+    ///         in another namespace of the same cluster, and a short name resolves only from inside the
+    ///         cache's own.
+    ///     </para>
+    /// </remarks>
+    public static string SentinelHost(string ns, string name) {
+        ArgumentException.ThrowIfNullOrEmpty(ns);
+        ArgumentException.ThrowIfNullOrEmpty(name);
+
+        return SentinelServiceName(name) + "." + ns + ".svc";
+    }
 
     /// <summary>The Sentinel port. The protocol's own, not a choice.</summary>
     public const int SentinelPort = 26379;
@@ -752,24 +947,29 @@ public static class ValkeyCaches {
     ///     </para>
     ///     <para>
     ///         ⚠ <b>The <c>requirepass</c> appears here as a <i>reference by name</i> and never as a
-    ///         value, and the <c>Secret</c> it names is not written by this reconciler.</b>
-    ///         <c>spec.auth.secretPath</c> is the seam: the operator reads the password out of a
-    ///         <c>Secret</c> in the namespace, so the only component that ever holds the plaintext is
-    ///         whatever writes that <c>Secret</c> — docs/plan/12 § The pattern, once, piece 5, which
-    ///         needs the OpenBao integration that does not exist.
+    ///         value.</b> <c>spec.auth.secretPath</c> is the seam: the operator reads the password out
+    ///         of a <c>Secret</c> in the namespace, so the only component that ever holds the plaintext
+    ///         is whatever writes that <c>Secret</c>. That is <see cref="CredentialSecretJson" />, and
+    ///         <c>ValkeyCacheReconciler</c> applies it <b>before</b> this document — docs/plan/12 § The
+    ///         pattern, once, piece 5.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>What that costs here is worse than what it cost Postgres, and the difference is
-    ///         deliberate.</b> CloudNativePG generates its own password when the referenced
-    ///         <c>Secret</c> is absent, so that provider's gap is a working database whose credentials
-    ///         <c>listKeys</c> cannot hand out. spotahome generates nothing: with
-    ///         <c>auth.secretPath</c> set and no <c>Secret</c>, the cache does not come up, and the
-    ///         resource sits in <see cref="ReconcileOutcome.InProgress" /> until piece 5 lands.
-    ///         <b>Omitting the block instead would produce a cache with no <c>requirepass</c> at
-    ///         all</b> — a running, unauthenticated Valkey reachable by anything in the tenant's
-    ///         namespace — which is a worse answer than a resource that visibly has not finished.
-    ///         docs/plan/12 § Cross-cutting decisions makes the same trade for external exposure and
-    ///         gives the same reason.
+    ///         ⚠ <b>THIS TYPE MINTS ITS OWN CREDENTIAL WHERE EVERY OTHER DATA PROVIDER READS ONE THE
+    ///         OPERATOR GENERATED, AND THE EXCEPTION IS spotahome's DOING.</b> CloudNativePG, Strimzi
+    ///         and the rest bring a credential up with the engine and the handler reads it, because
+    ///         anything minted afterwards is a password the server never accepted while everything
+    ///         reports success. spotahome generates nothing at all: with <c>auth.secretPath</c> set and
+    ///         no <c>Secret</c>, <c>GetRedisPassword</c> fails and the cache does not come up. So the
+    ///         reconciler mints, and <see cref="ISecretWriter" />'s mint-once <c>cas=0</c> is what
+    ///         keeps a second pass from rotating the password out from under a running server.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The <c>auth</c> block is rendered unconditionally, and the obvious "fix" for a
+    ///         cache stuck <see cref="ReconcileOutcome.InProgress" /> is to delete it.</b> Omitting it
+    ///         produces a cache with no <c>requirepass</c> at all — a running, unauthenticated Valkey
+    ///         reachable by anything in the tenant's namespace — which is a worse answer than a
+    ///         resource that visibly has not finished. docs/plan/12 § Cross-cutting decisions makes the
+    ///         same trade for external exposure and gives the same reason.
     ///     </para>
     /// </remarks>
     public static string RedisFailoverJson(string name, JsonElement desired) {
@@ -880,7 +1080,47 @@ public static class ValkeyCaches {
             return false;
         }
 
-        if (parsed is not JsonObject document || document["spec"] is not JsonObject spec) {
+        if (parsed is not JsonObject document) {
+            return false;
+        }
+
+        // ⚠ `null` is a rendered body's own shape: KubeCommandBuilder injects `kind` from the
+        // GroupVersionKind on the apply path, so a document carries one only after it has been applied
+        // and read back. RedisFailoverJson deliberately does not write one — the CR's own remarks say
+        // the render carries no metadata the builder owns — so a document with no kind is that render,
+        // and the two tests that compare against it must keep working.
+        return document["kind"]?.GetValue<string>() switch {
+            "Secret" => MatchesCredentialSecret(document),
+            "RedisFailover" or null => MatchesFailover(document, desired),
+            _ => false
+        };
+    }
+
+    /// <summary>
+    ///     Whether the credential <c>Secret</c> carries a <c>requirepass</c> the operator can read.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>THE KEY NAME IS THE ASSERTION, NOT THE PRESENCE OF A SECRET.</b> A <c>Secret</c>
+    ///         with the right name and the wrong key applies, reads back and converges, and the cache
+    ///         still never starts — <c>GetRedisPassword</c> returns
+    ///         <c>secret "…" does not have a password field</c> and every pod fails. So this reads the
+    ///         key by name and refuses an empty value.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>It does not compare the VALUE, and cannot.</b> The password is not in desired
+    ///         state — it is in the vault — and a comparison that reached for it would make this
+    ///         method need a resolver. What makes the value right is that the reconciler renders from
+    ///         what <c>ISecretResolver</c> returned; what makes it stay right is mint-once.
+    ///     </para>
+    /// </remarks>
+    static bool MatchesCredentialSecret(JsonObject document) =>
+        document["data"] is JsonObject data
+        && data[PasswordField]?.GetValue<string>() is { Length: > 0 };
+
+    /// <summary>Whether the <c>RedisFailover</c> carries what the desired body asked for.</summary>
+    static bool MatchesFailover(JsonObject document, JsonElement desired) {
+        if (document["spec"] is not JsonObject spec) {
             return false;
         }
 
