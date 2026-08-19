@@ -88,6 +88,23 @@ public static class CliEmitter {
             commands.Add(name, Command(type, version));
         }
 
+        // ⚠ THE SECOND WAY ONE TOKEN COMES TO MEAN TWO THINGS, AND THE CHECK ABOVE CANNOT SEE IT. A
+        // command name lands in a JsonObject key, so a duplicate is visible there; a SHORT NAME lands
+        // in an `alias` member on a command of a different name, so two of them — or one of them and
+        // a sibling's command name, or the group's own key — collide only once System.CommandLine
+        // builds the group's token dictionary, which is at `cyc` run time and not here. Three agents
+        // have hit the ArgumentException that produces. Derived from the document rather than from a
+        // list, because the two lists this replaces went stale twice — CliTokens' own remarks.
+        var collisions = CliTokens.Collisions(
+            DocumentReader.TypesOf(document).Select(
+                x => new CliDeclaration(x.ProviderNamespace, x.TypePath, x.Alias)
+            )
+        );
+
+        if (collisions.Length > 0) {
+            throw new InvalidOperationException(string.Join(" ", collisions));
+        }
+
         return new JsonObject {
             ["format"] = FormatVersion,
             ["apiVersion"] = version,
@@ -120,19 +137,22 @@ public static class CliEmitter {
     ///     exists; the alias is a second name for it rather than a replacement, so a script written
     ///     against the long form keeps working when an alias is added or removed.
     /// </remarks>
-    static string GroupOf(DocumentType type) {
-        var segments = type.ProviderNamespace.Split('.');
-
-        // ⚠ Lower-cased whole, not kebab-cased. A namespace segment is a proper noun with its own
-        // capitalisation — `DBforPostgreSQL` — and kebab-casing it on case transitions produces
-        // `dbfor-postgre-sql`, which is not a word anybody would type. Azure's CLI spells the same
-        // thing `dbforpostgresql` and that is what the alias table maps `postgres` onto.
-        return segments[^1].ToLowerInvariant();
-    }
+    /// <remarks>
+    ///     ⚠ Lower-cased whole, not kebab-cased. A namespace segment is a proper noun with its own
+    ///     capitalisation — <c>DBforPostgreSQL</c> — and kebab-casing it on case transitions produces
+    ///     <c>dbfor-postgre-sql</c>, which is not a word anybody would type. Azure's CLI spells the
+    ///     same thing <c>dbforpostgresql</c> and that is what the alias table maps <c>postgres</c>
+    ///     onto.
+    ///     <para>
+    ///         ⚠ <b>Delegated to <see cref="CliTokens" /> rather than computed here</b>, so the
+    ///         collision check and the surface it checks derive the group key the same way. Two copies
+    ///         of this two-line rule is how a check comes to disagree with the artifact it is guarding.
+    ///     </para>
+    /// </remarks>
+    static string GroupOf(DocumentType type) => CliTokens.GroupOf(type.ProviderNamespace);
 
     /// <summary>The command name within a group — the type path, kebab-cased, <c>/</c> to <c>-</c>.</summary>
-    static string CommandOf(DocumentType type) =>
-        string.Join('-', type.TypePath.Split('/').Select(Kebab));
+    static string CommandOf(DocumentType type) => CliTokens.CommandOf(type.TypePath);
 
     static JsonObject Command(DocumentType type, string version) {
         var verbs = new JsonObject();

@@ -1,3 +1,4 @@
+using CyberCloud.ResourceManager.Contracts.Generation;
 using CyberCloud.ResourceManager.Registry;
 using CyberCloud.Tenancy.Contracts;
 using System.Text.Json;
@@ -93,26 +94,28 @@ public sealed class StorageBucketDeclarationTests {
         // tree — so a group and an alias sharing a string throw `An item with the same key has
         // already been added` on the first parse of ANY command line, before any verb runs.
         //
-        // ⚠ ProviderRegistry.Build refuses a DUPLICATE short name and does not compare one against a
-        // group name; DerivedSurfaces.CliProblems does not either. That is still owed —
-        // charts/managed/seaweedfs/conformance.yaml § owed, `short-name-collides-with-the-group` —
-        // and this is the second type that has had to satisfy it by hand.
+        // ⚠ IT IS NO LONGER SATISFIED BY HAND, AND THE LIST THAT USED TO DO IT IS GONE. This test
+        // held five group keys as literals — `sample`, `dbforpostgresql`, `cache`, `messaging`,
+        // `storage` — while nine more were in the tree, and the same list in the network suite was
+        // stale on two consecutive passes. CliTokens derives the whole question from what is
+        // registered, ProviderRegistry.Build refuses it at silo start, and
+        // charts/managed/seaweedfs/conformance.yaml § owed no longer carries the row.
+        //
+        // ⚠ AND THE LIST WAS THE WRONG QUESTION ANYWAY. Measured against System.CommandLine 2.0.10,
+        // the token dictionary is per PARENT command: a short name equal to ANOTHER group's key
+        // cannot collide, so four of those five assertions could never have failed. The one that
+        // could — `storage`, this namespace's own group — is what the derived check keeps.
         var registry = ProviderRegistry.Build([new StorageProvider()]);
 
         registry.TryGetType(StorageBuckets.Type, out var bucket).ShouldBeTrue();
         registry.TryGetType(StorageAccounts.Type, out var account).ShouldBeTrue();
 
-        // ⚠ EVERY GROUP KEY, WRITTEN OUT. Deriving these from the namespaces the same way the emitter
-        // does would compare the emitter to itself. They are the last dot-separated segment of each
-        // provider namespace, lower-cased.
-        foreach (var group in new[] { "sample", "dbforpostgresql", "cache", "messaging", "storage" }) {
-            bucket.Display.Alias.ShouldNotBe(
-                group,
-                $"the bucket's short name equals the CLI group '{group}', so every `cyc` invocation "
-                + "throws before it parses."
-            );
-        }
+        CliTokens.Collisions(
+            registry.Types.Select(x => new CliDeclaration(x.Type.Namespace, x.Type.Type, x.Display.Alias))
+        ).ShouldBeEmpty();
 
+        // ⚠ The half the derived check cannot make: that the short name is the word a person would
+        // reach for, rather than merely a string nothing else has taken.
         bucket.Display.Alias.ShouldBe("bucket");
         bucket.Display.Alias.ShouldNotBe(account.Display.Alias);
     }

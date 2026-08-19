@@ -1,3 +1,4 @@
+using CyberCloud.ResourceManager.Contracts.Generation;
 using CyberCloud.ResourceManager.Registry;
 using CyberCloud.Tenancy.Contracts;
 using System.Text.Json;
@@ -84,17 +85,20 @@ public sealed class StorageDeclarationTests {
         // the two throw `An item with the same key has already been added. Key: storage` on the first
         // parse of any command line, before any verb runs.
         //
-        // ⚠ NOTHING IN THE REGISTRY CHECKS THIS. ProviderRegistry.Build refuses a DUPLICATE short
-        // name and does not compare one against a group name; DerivedSurfaces.CliProblems does not
-        // either. cyc.Tests' EveryVerbInTheTreeIsReachable catches it and reports an ArgumentException
-        // out of System.CommandLine that names neither the provider nor the string — which is why the
-        // check is worth having here, where the fix is.
+        // ⚠ THE REGISTRY CHECKS THIS NOW, AND THIS TEST NO LONGER HAS TO. The paragraph here used to
+        // read "nothing in the registry checks this … cyc.Tests' EveryVerbInTheTreeIsReachable
+        // catches it and reports an ArgumentException naming neither the provider nor the string".
+        // ProviderRegistry.Build refuses it at silo start with a message naming both ends, derived
+        // from what is registered rather than from a list — CliTokens.
         var registry = ProviderRegistry.Build([new StorageProvider()]);
         registry.TryGetType(StorageAccounts.Type, out var registration).ShouldBeTrue();
 
-        // ⚠ A LITERAL, not `ProviderNamespace.Split('.')[^1].ToLowerInvariant()`. Deriving the group
-        // name the same way the emitter does would compare the emitter to itself, which is the shape
-        // that let a casing sabotage stay green on an earlier provider.
+        CliTokens.Collisions(
+            registry.Types.Select(x => new CliDeclaration(x.Type.Namespace, x.Type.Type, x.Display.Alias))
+        ).ShouldBeEmpty();
+
+        // ⚠ A LITERAL, and deliberately so. The derived check says the short name collides with
+        // nothing; only this says it is not the one word this namespace could not have.
         registration.Display.Alias.ShouldNotBe(
             "storage",
             "the short name equals the group name CyberCloud.Storage produces, so every `cyc` "

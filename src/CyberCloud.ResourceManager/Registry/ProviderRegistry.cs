@@ -1,3 +1,4 @@
+using CyberCloud.ResourceManager.Contracts.Generation;
 using CyberCloud.ResourceManager.Contracts.Registry;
 using System.Collections.Frozen;
 using System.Collections.Immutable;
@@ -122,6 +123,27 @@ public sealed class ProviderRegistry : IProviderRegistry {
 
                 types.Add(type);
             }
+        }
+
+        // ⚠ THE CLI SURFACE IS PART OF WHAT A REGISTRATION MEANS, AND THIS IS WHERE THAT STOPS BEING
+        // A COMMENT. IResourceTypeBuilder.Display's own remarks have always promised that "a duplicate
+        // is a silo-start failure rather than a CLI that resolves one of two verbs" — and nothing
+        // checked it, so the defence was a literal list in one provider's test suite that went stale
+        // twice in consecutive passes and was green by luck both times. Derived from what is actually
+        // registered, it cannot go stale: a provider added tomorrow is in `types` the moment it is
+        // discovered. See CliTokens for what collides and why the scope is the parent command.
+        //
+        // ⚠ WHAT THIS SET CONTAINS IS WHAT THIS CHECK COVERS. A silo and the generator build every
+        // provider in the process, so both see cross-provider collisions; a provider's own suite
+        // builds one provider and sees only its own. src/Providers/README.md § Hard rule forbids the
+        // reference that would let a provider's suite see more, which is why the whole-tree answer
+        // lives here and in CliEmitter.Emit rather than in fourteen test files.
+        var collisions = CliTokens.Collisions(
+            types.Select(x => new CliDeclaration(x.Type.Namespace, x.Type.Type, x.Display.Alias))
+        );
+
+        if (collisions.Length > 0) {
+            throw new InvalidOperationException(string.Join(" ", collisions));
         }
 
         return new(

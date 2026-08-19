@@ -273,22 +273,22 @@ owed:
       here would be the promise docs/plan/12 warns produces "a support incident waiting to happen".
   - id: short-name-collides-with-the-group
     says: >
-      docs/plan/21 § Grammar's alias table would spell this type's short form `storage`, exactly as it
-      spells `postgres` for `dbforpostgresql server`. IT CANNOT BE. CliEmitter derives the CLI group
-      key from the provider namespace, so CyberCloud.Storage is already the group `storage`, and
-      System.CommandLine's ValidTokens builds ONE dictionary over every command token and every alias
-      in the whole tree — so a group and an alias sharing a string throw "An item with the same key
-      has already been added. Key: storage" on the first parse of ANY command line, before any verb
-      runs. ⚠ THIS IS THE FIRST NAMESPACE WHOSE NATURAL SHORT NAME IS ITS OWN GROUP NAME; the four
-      before it are near misses rather than a design (`postgres`/`dbforpostgresql`, `valkey`/`cache`,
-      `kafka`+`nats`/`messaging`, `widget`/`sample`). ProviderRegistry.Build refuses a DUPLICATE short
-      name — IResourceTypeBuilder.Display's remarks say the point is that a duplicate is "a silo-start
-      failure rather than a CLI that resolves one of two verbs" — and does not compare a short name
-      against a group name; DerivedSurfaces.CliProblems does not either. What caught it is cyc.Tests'
-      EveryVerbInTheTreeIsReachable, whose failure is an ArgumentException out of System.CommandLine
-      naming neither the provider nor the string. The type ships as `objectstore` and the docs/plan/21
-      spelling is owed. Closing it is one comparison in ProviderRegistry.Build, or a case in
-      DerivedSurfaces.CliProblems, over the union of group keys, command keys and aliases.
+      CLOSED 2026-08-19, both ways it named. docs/plan/21 § Grammar's alias table would spell this
+      type's short form `storage`, which is the CLI group CyberCloud.Storage already produces, and
+      System.CommandLine throws "An item with the same key has already been added. Key: storage" on
+      every parse that reaches the group. This row asked for "one comparison in ProviderRegistry.Build,
+      or a case in DerivedSurfaces.CliProblems, over the union of group keys, command keys and
+      aliases", and CliTokens is that union — called from ProviderRegistry.Build at silo start, from
+      CliEmitter.Emit at generation, and from DerivedSurfaces.CliProblems against the checked-in tree.
+      The refusal names both colliding declarations, which is what the ArgumentException never did.
+      ⚠ ONE CORRECTION THIS ROW GOT WRONG, AND IT MATTERED. "ValidTokens builds ONE dictionary over
+      every command token and every alias in the whole tree" is false: measured against
+      System.CommandLine 2.0.10, the dictionary is per PARENT command. `cyc monitor network` parses
+      cleanly while `network` is also a top-level group — so a short name colliding with ANOTHER
+      group's key is harmless, and the six provider suites that asserted a short name against every
+      group key in the tree were forbidding strings that could not collide while never checking the
+      scope that can. What can collide is a short name equal to its own group's key, a sibling
+      command's name, or a sibling's short name. Those literal lists are gone.
   - id: grafana-dashboard
     says: >
       The operator emits a ServiceMonitor per component and docs/plan/12 § The pattern, once, piece 6

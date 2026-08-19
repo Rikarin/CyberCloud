@@ -49,40 +49,31 @@ public sealed class RabbitmqDeclarationTests {
 
     [Fact]
     public void TheShortNameIsNoneOfTheCliGroupNamesTheNamespacesAlreadyProduce() {
-        // ⚠ FAILURE CLASS (a), AND THE ONE THE REGISTRY ITSELF CANNOT CATCH. ProviderRegistry.Build
-        // refuses a duplicate SHORT NAME and never compares one to a GROUP name — and
-        // CliEmitter.GroupOf derives a group from the provider namespace's last segment, lower-cased.
-        // System.CommandLine's ValidTokens is ONE DICTIONARY OVER THE WHOLE TREE, so a short name
-        // equal to any group would make EVERY `cyc` parse throw, not just this type's. A provider
-        // nearly shipped as `storage` for exactly this reason.
+        // ⚠ THE REGISTRY CATCHES THIS NOW, AND THE LIST THAT USED TO IS GONE. The paragraph here read
+        // "the one the registry itself cannot catch … ProviderRegistry.Build never compares one to a
+        // GROUP name", and it held five group keys as literals while fourteen were in the tree. The
+        // same list in the network suite was stale on two consecutive passes and green by luck both
+        // times. CliTokens derives the question from what is registered; ProviderRegistry.Build calls
+        // it, so a collision is a silo-start refusal naming both ends.
         //
-        // ⚠ EVERY EXPECTATION HERE IS A TYPED-OUT LITERAL. Deriving the group names from the same
-        // ProviderNamespace constants the emitter reads is the mistake a previous provider's casing
-        // sabotage survived: two things derived from one constant agree however that constant is
-        // spelled. These five are the CLI groups in the tree today, written by hand.
+        // ⚠ AND THE LIST WAS THE WRONG QUESTION. Measured against System.CommandLine 2.0.10, the
+        // token dictionary is per PARENT command, so a short name equal to ANOTHER group's key parses
+        // cleanly — four of those five assertions could never have failed. The one that could is this
+        // namespace's own group, which is what CliTokens seeds each scope with.
         var registry = ProviderRegistry.Build([new MessagingProvider()]);
         registry.TryGetType(RabbitmqClusters.Type, out var registration).ShouldBeTrue();
 
-        var alias = registration.Display.Alias;
-        alias.ShouldBe("rabbitmq");
+        registration.Display.Alias.ShouldBe("rabbitmq");
 
-        foreach (var group in new[] { "messaging", "dbforpostgresql", "cache", "storage", "sample" }) {
-            alias.ShouldNotBe(
-                group,
-                $"the short name is '{group}', which CliEmitter.GroupOf already derives as a top-level "
-                + "CLI group from a provider namespace. System.CommandLine keeps one ValidTokens "
-                + "dictionary over the whole verb tree, so this would throw on every `cyc` invocation "
-                + "rather than only on this type's."
-            );
-        }
+        CliTokens.Collisions(
+            registry.Types.Select(x => new CliDeclaration(x.Type.Namespace, x.Type.Type, x.Display.Alias))
+        ).ShouldBeEmpty();
 
-        // ⚠ And the group this type's OWN namespace produces, read off the emitted tree rather than
-        // out of the list above — because the list above is the thing that goes stale when a sibling
-        // provider lands, and this half cannot.
-        var cli = CliEmitter.Emit(Document());
-        foreach (var group in cli["groups"]!.AsObject().Select(x => x.Key)) {
-            alias.ShouldNotBe(group, $"the short name collides with the emitted CLI group '{group}'");
-        }
+        // ⚠ AND THE EMITTER IS ASKED THE SAME QUESTION SEPARATELY, because it is the half that can
+        // disagree: CliEmitter.Emit builds the tree the CLI actually embeds, and a throw here is the
+        // build refusing rather than a silo refusing. Kept from the test this replaces, where it was
+        // the only half that could not go stale.
+        Should.NotThrow(() => CliEmitter.Emit(Document()));
     }
 
     [Fact]

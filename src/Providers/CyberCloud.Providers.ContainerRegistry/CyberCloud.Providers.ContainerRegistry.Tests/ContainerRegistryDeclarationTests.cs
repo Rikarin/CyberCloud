@@ -1,3 +1,4 @@
+using CyberCloud.ResourceManager.Contracts.Generation;
 using CyberCloud.ResourceManager.Registry;
 using System.Text.Json;
 
@@ -107,91 +108,6 @@ public sealed class ContainerRegistryDeclarationTests {
         );
     }
 
-    // ── Failure class (d): a shortName collision ─────────────────────────────────────────────────
-
-    [Fact]
-    public void TheShortNameIsNoneOfTheTwelveCliGroupKeysInTheTree() {
-        // ⚠ CliEmitter derives the CLI GROUP key from the provider namespace's LAST SEGMENT,
-        // lower-cased — so this namespace is already the group `containerregistry`. System.CommandLine's
-        // ValidTokens builds ONE dictionary of every command token and every alias in the whole tree,
-        // so a group and an alias that share a string throw `ArgumentException: An item with the same
-        // key has already been added` ON THE FIRST PARSE OF ANY COMMAND LINE — not only for the
-        // colliding command. Three agents have hit that.
-        //
-        // ⚠ THE LIST IS TYPED OUT. Deriving it from the providers in the tree would compare a constant
-        // to itself and would also require referencing another Providers.* assembly, which
-        // src/Providers/README.md § Hard rule forbids.
-        string[] groups = [
-            "sample",
-            "dbforpostgresql",
-            "dbformysql",
-            "cache",
-            "messaging",
-            "search",
-            "storage",
-            "documentdb",
-            "analytics",
-            "containerservice",
-            "containerregistry",
-            "network"
-        ];
-
-        groups.ShouldContain(
-            "containerregistry",
-            "this provider's own group key is missing from the list it is being checked against"
-        );
-
-        groups.ShouldNotContain(ContainerRegistryProvider.ShortName);
-    }
-
-    [Fact]
-    public void TheShortNameIsNoneOfTheSixteenAlreadyDeclared() {
-        // ⚠ ProviderRegistry.Build refuses a duplicate short name WITHIN one provider and never
-        // compares one across providers or against a group name — see
-        // charts/managed/seaweedfs/conformance.yaml § owed, `short-name-collides-with-the-group`. So
-        // this is checked by hand, against literals, for the sixth time.
-        string[] declared = [
-            "widget",
-            "postgres",
-            "mariadb",
-            "valkey",
-            "kafka",
-            "nats",
-            "rabbitmq",
-            "objectstore",
-            "bucket",
-            "docdb",
-            "opensearch",
-            "clickhouse",
-            "aks",
-            "nodepool",
-            "vnet",
-            "subnet"
-        ];
-
-        declared.ShouldNotContain(ContainerRegistryProvider.ShortName);
-    }
-
-    [Fact]
-    public void TheShortNameIsNoneOfTheCliSReservedGroups() {
-        // ⚠ A THIRD DICTIONARY. `CommandTree.ReservedGroups` takes down `cyc --help` entirely at
-        // start-up when a generated group name collides — and an ALIAS lands in the same ValidTokens
-        // dictionary a group name does, so the reserved list binds both.
-        string[] reserved = [
-            "login",
-            "logout",
-            "account",
-            "rest",
-            "config",
-            "completion",
-            "complete",
-            "extension",
-            "version"
-        ];
-
-        reserved.ShouldNotContain(ContainerRegistryProvider.ShortName);
-    }
-
     [Fact]
     public void TheShortNameIsTheWordAPersonWouldReachFor() {
         // ⚠ Not `acr`. docs/plan/21 § Grammar's two examples are `aks` and `postgres` — a vendor
@@ -199,6 +115,30 @@ public sealed class ContainerRegistryDeclarationTests {
         // A second borrowed acronym for a service whose own name is a word people type would be worse
         // than the word.
         ContainerRegistryProvider.ShortName.ShouldBe("registry");
+    }
+
+    // ── Failure class (d): a shortName collision, derived rather than listed ─────────────
+
+    [Fact]
+    public void NoShortNameHereGivesACycTokenTwoMeanings() {
+        // ⚠ DERIVED, AND IT REPLACES ARRAYS OF LITERALS THAT WENT STALE ON TWO CONSECUTIVE PASSES —
+        // green by luck both times, because two of the short names they were missing are declared
+        // through a `const string ShortName` and the maintenance grep was `grep 'shortName: "'`. The
+        // list was maintained by a method that could not find everything it had to list.
+        //
+        // ⚠ AND THEY ASKED THE WRONG QUESTION. Measured against System.CommandLine 2.0.10, the token
+        // dictionary is per PARENT command, so a short name equal to ANOTHER group's key cannot
+        // collide — which is what most of those assertions spent themselves forbidding. CliTokens
+        // carries the rule and the measurements.
+        //
+        // ⚠ ONE PROVIDER IS ALL THIS SEES, and src/Providers/README.md § Hard rule is why. The
+        // whole-tree half is answered without a list by ProviderRegistry.Build at silo start,
+        // CliEmitter.Emit at generation, and GeneratedSurfaceTests over the embedded verb tree.
+        CliTokens.Collisions(
+            ProviderRegistry.Build([new ContainerRegistryProvider()]).Types.Select(
+                x => new CliDeclaration(x.Type.Namespace, x.Type.Type, x.Display.Alias)
+            )
+        ).ShouldBeEmpty();
     }
 
     // ── The meters ──────────────────────────────────────────────────────────────────────────────

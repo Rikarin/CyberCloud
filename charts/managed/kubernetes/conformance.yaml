@@ -262,6 +262,33 @@ owed:
       under them is a tenant whose stored body stopped being the body they sent. Offering 1.34 is a
       new api-version, and quay.io/capk/ubuntu-2404-container-disk already publishes v1.34.1, so the
       node image is not what blocks it.
+      ⚠ RE-VERIFIED FIRSTHAND ON 2026-08-19 AND THE ANSWER CHANGED, THOUGH NO FACT ABOVE DID. Both
+      EOL dates are exact — kubernetes/website data/releases/eol.yaml gives 1.32 endOfLifeDate
+      2026-02-28, finalPatchRelease 1.32.13, and schedule.yaml gives 1.33 endOfLifeDate 2026-06-28,
+      finalPatchRelease 1.33.13. The supported set is 1.34, 1.35 and 1.36, latest patches 1.34.10,
+      1.35.7 and 1.36.3. The tag list is exact too: the quay.io tag API returns has_additional false
+      over v1.31.5, v1.32.1, v1.33.5 and v1.34.1, nothing pushed since 2025-09-27.
+      ⚠ THE NUMBER THAT DECIDES IT IS 1.34'S OWN EOL, WHICH IS 2026-10-27 — SIXTY-NINE DAYS OUT, AND
+      1.34 ENTERS MAINTENANCE MODE IN EIGHT. So cutting a new api-version to offer the one supported
+      minor with a bootable image buys ten weeks and then needs another api-version, which is the
+      cost docs/plan/08 § The provider registry makes immutable and unrepeatable-on-a-whim. The two
+      minors that are worth an api-version — 1.35, supported to 2027-02-28, and 1.36, to 2027-06-28 —
+      HAVE NO CONTAINER-DISK IMAGE AT ALL, in this repository or any other under the quay.io capk
+      namespace, whose only other disk repositories stop at ubuntu-2204 v1.30.1 (2024-05-23).
+      ⚠ SO THE BLOCKER IS NODE-IMAGE SUPPLY, NOT THE API-VERSION COST, AND THAT INVERTS WHAT THIS ROW
+      SAID. Upstream CAPK has no automated container-disk build at all — .github/workflows/
+      image_build.yaml pushes only the manager images — which is why the tags have been frozen for
+      eleven months, and CAPK's own e2e still runs on v1.34.1. Even that image is nine patches behind
+      1.34.10, so "a supported minor" would not have meant "a patched node image". The documented
+      route is CAPK's docs/our-image-creation-process.md, which is kubernetes-sigs/image-builder;
+      its Makefile carries live KubeVirt targets (build-kubevirt-qemu-ubuntu-2404) and its
+      packer/config/kubernetes.json currently defaults to v1.36.1, so building a 1.36 disk is a
+      packer run and a FROM scratch Dockerfile rather than new engineering.
+      ⚠ RECOMMENDED, RATHER THAN LANDED: this platform builds and hosts its own container-disk for a
+      supported minor FIRST, and the api-version that offers 1.35 or 1.36 is cut against an image that
+      exists. Adding 1.34 now would spend an immutable api-version on a minor that dies before most
+      tenants would have migrated onto it. Nothing in this pass changed Versions, PinnedPatch or the
+      chart's enum; what changed is that the reason is now measured rather than assumed.
   - id: version-skew-is-not-enforced
     says: >
       ⚠ docs/plan/13 SAYS "the API enforces it with a clear error, rather than letting a tenant break

@@ -1,3 +1,4 @@
+using CyberCloud.ResourceManager.Contracts.Generation;
 using CyberCloud.ResourceManager.Registry;
 using CyberCloud.Tenancy.Contracts;
 using System.Text.Json;
@@ -54,13 +55,17 @@ public sealed class DocumentDbDeclarationTests {
         // name is what a human types and what every example shows, and docs/plan/12 says selling it
         // as MongoDB "produces a churn event at the first $lookup".
         //
-        // ⚠ NOTHING IN THE REGISTRY CHECKS EITHER. ProviderRegistry.Build refuses a DUPLICATE short
-        // name and does not compare one against a group name; DerivedSurfaces.CliProblems does not
-        // either. cyc.Tests' EveryVerbInTheTreeIsReachable catches the first as an ArgumentException
-        // out of System.CommandLine naming neither the provider nor the string, and nothing catches
-        // the second at all.
+        // ⚠ THE REGISTRY CHECKS THE FIRST NOW, AND NOTHING WILL EVER CHECK THE SECOND. That asymmetry
+        // is the reason this test survives the removal of the short-name literal lists elsewhere:
+        // ProviderRegistry.Build derives the collision question from what is registered — CliTokens —
+        // so `documentdb` is refused at silo start with a message naming both ends. `mongo` collides
+        // with nothing and is refused on ADR-011 grounds alone, which only a literal can state.
         var registry = ProviderRegistry.Build([new DocumentDbProvider()]);
         registry.TryGetType(DocumentDbAccounts.Type, out var registration).ShouldBeTrue();
+
+        CliTokens.Collisions(
+            registry.Types.Select(x => new CliDeclaration(x.Type.Namespace, x.Type.Type, x.Display.Alias))
+        ).ShouldBeEmpty();
 
         // ⚠ LITERALS, not `ProviderNamespace.Split('.')[^1].ToLowerInvariant()`. Deriving the group
         // name the same way the emitter does would compare the emitter to itself, which is the shape

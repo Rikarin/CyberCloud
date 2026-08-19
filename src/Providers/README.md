@@ -1101,6 +1101,22 @@ answers `meter.Fallback ?? 1m` for an empty `AmountPointer`, so `.Meters(PublicI
   three missing short names are declared through a `const string ShortName` rather than a literal at
   the call site, **so a `grep 'shortName: "'` misses them** — which is exactly how the list went stale
   twice. `publicip` is checked against all fourteen keys and all seventeen names, as literals.
+  **⚠ CLOSED 2026-08-19, and the lists are gone from all ten suites that held them.** `CliTokens`
+  derives the group key, the command name and the short name from what is registered, and
+  `ProviderRegistry.Build` refuses a collision at silo start with a message naming **both** ends —
+  which is what `IResourceTypeBuilder.Display`'s remarks had promised all along and nothing checked.
+  `CliEmitter.Emit` refuses it at generation and `DerivedSurfaces.CliProblems` reports it against the
+  checked-in tree; `cli/cyc.Tests` asks the same question of the embedded verb tree, which is the only
+  place in `dotnet test` that sees every provider without breaking § Hard rule.
+  **⚠ AND THE LISTS WERE ANSWERING THE WRONG QUESTION, WHICH IS WHY NOTHING THEY MISSED EVER
+  COLLIDED.** Measured against `System.CommandLine` 2.0.10 — the pinned version, in a throwaway
+  program: the token dictionary is **per parent command**, not one per tree. `cyc monitor network`
+  parses cleanly while `network` is a top-level group, so a short name equal to *another* group's key
+  cannot collide at all; of the fourteen keys each list checked, thirteen were unfalsifiable. What can
+  collide is a short name equal to its **own** group's key, a **sibling's** command name, or a
+  **sibling's** short name — and no list checked any of the three. The reserved-group assertions in
+  three suites were wrong for the same reason: an alias sits under a group, never at the root beside
+  `cyc login`.
 - ⚠ **The only action in the catalogue that returns the resource's own reason for existing.** Every
   other declared action reports a refinement — how full a subnet is, what a rule set expands to, what
   an isolation claim does not cover. `POST …/showAllocation` returns **the address**, which is not in

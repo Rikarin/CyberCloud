@@ -124,6 +124,98 @@ public sealed class GeneratedSurfaceTests {
     }
 
     [Fact]
+    public void NoGroupInAnyShippedTreeGivesOneTokenTwoMeanings() {
+        // ⚠ THE CHECK THE SIX LITERAL LISTS WERE TRYING TO BE, AND THE ONLY PLACE IN `dotnet test`
+        // THAT CAN SEE THE WHOLE TREE. src/Providers/README.md § Hard rule forbids one Providers.*
+        // assembly referencing another, so no provider's suite can compare its short name against
+        // another's — which is why the defence was six hand-typed lists, and why two of them were
+        // stale in consecutive passes. This assembly references no provider at all: it reads the
+        // generated tree the build embedded, so a provider added tomorrow is covered by this test
+        // without anybody editing it.
+        //
+        // ⚠ THE SCOPE IS THE GROUP, MEASURED RATHER THAN ASSUMED. System.CommandLine builds one token
+        // dictionary per command out of that command's own name and aliases plus its children's, so
+        // the strings that may not collide are a group's key, its commands' names and their aliases —
+        // and a short name equal to a DIFFERENT group's key is fine, which is what those lists spent
+        // their assertions forbidding. Measured against 2.0.10; CliTokens carries the same rule on the
+        // generator's side of the seam.
+        var catalog = TestHost.Catalog();
+
+        catalog.ApiVersions.ShouldNotBeEmpty("the build embeds every generated/cli/*.json");
+
+        foreach (var version in catalog.ApiVersions) {
+            var tree = catalog.Select(version);
+
+            tree.Groups.ShouldNotBeEmpty($"{version} carries no group at all");
+
+            foreach (var group in tree.Groups) {
+                var owners = new Dictionary<string, string>(StringComparer.Ordinal) {
+                    [group.Key] = "the group itself"
+                };
+
+                foreach (var command in group.Value.Commands) {
+                    Take(command.Key, $"the command '{command.Key}'");
+
+                    if (command.Value.Alias is { Length: > 0 } alias && alias != command.Key)
+                        Take(alias, $"the alias of '{command.Key}'");
+
+                    continue;
+
+                    void Take(string token, string owner) {
+                        owners.TryGetValue(token, out var existing).ShouldBeFalse(
+                            $"'cyc {group.Key} {token}' at api-version {version} is both {existing} "
+                            + $"and {owner}. System.CommandLine throws 'An item with the same key has "
+                            + $"already been added. Key: {token}' on every cyc invocation reaching "
+                            + $"'{group.Key}'");
+
+                        owners[token] = owner;
+                    }
+                }
+            }
+        }
+    }
+
+    [Fact]
+    public void EveryAliasInEveryShippedTreeResolvesToItsOwnCommand() {
+        // ⚠ The half the token check above cannot prove: that the alias reaches the right command
+        // rather than merely being unique. Built through the real CommandTree, so the assertion runs
+        // against System.CommandLine's own resolution and not against a model of it — which is also
+        // what makes a colliding tree fail here as the ArgumentException it really is.
+        var catalog = TestHost.Catalog();
+        var resolved = 0;
+
+        using var host = TestHost.Create();
+
+        foreach (var version in catalog.ApiVersions) {
+            var tree = catalog.Select(version);
+            var root = CommandTree.Build(host.Host, GlobalOptions.For(catalog), tree);
+
+            foreach (var group in tree.Groups) {
+                foreach (var command in group.Value.Commands) {
+                    if (command.Value.Alias is not { Length: > 0 } alias || alias == command.Key)
+                        continue;
+
+                    var verb = command.Value.Verbs.Keys.First();
+                    var parse = root.Parse([group.Key, alias, verb, "--help"]);
+
+                    parse.Errors.ShouldBeEmpty($"cyc {group.Key} {alias} {verb} did not parse");
+
+                    parse.CommandResult.Command.Parents.OfType<Command>().First().Name
+                        .ShouldBe(command.Key, $"'{alias}' resolved to the wrong command");
+
+                    resolved++;
+                }
+            }
+        }
+
+        // ⚠ A loop over an empty tree passes, and a green test that inspected nothing is the defect
+        // this repository names GateStatus.Vacuous. Every type in the catalogue declares a short name
+        // today; the floor asserts the loop ran rather than the exact count, so adding a type with no
+        // short name does not make this red for the wrong reason.
+        resolved.ShouldBeGreaterThan(10, "the loop found almost no alias to resolve");
+    }
+
+    [Fact]
     public void TheAliasTableIsNotInTheSourceTree() {
         // ⚠ The check docs/plan/21 § Grammar's claim deserves: there is no alias map in this
         // assembly. `widget` appears in the generated JSON and in this test file's expectations, and
