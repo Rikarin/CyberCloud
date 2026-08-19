@@ -292,6 +292,18 @@ consult — it is a resolution that stops. ⚠ The `404` on the old address is t
 unauthorized caller that the name was taken, which is the enumeration oracle the status code exists to
 close.
 
+⚠ **AND THE PURGE COULD NOT BE PERFORMED BY ANYBODY UNTIL 2026-08-19, WHICH IS A SHARPER FINDING
+THAN ANY OF THE OWED ITEMS BELOW.** The paragraph above separates "may delete" from "may destroy
+permanently" and gives the second its own permission name; `CyberCloudSchema` defined no such
+permission on `resource`, and an undeclared permission evaluates false. § The enforcement seam in
+[07](07-rebac-authorization.md) turns a false into the canonical `404`, so every purge answered *"does
+not exist"* — to every caller, for ever — and a recovery window therefore had no end: the name stayed
+held and the committed quota was never returned. **Every purge test here ran against a doubled
+authorizer**, which answers whatever its author believed about a permission name, so the whole feature
+tested green. `test/CyberCloud.Isolation` drove one through the real schema and found it;
+[07](07-rebac-authorization.md) § Azure RBAC, expressed in it records the fix and what it does and
+does not deliver.
+
 ⚠ **What is genuinely lost, and it is not the address — it is the place a tenant lists and reaches
 what is recoverable.** Key Vault's `deletedVaults` is a collection you can `GET`, which is how an
 operator finds the thing they are about to restore. Here, the recoverable resource is by construction
