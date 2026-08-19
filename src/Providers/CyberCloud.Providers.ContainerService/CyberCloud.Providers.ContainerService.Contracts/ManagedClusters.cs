@@ -598,6 +598,21 @@ public static class ManagedClusters {
     ///         <c>offered-minors-are-out-of-support</c>.
     ///     </para>
     ///     <para>
+    ///         ⚠ <b>RE-VERIFIED 2026-08-19 AGAINST BOTH UPSTREAMS, AND THE PINS BELOW ARE STILL THE
+    ///         ONLY RENDERABLE ONES — BUT THE MINOR SET IS NOW A DECISION RATHER THAN A GAP.</b> Both
+    ///         EOL dates are exact, and <c>quay.io</c> still publishes exactly the four tags named
+    ///         above with nothing pushed since 2025-09-27. What the earlier review did not weigh is
+    ///         that <b>1.34 — the one supported minor with a bootable image — is itself EOL on
+    ///         2026-10-27</b>, and enters maintenance mode on 2026-08-27. The minors worth an
+    ///         immutable api-version are 1.35 and 1.36, and <b>neither has a container-disk image in
+    ///         any repository under the <c>capk</c> namespace</b>. So the blocker is node-image supply
+    ///         rather than the api-version cost: upstream CAPK automates no container-disk build, and
+    ///         the documented route is <c>kubernetes-sigs/image-builder</c>, whose KubeVirt targets
+    ///         default to 1.36 today. <b>Recommended and deliberately not landed here:</b> host a
+    ///         container-disk for a supported minor first, then cut the api-version against an image
+    ///         that exists. <c>conformance.yaml § owed</c> carries the measurements.
+    ///     </para>
+    ///     <para>
     ///         ⚠ Still unchecked, and it needs a running management cluster rather than a registry
     ///         read: whether a pin is newer than the Kamaji install's bundled kubeadm, which its
     ///         version webhook refuses with a message about a version nobody typed.

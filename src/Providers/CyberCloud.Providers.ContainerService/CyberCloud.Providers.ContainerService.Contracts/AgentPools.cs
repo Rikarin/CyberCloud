@@ -278,6 +278,18 @@ public static class AgentPools {
     ///         objects below anything this platform reads, and invisible to a tenant who has no
     ///         credential for the cluster.
     ///     </para>
+    ///     <para>
+    ///         ⚠ <b>RE-READ 2026-08-19: THE SAME FOUR TAGS, AND THE REPOSITORY IS ABANDONED RATHER
+    ///         THAN MERELY SPARSE.</b> The tag API answers <c>has_additional: false</c> over
+    ///         <c>v1.31.5</c>, <c>v1.32.1</c>, <c>v1.33.5</c> and <c>v1.34.1</c>, and nothing has been
+    ///         pushed since 2025-09-27 — eleven months. Upstream automates no container-disk build at
+    ///         all: CAPK's image workflow pushes only the manager images, which is why the newest tag
+    ///         is nine patches behind 1.34's current 1.34.10 and why 1.35 and 1.36 have no image here
+    ///         or in any sibling repository under <c>capk</c>. <b>Anything this platform wants to
+    ///         offer at a supported minor, it has to build</b> —
+    ///         <c>kubernetes-sigs/image-builder</c>'s KubeVirt targets are the documented route.
+    ///         <see cref="ManagedClusters.PinnedPatch" /> carries the consequence for the offered set.
+    ///     </para>
     /// </remarks>
     public const string NodeImageRepository = "quay.io/capk/ubuntu-2404-container-disk";
 
