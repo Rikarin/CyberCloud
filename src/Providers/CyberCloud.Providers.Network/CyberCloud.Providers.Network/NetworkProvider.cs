@@ -1,3 +1,9 @@
+// ⚠ For `Result<decimal>`, which the load balancer's quota derivations return.
+// `CyberCloud.Core.Resources` is global in this assembly and `CyberCloud.Core` itself is not; the
+// `ErrorCode` alias in GlobalUsings still wins over the `Orleans.ErrorCode` this import would
+// otherwise put back in play — the same note ContainerRegistryProvider carries.
+using CyberCloud.Core;
+
 namespace CyberCloud.Providers.Network;
 
 /// <summary>
@@ -143,7 +149,20 @@ namespace CyberCloud.Providers.Network;
 ///                     job is not"</i>. Running public authoritative DNS means anycast nameservers,
 ///                     DDoS absorption, and being the reason a customer's whole business is offline.
 ///                     A shipped <c>zoneType: public</c> is that decision, made in a schema.
-///             </item>
+///                 </item>
+///                 <item>
+///                     ⚠ <b>A FOURTH BLOCKER, FOUND WHILE BUILDING <c>loadBalancers</c>, AND IT IS THE
+///                     ONE THAT BITES THE <i>PRIVATE</i> HALF.</b> docs/plan/14 § DNS wants private
+///                     zones <i>"linked to VPCs and resolved by the VPC's resolver only"</i>.
+///                     Kube-OVN's in-VPC resolver is <c>VpcDns</c> — a CoreDNS deployment on the
+///                     tenant's own switch — and its lister, its two work queues, its event handler,
+///                     its two workers and <c>resyncVpcDNSConfig</c> are <b>all inside
+///                     <c>if config.EnableLb</c></b> in <c>pkg/controller/controller.go</c>, which
+///                     ADR-019 sets to false. <b>So a tenant VPC on this platform has no resolver for
+///                     a private zone to be served by</b>, and the three blockers above are joined by
+///                     one that applies even to the half nobody has to decide about. It is also why
+///                     <see cref="LoadBalancers" /> takes addresses rather than names.
+///                 </item>
 ///             </list>
 ///             ⚠ <b>What is NOT a blocker, and is worth recording because it looks like one</b>: the
 ///             address model already carries record sets. <c>ResourceIdTests</c> round-trips
@@ -152,20 +171,67 @@ namespace CyberCloud.Providers.Network;
 ///             <c>ResourceId</c>.
 ///         </item>
 ///         <item>
-///             <b><c>loadBalancers</c>, <c>vpnGateways</c> — owed.</b> Both need the reshape
-///             <see cref="NetworkSecurityGroups" /> established, because a backend set and a peer list
-///             are both arrays of objects and <c>SchemaProperty.ElementKind</c> refuses one — and both
-///             are harder to reshape than a rule list was, because a backend and a peer each carry a
-///             <i>reference</i> rather than only scalars. ⚠ <c>loadBalancers</c> additionally needs a
-///             <b>reader</b>: docs/plan/14 has its backend pools <i>"reference resource ids (a VM, a
-///             scale set, a cluster's node pool), resolved by the reconciler into endpoints"</i>, and
-///             <c>ReconcileContext</c> carries a cluster connection, an <c>ISecretResolver</c> and
-///             nothing else. It is the same shape as <c>a-security-group-cannot-be-a-remote</c> and it
-///             wants the same reader. ⚠ <b><c>publicIpAddresses</c> shipping is nevertheless the half
-///             of docs/plan/14 § Load balancing that could be built alone</b>: the address exists now,
-///             it is metered, and the object a load balancer would attach to it — an <c>OvnFip</c> or
-///             an <c>OvnDnatRule</c> naming <see cref="PublicIpAddresses.ObjectNameOf" />'s output —
-///             is derivable from a resource id, so nothing here forecloses it.
+///             <b><c>virtualNetworks/loadBalancers</c> — SHIPPED, and the object both docs/plan/14 and
+///             this substrate point at is one nothing here reconciles.</b> Kube-OVN's native answer is
+///             a <c>SwitchLBRule</c>: a VIP on the tenant's logical switch, served by OVN, with no pod
+///             anywhere. Read firsthand in <c>pkg/controller/controller.go</c> at <c>v1.16.2</c> — the
+///             lister, the three work queues, the event handler and the three workers for
+///             <c>SwitchLBRule</c>, <b>and the whole of <c>VpcDns</c>, and the ordinary <c>Service</c>
+///             handlers</b>, are every one of them inside <c>if config.EnableLb</c>. ADR-019 runs
+///             Kube-OVN with <c>ENABLE_LB=false</c> so that Cilium owns the service datapath, so a
+///             <c>SwitchLBRule</c> on this platform would be accepted by the API server, reported
+///             <c>Succeeded</c>, and balance nothing. docs/plan/14 names the alternative in the same
+///             sentence — <i>"an HAProxy deployment for TCP with health checks and connection
+///             limits"</i> — and that is what landed: a proxy pod on the tenant's own subnet, joined
+///             through <c>ovn.kubernetes.io/logical_switch</c>. The full argument, including why it is
+///             a <b>child</b> where docs/plan/14 spells it top level, is on
+///             <see cref="LoadBalancers" />.
+///             <para>
+///                 ⚠ <b>The reader is still owed and is no longer what blocks the row.</b>
+///                 docs/plan/14 wants backend pools that <i>"reference resource ids … resolved by the
+///                 reconciler into endpoints"</i>, and <c>ReconcileContext</c> carries a cluster
+///                 connection, an <c>ISecretResolver</c>, an <c>ISecretWriter</c> and a log — nothing
+///                 that resolves a resource id. ⚠ <b>What makes an address list honest rather than a
+///                 workaround is the same <c>ENABLE_LB=false</c></b>: with the <c>Service</c> handlers
+///                 and <c>VpcDns</c> in that block, a tenant VPC has no service discovery and no DNS,
+///                 so an address is what a tenant has for every workload in their own network — and
+///                 what the reader would resolve to is still an address.
+///             </para>
+///         </item>
+///         <item>
+///             ⚠ <b><c>vpnGateways</c> — OWED, AND THE TWO THINGS THAT WOULD HAVE BLOCKED IT NO LONGER
+///             DO.</b> docs/plan/14 § VPN asks for WireGuard: a gateway plus <c>vpnClients</c>
+///             sub-resources, <i>"each with its own keypair"</i>. Two earlier readings are now wrong.
+///             <b>The peer list is not an array-of-objects problem</b> — that document's own shape puts
+///             each peer in a <i>child resource</i>, which is the reshape this family already knows how
+///             to do. And <b>a provider CAN mint a credential</b>: <c>ReconcileContext.SecretWriter</c>
+///             is an <c>ISecretWriter</c> with mint-once semantics, so the gateway's private key is
+///             writable to the tenant's vault by the reconciler that needs it.
+///             <list type="number">
+///                 <item>
+///                     ⚠ <b>What is left is a real blocker and it is the child's.</b> WireGuard reads
+///                     <b>one</b> configuration file listing every peer. So a <c>vpnClients</c> child
+///                     would have to write into its parent's file — which is <c>routeTables</c>'
+///                     refusal exactly: two children converging by erasing each other, with no
+///                     <c>x-kubernetes-list-type</c> to make it safe. What would close it is either a
+///                     WireGuard operator with a per-peer CRD (<b>which must be checked for existence,
+///                     maintenance and licence before it is designed around</b>, ADR-011) or a
+///                     reconciler on the <i>parent</i> that lists its own children — the same reader
+///                     <c>loadBalancers</c> wants, in a second shape.
+///                 </item>
+///                 <item>
+///                     ⚠ <b>And the gateway needs the kernel's WireGuard, which is a node property no
+///                     schema can state.</b> A <c>wg</c> interface needs <c>NET_ADMIN</c> and a
+///                     <c>wireguard</c> module on the host; a cluster without one runs the userspace
+///                     implementation at a fraction of the throughput, and nothing in
+///                     <c>ReconcileContext</c> can tell which cluster is which.
+///                 </item>
+///             </list>
+///             ⚠ <b><c>publicIpAddresses</c> and this row share the unfinished half</b>: a gateway a
+///             remote worker can reach needs a public address attached by an <c>OvnFip</c> or
+///             <c>OvnDnatRule</c> naming <see cref="PublicIpAddresses.ObjectNameOf" />'s output, and
+///             nothing creates one yet — <c>charts/managed/kube-ovn-eip/conformance.yaml § owed</c>,
+///             <c>nothing-can-be-given-an-address-yet</c>.
 ///         </item>
 ///     </list>
 ///     <para>
@@ -407,6 +473,104 @@ public sealed class NetworkProvider : IResourceProvider {
             )
             .Chart(PublicIpAddresses.ChartName)
             .SupportsTags()
-            .RequiresCluster(PublicIpAddresses.ClusterIdPointer);
+            .RequiresCluster(PublicIpAddresses.ClusterIdPointer)
+            // ── The fifth type — docs/plan/14 § Load balancing ────────────────────────────────
+            //
+            // ⚠ A CHILD, WHICH IS NOT HOW docs/plan/14 SPELLS IT, AND THE SUBSTRATE IS WHY. That
+            // document writes `CyberCloud.Network/loadBalancers` with no network segment — the
+            // spelling publicIpAddresses kept, because an OvnEip genuinely names no VPC. Every object
+            // THIS type renders is annotated onto one subnet of one VPC and its frontend address is
+            // only meaningful inside that VPC's address space, so the network comes from the ADDRESS
+            // and cannot be wrong. The alternative is a network-name property nothing validates.
+            .ResourceType(LoadBalancers.TypePath)
+            .ApiVersion(LoadBalancers.V2026, LoadBalancers.Schema2026)
+            .Reconciler<LoadBalancerReconciler>()
+            // ⚠ THE FIRST TYPE IN THIS FAMILY THAT DRAWS COMPUTE, AND ADR-019 IS WHAT PUT IT THERE.
+            // A Vpc, a Subnet and a SecurityGroup are rows in OVN's databases and consume nothing
+            // attributable, which is why they draw `Resources` alone. This row would have been the
+            // same — Kube-OVN's own SwitchLBRule is a VIP on a logical switch with no pod anywhere —
+            // except that SwitchLBRule is served only when the controller runs with `--enable-lb`,
+            // and ADR-019 runs Kube-OVN with ENABLE_LB=false so that Cilium owns the service
+            // datapath. Read firsthand in pkg/controller/controller.go at v1.16.2: the lister, the
+            // three queues, the event handler and the three workers are all inside
+            // `if config.EnableLb`. So the proxy is a POD, and a pod is vCPU and memory somebody's
+            // node actually gives up.
+            .Meter(QuotaMeter.Vcpu, ProxyVcpuDrawn)
+            .Meter(QuotaMeter.MemoryGb, ProxyMemoryDrawn)
+            // ⚠ NO StorageGb. The proxy mounts one ConfigMap and writes nothing: its root filesystem
+            // is read-only and it has no emptyDir, because HAProxy in TCP mode buffers in memory. A
+            // storage meter here would reserve disk nothing allocates.
+            .Meters(QuotaMeter.Resources)
+            .Permissions("read", "write", "delete")
+            .Action(
+                LoadBalancers.BackendsAction,
+                ActionKind.Post,
+                LoadBalancers.BackendsPermission,
+                response: LoadBalancers.BackendsResponse,
+                handler: typeof(ShowBackendsHandler)
+            )
+            // ⚠ `loadbalancer` — checked against the fourteen group keys (sample, dbforpostgresql,
+            // cache, messaging, storage, search, documentdb, analytics, dbformysql, network,
+            // containerservice, monitor, terminal, containerregistry), against every existing short
+            // name (widget, postgres, valkey, kafka, nats, rabbitmq, objectstore, bucket, opensearch,
+            // docdb, clickhouse, mariadb, aks, nodepool, workspace, shell, registry), against
+            // CommandTree.ReservedGroups' nine, and against this family's own `vnet`, `subnet`,
+            // `secgroup` and `publicip`. NOT `lb`: two characters is the collision `secgroup` was
+            // renamed to avoid, and System.CommandLine's ValidTokens is ONE dictionary of every
+            // command token and alias in the tree — a collision throws `ArgumentException` on the
+            // first parse of ANY command line, naming neither the provider nor the string.
+            .Display(
+                "Load balancer",
+                "Load balancers",
+                shortName: "loadbalancer",
+                summary: "An L4 TCP proxy on an address inside a virtual network, spreading "
+                + "connections across a pool of workload addresses with health checks and a "
+                + "connection limit."
+            )
+            .Chart(LoadBalancers.ChartName)
+            .SupportsTags()
+            .RequiresCluster(LoadBalancers.ClusterIdPointer);
     }
+
+    // ── What a load balancer draws ─────────────────────────────────────────────────────────────
+    //
+    // ⚠ BOTH DERIVE FROM ONE POINTER, WHICH IS THE SIMPLEST SHAPE MeterDerivation TAKES IN THE TREE
+    // AND IS STILL NOT A CONSTANT. `sizing.preset` is the only body property that moves either
+    // figure, because this row is exactly one pod: no replica count (see LoadBalancers' remarks on
+    // why there is one) and no second component. A flat `Meters(Vcpu)` would have reserved 1 vCPU for
+    // a proxy that asks for 250m, on every subscription, forever.
+
+    /// <summary>vCPU: the proxy pod at its preset.</summary>
+    /// <remarks>
+    ///     ⚠ Refuses rather than reserving zero when the quantity does not parse. That is unreachable
+    ///     from a validated body — <c>AllowedValues</c> is <see cref="LoadBalancers.Presets" />' own
+    ///     keys — and is exactly the drift worth failing on when somebody adds a preset to the enum and
+    ///     forgets the table.
+    /// </remarks>
+    static MeterDerivation ProxyVcpuDrawn { get; } =
+        MeterDerivation.Of(
+            "sizing.preset's cpu, in cores",
+            ["/properties/sizing/preset"],
+            body => KubeQuantity.TryParse(LoadBalancers.Resources(body).Cpu, out var cores)
+                ? Result<decimal>.Success(cores)
+                : Result<decimal>.Failure(
+                    ErrorCode.InternalError,
+                    "the sizing preset behind '/properties/sizing/preset' carries a cpu quantity that "
+                    + "does not parse, so no reservation can be computed"
+                )
+        );
+
+    /// <summary>Memory: the same pod, in gibibytes.</summary>
+    static MeterDerivation ProxyMemoryDrawn { get; } =
+        MeterDerivation.Of(
+            "sizing.preset's memory, in GiB",
+            ["/properties/sizing/preset"],
+            body => KubeQuantity.TryGibibytes(LoadBalancers.Resources(body).Memory, out var gibibytes)
+                ? Result<decimal>.Success(gibibytes)
+                : Result<decimal>.Failure(
+                    ErrorCode.InternalError,
+                    "the sizing preset behind '/properties/sizing/preset' carries a memory quantity "
+                    + "that does not parse, so no reservation can be computed"
+                )
+        );
 }

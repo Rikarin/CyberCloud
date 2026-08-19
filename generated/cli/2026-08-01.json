@@ -7328,6 +7328,554 @@
           },
           "alias": "vnet"
         },
+        "virtual-networks-load-balancers": {
+          "name": "virtual-networks-load-balancers",
+          "resourceType": "CyberCloud.Network/virtualNetworks/loadBalancers",
+          "title": "Load balancer",
+          "plural": "Load balancers",
+          "summary": "An L4 TCP proxy on an address inside a virtual network, spreading connections across a pool of workload addresses with health checks and a connection limit.",
+          "verbs": {
+            "create": {
+              "name": "create",
+              "summary": "Create or replace a Load balancer.",
+              "method": "PUT",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Network/virtualNetworks/{virtualNetworksName}/loadBalancers/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": true,
+              "flags": [
+                {
+                  "name": "--addresses",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The workload addresses to balance across, comma separated — for example 10.20.1.11,10.20.1.12. ⚠ Addresses and not resource ids: there is no service discovery and no DNS inside a virtual network, so an address is what a tenant has for their own workloads. At most 32.",
+                  "jsonPointer": "/properties/backend/addresses",
+                  "default": "10.20.1.11",
+                  "example": "10.20.1.11,10.20.1.12"
+                },
+                {
+                  "name": "--backend-port",
+                  "type": "integer",
+                  "required": true,
+                  "summary": "The TCP port every backend address is reached on. ⚠ One port for the whole pool: a pool whose members listen on different ports is two pools.",
+                  "jsonPointer": "/properties/backend/port",
+                  "default": 8080
+                },
+                {
+                  "name": "--cluster-id",
+                  "type": "string",
+                  "required": true,
+                  "alias": "--cluster",
+                  "summary": "The cluster the proxy runs in. ⚠ It must be the cluster the virtual network was created in: a proxy in another cluster has no route into this network at all.",
+                  "jsonPointer": "/properties/clusterId",
+                  "immutable": true,
+                  "widget": "cluster"
+                },
+                {
+                  "name": "--frontend-port",
+                  "type": "integer",
+                  "required": true,
+                  "summary": "The TCP port the proxy listens on. ⚠ There is no protocol setting: HAProxy does not proxy UDP in any version, so every rule here is TCP.",
+                  "jsonPointer": "/properties/frontend/port",
+                  "default": 80
+                },
+                {
+                  "name": "--healthy-after",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "How many successful probes put a backend back into the pool.",
+                  "jsonPointer": "/properties/health/healthyAfter",
+                  "default": 2
+                },
+                {
+                  "name": "--interval-seconds",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "How often each backend is probed with a TCP connection.",
+                  "jsonPointer": "/properties/health/intervalSeconds",
+                  "default": 5
+                },
+                {
+                  "name": "--location",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The region the load balancer is billed in. ⚠ It must be the region its virtual network is in — nothing checks that, because the network's own region is not readable from here.",
+                  "jsonPointer": "/location",
+                  "immutable": true,
+                  "widget": "region",
+                  "example": "eu-central"
+                },
+                {
+                  "name": "--max-connections",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "How many connections the frontend accepts at once. ⚠ Further connections wait in the kernel's accept queue rather than being refused, so this is a back-pressure setting rather than a firewall. It is also applied per backend server.",
+                  "jsonPointer": "/properties/limits/maxConnections",
+                  "default": 2000
+                },
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--preset",
+                  "type": "string",
+                  "required": false,
+                  "summary": "How much the proxy pod gets. An L4 proxy is mostly kernel work, so the small row carries far more than its size suggests; the larger rows are for many long-lived connections.",
+                  "jsonPointer": "/properties/sizing/preset",
+                  "choices": [
+                    "c1.large",
+                    "c1.medium",
+                    "c1.small"
+                  ],
+                  "widget": "cozy-preset",
+                  "default": "c1.small"
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--subnet",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The subnet of this virtual network the proxy sits on. ⚠ The proxy gets an address from it, so the frontend address below must be inside its range. A name that is not a subnet of this network is refused by the fabric rather than by the API, and the proxy pod never schedules.",
+                  "jsonPointer": "/properties/subnet",
+                  "immutable": true,
+                  "widget": "subnet",
+                  "default": "web",
+                  "example": "web"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tags",
+                  "type": "keyValue",
+                  "required": false,
+                  "summary": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+                  "jsonPointer": "/tags",
+                  "widget": "tag-input"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--unhealthy-after",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "How many failed probes take a backend out of the pool.",
+                  "jsonPointer": "/properties/health/unhealthyAfter",
+                  "default": 3
+                },
+                {
+                  "name": "--v4",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The IPv4 address the proxy answers on, inside the subnet's range. ⚠ Required, and it is the one thing about this resource a tenant must choose: there is no DNS inside a virtual network, so an address nobody picked is an address nothing can be pointed at. A bare address and never a prefix.",
+                  "jsonPointer": "/properties/frontend/v4",
+                  "immutable": true,
+                  "widget": "cidr",
+                  "default": "10.20.1.10",
+                  "example": "10.20.1.10"
+                },
+                {
+                  "name": "--v6",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The IPv6 address the proxy also answers on, or empty. ⚠ Lower case only, for the fabric's reason. It must be inside the subnet's IPv6 range, which means the subnet has to have one.",
+                  "jsonPointer": "/properties/frontend/v6",
+                  "immutable": true,
+                  "widget": "cidr",
+                  "default": "",
+                  "example": "fd00:20:1::10"
+                },
+                {
+                  "name": "--version",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Which HAProxy line to run. 3.2 is the long-term-support line and is the default; 3.4 is the current one. ⚠ A change here restarts the proxy and drops open connections.",
+                  "jsonPointer": "/properties/version",
+                  "choices": [
+                    "3.2",
+                    "3.4"
+                  ],
+                  "default": "3.2"
+                },
+                {
+                  "name": "--virtual-networks-name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The name of the parent this Load balancer lives inside. docs/plan/12 § Child resources: a child is addressed '…/{parentType}/{parentName}/{childType}/{childName}', so the parent's name is part of the address rather than part of the body.",
+                  "pathPlaceholder": "virtualNetworksName"
+                }
+              ],
+              "waitFlags": [
+                "--wait",
+                "--no-wait"
+              ]
+            },
+            "delete": {
+              "name": "delete",
+              "summary": "Delete a Load balancer. Permanent.",
+              "method": "DELETE",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Network/virtualNetworks/{virtualNetworksName}/loadBalancers/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": true,
+              "flags": [
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--virtual-networks-name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The name of the parent this Load balancer lives inside. docs/plan/12 § Child resources: a child is addressed '…/{parentType}/{parentName}/{childType}/{childName}', so the parent's name is part of the address rather than part of the body.",
+                  "pathPlaceholder": "virtualNetworksName"
+                }
+              ],
+              "waitFlags": [
+                "--wait",
+                "--no-wait"
+              ]
+            },
+            "show": {
+              "name": "show",
+              "summary": "Read a Load balancer.",
+              "method": "GET",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Network/virtualNetworks/{virtualNetworksName}/loadBalancers/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--virtual-networks-name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The name of the parent this Load balancer lives inside. docs/plan/12 § Child resources: a child is addressed '…/{parentType}/{parentName}/{childType}/{childName}', so the parent's name is part of the address rather than part of the body.",
+                  "pathPlaceholder": "virtualNetworksName"
+                }
+              ]
+            },
+            "show-backends": {
+              "name": "show-backends",
+              "summary": "showBackends a Load balancer.",
+              "method": "POST",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Network/virtualNetworks/{virtualNetworksName}/loadBalancers/{resourceName}/showBackends",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--virtual-networks-name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The name of the parent this Load balancer lives inside. docs/plan/12 § Child resources: a child is addressed '…/{parentType}/{parentName}/{childType}/{childName}', so the parent's name is part of the address rather than part of the body.",
+                  "pathPlaceholder": "virtualNetworksName"
+                }
+              ],
+              "action": "showBackends",
+              "permission": "read",
+              "rawBody": true
+            },
+            "update": {
+              "name": "update",
+              "summary": "Amend a Load balancer. Only the flags given are changed.",
+              "method": "PATCH",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Network/virtualNetworks/{virtualNetworksName}/loadBalancers/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": true,
+              "flags": [
+                {
+                  "name": "--addresses",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The workload addresses to balance across, comma separated — for example 10.20.1.11,10.20.1.12. ⚠ Addresses and not resource ids: there is no service discovery and no DNS inside a virtual network, so an address is what a tenant has for their own workloads. At most 32.",
+                  "jsonPointer": "/properties/backend/addresses",
+                  "default": "10.20.1.11",
+                  "example": "10.20.1.11,10.20.1.12"
+                },
+                {
+                  "name": "--backend-port",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "The TCP port every backend address is reached on. ⚠ One port for the whole pool: a pool whose members listen on different ports is two pools.",
+                  "jsonPointer": "/properties/backend/port",
+                  "default": 8080
+                },
+                {
+                  "name": "--cluster-id",
+                  "type": "string",
+                  "required": false,
+                  "alias": "--cluster",
+                  "summary": "The cluster the proxy runs in. ⚠ It must be the cluster the virtual network was created in: a proxy in another cluster has no route into this network at all.",
+                  "jsonPointer": "/properties/clusterId",
+                  "immutable": true,
+                  "widget": "cluster"
+                },
+                {
+                  "name": "--frontend-port",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "The TCP port the proxy listens on. ⚠ There is no protocol setting: HAProxy does not proxy UDP in any version, so every rule here is TCP.",
+                  "jsonPointer": "/properties/frontend/port",
+                  "default": 80
+                },
+                {
+                  "name": "--healthy-after",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "How many successful probes put a backend back into the pool.",
+                  "jsonPointer": "/properties/health/healthyAfter",
+                  "default": 2
+                },
+                {
+                  "name": "--interval-seconds",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "How often each backend is probed with a TCP connection.",
+                  "jsonPointer": "/properties/health/intervalSeconds",
+                  "default": 5
+                },
+                {
+                  "name": "--location",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The region the load balancer is billed in. ⚠ It must be the region its virtual network is in — nothing checks that, because the network's own region is not readable from here.",
+                  "jsonPointer": "/location",
+                  "immutable": true,
+                  "widget": "region",
+                  "example": "eu-central"
+                },
+                {
+                  "name": "--max-connections",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "How many connections the frontend accepts at once. ⚠ Further connections wait in the kernel's accept queue rather than being refused, so this is a back-pressure setting rather than a firewall. It is also applied per backend server.",
+                  "jsonPointer": "/properties/limits/maxConnections",
+                  "default": 2000
+                },
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--preset",
+                  "type": "string",
+                  "required": false,
+                  "summary": "How much the proxy pod gets. An L4 proxy is mostly kernel work, so the small row carries far more than its size suggests; the larger rows are for many long-lived connections.",
+                  "jsonPointer": "/properties/sizing/preset",
+                  "choices": [
+                    "c1.large",
+                    "c1.medium",
+                    "c1.small"
+                  ],
+                  "widget": "cozy-preset",
+                  "default": "c1.small"
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--subnet",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subnet of this virtual network the proxy sits on. ⚠ The proxy gets an address from it, so the frontend address below must be inside its range. A name that is not a subnet of this network is refused by the fabric rather than by the API, and the proxy pod never schedules.",
+                  "jsonPointer": "/properties/subnet",
+                  "immutable": true,
+                  "widget": "subnet",
+                  "default": "web",
+                  "example": "web"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tags",
+                  "type": "keyValue",
+                  "required": false,
+                  "summary": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+                  "jsonPointer": "/tags",
+                  "widget": "tag-input"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--unhealthy-after",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "How many failed probes take a backend out of the pool.",
+                  "jsonPointer": "/properties/health/unhealthyAfter",
+                  "default": 3
+                },
+                {
+                  "name": "--v4",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The IPv4 address the proxy answers on, inside the subnet's range. ⚠ Required, and it is the one thing about this resource a tenant must choose: there is no DNS inside a virtual network, so an address nobody picked is an address nothing can be pointed at. A bare address and never a prefix.",
+                  "jsonPointer": "/properties/frontend/v4",
+                  "immutable": true,
+                  "widget": "cidr",
+                  "default": "10.20.1.10",
+                  "example": "10.20.1.10"
+                },
+                {
+                  "name": "--v6",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The IPv6 address the proxy also answers on, or empty. ⚠ Lower case only, for the fabric's reason. It must be inside the subnet's IPv6 range, which means the subnet has to have one.",
+                  "jsonPointer": "/properties/frontend/v6",
+                  "immutable": true,
+                  "widget": "cidr",
+                  "default": "",
+                  "example": "fd00:20:1::10"
+                },
+                {
+                  "name": "--version",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Which HAProxy line to run. 3.2 is the long-term-support line and is the default; 3.4 is the current one. ⚠ A change here restarts the proxy and drops open connections.",
+                  "jsonPointer": "/properties/version",
+                  "choices": [
+                    "3.2",
+                    "3.4"
+                  ],
+                  "default": "3.2"
+                },
+                {
+                  "name": "--virtual-networks-name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The name of the parent this Load balancer lives inside. docs/plan/12 § Child resources: a child is addressed '…/{parentType}/{parentName}/{childType}/{childName}', so the parent's name is part of the address rather than part of the body.",
+                  "pathPlaceholder": "virtualNetworksName"
+                }
+              ],
+              "waitFlags": [
+                "--wait",
+                "--no-wait"
+              ]
+            }
+          },
+          "alias": "loadbalancer"
+        },
         "virtual-networks-security-groups": {
           "name": "virtual-networks-security-groups",
           "resourceType": "CyberCloud.Network/virtualNetworks/securityGroups",

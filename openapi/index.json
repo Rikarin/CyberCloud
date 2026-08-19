@@ -376,6 +376,19 @@
       }
     },
     {
+      "type": "CyberCloud.Network/virtualNetworks/loadBalancers",
+      "apiVersions": [
+        "2026-08-01"
+      ],
+      "display": {
+        "name": "Load balancer",
+        "plural": "Load balancers",
+        "alias": "loadbalancer",
+        "summary": "An L4 TCP proxy on an address inside a virtual network, spreading connections across a pool of workload addresses with health checks and a connection limit.",
+        "declared": true
+      }
+    },
+    {
       "type": "CyberCloud.Network/virtualNetworks/securityGroups",
       "apiVersions": [
         "2026-08-01"

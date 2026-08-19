@@ -15,7 +15,7 @@ public sealed class NetworkDeclarationTests {
         // process that does not start. Running it here is what turns those into a test failure.
         var registry = Build();
 
-        registry.Types.Length.ShouldBe(4);
+        registry.Types.Length.ShouldBe(5);
 
         registry.Types.Select(x => x.Type.ToString()).ShouldBe(
             [
@@ -24,7 +24,13 @@ public sealed class NetworkDeclarationTests {
                 "CyberCloud.Network/virtualNetworks/securityGroups",
                 // ⚠ ONE SEGMENT, NOT TWO. The other three types in this family are a network and two
                 // things inside one; an OvnEip names no VPC, so this is a top-level type at Depth 1.
-                "CyberCloud.Network/publicIpAddresses"
+                "CyberCloud.Network/publicIpAddresses",
+                // ⚠ TWO SEGMENTS, WHICH IS NOT HOW docs/plan/14 SPELLS IT. That document writes
+                // `CyberCloud.Network/loadBalancers`, and the substrate disagrees: every object this
+                // type renders is annotated onto one subnet of one VPC, so the network comes from the
+                // ADDRESS and cannot be wrong. The alternative is a network-name property nothing
+                // validates. See NetworkProvider's remarks.
+                "CyberCloud.Network/virtualNetworks/loadBalancers"
             ],
             ignoreOrder: true
         );
@@ -63,8 +69,54 @@ public sealed class NetworkDeclarationTests {
                     + "Fallback ?? 1m and a body that does not carry it refuses the write"
                 );
 
+                // ⚠ THE ONE EXCEPTION, AND IT IS THE TYPE THAT PROVISIONS A POD. Four of these five
+                // types are rows in OVN's databases and draw a flat count. A load balancer is an
+                // HAProxy Deployment — because ADR-019's ENABLE_LB=false leaves Kube-OVN's own
+                // SwitchLBRule unreconciled — so its vCPU and memory come off a sizing preset through
+                // a MeterDerivation. Its `Resources` meter is still flat.
+                if (type.Type == LoadBalancers.Type && meter.Meter != QuotaMeter.Resources) {
+                    meter.Derivation.ShouldNotBeNull($"{type.Type}/{meter.Meter}");
+
+                    continue;
+                }
+
                 meter.Derivation.ShouldBeNull($"{type.Type}/{meter.Meter}");
             }
+        }
+    }
+
+    [Fact]
+    public void OnlyTheLoadBalancerDrawsComputeAndItDrawsItsPresetsRow() {
+        // ⚠ THE ASSERTION THE FIFTH TYPE EXISTS FOR, AND IT IS A CLAIM ABOUT THE SUBSTRATE RATHER
+        // THAN ABOUT ARITHMETIC. A Vpc, a Subnet and a SecurityGroup provision nothing a node gives
+        // up, and this row would have been the same — Kube-OVN's SwitchLBRule is a VIP on a logical
+        // switch with no pod anywhere — except that its controller, queues and workers all sit inside
+        // `if config.EnableLb` and ADR-019 sets ENABLE_LB=false. So the proxy is a pod, and a pod is
+        // vCPU and memory somebody is charged for.
+        foreach (var type in Build().Types) {
+            var meters = type.Meters.Select(x => x.Meter).ToList();
+
+            if (type.Type == LoadBalancers.Type) {
+                meters.ShouldBe(
+                    [QuotaMeter.Vcpu, QuotaMeter.MemoryGb, QuotaMeter.Resources],
+                    ignoreOrder: true
+                );
+
+                continue;
+            }
+
+            meters.ShouldNotContain(QuotaMeter.Vcpu, type.Type.ToString());
+            meters.ShouldNotContain(QuotaMeter.MemoryGb, type.Type.ToString());
+        }
+
+        // ⚠ AND NO StorageGb ON ANY OF THE FIVE. The proxy's root filesystem is read-only, it mounts
+        // one ConfigMap and HAProxy in TCP mode buffers in memory — a storage meter would reserve
+        // disk nothing allocates.
+        foreach (var type in Build().Types) {
+            type.Meters.Select(x => x.Meter).ShouldNotContain(
+                QuotaMeter.StorageGb,
+                type.Type.ToString()
+            );
         }
     }
 
@@ -146,6 +198,15 @@ public sealed class NetworkDeclarationTests {
         CliTokens.Collisions(Declarations()).ShouldBeEmpty();
     }
 
+    // ⚠ A RESERVED-GROUP ASSERTION LIVED HERE AND ITS PREMISE WAS MEASURED FALSE. It read every
+    // short name against `CommandTree.ReservedGroups`, on the stated grounds that "a short NAME is an
+    // alias in the same System.CommandLine ValidTokens dictionary". Measured against the pinned
+    // 2.0.10, that dictionary is per PARENT command: an alias sits under `network` and `cyc login`
+    // sits at the root, so the two can never be one token and the assertion could not fail. The half
+    // that IS real — a generated GROUP taking one of the nine — `CommandTree` throws on while the
+    // root command is built, and `cyc.Tests.ReservedGroupTests` asserts over the whole tree rather
+    // than one family at a time.
+
     [Fact]
     public void TheShortNamesAreTheOnesTheProviderMeantToDeclare() {
         // ⚠ `secgroup` AND NOT `sg`, WHICH IS KUBE-OVN'S OWN shortName. Two characters is a token
@@ -155,7 +216,13 @@ public sealed class NetworkDeclarationTests {
         // ⚠ `publicip` AND NOT `pip` OR `eip`, for the same reason plus one more: `eip` is the
         // SUBSTRATE'S word rather than the product's, and docs/plan/21 § Grammar spells the type
         // `publicIpAddresses`. A tenant who has never heard of Kube-OVN should be able to guess it.
-        ShortNames().ShouldBe(["vnet", "subnet", "secgroup", "publicip"], ignoreOrder: true);
+        // ⚠ `loadbalancer` AND NOT `lb`, WHICH IS `secgroup`'s ARGUMENT ONE MORE TIME. Two characters
+        // is a token somebody else will reach for, and docs/plan/21 § Grammar spells the type
+        // `loadBalancers` — a tenant who has never heard of HAProxy should be able to guess it.
+        ShortNames().ShouldBe(
+            ["vnet", "subnet", "secgroup", "publicip", "loadbalancer"],
+            ignoreOrder: true
+        );
     }
 
     [Fact]

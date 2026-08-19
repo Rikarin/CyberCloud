@@ -5640,6 +5640,378 @@
       "x-cybercloud-resource-type": "CyberCloud.Network/virtualNetworks",
       "x-cybercloud-action": "showIsolation"
     },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Network/virtualNetworks/{virtualNetworksName}/loadBalancers/{resourceName}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "name": "virtualNetworksName",
+          "in": "path",
+          "required": true,
+          "description": "The name of the parent resource this one lives inside. A child is addressed through its parent — docs/plan/12 § Child resources.",
+          "schema": {
+            "type": "string",
+            "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
+            "minLength": 1,
+            "maxLength": 63
+          }
+        },
+        {
+          "$ref": "#/components/parameters/ResourceName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "get": {
+        "operationId": "CyberCloud_Network_virtualNetworks_loadBalancers_Get",
+        "summary": "Read a CyberCloud.Network/virtualNetworks/loadBalancers.",
+        "description": "The body is this api-version's projection of the resource: docs/plan/08 § The provider registry keeps grain state as a superset and a read at an older version drops what that version did not declare.",
+        "responses": {
+          "200": {
+            "description": "The resource.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Network.virtualNetworks.loadBalancers"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "read"
+      },
+      "put": {
+        "operationId": "CyberCloud_Network_virtualNetworks_loadBalancers_CreateOrUpdate",
+        "summary": "Create or replace a CyberCloud.Network/virtualNetworks/loadBalancers.",
+        "description": "A full replacement. Every property the schema marks required must be present; a read-only property is refused rather than ignored — docs/plan/08 § The write path, end to end.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CyberCloud.Network.virtualNetworks.loadBalancers"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "headers": {
+              "Azure-AsyncOperation": {
+                "description": "The absolute URL of the operation to poll.",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "Retry-After": {
+                "description": "Seconds to wait before the first poll.",
+                "required": true,
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "write"
+      },
+      "patch": {
+        "operationId": "CyberCloud_Network_virtualNetworks_loadBalancers_Update",
+        "summary": "Merge-patch a CyberCloud.Network/virtualNetworks/loadBalancers.",
+        "description": "A merge patch. The patch itself may omit required properties; the merged result is what is validated — see ResourceSchema.Validate.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CyberCloud.Network.virtualNetworks.loadBalancers"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "headers": {
+              "Azure-AsyncOperation": {
+                "description": "The absolute URL of the operation to poll.",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "Retry-After": {
+                "description": "Seconds to wait before the first poll.",
+                "required": true,
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "write"
+      },
+      "delete": {
+        "operationId": "CyberCloud_Network_virtualNetworks_loadBalancers_Delete",
+        "summary": "Delete a CyberCloud.Network/virtualNetworks/loadBalancers.",
+        "description": "The delete is permanent: this type declares no soft-delete window.",
+        "responses": {
+          "202": {
+            "description": "Accepted. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "headers": {
+              "Azure-AsyncOperation": {
+                "description": "The absolute URL of the operation to poll.",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "Retry-After": {
+                "description": "Seconds to wait before the first poll.",
+                "required": true,
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "delete",
+        "x-cybercloud-soft-delete-days": 0,
+        "x-cybercloud-purge-permission": ""
+      },
+      "x-cybercloud-resource-type": "CyberCloud.Network/virtualNetworks/loadBalancers",
+      "x-cybercloud-display": {
+        "name": "Load balancer",
+        "plural": "Load balancers",
+        "alias": "loadbalancer",
+        "summary": "An L4 TCP proxy on an address inside a virtual network, spreading connections across a pool of workload addresses with health checks and a connection limit.",
+        "declared": true
+      },
+      "x-cybercloud-supports-tags": true,
+      "x-cybercloud-requires-cluster": true,
+      "x-cybercloud-cluster-id-pointer": "/properties/clusterId",
+      "x-cybercloud-soft-delete-days": 0,
+      "x-cybercloud-purge-permission": "",
+      "x-cybercloud-purge-protection-pointer": "",
+      "x-cybercloud-meters": [
+        {
+          "meter": "MemoryGb",
+          "amountPointer": "",
+          "fallback": null,
+          "expression": "sizing.preset's memory, in GiB",
+          "reads": [
+            "/properties/sizing/preset"
+          ]
+        },
+        {
+          "meter": "Resources",
+          "amountPointer": "",
+          "fallback": 1,
+          "expression": "1",
+          "reads": []
+        },
+        {
+          "meter": "Vcpu",
+          "amountPointer": "",
+          "fallback": null,
+          "expression": "sizing.preset's cpu, in cores",
+          "reads": [
+            "/properties/sizing/preset"
+          ]
+        }
+      ]
+    },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Network/virtualNetworks/{virtualNetworksName}/loadBalancers/{resourceName}/showBackends": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "name": "virtualNetworksName",
+          "in": "path",
+          "required": true,
+          "description": "The name of the parent resource this one lives inside. A child is addressed through its parent — docs/plan/12 § Child resources.",
+          "schema": {
+            "type": "string",
+            "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
+            "minLength": 1,
+            "maxLength": 63
+          }
+        },
+        {
+          "$ref": "#/components/parameters/ResourceName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "post": {
+        "operationId": "CyberCloud_Network_virtualNetworks_loadBalancers_ShowBackends",
+        "summary": "showBackends a CyberCloud.Network/virtualNetworks/loadBalancers.",
+        "description": "An action never creates: a POST to a name that does not exist is a 404 — docs/plan/08 § The write path, end to end.",
+        "responses": {
+          "200": {
+            "description": "The action's result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Network.virtualNetworks.loadBalancers.ShowBackendsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "read",
+        "x-cybercloud-secret": false,
+        "x-cybercloud-long-running": false
+      },
+      "x-cybercloud-resource-type": "CyberCloud.Network/virtualNetworks/loadBalancers",
+      "x-cybercloud-action": "showBackends"
+    },
     "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Network/virtualNetworks/{virtualNetworksName}/securityGroups/{resourceName}": {
       "parameters": [
         {
@@ -11203,6 +11575,237 @@
         "title": "CyberCloud.Network.virtualNetworks.ShowIsolationResponse",
         "type": "object"
       },
+      "CyberCloud.Network.virtualNetworks.loadBalancers": {
+        "additionalProperties": false,
+        "description": "The body of a CyberCloud.Network/virtualNetworks/loadBalancers. Generated from the provider registry's schema, which is the same object the write path validates against — docs/plan/08 § The provider registry.",
+        "properties": {
+          "location": {
+            "description": "The region the load balancer is billed in. ⚠ It must be the region its virtual network is in — nothing checks that, because the network's own region is not readable from here.",
+            "example": "eu-central",
+            "format": "cybercloud-region",
+            "type": "string",
+            "x-cybercloud-immutable": true,
+            "x-cybercloud-widget": "region"
+          },
+          "properties": {
+            "additionalProperties": false,
+            "description": "The load balancer's own settings.",
+            "properties": {
+              "backend": {
+                "additionalProperties": false,
+                "description": "Where the connections go.",
+                "properties": {
+                  "addresses": {
+                    "default": "10.20.1.11",
+                    "description": "The workload addresses to balance across, comma separated — for example 10.20.1.11,10.20.1.12. ⚠ Addresses and not resource ids: there is no service discovery and no DNS inside a virtual network, so an address is what a tenant has for their own workloads. At most 32.",
+                    "example": "10.20.1.11,10.20.1.12",
+                    "maxLength": 1024,
+                    "pattern": "^(?:[0-9A-Fa-f:.]+(,[0-9A-Fa-f:.]+)*)$",
+                    "type": "string"
+                  },
+                  "port": {
+                    "default": 8080,
+                    "description": "The TCP port every backend address is reached on. ⚠ One port for the whole pool: a pool whose members listen on different ports is two pools.",
+                    "maximum": 65535,
+                    "minimum": 1,
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "addresses",
+                  "port"
+                ],
+                "type": "object"
+              },
+              "clusterId": {
+                "description": "The cluster the proxy runs in. ⚠ It must be the cluster the virtual network was created in: a proxy in another cluster has no route into this network at all.",
+                "format": "uuid",
+                "type": "string",
+                "x-cybercloud-immutable": true,
+                "x-cybercloud-widget": "cluster"
+              },
+              "frontend": {
+                "additionalProperties": false,
+                "description": "The address and port workloads connect to.",
+                "properties": {
+                  "port": {
+                    "default": 80,
+                    "description": "The TCP port the proxy listens on. ⚠ There is no protocol setting: HAProxy does not proxy UDP in any version, so every rule here is TCP.",
+                    "maximum": 65535,
+                    "minimum": 1,
+                    "type": "integer"
+                  },
+                  "v4": {
+                    "default": "10.20.1.10",
+                    "description": "The IPv4 address the proxy answers on, inside the subnet's range. ⚠ Required, and it is the one thing about this resource a tenant must choose: there is no DNS inside a virtual network, so an address nobody picked is an address nothing can be pointed at. A bare address and never a prefix.",
+                    "example": "10.20.1.10",
+                    "pattern": "^(?:(\\d{1,3}\\.){3}\\d{1,3})$",
+                    "type": "string",
+                    "x-cybercloud-immutable": true,
+                    "x-cybercloud-widget": "cidr"
+                  },
+                  "v6": {
+                    "default": "",
+                    "description": "The IPv6 address the proxy also answers on, or empty. ⚠ Lower case only, for the fabric's reason. It must be inside the subnet's IPv6 range, which means the subnet has to have one.",
+                    "example": "fd00:20:1::10",
+                    "pattern": "^(?:([0-9A-Fa-f:.]+)?)$",
+                    "type": "string",
+                    "x-cybercloud-immutable": true,
+                    "x-cybercloud-widget": "cidr"
+                  }
+                },
+                "required": [
+                  "port",
+                  "v4"
+                ],
+                "type": "object"
+              },
+              "health": {
+                "additionalProperties": false,
+                "description": "How a backend is decided to be up. ⚠ Checking cannot be turned off — a proxy that sends connections to a dead server is worse than no proxy.",
+                "properties": {
+                  "healthyAfter": {
+                    "default": 2,
+                    "description": "How many successful probes put a backend back into the pool.",
+                    "maximum": 10,
+                    "minimum": 1,
+                    "type": "integer"
+                  },
+                  "intervalSeconds": {
+                    "default": 5,
+                    "description": "How often each backend is probed with a TCP connection.",
+                    "maximum": 60,
+                    "minimum": 2,
+                    "type": "integer"
+                  },
+                  "unhealthyAfter": {
+                    "default": 3,
+                    "description": "How many failed probes take a backend out of the pool.",
+                    "maximum": 10,
+                    "minimum": 1,
+                    "type": "integer"
+                  }
+                },
+                "type": "object"
+              },
+              "limits": {
+                "additionalProperties": false,
+                "description": "What the proxy refuses rather than passes on.",
+                "properties": {
+                  "maxConnections": {
+                    "default": 2000,
+                    "description": "How many connections the frontend accepts at once. ⚠ Further connections wait in the kernel's accept queue rather than being refused, so this is a back-pressure setting rather than a firewall. It is also applied per backend server.",
+                    "maximum": 100000,
+                    "minimum": 10,
+                    "type": "integer"
+                  }
+                },
+                "type": "object"
+              },
+              "sizing": {
+                "additionalProperties": false,
+                "description": "CPU and memory for the proxy.",
+                "properties": {
+                  "preset": {
+                    "default": "c1.small",
+                    "description": "How much the proxy pod gets. An L4 proxy is mostly kernel work, so the small row carries far more than its size suggests; the larger rows are for many long-lived connections.",
+                    "enum": [
+                      "c1.large",
+                      "c1.medium",
+                      "c1.small"
+                    ],
+                    "type": "string",
+                    "x-cybercloud-widget": "cozy-preset"
+                  }
+                },
+                "type": "object"
+              },
+              "subnet": {
+                "default": "web",
+                "description": "The subnet of this virtual network the proxy sits on. ⚠ The proxy gets an address from it, so the frontend address below must be inside its range. A name that is not a subnet of this network is refused by the fabric rather than by the API, and the proxy pod never schedules.",
+                "example": "web",
+                "maxLength": 63,
+                "pattern": "^(?:[a-z0-9]([-a-z0-9]*[a-z0-9])?)$",
+                "type": "string",
+                "x-cybercloud-immutable": true,
+                "x-cybercloud-widget": "subnet"
+              },
+              "version": {
+                "default": "3.2",
+                "description": "Which HAProxy line to run. 3.2 is the long-term-support line and is the default; 3.4 is the current one. ⚠ A change here restarts the proxy and drops open connections.",
+                "enum": [
+                  "3.2",
+                  "3.4"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "clusterId",
+              "subnet"
+            ],
+            "type": "object"
+          },
+          "tags": {
+            "type": "object",
+            "description": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "maxProperties": 50,
+            "x-cybercloud-widget": "tag-input"
+          }
+        },
+        "required": [
+          "location"
+        ],
+        "title": "CyberCloud.Network/virtualNetworks/loadBalancers",
+        "type": "object"
+      },
+      "CyberCloud.Network.virtualNetworks.loadBalancers.ShowBackendsResponse": {
+        "additionalProperties": false,
+        "description": "What CyberCloud.Network/virtualNetworks/loadBalancers/showBackends returns.",
+        "properties": {
+          "frontend": {
+            "description": "The address and port the proxy answers on.",
+            "type": "string"
+          },
+          "note": {
+            "description": "What the answer is and is not — in particular that the servers are what the platform configured rather than what the proxy currently believes is healthy.",
+            "type": "string"
+          },
+          "readyReplicas": {
+            "description": "How many proxy pods are running and passing their readiness probe. ⚠ 0 with servers listed is a load balancer that is configured and carrying no traffic, which is the state this action exists to make visible.",
+            "type": "integer"
+          },
+          "sampledAt": {
+            "description": "When the platform read the Deployment, RFC 3339.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "serverCount": {
+            "description": "How many servers the pool carries.",
+            "type": "integer"
+          },
+          "servers": {
+            "description": "One line per backend server, in the order the proxy is given them.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "frontend",
+          "note",
+          "readyReplicas",
+          "sampledAt",
+          "serverCount",
+          "servers"
+        ],
+        "title": "CyberCloud.Network.virtualNetworks.loadBalancers.ShowBackendsResponse",
+        "type": "object"
+      },
       "CyberCloud.Network.virtualNetworks.securityGroups": {
         "additionalProperties": false,
         "description": "The body of a CyberCloud.Network/virtualNetworks/securityGroups. Generated from the provider registry's schema, which is the same object the write path validates against — docs/plan/08 § The provider registry.",
@@ -12511,5 +13114,5 @@
       }
     }
   },
-  "x-cybercloud-resource-type-count": 21
+  "x-cybercloud-resource-type-count": 22
 }

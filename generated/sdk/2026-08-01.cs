@@ -2924,6 +2924,206 @@ public sealed partial class VirtualNetworkCollection {
     public partial AsyncPageable<VirtualNetworkResource> GetAllAsync(CancellationToken cancellationToken = default);
 }
 
+/// <summary>The values /properties/sizing/preset accepts. ⚠ Closed: the write path refuses anything else.</summary>
+public enum LoadBalancerPreset {
+    /// <summary>Never assigned. Not a value the API accepts.</summary>
+    Unknown = 0,
+
+    /// <summary>c1.large</summary>
+    [JsonStringEnumMemberName("c1.large")]
+    C1Large = 1,
+
+    /// <summary>c1.medium</summary>
+    [JsonStringEnumMemberName("c1.medium")]
+    C1Medium = 2,
+
+    /// <summary>c1.small</summary>
+    [JsonStringEnumMemberName("c1.small")]
+    C1Small = 3
+}
+
+/// <summary>The values /properties/version accepts. ⚠ Closed: the write path refuses anything else.</summary>
+public enum LoadBalancerVersion {
+    /// <summary>Never assigned. Not a value the API accepts.</summary>
+    Unknown = 0,
+
+    /// <summary>3.2</summary>
+    [JsonStringEnumMemberName("3.2")]
+    N32 = 1,
+
+    /// <summary>3.4</summary>
+    [JsonStringEnumMemberName("3.4")]
+    N34 = 2
+}
+
+/// <summary>The body of a CyberCloud.Network/virtualNetworks/loadBalancers.</summary>
+/// <remarks>An L4 TCP proxy on an address inside a virtual network, spreading connections across a pool of workload addresses with health checks and a connection limit.</remarks>
+public sealed partial class LoadBalancerData {
+
+    /// <summary>The region the load balancer is billed in. ⚠ It must be the region its virtual network is in — nothing checks that, because the network's own region is not readable from here.</summary>
+    /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+    [JsonPropertyName("location")]
+    public required string Location { get; set; }
+
+    /// <summary>The workload addresses to balance across, comma separated — for example 10.20.1.11,10.20.1.12. ⚠ Addresses and not resource ids: there is no service discovery and no DNS inside a virtual network, so an address is what a tenant has for their own workloads. At most 32.</summary>
+    /// <remarks>Required on a create. Defaults to "10.20.1.11" when left unset.</remarks>
+    [JsonPropertyName("addresses")]
+    public required string Addresses { get; set; }
+
+    /// <summary>The TCP port every backend address is reached on. ⚠ One port for the whole pool: a pool whose members listen on different ports is two pools.</summary>
+    /// <remarks>Required on a create. Defaults to 8080 when left unset.</remarks>
+    [JsonPropertyName("port")]
+    public required long Port { get; set; }
+
+    /// <summary>The cluster the proxy runs in. ⚠ It must be the cluster the virtual network was created in: a proxy in another cluster has no route into this network at all.</summary>
+    /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+    [JsonPropertyName("clusterId")]
+    public required Guid ClusterId { get; set; }
+
+    /// <summary>The TCP port the proxy listens on. ⚠ There is no protocol setting: HAProxy does not proxy UDP in any version, so every rule here is TCP.</summary>
+    /// <remarks>Required on a create. Defaults to 80 when left unset.</remarks>
+    [JsonPropertyName("port")]
+    public required long Port { get; set; }
+
+    /// <summary>The IPv4 address the proxy answers on, inside the subnet's range. ⚠ Required, and it is the one thing about this resource a tenant must choose: there is no DNS inside a virtual network, so an address nobody picked is an address nothing can be pointed at. A bare address and never a prefix.</summary>
+    /// <remarks>Required on a create. ⚠ Cannot change after create. Defaults to "10.20.1.10" when left unset.</remarks>
+    [JsonPropertyName("v4")]
+    public required string V4 { get; set; }
+
+    /// <summary>The IPv6 address the proxy also answers on, or empty. ⚠ Lower case only, for the fabric's reason. It must be inside the subnet's IPv6 range, which means the subnet has to have one.</summary>
+    /// <remarks>⚠ Cannot change after create. Defaults to "" when left unset.</remarks>
+    [JsonPropertyName("v6")]
+    public string? V6 { get; set; }
+
+    /// <summary>How many successful probes put a backend back into the pool.</summary>
+    /// <remarks>Defaults to 2 when left unset.</remarks>
+    [JsonPropertyName("healthyAfter")]
+    public long? HealthyAfter { get; set; }
+
+    /// <summary>How often each backend is probed with a TCP connection.</summary>
+    /// <remarks>Defaults to 5 when left unset.</remarks>
+    [JsonPropertyName("intervalSeconds")]
+    public long? IntervalSeconds { get; set; }
+
+    /// <summary>How many failed probes take a backend out of the pool.</summary>
+    /// <remarks>Defaults to 3 when left unset.</remarks>
+    [JsonPropertyName("unhealthyAfter")]
+    public long? UnhealthyAfter { get; set; }
+
+    /// <summary>How many connections the frontend accepts at once. ⚠ Further connections wait in the kernel's accept queue rather than being refused, so this is a back-pressure setting rather than a firewall. It is also applied per backend server.</summary>
+    /// <remarks>Defaults to 2000 when left unset.</remarks>
+    [JsonPropertyName("maxConnections")]
+    public long? MaxConnections { get; set; }
+
+    /// <summary>How much the proxy pod gets. An L4 proxy is mostly kernel work, so the small row carries far more than its size suggests; the larger rows are for many long-lived connections.</summary>
+    /// <remarks>Defaults to "c1.small" when left unset.</remarks>
+    [JsonPropertyName("preset")]
+    public LoadBalancerPreset? Preset { get; set; }
+
+    /// <summary>The subnet of this virtual network the proxy sits on. ⚠ The proxy gets an address from it, so the frontend address below must be inside its range. A name that is not a subnet of this network is refused by the fabric rather than by the API, and the proxy pod never schedules.</summary>
+    /// <remarks>Required on a create. ⚠ Cannot change after create. Defaults to "web" when left unset.</remarks>
+    [JsonPropertyName("subnet")]
+    public required string Subnet { get; set; }
+
+    /// <summary>Which HAProxy line to run. 3.2 is the long-term-support line and is the default; 3.4 is the current one. ⚠ A change here restarts the proxy and drops open connections.</summary>
+    /// <remarks>Defaults to "3.2" when left unset.</remarks>
+    [JsonPropertyName("version")]
+    public LoadBalancerVersion? Version { get; set; }
+
+    /// <summary>Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.</summary>
+    [JsonPropertyName("tags")]
+    public IDictionary<string, string> Tags { get; set; } = new Dictionary<string, string>(StringComparer.Ordinal);
+}
+
+/// <summary>One Load balancer, and the operations on it.</summary>
+public sealed partial class LoadBalancerResource {
+    /// <summary>The resource's fully qualified id.</summary>
+    public string Id { get; init; } = string.Empty;
+
+    /// <summary>The body, projected at this api-version.</summary>
+    public LoadBalancerData Data { get; init; } = new();
+
+    /// <summary>Re-reads the resource.</summary>
+    public partial Task<Response<LoadBalancerResource>> GetAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Amends the resource. A merge patch: what is not set is not changed.</summary>
+    public partial Task<Operation<LoadBalancerResource>> UpdateAsync(
+        WaitUntil waitUntil,
+        LoadBalancerData data,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Deletes the resource. ⚠ Permanent: this type declares no soft-delete window.</summary>
+    public partial Task<Operation> DeleteAsync(
+        WaitUntil waitUntil,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>What showBackends returns.</summary>
+    public sealed partial class ShowBackendsResult {
+
+        /// <summary>The address and port the proxy answers on.</summary>
+        [JsonPropertyName("frontend")]
+        public required string Frontend { get; set; }
+
+        /// <summary>What the answer is and is not — in particular that the servers are what the platform configured rather than what the proxy currently believes is healthy.</summary>
+        [JsonPropertyName("note")]
+        public required string Note { get; set; }
+
+        /// <summary>How many proxy pods are running and passing their readiness probe. ⚠ 0 with servers listed is a load balancer that is configured and carrying no traffic, which is the state this action exists to make visible.</summary>
+        [JsonPropertyName("readyReplicas")]
+        public required long ReadyReplicas { get; set; }
+
+        /// <summary>When the platform read the Deployment, RFC 3339.</summary>
+        [JsonPropertyName("sampledAt")]
+        public required DateTimeOffset SampledAt { get; set; }
+
+        /// <summary>How many servers the pool carries.</summary>
+        [JsonPropertyName("serverCount")]
+        public required long ServerCount { get; set; }
+
+        /// <summary>One line per backend server, in the order the proxy is given them.</summary>
+        [JsonPropertyName("servers")]
+        public IList<string> Servers { get; set; } = new List<string>();
+    }
+
+    /// <summary>ShowBackends. ⚠ An action never creates — a POST to a name that does not exist is a 404.</summary>
+    public partial Task<Response<ShowBackendsResult>> ShowBackendsAsync(
+        CancellationToken cancellationToken = default);
+}
+
+/// <summary>The Load balancers in one parent.</summary>
+/// <remarks>⚠ Every write is long-running: docs/plan/08 § The write path, end to end
+/// ends in a 202 for every verb, so there is no synchronous overload to offer.
+/// ⚠ The leading parameter(s) name the ancestors this type nests inside —
+/// docs/plan/12 § Child resources addresses a child
+/// '…/{parentType}/{parentName}/{childType}/{childName}', so the parent's name is
+/// part of the address rather than part of the body.</remarks>
+public sealed partial class LoadBalancerCollection {
+    /// <summary>The resource type these address.</summary>
+    public const string ResourceType = "CyberCloud.Network/virtualNetworks/loadBalancers";
+
+    /// <summary>The URL template, with the api-version this file was generated at.</summary>
+    public const string PathTemplate = "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Network/virtualNetworks/{virtualNetworksName}/loadBalancers/{resourceName}";
+
+    /// <inheritdoc cref="GeneratedApiVersion.Value" />
+    public const string ApiVersion = "2026-08-01";
+
+    /// <summary>Creates or replaces one Load balancer.</summary>
+    /// <remarks>⚠ Poll with GetProgressAsync() rather than only WaitForCompletionAsync():
+    /// docs/plan/21 § The .NET SDK — "Azure's LROs expose no progress; ours do and the
+    /// SDK should not hide it".</remarks>
+    public partial Task<Operation<LoadBalancerResource>> CreateOrUpdateAsync(
+        WaitUntil waitUntil,
+        string virtualNetworksName, string name,
+        LoadBalancerData data,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Reads one Load balancer by name.</summary>
+    public partial Task<Response<LoadBalancerResource>> GetAsync(string virtualNetworksName, string name, CancellationToken cancellationToken = default);
+
+    /// <summary>The Load balancers in one parent, paged.</summary>
+    public partial AsyncPageable<LoadBalancerResource> GetAllAsync(string virtualNetworksName, CancellationToken cancellationToken = default);
+}
+
 /// <summary>The body of a CyberCloud.Network/virtualNetworks/securityGroups.</summary>
 /// <remarks>A deny-by-default set of allow rules that become OVN ACLs on the ports in a virtual network. A workload may carry several.</remarks>
 public sealed partial class SecurityGroupData {

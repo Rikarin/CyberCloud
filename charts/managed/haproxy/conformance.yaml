@@ -1,0 +1,214 @@
+# Conformance manifest — docs/plan/12 § The pattern, once, piece 8.
+#
+# What the conformance suite asserts about CyberCloud.Network/virtualNetworks/loadBalancers. This file
+# is data: `Build.Charts` checks that it is present, non-empty, and names the same resource type as
+# Chart.yaml. The suite that reads the rest of it lives in test/ and does not exist yet.
+
+resourceType: CyberCloud.Network/virtualNetworks/loadBalancers
+apiVersion: "2026-08-01"
+chart: haproxy
+
+# Objects the reconciler must have applied once the resource reports Succeeded.
+#
+# ⚠ TWO, AND BOTH ARE NAMESPACED — the first objects in this family that are. Its four siblings render
+# Kube-OVN kinds, every one of which is +kubebuilder:resource:scope="Cluster".
+renders:
+  - group: ""
+    version: v1
+    kind: ConfigMap
+    count: 1
+    clusterScoped: false
+  - group: apps
+    version: v1
+    kind: Deployment
+    count: 1
+    clusterScoped: false
+
+# ADR-013 — every rendered object carries all seven labels.
+labels:
+  required:
+    - cybercloud.io/tenant-id
+    - cybercloud.io/subscription-id
+    - cybercloud.io/resource-group
+    - cybercloud.io/resource-id
+    - cybercloud.io/resource-type
+    - cybercloud.io/api-version
+    - cybercloud.io/managed-by
+  values:
+    cybercloud.io/resource-type: cybercloud.network_virtualnetworks_loadbalancers
+    cybercloud.io/managed-by: cybercloud
+
+# Behaviour a tenant is entitled to. Each is a statement the suite can fail on, not a feature list.
+assertions:
+  - id: a-config-change-restarts-the-proxy
+    says: >
+      Changing the backend list changes what the running proxy forwards to. ⚠ THIS IS THE SINGLE MOST
+      LIKELY BUG IN THIS TYPE AND IT WOULD BE INVISIBLE. A ConfigMap that changes does NOT restart the
+      pods that mount it, and HAProxy reads its file once at start — so an implementation without
+      LoadBalancers.ConfigChecksumAnnotation on the POD TEMPLATE applies cleanly, reads back exactly
+      as desired, converges, reports Succeeded, and keeps sending traffic to the old servers for as
+      long as the pod lives. The annotation makes the configuration part of the pod template, so a
+      config change is a rollout. NetworkLoadBalancerTests runs the mistake red, and the conformance
+      case's ChangedBody adds a BACKEND rather than changing a sizing preset for exactly this reason:
+      a preset is one field the renderer copies through, and an update test over it would pass against
+      a renderer that never regenerated the configuration at all.
+  - id: the-proxy-is-inside-the-tenants-network
+    says: >
+      The pod is on the tenant's own subnet and not on the platform's. ⚠ The only seam is the
+      `ovn.kubernetes.io/logical_switch` annotation on the pod template; without it the pod joins the
+      namespace's default subnet, which is Kube-OVN's default VPC — the PLATFORM'S OWN — and the proxy
+      would be neither reachable from the tenant's network nor able to reach anything in it, while
+      sitting on the platform's address space. The switch name is
+      `{namespace}-{network}-{subnet}`, composed through NetworkSubnets.ObjectNameOf so there is one
+      spelling of it, and the network half comes from the RESOURCE ADDRESS rather than from the body —
+      so a body cannot place a proxy in another network.
+  - id: the-frontend-address-is-the-one-that-was-asked-for
+    says: >
+      The proxy answers on the address the body names, every time it is rescheduled. ⚠ Without the
+      `ovn.kubernetes.io/ip_pool` annotation the pod gets whatever IPAM has free, which changes on
+      every restart — and there is no DNS inside a tenant VPC to hide that behind, so every client
+      configuration in the tenant's network would break on a node drain. It is also why the address is
+      REQUIRED, which is the opposite of publicIpAddresses' answer for the same field.
+  - id: two-networks-in-one-resource-group-do-not-collide
+    says: >
+      Two virtual networks in one resource group, each holding a load balancer called `web`, render
+      two Deployments. ⚠ THE ARITHMETIC IS THE INVERSE OF THIS FAMILY'S OTHER FOUR TYPES and getting
+      it wrong is silent either way. These objects are NAMESPACED, so ReconcileDriver.NamespaceFor's
+      `{subscriptionId:N}-{resourceGroup}` already separates two subscriptions — which is exactly what
+      NetworkSubnets.ObjectNameOf has to add by hand for a cluster-scoped Subnet. What a namespace does
+      NOT separate is two networks in one group, so the parent's name is a name component and an id
+      without one throws rather than rendering a colliding name.
+  - id: the-proxy-runs-as-a-non-root-user-and-still-binds-port-80
+    says: >
+      A load balancer whose listener is port 80 starts. ⚠ The upstream image ends with
+      `USER haproxy` (uid 99), and binding a privileged port as non-root fails with EACCES — HAProxy
+      logs "cannot bind socket" and exits, which presents as CrashLoopBackOff with the resource stuck
+      in InProgress. `net.ipv4.ip_unprivileged_port_start=0` is in the kubelet's SAFE sysctl set from
+      Kubernetes 1.22, so it needs no node configuration. ⚠ And `runAsUser: 99` is written EXPLICITLY
+      alongside `runAsNonRoot: true`, because the image's user is a NAME and a kubelet cannot verify a
+      non-numeric user is non-root — it refuses the container instead.
+  - id: a-backend-cannot-be-the-frontend
+    says: >
+      A body whose backend list contains the proxy's own frontend address is refused. It would be a
+      proxy that connects to itself on every request until the connection limit was reached, which
+      presents as a load balancer that accepts connections and answers none. The check is
+      LoadBalancers.BackendProblem, in the reconciler, because it compares two properties against each
+      other and ResourceSchema compares one property against constants.
+  - id: the-configured-servers-are-readable
+    says: >
+      `POST …/showBackends` returns the servers the proxy was configured with, the frontend it answers
+      on, and how many proxy pods are ready. ⚠ The replica count is the only fact in that response the
+      tenant did not supply, and it is what makes the rest worth returning: a load balancer whose image
+      will not pull reports exactly the same servers as one that is working.
+
+# Meters the type must emit.
+#
+# ⚠ THE FIRST TYPE IN THIS FAMILY TO DRAW COMPUTE, AND ADR-019 IS WHY. A Vpc, a Subnet and a
+# SecurityGroup are rows in OVN's databases and consume nothing attributable, so they draw `resources`
+# alone. This row would have been the same — a SwitchLBRule is a VIP with no pod — except that
+# SwitchLBRule is served only with `--enable-lb`, which ADR-019 turns off. The proxy is a pod, and a
+# pod is vCPU and memory a node actually gives up.
+#
+# ⚠ NO `storageGb`: the container's root filesystem is read-only, it mounts one ConfigMap, and HAProxy
+# in TCP mode buffers in memory. ⚠ NO `publicIps`: this address is a PRIVATE one out of the tenant's
+# own subnet, and attaching a public address is a second Kube-OVN object nothing renders yet.
+meters:
+  - vcpu
+  - memoryGb
+  - resources
+
+# ── owed ──────────────────────────────────────────────────────────────────────────────────────────
+owed:
+  - id: one-proxy-is-a-single-point-of-failure
+    says: >
+      ⚠ THE HEADLINE COST OF THIS ROW, AND IT IS THE SUBSTRATE'S RATHER THAN AN UNFINISHED CHART. The
+      Deployment has ONE replica. Two would need two addresses and something to share a virtual
+      address between them, and the thing that shares a VIP on this substrate is the OVN load balancer
+      ADR-019 turns off — so a second replica would be a second proxy on a second address, which is two
+      load balancers rather than one that is redundant. What a tenant gets today is a proxy the
+      kubelet restarts, with an outage as long as a pod start. ⚠ WHAT WOULD CLOSE IT is either
+      ENABLE_LB=true on a per-cluster basis (which ADR-019 decided against for the platform's own
+      datapath and did not decide for tenant VPCs) or keepalived-style VRRP between two proxy pods,
+      which is a second product's worth of failure modes.
+  - id: a-config-change-drops-connections
+    says: >
+      Every change to this resource restarts the proxy and every open connection through it is cut.
+      ⚠ The Deployment's strategy is `Recreate` DELIBERATELY: a RollingUpdate would start the new pod
+      before the old one goes, and the new pod would ask IPAM for the frontend address the old pod
+      still holds — `acquireStaticAddress` refuses it, the rollout stalls, and the resource sits in
+      InProgress forever on a change that looked harmless. So the choice is between a few seconds of
+      downtime and a deadlock, and this row takes the downtime and says so.
+  - id: backend-health-is-not-observable
+    says: >
+      A tenant cannot ask which of their backends the proxy currently believes is up. HAProxy knows —
+      it is checking them on the interval this body sets — but the answer lives in its runtime API on
+      a UNIX socket inside the pod, and `ActionContext` carries a cluster connection, which reads
+      objects rather than running commands in containers. ⚠ `showBackends` therefore returns what the
+      platform CONFIGURED plus the pod's readiness, and says so in its own `note` field rather than
+      leaving a caller to assume the list is a health report. Closing it is an exec seam on
+      IKubeClusterConnection, which is CyberCloud.Kubernetes surface rather than a provider's — the
+      same class of platform gap as charts/managed/kube-ovn-vpc's `address-space-is-validated-after-202`.
+  - id: udp-is-not-balanced
+    says: >
+      There is no `protocol` property and every rule this type writes is TCP. HAProxy does not proxy
+      UDP in any version — it is not a limitation of this chart — so a property with `udp` in it would
+      be a 400 a tenant discovers after designing around it, and a property with one legal value would
+      imply a choice nobody has. ⚠ What a UDP row would need on this substrate is either the OVN load
+      balancer ENABLE_LB=false turns off, or a second proxy (nftables, or Envoy's UDP listener), which
+      is a different product rather than a value in this enum.
+  - id: nothing-can-be-reached-from-outside-the-vpc
+    says: >
+      This load balancer answers on a PRIVATE address inside the tenant's subnet. Publishing it needs a
+      public address attached by a second Kube-OVN object — an OvnFip or an OvnDnatRule naming
+      PublicIpAddresses.ObjectNameOf's output — and nothing in this platform creates one yet, which is
+      the other half of charts/managed/kube-ovn-eip's `nothing-can-be-given-an-address-yet`. ⚠ WHAT WAS
+      AVOIDED is foreclosing it: the join is a resource id a future provider resolves through
+      CyberCloud.ResourceManager, and no property here would have to change.
+  - id: backends-are-addresses-and-not-resource-ids
+    says: >
+      docs/plan/14 wants backend pools that "reference resource ids (a VM, a scale set, a cluster's
+      node pool), resolved by the reconciler into endpoints". `ReconcileContext` carries a cluster
+      connection, an ISecretResolver, an ISecretWriter and a log — nothing that can resolve a resource
+      id, and no seam to add one from a provider — and a list of objects is
+      what SchemaProperty.ElementKind refuses. ⚠ WHAT MAKES THE ADDRESS LIST HONEST RATHER THAN A
+      WORKAROUND is the same ENABLE_LB=false: with the Service handlers and VpcDns in that block, a
+      tenant VPC has no service discovery and no DNS, so an address is what a tenant has for every
+      workload in their own network. The reader is still owed and what it would resolve to is still an
+      address.
+  - id: the-frontend-address-is-not-checked-against-the-subnet
+    says: >
+      A tenant may name a frontend address outside the subnet's prefix, or one already taken, and the
+      API accepts it: the pattern checks the SHAPE and LoadBalancers.BackendProblem checks the family
+      and the self-reference. The prefix is on a Subnet object in the cluster, which nothing on the
+      write path can consult — the same shape as charts/managed/kube-ovn-eip's
+      `an-address-is-not-checked-against-the-pool-before-202`, one level in. The symptom is a pod that
+      never gets an address and a resource that stays InProgress.
+  - id: the-subnet-name-is-not-checked-either
+    says: >
+      `/properties/subnet` names a subnet of this virtual network and nothing validates that one
+      exists. It is a NAME rather than a resource id for the reader's reason above; a wrong name
+      renders a `logical_switch` annotation naming a switch that does not exist, and the pod stays
+      Pending with a CNI error. ⚠ It is bounded in the direction that matters: the name is only ever a
+      SUFFIX of `{namespace}-{network}-`, both of which come from the resource address, so a wrong
+      name cannot reach another tenant's subnet — only a nonexistent one.
+  - id: the-image-is-a-tag-and-not-a-digest
+    says: >
+      `haproxy:3.2-alpine` is a moving tag: a patched image arrives on the next pod restart, which is
+      what a tenant wants for a CVE and is not what docs/plan/18 § Platform security wants for
+      reproducibility. cloud-shell pins its own image by digest because the platform builds it; this
+      one is somebody else's and a digest here would have to be bumped in this repository for every
+      HAProxy patch release, which is a job nothing in the tree does yet.
+  - id: connection-counts-are-not-metered
+    says: >
+      docs/plan/22 would bill a load balancer by connections and bytes, and this row emits neither.
+      What exists is HAProxy's own stats and its `option tcplog` lines on stdout; turning either into a
+      usage event is docs/plan/16's pipeline rather than this provider's, and the same gap
+      charts/managed/seaweedfs records as `egress-is-not-derivable`.
+  - id: grafana-dashboard
+    says: >
+      docs/plan/12 § The pattern, once, piece 6 keeps the dashboard chart-side. ⚠ It applies to this
+      row — unlike kube-ovn-vpc's and kube-ovn-eip's, there IS a workload to scrape — and it is owed
+      rather than declined: HAProxy's Prometheus endpoint is a built-in
+      (`http-request use-service prometheus-exporter` on its own listener), and adding it means a
+      second bind, a PodMonitor, and a decision about whether a tenant's proxy metrics are the
+      tenant's or the platform's. None of that is a reason to ship a dashboard that scrapes nothing.

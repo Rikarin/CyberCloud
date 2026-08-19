@@ -313,6 +313,128 @@ public sealed class ShowEffectiveRulesHandler : IResourceActionHandler {
 }
 
 /// <summary>
+///     Serves <c>POST …/loadBalancers/{name}/showBackends</c>: what the proxy is configured to do, and
+///     whether it is running.
+/// </summary>
+/// <remarks>
+///     <para>
+///         ⚠ <b>IT IS TWO ACTIONS THAT WOULD BOTH BE HALF AN ANSWER.</b> The server list is
+///         <see cref="ShowEffectiveRulesHandler" />'s shape — an expansion of two scalars a tenant
+///         would otherwise do in their head — and on its own it is derivable from the body, so a load
+///         balancer whose image will not pull reports exactly what a working one does. The replica
+///         count is the fact the body cannot carry, and on its own it says nothing about what the
+///         proxy would forward. Together they answer the question this type is actually asked, which
+///         is "why is nothing reaching my workload".
+///     </para>
+///     <para>
+///         ⚠ <b>WHAT IS NOT HERE IS PER-SERVER HEALTH, AND THAT IS A LIMIT RATHER THAN AN
+///         OMISSION.</b> Which backends HAProxy currently believes are up lives in its runtime API, on
+///         a UNIX socket inside the pod. Reaching it needs an exec seam <c>ActionContext</c> does not
+///         have — it carries a cluster connection, and a connection reads objects rather than running
+///         commands in containers. <c>charts/managed/haproxy/conformance.yaml § owed</c>,
+///         <c>backend-health-is-not-observable</c>.
+///     </para>
+///     <para>
+///         ⚠ <b><c>readyReplicas</c> IS READ AS ABSENT-OR-ZERO RATHER THAN REQUIRED.</b> A
+///         <c>Deployment</c> that has just been applied has no <c>status</c> at all, and
+///         <c>status.readyReplicas</c> is <c>omitempty</c> — so an absent key and a zero are the same
+///         state and both mean "nothing is serving yet". Refusing on the absent key would fail the
+///         action at exactly the moment somebody is most likely to call it.
+///     </para>
+/// </remarks>
+/// <param name="clock">Stamps <c>sampledAt</c>. ⚠ The handler's only field, and it is not mutable.</param>
+public sealed class ShowBackendsHandler(IClock clock) : IResourceActionHandler {
+    /// <summary>What the answer is, and is not, on every response.</summary>
+    public const string Note =
+        "These are the servers the platform configured this proxy with, in the order it was given "
+        + "them, rather than a reading of which ones HAProxy currently believes are healthy — that "
+        + "lives on a socket inside the pod. `readyReplicas: 0` means the proxy is not serving, "
+        + "whatever the servers below say.";
+
+    /// <inheritdoc />
+    public ResourceTypeName Type => LoadBalancers.Type;
+
+    /// <inheritdoc />
+    public string Action => LoadBalancers.BackendsAction;
+
+    /// <inheritdoc />
+    public async Task<Result<string>> InvokeAsync(
+        ActionContext context,
+        CancellationToken cancellationToken = default
+    ) {
+        if (context.Cluster is not { } cluster) {
+            // ⚠ Unreachable in production — the type declares RequiresCluster and ActionDispatcher
+            // refuses before a handler is reached. It is here because "unreachable" is a claim about a
+            // call site rather than about this method.
+            return Result<string>.Failure(
+                ErrorCode.InternalError,
+                $"'{context.Id.Path}' has no cluster connection, and whether a proxy is running is "
+                + "read from the Deployment object in a cluster."
+            );
+        }
+
+        var target = LoadBalancers.DeploymentRef(context.Namespace, context.Id);
+        var read = await cluster.GetAsync(target, cancellationToken);
+
+        if (read.TryGetError(out var error)) {
+            return Result<string>.Failure(error);
+        }
+
+        var ready = ReadyReplicas(read.GetValueOrThrow().Json);
+        var port = LoadBalancers.BackendPort(context.Desired);
+        var servers = new JsonArray();
+        var count = 0;
+
+        foreach (var address in LoadBalancers.BackendAddresses(context.Desired)) {
+            count++;
+
+            servers.Add(
+                $"s{count.ToString(CultureInfo.InvariantCulture)} {address}:"
+                + $"{port.ToString(CultureInfo.InvariantCulture)} check every "
+                + $"{LoadBalancers.HealthIntervalSeconds(context.Desired).ToString(CultureInfo.InvariantCulture)}s, "
+                + $"out after {LoadBalancers.UnhealthyAfter(context.Desired).ToString(CultureInfo.InvariantCulture)} "
+                + $"failures, back after {LoadBalancers.HealthyAfter(context.Desired).ToString(CultureInfo.InvariantCulture)} "
+                + "successes"
+            );
+        }
+
+        var frontend = LoadBalancers.FrontendV6(context.Desired) is { Length: > 0 } v6
+            ? $"{LoadBalancers.FrontendV4(context.Desired)} and [{v6}]"
+            : LoadBalancers.FrontendV4(context.Desired);
+
+        return Result<string>.Success(
+            new JsonObject {
+                ["frontend"] =
+                    $"{frontend}:{LoadBalancers.FrontendPort(context.Desired).ToString(CultureInfo.InvariantCulture)}",
+                ["servers"] = servers,
+                ["serverCount"] = count,
+                ["readyReplicas"] = ready,
+                ["note"] = Note,
+                ["sampledAt"] = clock.UtcNow.ToString("O", CultureInfo.InvariantCulture)
+            }.ToJsonString()
+        );
+    }
+
+    /// <summary>How many proxy pods are ready, or zero when the controller has not written one.</summary>
+    /// <param name="objectJson">The Deployment's JSON.</param>
+    static int ReadyReplicas(string objectJson) {
+        JsonNode? parsed;
+        try {
+            parsed = JsonNode.Parse(objectJson);
+        } catch (JsonException) {
+            return 0;
+        }
+
+        return parsed is JsonObject document
+            && document["status"] is JsonObject status
+            && status["readyReplicas"] is JsonValue value
+            && value.TryGetValue<int>(out var ready)
+                ? ready
+                : 0;
+    }
+}
+
+/// <summary>
 ///     Serves <c>POST …/publicIpAddresses/{name}/showAllocation</c>: the address the fabric actually
 ///     handed out.
 /// </summary>

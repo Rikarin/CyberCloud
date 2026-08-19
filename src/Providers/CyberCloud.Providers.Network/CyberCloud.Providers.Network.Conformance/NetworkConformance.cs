@@ -316,6 +316,83 @@ public sealed class PublicIpAddressCase : IProviderCaseSource {
         };
 }
 
+/// <summary>
+///     <c>CyberCloud.Network/virtualNetworks/loadBalancers</c> — the family's fifth type and the first
+///     whose objects are <b>namespaced</b>.
+/// </summary>
+/// <remarks>
+///     <para>
+///         ⚠ <b>THE FIRST CASE IN THIS FAMILY WHOSE <c>ObjectRef</c>s CARRY A NAMESPACE, WHICH IS THE
+///         AXIS THE HARNESS WAS CHANGED FOR AND IS NOW BEING EXERCISED IN THE OTHER DIRECTION.</b>
+///         <c>ClusterConformanceHarness</c> derives each CRD stub's scope from the case's own
+///         <c>ObjectRef.IsClusterScoped</c> because this family's four Kube-OVN kinds are
+///         <c>scope="Cluster"</c>. A <c>ConfigMap</c> and a <c>Deployment</c> are built-in and
+///         namespaced, so this case needs no stub at all — and <c>NetworkSuiteShapeTests</c> asserts
+///         the refs are namespaced rather than leaving the difference to a reader.
+///     </para>
+///     <para>
+///         ⚠ <b><c>ChangedBody</c> ADDS A BACKEND, WHICH IS THE ONLY AXIS THAT REACHES BOTH
+///         OBJECTS.</b> The tempting change is the sizing preset — one field on the pod template, copied
+///         straight through — and it would pass against a renderer that never regenerated the
+///         configuration at all. A second backend address changes the <c>ConfigMap</c>'s <c>data</c>
+///         <i>and</i> the pod template's config hash, which is the pair whose disagreement is this
+///         type's headline failure: a config change that applies cleanly and restarts nothing.
+///     </para>
+///     <para>
+///         ⚠ <b>THE INVALID BODY IS A PORT OF <c>0</c> RATHER THAN A MISSING PROPERTY.</b> Every
+///         required property here carries a default — a required patterned property must, or the
+///         generated chart's own literal fails <c>helm lint</c> — so removing one and letting the
+///         default fill it in would test nothing. <c>0</c> is refused at
+///         <c>/properties/frontend/port</c> by <c>Minimum</c>, with a <c>400</c> and that pointer,
+///         before the write path answers.
+///     </para>
+///     <para>
+///         ⚠ <b><c>ObjectMatchesDesired</c> READS <c>match.Namespace</c> AND <c>match.Id</c>, LIKE THE
+///         SUBNET AND UNLIKE THE OTHER THREE.</b> The pod template's
+///         <c>ovn.kubernetes.io/logical_switch</c> is <c>{namespace}-{network}-{subnet}</c> — a name
+///         built from the address — so a comparison without them would silently skip the field that
+///         decides <b>which tenant's network this proxy is inside</b>. It is <c>spec.vpc</c>'s
+///         hazard on a different object.
+///     </para>
+/// </remarks>
+public sealed class LoadBalancerCase : IProviderCaseSource {
+    /// <inheritdoc />
+    public static ProviderConformanceCase ProviderCase { get; } =
+        new() {
+            DisplayName = "CyberCloud.Network/virtualNetworks/loadBalancers",
+            CreateProvider = () => new NetworkProvider(),
+            ReconcilerType = typeof(LoadBalancerReconciler),
+            CreateReconciler = clock => new LoadBalancerReconciler(clock),
+            Type = LoadBalancers.Type,
+            ApiVersion = LoadBalancers.V2026,
+            Body = cluster => LoadBalancers.Body(cluster),
+            ChangedBody = cluster =>
+                LoadBalancers.Body(cluster, backendAddresses: "10.20.1.11,10.20.1.12"),
+            InvalidBody = cluster => LoadBalancers.Body(cluster, frontendPort: 0),
+            InvalidBodyTarget = "/properties/frontend/port",
+            ActionName = LoadBalancers.BackendsAction,
+            Objects = (id, ns) => LoadBalancers.Objects(ns, id),
+            // ⚠ Empty, and it is a statement rather than a formality. `showBackends` reads a
+            // Deployment's status and the resource's own stored body; there is no Secret in this
+            // type's object set at all, because an L4 proxy terminates nothing and holds no key.
+            OperatorWritten = static (_, _) => [],
+            ObjectMatchesDesired = match => {
+                using var desired = JsonDocument.Parse(match.DesiredJson);
+
+                return LoadBalancers.Matches(
+                    match.ObjectJson,
+                    match.Namespace,
+                    match.Id,
+                    desired.RootElement
+                );
+            }
+        };
+
+    /// <inheritdoc />
+    public static ImmutableArray<ProviderConformanceCase> Ancestors { get; } =
+        [VirtualNetworkCase.ProviderCase];
+}
+
 /// <summary>The shared suite, run against the virtual-network provider.</summary>
 /// <param name="cluster">The harness.</param>
 public sealed class VirtualNetworkConformance(ProviderTestCluster<VirtualNetworkCase> cluster)
@@ -351,6 +428,15 @@ public sealed class PublicIpAddressConformance(ProviderTestCluster<PublicIpAddre
     : ProviderConformanceTests<PublicIpAddressCase>(cluster),
         IClassFixture<ProviderTestCluster<PublicIpAddressCase>>;
 
+/// <summary>
+///     The <b>same</b> suite again, run against the load balancer — the family's second child-shaped
+///     addition and its first namespaced one.
+/// </summary>
+/// <param name="cluster">The harness.</param>
+public sealed class LoadBalancerConformance(ProviderTestCluster<LoadBalancerCase> cluster)
+    : ProviderConformanceTests<LoadBalancerCase>(cluster),
+        IClassFixture<ProviderTestCluster<LoadBalancerCase>>;
+
 /// <summary>The container-backed half, skipped loudly, against the virtual-network type.</summary>
 public sealed class VirtualNetworkClusterBackedConformance()
     : ClusterBackedConformanceTests(VirtualNetworkCase.ProviderCase);
@@ -366,6 +452,23 @@ public sealed class NetworkSecurityGroupClusterBackedConformance()
 /// <summary>The container-backed half, skipped loudly, against the public-address type.</summary>
 public sealed class PublicIpAddressClusterBackedConformance()
     : ClusterBackedConformanceTests(PublicIpAddressCase.ProviderCase);
+
+/// <summary>
+///     The container-backed half against the load balancer.
+/// </summary>
+/// <remarks>
+///     ⚠ <b>THIS IS THE ONE CASE IN THE FAMILY THE CLUSTER-BACKED SUITE PROVES SOMETHING REAL
+///     ABOUT.</b> Its four siblings render Kube-OVN custom resources into a k3s that has no Kube-OVN,
+///     so the derived CRD stub's schema is <c>x-kubernetes-preserve-unknown-fields</c> and a field the
+///     real fabric would refuse is accepted. A <c>ConfigMap</c> and a <c>Deployment</c> are <b>built
+///     in</b>: the API server validates them against its own schemas, defaults them, and would refuse
+///     a malformed pod template outright. ⚠ What it still cannot prove is the part that needs
+///     Kube-OVN — that the <c>logical_switch</c> annotation puts the pod on a tenant's subnet — and
+///     the pod will not schedule at all in that harness, which is why the assertions are about the
+///     objects rather than about traffic.
+/// </remarks>
+public sealed class LoadBalancerClusterBackedConformance()
+    : ClusterBackedConformanceTests(LoadBalancerCase.ProviderCase);
 
 /// <summary>
 ///     What this provider's two registrations into the shared suite are <b>shaped</b> like.
@@ -398,6 +501,11 @@ public sealed class NetworkSuiteShapeTests {
             + "otherwise let drift."
         );
 
+        RunnableFactsOf(typeof(LoadBalancerConformance)).ShouldBe(
+            parent,
+            "the load balancer runs a different set of assertions than the virtual network does."
+        );
+
         parent.Length.ShouldBeGreaterThan(20);
     }
 
@@ -418,7 +526,13 @@ public sealed class NetworkSuiteShapeTests {
         // parent whose body no longer validates.
         foreach (var ancestors in
                  (ReadOnlySpan<ImmutableArray<ProviderConformanceCase>>)[
-                     AncestorsOf<NetworkSubnetCase>(), AncestorsOf<NetworkSecurityGroupCase>()
+                     AncestorsOf<NetworkSubnetCase>(),
+                     AncestorsOf<NetworkSecurityGroupCase>(),
+                     // ⚠ The load balancer DOES declare one, which is the opposite of the public
+                     // address's answer and for the opposite reason: every object it renders is
+                     // annotated onto a subnet of one VPC, so the harness must create the network
+                     // first or the case is testing a proxy in a network that does not exist.
+                     AncestorsOf<LoadBalancerCase>()
                  ]) {
             ancestors.Length.ShouldBe(1);
 
@@ -502,6 +616,29 @@ public sealed class NetworkSuiteShapeTests {
             + "apply never reaches — and the symptom is a discovery error naming a missing operator "
             + "rather than a wrong plural."
         );
+
+        // ⚠ AND THE FIFTH TYPE IS THE ONE THAT MUST NOT BE CLUSTER-SCOPED, which is worth asserting
+        // in the same test rather than trusting the difference to be remembered. A ConfigMap and a
+        // Deployment are namespaced; an ObjectRef with an empty namespace would be applied to
+        // /api/v1/configmaps, which the API server does not serve, and the symptom is a 404 that
+        // reads as a missing object.
+        var balancer = LoadBalancerCase.ProviderCase.Objects(
+            child with { Type = LoadBalancers.Type },
+            "ns"
+        );
+
+        balancer.Length.ShouldBe(2);
+
+        foreach (var target in balancer) {
+            target.IsClusterScoped.ShouldBeFalse(
+                $"'{target.Kind.Kind}' is namespaced, and ReconcileDriver.NamespaceFor is what keeps "
+                + "two subscriptions' load balancers apart — which is why LoadBalancers.ObjectNameOf "
+                + "folds in the parent network and NOT the namespace."
+            );
+
+            target.Namespace.ShouldBe("ns");
+            target.Name.ShouldBe("net-web");
+        }
     }
 
     static ImmutableArray<ProviderConformanceCase> AncestorsOf<TSource>()

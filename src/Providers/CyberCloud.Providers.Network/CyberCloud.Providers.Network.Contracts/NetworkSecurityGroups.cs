@@ -437,7 +437,7 @@ public static class NetworkSecurityGroups {
     /// <param name="id">The security group's address.</param>
     /// <exception cref="ArgumentException"><paramref name="id" /> carries no parent name.</exception>
     /// <remarks>
-    ///     ⚠ <b>Three components, exactly as <see cref="NetworkSubnets.ObjectNameOf" /> — and here the
+    ///     ⚠ <b>Three components, exactly as <see cref="NetworkSubnets.ObjectNameOf(string, ResourceId)" /> — and here the
     ///     third one is doing MORE work than it does there.</b> A <c>Subnet</c> at least names its
     ///     <c>Vpc</c>, so a collision would be visible in the object. A <c>SecurityGroup</c> names
     ///     nothing, so this name is the <b>only</b> thing separating two networks' groups called

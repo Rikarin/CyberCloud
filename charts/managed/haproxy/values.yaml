@@ -1,0 +1,126 @@
+# An L4 load balancer inside a tenant's virtual network — the configuration surface, once.
+#
+# ⚠ EVERY NON-`@internal` BLOCK BELOW IS GENERATED from LoadBalancers.Schema2026 by
+# `./build.sh Charts`, and so is values.schema.json. ADR-010 § Which end authors the schema: "The C#
+# ResourceSchema is authored. The chart's @param annotations are generated from it and diffed."
+# Editing a generated row here is undone on the next run and fails the build in between; add the
+# field in C# instead.
+#
+# ⚠ WHY THIS IS A POD AND NOT A VIP. Kube-OVN's own `SwitchLBRule` would do this row with no pod at
+# all — and its controller, its queues and its workers are all inside `if config.EnableLb`, which
+# ADR-019 sets to false so that Cilium owns the service datapath. SOURCE has the three line numbers.
+# docs/plan/14 § Load balancing names the alternative in the same sentence: "an HAProxy deployment for
+# TCP with health checks and connection limits".
+#
+# ⚠ THE FRONTEND ADDRESS IS REQUIRED, WHICH LOOKS LIKE AN ODD THING TO DEMAND. `ENABLE_LB=false` also
+# turns off `VpcDns`, so a tenant VPC has no name resolution at all — an address nobody chose is an
+# address nothing can be configured to reach. It is the opposite of kube-ovn-eip's decision for the
+# same field, for the same reason read the other way round.
+#
+# ⚠ NO `protocol`. HAProxy does not proxy UDP in any version, so a property with one legal value would
+# imply a choice nobody has. conformance.yaml § owed, `udp-is-not-balanced`.
+#
+# ⚠ NO `replicas`. Two proxies would need two addresses and something to share a virtual address
+# between them, and the thing that shares a VIP here is the OVN load balancer ADR-019 turns off.
+# conformance.yaml § owed, `one-proxy-is-a-single-point-of-failure`.
+
+## @param subnet {string} The subnet of this virtual network the proxy sits on. ⚠ The proxy gets an address from it, so the frontend address below must be inside its range. A name that is not a subnet of this network is refused by the fabric rather than by the API, and the proxy pod never schedules.
+## @required
+## @immutable
+## @length ..63
+## @pattern [a-z0-9]([-a-z0-9]*[a-z0-9])?
+## @example "web"
+## @widget subnet
+subnet: web
+
+## @param frontend {object} The address and port workloads connect to.
+frontend:
+  ## @param v4 {string} The IPv4 address the proxy answers on, inside the subnet's range. ⚠ Required, and it is the one thing about this resource a tenant must choose: there is no DNS inside a virtual network, so an address nobody picked is an address nothing can be pointed at. A bare address and never a prefix.
+  ## @required
+  ## @immutable
+  ## @pattern (\d{1,3}\.){3}\d{1,3}
+  ## @example "10.20.1.10"
+  ## @widget cidr
+  v4: "10.20.1.10"
+  ## @param v6 {string} The IPv6 address the proxy also answers on, or empty. ⚠ Lower case only, for the fabric's reason. It must be inside the subnet's IPv6 range, which means the subnet has to have one.
+  ## @immutable
+  ## @pattern ([0-9A-Fa-f:.]+)?
+  ## @example "fd00:20:1::10"
+  ## @widget cidr
+  v6: ""
+  ## @param port {integer} The TCP port the proxy listens on. ⚠ There is no protocol setting: HAProxy does not proxy UDP in any version, so every rule here is TCP.
+  ## @required
+  ## @range 1..65535
+  port: 80
+
+## @param backend {object} Where the connections go.
+backend:
+  ## @param addresses {string} The workload addresses to balance across, comma separated — for example 10.20.1.11,10.20.1.12. ⚠ Addresses and not resource ids: there is no service discovery and no DNS inside a virtual network, so an address is what a tenant has for their own workloads. At most 32.
+  ## @required
+  ## @length ..1024
+  ## @pattern [0-9A-Fa-f:.]+(,[0-9A-Fa-f:.]+)*
+  ## @example "10.20.1.11,10.20.1.12"
+  addresses: "10.20.1.11"
+  ## @param port {integer} The TCP port every backend address is reached on. ⚠ One port for the whole pool: a pool whose members listen on different ports is two pools.
+  ## @required
+  ## @range 1..65535
+  port: 8080
+
+## @param health {object} How a backend is decided to be up. ⚠ Checking cannot be turned off — a proxy that sends connections to a dead server is worse than no proxy.
+health:
+  ## @param intervalSeconds {integer} How often each backend is probed with a TCP connection.
+  ## @range 2..60
+  intervalSeconds: 5
+  ## @param unhealthyAfter {integer} How many failed probes take a backend out of the pool.
+  ## @range 1..10
+  unhealthyAfter: 3
+  ## @param healthyAfter {integer} How many successful probes put a backend back into the pool.
+  ## @range 1..10
+  healthyAfter: 2
+
+## @param limits {object} What the proxy refuses rather than passes on.
+limits:
+  ## @param maxConnections {integer} How many connections the frontend accepts at once. ⚠ Further connections wait in the kernel's accept queue rather than being refused, so this is a back-pressure setting rather than a firewall. It is also applied per backend server.
+  ## @range 10..100000
+  maxConnections: 2000
+
+## @param sizing {object} CPU and memory for the proxy.
+sizing:
+  ## @param preset {string} How much the proxy pod gets. An L4 proxy is mostly kernel work, so the small row carries far more than its size suggests; the larger rows are for many long-lived connections.
+  ## @enum c1.large | c1.medium | c1.small
+  ## @widget cozy-preset
+  preset: c1.small
+
+## @param version {string} Which HAProxy line to run. 3.2 is the long-term-support line and is the default; 3.4 is the current one. ⚠ A change here restarts the proxy and drops open connections.
+## @enum 3.2 | 3.4
+version: "3.2"
+
+## @param platform {object} Resource identity injected by the reconciler. Not a tenant-facing setting.
+## @internal Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.
+platform:
+  ## @param tenantId {string} Tenant GUID, rendered into the cybercloud.io/tenant-id label.
+  tenantId: ""
+  ## @param subscriptionId {string} Subscription GUID, rendered into the cybercloud.io/subscription-id label.
+  subscriptionId: ""
+  ## @param resourceGroup {string} Resource group name, rendered into the cybercloud.io/resource-group label.
+  resourceGroup: ""
+  ## @param resourceId {string} Resource GUID, rendered into the cybercloud.io/resource-id label.
+  resourceId: ""
+  ## @param resourceType {string} Fully qualified resource type, rendered into the cybercloud.io/resource-type label.
+  resourceType: CyberCloud.Network/virtualNetworks/loadBalancers
+  ## @param apiVersion {string} The api-version the resource was last written at, rendered into the cybercloud.io/api-version label.
+  apiVersion: "2026-08-01"
+  ## @param managedBy {string} Value of the cybercloud.io/managed-by label. Constant, and the selector every informer filters on.
+  managedBy: cybercloud
+  ## @param virtualNetwork {string} The parent virtual network's name, which is a component of the Subnet object the proxy pod is annotated onto.
+  virtualNetwork: net
+  ## @param namespace {string} The resource's own namespace, which is the first component of that same Subnet object's name.
+  namespace: ""
+
+## @param imageRepository {string} Where the HAProxy image is pulled from.
+## @internal Docker's own library/haproxy, unmodified. A tenant choosing what runs in a pod on their own subnet is not a configuration surface, and a mirror is an operator's decision rather than a tenant's.
+imageRepository: haproxy
+
+## @param nameOverride {string} Replace the generated object-name stem. Empty means derive it from the release name.
+## @internal Helm plumbing. Nothing about it belongs in a resource body.
+nameOverride: ""

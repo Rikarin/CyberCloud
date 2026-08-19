@@ -9,9 +9,12 @@ namespace CyberCloud.Providers.Network.ClusterConformance;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>Four class declarations over the two cases
-///         <c>CyberCloud.Providers.Network.Conformance</c> already declares.</b> One provider, one
-///         <c>ProviderConformanceCase</c> per type.
+///         ⚠ <b>Ten class declarations over the five cases
+///         <c>CyberCloud.Providers.Network.Conformance</c> declares.</b> One provider, one
+///         <c>ProviderConformanceCase</c> per type, two suites per case. ⚠ <b>This sentence read "four
+///         over two" while the family had four types</b>, which is how the public address's pair went
+///         missing: nothing counts the classes in this file against the cases in that one, so a row
+///         with no class here is simply a row the docs/plan/24 exit criterion never reaches.
 ///     </para>
 ///     <para>
 ///         ⚠ <b>THE FIRST CLUSTER-BACKED SUITE IN THE TREE FOR A CLUSTER-SCOPED OBJECT, AND IT IS THE
@@ -90,3 +93,54 @@ public sealed class NetworkSecurityGroupLifecycleConformance(
 /// <summary>docs/plan/24 § Phase 1's exit criterion 3, against the security-group child type.</summary>
 public sealed class NetworkSecurityGroupSiloKillConformance
     : SiloKillConformanceTests<NetworkSecurityGroupCase>;
+
+/// <summary>
+///     The same two suites against <c>CyberCloud.Network/publicIpAddresses</c>.
+/// </summary>
+/// <remarks>
+///     ⚠ <b>THESE TWO WERE MISSING, AND NOTHING WOULD HAVE SAID SO.</b> The fourth type in this family
+///     shipped with a <c>ProviderConformanceCase</c>, a Docker-free suite and a
+///     <c>ClusterBackedConformanceTests</c> registration — and no class in <i>this</i> assembly, so it
+///     had never been through a real API server at all. The docs/plan/24 § Phase 1 exit criterion is a
+///     claim about every catalogue row, and a row with no class here is a row the criterion silently
+///     skips: there is no roster to count against, only files somebody remembered to write.
+///     ⚠ What it establishes for this type is the <b>hyphenated plural</b> <c>ovn-eips</c>, for
+///     <see cref="NetworkSecurityGroupLifecycleConformance" />'s reason, and cluster-scoped addressing.
+///     What it cannot establish is anything the Kube-OVN controller does, which on this type is
+///     everything the resource is for —
+///     <c>charts/managed/kube-ovn-eip/conformance.yaml § owed</c>,
+///     <c>the-cluster-backed-suite-proves-less-than-it-looks</c>.
+/// </remarks>
+/// <param name="fixture">The harness.</param>
+public sealed class PublicIpAddressLifecycleConformance(
+    ClusterConformanceFixture<PublicIpAddressCase> fixture
+) : ClusterConformanceTests<PublicIpAddressCase>(fixture),
+    IClassFixture<ClusterConformanceFixture<PublicIpAddressCase>>;
+
+/// <summary>docs/plan/24 § Phase 1's exit criterion 3, against the public-address type.</summary>
+public sealed class PublicIpAddressSiloKillConformance : SiloKillConformanceTests<PublicIpAddressCase>;
+
+/// <summary>
+///     The same two suites against <c>CyberCloud.Network/virtualNetworks/loadBalancers</c>.
+/// </summary>
+/// <remarks>
+///     ⚠ <b>THE ONLY ROW IN THIS FAMILY WHOSE OBJECTS THIS HARNESS CAN REALLY VALIDATE.</b> The other
+///     four render Kube-OVN custom resources into a k3s that has no Kube-OVN, so the derived CRD stub
+///     is <c>x-kubernetes-preserve-unknown-fields</c> and a field the real fabric would refuse is
+///     accepted here. A <c>ConfigMap</c> and a <c>Deployment</c> are <b>built in</b>: the API server
+///     validates them against its own schemas and would refuse a malformed pod template outright — so
+///     a container with no image, a selector that does not match its own template, or a sysctl the
+///     kubelet does not recognise fails here rather than in a tenant's cluster.
+///     ⚠ <b>What it still cannot prove is the part that needs Kube-OVN.</b> No CNI in that cluster
+///     reads <c>ovn.kubernetes.io/logical_switch</c>, so the pod is scheduled onto the ordinary pod
+///     network — or not scheduled at all — and nothing here has ever put a proxy inside a tenant's
+///     routing domain.
+/// </remarks>
+/// <param name="fixture">The harness.</param>
+public sealed class LoadBalancerLifecycleConformance(
+    ClusterConformanceFixture<LoadBalancerCase> fixture
+) : ClusterConformanceTests<LoadBalancerCase>(fixture),
+    IClassFixture<ClusterConformanceFixture<LoadBalancerCase>>;
+
+/// <summary>docs/plan/24 § Phase 1's exit criterion 3, against the load balancer.</summary>
+public sealed class LoadBalancerSiloKillConformance : SiloKillConformanceTests<LoadBalancerCase>;
