@@ -195,6 +195,13 @@ public sealed class ListBackedClusterObjectInventory(
             ResourceId = owner,
             ResourcePath = Text(annotations, KubeLabels.ResourcePathAnnotation),
             ReconcileHash = Text(annotations, KubeLabels.ReconcileHashAnnotation),
+            // ⚠ Read off the object rather than defaulted, because the scan uses it to tell an
+            // object that belongs to a RESOURCE from one that belongs to a resource GROUP — the
+            // namespace the platform writes itself, whose resource-id is derived and matches no
+            // grain. Leaving it blank makes every namespace on the cluster a permanent orphan
+            // finding. KubeLabels.IsGroupScoped is the test; ClusterObjectRecord's remarks say why
+            // the member is `required`.
+            ResourceType = Text(labels, KubeLabels.ResourceType),
             Target = new() {
                 Kind = kind,
                 Namespace = Text(metadata, "namespace"),

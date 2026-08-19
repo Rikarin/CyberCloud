@@ -89,6 +89,26 @@ public sealed class ProviderRegistry : IProviderRegistry {
         foreach (var provider in providers) {
             ArgumentNullException.ThrowIfNull(provider);
 
+            // ⚠ RESERVED, AND THE RESERVATION IS LOAD-BEARING RATHER THAN TIDY. A namespace object
+            // carries `cybercloud.io/resource-type = cybercloud.resources_resourcegroups`, and three
+            // components read that label to mean "this object belongs to a resource GROUP, so its
+            // resource-id is a derived GUID and must not be compared to a resource grain" —
+            // DriftScanner's orphan join, ProviderConformanceTests' labels assertion, and any future
+            // cluster inventory. A provider declaring this namespace would render objects that all
+            // three would then decline to check, which is a way for a reconciler to opt its output
+            // out of orphan detection and out of the labels gate at once. The type label itself is
+            // one of ADR-013's seven and cannot be set by a caller; this closes the other door.
+            if (string.Equals(provider.ProviderNamespace, KubeLabels.ReservedNamespace, StringComparison.OrdinalIgnoreCase)) {
+                throw new InvalidOperationException(
+                    $"Provider '{provider.ProviderNamespace}' declares the reserved namespace "
+                    + $"'{KubeLabels.ReservedNamespace}'. The platform stamps that namespace on the "
+                    + "cluster objects it owns on a resource group's behalf — the group's namespace — "
+                    + "and the drift scan and the conformance suite both read it to mean 'not "
+                    + "attributed to a resource'. A provider that rendered objects under it would "
+                    + "have its output excluded from both. See KubeLabels.ReservedNamespace."
+                );
+            }
+
             if (!seenNamespaces.Add(provider.ProviderNamespace)) {
                 throw new InvalidOperationException(
                     $"Two providers declare the namespace '{provider.ProviderNamespace}'. A namespace names "

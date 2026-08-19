@@ -572,16 +572,43 @@ public interface IClusterObjectInventory {
 }
 
 /// <summary>One labelled object as the drift scan sees it.</summary>
-/// <param name="ResourceId">
-///     The <c>cybercloud.io/resource-id</c> label — ADR-013's hash-join key
-///     (docs/plan/09 § The command builder).
-/// </param>
-/// <param name="ResourcePath">The <c>cybercloud.io/resource-path</c> annotation.</param>
-/// <param name="ReconcileHash">The <c>cybercloud.io/reconcile-hash</c> annotation.</param>
-/// <param name="Target">Which object.</param>
-public readonly record struct ClusterObjectRecord(
-    Guid ResourceId,
-    string ResourcePath,
-    string ReconcileHash,
-    ObjectRef Target
-);
+/// <remarks>
+///     ⚠ <b>Every member is <see langword="required" />, and this type used to be positional.</b> The
+///     change was forced by <see cref="ResourceType" /> below: it was added as a fifth positional
+///     parameter with no default, on the theory that omitting it would then be a compile error — and
+///     it was not, because both real construction sites use an object initializer, which runs a
+///     struct's parameterless constructor and leaves anything unset at its default. An unset
+///     <see cref="ResourceType" /> reads as "belongs to a resource", which is the exact wrong answer
+///     and produces a silent orphan storm rather than a build failure. <see langword="required" /> is
+///     what makes the omission fail the way it was supposed to.
+/// </remarks>
+public readonly record struct ClusterObjectRecord {
+    /// <summary>
+    ///     The <c>cybercloud.io/resource-id</c> label — ADR-013's hash-join key
+    ///     (docs/plan/09 § The command builder).
+    /// </summary>
+    public required Guid ResourceId { get; init; }
+
+    /// <summary>The <c>cybercloud.io/resource-path</c> annotation.</summary>
+    public required string ResourcePath { get; init; }
+
+    /// <summary>The <c>cybercloud.io/reconcile-hash</c> annotation.</summary>
+    public required string ReconcileHash { get; init; }
+
+    /// <summary>Which object.</summary>
+    public required ObjectRef Target { get; init; }
+
+    /// <summary>
+    ///     The <c>cybercloud.io/resource-type</c> label.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Carried for one reason: not every labelled object belongs to a resource.</b> The
+    ///     platform writes a resource group's namespace itself (<c>NamespaceEnsurer</c>), and its
+    ///     <see cref="ResourceId" /> is a GUID derived from the group — deliberately, so that
+    ///     deleting the resource that happened to create it does not orphan the namespace everything
+    ///     else in the group lives in. Without this member the scan cannot tell that object from a
+    ///     real one and reports every namespace on the cluster as an orphan, forever.
+    ///     <c>KubeLabels.IsGroupScoped</c> is the test.
+    /// </remarks>
+    public required string ResourceType { get; init; }
+}

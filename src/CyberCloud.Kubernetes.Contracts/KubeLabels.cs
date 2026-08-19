@@ -122,6 +122,74 @@ public static class KubeLabels {
     public static bool IsMandatoryAnnotation(string? key) =>
         key is not null && MandatoryAnnotations.Contains(key, StringComparer.Ordinal);
 
+    // ── Objects attributed to a resource group rather than to a resource ────────────────────────
+
+    /// <summary>
+    ///     The provider namespace the platform keeps for itself. No provider may declare it.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Reserving it is what makes <see cref="IsGroupScoped(string)" /> un-forgeable, and
+    ///     without the reservation the predicate would be a suggestion.</b> A provider cannot set
+    ///     <see cref="ResourceType" /> — it is one of the seven, injected by
+    ///     <see cref="KubeCommandBuilder" /> from the resource's own type, and
+    ///     <see cref="IsMandatory" /> rejects an attempt to override it. So the only way an object
+    ///     could claim to be group-attributed is for its <i>resource</i> to be of a type in this
+    ///     namespace, and <c>ProviderRegistry.Build</c> refuses to register one. The two halves
+    ///     together are why a check keyed on this label cannot be talked into ignoring a real
+    ///     object with a wrong id.
+    /// </remarks>
+    public const string ReservedNamespace = "CyberCloud.Resources";
+
+    /// <summary>
+    ///     <c>CyberCloud.Resources/resourceGroups</c> — the type a resource group's own cluster
+    ///     objects carry.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>A resource group is not a resource, and this type exists so that saying so is a
+    ///         label rather than a convention.</b> A group has no GUID —
+    ///         <c>ResourceGroupDescriptor</c> carries a name, a subscription and a tenant, and no id —
+    ///         and it is a structural segment of a resource path rather than a registered provider
+    ///         type. But its namespace is a real object in a real cluster that ADR-013 requires all
+    ///         seven labels on, so <c>resource-type</c> needs a value, and the honest one names what
+    ///         the object belongs to.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Three consumers need to recognise this and none of them may depend on the
+    ///         writer.</b> <c>NamespaceEnsurer</c> stamps it; <c>DriftScanner</c> must not report the
+    ///         namespace as an orphan of a resource grain that will never exist; and
+    ///         <c>ProviderConformanceTests</c> must not hold a group-attributed object to the
+    ///         triggering resource's id. It lives here, in the label vocabulary, because that is the
+    ///         one assembly all three already reference.
+    ///     </para>
+    /// </remarks>
+    public static ResourceTypeName ResourceGroupType { get; } = new(ReservedNamespace, "resourceGroups");
+
+    /// <summary>The <see cref="ResourceType" /> value <see cref="ResourceGroupType" /> renders to.</summary>
+    public static string ResourceGroupTypeValue { get; } = ResourceTypeValue(ResourceGroupType);
+
+    /// <summary>
+    ///     Whether a <see cref="ResourceType" /> label value marks an object owned by a resource
+    ///     <i>group</i> rather than by a resource.
+    /// </summary>
+    /// <param name="resourceTypeValue">The object's <c>cybercloud.io/resource-type</c> label.</param>
+    /// <remarks>
+    ///     ⚠ Such an object's <see cref="ResourceId" /> label is a <b>derived</b> GUID naming the
+    ///     group, so it will never match a resource grain and must never be compared to one. See
+    ///     <see cref="ResourceGroupType" /> for why this cannot be forged.
+    /// </remarks>
+    public static bool IsGroupScoped(string? resourceTypeValue) =>
+        string.Equals(resourceTypeValue, ResourceGroupTypeValue, StringComparison.Ordinal);
+
+    /// <summary>
+    ///     <see cref="IsGroupScoped(string)" />, read off a label set.
+    /// </summary>
+    /// <param name="labels">An object's labels, as emitted.</param>
+    public static bool IsGroupScoped(IReadOnlyDictionary<string, string>? labels) =>
+        labels is not null
+        && labels.TryGetValue(ResourceType, out var value)
+        && IsGroupScoped(value);
+
     /// <summary>A GUID as a label value — the canonical hyphenated form, 36 characters.</summary>
     /// <remarks>
     ///     ⚠ The <c>D</c> format and not <c>N</c>, matching <see cref="Core.Resources.ResourceId.Path" />
