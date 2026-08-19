@@ -821,10 +821,34 @@ public abstract class ClusterConformanceTests<TSource>(ClusterConformanceFixture
             );
     }
 
-    /// <summary>The field manager the commands this run rendered carried.</summary>
+    /// <summary>The field manager the PROVIDER's commands carried.</summary>
     /// <param name="harness">The harness.</param>
-    protected static string FieldManagerOf(ClusterConformanceHarness<TSource> harness) =>
-        harness.Connection.Applied.TryPeek(out var first) ? first.FieldManager : string.Empty;
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>This used to peek the first applied command, and that was a proxy that held only
+    ///         while every apply in a run came from one provider.</b> It stopped holding the day
+    ///         <c>NamespaceEnsurer</c> landed: the driver now applies the namespace before the pass,
+    ///         under <c>cybercloud/resource-manager</c>, so the first command is the platform's and
+    ///         every provider object was then checked against a manager that never wrote it. The
+    ///         failure read <i>"the API server recorded no field-manager entry"</i> — which sounds
+    ///         like the apply was not an apply, and was really this helper naming the wrong manager.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Skipping group-scoped commands is exact rather than approximate.</b> Every command
+    ///         a provider renders carries <c>KubeCommandBuilder.FieldManagerFor(providerNamespace)</c>,
+    ///         one manager per provider, so the first non-group-scoped command's manager is the
+    ///         provider's — and <see cref="KubeLabels.IsGroupScoped(IReadOnlyDictionary{string,string})" />
+    ///         cannot be forged by a provider, because <c>cybercloud.io/resource-type</c> is injected
+    ///         and <c>ProviderRegistry.Build</c> refuses the reserved namespace.
+    ///     </para>
+    /// </remarks>
+    protected static string FieldManagerOf(ClusterConformanceHarness<TSource> harness) {
+        ArgumentNullException.ThrowIfNull(harness);
+
+        return harness.Connection.Applied.FirstOrDefault(x => !KubeLabels.IsGroupScoped(x.Labels))
+            ?.FieldManager
+            ?? string.Empty;
+    }
 
     /// <summary><c>apiVersion</c> as the wire spells it — the core group has no group segment.</summary>
     /// <param name="kind">The kind.</param>
