@@ -228,6 +228,78 @@ public sealed class SoftDeleteEdgeTests(IsolationCluster cluster) {
     ///         <c>fullyConsistent: true</c> docs/plan/07 § Consistency puts deletion in the row for.
     ///     </para>
     /// </remarks>
+    /// <summary>
+    ///     ⚠ <b>Every purge permission the registry names is one <c>CyberCloudSchema</c> actually
+    ///     defines — the check that would have caught a purge nobody could perform.</b>
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         <b>What went wrong, because the shape of it is the reason this exists.</b>
+    ///         <c>SoftDeletePolicy.DefaultPurgePermission</c> is <c>"purge"</c> and
+    ///         <c>ResourceManagerService.PurgeAsync</c> checks it. <c>CyberCloudSchema</c> defined
+    ///         <c>read</c>, <c>write</c>, <c>delete</c> and <c>assignRole</c> on
+    ///         <see cref="ObjectTypes.Resource" /> and nothing else. A permission the schema does not
+    ///         declare can only evaluate false, and docs/plan/07 § The enforcement seam turns a false
+    ///         into the canonical <c>404</c> — so on a real silo every purge answered "does not exist"
+    ///         to every caller, for ever: the name stayed held, the committed quota was never returned,
+    ///         and the recovery window had no end. The two constants live in assemblies that do not
+    ///         reference each other, so nothing in the compiler could say they had drifted.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>It survived because every purge in the repository ran against a doubled
+    ///         authorizer.</b> <c>SwitchableAuthorizer</c> and <c>PermissiveAuthorizer</c> answer
+    ///         whatever their author believed about a permission name, which is the same argument
+    ///         <see cref="ParentEdgeTests" /> opens with — and this is the second defect it has caught.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>A registry sweep rather than one assertion about one constant, because
+    ///         <c>SupportsSoftDelete(days, purgePermission)</c> lets a provider name its own.</b> A type
+    ///         declaring <c>purgePermission: "destroy"</c> would reintroduce exactly this, silently, and
+    ///         a test pinned to <c>"purge"</c> would stay green through it. ⚠ It sweeps
+    ///         <b>this cluster's</b> registry, which holds three providers — so it is a gate on the
+    ///         shape rather than a census of the catalogue, and a type declaring a window outside these
+    ///         three is not covered here.
+    ///     </para>
+    /// </remarks>
+    [Fact]
+    public void EveryDeclaredPurgePermissionIsOneTheSchemaDefinesOnAResource() {
+        var windows = 0;
+
+        foreach (var registration in cluster.Registry.Types) {
+            if (registration.SoftDeleteDays == 0) {
+                registration.PurgePermission.ShouldBeEmpty(
+                    $"'{registration.Type}' declares no recovery window and carries a purge permission "
+                    + "anyway, so the registry answers two questions that can disagree"
+                );
+
+                continue;
+            }
+
+            windows++;
+
+            registration.PurgePermission.ShouldNotBeEmpty(
+                $"'{registration.Type}' declares a recovery window and no permission to end it"
+            );
+
+            CyberCloudSchema.Instance
+                .Member(ObjectTypes.Resource, registration.PurgePermission)
+                .ShouldNotBeNull(
+                    $"'{registration.Type}' declares purgePermission '{registration.PurgePermission}' "
+                    + "and CyberCloudSchema defines no such member on `resource`. An undeclared "
+                    + "permission evaluates false and the enforcement seam turns that into the "
+                    + "canonical 404, so every purge of this type answers 'does not exist' to "
+                    + "everybody — its name is held and its committed quota is never returned, for "
+                    + "the whole window and then for ever. docs/plan/08 § Soft delete."
+                );
+        }
+
+        windows.ShouldBeGreaterThan(
+            0,
+            "no type in this cluster's registry declares a recovery window, so the loop above asserted "
+            + "nothing. A gate that inspects nothing is not a gate that found nothing wrong"
+        );
+    }
+
     Task<Result> ReadAsync(ResourceId address, IsolationTarget target, string user) {
         cluster.Registry.TryGetType(target.Type, out var registration).ShouldBeTrue();
 

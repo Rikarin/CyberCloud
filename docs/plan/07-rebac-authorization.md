@@ -79,6 +79,39 @@ how the portal shows a familiar screen over an unfamiliar engine. The reverse di
 `resourceGroup:prod#reader@group:eng#member` in Azure RBAC — is not possible, which is the argument
 for building this rather than a role table.
 
+⚠ **`purge` is the sixth permission, added at `SchemaVersion` 2, and how it came to be missing is the
+more useful half.** [08](08-resource-manager.md) § Soft delete gives a purge its own permission —
+`SoftDeletePolicy.DefaultPurgePermission` is `"purge"` — and `ResourceManagerService.PurgeAsync`
+checks it through the real authorizer. The schema declared `read`, `write`, `delete` and `assignRole`
+on `resource` and nothing else. **A permission this schema does not declare can only evaluate false,
+and § The enforcement seam turns a false into the canonical `404`** — so on a real silo every purge
+answered *"does not exist"*, to every caller, permanently: the name stayed held, the committed quota
+was never returned, and a recovery window had no way to end. The two constants live in assemblies
+that do not reference each other (`CyberCloud.ResourceManager.Contracts` does not reference
+`CyberCloud.Authorization.Contracts`), so nothing in the compiler could say they had drifted, and
+**every purge test in the repository ran against a doubled authorizer** — which answers whatever its
+author believed about a permission name. `test/CyberCloud.Isolation` is what drove one through this
+schema and found it, which is the second defect that project has caught in the same way.
+
+**Decided: `resource.purge` is `Rel("owner") & !Rel("suspended")`, and that is deliberately less
+separation than [08](08-resource-manager.md) § Soft delete describes.** That section wants *"a role
+can hold the first without the second"*, copying `deletedVaults/purge/action` sitting in Key Vault
+Contributor's `notActions`. Here `delete` is already `Rel("owner")`, so **any** purge defined in terms
+of `owner` is held by everyone who can delete, and a strictly separable purge needs a grantable role
+of its own — which needs a role-assignment story this document does not yet have. What the definition
+above does deliver is worth stating exactly: a deny assignment removes `purge` while leaving `delete`,
+which is `notActions` with one row in it; and — the separation that actually bites — a parked resource
+has been re-parented to its **subscription** and had its direct role assignments dropped, so `owner`
+resolves through `From("parent", "owner")` to a *subscription* owner and **not** to the resource-group
+owner whose `DELETE` parked it. ⚠ **Owed: whether `purge` deserves a grantable relation of its own**,
+which is the only thing that makes "may delete, may not destroy" expressible for a role rather than
+for a deny assignment.
+
+⚠ **And it is the second permission carrying `& !Rel("suspended")`.** § The model's sketch above
+shows the negation on `assignRole` alone, and `CyberCloudSchema`'s own remarks used to call that
+permission the only one to carry it; both now describe a pair. Adding a negation is a schema change
+and a version bump rather than an edit, and this one paid both.
+
 ## Storage
 
 Tuples live in the **durable tier**, sharded by tenant, in grains. Three grain kinds, and the third one
