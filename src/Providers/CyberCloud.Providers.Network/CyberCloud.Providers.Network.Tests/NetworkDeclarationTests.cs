@@ -1,3 +1,4 @@
+using CyberCloud.ResourceManager.Contracts.Generation;
 using CyberCloud.ResourceManager.Registry;
 using CyberCloud.Tenancy.Contracts;
 
@@ -7,73 +8,6 @@ namespace CyberCloud.Providers.Network.Tests;
 ///     What this provider declares into the registry, and the isolation claim it may not exceed.
 /// </summary>
 public sealed class NetworkDeclarationTests {
-    /// <summary>
-    ///     Every CLI group key in the tree, as a literal.
-    /// </summary>
-    /// <remarks>
-    ///     ⚠ <b>LITERALS RATHER THAN A REFLECTION SWEEP, AND THAT IS THE POINT OF THE TEST.</b>
-    ///     <c>CliEmitter</c> derives a group key from each provider namespace's last segment, and a
-    ///     sweep would compute the same wrong answer as the code it is checking. These are typed out
-    ///     so that the day somebody adds a namespace whose key collides with a short name here, this
-    ///     list is out of date and a human notices — which is a better failure than
-    ///     System.CommandLine's, which is <c>ArgumentException: An item with the same key has already
-    ///     been added</c> on <b>every</b> <c>cyc</c> parse, naming neither the provider nor the string.
-    ///     Two agents have hit exactly that.
-    /// </remarks>
-    public static readonly string[] GroupKeys = [
-        "sample",
-        "dbforpostgresql",
-        "cache",
-        "messaging",
-        "storage",
-        "search",
-        "documentdb",
-        "analytics",
-        "dbformysql",
-        "network",
-        // ⚠ ADDED WHEN THE THIRD TYPE IN THIS FAMILY ARRIVED, AND IT WAS MISSING BEFORE THAT — which
-        // is exactly the failure this list's own remarks predict. `CyberCloud.ContainerService` was
-        // already in the tree and its key was never typed here, so `vnet` and `subnet` were checked
-        // against ten of eleven group keys. Neither collides, so nothing broke; the omission was luck
-        // rather than a check, and a list nobody notices is out of date is a list that proves nothing.
-        "containerservice",
-        // ⚠ ADDED WHEN THE FOURTH TYPE ARRIVED, AND ALL THREE WERE MISSING — the same failure again,
-        // one pass later. `CyberCloud.Monitor`, `CyberCloud.Terminal` and
-        // `CyberCloud.ContainerRegistry` had all landed since the last time this list was touched, so
-        // `vnet`, `subnet` and `secgroup` were being checked against eleven of fourteen group keys.
-        // Nothing collides, so nothing broke — twice in a row the check has been luck. The list is
-        // now derived-by-hand from `grep -rh 'ProviderNamespace = "' src/Providers`, which is the
-        // command to re-run when a provider is added.
-        "monitor",
-        "terminal",
-        "containerregistry"
-    ];
-
-    /// <summary>Every short name already declared in the tree, as a literal.</summary>
-    public static readonly string[] ExistingShortNames = [
-        "widget",
-        "postgres",
-        "valkey",
-        "kafka",
-        "nats",
-        "rabbitmq",
-        "objectstore",
-        "bucket",
-        "opensearch",
-        "docdb",
-        "clickhouse",
-        "mariadb",
-        // ⚠ ContainerServiceProvider's two, absent for the same reason `containerservice` was.
-        "aks",
-        "nodepool",
-        // ⚠ The three that landed since, found by `grep -rn 'shortName' src/Providers` — two of them
-        // are declared through a `const string ShortName` rather than a literal at the call site,
-        // which is why a grep for `shortName: "` alone misses them and is worth saying once.
-        "workspace",
-        "shell",
-        "registry"
-    ];
-
     [Fact]
     public void TheProviderBuildsTheWayASiloBuildsIt() {
         // ⚠ ProviderRegistry.Build is what runs at silo start, and it is where a duplicate short
@@ -196,40 +130,20 @@ public sealed class NetworkDeclarationTests {
         NetworkSubnets.V2026.ShouldBe(VirtualNetworks.V2026);
     }
 
-    [Theory]
-    [MemberData(nameof(EveryGroupKey))]
-    public void NeitherShortNameIsAnyProvidersGroupKey(string groupKey) {
-        // ⚠ System.CommandLine's ValidTokens is ONE dictionary of every command token and every alias
-        // in the whole tree, so a group and an alias that share a string throw on the first parse of
-        // ANY command line. ProviderRegistry.Build refuses a DUPLICATE short name and never compares
-        // one against a group name — charts/managed/seaweedfs/conformance.yaml § owed,
-        // `short-name-collides-with-the-group` — so this is checked by hand, for the third and fourth
-        // time.
-        foreach (var shortName in ShortNames()) {
-            shortName.ShouldNotBe(
-                groupKey,
-                $"'{shortName}' is also a CLI group key, so every `cyc` invocation would throw "
-                + "ArgumentException naming neither this provider nor the string"
-            );
-        }
-    }
-
-    [Theory]
-    [MemberData(nameof(EveryExistingShortName))]
-    public void NeitherShortNameCollidesWithOneThatAlreadyExists(string existing) {
-        foreach (var shortName in ShortNames()) {
-            shortName.ShouldNotBe(existing);
-        }
-    }
-
     [Fact]
-    public void TheFourShortNamesAreDistinctFromEachOther() {
-        // ⚠ With four types in one family there are four chances to collide, including with each
-        // other — and ProviderRegistry.Build DOES refuse this one, which is why the assertion is
-        // cheap and worth having anyway: it names the problem where a silo-start failure would not.
-        var names = ShortNames().ToList();
-
-        names.Distinct(StringComparer.Ordinal).Count().ShouldBe(names.Count);
+    public void NoShortNameHereGivesACycTokenTwoMeanings() {
+        // ⚠ DERIVED, AND THE TWO LISTS THIS REPLACES ARE THE REASON. They held every group key and
+        // every short name in the tree as literals, and they were stale on two consecutive passes —
+        // green by luck both times, because nothing they had missed happened to collide. A list is
+        // maintained by whoever remembers it exists; this reads what the provider declares.
+        //
+        // ⚠ AND THE OLD ONES ASKED THE WRONG QUESTION, WHICH IS WORSE THAN ASKING IT LATE. Measured
+        // against System.CommandLine 2.0.10: the token dictionary is per PARENT command, so `cyc
+        // monitor network` parses cleanly with `network` also a top-level group — a short name equal
+        // to another group's key cannot collide. What can is a short name equal to its OWN group's
+        // key, a sibling's command name, or a sibling's short name, and no list checked any of those.
+        // CliTokens carries the rule and CliTokenTests carries the measurements.
+        CliTokens.Collisions(Declarations()).ShouldBeEmpty();
     }
 
     [Fact]
@@ -442,11 +356,21 @@ public sealed class NetworkDeclarationTests {
 
     // ── Helpers ──────────────────────────────────────────────────────────────────────────────────
 
-    public static TheoryData<string> EveryGroupKey() => [.. GroupKeys];
-
-    public static TheoryData<string> EveryExistingShortName() => [.. ExistingShortNames];
-
     static IEnumerable<string> ShortNames() => Build().Types.Select(x => x.Display.Alias);
+
+    /// <summary>
+    ///     What this provider puts into the <c>cyc</c> token namespace, read off the built registry.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>One provider is deliberately all this can see.</b> src/Providers/README.md § Hard rule
+    ///     forbids a <c>Providers.*</c> assembly referencing another, so the cross-provider half of
+    ///     the question is answered where the whole tree is visible — <c>ProviderRegistry.Build</c> at
+    ///     silo start, <c>CliEmitter.Emit</c> at generation, and
+    ///     <c>GeneratedSurfaceTests.NoGroupInAnyShippedTreeGivesOneTokenTwoMeanings</c> over the
+    ///     embedded tree in <c>dotnet test</c>. None of the three is a list.
+    /// </remarks>
+    static IEnumerable<CliDeclaration> Declarations() =>
+        Build().Types.Select(x => new CliDeclaration(x.Type.Namespace, x.Type.Type, x.Display.Alias));
 
     static ProviderRegistry Build() => ProviderRegistry.Build([new NetworkProvider()]);
 }
