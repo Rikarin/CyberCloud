@@ -1,0 +1,45 @@
+# Bundle component — charts/bundle/README.md § What a component owes.
+#
+# Core Cluster API, plus the kubeadm bootstrap and kubeadm control-plane providers, which
+# `cluster-api-components.yaml` ships as one document. charts/managed/kubernetes-agentpool renders a
+# `bootstrap.cluster.x-k8s.io/v1beta2` KubeadmConfigTemplate, so the bootstrap provider is not
+# optional here even though the platform's control planes are Kamaji's rather than kubeadm's.
+
+component: cluster-api
+phase: 40
+licence: Apache-2.0
+install: manifest
+release: v1.14.0
+manifest: https://github.com/kubernetes-sigs/cluster-api/releases/download/v1.14.0/cluster-api-components.yaml
+
+source: https://api.github.com/repos/kubernetes-sigs/cluster-api/releases/latest
+checked: 2026-08-19
+
+# ⚠ EVERY LINE HERE WAS READ OFF THE DOWNLOADED DOCUMENT'S CustomResourceDefinitions, AND THE
+# DISTINCTION MATTERS FOR THIS COMPONENT MORE THAN FOR ANY OTHER. v1.14.0 serves v1beta1 AND v1beta2
+# side by side for every core kind. charts/managed/kubernetes and charts/managed/kubernetes-agentpool
+# render v1beta2, which is the storage version; src/Providers/CyberCloud.Providers.ContainerService
+# declares the same. A reader who assumed "latest release, therefore v1beta1 is gone" would have been
+# wrong today and will be right at some release, which is exactly why the coverage check reads the
+# document instead of the assumption.
+serves:
+  - cluster.x-k8s.io/v1beta2
+  - bootstrap.cluster.x-k8s.io/v1beta2
+  - controlplane.cluster.x-k8s.io/v1beta2
+
+requiredBy:
+  - charts/managed/kubernetes
+  - charts/managed/kubernetes-agentpool
+  - charts/bundle/kamaji-control-plane-provider
+  - charts/bundle/cluster-api-provider-kubevirt
+
+notes: >
+  ⚠ `clusterctl init` is the documented install path and is deliberately not the one taken. It
+  resolves provider versions from a remote contract at install time, which is a pin this directory
+  cannot see and cannot diff — the same objection ADR-010 raises to a vendored chart with no
+  provenance. Applying the released component document pins the same bits and leaves the version in a
+  file a reviewer reads.
+  ⚠ ONE THING THE COMPONENT DOCUMENT DOES THAT clusterctl WOULD HAVE DONE FOR YOU: it declares
+  `cert-manager` annotations on its webhook configurations. Cluster API's webhooks are served with
+  cert-manager-issued certificates, and this bundle does not install cert-manager. See
+  README.md § What this bundle does not install.

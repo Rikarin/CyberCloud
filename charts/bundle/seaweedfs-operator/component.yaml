@@ -1,0 +1,40 @@
+# Bundle component — charts/bundle/README.md § What a component owes.
+#
+# The SeaweedFS operator, behind CyberCloud.Storage/accounts and .../buckets — docs/plan/15 § The
+# three kinds' object-storage row.
+
+component: seaweedfs-operator
+phase: 50
+licence: Apache-2.0
+
+# Packaged chart published as a GitHub release asset, like clickhouse-operator, so the release tag
+# and the chart version are both part of the pin.
+install: helm-archive
+archive: https://github.com/seaweedfs/seaweedfs-operator/releases/download/seaweedfs-operator-0.1.38/seaweedfs-operator-0.1.38.tgz
+release: seaweedfs-operator-0.1.38
+chart: seaweedfs-operator
+version: 0.1.38
+appVersion: 1.0.35
+
+source: https://api.github.com/repos/seaweedfs/seaweedfs-operator/releases/latest
+checked: 2026-08-19
+
+# Read off templates/crd-seaweed.yaml in chart 0.1.38: thirteen kinds, all `seaweed.seaweedfs.com`,
+# all at v1. charts/managed/seaweedfs renders Seaweed; charts/managed/seaweedfs-bucket renders
+# Bucket.
+serves:
+  - seaweed.seaweedfs.com/v1
+
+requiredBy:
+  - charts/managed/seaweedfs
+  - charts/managed/seaweedfs-bucket
+
+notes: >
+  ⚠ THE DEFINITIONS ARE IN `templates/`, NOT IN `crds/`, AND THAT CHANGES WHAT AN UNINSTALL DOES.
+  A chart's `crds/` directory is never deleted by `helm uninstall`; a templated definition is. So
+  removing this release removes the Seaweed and Bucket kinds and, with them, every tenant's object —
+  which is the opposite of what charts/bundle/cloudnative-pg does with the same verb.
+  ⚠ charts/managed/opensearch/conformance.yaml § owed, `listkeys-has-no-handler`, contrasts the two
+  services and names this one as the harder case: "there the credential does not exist at all and the
+  resource never converges". That is a provider gap and not this component's — the operator installs
+  and reconciles regardless of it.

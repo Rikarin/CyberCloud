@@ -1,0 +1,39 @@
+# Bundle component — charts/bundle/README.md § What a component owes.
+#
+# mariadb-operator, behind CyberCloud.DBforMySQL/servers. ⚠ ADR-011 does not name MariaDB in its
+# table and does not need to: MariaDB Server is GPL-2.0 and the operator is MIT, so neither is an
+# SSPL/BUSL row. This is the one component here whose licence is not Apache-2.0, which is why the
+# allow-list the Bundle gate checks is a list rather than a single value.
+
+component: mariadb-operator
+phase: 50
+licence: MIT
+install: helm
+repo: https://helm.mariadb.com/mariadb-operator
+chart: mariadb-operator
+version: 26.6.0
+appVersion: 26.6.0
+
+source: https://helm.mariadb.com/mariadb-operator/index.yaml
+checked: 2026-08-19
+
+# ⚠ THE DEFINITIONS ARE A SEPARATE CHART AND THE OPERATOR CHART DOES NOT PULL THEM.
+# `mariadb-operator-crds` 26.6.0 ships the twelve `k8s.mariadb.com/v1alpha1` definitions; the
+# operator chart ships the controller. Installing the second without the first gives a controller
+# whose watches fail on every kind. Both are the same version and install.sh applies them in order.
+chartCrds: mariadb-operator-crds
+versionCrds: 26.6.0
+
+serves:
+  - k8s.mariadb.com/v1alpha1
+
+requiredBy:
+  - charts/managed/mariadb
+
+notes: >
+  `currentNamespaceOnly: false` is the chart's default, so the operator watches every namespace out
+  of the box. Checked rather than assumed — two of the nine data-service operators in this bundle
+  default the other way.
+  ⚠ v1alpha1 for a project on its twenty-sixth major chart version is not a stale pin: every one of
+  the twelve kinds in 26.6.0 is v1alpha1, and the chart's version number tracks a calendar rather
+  than the API.

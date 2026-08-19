@@ -1,0 +1,38 @@
+# Bundle component — charts/bundle/README.md § What a component owes.
+#
+# CAPK — the Cluster API infrastructure provider that turns a Machine into a KubeVirt VirtualMachine.
+# charts/managed/kubernetes renders its KubevirtCluster and charts/managed/kubernetes-agentpool its
+# KubevirtMachineTemplate.
+
+component: cluster-api-provider-kubevirt
+phase: 40
+licence: Apache-2.0
+install: manifest
+release: v0.11.2
+manifest: https://github.com/kubernetes-sigs/cluster-api-provider-kubevirt/releases/download/v0.11.2/infrastructure-components.yaml
+
+source: https://api.github.com/repos/kubernetes-sigs/cluster-api-provider-kubevirt/releases/latest
+checked: 2026-08-19
+
+# ⚠ v1alpha1 IS THE ONLY VERSION THIS PROVIDER HAS EVER SERVED, WHICH IS WORTH SAYING BECAUSE IT
+# LOOKS LIKE A STALE PIN AND IS NOT. v0.11.2's four definitions — KubevirtCluster,
+# KubevirtClusterTemplate, KubevirtMachine, KubevirtMachineTemplate — are all
+# `infrastructure.cluster.x-k8s.io/v1alpha1`. The Cluster API CONTRACT version the provider
+# implements and the API version of its own types are different numbers, and only the second one
+# appears in a manifest.
+serves:
+  - infrastructure.cluster.x-k8s.io/v1alpha1
+
+requiredBy:
+  - charts/managed/kubernetes
+  - charts/managed/kubernetes-agentpool
+
+notes: >
+  ⚠ Its RBAC is where charts/bundle/kubevirt and charts/bundle/containerized-data-importer became
+  requirements. infrastructure-components.yaml v0.11.2 grants this controller rules over the
+  `kubevirt.io` and `cdi.kubevirt.io` API groups; nothing in charts/managed/ renders either group, so
+  reading the charts alone would have produced a bundle that installs a provider with nothing to
+  reconcile against.
+  ⚠ v0.11.2 was published 2026-03-03 and is the newest release. It is the slowest-moving pin in this
+  directory; that is a property of the project, recorded so that "no newer release" is visible as a
+  fact rather than inferred from a date nobody looked at.

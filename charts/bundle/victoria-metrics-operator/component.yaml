@@ -1,0 +1,38 @@
+# Bundle component — charts/bundle/README.md § What a component owes.
+#
+# The VictoriaMetrics operator, behind CyberCloud.Monitor/workspaces. ADR-011 § Grafana is what puts
+# this row here rather than a Prometheus stack: the platform embeds rendered dashboards by URL and
+# does not link Grafana code, and the metrics store underneath is a choice this operator makes cheap.
+
+component: victoria-metrics-operator
+phase: 60
+licence: Apache-2.0
+install: helm
+repo: https://victoriametrics.github.io/helm-charts
+chart: victoria-metrics-operator
+version: 0.67.2
+appVersion: v0.74.0
+
+source: https://victoriametrics.github.io/helm-charts/index.yaml
+checked: 2026-08-19
+
+# Read off the definitions the chart installs. charts/managed/monitor-workspace renders VMUser.
+serves:
+  - operator.victoriametrics.com/v1beta1
+
+requiredBy:
+  - charts/managed/monitor-workspace
+
+notes: >
+  ⚠ THE DEFINITIONS COME FROM A SUBCHART AND THE FLAG THAT CONTROLS THEM IS NOT THE OBVIOUS ONE.
+  `crds.enabled: true` is the chart's default and it disables creation "only in combination with
+  `crds.plain: false`", per its own comment — a two-key condition rather than a boolean. Both
+  defaults are taken; they are recorded because a values default that needs two keys read together is
+  a values default somebody will misread once.
+  ⚠ `watchNamespaces: []` here DOES mean all namespaces — the chart says so in as many words: "By
+  default, the operator will watch all the namespaces". The identical key means the opposite in
+  charts/bundle/clickhouse-operator, which is why each of the nine data-service operators was checked
+  against its own values.yaml rather than against a convention.
+  ⚠ The operator converts Prometheus-operator kinds (PodMonitor, ServiceMonitor) into its own, which
+  is what makes charts/bundle/prometheus-operator-crds a definitions-only component: three managed
+  charts render a PodMonitor and this is what reads it.

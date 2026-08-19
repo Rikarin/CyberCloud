@@ -1,0 +1,31 @@
+# Bundle component — charts/bundle/README.md § What a component owes.
+#
+# CDI. The other half of the transitive requirement kubevirt/component.yaml describes: a KubeVirt
+# guest needs a disk, and a Cluster API node image arrives as a container image that CDI imports into
+# a PersistentVolume. cluster-api-provider-kubevirt's RBAC names `cdi.kubevirt.io` for that reason.
+
+component: containerized-data-importer
+phase: 30
+licence: Apache-2.0
+install: manifest
+release: v1.66.0
+
+manifest: https://github.com/kubevirt/containerized-data-importer/releases/download/v1.66.0/cdi-operator.yaml
+manifestExtra: https://github.com/kubevirt/containerized-data-importer/releases/download/v1.66.0/cdi-cr.yaml
+
+source: https://api.github.com/repos/kubevirt/containerized-data-importer/releases/latest
+checked: 2026-08-19
+
+# Read off cdi-operator.yaml. The definition also serves `cdi.kubevirt.io/v1alpha1`; only the version
+# in use is claimed.
+serves:
+  - cdi.kubevirt.io/v1beta1
+
+requiredBy:
+  - charts/bundle/cluster-api-provider-kubevirt
+
+notes: >
+  ⚠ CDI's import pods write into a PersistentVolume, so this component depends on a storage class and
+  this bundle installs none — bundle.yaml § owed, `no-csi`. On a cluster with no default storage
+  class the CDI operator installs cleanly, reports Deployed, and every DataVolume stays Pending,
+  which is the shape of failure that reads as a KubeVirt problem and is not one.

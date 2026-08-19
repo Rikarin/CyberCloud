@@ -1,0 +1,38 @@
+# Bundle component — charts/bundle/README.md § What a component owes.
+#
+# ⚠ NO CHART IN charts/managed/ RENDERS A `kubevirt.io` OBJECT, AND THIS COMPONENT IS STILL REQUIRED.
+# The requirement is transitive: cluster-api-provider-kubevirt reconciles a Cluster API `Machine`
+# into a `kubevirt.io/v1` VirtualMachine, and its own RBAC in `infrastructure-components.yaml` names
+# the `kubevirt.io` and `cdi.kubevirt.io` API groups. A `requiredBy:` that named only charts is a
+# `requiredBy:` that would have missed this component entirely, which is why the key takes components
+# as well as charts.
+
+component: kubevirt
+phase: 30
+licence: Apache-2.0
+install: manifest
+release: v1.9.0
+
+# Two documents, in this order: the operator, then the `KubeVirt` custom resource that tells the
+# operator to deploy the handler and the API. Installing the first alone leaves a cluster with the
+# definitions and no virtualisation.
+manifest: https://github.com/kubevirt/kubevirt/releases/download/v1.9.0/kubevirt-operator.yaml
+manifestExtra: https://github.com/kubevirt/kubevirt/releases/download/v1.9.0/kubevirt-cr.yaml
+
+source: https://api.github.com/repos/kubevirt/kubevirt/releases/latest
+checked: 2026-08-19
+
+# Read off kubevirt-operator.yaml. The definition also serves the deprecated `kubevirt.io/v1alpha3`;
+# only the version this platform's dependants use is claimed.
+serves:
+  - kubevirt.io/v1
+
+requiredBy:
+  - charts/bundle/cluster-api-provider-kubevirt
+
+notes: >
+  ⚠ Nested virtualisation. KubeVirt runs guests under KVM, and a node with no `/dev/kvm` falls back
+  to software emulation, which is slow enough that a Cluster API Machine can time out before its
+  guest finishes booting. That is a property of the host fleet rather than of this pin, and it is the
+  first thing to check when charts/managed/kubernetes-agentpool creates Machines that never become
+  Ready.

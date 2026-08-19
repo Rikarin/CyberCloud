@@ -1,0 +1,59 @@
+# Bundle component — charts/bundle/README.md § What a component owes.
+#
+# ⚠ THE WORST ROW IN THIS DIRECTORY, AND EVERY SENTENCE BELOW WAS READ OFF A REGISTRY OR AN API
+# RATHER THAN OFF DOCUMENTATION. Read bundle.yaml § owed, `redis-operator-is-archived-and-its-chart-
+# is-broken`, before changing anything here.
+#
+#   * github.com/spotahome/redis-operator reports `archived: true`. Last push 2024-07-01.
+#   * Its newest chart release is `Chart-3.3.0`, published 2023-08-17.
+#   * Its newest OPERATOR tag is `v1.3.0-rc1`, published 2023-08-21, `prerelease: true`. The last
+#     non-prerelease is `v1.2.4`, 2022-12-28.
+#   * Chart 3.3.0's values.yaml pins `image.tag: v1.3.0` against `quay.io/spotahome/redis-operator`,
+#     and the Quay tag listing for that repository has no `v1.3.0` in it — the newest tag is
+#     `v1.3.0-rc1`. SO THE CHART'S DEFAULT VALUES PRODUCE A DEPLOYMENT THAT CANNOT PULL, and the
+#     project cannot fix it because it is read-only.
+#
+# This is the defect class Task #109 names: "a version pin that was 'verified' and points at a tag
+# that does not exist". Here the broken pin is upstream's, and this component overrides it.
+
+component: redis-operator
+phase: 50
+licence: Apache-2.0
+install: helm
+repo: https://spotahome.github.io/redis-operator
+chart: redis-operator
+version: 3.3.0
+appVersion: 1.3.0
+
+source: https://spotahome.github.io/redis-operator/index.yaml
+checked: 2026-08-19
+
+serves:
+  - databases.spotahome.com/v1
+
+requiredBy:
+  - charts/managed/valkey
+
+# ⚠ A TAG AND NOT A DIGEST, BECAUSE THE CHART HAS NO DIGEST KEY. templates/deployment.yaml composes
+# the reference as `"{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion
+# }}"` and nothing else, so `image.digest` would be a values key that silently does nothing — which
+# is worse than a tag, because it reads as a stronger pin than it is. The digest below is recorded so
+# that `install.sh --verify` can compare what it pulled against what was reviewed; it is a fact to
+# check against, not a value that is passed.
+values:
+  image.tag: "v1.3.0-rc1"
+
+# quay.io/api/v1/repository/spotahome/redis-operator/tag/?specificTag=v1.3.0-rc1, read 2026-08-19.
+imageDigest: sha256:8c772955184e60ee3116428540ec21abe7b648f4d5a5d74ecf3f19aec52b7e49
+
+notes: >
+  ⚠ ADR-011 IS SATISFIED AND IT IS SATISFIED BY THE CHART, NOT BY THIS COMPONENT. The licence
+  question is about the ENGINE, and this operator's `defaultImage` is `redis:6.2.6-alpine` — the
+  licence ADR-011 rejected. charts/managed/valkey/values.yaml already refuses to inherit it: its
+  `imageName` row's `@internal` reason says "Leaving it empty must NOT mean 'let the operator
+  choose' … so the empty case renders a Valkey tag rather than nothing". Installing this operator
+  does not put Redis on the cluster; rendering a RedisFailover without an image would.
+  ⚠ The operator's own licence is Apache-2.0, which is why this is a hazard to record rather than an
+  ADR-011 refusal. A refusal would be the right answer to an SSPL or BUSL operator and is the wrong
+  answer to an unmaintained one — the cost here is unpatched CVEs, which is a decision for whoever
+  owns CyberCloud.Cache/redis and not a decision a bundle can make.

@@ -1,0 +1,38 @@
+# Bundle component — charts/bundle/README.md § What a component owes.
+#
+# The CNI, and the source of the four network resource types' custom resources. ADR-011: Apache-2.0.
+
+component: kube-ovn
+phase: 10
+licence: Apache-2.0
+install: helm
+repo: https://kubeovn.github.io/kube-ovn
+chart: kube-ovn
+version: v1.16.2
+appVersion: 1.16.2
+
+# Where the pin was read, and when. ⚠ The repository index, not a release page: the index is what
+# `helm install` resolves against, so it is the only reading that answers the question being asked.
+source: https://kubeovn.github.io/kube-ovn/index.yaml
+checked: 2026-08-19
+
+# Read off the CustomResourceDefinition documents in the pulled chart, not off its documentation.
+# The chart ships one `kubeovn.io/v1` group holding 24 kinds; the four this platform renders are
+# Vpc, Subnet, SecurityGroup and OvnEip.
+serves:
+  - kubeovn.io/v1
+
+requiredBy:
+  - charts/managed/kube-ovn-vpc
+  - charts/managed/kube-ovn-subnet
+  - charts/managed/kube-ovn-security-group
+  - charts/managed/kube-ovn-eip
+
+# ⚠ THE REPOSITORY SERVES TWO CHARTS AND THE OTHER ONE IS NOT A NEWER VERSION OF THIS ONE.
+# `kubeovn/kube-ovn-v2` carries the same chart version and app version as `kubeovn/kube-ovn`; the
+# suffix is a packaging generation, not a release. Reading "v2" as "newer" is the mistake this note
+# exists to prevent, and the two were compared rather than assumed.
+notes: >
+  A CNI is the one component in this bundle that cannot be installed onto a running cluster without
+  consequence — replacing the CNI restarts every pod's networking. It is phase 10 for that reason and
+  belongs to cluster creation rather than to platform upgrade.

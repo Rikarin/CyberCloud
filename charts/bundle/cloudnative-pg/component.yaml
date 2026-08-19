@@ -1,0 +1,36 @@
+# Bundle component — charts/bundle/README.md § What a component owes.
+#
+# CloudNativePG. Two managed charts render its Cluster, which is the only group in this bundle with
+# more than one dependant that is not a network row: charts/managed/postgres renders it as the
+# service, and charts/managed/ferretdb renders it as FerretDB's storage engine — ADR-011's "FerretDB
+# (Apache-2.0) over Postgres", and ADR-010 clause 1's amendment, second sighting.
+
+component: cloudnative-pg
+phase: 50
+licence: Apache-2.0
+install: helm
+repo: https://cloudnative-pg.github.io/charts
+chart: cloudnative-pg
+version: 0.29.0
+appVersion: 1.30.0
+
+source: https://cloudnative-pg.github.io/charts/index.yaml
+checked: 2026-08-19
+
+# Read off templates/crds/crds.yaml in chart 0.29.0. Eleven kinds, one version: Backup, Cluster,
+# ClusterImageCatalog, Database, DatabaseRole, FailoverQuorum, ImageCatalog, Pooler, Publication,
+# ScheduledBackup, Subscription. charts/managed/postgres renders Cluster and Pooler.
+serves:
+  - postgresql.cnpg.io/v1
+
+requiredBy:
+  - charts/managed/postgres
+  - charts/managed/ferretdb
+
+notes: >
+  ⚠ The chart's definitions carry `helm.sh/resource-policy: keep`, so `helm uninstall` leaves the
+  definitions and therefore leaves every tenant's Cluster object behind. That is the right default
+  for a bundle and the wrong assumption for a test that expects an uninstall to clean up.
+  ⚠ charts/managed/postgres/SOURCE names an open question this component does not answer: whether
+  `ghcr.io/cloudnative-pg/postgresql` ships pgvector, postgis, pg_stat_statements and timescaledb at
+  all. The image is the chart's choice, not the operator's, so the answer lives there.
