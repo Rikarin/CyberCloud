@@ -522,6 +522,21 @@ public sealed class ClusterConformanceHarness<TSource> : IAsyncDisposable
         }
     }
 
+    /// <summary>Creates the harness namespace before the silo comes up.</summary>
+    /// <remarks>
+    ///     ⚠ <b>No longer the only thing that creates it, and it is kept for what runs
+    ///     <i>outside</i> a pass.</b> <c>NamespaceEnsurer</c> now applies the same namespace, labelled,
+    ///     on the reconcile driver's path — so on the driven path this is redundant. It stays because
+    ///     this harness also reads and writes the namespace with the raw client before any operation
+    ///     has been driven (<c>RivalApplyAsync</c>, <c>ReadFromClusterAsync</c>,
+    ///     <c>EnsureCustomResourceDefinitionsAsync</c>), and those have no pass to hang the creation
+    ///     off. ⚠ It creates the namespace <b>unlabelled</b>, which is deliberate: the first pass's
+    ///     apply is then what puts ADR-013's seven on it, so a suite that wanted to assert the labels
+    ///     would be asserting against the platform rather than against this method.
+    /// </remarks>
+    /// <param name="raw">The raw client.</param>
+    /// <param name="ns">The namespace name.</param>
+    /// <param name="cancellationToken">The fixture's token.</param>
     static async Task EnsureNamespaceAsync(IKubernetes raw, string ns, CancellationToken cancellationToken) {
         var existing = await raw.CoreV1
             .ListNamespaceAsync(fieldSelector: $"metadata.name={ns}", cancellationToken: cancellationToken)

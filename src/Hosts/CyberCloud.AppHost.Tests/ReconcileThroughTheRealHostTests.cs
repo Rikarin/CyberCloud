@@ -72,12 +72,14 @@ namespace CyberCloud.AppHost.Tests;
 ///         in-process by design.
 ///     </para>
 ///     <para>
-///         ⚠ <b>And one seam is still held open by hand: the namespace.</b>
-///         <c>ReconcileDriver.NamespaceFor</c> derives <c>{subscription:N}-{resourceGroup}</c> and
-///         every reconciler applies into it, but <c>src/Providers/README.md</c> records that <b>no
-///         component owns namespace creation</b> — it is an open item, not an oversight of this test.
-///         <see cref="EnsureNamespaceAsync" /> creates it, and the day something in the platform does,
-///         that method should be deleted rather than kept as a convenience.
+///         ⚠ <b>The namespace seam used to be held open by hand here and is now an assertion.</b>
+///         This class carried an <c>EnsureNamespaceAsync</c> that created
+///         <c>{subscription:N}-{resourceGroup}</c> with the raw client, because
+///         <c>ReconcileDriver.NamespaceFor</c> derived the name and nothing created it. It is gone:
+///         <c>NamespaceEnsurer</c> applies the namespace, with ADR-013's seven labels, before the
+///         first pass — and <see cref="AWidgetPutThroughTheRealHostsReachesSucceededAndItsConfigMapIsInK3s" />
+///         now reads that namespace back through the raw client and checks the labels. A test that
+///         creates the thing it is about to look for proves the API server accepts creates.
 ///     </para>
 /// </remarks>
 /// <param name="topology">The running AppHost — two silo processes, Redis, PostgreSQL, k3s.</param>
@@ -139,7 +141,6 @@ public sealed class ReconcileThroughTheRealHostTests(LocalTopology topology) : I
 
         await SeedSubscriptionAsync(token);
         await GrantAsync(token);
-        await EnsureNamespaceAsync(token);
         await AttachClusterAsync(token);
 
         gateway = await BuildGatewayAsync();
@@ -202,6 +203,58 @@ public sealed class ReconcileThroughTheRealHostTests(LocalTopology topology) : I
         var status = await ConvergeAsync(manager, write.OperationId);
 
         status.State.ShouldBe(OperationState.Succeeded, Diagnose(status));
+
+        // ── The namespace, which nothing in this process created ────────────────────────────────
+        //
+        // ⚠ THIS ASSERTION REPLACED A HELPER THAT CREATED THE NAMESPACE ITSELF. While
+        // EnsureNamespaceAsync existed, every k3s-backed assertion below was standing on a namespace
+        // the test had made, so the suite proved nothing about whether the platform can place a
+        // resource on a cluster it has never written to. Nothing in this file touches the namespace
+        // now: NamespaceEnsurer applies it on the driver's path, in a silo process, before the first
+        // reconciler runs.
+        var namespaces = await raw.CoreV1.ListNamespaceAsync(
+            fieldSelector: "metadata.name=" + Namespace,
+            cancellationToken: token
+        );
+
+        namespaces.Items.Count.ShouldBe(
+            1,
+            $"the operation succeeded and there is no namespace '{Namespace}' in the cluster. "
+            + "ReconcileDriver.NamespaceFor derives it and NamespaceEnsurer is what creates it, "
+            + "before the pass — a converged reconcile with no namespace means the ensure was "
+            + "skipped and the reconciler applied somewhere else."
+        );
+
+        var created = namespaces.Items[0];
+
+        // ⚠ THE LABELS ARE THE HALF THAT MATTERS, and they are why this is not just an existence
+        // check. An unlabelled namespace is worse than an absent one: CloudConsoles' tenant-boundary
+        // NetworkPolicy selects namespaces by cybercloud.io/tenant-id, so a namespace that exists
+        // without the label degrades the isolation model silently instead of failing the reconcile.
+        // The hand-rolled helper created exactly such a namespace, so this assertion is also what
+        // makes its return impossible to miss.
+        created.Metadata.Labels.ShouldNotBeNull(
+            $"namespace '{Namespace}' carries no labels at all, so nothing in the cluster records "
+            + "which tenant it belongs to."
+        );
+
+        foreach (var label in KubeLabels.Mandatory) {
+            created.Metadata.Labels.ShouldContainKey(
+                label,
+                $"namespace '{Namespace}' is missing the mandatory label '{label}'. ADR-013's seven "
+                + "are injected by KubeCommand on the same write that creates the namespace, so a "
+                + "missing one here means the namespace was created by something other than "
+                + "NamespaceEnsurer."
+            );
+        }
+
+        created.Metadata.Labels[KubeLabels.TenantId].ShouldBe(
+            KubeLabels.GuidValue(Tenant),
+            "the namespace names a different tenant than the one that created the resource. The "
+            + "cloud-shell NetworkPolicy's tenant-wide egress rule matches on exactly this value."
+        );
+
+        created.Metadata.Labels[KubeLabels.ResourceGroup].ShouldBe(ResourceGroup);
 
         // ── The object, read around every line of our own code ──────────────────────────────────
         //
@@ -416,34 +469,6 @@ public sealed class ReconcileThroughTheRealHostTests(LocalTopology topology) : I
         );
 
         cancellationToken.ThrowIfCancellationRequested();
-    }
-
-    /// <summary>
-    ///     Creates the namespace every reconciler applies into.
-    /// </summary>
-    /// <param name="cancellationToken">The test's token.</param>
-    /// <remarks>
-    ///     ⚠ <b>THIS IS A GAP HELD OPEN BY HAND, AND IT SHOULD NOT SURVIVE.</b>
-    ///     <c>ReconcileDriver.NamespaceFor</c> derives <c>{subscription:N}-{resourceGroup}</c> and
-    ///     every reconciler in the catalogue applies into it, but <c>src/Providers/README.md</c>
-    ///     records the open item plainly: <i>"no component owns namespace creation"</i>. On a real
-    ///     cluster the apply fails with a <c>404</c> naming the namespace until something creates it.
-    ///     Delete this method the day a resource group's create does.
-    /// </remarks>
-    async Task EnsureNamespaceAsync(CancellationToken cancellationToken) {
-        var existing = await raw.CoreV1.ListNamespaceAsync(
-            fieldSelector: "metadata.name=" + Namespace,
-            cancellationToken: cancellationToken
-        );
-
-        if (existing.Items.Count > 0) {
-            return;
-        }
-
-        await raw.CoreV1.CreateNamespaceAsync(
-            new() { Metadata = new() { Name = Namespace } },
-            cancellationToken: cancellationToken
-        );
     }
 
     /// <summary>

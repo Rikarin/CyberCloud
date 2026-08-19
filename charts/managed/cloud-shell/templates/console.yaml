@@ -101,10 +101,13 @@ spec:
             matchLabels:
               kubernetes.io/metadata.name: {{ .Values.platform.namespace | quote }}
     {{/*
-      ⚠ THIS RULE MATCHES NOTHING TODAY. Nothing in this repository creates or labels a namespace, so
-      a shell's reach is its own resource group and no further — which means docs/plan/24's M1 exit
-      story does not work across resource groups. It fails closed, and it is rendered now so that the
-      day namespaces are labelled every existing console gains the reach with no api-version change.
+      ⚠ THIS RULE MATCHED NOTHING WHEN IT WAS WRITTEN, WHICH IS WHY IT WORKS NOW FOR FREE. Nothing in
+      the repository created or labelled a namespace then, so a shell's reach was its own resource
+      group and no further and docs/plan/24's M1 exit story did not work across resource groups.
+      NamespaceEnsurer applies `{subscriptionId:N}-{resourceGroup}` with ADR-013's seven labels before
+      the first reconcile pass, so this selector matches every namespace of this tenant — including
+      for consoles created before it did, because the rule was already in the rendered object. The
+      reach is still per-cluster, and still only reaches groups that have actually been reconciled.
       conformance.yaml § owed, `namespaces-are-not-labelled`.
     */}}
     - to:

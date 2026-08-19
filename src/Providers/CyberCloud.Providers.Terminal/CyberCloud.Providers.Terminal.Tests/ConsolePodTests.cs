@@ -1,3 +1,4 @@
+using CyberCloud.ResourceManager.Reconcile;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
@@ -425,6 +426,48 @@ public sealed class ConsolePodTests {
         container["tty"]!.GetValue<bool>().ShouldBeTrue();
     }
 
+    [Fact]
+    public async Task TheTenantWideRuleSelectsTheLabelTheNamespaceWriteActuallyPuts() {
+        // ⚠ THE JOIN THIS ROW WAS OWED FOR, AND THE ONE THING A DOCKER-FREE SUITE CAN PROVE ABOUT IT.
+        // `namespaces-are-not-labelled` was open because the rule below selected a label nothing
+        // wrote. NamespaceEnsurer now writes it — and "writes a label" and "writes THE label" are two
+        // claims. This one runs the real namespace write through a recorder and compares its output
+        // to the selector byte for byte, so a change to either side's key or GUID FORMAT ("D" versus
+        // "N" — both legal label values, and a selector never matches across the two) fails here
+        // rather than as a shell that silently reaches nothing.
+        var address = new ResourceId(
+            Tenant,
+            Guid.Parse("11111111-1111-4111-8111-111111111112"),
+            "prod",
+            CloudConsoles.Type,
+            "shell",
+            Guid.Parse("11111111-1111-4111-8111-111111111113")
+        );
+
+        var connection = new LabelRecordingConnection();
+
+        var written = await new NamespaceEnsurer(new PolicyClock()).EnsureAsync(
+            address,
+            ReconcileDriver.NamespaceFor(address),
+            connection,
+            TestContext.Current.CancellationToken
+        );
+
+        written.IsSuccess.ShouldBeTrue();
+
+        var selector = Policy()["spec"]!["egress"]!.AsArray()[1]!["to"]![0]!["namespaceSelector"]!["matchLabels"]!
+            .AsObject();
+
+        var (key, value) = selector.Single();
+
+        connection.Labels.ShouldContainKeyAndValue(
+            key,
+            value!.GetValue<string>(),
+            $"the tenant-wide egress rule selects namespaces on '{key}={value}' and the namespace "
+            + "write puts a different value there, so a shell reaches nothing outside its own group."
+        );
+    }
+
     // ── Harness ───────────────────────────────────────────────────────────────────────────────
 
     static readonly Guid Cluster = Guid.Parse("eeeeeeee-0000-4000-8000-000000000005");
@@ -441,4 +484,39 @@ public sealed class ConsolePodTests {
     /// <summary>The policy a body that asks for nothing renders.</summary>
     static JsonObject Policy() =>
         JsonNode.Parse(CloudConsoles.NetworkPolicyJson("plain", Tenant, "plain-ns", Desired))!.AsObject();
+
+    /// <summary>A fixed clock, so the ensurer's memo never matters here.</summary>
+    sealed class PolicyClock : CyberCloud.Core.Time.IClock {
+        public DateTimeOffset UtcNow => new(2026, 8, 19, 9, 0, 0, TimeSpan.Zero);
+    }
+
+    /// <summary>Keeps the labels of the one namespace command the ensurer builds.</summary>
+    sealed class LabelRecordingConnection : IKubeClusterConnection {
+        public Guid ClusterId { get; } = Guid.Parse("eeeeeeee-0000-4000-8000-00000000000b");
+
+        public IReadOnlyDictionary<string, string> Labels { get; private set; } =
+            new Dictionary<string, string>(StringComparer.Ordinal);
+
+        public Task<Result<ApplyOutcome>> ApplyAsync(
+            KubeCommand command,
+            CancellationToken cancellationToken = default
+        ) {
+            ArgumentNullException.ThrowIfNull(command);
+            Labels = command.Labels;
+
+            return Task.FromResult(
+                Result<ApplyOutcome>.Success(new() { Result = ApplyResult.Created, Target = command.Target })
+            );
+        }
+
+        public Task<Result<KubeObject>> GetAsync(ObjectRef target, CancellationToken cancellationToken = default) =>
+            Task.FromResult(Result<KubeObject>.Failure(ErrorCode.ResourceNotFound, $"{target} is not here."));
+
+        public Task<Result> DeleteAsync(
+            KubeCommand command,
+            CascadePolicy policy = CascadePolicy.Background,
+            CancellationToken cancellationToken = default
+        ) =>
+            Task.FromResult(Result.Failure(ErrorCode.InternalError, "Not asked for."));
+    }
 }

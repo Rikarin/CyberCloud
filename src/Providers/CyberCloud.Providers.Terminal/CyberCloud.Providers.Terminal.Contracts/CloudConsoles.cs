@@ -836,15 +836,19 @@ public static class CloudConsoles {
     ///         policy that silently allows what it was written to forbid.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>THE TENANT-WIDE RULE MATCHES NOTHING TODAY AND IS RENDERED ANYWAY.</b> It selects
-    ///         namespaces carrying <c>cybercloud.io/tenant-id</c>, and <b>nothing in this repository
-    ///         creates or labels a namespace</b> — <c>ReconcileDriver.NamespaceFor</c> derives a name
-    ///         and every reconciler assumes it exists. So today the reach is the console's own
-    ///         resource group and no further, which means <b>docs/plan/24's M1 exit story does not
-    ///         work across resource groups</b>: <c>psql</c> into a Postgres server in a different
-    ///         group is refused by this policy. It fails closed, which is the right direction to be
-    ///         wrong in, and the rule is rendered now so that the day namespaces are labelled every
-    ///         existing console gains the reach with no api-version change.
+    ///         ⚠ <b>THE TENANT-WIDE RULE MATCHED NOTHING WHEN IT WAS WRITTEN, AND WAS RENDERED
+    ///         ANYWAY. That is why it works now without an api-version change.</b> It selects
+    ///         namespaces carrying <c>cybercloud.io/tenant-id</c>, and for the first eleven provider
+    ///         families nothing in the repository created or labelled a namespace — so the reach was
+    ///         the console's own resource group and no further, and docs/plan/24's M1 exit story did
+    ///         not work across resource groups. <c>NamespaceEnsurer</c>, on the reconcile driver's
+    ///         path, now applies <c>{subscriptionId:N}-{resourceGroup}</c> with ADR-013's seven
+    ///         labels before the first pass of any resource in the group, so this rule selects what
+    ///         it was written to select — for every console already created, because the rule was in
+    ///         the rendered object all along. ⚠ <b>The reach is still bounded by two things and both
+    ///         are correct:</b> a namespace exists only where a resource in that group has actually
+    ///         been reconciled, and a <c>NetworkPolicy</c> is per-cluster, so a shell does not reach
+    ///         a group whose resources live on a different cluster.
     ///         <c>conformance.yaml § owed</c>, <c>namespaces-are-not-labelled</c>.
     ///     </para>
     ///     <para>
@@ -876,7 +880,8 @@ public static class CloudConsoles {
                     }
                 }
             },
-            // 2. The rest of this tenant. See the remarks: it matches nothing yet.
+            // 2. The rest of this tenant. See the remarks: it matched nothing until NamespaceEnsurer
+            //    started labelling namespaces, and it selects every one of them now.
             new JsonObject {
                 ["to"] = new JsonArray {
                     new JsonObject {
