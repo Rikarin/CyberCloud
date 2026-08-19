@@ -1109,13 +1109,13 @@ that single sentence is what every finding below is downstream of.
   because their addresses are in the cluster CIDR. The requirement is met the only way it can be: the
   tenant's namespaces are allowed **positively** and every private range is excised from the public
   rule, so the platform is excluded by construction rather than by exception.
-- ⚠ **And the tenant-wide half of that rule matches nothing, because nothing in this repository
-  labels a namespace.** `ReconcileDriver.NamespaceFor` derives a name and every reconciler assumes it
-  exists; no component owns namespace creation. So a shell today reaches its own resource group and no
-  further, which means **docs/plan/24's M1 exit story does not work across resource groups** —
-  `psql` into a Postgres server in another group is refused by this policy. It fails closed, and the
-  rule is rendered now so that the day namespaces are labelled every existing console gains the reach
-  with no api-version change.
+- ⚠ **The tenant-wide half of that rule matched nothing when this row landed, and now matches —
+  see § Namespaces.** It was written against `cybercloud.io/tenant-id` on a namespace at a time when
+  nothing in the repository created or labelled one, so a shell reached its own resource group and no
+  further and **docs/plan/24's M1 exit story did not work across resource groups**. `NamespaceEnsurer`
+  now applies the namespace with ADR-013's seven labels before the first pass, so the rule selects
+  what it was written to select, on **every console already created** — the rule was rendered from the
+  first day precisely so that closing the gap needed no api-version change, and that is what happened.
 - ⚠ **The first family whose product is cross-provider reach, and it still needed only four module
   edges.** Rule 2 should have broken here — a terminal exists to reach the tenant's other resources —
   and it did not, for a reason that is not the usual "it would have been a shortcut": what the
@@ -1535,6 +1535,63 @@ four bullets under this row and **none of them ships**; each is at
 by the same thing: they are configured over **Harbor's own API**, after the resource exists, by a
 caller that would have to authenticate to the thing it just created — which no reconciler in the tree
 does and which `ReconcileContext` gives no way to do.
+
+## Namespaces
+
+Every namespaced object this platform applies lands in `{subscriptionId:N}-{resourceGroup}`, derived
+by `ReconcileDriver.NamespaceFor` and handed to a reconciler as `ctx.Namespace`. **A reconciler never
+derives it and never creates it.** `NamespaceEnsurer`, on the driver's path, applies the namespace
+before the pass runs — with ADR-013's seven labels, in the same write.
+
+- **The driver owns it, and the resource-group grain was refused.** A resource group is a
+  control-plane lifecycle unit with no cluster; which cluster its objects land in is decided
+  *per resource*, from the body's `clusterId`. A group whose resources name two clusters needs a
+  namespace on each, and a group created before its first resource has none to create one on.
+  `CyberCloud.Tenancy` also holds no reference to `CyberCloud.Kubernetes.Contracts`, so
+  `ResourceGroupGrain` could not build the command if it wanted to. A platform-level controller was
+  refused for a related reason: the set of (group × cluster) pairs needing a namespace is a scan of
+  every resource in every group, to answer a question the pass that needs the namespace already knows.
+- **The labels are part of the create, not a later pass.** A namespace that exists and is unlabelled
+  is *worse* than one that does not exist: the cloud-shell NetworkPolicy's tenant-wide egress rule
+  selects namespaces on `cybercloud.io/tenant-id`, so an unlabelled namespace narrows a shell's reach
+  silently, while an absent one fails the reconcile loudly. Going through `KubeCommand` is what makes
+  the two inseparable — the builder injects all seven or refuses to build.
+- **The namespace is attributed to the resource *group*, not to whichever resource reconciled first.**
+  ADR-013's `resource-id` and `resource-type` have no honest value for a namespace — a group has no
+  GUID and is not a registered type — so the id is derived from `{subscriptionId}/{group}`
+  (`NamespaceEnsurer.IdFor`) and the type label reads `cybercloud.resources_resourcegroups`. Stamping
+  the triggering resource's id would name a resource that can be deleted while the namespace and
+  everything else in it lives on.
+- **Idempotent and race-safe because it is a server-side apply.** Two reconcilers converging two
+  resources in one group on two silos both call it; an apply patch creates when absent and is a no-op
+  when present, so neither has to catch and swallow a `409 AlreadyExists` — and swallowing *that*
+  conflict is indistinguishable from swallowing a real one. One field manager,
+  `cybercloud/resource-manager`, for every provider: per-provider managers would co-own the labels.
+- **It costs one round trip per (cluster, namespace) per hour**, not one per apply —
+  `NamespaceEnsurer.RecheckAfter`. A memo that never expired would leave a namespace deleted out of
+  band gone until the silo restarted.
+
+### ⚠ Owed: nothing deletes a namespace
+
+**No component removes a namespace when its resource group is emptied or removed, and that is a
+decision.** Deleting a namespace is a recursive delete of everything inside it, and the platform
+cannot tell "empty" from "empty of objects we wrote": a tenant's own `PersistentVolumeClaim`, a
+`Secret` an operator added and a `StatefulSet` from a chart nobody registered all live there and none
+carries `cybercloud.io/managed-by`. There is also nothing to hang the delete on —
+`IResourceGroupGrain` has `BeginDeleteAsync`/`CompleteDeleteAsync` for its *members* and **no method
+that deletes the group itself**. So an emptied group leaves an empty namespace behind, which costs an
+etcd object and no compute. Closing it needs a group-delete choreography that first proves the
+namespace holds nothing but objects this platform wrote, and the safe order is the one docs/plan/06
+§ Two-phase create already uses in reverse.
+
+### ⚠ Owed: the drift scan will call a namespace an orphan
+
+`DriftScanner` joins cluster objects to resource grains on `cybercloud.io/resource-id`, and a
+namespace's is a group's derived GUID that no resource grain will ever own. The shipping inventory is
+`UnavailableClusterObjectInventory`, so nothing reports it today; the informer-backed one of
+docs/plan/09 § Observing must either not list `v1 Namespace` or skip records whose `resource-type` is
+`NamespaceEnsurer.GroupType`. `ClusterObjectRecord` carries no resource-type label, so the filter is a
+change to that record rather than one `DriftScanner` can make on its own.
 
 ## Comparing an object you read back: containment, never equality
 

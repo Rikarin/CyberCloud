@@ -152,16 +152,22 @@ owed:
       which is where docs/plan/07 says such a check belongs anyway.
   - id: namespaces-are-not-labelled
     says: >
-      The network policy's tenant-wide egress rule selects namespaces carrying cybercloud.io/tenant-id
-      and NOTHING IN THIS REPOSITORY CREATES OR LABELS A NAMESPACE. ReconcileDriver.NamespaceFor
-      derives `{subscriptionId:N}-{resourceGroup}` and every reconciler assumes it exists. So a
-      shell's reach today is its OWN resource group's namespace and no further — which means
-      docs/plan/24's M1 exit story does not work across resource groups: psql into a Postgres server
-      in a different group is refused by this policy. ⚠ IT FAILS CLOSED, which is the right direction
-      to be wrong in, and the rule is rendered now so that the day namespaces are labelled every
-      existing console gains the reach with no api-version change. Closing it is one label at
-      namespace creation, wherever that eventually lives — and that "wherever" is itself a gap: no
-      component owns namespace creation today.
+      ⚠ CLOSED for the reason it was owed, and the residue is named below rather than the item being
+      deleted. The network policy's tenant-wide egress rule selects namespaces carrying
+      cybercloud.io/tenant-id, and when this row landed nothing in the repository created or labelled
+      a namespace — ReconcileDriver.NamespaceFor derived a name and every reconciler assumed it
+      existed — so a shell's reach was its OWN resource group and no further and docs/plan/24's M1
+      exit story did not work across resource groups. NamespaceEnsurer, on the reconcile driver's
+      path, now applies `{subscriptionId:N}-{resourceGroup}` with ADR-013's seven labels before the
+      first pass of any resource in the group. The prediction held exactly: the rule was rendered
+      from day one, so every console created before the fix gained the reach with NO api-version
+      change and no re-reconcile of its own. ⚠ WHAT REMAINS IS TWO BOUNDS, BOTH CORRECT AND NEITHER
+      A LABEL PROBLEM: a namespace exists only where a resource in that group has actually been
+      reconciled, and a NetworkPolicy is per-cluster, so a shell does not reach a group whose
+      resources live on a different cluster. Reaching across clusters is not a policy this object can
+      express at all — it is pod-network routing between two clusters, which docs/plan/09 does not
+      claim. ⚠ And `a-networkpolicy-that-nothing-enforces-still-reads-back`, below, is unchanged and
+      still the larger gap: none of this is proof the CNI enforces any of it.
   - id: a-networkpolicy-that-nothing-enforces-still-reads-back
     says: >
       This is failure class (e) for this row, stated plainly. A NetworkPolicy applies, reads back and
