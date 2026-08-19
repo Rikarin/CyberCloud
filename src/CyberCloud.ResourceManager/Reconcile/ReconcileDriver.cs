@@ -44,6 +44,22 @@ public readonly record struct ReconcilePass(
 ///         <c>ObserveAsync</c> itself so the resource's observed state is what the drift scan compares
 ///         against. The <i>conformance suite</i> is what turns the claim into a check.
 ///     </para>
+///     <para>
+///         ⚠ <b>The driver creates the namespace, and nothing deletes it.</b>
+///         <see cref="NamespaceFor" /> derives the name, <see cref="NamespaceEnsurer" /> applies it
+///         with ADR-013's seven labels before the pass, and the second half of that sentence is a
+///         decision rather than an omission. Deleting a namespace is a recursive delete of everything
+///         inside it, and the platform cannot tell "empty" from "empty of objects we wrote": a
+///         tenant's own <c>PersistentVolumeClaim</c>, a <c>Secret</c> an operator added and a
+///         <c>StatefulSet</c> from a chart nobody registered all live in the same namespace and all
+///         carry no <c>cybercloud.io/managed-by</c>. There is also nothing to hang the delete on —
+///         <c>IResourceGroupGrain</c> has <c>BeginDeleteAsync</c>/<c>CompleteDeleteAsync</c> for its
+///         <i>members</i> and <b>no method that deletes the group itself</b>. So an emptied group
+///         leaves an empty namespace behind, which costs an etcd object and no compute, and the
+///         alternative — a sweeper that deletes namespaces it believes are empty — is how a tenant's
+///         running database disappears. <c>src/Providers/README.md</c> § Namespaces records it as
+///         owed with what closing it needs.
+///     </para>
 /// </remarks>
 public sealed class ReconcileDriver(
     IProviderRegistry registry,
@@ -53,6 +69,7 @@ public sealed class ReconcileDriver(
     IClusterConnectionRegistrar clusterRegistrar,
     ISecretResolver secrets,
     ISecretWriter secretWriter,
+    NamespaceEnsurer namespaces,
     IClock clock
 ) {
     /// <summary>How long one pass may take. Clause 3 of docs/plan/08 § The reconcile loop.</summary>
@@ -144,13 +161,62 @@ public sealed class ReconcileDriver(
         var desired = ParseOrEmpty(reconcileInput.Desired);
         var log = new CollectingReconcileLog(clock);
         var produced = new CollectingClusterConnectionSink();
+        var ns = NamespaceFor(id);
+
+        // ── The namespace every reconciler applies into ──────────────────────────────────────────
+        //
+        // ⚠ HERE, AND NOT IN THE RESOURCE-GROUP GRAIN. NamespaceEnsurer's remarks carry the argument;
+        // the short form is that a namespace is keyed by (group, cluster) and this is the only place
+        // that holds both. It is skipped on a teardown, because a delete that begins by creating the
+        // namespace it is about to empty is a delete that recreates what an operator just removed.
+        if (!tearingDown && connection is not null) {
+            var namespaceReady = await namespaces.EnsureAsync(id, ns, connection, cancellationToken);
+
+            if (namespaceReady.TryGetError(out var namespaceError)) {
+                // ⚠ THE PASS FAILS RATHER THAN CONTINUING, and that is the whole point of doing this
+                // in the driver. Letting the reconciler run would produce a 404 from the API server
+                // naming a namespace, in twenty different reconcilers' words, on a pass that had
+                // nothing wrong with it.
+                log.Report(
+                    "ensuring-namespace",
+                    $"the namespace '{ns}' is not available on cluster {reconcileInput.ClusterId:D}: "
+                    + namespaceError.Message
+                );
+
+                return new(ReconcileOutcome.Failed(namespaceError, true), log.Drain(), true);
+            }
+
+            var namespaceOutcome = namespaceReady.GetValueOrThrow();
+
+            switch (namespaceOutcome.Result) {
+                case ApplyResult.Created:
+                    log.Report("created-namespace", $"namespace '{ns}' now exists and carries the tenant's labels");
+                    break;
+
+                // ⚠ Reported and not failed. The namespace is there, so the pass can proceed; what is
+                // not ours is one of the seven labels on it, and CloudConsoles' tenant-wide egress
+                // rule reads those. A tenant-boundary label held by another field manager is worth a
+                // line in the operation's progress that names it.
+                case ApplyResult.Conflict:
+                    log.Report(
+                        "ensuring-namespace",
+                        $"namespace '{ns}' exists and another field manager owns a label this "
+                        + $"platform sets: {namespaceOutcome.Message}"
+                    );
+
+                    break;
+
+                default:
+                    break;
+            }
+        }
 
         var context = new ReconcileContext(
             id,
             reconcileInput.ApiVersion,
             desired,
             reconcileInput.Observed,
-            NamespaceFor(id),
+            ns,
             connection,
             secrets,
             log

@@ -117,6 +117,12 @@ public static class ResourceManagerSiloBuilderExtensions {
         services.TryAddSingleton<IResourceRelationWriter, ReBacResourceRelationWriter>();
 
         services.TryAddSingleton<DriftScanner>();
+
+        // ⚠ A SINGLETON BECAUSE ITS MEMO IS THE POINT. NamespaceEnsurer applies a namespace once per
+        // (cluster, namespace) per NamespaceEnsurer.RecheckAfter; registered per-scope or transient it
+        // would remember nothing and every reconcile pass of every resource would cost a read and a
+        // patch against a namespace that has existed for months.
+        services.TryAddSingleton<NamespaceEnsurer>();
         services.TryAddSingleton<ReconcileDriver>();
 
         // ⚠ Resolved in the GATEWAY as well as in a silo, and unlike DriftScanner and ReconcileDriver
