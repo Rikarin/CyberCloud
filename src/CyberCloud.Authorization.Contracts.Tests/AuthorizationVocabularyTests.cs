@@ -85,9 +85,20 @@ public sealed class AuthorizationVocabularyTests {
         Permissions.AssignRole.ShouldBe("assignRole");
         Permissions.Administer.ShouldBe("administer");
 
-        // The other camelCase one, and the only permission with a negation in its rewrite.
+        // ⚠ THE SPELLING HERE IS HALF OF A PAIR AND THE COMPILER CANNOT SEE THE OTHER HALF.
+        // `SoftDeletePolicy.DefaultPurgePermission` in CyberCloud.ResourceManager.Contracts is what a
+        // provider's SupportsSoftDelete defaults to, and that assembly does not reference this one. The
+        // two spelling the same string is what makes a purge reachable at all: this permission was
+        // named by the registry and defined by no schema, and because an undeclared permission
+        // evaluates false and the enforcement seam turns false into the canonical 404, every purge on
+        // a real silo answered "does not exist" to everybody. test/CyberCloud.Isolation's
+        // EveryDeclaredPurgePermissionIsOneTheSchemaDefinesOnAResource is the assertion that they
+        // agree; this one is the assertion that neither drifts on its own.
+        Permissions.Purge.ShouldBe("purge");
+
+        // The other camelCase one, and one of the two permissions with a negation in its rewrite.
         Permissions.AssignRole.ShouldNotBe("assignrole");
-        Literals(typeof(Permissions)).Count.ShouldBe(5);
+        Literals(typeof(Permissions)).Count.ShouldBe(6);
     }
 
     [Fact]
