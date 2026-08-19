@@ -287,6 +287,18 @@ common cloud breach"** applies inside a namespace too. **A resource that visibly
 beats one that quietly came up open**, and the general lesson is that "the operator will fill in the
 gap" is a property of one operator rather than of the pattern.
 
+> ✅ **CLOSED — the reconciler mints, and this row is the platform's only exception.** Piece 5 is
+> built, and everywhere else it means *the operator generates the credential at bootstrap and the
+> handler reads it*, because anything minted afterwards is a password the server never accepted while
+> every surface reports success. spotahome generates nothing, so `CyberCloud.Cache/redis` mints
+> through `ISecretWriter` and renders the `Secret` from what the vault returned. ⚠ The property that
+> makes that safe is **mint-once**: a reconcile that re-minted would overwrite the `Secret` a
+> **running** Valkey read its `requirepass` from at start-up, and nothing would report a failure. ⚠
+> What is **not** yet observed is the operator *accepting* the rendered `Secret` — nothing in the
+> repository installs spotahome — recorded at `charts/managed/valkey/conformance.yaml § owed`,
+> `the-operator-accepts-the-rendered-secret`. **The lesson above survives the fix** and is why this
+> paragraph is kept rather than deleted.
+
 ### MongoDB-compatible — `CyberCloud.DocumentDB/accounts` · M2 · 1.2 EM
 
 **FerretDB** (Apache-2.0) over a CloudNativePG cluster. ADR-011: real MongoDB is SSPL and cannot be
