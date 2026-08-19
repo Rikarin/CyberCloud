@@ -130,7 +130,9 @@ public static class Permissions {
     ///         how this permission came to be named by the registry and defined by no schema: every
     ///         purge test in the repository ran against a doubled authorizer, so a permission that
     ///         always evaluated false looked identical to one that worked.
-    ///         <c>PurgePermissionTests</c> is the assertion that they agree.
+    ///         <c>SoftDeleteEdgeTests.EveryDeclaredPurgePermissionIsOneTheSchemaDefinesOnAResource</c>
+///         is the assertion that they agree, and it sweeps the registry rather than pinning this
+///         string — a provider may name its own permission through <c>SupportsSoftDelete</c>.
     ///     </para>
     /// </remarks>
     public const string Purge = "purge";
