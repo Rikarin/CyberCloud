@@ -1536,6 +1536,108 @@ by the same thing: they are configured over **Harbor's own API**, after the reso
 caller that would have to authenticate to the thing it just created — which no reconciler in the tree
 does and which `ReconcileContext` gives no way to do.
 
+### What the eleventh provider's fourth pass measured
+
+⚠ **`loadBalancers` landed, and the object docs/plan/14 and this substrate both point at is one
+nothing on this platform reconciles.** Kube-OVN's native answer to
+[14 § Load balancing](../../docs/plan/14-networking.md) is a `SwitchLBRule`: a VIP on the tenant's
+logical switch, served by OVN itself, with no pod anywhere. Read firsthand in
+`pkg/controller/controller.go` at `v1.16.2`, the lister, the three work queues, the event handler and
+the three workers for `SwitchLBRule` — **and the whole of `VpcDns`, and the ordinary `Service`
+handlers** — are every one of them inside `if config.EnableLb`. **ADR-019 runs Kube-OVN with
+`ENABLE_LB=false`**, deliberately, so that Cilium owns the service datapath. So on the cluster this
+platform actually deploys, a `SwitchLBRule` would be accepted by the API server, reported `Succeeded`
+by this platform, and balance nothing.
+
+- ⚠ **The refutation is bigger than this row, and the second half is `dnsZones`'.** The same `if`
+  block holds `VpcDns`, which is Kube-OVN's in-VPC CoreDNS. **A tenant VPC on this platform therefore
+  has no name resolution and no service discovery at all** — which is not a gap to be filled later so
+  much as a fact every type inside a VPC has to be designed around. It is why this type's backend pool
+  is *addresses*, why its frontend address is **required** where
+  `publicIpAddresses`' is optional, and it is a fourth thing `dnsZones` is owed for on top of the
+  three already recorded.
+- ⚠ **docs/plan/14 named the alternative in the same sentence and it is the one that shipped**: *"an
+  HAProxy deployment for TCP with health checks and connection limits"*. The proxy is a pod on the
+  tenant's own subnet, joined through `ovn.kubernetes.io/logical_switch` — the only seam by which
+  anything this platform runs is *inside* a tenant's routing domain. ⚠ **The Cilium half of that
+  section is not available either**, for ADR-019's own reason: a `Service type=LoadBalancer` is
+  announced from the host network namespace, and an address on an OVN logical router is invisible to a
+  host-network speaker.
+- ⚠ **A CHILD OF `virtualNetworks`, WHICH IS NOT HOW docs/plan/14 SPELLS IT, AND THE SUBSTRATE DECIDED
+  IT BOTH TIMES.** That document writes `CyberCloud.Network/loadBalancers`, with no network segment —
+  the spelling `publicIpAddresses` kept, because an `OvnEip` genuinely names no VPC. Here every object
+  is annotated onto **one subnet of one VPC** and the frontend address is only meaningful inside that
+  VPC's address space, so the network comes from `ResourceId.ParentNames` and cannot be wrong. **The
+  rule is not "follow the doc" or "follow the substrate" but "the doc's spelling is a claim about the
+  substrate, and it is checkable".**
+- ⚠ **THE FIRST TYPE IN THIS FAMILY WHOSE OBJECTS ARE NAMESPACED, AND THE NAME ARITHMETIC INVERTS.**
+  All four earlier types render `scope="Cluster"` Kube-OVN kinds and fold the namespace into the
+  object name by hand. A `Deployment` and a `ConfigMap` are namespaced, so
+  `ReconcileDriver.NamespaceFor` already separates two subscriptions and `ObjectNameOf` folds in the
+  **parent network** and nothing else. The cross-tenant test therefore asserts the opposite thing from
+  its four siblings': there the two objects must differ by **name**, here by **namespace**.
+- ⚠ **THE HEADLINE FINDING IS A KUBERNETES FACT THAT MAKES AN UPDATE PATH A NO-OP REPORTING SUCCESS.**
+  A `ConfigMap` that changes does **not** restart the pods that mount it, and HAProxy reads its file
+  once at start. Without a hash of the rendered configuration **on the pod template**, an edited
+  backend list applies cleanly, reads back exactly as desired, converges, reports `Succeeded` — and
+  traffic keeps going to the old servers for as long as the pod lives. Every check in this repository
+  would have been green. `LoadBalancers.ConfigChecksumAnnotation` is on the pod template, `Matches`
+  compares it, and `NetworkLoadBalancerTests` runs the mistake red in both directions. ⚠ The
+  conformance case's `ChangedBody` adds a **backend** rather than changing a sizing preset for the same
+  reason: a preset is one field the renderer copies through, so an update test over it would pass
+  against a renderer that never regenerated the configuration at all.
+- ⚠ **AND THE FIX FORCES `Recreate`, WHICH IS THE SECOND-ORDER COST NOBODY WOULD PREDICT.** A rolling
+  update starts the new pod before the old one goes, and the new pod asks IPAM for the frontend address
+  the old pod still holds; `acquireStaticAddress` refuses it and the rollout stalls **forever**. So the
+  choice is a few seconds of downtime per change or a deadlock, and the row takes the downtime and says
+  so at `charts/managed/haproxy/conformance.yaml § owed`, `a-config-change-drops-connections`.
+- ⚠ **TWO IMAGE FACTS THAT ARE POD-KILLING AND ARE ONLY IN THE DOCKERFILE.** `docker-library/haproxy`
+  ends with `USER haproxy` — **a name, not a number** — so `runAsNonRoot: true` alone makes the kubelet
+  refuse the container: *"image has non-numeric user (haproxy), cannot verify user is non-root"*. The
+  uid is 99, in the same file, and is written explicitly. And a non-root process cannot bind port 80:
+  `NET_BIND_SERVICE` does not help, because Kubernetes sets no **ambient** capabilities and the binary
+  carries no file capability. What does work is `net.ipv4.ip_unprivileged_port_start`, which has been in
+  the kubelet's **safe** sysctl set since 1.22 and therefore needs no node allow-list.
+- ⚠ **THE FIRST TYPE IN THIS FAMILY TO DRAW COMPUTE, AND ADR-019 IS WHY.** A `Vpc`, a `Subnet` and a
+  `SecurityGroup` are rows in OVN's databases and draw `Resources` alone. This row would have been the
+  same — a `SwitchLBRule` is a VIP with no pod — except that `ENABLE_LB=false` turns its controller
+  off. **A configuration decision one ADR away changed which quota meters a resource type draws**,
+  which is worth writing down because nothing about the resource *as a product* changed.
+- ⚠ **THE PUBLIC ADDRESS HAD NO CLUSTER-BACKED SUITE AND NOTHING SAID SO.** It shipped a
+  `ProviderConformanceCase`, a Docker-free suite and a `ClusterBackedConformanceTests` registration —
+  and no class in `CyberCloud.Providers.Network.Cluster.Conformance`, so it had **never been through a
+  real API server**. Nothing counts the classes in that assembly against the cases in the conformance
+  one; the file's own header said *"four class declarations over the two cases"* while the family had
+  four types. Both pairs are in now and 30 assertions pass against k3s.
+- ⚠ **THIS IS THE ONE ROW IN THE FAMILY THE CLUSTER-BACKED SUITE REALLY VALIDATES.** The other four
+  render Kube-OVN custom resources into a k3s with no Kube-OVN, so the derived CRD stub is
+  `x-kubernetes-preserve-unknown-fields` and a field the fabric would refuse is accepted. A `ConfigMap`
+  and a `Deployment` are **built in**: a container with no image, a selector that does not match its own
+  template, or an unrecognised sysctl fails there rather than in a tenant's cluster.
+- **The chart-annotation emitter's output is predictable by hand — an eighth sighting.** `values.yaml`
+  was written to match what `ChartAnnotationEmitter` would produce and came back **unchanged on the
+  first generator run** — *"unchanged, 0 problem(s)"*.
+
+**What landed on this pass: `virtualNetworks/loadBalancers`.** `dnsZones` and `vpnGateways` remain
+**owed** and `routeTables` remains **refused**. ⚠ **What was learned about the two owed rows is now
+sharper than "owed"**, and both are at `NetworkProvider`'s remarks.
+
+- `dnsZones` gains a **fourth** blocker, and it is the one that bites the half nobody has to take a
+  business decision about: docs/plan/14 wants private zones *"resolved by the VPC's resolver only"*,
+  and Kube-OVN's in-VPC resolver is `VpcDns`, which is in the same `if config.EnableLb` block. **A
+  tenant VPC on this platform has no resolver for a private zone to be served by.**
+- `vpnGateways` **lost two blockers and kept one**. The peer list is not an array-of-objects problem —
+  docs/plan/14's own shape puts each peer in a `vpnClients` **child**, which is the reshape this family
+  already knows how to do. And a provider **can** mint a credential: `ReconcileContext.SecretWriter` is
+  an `ISecretWriter` with mint-once semantics, so the gateway's private key is writable by the
+  reconciler that needs it — the sentence *"`ReconcileContext` carries a cluster connection, an
+  `ISecretResolver` and nothing else"*, which three files in this family repeated, **is out of date**.
+  What is left is real: WireGuard reads **one** configuration file listing every peer, so a child
+  writing into its parent's file is `routeTables`' refusal exactly — two children converging by erasing
+  each other. Closing it needs either a per-peer CRD from a WireGuard operator (existence, maintenance
+  and licence to be checked *before* it is designed around) or a parent reconciler that can list its
+  own children, which is `loadBalancers`' missing reader in a second shape.
+
 ## Comparing an object you read back: containment, never equality
 
 An object read out of a cluster is never byte-equal to the object you applied, and it differs in

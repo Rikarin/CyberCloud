@@ -149,7 +149,20 @@ namespace CyberCloud.Providers.Network;
 ///                     job is not"</i>. Running public authoritative DNS means anycast nameservers,
 ///                     DDoS absorption, and being the reason a customer's whole business is offline.
 ///                     A shipped <c>zoneType: public</c> is that decision, made in a schema.
-///             </item>
+///                 </item>
+///                 <item>
+///                     ⚠ <b>A FOURTH BLOCKER, FOUND WHILE BUILDING <c>loadBalancers</c>, AND IT IS THE
+///                     ONE THAT BITES THE <i>PRIVATE</i> HALF.</b> docs/plan/14 § DNS wants private
+///                     zones <i>"linked to VPCs and resolved by the VPC's resolver only"</i>.
+///                     Kube-OVN's in-VPC resolver is <c>VpcDns</c> — a CoreDNS deployment on the
+///                     tenant's own switch — and its lister, its two work queues, its event handler,
+///                     its two workers and <c>resyncVpcDNSConfig</c> are <b>all inside
+///                     <c>if config.EnableLb</c></b> in <c>pkg/controller/controller.go</c>, which
+///                     ADR-019 sets to false. <b>So a tenant VPC on this platform has no resolver for
+///                     a private zone to be served by</b>, and the three blockers above are joined by
+///                     one that applies even to the half nobody has to decide about. It is also why
+///                     <see cref="LoadBalancers" /> takes addresses rather than names.
+///                 </item>
 ///             </list>
 ///             ⚠ <b>What is NOT a blocker, and is worth recording because it looks like one</b>: the
 ///             address model already carries record sets. <c>ResourceIdTests</c> round-trips
@@ -158,20 +171,67 @@ namespace CyberCloud.Providers.Network;
 ///             <c>ResourceId</c>.
 ///         </item>
 ///         <item>
-///             <b><c>loadBalancers</c>, <c>vpnGateways</c> — owed.</b> Both need the reshape
-///             <see cref="NetworkSecurityGroups" /> established, because a backend set and a peer list
-///             are both arrays of objects and <c>SchemaProperty.ElementKind</c> refuses one — and both
-///             are harder to reshape than a rule list was, because a backend and a peer each carry a
-///             <i>reference</i> rather than only scalars. ⚠ <c>loadBalancers</c> additionally needs a
-///             <b>reader</b>: docs/plan/14 has its backend pools <i>"reference resource ids (a VM, a
-///             scale set, a cluster's node pool), resolved by the reconciler into endpoints"</i>, and
-///             <c>ReconcileContext</c> carries a cluster connection, an <c>ISecretResolver</c> and
-///             nothing else. It is the same shape as <c>a-security-group-cannot-be-a-remote</c> and it
-///             wants the same reader. ⚠ <b><c>publicIpAddresses</c> shipping is nevertheless the half
-///             of docs/plan/14 § Load balancing that could be built alone</b>: the address exists now,
-///             it is metered, and the object a load balancer would attach to it — an <c>OvnFip</c> or
-///             an <c>OvnDnatRule</c> naming <see cref="PublicIpAddresses.ObjectNameOf" />'s output —
-///             is derivable from a resource id, so nothing here forecloses it.
+///             <b><c>virtualNetworks/loadBalancers</c> — SHIPPED, and the object both docs/plan/14 and
+///             this substrate point at is one nothing here reconciles.</b> Kube-OVN's native answer is
+///             a <c>SwitchLBRule</c>: a VIP on the tenant's logical switch, served by OVN, with no pod
+///             anywhere. Read firsthand in <c>pkg/controller/controller.go</c> at <c>v1.16.2</c> — the
+///             lister, the three work queues, the event handler and the three workers for
+///             <c>SwitchLBRule</c>, <b>and the whole of <c>VpcDns</c>, and the ordinary <c>Service</c>
+///             handlers</b>, are every one of them inside <c>if config.EnableLb</c>. ADR-019 runs
+///             Kube-OVN with <c>ENABLE_LB=false</c> so that Cilium owns the service datapath, so a
+///             <c>SwitchLBRule</c> on this platform would be accepted by the API server, reported
+///             <c>Succeeded</c>, and balance nothing. docs/plan/14 names the alternative in the same
+///             sentence — <i>"an HAProxy deployment for TCP with health checks and connection
+///             limits"</i> — and that is what landed: a proxy pod on the tenant's own subnet, joined
+///             through <c>ovn.kubernetes.io/logical_switch</c>. The full argument, including why it is
+///             a <b>child</b> where docs/plan/14 spells it top level, is on
+///             <see cref="LoadBalancers" />.
+///             <para>
+///                 ⚠ <b>The reader is still owed and is no longer what blocks the row.</b>
+///                 docs/plan/14 wants backend pools that <i>"reference resource ids … resolved by the
+///                 reconciler into endpoints"</i>, and <c>ReconcileContext</c> carries a cluster
+///                 connection, an <c>ISecretResolver</c>, an <c>ISecretWriter</c> and a log — nothing
+///                 that resolves a resource id. ⚠ <b>What makes an address list honest rather than a
+///                 workaround is the same <c>ENABLE_LB=false</c></b>: with the <c>Service</c> handlers
+///                 and <c>VpcDns</c> in that block, a tenant VPC has no service discovery and no DNS,
+///                 so an address is what a tenant has for every workload in their own network — and
+///                 what the reader would resolve to is still an address.
+///             </para>
+///         </item>
+///         <item>
+///             ⚠ <b><c>vpnGateways</c> — OWED, AND THE TWO THINGS THAT WOULD HAVE BLOCKED IT NO LONGER
+///             DO.</b> docs/plan/14 § VPN asks for WireGuard: a gateway plus <c>vpnClients</c>
+///             sub-resources, <i>"each with its own keypair"</i>. Two earlier readings are now wrong.
+///             <b>The peer list is not an array-of-objects problem</b> — that document's own shape puts
+///             each peer in a <i>child resource</i>, which is the reshape this family already knows how
+///             to do. And <b>a provider CAN mint a credential</b>: <c>ReconcileContext.SecretWriter</c>
+///             is an <c>ISecretWriter</c> with mint-once semantics, so the gateway's private key is
+///             writable to the tenant's vault by the reconciler that needs it.
+///             <list type="number">
+///                 <item>
+///                     ⚠ <b>What is left is a real blocker and it is the child's.</b> WireGuard reads
+///                     <b>one</b> configuration file listing every peer. So a <c>vpnClients</c> child
+///                     would have to write into its parent's file — which is <c>routeTables</c>'
+///                     refusal exactly: two children converging by erasing each other, with no
+///                     <c>x-kubernetes-list-type</c> to make it safe. What would close it is either a
+///                     WireGuard operator with a per-peer CRD (<b>which must be checked for existence,
+///                     maintenance and licence before it is designed around</b>, ADR-011) or a
+///                     reconciler on the <i>parent</i> that lists its own children — the same reader
+///                     <c>loadBalancers</c> wants, in a second shape.
+///                 </item>
+///                 <item>
+///                     ⚠ <b>And the gateway needs the kernel's WireGuard, which is a node property no
+///                     schema can state.</b> A <c>wg</c> interface needs <c>NET_ADMIN</c> and a
+///                     <c>wireguard</c> module on the host; a cluster without one runs the userspace
+///                     implementation at a fraction of the throughput, and nothing in
+///                     <c>ReconcileContext</c> can tell which cluster is which.
+///                 </item>
+///             </list>
+///             ⚠ <b><c>publicIpAddresses</c> and this row share the unfinished half</b>: a gateway a
+///             remote worker can reach needs a public address attached by an <c>OvnFip</c> or
+///             <c>OvnDnatRule</c> naming <see cref="PublicIpAddresses.ObjectNameOf" />'s output, and
+///             nothing creates one yet — <c>charts/managed/kube-ovn-eip/conformance.yaml § owed</c>,
+///             <c>nothing-can-be-given-an-address-yet</c>.
 ///         </item>
 ///     </list>
 ///     <para>

@@ -168,7 +168,8 @@ owed:
     says: >
       docs/plan/14 wants backend pools that "reference resource ids (a VM, a scale set, a cluster's
       node pool), resolved by the reconciler into endpoints". `ReconcileContext` carries a cluster
-      connection, an ISecretResolver and nothing else — there is no reader — and a list of objects is
+      connection, an ISecretResolver, an ISecretWriter and a log — nothing that can resolve a resource
+      id, and no seam to add one from a provider — and a list of objects is
       what SchemaProperty.ElementKind refuses. ⚠ WHAT MAKES THE ADDRESS LIST HONEST RATHER THAN A
       WORKAROUND is the same ENABLE_LB=false: with the Service handlers and VpcDns in that block, a
       tenant VPC has no service discovery and no DNS, so an address is what a tenant has for every

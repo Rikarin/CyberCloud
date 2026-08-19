@@ -77,8 +77,9 @@ namespace CyberCloud.Providers.Network.Contracts;
 ///         LIMIT RATHER THAN MERELY IMPOSING IT.</b> docs/plan/14 wants backend pools that
 ///         <i>"reference resource ids (a VM, a scale set, a cluster's node pool), resolved by the
 ///         reconciler into endpoints"</i>. <c>ReconcileContext</c> carries a cluster connection, an
-///         <c>ISecretResolver</c> and nothing else — there is no reader, which is the blocker
-///         <c>NetworkProvider</c> recorded for this type — <b>and</b> a comma-separated list of objects
+///         <c>ISecretResolver</c>, an <c>ISecretWriter</c> and a log — <b>nothing that can resolve a
+///         resource id</b>, which is the blocker <c>NetworkProvider</c> recorded for this type — and a
+///         comma-separated list of objects
 ///         is what <c>SchemaProperty.ElementKind</c> refuses. What makes the address list honest rather
 ///         than a workaround is the first paragraph: with <c>ENABLE_LB=false</c> there is no service
 ///         discovery inside a tenant VPC and with <c>VpcDns</c> in the same block there is no name
