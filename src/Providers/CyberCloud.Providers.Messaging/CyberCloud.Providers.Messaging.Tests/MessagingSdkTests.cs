@@ -90,10 +90,10 @@ public sealed class MessagingSdkTests {
         // SILO START RATHER THAN QUIETLY. docs/plan/21 § Grammar's alias table is declared next to
         // each type precisely so that a duplicate is a startup failure.
         //
-        // ⚠ WHAT IT DOES NOT CATCH is a short name equal to a CLI GROUP — ProviderRegistry.Build
-        // never compares one to the other, and System.CommandLine keeps one ValidTokens dictionary
-        // over the whole verb tree, so that collision breaks EVERY `cyc` parse rather than one type's.
-        // RabbitmqDeclarationTests pins that separately, against typed-out literals.
+        // ⚠ IT CATCHES THE GROUP CASE TOO NOW. This read "what it does not catch is a short name
+        // equal to a CLI GROUP — ProviderRegistry.Build never compares one to the other … Rabbitmq
+        // DeclarationTests pins that separately, against typed-out literals". Build calls CliTokens,
+        // which seeds each group's scope with the group's own key, so the literals are gone.
         var registry = ProviderRegistry.Build([new MessagingProvider()]);
 
         registry.TryGetType(KafkaClusters.Type, out var kafka).ShouldBeTrue();

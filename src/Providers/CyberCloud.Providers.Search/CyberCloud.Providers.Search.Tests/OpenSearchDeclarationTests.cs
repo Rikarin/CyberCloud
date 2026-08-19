@@ -1,3 +1,4 @@
+using CyberCloud.ResourceManager.Contracts.Generation;
 using CyberCloud.ResourceManager.Registry;
 using CyberCloud.Tenancy.Contracts;
 using System.Text.Json;
@@ -109,56 +110,6 @@ public sealed class OpenSearchDeclarationTests {
     // ── Failure class (a), at the CLI: two short names, neither of them the group ────────────────
 
     [Fact]
-    public void TheShortNameIsNotTheGroupNameTheNamespaceAlreadyProduces() {
-        // ⚠ THE COLLISION CyberCloud.Storage/accounts FOUND, MET FOR THE SECOND TIME AND BY A
-        // NAMESPACE WHOSE NATURAL SHORT NAME IS EVEN MORE OBVIOUS. CliEmitter.GroupOf is the provider
-        // namespace's last segment lower-cased, so `CyberCloud.Search` is already the group `search` —
-        // and System.CommandLine's ValidTokens builds ONE dictionary over every command token AND
-        // every alias in the tree, so the two throw `An item with the same key has already been added.
-        // Key: search` on the first parse of any command line, before any verb runs.
-        //
-        // ⚠ NOTHING IN THE REGISTRY CHECKS THIS. ProviderRegistry.Build refuses a DUPLICATE short
-        // name and does not compare one against a group name; DerivedSurfaces.CliProblems does not
-        // either. cyc.Tests' EveryVerbInTheTreeIsReachable catches it and reports an ArgumentException
-        // out of System.CommandLine that names neither the provider nor the string.
-        var registry = ProviderRegistry.Build([new SearchProvider()]);
-        registry.TryGetType(OpenSearchServices.Type, out var registration).ShouldBeTrue();
-
-        // ⚠ A LITERAL, not `ProviderNamespace.Split('.')[^1].ToLowerInvariant()`. Deriving the group
-        // name the same way the emitter does would compare the emitter to itself, which is the shape
-        // that let a casing sabotage stay green on an earlier provider.
-        registration.Display.Alias.ShouldBe("opensearch");
-
-        registration.Display.Alias.ShouldNotBe(
-            "search",
-            "the short name equals the group name CyberCloud.Search produces, so every `cyc` "
-            + "invocation throws before it parses."
-        );
-    }
-
-    [Fact]
-    public void TheShortNameCollidesWithNoGroupKeyThatAlreadyExists() {
-        // ⚠ EVERY EXISTING GROUP KEY, AS A LITERAL LIST. These are the top-level keys of
-        // generated/cli/2026-08-01.json, which CliEmitter derives from each provider namespace's last
-        // segment. Reading them off the registry would compare the emitter to itself — the same shape
-        // the casing sabotage exploited — so they are typed out, and a sixth namespace landing beside
-        // this one is a line somebody adds here on purpose.
-        //
-        // ⚠ `search` is in this list because it is THIS provider's own group. An alias may not equal
-        // any group key including its own, which is the case the storage provider met.
-        string[] groups = ["cache", "dbforpostgresql", "messaging", "sample", "search", "storage"];
-
-        var registry = ProviderRegistry.Build([new SearchProvider()]);
-        registry.TryGetType(OpenSearchServices.Type, out var registration).ShouldBeTrue();
-
-        groups.ShouldNotContain(
-            registration.Display.Alias,
-            $"the short name '{registration.Display.Alias}' is also a CLI group key, and "
-            + "System.CommandLine builds one token dictionary over both."
-        );
-    }
-
-    [Fact]
     public void EveryDeclaredDefaultIsAValueTheApiWouldAccept() {
         // ⚠ SchemaProperty checks its own DefaultJson against its own constraints at construction, so
         // a default outside its @range cannot reach here. What THAT check cannot see is the whole
@@ -239,6 +190,35 @@ public sealed class OpenSearchDeclarationTests {
             .AllowedValues
             .Order(StringComparer.Ordinal)
             .ShouldBe(OpenSearchServices.Presets.Keys.Order(StringComparer.Ordinal));
+    }
+
+    // ── Failure class (d): a shortName collision, derived rather than listed ─────────────
+
+    [Fact]
+    public void NoShortNameHereGivesACycTokenTwoMeanings() {
+        // ⚠ DERIVED, AND IT REPLACES ARRAYS OF LITERALS THAT WENT STALE ON TWO CONSECUTIVE PASSES —
+        // green by luck both times, because two of the short names they were missing are declared
+        // through a `const string ShortName` and the maintenance grep was `grep 'shortName: "'`. The
+        // list was maintained by a method that could not find everything it had to list.
+        //
+        // ⚠ AND THEY ASKED THE WRONG QUESTION. Measured against System.CommandLine 2.0.10, the token
+        // dictionary is per PARENT command, so a short name equal to ANOTHER group's key cannot
+        // collide — which is what most of those assertions spent themselves forbidding. CliTokens
+        // carries the rule and the measurements.
+        //
+        // ⚠ ONE PROVIDER IS ALL THIS SEES, and src/Providers/README.md § Hard rule is why. The
+        // whole-tree half is answered without a list by ProviderRegistry.Build at silo start,
+        // CliEmitter.Emit at generation, and GeneratedSurfaceTests over the embedded verb tree.
+        CliTokens.Collisions(
+            ProviderRegistry.Build([new SearchProvider()]).Types.Select(
+                x => new CliDeclaration(x.Type.Namespace, x.Type.Type, x.Display.Alias)
+            )
+        ).ShouldBeEmpty();
+
+        // ⚠ THE HALF THE DERIVED CHECK CANNOT MAKE, KEPT FROM THE TEST THAT HELD THE LISTS. Uniqueness
+        // says the short name reaches this type; it does not say the short name is the word a person
+        // would reach for, and only a literal can say that.
+        ProviderRegistry.Build([new SearchProvider()]).Types.Single().Display.Alias.ShouldBe("opensearch");
     }
 
     // ── The node-pool projection ────────────────────────────────────────────────────────────────

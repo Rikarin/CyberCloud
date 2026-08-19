@@ -1,3 +1,4 @@
+using CyberCloud.ResourceManager.Contracts.Generation;
 using CyberCloud.ResourceManager.Registry;
 using System.Text.Json;
 
@@ -119,64 +120,33 @@ public sealed class MonitorDeclarationTests {
         handler.Action.ShouldBe(MonitorWorkspaces.ListKeysAction);
     }
 
-    // ── Failure class (d): the short name against every CLI group key, as literals ───────────────
+    // ── Failure class (d): a shortName collision, derived rather than listed ─────────────
 
     [Fact]
-    public void TheShortNameIsNoneOfTheTwelveCliGroupKeysInTheTree() {
-        // ⚠ THE CHECK CyberCloud.Storage/accounts DEMANDS OF EVERY PROVIDER AFTER IT, AND NOTHING IN
-        // THE REGISTRY MAKES IT. CliEmitter derives the GROUP key from the provider namespace's last
-        // segment, lower-cased, and System.CommandLine's ValidTokens builds ONE dictionary over every
-        // command token AND every alias in the whole tree — so a short name equal to any group name
-        // throws `An item with the same key has already been added` on the FIRST PARSE OF ANY COMMAND
-        // LINE, before any verb runs, naming neither the provider nor the string.
+    public void NoShortNameHereGivesACycTokenTwoMeanings() {
+        // ⚠ DERIVED, AND IT REPLACES ARRAYS OF LITERALS THAT WENT STALE ON TWO CONSECUTIVE PASSES —
+        // green by luck both times, because two of the short names they were missing are declared
+        // through a `const string ShortName` and the maintenance grep was `grep 'shortName: "'`. The
+        // list was maintained by a method that could not find everything it had to list.
         //
-        // ⚠ EVERY NAME BELOW IS A TYPED-OUT LITERAL, INCLUDING THIS PROVIDER'S OWN. Deriving them the
-        // way the emitter does — `ProviderNamespace.Split('.')[^1].ToLowerInvariant()` — would compare
-        // the emitter to itself, which is the shape that let a casing sabotage stay green on an
-        // earlier provider. The list is the twelve families in src/Providers today.
-        var groups = new[] {
-            "sample", "dbforpostgresql", "dbformysql", "cache", "messaging", "storage", "analytics",
-            "search", "documentdb", "containerservice", "network", "monitor"
-        };
+        // ⚠ AND THEY ASKED THE WRONG QUESTION. Measured against System.CommandLine 2.0.10, the token
+        // dictionary is per PARENT command, so a short name equal to ANOTHER group's key cannot
+        // collide — which is what most of those assertions spent themselves forbidding. CliTokens
+        // carries the rule and the measurements.
+        //
+        // ⚠ ONE PROVIDER IS ALL THIS SEES, and src/Providers/README.md § Hard rule is why. The
+        // whole-tree half is answered without a list by ProviderRegistry.Build at silo start,
+        // CliEmitter.Emit at generation, and GeneratedSurfaceTests over the embedded verb tree.
+        CliTokens.Collisions(
+            ProviderRegistry.Build([new MonitorProvider()]).Types.Select(
+                x => new CliDeclaration(x.Type.Namespace, x.Type.Type, x.Display.Alias)
+            )
+        ).ShouldBeEmpty();
 
-        var registry = ProviderRegistry.Build([new MonitorProvider()]);
-        registry.TryGetType(MonitorWorkspaces.Type, out var registration).ShouldBeTrue();
-
-        registration.Display.Alias.ShouldBe("workspace");
-
-        foreach (var group in groups) {
-            registration.Display.Alias.ShouldNotBe(
-                group,
-                $"the short name equals the CLI group key '{group}', so every `cyc` invocation throws "
-                + "before it parses."
-            );
-        }
-
-        // ⚠ And this namespace's OWN group key is in that list, spelled out. `CyberCloud.Monitor`
-        // becomes `monitor`, which is the obvious short name for this type and is precisely the one it
-        // could not have — the same trap `CyberCloud.Storage` walked into with `storage` and
-        // `CyberCloud.Analytics` with `analytics`.
-        groups.ShouldContain("monitor");
-    }
-
-    [Fact]
-    public void TheShortNameIsNoneOfTheSixteenShortNamesAlreadyDeclared() {
-        // ⚠ ProviderRegistry.Build DOES refuse a duplicate short name — but only across the providers
-        // it is handed, and this test builds a registry holding one. The sixteen below are the ones
-        // shipping in src/Providers today, typed out for the reason above.
-        var declared = new[] {
-            "widget", "postgres", "mariadb", "valkey", "kafka", "nats", "rabbitmq", "objectstore",
-            "bucket", "opensearch", "clickhouse", "docdb", "aks", "nodepool", "vnet", "subnet"
-        };
-
-        var registry = ProviderRegistry.Build([new MonitorProvider()]);
-        registry.TryGetType(MonitorWorkspaces.Type, out var registration).ShouldBeTrue();
-
-        declared.ShouldNotContain(
-            registration.Display.Alias,
-            "the short name is already taken by another provider, which ProviderRegistry.Build refuses "
-            + "only when both providers are in the same registry — and a silo builds one registry."
-        );
+        // ⚠ THE HALF THE DERIVED CHECK CANNOT MAKE, KEPT FROM THE TEST THAT HELD THE LISTS. Uniqueness
+        // says the short name reaches this type; it does not say the short name is the word a person
+        // would reach for, and only a literal can say that.
+        ProviderRegistry.Build([new MonitorProvider()]).Types.Single().Display.Alias.ShouldBe("workspace");
     }
 
     // ── The schema ─────────────────────────────────────────────────────────────────────────────

@@ -129,29 +129,6 @@ public sealed class MariaDbDeclarationTests {
         command.FieldManager.ShouldBe("cybercloud/cybercloud.dbformysql");
     }
 
-    [Theory]
-    // ⚠ EVERY GROUP KEY IN THE TREE, AS A LITERAL — including this provider's own. CliEmitter.GroupOf
-    // takes the provider namespace's last segment and lower-cases it, so `CyberCloud.DBforMySQL` is
-    // already the group `dbformysql`. System.CommandLine's ValidTokens builds ONE dictionary over
-    // every command token AND every alias in the tree, so a short name equal to any group key throws
-    // `An item with the same key has already been added` on the first parse of ANY command line,
-    // before any verb runs. CyberCloud.Storage nearly shipped exactly that.
-    //
-    // ⚠ Deriving these from the registry would compare the emitter with itself. They are typed out.
-    [InlineData("dbformysql")]
-    [InlineData("dbforpostgresql")]
-    [InlineData("cache")]
-    [InlineData("messaging")]
-    [InlineData("storage")]
-    [InlineData("sample")]
-    public void TheShortNameIsNotAnyProvidersGroupKey(string groupKey) {
-        MariaDbProvider.ShortName.ShouldNotBe(
-            groupKey,
-            $"the short name equals the CLI group key '{groupKey}', so every `cyc` invocation throws "
-            + "before it parses."
-        );
-    }
-
     [Fact]
     public void TheShortNameNamesTheEngineRatherThanTheResourceTypesSpelling() {
         // ⚠ THE RENAME THAT WOULD LOOK LIKE A CONSISTENCY FIX. The namespace says DBforMySQL, so
