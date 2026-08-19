@@ -66,6 +66,13 @@ exactly one component**. A group nothing serves fails the build, naming the char
 Two components serving the same group/version fails as well, because that is two operators owning
 one definition.
 
+Today that is **eighteen components serving twenty-one `group/version` pairs against twenty charts
+rendering sixteen**. The five that no chart renders are the reason a bundle cannot be derived from
+`charts/managed/` alone: `cluster-api-provider-kubevirt` reconciles a Machine into a `kubevirt.io/v1`
+VirtualMachine and imports its disk through `cdi.kubevirt.io/v1beta1`; Cluster API's and Kamaji's
+webhooks mount a Secret only `cert-manager.io/v1` creates; and Kamaji's own `kamaji.clastix.io/v1alpha1`
+`DataStore` is what `charts/managed/kubernetes`'s `dataStoreName: default` resolves against.
+
 That check is not decoration. It is what the ordering rule reduces to:
 
 > ⚠ **It already caught a live one.** Strimzi 1.0.0 removed `kafka.strimzi.io/v1beta2`, and 1.1.0 —
