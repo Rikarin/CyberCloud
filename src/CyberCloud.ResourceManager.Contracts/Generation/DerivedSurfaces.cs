@@ -260,6 +260,13 @@ public static class DerivedSurfaces {
                 continue;
             }
 
+            // ⚠ READ OFF THE FILE, NOT OFF THE REGISTRY, WHICH IS THE ONLY REASON THIS IS NOT A
+            // DUPLICATE OF THE EMITTER'S CHECK. CliEmitter.Emit refuses a colliding short name as it
+            // builds; this one asks whether the tree sitting in `generated/cli/` collides — a
+            // question a hand edit, a partial regeneration or a merge can answer differently. Same
+            // scope rule, same sentence: CliTokens owns both.
+            problems.AddRange(CliTokens.Collisions(commands.Select(x => Declaration(x.Value))));
+
             foreach (var command in commands) {
                 if (command.Value?["verbs"] is not JsonObject verbs) {
                     continue;
@@ -297,6 +304,28 @@ public static class DerivedSurfaces {
 
         problems.Sort(StringComparer.Ordinal);
         return [.. problems];
+    }
+
+    /// <summary>
+    ///     One command in the checked-in tree, as the declaration <see cref="CliTokens" /> compares.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ Built from <c>resourceType</c> rather than from the group's key and the command's name,
+    ///     so the message names the type a reader has to go and change. The group key
+    ///     <see cref="CliTokens.GroupOf" /> derives from it is the group the emitter filed it under,
+    ///     by construction.
+    /// </remarks>
+    static CliDeclaration Declaration(JsonNode? command) {
+        var resourceType = DocumentReader.Text(command?["resourceType"]);
+        var slash = resourceType.IndexOf('/', StringComparison.Ordinal);
+
+        return slash < 0
+            ? new(resourceType, string.Empty, DocumentReader.Text(command?["alias"]))
+            : new(
+                resourceType[..slash],
+                resourceType[(slash + 1)..],
+                DocumentReader.Text(command?["alias"])
+            );
     }
 
     /// <summary>
