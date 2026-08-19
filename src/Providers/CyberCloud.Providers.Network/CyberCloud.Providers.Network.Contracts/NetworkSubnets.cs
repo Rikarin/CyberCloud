@@ -36,13 +36,13 @@ namespace CyberCloud.Providers.Network.Contracts;
 ///         <see cref="ResourceId.Parent" /> is a pure function of that address. A <c>parentNetwork</c>
 ///         property would be a second spelling of the same fact and the two would disagree the first
 ///         time a body was sent under the wrong path. The only places the parent's name is read are
-///         <see cref="VpcRefOf" /> and <see cref="ObjectNameOf" />, both of which take the id.
+///         <see cref="VpcRefOf" /> and <see cref="ObjectNameOf(string, ResourceId)" />, both of which take the id.
 ///     </para>
 ///     <para>
 ///         ⚠ <b>CLUSTER-SCOPED, LIKE ITS PARENT, AND THE NAME HAS TO CARRY THREE THINGS RATHER THAN
 ///         TWO.</b> <c>pkg/apis/kubeovn/v1/subnet.go</c>:
 ///         <c>// +kubebuilder:resource:scope="Cluster",shortName="subnet",path="subnets"</c>. So
-///         <see cref="ObjectNameOf" /> folds in the namespace <i>and</i> the parent network's name —
+///         <see cref="ObjectNameOf(string, ResourceId)" /> folds in the namespace <i>and</i> the parent network's name —
 ///         the namespace because two subscriptions must not collide, and the parent's name because two
 ///         networks in ONE resource group may each hold a subnet called <c>web</c>. A renderer that
 ///         folded in only the namespace would have those two fighting over one <c>Subnet</c> object,
@@ -181,7 +181,29 @@ public static class NetworkSubnets {
                 + "NetworkSubnets.TypePath.",
                 nameof(id)
             )
-            : ns + "-" + id.ParentNames.Replace('/', '-') + "-" + id.Name;
+            : ObjectNameOf(ns, id.ParentNames.Replace('/', '-'), id.Name);
+
+    /// <summary>
+    ///     The same three components, joined, for a caller that holds the names rather than an address.
+    /// </summary>
+    /// <param name="ns">The resource's namespace, used as a name component.</param>
+    /// <param name="network">The virtual network's name.</param>
+    /// <param name="subnet">The subnet's name.</param>
+    /// <remarks>
+    ///     ⚠ <b>It exists so that a second type can name a subnet without spelling this joining
+    ///     again</b>, which is the rule <see cref="VpcRefOf" /> states in the other direction:
+    ///     <c>LoadBalancers.LogicalSwitchOf</c> puts a proxy pod on this object through
+    ///     <c>ovn.kubernetes.io/logical_switch</c>, and a second spelling of the name would put it on a
+    ///     switch that does not exist the day this one changes — a pod that never schedules, reported
+    ///     as a resource stuck in <c>InProgress</c>.
+    ///     <para>
+    ///         ⚠ It takes the network's name and <b>not</b> a <see cref="ResourceId" />, because the
+    ///         caller's address is the <i>load balancer's</i> rather than the subnet's: there is no
+    ///         subnet resource id to build, only a name out of a body and a parent out of an address.
+    ///     </para>
+    /// </remarks>
+    public static string ObjectNameOf(string ns, string network, string subnet) =>
+        ns + "-" + network + "-" + subnet;
 
     /// <summary>The <c>Vpc</c> object name a subnet binds to.</summary>
     /// <param name="ns">The resource's namespace, used as a name component.</param>

@@ -1,3 +1,9 @@
+// ⚠ For `Result<decimal>`, which the load balancer's quota derivations return.
+// `CyberCloud.Core.Resources` is global in this assembly and `CyberCloud.Core` itself is not; the
+// `ErrorCode` alias in GlobalUsings still wins over the `Orleans.ErrorCode` this import would
+// otherwise put back in play — the same note ContainerRegistryProvider carries.
+using CyberCloud.Core;
+
 namespace CyberCloud.Providers.Network;
 
 /// <summary>
@@ -407,6 +413,104 @@ public sealed class NetworkProvider : IResourceProvider {
             )
             .Chart(PublicIpAddresses.ChartName)
             .SupportsTags()
-            .RequiresCluster(PublicIpAddresses.ClusterIdPointer);
+            .RequiresCluster(PublicIpAddresses.ClusterIdPointer)
+            // ── The fifth type — docs/plan/14 § Load balancing ────────────────────────────────
+            //
+            // ⚠ A CHILD, WHICH IS NOT HOW docs/plan/14 SPELLS IT, AND THE SUBSTRATE IS WHY. That
+            // document writes `CyberCloud.Network/loadBalancers` with no network segment — the
+            // spelling publicIpAddresses kept, because an OvnEip genuinely names no VPC. Every object
+            // THIS type renders is annotated onto one subnet of one VPC and its frontend address is
+            // only meaningful inside that VPC's address space, so the network comes from the ADDRESS
+            // and cannot be wrong. The alternative is a network-name property nothing validates.
+            .ResourceType(LoadBalancers.TypePath)
+            .ApiVersion(LoadBalancers.V2026, LoadBalancers.Schema2026)
+            .Reconciler<LoadBalancerReconciler>()
+            // ⚠ THE FIRST TYPE IN THIS FAMILY THAT DRAWS COMPUTE, AND ADR-019 IS WHAT PUT IT THERE.
+            // A Vpc, a Subnet and a SecurityGroup are rows in OVN's databases and consume nothing
+            // attributable, which is why they draw `Resources` alone. This row would have been the
+            // same — Kube-OVN's own SwitchLBRule is a VIP on a logical switch with no pod anywhere —
+            // except that SwitchLBRule is served only when the controller runs with `--enable-lb`,
+            // and ADR-019 runs Kube-OVN with ENABLE_LB=false so that Cilium owns the service
+            // datapath. Read firsthand in pkg/controller/controller.go at v1.16.2: the lister, the
+            // three queues, the event handler and the three workers are all inside
+            // `if config.EnableLb`. So the proxy is a POD, and a pod is vCPU and memory somebody's
+            // node actually gives up.
+            .Meter(QuotaMeter.Vcpu, ProxyVcpuDrawn)
+            .Meter(QuotaMeter.MemoryGb, ProxyMemoryDrawn)
+            // ⚠ NO StorageGb. The proxy mounts one ConfigMap and writes nothing: its root filesystem
+            // is read-only and it has no emptyDir, because HAProxy in TCP mode buffers in memory. A
+            // storage meter here would reserve disk nothing allocates.
+            .Meters(QuotaMeter.Resources)
+            .Permissions("read", "write", "delete")
+            .Action(
+                LoadBalancers.BackendsAction,
+                ActionKind.Post,
+                LoadBalancers.BackendsPermission,
+                response: LoadBalancers.BackendsResponse,
+                handler: typeof(ShowBackendsHandler)
+            )
+            // ⚠ `loadbalancer` — checked against the fourteen group keys (sample, dbforpostgresql,
+            // cache, messaging, storage, search, documentdb, analytics, dbformysql, network,
+            // containerservice, monitor, terminal, containerregistry), against every existing short
+            // name (widget, postgres, valkey, kafka, nats, rabbitmq, objectstore, bucket, opensearch,
+            // docdb, clickhouse, mariadb, aks, nodepool, workspace, shell, registry), against
+            // CommandTree.ReservedGroups' nine, and against this family's own `vnet`, `subnet`,
+            // `secgroup` and `publicip`. NOT `lb`: two characters is the collision `secgroup` was
+            // renamed to avoid, and System.CommandLine's ValidTokens is ONE dictionary of every
+            // command token and alias in the tree — a collision throws `ArgumentException` on the
+            // first parse of ANY command line, naming neither the provider nor the string.
+            .Display(
+                "Load balancer",
+                "Load balancers",
+                shortName: "loadbalancer",
+                summary: "An L4 TCP proxy on an address inside a virtual network, spreading "
+                + "connections across a pool of workload addresses with health checks and a "
+                + "connection limit."
+            )
+            .Chart(LoadBalancers.ChartName)
+            .SupportsTags()
+            .RequiresCluster(LoadBalancers.ClusterIdPointer);
     }
+
+    // ── What a load balancer draws ─────────────────────────────────────────────────────────────
+    //
+    // ⚠ BOTH DERIVE FROM ONE POINTER, WHICH IS THE SIMPLEST SHAPE MeterDerivation TAKES IN THE TREE
+    // AND IS STILL NOT A CONSTANT. `sizing.preset` is the only body property that moves either
+    // figure, because this row is exactly one pod: no replica count (see LoadBalancers' remarks on
+    // why there is one) and no second component. A flat `Meters(Vcpu)` would have reserved 1 vCPU for
+    // a proxy that asks for 250m, on every subscription, forever.
+
+    /// <summary>vCPU: the proxy pod at its preset.</summary>
+    /// <remarks>
+    ///     ⚠ Refuses rather than reserving zero when the quantity does not parse. That is unreachable
+    ///     from a validated body — <c>AllowedValues</c> is <see cref="LoadBalancers.Presets" />' own
+    ///     keys — and is exactly the drift worth failing on when somebody adds a preset to the enum and
+    ///     forgets the table.
+    /// </remarks>
+    static MeterDerivation ProxyVcpuDrawn { get; } =
+        MeterDerivation.Of(
+            "sizing.preset's cpu, in cores",
+            ["/properties/sizing/preset"],
+            body => KubeQuantity.TryParse(LoadBalancers.Resources(body).Cpu, out var cores)
+                ? Result<decimal>.Success(cores)
+                : Result<decimal>.Failure(
+                    ErrorCode.InternalError,
+                    "the sizing preset behind '/properties/sizing/preset' carries a cpu quantity that "
+                    + "does not parse, so no reservation can be computed"
+                )
+        );
+
+    /// <summary>Memory: the same pod, in gibibytes.</summary>
+    static MeterDerivation ProxyMemoryDrawn { get; } =
+        MeterDerivation.Of(
+            "sizing.preset's memory, in GiB",
+            ["/properties/sizing/preset"],
+            body => KubeQuantity.TryGibibytes(LoadBalancers.Resources(body).Memory, out var gibibytes)
+                ? Result<decimal>.Success(gibibytes)
+                : Result<decimal>.Failure(
+                    ErrorCode.InternalError,
+                    "the sizing preset behind '/properties/sizing/preset' carries a memory quantity "
+                    + "that does not parse, so no reservation can be computed"
+                )
+        );
 }
