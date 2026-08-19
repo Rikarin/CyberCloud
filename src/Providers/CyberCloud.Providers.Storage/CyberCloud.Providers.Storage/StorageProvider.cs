@@ -80,22 +80,34 @@ namespace CyberCloud.Providers.Storage;
 ///         across the catalogue — was declared, published, and could not run.
 ///     </para>
 ///     <para>
-///         ⚠ <b>No <c>SupportsSoftDelete</c>, for the reason the three providers before this one give</b>:
-///         the manager did not read <c>SoftDeleteDays</c>, and declaring a recovery window the platform
-///         does not honour would be a promise made to the users most likely to test it. ⚠ <b>It is a worse
-///         absence here than on any of them</b> — docs/plan/06 § Tags, locks gives 7 days to <i>"types
-///         carrying data"</i>, and an object-storage account is the type that carries the most of it. What
-///         partly stands in is the volume servers' PVCs, which a <c>Background</c> cascade leaves behind
-///         unless the StorageClass reclaims them; that is a property of somebody else's configuration
-///         rather than a promise this type makes, so it is not offered as one. ⚠ <b>THAT REASON HAS EXPIRED
-///         AND THE DECLARATION IS NOW A ONE-LINE DECISION RATHER THAN A BLOCKED ONE.</b> docs/plan/08 §
-///         Soft delete is built: a <c>DELETE</c> of a type declaring a window parks the resource at
-///         <c>IndexEntryState.SoftDeleted</c> so its old address answers the canonical <c>404</c>, holds
-///         its name, keeps its committed quota, moves its ReBAC parent edge to the subscription and drops
-///         its direct role assignments; a restore reverses it and a purge — under its own permission — ends
-///         it. So the question this type still owes an answer to is the provider's own: <i>does the data
-///         this type carries deserve a recovery window, and how long</i>, which is a claim about the data
-///         and not about the platform.
+///         ⚠ <b><c>SupportsSoftDelete(7)</c> on the account, and this is the type docs/plan/06 § Tags,
+///         locks names first.</b> That section gives 7 days to <i>"resources carrying data (Vault,
+///         Storage, databases)"</i>, and an object-storage account carries more of it than anything else
+///         in the catalogue. It went undeclared while the manager did not read <c>SoftDeleteDays</c>,
+///         because a recovery window the platform does not honour is a promise made to the users most
+///         likely to test it. docs/plan/08 § Soft delete is now built — a <c>DELETE</c> parks the account
+///         at <c>IndexEntryState.SoftDeleted</c> so its old address answers the canonical <c>404</c>,
+///         holds its name, keeps its committed quota, moves its ReBAC parent edge to the subscription and
+///         drops its direct role assignments — so the declaration is this type's own claim about its data.
+///     </para>
+///     <para>
+///         ⚠ <b>What a restored account gets back, and one thing it keeps that no other type does.</b>
+///         The teardown runs, so the filer, the volume servers and the S3 gateway go; deleting a
+///         <c>StatefulSet</c> does not delete the <c>PersistentVolumeClaim</c>s its
+///         <c>volumeClaimTemplate</c> made, so the objects are still on disk. What the earlier note
+///         called <i>"a property of somebody else's configuration rather than a promise this type
+///         makes"</i> — reclaim policy leaving the PVCs behind — is now a promise this type does make,
+///         because the window is what makes it one. And <c>ISecretWriter</c> mints once and has no
+///         delete, so the restored account answers to the same access-key pair
+///         <see cref="StorageAccountListKeysHandler" /> handed out before the delete: a client with a
+///         cached key pair does not have to be re-credentialled.
+///     </para>
+///     <para>
+///         ⚠ <b>The window is on <c>accounts</c> and NOT on <c>accounts/buckets</c>, which is a
+///         decision.</b> A bucket is a child of an account and its data lives in the account's volumes,
+///         so a parked account already holds every bucket's bytes. Declaring a second window on the child
+///         would park a name whose data plane is a prefix inside its parent's, hold a second committed
+///         quota for it, and give a tenant two recovery windows to reason about for one set of objects.
 ///     </para>
 /// </remarks>
 public sealed class StorageProvider : IResourceProvider {

@@ -97,6 +97,16 @@ public static class MariaDbServers {
     /// </remarks>
     public const string ChartName = "managed/mariadb";
 
+    /// <summary>How long a deleted server can be restored for. docs/plan/06 § Tags, locks.</summary>
+    /// <remarks>
+    ///     ⚠ <b>The same seven days <c>PostgresServers.SoftDeleteDays</c> claims, deliberately.</b>
+    ///     docs/plan/06 § Tags, locks names 7 days for <i>"resources carrying data"</i>, and two managed
+    ///     relational databases whose recovery windows differed would be a difference a tenant has to
+    ///     look up rather than assume. What the window preserves is what the teardown leaves behind: the
+    ///     Galera nodes' <c>PersistentVolumeClaim</c>s, the stored body, and the committed quota.
+    /// </remarks>
+    public const int SoftDeleteDays = 7;
+
     /// <summary>The field manager the apply runs under — ADR-013's stable per-provider name.</summary>
     public const string FieldManager = "cybercloud/cybercloud.dbformysql";
 

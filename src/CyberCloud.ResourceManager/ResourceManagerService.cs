@@ -934,6 +934,35 @@ public sealed class ResourceManagerService(
     ) {
         ArgumentNullException.ThrowIfNull(request);
 
+        // ── The two actions the platform owns, before step 1 rather than inside it ──────────────
+        //
+        // ⚠ THIS IS THE BINDING THAT GIVES RESTORE AND PURGE AN HTTP ROUTE, AND IT IS HERE RATHER
+        // THAN IN THE GATEWAY ON PURPOSE.
+        //
+        // docs/plan/08 § Soft delete recorded both methods as reachable "from in-process callers and
+        // tests only". A POST to `{resource}/restore` now reaches them because ProviderBuilder
+        // declares the two names on every type with a window — see SoftDeleteActionsOf — and the
+        // gateway routes a declared action to this method. Putting the fork in DispatchStage instead
+        // would bind the route for HTTP callers and leave every other caller of IResourceManager
+        // running the ordinary action path against a resource that is not there; the two test suites
+        // meet at this interface, so a fork above it is a fork only one of them can see.
+        //
+        // ⚠ BEFORE ResolveAsync, WHICH IS THE ONLY PLACE IT CAN GO. Step 1 reads
+        // IResourceIndexGrain.ResolveAsync, and that refuses a soft-deleted binding — the refusal is
+        // the whole of the canonical 404 and must not be relaxed. So for exactly the resources these
+        // two exist to act on, step 1 answers "not found". RestoreAsync and PurgeAsync ask the index's
+        // soft-deleted side instead, and they run their own twelve steps from the top.
+        //
+        // ⚠ The registry is NOT consulted here, and it does not need to be: a type with no window
+        // declares neither name, so the gateway answers the canonical 404 at stage 6 and an in-process
+        // caller reaches RestorableAsync, which refuses a type whose SoftDeleteDays is zero. Checking
+        // it twice would put a second, weaker copy of that rule on this line.
+        if (SoftDeletePolicy.IsReserved(request.Action)) {
+            return string.Equals(request.Action, SoftDeletePolicy.RestoreAction, StringComparison.OrdinalIgnoreCase)
+                ? await RestoreAsync(request, cancellationToken)
+                : await PurgeAsync(request, cancellationToken);
+        }
+
         var trace = new WriteTraceBuilder();
         trace.Enter(WriteStep.ResolveRegistration);
 

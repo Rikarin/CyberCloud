@@ -98,6 +98,16 @@ public static class PostgresServers {
     /// </remarks>
     public const string ChartName = "managed/postgres";
 
+    /// <summary>How long a deleted server can be restored for. docs/plan/06 § Tags, locks.</summary>
+    /// <remarks>
+    ///     ⚠ <b>Seven days is a claim about this type's data, not a platform default</b> — nothing
+    ///     supplies this number when a type declares no window. docs/plan/06 § Tags, locks names 7 days
+    ///     for <i>"resources carrying data (Vault, Storage, databases)"</i>, and a managed PostgreSQL
+    ///     cluster is the third of those. What the window preserves is what the teardown leaves: the
+    ///     instances' <c>PersistentVolumeClaim</c>s, the stored body, and the committed quota.
+    /// </remarks>
+    public const int SoftDeleteDays = 7;
+
     /// <summary>The field manager the apply runs under — ADR-013's stable per-provider name.</summary>
     public const string FieldManager = "cybercloud/cybercloud.dbforpostgresql";
 

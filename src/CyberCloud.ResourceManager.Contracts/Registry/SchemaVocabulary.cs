@@ -162,4 +162,58 @@ public static class SoftDeletePolicy {
     ///     protects against — the one who could already delete.
     /// </remarks>
     public const string DefaultPurgePermission = "purge";
+
+    /// <summary>The action a caller posts to bring a parked resource back.</summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>An action on the resource's own address, which is the one address a parked
+    ///         resource still has.</b> docs/plan/08 § Soft delete records that the alternative —
+    ///         Key Vault's <c>deletedVaults</c> collection at subscription+location scope — cannot be
+    ///         built here, because <c>ResourceId.ParsePath</c> has <c>const int fixedPrefix = 8</c> and
+    ///         there is no subscription-scoped address for the collection to live at. A <c>POST</c> to
+    ///         <c>{resource}/restore</c> needs no new address shape: the path parses today, and
+    ///         <c>ResourceManagerService.RestoreAsync</c> already asks the index's soft-deleted side for
+    ///         the GUID that <c>ResolveAsync</c> refuses to give it.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Declared by the platform on every type that has a window, never by a provider.</b>
+    ///         <c>ProviderBuilder</c> synthesises this and <see cref="PurgeAction" /> in <c>Build</c>
+    ///         and refuses a provider that declares either name itself. Two consequences follow, and
+    ///         both are the reason it is done there. The gateway's stage 6 answers <c>404</c> to a
+    ///         <c>POST</c> whose action the registry does not declare, so the route exists exactly for
+    ///         the types that have a window and for no others; and ADR-012's four generated surfaces
+    ///         read actions off the registry, so the OpenAPI path, the <c>cyc</c> verb, the SDK method
+    ///         and the portal's action button all appear without an emitter knowing what soft delete is.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>It is not dispatched as an ordinary action.</b>
+    ///         <c>ResourceManagerService.ActionAsync</c> hands this name and <see cref="PurgeAction" />
+    ///         to <c>RestoreAsync</c> and <c>PurgeAsync</c> before its own step 1, because an ordinary
+    ///         action resolves the address first and a parked resource has no addressable binding to
+    ///         resolve — the canonical <c>404</c> is what step 1 is for. The registration is therefore a
+    ///         declaration of the surface; the behaviour is the two methods that already existed.
+    ///     </para>
+    /// </remarks>
+    public const string RestoreAction = "restore";
+
+    /// <summary>The action a caller posts to end a recovery window early.</summary>
+    /// <remarks>
+    ///     ⚠ Its permission is the type's <c>PurgePermission</c> rather than
+    ///     <see cref="DefaultPurgePermission" /> directly, so a type that named its own is published
+    ///     with the one it named.
+    /// </remarks>
+    public const string PurgeAction = "purge";
+
+    /// <summary>Whether <paramref name="name" /> is one of the two the platform owns.</summary>
+    /// <param name="name">An action name from a declaration or a URL segment.</param>
+    /// <returns><c>true</c> for <see cref="RestoreAction" /> and <see cref="PurgeAction" />.</returns>
+    /// <remarks>
+    ///     ⚠ <b>Case-insensitive, because an action is matched as a URL segment is.</b>
+    ///     <c>ResourceTypeRegistration.TryGetAction</c> compares that way, so a check here that was
+    ///     case-sensitive would let <c>POST …/Restore</c> resolve to the synthesised registration and
+    ///     then miss this test — an ordinary action dispatch against a resource that is not there.
+    /// </remarks>
+    public static bool IsReserved(string? name) =>
+        string.Equals(name, RestoreAction, StringComparison.OrdinalIgnoreCase)
+        || string.Equals(name, PurgeAction, StringComparison.OrdinalIgnoreCase);
 }
