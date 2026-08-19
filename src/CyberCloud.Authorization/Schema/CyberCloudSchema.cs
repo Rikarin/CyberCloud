@@ -59,8 +59,10 @@ namespace CyberCloud.Authorization;
 ///             document's shape rather than a simplification.
 ///         </b>
 ///         docs/plan/07 § The model's example
-///         puts <c>&amp; !Rel("suspended")</c> on <c>assignRole</c> and on nothing else. Extending
-///         it to <c>delete</c> or <c>write</c> is a schema change and a version bump, not an edit.
+///         puts <c>&amp; !Rel("suspended")</c> on <c>assignRole</c>, and <c>resource</c>'s
+///         <c>purge</c> is the second permission to carry it — added with a version bump, which is
+///         what that costs. Extending it to <c>delete</c> or <c>write</c> is the same kind of change
+///         and the same kind of cost, not an edit.
 ///     </para>
 ///     <para>
 ///         ⚠ <b><see cref="ObjectTypes.User" /> has no members and that is correct.</b> A user is a
@@ -75,7 +77,13 @@ public static class CyberCloudSchema {
     ///     component of the check cache key (docs/plan/07 § Caching across requests), and a cached
     ///     answer computed under a different rewrite is not an answer to the same question.
     /// </summary>
-    public const int SchemaVersion = 1;
+    /// <remarks>
+    ///     ⚠ <b>2 since <see cref="Permissions.Purge" /> was defined on
+    ///     <see cref="ObjectTypes.Resource" />.</b> It was 1 while the resource manager checked a
+    ///     <c>purge</c> permission this schema did not declare — see the remarks on that permission for
+    ///     how a permission that always evaluated false went unnoticed.
+    /// </remarks>
+    public const int SchemaVersion = 2;
 
     /// <summary>The built-in schema, built once.</summary>
     public static AuthorizationSchema Instance { get; } = Build();
@@ -149,6 +157,40 @@ public static class CyberCloudSchema {
             .Permission(Permissions.Delete, Rel(Relations.Owner))
             .Permission(
                 Permissions.AssignRole,
+                Rel(Relations.Owner) & !Rel(Relations.Suspended)
+            )
+            // ⚠ THE PERMISSION THE RESOURCE MANAGER HAS BEEN CHECKING SINCE SOFT DELETE SHIPPED, AND
+            // THAT NOTHING DEFINED UNTIL NOW.
+            //
+            // SoftDeletePolicy.DefaultPurgePermission is "purge" and ResourceManagerService.PurgeAsync
+            // checks it through the real authorizer. A permission this schema does not declare can only
+            // ever evaluate false, and the enforcement seam turns a false into the canonical 404 — so
+            // on a real silo every purge answered "does not exist", by anybody, forever: the name stayed
+            // held and the committed quota was never returned. Every purge test in the repository runs
+            // against a doubled authorizer, which answers whatever its author believed, so the gap was
+            // invisible until test/CyberCloud.Isolation drove one through this schema.
+            //
+            // ⚠ ON `resource` AND ON NOTHING ELSE, because nothing else is ever parked. A tenant, a
+            // subscription and a resource group are deleted or they are not.
+            //
+            // ⚠ Rel(owner), WHICH IS WHAT MAKES IT REACHABLE BY THE RIGHT PARTY RATHER THAN BY THE
+            // OBVIOUS ONE. docs/plan/08 § Soft delete re-parents a parked resource to its SUBSCRIPTION
+            // and drops its direct role assignments, so `owner` here resolves through
+            // From(parent, owner) to a subscription owner — "the people who can see a deleted resource
+            // become the people who hold subscription-scoped rights, which is exactly who Azure gives
+            // deletedVaults/read and purge/action to". The resource-group owner whose DELETE parked it
+            // is no longer in that set, which is the separation that actually bites.
+            //
+            // ⚠ AND THE NEGATION IS THE ONLY SEPARATION FROM `delete` THIS SCHEMA CAN EXPRESS TODAY —
+            // SAID PLAINLY BECAUSE IT IS LESS THAN docs/plan/08 DESCRIBES. That section wants "a role
+            // can hold the first without the second", copying `deletedVaults/purge/action` sitting in
+            // Key Vault Contributor's notActions. Here `delete` is already Rel(owner), so any purge
+            // defined in terms of owner is held by everyone who can delete, and a strictly separable
+            // purge needs a grantable role of its own — which needs a role-assignment story that does
+            // not exist. What this does deliver is a deny assignment that removes purge while leaving
+            // delete, which is `notActions` with one row in it. Tightening it is docs/plan/07's.
+            .Permission(
+                Permissions.Purge,
                 Rel(Relations.Owner) & !Rel(Relations.Suspended)
             )
             .DefineType(ObjectTypes.Group)

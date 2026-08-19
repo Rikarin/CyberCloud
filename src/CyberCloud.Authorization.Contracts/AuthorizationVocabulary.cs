@@ -109,8 +109,31 @@ public static class Permissions {
     /// <summary>Delete the object.</summary>
     public const string Delete = "delete";
 
-    /// <summary>Assign a role at this scope. The one permission with a negation in it.</summary>
+    /// <summary>Assign a role at this scope. One of the two permissions with a negation in it.</summary>
     public const string AssignRole = "assignRole";
+
+    /// <summary>
+    ///     Destroy a soft-deleted resource permanently, ending its recovery window early.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>Defined on <see cref="ObjectTypes.Resource" /> and on nothing else</b>, because a
+    ///         tenant, a subscription and a resource group are not soft-deletable — only a resource
+    ///         whose type declares <c>SupportsSoftDelete</c> is ever parked.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>THIS STRING IS ALSO WRITTEN DOWN IN A PLACE THAT CANNOT SEE IT.</b>
+    ///         <c>SoftDeletePolicy.DefaultPurgePermission</c> in
+    ///         <c>CyberCloud.ResourceManager.Contracts</c> is what a provider's
+    ///         <c>SupportsSoftDelete</c> defaults to, and that assembly does not reference this one. The
+    ///         two must spell the same permission and nothing in the compiler says so, which is exactly
+    ///         how this permission came to be named by the registry and defined by no schema: every
+    ///         purge test in the repository ran against a doubled authorizer, so a permission that
+    ///         always evaluated false looked identical to one that worked.
+    ///         <c>PurgePermissionTests</c> is the assertion that they agree.
+    ///     </para>
+    /// </remarks>
+    public const string Purge = "purge";
 
     /// <summary>Administer the platform.</summary>
     public const string Administer = "administer";

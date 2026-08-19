@@ -531,13 +531,65 @@ public sealed class ParentEdgeTests(IsolationCluster cluster) {
         // ⚠ THIS IS THE ONLY PURGE IN THE REPOSITORY THAT MEETS THE REAL SCHEMA. Every other one
         // runs against a doubled authorizer, so "a caller who may purge can purge" was reasoning
         // rather than a measurement — the same gap ParentEdgeTests opens by describing.
-        var purged = await cluster.Manager.PurgeAsync(
+        // ⚠ AND THE PERSON WHO DELETED IT CANNOT PURGE IT, WHICH IS THE EDGE MOVE HAVING AN EFFECT
+        // RATHER THAN JUST A SHAPE.
+        //
+        // victor holds `owner` on the resource GROUP and on nothing above it. The assertions above say
+        // the parked resource no longer hangs off that group; this says what that costs him, and it is
+        // the canonical 404 — docs/plan/07 § The enforcement seam, because "you may not purge this"
+        // would confirm the name is held. docs/plan/08 § Soft delete chose this deliberately: "the
+        // people who can see a deleted resource become the people who hold subscription-scoped rights,
+        // which is exactly who Azure gives deletedVaults/read and purge/action to."
+        //
+        // ⚠ It is asserted before the successful purge rather than after, and the order is what makes
+        // the pair evidence. Run the other way round the resource would already be gone, and a 404
+        // would be the honest answer to a caller with every right in the platform.
+        var byTheGroupOwner = await cluster.Manager.PurgeAsync(
             new() { Path = address.Path, ApiVersion = target.ApiVersion, Caller = caller },
             TestContext.Current.CancellationToken
         );
 
+        byTheGroupOwner.IsFailure.ShouldBeTrue(
+            "the resource-group owner purged a resource that no longer hangs off his group. The "
+            + "re-parent moved the edge and changed nothing about who can reach it, so the window is "
+            + "visible to the same people it was before — and a compromised group owner can destroy "
+            + "the recovery it exists to provide"
+        );
+
+        byTheGroupOwner.Error!.Code.ShouldBe(
+            ErrorCode.ResourceNotFound,
+            "the refusal names something other than the canonical 404, so it tells a caller who may "
+            + "not see this resource that there is one to see"
+        );
+
+        // ── The subscription role holder, who is who the window belongs to now ───────────────────
+        //
+        // ⚠ simone is granted here rather than in the fixture, so the grant is visibly the thing that
+        // changes the answer between the two calls. She holds `owner` on the SUBSCRIPTION and nothing
+        // below it — the same subject SoftDeleteEdgeTests uses, and for the same reason: reusing
+        // victor would route the check through the group edge that has just been taken away.
+        await cluster.WriteTupleAsync(
+            IsolationCluster.Victim,
+            Authorization.Contracts.ObjectRef.Of(
+                ObjectTypes.Subscription,
+                IsolationCluster.VictimSubscription.ToString("N", CultureInfo.InvariantCulture)
+            ),
+            Relations.Owner,
+            SubjectRef.Of(ObjectTypes.User, SubscriptionOwner)
+        );
+
+        var purged = await cluster.Manager.PurgeAsync(
+            new() {
+                Path = address.Path,
+                ApiVersion = target.ApiVersion,
+                Caller = IsolationCluster.Caller(IsolationCluster.Victim, SubscriptionOwner)
+            },
+            TestContext.Current.CancellationToken
+        );
+
         purged.IsSuccess.ShouldBeTrue(
-            "the purge was refused, so nothing can end the window and the edge cannot be removed: "
+            "the subscription owner cannot purge, so nothing can end the window: the name is held and "
+            + "the committed quota is never returned, for the full seven days and then forever. "
             + purged.Error?.Code + " \u2014 " + purged.Error?.Message
         );
 
@@ -560,6 +612,16 @@ public sealed class ParentEdgeTests(IsolationCluster cluster) {
             + "report success, and leave one inert row per purged resource forever"
         );
     }
+
+    /// <summary>The user who holds a role on the subscription and on nothing below it.</summary>
+    /// <remarks>
+    ///     ⚠ Deliberately not <c>victor</c>, who owns the resource group. A parked resource has left
+    ///     that group — docs/plan/08 § Soft delete's fourth decision — so a purge driven by him would
+    ///     either fail for the right reason or pass for the wrong one, and only a subject whose only
+    ///     grant is above the group can tell the two apart. <c>SoftDeleteEdgeTests</c> names the same
+    ///     subject for the same reason.
+    /// </remarks>
+    const string SubscriptionOwner = "simone";
 
     /// <summary>The providers under attack.</summary>
     public static TheoryData<IsolationTarget> Targets => IsolationCatalog.All;
