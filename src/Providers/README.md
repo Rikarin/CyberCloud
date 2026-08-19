@@ -105,6 +105,49 @@ cost the next eight services:
 that `CyberCloud.Providers.DBforPostgreSQL` still owes. Adding one is two class declarations and an
 `AssemblyInfo` line — plus, for a custom resource, the CRD that makes it addressable.
 
+### What closing the Valkey credential established
+
+This type shipped with `spec.auth.secretPath` pointing at a `Secret` **nothing wrote**, so every
+cache a tenant created converged from the platform's point of view and sat `InProgress` on the
+cluster forever. Closing it is the one place the platform departs from the rule the action-handler
+work established, and the departure is worth more than the fix.
+
+- **⚠ THE RULE IS "THE OPERATOR GENERATES, THE HANDLER READS", AND THIS IS THE ONE EXCEPTION.** For
+  every other data provider the credential exists before this platform touches it, because anything
+  minted afterwards is a password the server never accepted while everything reports success.
+  **`spotahome/redis-operator` generates nothing** — `service/k8s/util.go`'s `GetRedisPassword` reads
+  `secret.Data["password"]` out of the `RedisFailover`'s own namespace and returns an error when the
+  object is absent — so `ValkeyCacheReconciler` mints through `ISecretWriter` and renders the
+  `Secret` from what `ISecretResolver` returned. **An exception with a citation is a rule that
+  survives; an exception with a reason is one the next author copies.**
+- **⚠ The property to test hardest is that a SECOND pass does not rotate.** `MintAsync`'s `cas=0` is
+  mint-once per path, and a reconciler that rendered its own fresh candidate would converge, apply
+  cleanly, read back cleanly, and overwrite the `Secret` a **running** Valkey read its `requirepass`
+  from at start-up — every connected client keeps working, `listKeys` starts handing out a value the
+  server has never accepted, and nothing reports a failure.
+  `ValkeyReconcilerTests.ASecondPassRendersTheSamePasswordAndMintsNothing` drives two passes against
+  one `InMemorySecretVault` and asserts **both** halves: the rendered document is byte-identical
+  *and* `vault.Writes` is 1. Neither is enough alone — identical bodies cannot tell a correct
+  reconciler from one relying on the writer to save it, and a write count cannot see a render that
+  changed the key name.
+- **⚠ A `Secret` under the wrong key applies, reads back and converges, and the cache still never
+  starts.** The API server has no opinion about the keys in an `Opaque` document, so **nothing inside
+  this repository can tell a working credential from a decorative one**. That is why
+  `ValkeyCaches.PasswordField` carries the upstream quotation rather than a convention, and why
+  `ValkeySecretTests.TheCredentialSecretIsAddressedTheWayTheOperatorLooksItUp` pins all three facts
+  the operator's read depends on: the name is what `secretPath` says, the namespace is the CR's own,
+  and the key is `password`.
+- **⚠ What was NOT proved, stated plainly.** Nothing in this repository installs the operator —
+  `charts/bundle/` does not exist — so the suites show the `Secret` **is rendered and applied with
+  the fields the operator's source reads**. Nobody has watched a cache come up.
+  `charts/managed/valkey/conformance.yaml § owed`, `the-operator-accepts-the-rendered-secret`, is
+  where that limit is recorded, and it closes with the bundle.
+- **⚠ A `ProviderConformanceCase.Objects` that omits an object the provider applies stops asserting
+  anything about it.** The case listed one object where the provider now applies two; the entry for
+  the `Secret` is what makes every world-facing assertion cover it. The inverse error — listing an
+  object the provider does *not* apply — is loud, and this one is silent, which is how a `Secret`
+  nobody wrote went unnoticed for the life of the type.
+
 `CyberCloud.Providers.Messaging` — `CyberCloud.Messaging/kafkaClusters` on Strimzi in KRaft mode,
 [12 § The catalogue](../../docs/plan/12-managed-data-services.md). **The first provider whose objects
 are custom resources on both sides**, and the first with a `.Cluster.Conformance` sibling other than
@@ -471,7 +514,13 @@ operator's CRD.
   the ratio-correct rungs, and pins every one of them.
 - **⚠ Piece 5's absence is REPRODUCED rather than made worse, which is the first time.**
   `CyberCloud.Cache/redis` does not come up; `CyberCloud.Storage/accounts` comes up serving every
-  anonymous caller as an administrator. Here CloudNativePG generates the credential and FerretDB
+  anonymous caller as an administrator.
+
+  > ⚠ **BOTH OF THOSE ARE CLOSED, and the Valkey one closed differently from every other.** See
+  > § What closing the Valkey credential established below. The comparison the finding was making —
+  > three engines, three different consequences for one missing `Secret` — is why it is kept.
+
+  Here CloudNativePG generates the credential and FerretDB
   neither stores nor invents one — `website/docs/security/authentication.md`: *"FerretDB does not
   store authentication information … it relies entirely on PostgreSQL's authentication
   mechanisms"*, and an anonymous client *"may still connect … but they cannot access or perform

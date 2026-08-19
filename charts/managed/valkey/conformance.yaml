@@ -56,6 +56,10 @@ assertions:
     says: A PUT that changes mode is refused at the API rather than producing a topology change no client was ready for.
   - id: secrets-never-round-trip
     says: A GET of the resource never returns the requirepass in any form. The only path out is the listKeys action.
+  - id: requirepass-is-provisioned
+    says: docs/plan/12 § The pattern, once, piece 5 — the credential is generated at create and written to the tenant's Vault. The reconciler mints through ISecretWriter and renders the Secret spec.auth.secretPath names from what the vault returned, under the key the operator reads it from.
+  - id: a-reconcile-never-rotates-the-requirepass
+    says: A second reconcile pass on a converged cache renders a byte-identical Secret and writes nothing to the vault. Rotating would leave a running server holding a password no caller has been given, while every surface reported success.
 
 # ⚠ OWED, AND NAMED RATHER THAN OMITTED. Each of these is something docs/plan/12 asks of this row
 # and the operator ADR-010 clause 1 selects cannot do. Checked against that operator's source on
@@ -70,9 +74,9 @@ owed:
   - id: cluster-mode
     says: docs/plan/12 names a Cluster (sharded) mode. The operator ships one CRD, RedisFailover, and it has no sharding.
     blocked-by: There is nothing to render. A second operator would be an ADR-010 clause 1 change.
-  - id: requirepass-is-provisioned
-    says: docs/plan/12 § The pattern, once, piece 5 — the credential is generated at create and written to the tenant's Vault. spec.auth.secretPath is rendered and the Secret it names is not written by anything, so the cache does not come up.
-    blocked-by: There is no OpenBao integration and ISecretResolver's only implementation refuses. ⚠ This is strictly worse here than on CyberCloud.DBforPostgreSQL/servers, where CloudNativePG generates its own password when the Secret is absent. Omitting the block instead would produce a running, unauthenticated Valkey, which is the worse of the two.
+  - id: the-operator-accepts-the-rendered-secret
+    says: The Secret the reconciler applies is one spotahome's GetRedisPassword reads successfully, and the cache reaches a state where a client can PING it. ⚠ THE HONEST LIMIT OF WHAT WAS PROVED WHEN THE CREDENTIAL LANDED. The suites reach an API server and can show the Secret is rendered and applied with the name, namespace and `password` key the operator's source reads; no operator runs anywhere either suite reaches, so nobody has watched a cache come up. The key name is pinned against upstream in ValkeySecretTests rather than observed.
+    blocked-by: Nothing in this repository installs spotahome/redis-operator — charts/bundle/ does not exist. This closes with the bundle, together with connect-through-sentinel above, which is the assertion that would actually observe it.
 
 # Meters the type must emit — docs/plan/12 § The pattern, once, piece 3. Listed here so the
 # conformance suite and the provider's Describe can be diffed against one file rather than agreeing
