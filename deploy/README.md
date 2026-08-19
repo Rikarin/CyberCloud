@@ -10,6 +10,35 @@ deploy/
 `platform/` and `managed-cluster/` are not written yet. `bootstrap/` is, because it is the one that
 has to work when nothing else does.
 
+## ⚠ The operator layer is installed from `charts/bundle/`, not from here
+
+`managed-cluster/` is described above as "the bundle applied to a cluster the platform adopts or
+creates", and **the bundle itself landed on 2026-08-19 in [`charts/bundle/`](../charts/bundle/README.md)
+rather than here**. The split is worth stating, because the two directories both install things onto a
+cluster and only one of them is on a repair path.
+
+| | `deploy/bootstrap/` | `charts/bundle/` |
+|---|---|---|
+| Installs | Cyber Cloud itself | eighteen third-party operators, a CNI and cert-manager |
+| Onto | the cluster the platform runs on | a cluster the platform will manage |
+| Tools | `kubectl` and checked-in YAML only | `helm` and `kubectl` |
+| Run when | the platform is the broken thing | a managed cluster is being prepared |
+
+Everything in `bootstrap/` is `kubectl` and checked-in YAML because **its availability is what is being
+repaired** — see § The platform's own cluster is not Kamaji-hosted below. `charts/bundle/install.sh` is
+under no such constraint: it uses `helm`, it reads its pins out of eighteen `component.yaml` files, and
+nothing about a broken platform makes it unusable, because nothing about it involves the platform.
+
+So `bootstrap.sh` must not grow a `--bundle` flag and `install.sh` must not learn to install a silo.
+What `deploy/managed-cluster/` is still for is the **per-environment overrides** of that bundle — an
+air-gapped registry mirror, a storage class, a CNI configured for one datacentre's fabric — which are
+environment facts and do not belong beside a pin.
+
+⚠ **Neither the platform's own cluster nor a CI run installs `charts/bundle/` today.** Every pin in it
+was resolved against the registry that serves it and the apply path has never been exercised —
+`charts/bundle/README.md` § Verification, and its honest limit says why, and `bundle.yaml` § owed
+records it as the first thing that directory owes.
+
 ## `bootstrap/` answers the chicken-and-egg
 
 The platform manages clusters, but something has to run the platform. The decision is already made:

@@ -3,7 +3,7 @@
 ```
 charts/
 ├── platform/         # Cyber Cloud itself: silo, gateway, identity, ingest, worker, portal
-├── bundle/           # what we install into a managed cluster: operators, CNI, CSI, monitoring
+├── bundle/           # what we install into a managed cluster: operators, CNI, monitoring   ← exists
 ├── managed/          # one chart per managed service — the catalogue
 └── tenant-cluster/   # ⚠ CORRECTED — see below; these live in managed/ instead
 ```
@@ -16,6 +16,46 @@ charts/
 > [docs/plan/12 § The pattern, once](../docs/plan/12-managed-data-services.md)'s eighth piece dropped
 > by a directory name. A managed Kubernetes cluster is a catalogue row like every other. `bundle/` is
 > unaffected and is still what gets installed *into* a cluster once one exists.
+
+> ⚠ **`bundle/` landed 2026-08-19 and the tree comment above lost a word to it.** It reads "operators,
+> CNI, CSI, monitoring" and there is no CSI component: two managed charts offer the tenant a storage
+> class by name and nothing installs one. ADR-011 has already priced the candidate — LINSTOR is
+> GPL-3.0, DRBD is GPL-2.0, and a LINBIT support contract is a decision to make before the first
+> customer's data is on DRBD. The row is named in `charts/bundle/bundle.yaml` § owed rather than
+> quietly pinned.
+
+## `bundle/` — the operator layer, which is not a chart family
+
+**Every chart under `managed/` renders a custom resource and installs no controller.** Three say so in
+the template itself: *"It renders a custom resource; it does not install the operator. The operator is
+`charts/bundle/`'s job."* [`charts/bundle/`](bundle/README.md) is that job — **eighteen components
+serving twenty-one `group/version` pairs**: the sixteen this catalogue renders, plus five nothing here
+renders and something here needs. Those five are the reason a bundle cannot be derived from the charts
+alone — `cluster-api-provider-kubevirt` reconciles a Machine into a `kubevirt.io/v1` VirtualMachine, and
+Cluster API's and Kamaji's webhooks mount a Secret only cert-manager creates.
+
+> ⚠ **This directory's absence had been misread twelve times.** Twelve provider agents each wrote some
+> form of "the k3s the cluster suite starts has no `<X>` operator" and read it as a limitation of the
+> test harness. It was not. `test/CyberCloud.Cluster.Conformance` says the same thing in its own
+> remarks — *"the platform cluster installs its CRDs from `charts/bundle/` long before a tenant creates
+> one"* — which is why that harness derives CRD stubs rather than installing real ones.
+
+**Nothing under `bundle/` has a `Chart.yaml`, and that is a decision rather than an omission.** The
+`Build.Charts` pipeline above exists to describe *a resource type's configuration surface*; a bundle
+component has no resource type and no tenant-facing surface. A component is one directory holding one
+file, `component.yaml`, carrying the pin, the licence, the date it was resolved against its registry,
+and the `group/version` pairs the pin's definitions serve.
+
+**The `serves:` key is checked, not decorative.** `build/Build.Architecture.cs`'s **Bundle** gate reads
+every `apiVersion:` out of every `managed/*/templates/` file, drops the Kubernetes built-in groups, and
+requires each remaining pair to be served by exactly one component. It caught a live one while it was
+being written: Strimzi 1.0.0 removed `kafka.strimzi.io/v1beta2`, which `managed/kafka` renders, so the
+newest Strimzi would have failed every Kafka create at the API server. The pin is 0.51.0.
+
+That check is also the enforceable half of the ordering rule
+`managed/opensearch/conformance.yaml` § owed, `api-group-is-deprecated` states — *"a bundle bump …
+must not be done in one commit"*. The direction is enforced on every run; the granularity is checked
+over the tip commit.
 
 ## A managed-service chart
 
@@ -428,6 +468,16 @@ provenance is how a platform ends up unable to upgrade Postgres.
 `Build.Licence` scans the chart set and the container images in the platform bundle and fails on any
 SSPL/BUSL/AGPL image outside an allow-list with a written reason — ADR-011. Valkey not Redis,
 OpenBao not Vault, FerretDB not MongoDB, OpenSearch not Elasticsearch.
+
+> ⚠ **CORRECTED 2026-08-19. `Build.Licence` is `NotImplementedYet` and the paragraph above describes
+> what it will do.** What exists is narrower and is labelled as such: the **Bundle** gate checks each
+> `charts/bundle/*/component.yaml`'s **declared** SPDX identifier against an allow-list of four —
+> Apache-2.0, BSD-3-Clause, MIT, MPL-2.0. That catches a component added under SSPL or BUSL by an
+> author who wrote its licence down honestly. It reads no `LICENSE` file and opens no image, so the
+> distance between it and the sentence above is the distance between an attestation and a scan.
+> AGPL-3.0 is deliberately off the list even though ADR-011 marks Grafana offerable, because that row
+> carries a condition — *we distribute, we do not modify* — and a gate that turns a conditional into an
+> unconditional yes is a gate that retires the condition.
 
 See [docs/plan/03 § charts](../docs/plan/03-repository-layout.md) and
 [docs/plan/12](../docs/plan/12-managed-data-services.md).
