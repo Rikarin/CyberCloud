@@ -38,37 +38,14 @@ public sealed class CliTokenTests {
         CliTokens.CommandOf("servers").ShouldBe("servers");
     }
 
-    [Fact]
-    public void TheTreeAsItStandsCollidesNowhere() {
-        // ⚠ The regression this whole file exists for. Every short name and command name in the tree,
-        // derived rather than typed — so a provider added tomorrow is checked by this test without
-        // anybody editing it, which is exactly what the two literal lists it replaces could not do.
-        CliTokens.Collisions(
-            [
-                new("CyberCloud.Sample", "widgets", "widget"),
-                new("CyberCloud.DBforPostgreSQL", "servers", "postgres"),
-                new("CyberCloud.DBforMySQL", "servers", "mariadb"),
-                new("CyberCloud.Cache", "redis", "valkey"),
-                new("CyberCloud.Messaging", "kafkaClusters", "kafka"),
-                new("CyberCloud.Messaging", "natsClusters", "nats"),
-                new("CyberCloud.Messaging", "rabbitmqClusters", "rabbitmq"),
-                new("CyberCloud.Storage", "accounts", "objectstore"),
-                new("CyberCloud.Storage", "accounts/buckets", "bucket"),
-                new("CyberCloud.Search", "services", "opensearch"),
-                new("CyberCloud.DocumentDB", "accounts", "docdb"),
-                new("CyberCloud.Analytics", "clickhouseClusters", "clickhouse"),
-                new("CyberCloud.ContainerService", "managedClusters", "aks"),
-                new("CyberCloud.ContainerService", "managedClusters/agentPools", "nodepool"),
-                new("CyberCloud.ContainerRegistry", "registries", "registry"),
-                new("CyberCloud.Monitor", "workspaces", "workspace"),
-                new("CyberCloud.Terminal", "consoles", "shell"),
-                new(Network, "virtualNetworks", "vnet"),
-                new(Network, "virtualNetworks/subnets", "subnet"),
-                new(Network, "virtualNetworks/securityGroups", "secgroup"),
-                new(Network, "publicIpAddresses", "publicip")
-            ]
-        ).ShouldBeEmpty();
-    }
+    // ⚠ THERE IS DELIBERATELY NO "THE TREE AS IT STANDS COLLIDES NOWHERE" CASE HERE, and writing one
+    // was the first thing this file did. It would be a list of every provider's namespace, type path
+    // and short name — which is precisely the artifact this whole change exists to delete, and it
+    // would have gone stale on the day the next provider landed exactly as its six predecessors did.
+    // That question belongs where the real tree is:
+    // <c>GeneratedSurfaceTests.NoGroupInAnyShippedTreeGivesOneTokenTwoMeanings</c> asks it of the verb
+    // tree the build embedded, and ProviderRegistry.Build asks it of every provider a silo loads.
+    // What is below is the mechanism, which literals are the right way to pin.
 
     [Fact]
     public void TwoTypesInOneGroupSharingAShortNameCollideAndBothAreNamed() {
