@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
@@ -27,12 +28,12 @@ namespace CyberCloud.Providers.Cache.Tests;
 ///         PostgreSQL.
 ///     </para>
 ///     <para>
-///         ⚠ <b>What is different from the first provider is what happens when the value is
-///         missing.</b> CloudNativePG generates its own password when the referenced <c>Secret</c> is
-///         absent; spotahome generates nothing, so this cache does not come up. That is the trade
-///         <c>ValkeyCaches.RedisFailoverJson</c> argues for and it is the reason the <c>auth</c> block
-///         is rendered unconditionally rather than only when a resolver supplies something: the
-///         alternative is a running, unauthenticated Valkey.
+///         ⚠ <b>What is different from every other data provider is who makes the value.</b>
+///         CloudNativePG, Strimzi and the rest generate a credential at bootstrap and the handler
+///         reads it; spotahome generates nothing at all, so <c>ValkeyCacheReconciler</c> mints into
+///         the tenant's vault and renders the <c>Secret</c> from what the vault returned. That is also
+///         why the <c>auth</c> block is rendered unconditionally rather than only when a resolver
+///         supplies something: the alternative is a running, unauthenticated Valkey.
 ///     </para>
 /// </remarks>
 public sealed class ValkeySecretTests {
@@ -93,19 +94,106 @@ public sealed class ValkeySecretTests {
     }
 
     [Fact]
-    public void TheAuthBlockIsRenderedEvenThoughNothingWritesTheSecretYet() {
-        // ⚠ THE DECISION, PINNED, BECAUSE THE OBVIOUS "FIX" IS TO DELETE IT. With no OpenBao
-        // integration the named Secret does not exist and the operator will not start the cache — so a
-        // future reader looking at a resource stuck InProgress has an easy, wrong repair available:
-        // drop `spec.auth`, and the cache comes up. It comes up with NO requirepass, reachable by
-        // anything in the tenant's namespace. docs/plan/12 § Cross-cutting decisions makes the same
-        // trade for external exposure and gives the same reason.
+    public void TheAuthBlockIsRenderedUnconditionally() {
+        // ⚠ THE DECISION, PINNED, BECAUSE THE OBVIOUS "FIX" IS TO DELETE IT. If the named Secret is
+        // ever missing the operator will not start the cache — so a reader looking at a resource stuck
+        // InProgress has an easy, wrong repair available: drop `spec.auth`, and the cache comes up. It
+        // comes up with NO requirepass, reachable by anything in the tenant's namespace.
+        // docs/plan/12 § Cross-cutting decisions makes the same trade for external exposure and gives
+        // the same reason. The right repair is to find out why the Secret is absent.
         using var desired = JsonDocument.Parse(ValkeyCaches.Body(Guid.NewGuid()));
 
         JsonNode.Parse(ValkeyCaches.RedisFailoverJson("unauthenticated", desired.RootElement))!
             ["spec"]!["auth"]!["secretPath"]!.GetValue<string>()
             .ShouldBe("unauthenticated-auth");
     }
+
+    [Fact]
+    public void TheCredentialSecretIsAddressedTheWayTheOperatorLooksItUp() {
+        // ⚠ THE UPSTREAM READ, WRITTEN DOWN, BECAUSE NOTHING IN THIS REPOSITORY CAN CHECK IT.
+        // spotahome's service/k8s/util.go:
+        //
+        //     secret, err := s.GetSecret(rf.ObjectMeta.Namespace, rf.Spec.Auth.SecretPath)
+        //     if password, ok := secret.Data["password"]; ok { return string(password), nil }
+        //     return "", fmt.Errorf("secret %q does not have a password field", ...)
+        //
+        // Three facts follow, and getting any one of them wrong produces a Secret that applies, reads
+        // back and converges while the cache never starts: the NAME must be what `secretPath` says,
+        // the NAMESPACE is the RedisFailover's own — `secretPath` is a name despite what it is called,
+        // and there is no cross-namespace form — and the KEY is `password`.
+        using var desired = JsonDocument.Parse(ValkeyCaches.Body(Guid.NewGuid()));
+
+        var failover = JsonNode.Parse(ValkeyCaches.RedisFailoverJson("orders", desired.RootElement))!;
+        var reference = ValkeyCaches.CredentialSecretRef("prod-ns", "orders");
+
+        reference.Name.ShouldBe(failover["spec"]!["auth"]!["secretPath"]!.GetValue<string>());
+        reference.Namespace.ShouldBe("prod-ns");
+        reference.Kind.Kind.ShouldBe("Secret");
+
+        var secret = JsonNode.Parse(ValkeyCaches.CredentialSecretJson("orders", "hunter2"))!.AsObject();
+
+        secret["metadata"]!["name"]!.GetValue<string>().ShouldBe(reference.Name);
+        secret["type"]!.GetValue<string>().ShouldBe("Opaque");
+        secret["data"]!.AsObject().Select(x => x.Key).ShouldBe(["password"]);
+        secret["data"]!["password"]!.GetValue<string>().ShouldBe(
+            Convert.ToBase64String(Encoding.UTF8.GetBytes("hunter2"))
+        );
+    }
+
+    [Fact]
+    public void AGeneratedPasswordSurvivesRedisConfWithoutQuoting() {
+        // ⚠ NOT AN ENTROPY TEST — THE ALPHABET IS A PROTOCOL CONSTRAINT. The requirepass reaches the
+        // server through redis.conf, where whitespace splits the directive's arguments, `#` starts a
+        // comment and `"` opens a quoted token; the operator also passes the same value on an AUTH
+        // command line. A generator that reached for punctuation "because it is stronger" would
+        // produce a cache that starts with a password nobody can reproduce, intermittently, for
+        // whatever fraction of resources drew an unlucky character.
+        for (var attempt = 0; attempt < 64; attempt++) {
+            var password = ValkeyCaches.GeneratePassword();
+
+            password.Length.ShouldBe(ValkeyCaches.PasswordLength);
+
+            foreach (var symbol in password) {
+                char.IsAsciiLetterOrDigit(symbol).ShouldBeTrue(
+                    $"'{symbol}' is not alphanumeric, and redis.conf reads it as syntax"
+                );
+            }
+        }
+
+        // And it is a fresh value every call. Two equal draws out of 62^32 is not a flake.
+        ValkeyCaches.GeneratePassword().ShouldNotBe(ValkeyCaches.GeneratePassword());
+    }
+
+    [Fact]
+    public void TheVaultPathIsKeyedOnTheResourceGuidRatherThanItsName() {
+        // ⚠ MINT-ONCE MAKES A NAME COLLISION PERMANENT. docs/plan/06 § Identifiers releases the index
+        // entry before the resource is gone, deliberately, "so the name is immediately reusable" — so
+        // a path built from the name would hand a brand-new cache the password of the cache somebody
+        // deleted an hour ago, and cas=0 would then refuse to let the new one mint its own. Forever.
+        var first = Address(Guid.Parse("aaaaaaaa-0000-4000-8000-000000000001"));
+        var second = Address(Guid.Parse("aaaaaaaa-0000-4000-8000-000000000002"));
+
+        ValkeyCaches.SecretPath(first).ShouldNotBe(ValkeyCaches.SecretPath(second));
+
+        // ⚠ And the tenant leads, because docs/plan/18 scopes vault policy per tenant. A path that led
+        // with the provider would make "everything this tenant owns" unexpressible as a prefix.
+        ValkeyCaches.SecretPath(first).ShouldStartWith($"tenants/{first.TenantId:D}/");
+
+        // The reconciler and the handler must reach the same address; the ref is where that is spelled.
+        ValkeyCaches.PasswordRef(first).Path.ShouldBe(ValkeyCaches.SecretPath(first));
+        ValkeyCaches.PasswordRef(first).Field.ShouldBe(ValkeyCaches.PasswordField);
+    }
+
+    /// <summary>Two caches with the SAME name, in one tenant, at two resource GUIDs.</summary>
+    static ResourceId Address(Guid id) =>
+        new(
+            Guid.Parse("11111111-1111-4111-8111-111111111111"),
+            Guid.Parse("22222222-2222-4222-8222-222222222222"),
+            "prod",
+            ValkeyCaches.Type,
+            "sessions",
+            id
+        );
 
     [Fact]
     public void TheListKeysResponseIsTheOnlyPlaceAPasswordIsDeclaredAndItIsMarkedSecret() {

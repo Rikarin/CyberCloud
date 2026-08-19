@@ -3,6 +3,7 @@ using CyberCloud.ResourceManager;
 using CyberCloud.ResourceManager.Conformance;
 using CyberCloud.ResourceManager.Reconcile;
 using System.Collections.Concurrent;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
@@ -52,6 +53,12 @@ public sealed class ValkeyReconcilerTests {
 
         var world = new RecordingConnection();
 
+        // ⚠ ONE VAULT ACROSS BOTH TENANTS, because in a silo there is one. Two doubles would isolate
+        // the tenants for the harness's reason rather than the reconciler's, and the mint-once rule
+        // would never be exercised across the interleave — which is exactly where a path built from
+        // the resource NAME rather than its GUID would show up, both caches being called `sessions`.
+        var vault = new InMemorySecretVault();
+
         // ⚠ The two bodies differ in THREE independently rendered fields — replicas, the persistence
         // mode (which changes the storage block AND two customConfig lines) and the volume size. A
         // cache that kept one of them would be caught; a cache that kept a whole rendered document
@@ -61,35 +68,61 @@ public sealed class ValkeyReconcilerTests {
 
         // Interleaved on purpose: A, B, A. A reconciler that remembered anything from its first pass
         // would answer the third pass with B's values.
-        await Pass(reconciler, world, alice, aliceBody.RootElement);
-        await Pass(reconciler, world, bob, bobBody.RootElement);
-        var third = await Pass(reconciler, world, alice, aliceBody.RootElement);
+        await Pass(reconciler, world, alice, aliceBody.RootElement, vault);
+        await Pass(reconciler, world, bob, bobBody.RootElement, vault);
+        var third = await Pass(reconciler, world, alice, aliceBody.RootElement, vault);
 
         third.IsConverged.ShouldBeTrue(third.ToString());
 
+        // ⚠ Two objects per pass now — the credential Secret and then the RedisFailover — so the
+        // failovers are the odd indices. The pairing is asserted rather than assumed, because an
+        // off-by-one here would compare a Secret's body to a spec and fail for the wrong reason.
         var applied = world.Applied;
-        applied.Count.ShouldBe(3);
+        applied.Count.ShouldBe(6);
 
-        Redis(applied[0].Body)["replicas"]!.GetValue<int>().ShouldBe(3);
-        Redis(applied[1].Body)["replicas"]!.GetValue<int>().ShouldBe(5);
-        Redis(applied[2].Body)["replicas"]!.GetValue<int>().ShouldBe(3);
+        foreach (var (index, kind) in new[] {
+                     (0, "Secret"), (1, "RedisFailover"),
+                     (2, "Secret"), (3, "RedisFailover"),
+                     (4, "Secret"), (5, "RedisFailover")
+                 }) {
+            applied[index].Target.Kind.Kind.ShouldBe(kind);
+        }
 
-        Redis(applied[0].Body)["storage"]!["persistentVolumeClaim"]!["spec"]!["resources"]!["requests"]!["storage"]!
+        Redis(applied[1].Body)["replicas"]!.GetValue<int>().ShouldBe(3);
+        Redis(applied[3].Body)["replicas"]!.GetValue<int>().ShouldBe(5);
+        Redis(applied[5].Body)["replicas"]!.GetValue<int>().ShouldBe(3);
+
+        Redis(applied[1].Body)["storage"]!["persistentVolumeClaim"]!["spec"]!["resources"]!["requests"]!["storage"]!
             .GetValue<string>().ShouldBe("8Gi");
-        Redis(applied[1].Body)["storage"]!.AsObject().ContainsKey("emptyDir").ShouldBeTrue(
+        Redis(applied[3].Body)["storage"]!.AsObject().ContainsKey("emptyDir").ShouldBeTrue(
             "tenant B asked for no persistence and got tenant A's volume claim"
         );
-        Redis(applied[2].Body)["storage"]!["persistentVolumeClaim"]!["spec"]!["resources"]!["requests"]!["storage"]!
+        Redis(applied[5].Body)["storage"]!["persistentVolumeClaim"]!["spec"]!["resources"]!["requests"]!["storage"]!
             .GetValue<string>().ShouldBe("8Gi");
 
-        applied[0].Labels[KubeLabels.TenantId].ShouldBe(KubeLabels.GuidValue(TenantA));
-        applied[1].Labels[KubeLabels.TenantId].ShouldBe(KubeLabels.GuidValue(TenantB));
-        applied[2].Labels[KubeLabels.TenantId].ShouldBe(KubeLabels.GuidValue(TenantA));
+        applied[1].Labels[KubeLabels.TenantId].ShouldBe(KubeLabels.GuidValue(TenantA));
+        applied[3].Labels[KubeLabels.TenantId].ShouldBe(KubeLabels.GuidValue(TenantB));
+        applied[5].Labels[KubeLabels.TenantId].ShouldBe(KubeLabels.GuidValue(TenantA));
 
         // ⚠ And the two tenants' objects are in different namespaces, so the third pass read back
         // Alice's RedisFailover rather than Bob's. Without this the assertions above would hold for a
         // reconciler that wrote both tenants into one namespace and let the second overwrite the first.
-        applied[0].Target.Namespace.ShouldNotBe(applied[1].Target.Namespace);
+        applied[1].Target.Namespace.ShouldNotBe(applied[3].Target.Namespace);
+
+        // ⚠ AND THE TWO TENANTS GOT TWO PASSWORDS, which no assertion above could see. Both caches
+        // are called `sessions`, so a vault path built from the name would have handed Bob whatever
+        // Alice minted — mint-once makes the collision permanent rather than transient — and every
+        // structural check in this test would still pass.
+        var alicePassword = Password(applied[0].Body);
+        var bobPassword = Password(applied[2].Body);
+
+        alicePassword.ShouldNotBeNullOrEmpty();
+        bobPassword.ShouldNotBe(alicePassword, "two tenants' caches share one requirepass");
+
+        // ⚠ And Alice's third pass rendered the password her FIRST pass minted, not a fresh one. This
+        // is the property that keeps a reminder from rotating the credential out from under a running
+        // server; see ASecondPassRendersTheSamePasswordAndMintsNothing for the isolated form.
+        Password(applied[4].Body).ShouldBe(alicePassword);
     }
 
     [Fact]
@@ -143,8 +176,9 @@ public sealed class ValkeyReconcilerTests {
 
         (await Reconcile(connection, desired.RootElement)).IsConverged.ShouldBeTrue();
 
-        connection.Applied.Count.ShouldBe(1);
-        connection.Applied[0].Target.Kind.Kind.ShouldBe("RedisFailover");
+        connection.Applied.Count.ShouldBe(2);
+        connection.Applied[0].Target.Kind.Kind.ShouldBe("Secret");
+        connection.Applied[1].Target.Kind.Kind.ShouldBe("RedisFailover");
 
         // ⚠ ADR-013's seven, on a CUSTOM RESOURCE whose CRD nothing in this repository installs. The
         // rendered object goes through the same KubeCommand injection as a core-group ConfigMap, and
@@ -169,14 +203,110 @@ public sealed class ValkeyReconcilerTests {
         // an Unchanged, and nothing here counts, appends or timestamps. A rendering that embedded a
         // clock or a counter would produce a different body on every pass and re-apply forever.
         var connection = new RecordingConnection();
+        var vault = new InMemorySecretVault();
         using var desired = JsonDocument.Parse(ValkeyCaches.Body(ClusterId));
 
-        (await Reconcile(connection, desired.RootElement)).IsConverged.ShouldBeTrue();
-        var first = connection.Applied[0].Body;
+        (await Reconcile(connection, desired.RootElement, vault)).IsConverged.ShouldBeTrue();
+        var first = connection.Applied[1].Body;
 
-        (await Reconcile(connection, desired.RootElement)).IsConverged.ShouldBeTrue();
+        (await Reconcile(connection, desired.RootElement, vault)).IsConverged.ShouldBeTrue();
 
-        connection.Applied[1].Body.ShouldBe(first, "the rendered object changed between two identical passes");
+        connection.Applied[3].Body.ShouldBe(first, "the rendered object changed between two identical passes");
+    }
+
+    [Fact]
+    public async Task ASecondPassRendersTheSamePasswordAndMintsNothing() {
+        // ⚠⚠ THE PROPERTY THIS TYPE IS MOST EASILY WRONG ABOUT, AND THE ONE WITH THE QUIETEST
+        // FAILURE. ValkeyCaches.GeneratePassword answers differently on every call, and a reconciler
+        // that rendered ITS OWN candidate rather than what the vault returned would converge on every
+        // pass, apply cleanly, read back cleanly, and rewrite the Secret a RUNNING Valkey read its
+        // requirepass from at start-up. The server keeps the password it was started with; every
+        // already-connected client keeps working; `listKeys` starts handing out a value the server has
+        // never accepted; and nothing anywhere reports a failure. So: drive the reconciler twice
+        // against ONE vault and assert both halves.
+        var connection = new RecordingConnection();
+        var vault = new InMemorySecretVault();
+        using var desired = JsonDocument.Parse(ValkeyCaches.Body(ClusterId));
+
+        (await Reconcile(connection, desired.RootElement, vault)).IsConverged.ShouldBeTrue();
+        (await Reconcile(connection, desired.RootElement, vault)).IsConverged.ShouldBeTrue();
+
+        connection.Applied.Count.ShouldBe(4);
+
+        // ⚠ BYTE-IDENTICAL, not "both non-empty". A comparison of the decoded values would pass for a
+        // render that changed the key name, the type or the base64 padding — and a Secret the operator
+        // cannot read is the failure this whole change exists to end.
+        connection.Applied[2].Body.ShouldBe(
+            connection.Applied[0].Body,
+            "the second pass rendered a different Secret, which rotates the requirepass out from under "
+            + "a running server while every surface reports success"
+        );
+
+        // ⚠ THE VAULT SIDE, AND IT IS NOT REDUNDANT WITH THE LINE ABOVE. A reconciler that minted a
+        // fresh candidate on every pass and then resolved would ALSO render an identical Secret, if
+        // the writer happened to honour mint-once — so identical bodies alone cannot tell a correct
+        // reconciler from one that is relying on the vault to save it. `Writes` counts mints that
+        // actually WROTE: the second pass must find the credential already there.
+        vault.Writes.ShouldBe(1, "the second pass wrote to the vault");
+        vault.Holds(ValkeyCaches.SecretPath(Address("observed", TenantA, SubscriptionA))).ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task TheRenderedSecretCarriesThePasswordUnderTheKeyTheOperatorReads() {
+        // ⚠ THE KEY NAME IS THE ASSERTION. spotahome's service/k8s/util.go:
+        //
+        //     if password, ok := secret.Data["password"]; ok { return string(password), nil }
+        //     return "", fmt.Errorf("secret %q does not have a password field", ...)
+        //
+        // A Secret with the right NAME and any other key applies, reads back and converges — the API
+        // server has no opinion about the keys in an Opaque document — and the cache still never
+        // starts. Nothing inside this repository can tell the two apart, so the constant is pinned
+        // here against the upstream read.
+        var connection = new RecordingConnection();
+        var vault = new InMemorySecretVault();
+        using var desired = JsonDocument.Parse(ValkeyCaches.Body(ClusterId));
+
+        (await Reconcile(connection, desired.RootElement, vault)).IsConverged.ShouldBeTrue();
+
+        var secret = JsonNode.Parse(connection.Applied[0].Body)!.AsObject();
+
+        secret["type"]!.GetValue<string>().ShouldBe("Opaque");
+        secret["data"]!.AsObject().Select(x => x.Key).ShouldBe(["password"]);
+
+        // ⚠ `data` and not `stringData`. The API server folds stringData into data and never returns
+        // it, so a Secret written that way reads back with no `password` at all — and
+        // GetRedisPassword reads secret.Data, which on a fetched object would then be empty.
+        secret.ContainsKey("stringData").ShouldBeFalse();
+
+        // ⚠ And the name is the one the CR points at. Two spellings of one object's name is a
+        // credential the operator looks for and never finds.
+        connection.Applied[0].Target.Name.ShouldBe(
+            JsonNode.Parse(connection.Applied[1].Body)!["spec"]!["auth"]!["secretPath"]!.GetValue<string>()
+        );
+
+        // And the value is the one the vault holds, rather than a candidate this pass invented.
+        Password(connection.Applied[0].Body).ShouldBe(
+            vault.Peek(
+                ValkeyCaches.SecretPath(Address("observed", TenantA, SubscriptionA)),
+                ValkeyCaches.PasswordField
+            )
+        );
+    }
+
+    [Fact]
+    public async Task AVaultThatRefusesLeavesNoRedisFailoverBehind() {
+        // ⚠ THE ORDER, AS A CONSEQUENCE RATHER THAN AS A COMMENT. A RedisFailover applied before its
+        // Secret exists is a cache whose pods fail from the first loop the operator runs, and it would
+        // still be applied — and billed — if the credential step were best-effort. The mint is first
+        // and it fails the pass, so nothing reaches the cluster at all.
+        var connection = new RecordingConnection();
+        var vault = new InMemorySecretVault { RefuseMint = true };
+        using var desired = JsonDocument.Parse(ValkeyCaches.Body(ClusterId));
+
+        var outcome = await Reconcile(connection, desired.RootElement, vault);
+
+        outcome.IsConverged.ShouldBeFalse();
+        connection.Applied.ShouldBeEmpty("the cache was applied without a credential to start it with");
     }
 
     [Fact]
@@ -192,14 +322,23 @@ public sealed class ValkeyReconcilerTests {
         torn.IsConverged.ShouldBeTrue();
         connection.Objects.ShouldBeEmpty();
 
-        // ⚠ FOREGROUND, and this is the one platform default this provider departs from. The
-        // StatefulSet, Deployment, Services and ConfigMaps a RedisFailover expands into are its OWNED
-        // children. A background cascade returns as soon as the CR is gone, so the read-back would
-        // report "not found" while the pods were still serving — and a resource that stops being billed
-        // while it is still serving traffic is the failure the read-back exists to prevent.
-        // docs/plan/06 § Two-phase create: "never silently gone while its pods still run and its meter
-        // still ticks".
-        connection.Cascades.ShouldBe([CascadePolicy.Foreground]);
+        // ⚠ FOREGROUND on the RedisFailover, and this is the one platform default this provider
+        // departs from. The StatefulSet, Deployment, Services and ConfigMaps a RedisFailover expands
+        // into are its OWNED children. A background cascade returns as soon as the CR is gone, so the
+        // read-back would report "not found" while the pods were still serving — and a resource that
+        // stops being billed while it is still serving traffic is the failure the read-back exists to
+        // prevent. docs/plan/06 § Two-phase create: "never silently gone while its pods still run and
+        // its meter still ticks".
+        //
+        // ⚠ BACKGROUND on the Secret, because a Secret owns nothing and Foreground would block on a
+        // dependent set that is always empty.
+        connection.Cascades.ShouldBe([CascadePolicy.Foreground, CascadePolicy.Background]);
+
+        // ⚠ THE CR GOES FIRST, WHICH IS THE REVERSE OF THE APPLY ORDER AND IS THE SAME ARGUMENT.
+        // spotahome's checker calls GetRedisPassword on every loop, so a Secret removed underneath a
+        // live RedisFailover makes the controller error out mid-teardown against the object it is
+        // trying to remove.
+        connection.Deleted.Select(x => x.Kind.Kind).ShouldBe(["RedisFailover", "Secret"]);
     }
 
     [Fact]
@@ -264,7 +403,7 @@ public sealed class ValkeyReconcilerTests {
         using var desired = JsonDocument.Parse(body.ToJsonString());
         await Reconcile(connection, desired.RootElement);
 
-        var redis = Redis(connection.Applied[0].Body);
+        var redis = Redis(connection.Applied[1].Body);
 
         redis["resources"]!["requests"]!["cpu"]!.GetValue<string>().ShouldBe("2");
         redis["resources"]!["limits"]!["memory"]!.GetValue<string>().ShouldBe("16Gi");
@@ -295,7 +434,7 @@ public sealed class ValkeyReconcilerTests {
 
         await Reconcile(connection, desired.RootElement);
 
-        var config = Redis(connection.Applied[0].Body)["customConfig"]!.AsArray()
+        var config = Redis(connection.Applied[1].Body)["customConfig"]!.AsArray()
             .Select(x => x!.GetValue<string>())
             .ToList();
 
@@ -315,7 +454,7 @@ public sealed class ValkeyReconcilerTests {
 
         await Reconcile(connection, desired.RootElement);
 
-        var image = Redis(connection.Applied[0].Body)["image"]!.GetValue<string>();
+        var image = Redis(connection.Applied[1].Body)["image"]!.GetValue<string>();
 
         image.ShouldStartWith("valkey/valkey:");
         image.ShouldNotContain("redis", Case.Insensitive);
@@ -354,17 +493,24 @@ public sealed class ValkeyReconcilerTests {
     static readonly Guid SubscriptionA = Guid.Parse("22222222-2222-4222-8222-222222222222");
     static readonly Guid SubscriptionB = Guid.Parse("55555555-5555-4555-8555-555555555555");
 
-    static async Task<ReconcileOutcome> Reconcile(RecordingConnection connection, JsonElement desired) =>
+    static async Task<ReconcileOutcome> Reconcile(
+        RecordingConnection connection,
+        JsonElement desired,
+        InMemorySecretVault? vault = null
+    ) =>
         await new ValkeyCacheReconciler(new FixedClock())
-            .ReconcileAsync(Context(connection, desired), TestContext.Current.CancellationToken);
+            .ReconcileAsync(Context(connection, desired, vault), TestContext.Current.CancellationToken);
 
     static async Task<ReconcileOutcome> Pass(
         ValkeyCacheReconciler reconciler,
         RecordingConnection connection,
         ResourceId address,
-        JsonElement desired
-    ) =>
-        await reconciler.ReconcileAsync(
+        JsonElement desired,
+        InMemorySecretVault? vault = null
+    ) {
+        var store = vault ?? new InMemorySecretVault();
+
+        return await reconciler.ReconcileAsync(
             new(
                 address,
                 ValkeyCaches.V2026,
@@ -372,14 +518,38 @@ public sealed class ValkeyReconcilerTests {
                 null,
                 ReconcileDriver.NamespaceFor(address),
                 connection,
-                new UnavailableSecretResolver(),
+                store,
                 new NullLog()
-            ),
+            ) {
+                SecretWriter = store
+            },
             TestContext.Current.CancellationToken
         );
+    }
 
-    static ReconcileContext Context(IKubeClusterConnection? connection, JsonElement desired) {
+    /// <summary>
+    ///     A pass's context, with a vault that mints once and resolves what it minted.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b><see cref="InMemorySecretVault" /> rather than a stub that always answers, and the
+    ///     difference is the whole point of the idempotence assertions below.</b> A double that
+    ///     overwrote on every call would make "the rendered Secret is byte-identical across two
+    ///     passes" pass against a writer with no mint-once property — the test would be measuring
+    ///     itself. This one implements <c>cas=0</c> for real, with <c>TryAdd</c>.
+    ///     <para>
+    ///         ⚠ One instance serves both <see cref="ReconcileContext.Secrets" /> and
+    ///         <see cref="ReconcileContext.SecretWriter" />, because in production they are two views
+    ///         of one vault. Two separate doubles would let a reconciler render a value nothing ever
+    ///         wrote and still go green.
+    ///     </para>
+    /// </remarks>
+    static ReconcileContext Context(
+        IKubeClusterConnection? connection,
+        JsonElement desired,
+        InMemorySecretVault? vault = null
+    ) {
         var address = Address("observed", TenantA, SubscriptionA);
+        var store = vault ?? new InMemorySecretVault();
 
         return new(
             address,
@@ -388,9 +558,11 @@ public sealed class ValkeyReconcilerTests {
             null,
             ReconcileDriver.NamespaceFor(address),
             connection,
-            new UnavailableSecretResolver(),
+            store,
             new NullLog()
-        );
+        ) {
+            SecretWriter = store
+        };
     }
 
     /// <summary>An address in a named tenant and its own subscription.</summary>
@@ -405,6 +577,19 @@ public sealed class ValkeyReconcilerTests {
         );
 
     static JsonObject Redis(string objectJson) => JsonNode.Parse(objectJson)!["spec"]!["redis"]!.AsObject();
+
+    /// <summary>The <c>requirepass</c> out of a rendered <c>Secret</c>, decoded.</summary>
+    /// <remarks>
+    ///     ⚠ Decodes rather than comparing base64, because the assertions that use it are about which
+    ///     VALUE the vault handed back. The one assertion about the rendered document's bytes compares
+    ///     the bodies directly and does not come through here.
+    /// </remarks>
+    static string Password(string objectJson) =>
+        Encoding.UTF8.GetString(
+            Convert.FromBase64String(
+                JsonNode.Parse(objectJson)!["data"]![ValkeyCaches.PasswordField]!.GetValue<string>()
+            )
+        );
 }
 
 /// <summary>A connection that records what it was asked to do and can be made to misbehave.</summary>
