@@ -143,8 +143,15 @@ verify_component() {
         manifest)
             manifest=$(key "$file" manifest)
             verify_url manifest "$manifest" || return 1
+            # ⚠ An `if` and not `[[ -n "$extra" ]] && { … }`, which is what this was and which reported
+            # four false failures on its first run: a `&&` chain whose test is FALSE is the last
+            # command of the branch, so the function returned 1 for every component that simply has no
+            # second document. Four ✘ under eighteen ✔ — a verifier that fails when there is nothing
+            # to verify is the same defect as one that passes when there is.
             extra=$(key "$file" manifestExtra)
-            [[ -n "$extra" ]] && { verify_url manifestExtra "$extra" || return 1; }
+            if [[ -n "$extra" ]]; then
+                verify_url manifestExtra "$extra" || return 1
+            fi
             ;;
         *)
             printf '  ✘ %-14s unknown install kind "%s"\n' install "$install"
