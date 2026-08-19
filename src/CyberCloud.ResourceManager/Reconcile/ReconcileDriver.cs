@@ -170,7 +170,27 @@ public sealed class ReconcileDriver(
         // that holds both. It is skipped on a teardown, because a delete that begins by creating the
         // namespace it is about to empty is a delete that recreates what an operator just removed.
         if (!tearingDown && connection is not null) {
-            var namespaceReady = await namespaces.EnsureAsync(id, ns, connection, cancellationToken);
+            // ⚠ BOUNDED LIKE THE PASS ITSELF. This runs before the reconciler's own budget is set up
+            // and it is a read and a patch against an API server, so an unbounded token here would
+            // reintroduce exactly what clause 3 exists to prevent — a grain turn blocked on a cluster
+            // that stopped answering — one step above the reconciler that is not allowed to do it.
+            using var namespaceBudget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            namespaceBudget.CancelAfter(PassBudget);
+
+            Result<NamespaceEnsured> namespaceReady;
+            try {
+                namespaceReady = await namespaces.EnsureAsync(id, ns, connection, namespaceBudget.Token);
+            }
+            catch (OperationCanceledException) when (namespaceBudget.IsCancellationRequested
+                && !cancellationToken.IsCancellationRequested) {
+                namespaceReady = Result<NamespaceEnsured>.Failure(
+                    ErrorCode.ProvisioningFailed,
+                    $"Creating the namespace '{ns}' on cluster {reconcileInput.ClusterId:D} did not "
+                    + $"finish within {PassBudget.TotalSeconds.ToString("0", CultureInfo.InvariantCulture)} "
+                    + "seconds. The cluster is answering too slowly to place anything in; the next "
+                    + "pass tries again."
+                );
+            }
 
             if (namespaceReady.TryGetError(out var namespaceError)) {
                 // ⚠ THE PASS FAILS RATHER THAN CONTINUING, and that is the whole point of doing this
