@@ -130,9 +130,11 @@ namespace CyberCloud.Providers.Search;
 ///             before writing any of it.
 ///         </item>
 ///         <item>
-///             The short name is free: <c>qdrant</c> collides with no CLI group key and with no
-///             existing alias. <c>OpenSearchDeclarationTests.TheShortNameCollidesWithNoGroupKeyThatAlreadyExists</c>
-///             carries the literal list to check a second one against.
+///             The short name is free: <c>qdrant</c> collides with nothing this provider declares,
+///             and <c>OpenSearchDeclarationTests.NoShortNameHereGivesACycTokenTwoMeanings</c> is what
+///             asks. ⚠ It no longer carries a list to check a second name against — the rule is
+///             derived from what is registered, by <c>CliTokens</c>, so a new type is checked by
+///             declaring it rather than by being added anywhere.
 ///         </item>
 ///     </list>
 /// </remarks>
