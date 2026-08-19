@@ -211,10 +211,14 @@ public sealed class NamespaceEnsurer(IClock clock) {
             .ConfigureAwait(false);
 
         if (applied.TryGetError(out var error)) {
-            // ⚠ The caller turns this into a RETRYABLE failure. A namespace the platform may not
-            // create is an RBAC problem on the connection's credential, which an operator fixes
-            // without the tenant re-issuing anything — so the next pass may well find the API server
-            // willing, and a terminal failure here would strand a create that was never wrong.
+            // ⚠ THE CODE IS PRESERVED, because the caller reads it to decide whether another pass
+            // could get a different answer — ReconcileOutcome.IsRetryable, and its four terminal
+            // codes. An earlier version of this method wrapped every failure as retryable on the
+            // reasoning that "a namespace the platform may not create is an operator's problem", and
+            // that reasoning is true of exactly one of the codes the API server answers with: an
+            // admission policy declining the namespace declines it every time, and rescheduling
+            // reaches the tenant an hour later as an OperationTimeout. Re-coding an error here would
+            // hide the distinction from the one place equipped to make it.
             return Result<NamespaceEnsured>.Failure(
                 new(
                     error.Code,
