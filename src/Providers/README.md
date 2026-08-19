@@ -1562,6 +1562,18 @@ before the pass runs — with ADR-013's seven labels, in the same write.
   (`NamespaceEnsurer.IdFor`) and the type label reads `cybercloud.resources_resourcegroups`. Stamping
   the triggering resource's id would name a resource that can be deleted while the namespace and
   everything else in it lives on.
+- **"Attributed to a group" is one rule, in `KubeLabels`, read by three components.**
+  `KubeLabels.IsGroupScoped` is the only test, and `KubeLabels.ResourceGroupType` the only spelling.
+  `NamespaceEnsurer` writes it; `DriftScanner` skips those objects in its orphan join;
+  `ProviderConformanceTests` holds them to the group's invariants rather than the resource's. The
+  vocabulary lives in the label assembly rather than in the writer so that recognising an object never
+  means depending on whatever produced it.
+- **⚠ `CyberCloud.Resources` is a reserved provider namespace and `ProviderRegistry.Build` refuses
+  it.** Without that, the recognition rule would be an opt-out: a provider declaring that namespace
+  would render objects that the drift scan and the labels gate both decline to check. The other half
+  is already closed by ADR-013 — `resource-type` is one of the seven, injected by the builder from
+  the resource's own type, and `WithLabels` throws on an attempt to set it. Neither door can be
+  opened from a provider.
 - **Idempotent and race-safe because it is a server-side apply.** Two reconcilers converging two
   resources in one group on two silos both call it; an apply patch creates when absent and is a no-op
   when present, so neither has to catch and swallow a `409 AlreadyExists` — and swallowing *that*
@@ -1570,6 +1582,27 @@ before the pass runs — with ADR-013's seven labels, in the same write.
 - **It costs one round trip per (cluster, namespace) per hour**, not one per apply —
   `NamespaceEnsurer.RecheckAfter`. A memo that never expired would leave a namespace deleted out of
   band gone until the silo restarted.
+- **A refusal is terminal or retryable by its *code*, through `ReconcileOutcome.FromFailure`** — the
+  same routing every reconciler uses for its own applies. ⚠ This was hard-coded to `retryable: true`
+  first, and the conformance suite's admission-refusal case caught it: an admission policy declining
+  the namespace declines it every time, so rescheduling turns a refusal the tenant could act on into
+  an `OperationTimeout` an hour later.
+
+### ⚠ What the memo hid, and why the harness now empties it
+
+`NamespaceEnsurer.Forget` exists because the memo caches a fact about a cluster, and a test harness
+invalidates that fact between every test — `FakeKubeCluster.Reset` empties the world in microseconds
+and no re-check interval is short enough. `ConformanceState.Reset` calls it.
+
+**Two real defects were hiding behind that.** With a warm memo the namespace was never re-applied, so
+it never entered `World.Applied`, so the labels assertion silently stopped covering it — the full
+suite passed while the single-test run the `Labels` architecture gate makes failed. Once the memo was
+cold in both shapes, the assertion saw the namespace (the attribution mismatch, which was the reported
+failure) *and* the admission-refusal case saw the namespace apply inherit a wrong retryability (which
+nothing had reported). An assertion whose subject depends on which test ran first does not merely give
+the wrong answer; it stops asking. `EveryAppliedObjectCarriesTheSevenMandatoryLabelsAndBothAnnotations`
+now asserts it saw **exactly one** group-attributed object, so a memo that stops being cleared fails
+loudly rather than quietly narrowing the check.
 
 ### ⚠ Owed: nothing deletes a namespace
 
@@ -1584,14 +1617,22 @@ etcd object and no compute. Closing it needs a group-delete choreography that fi
 namespace holds nothing but objects this platform wrote, and the safe order is the one docs/plan/06
 § Two-phase create already uses in reverse.
 
-### ⚠ Owed: the drift scan will call a namespace an orphan
+### Closed: the drift scan no longer calls a namespace an orphan
 
-`DriftScanner` joins cluster objects to resource grains on `cybercloud.io/resource-id`, and a
-namespace's is a group's derived GUID that no resource grain will ever own. The shipping inventory is
-`UnavailableClusterObjectInventory`, so nothing reports it today; the informer-backed one of
-docs/plan/09 § Observing must either not list `v1 Namespace` or skip records whose `resource-type` is
-`NamespaceEnsurer.GroupType`. `ClusterObjectRecord` carries no resource-type label, so the filter is a
-change to that record rather than one `DriftScanner` can make on its own.
+This was owed when the namespace write landed and is now closed, because the same recognition rule the
+conformance harness needed is the one the scan needed. `DriftScanner` joins on
+`cybercloud.io/resource-id`, and a namespace's is a group's derived GUID that no resource grain will
+ever own — so every namespace on every cluster would have been a permanent orphan finding.
+`ClusterObjectRecord` now carries `ResourceType` and the scan skips group-attributed records.
+
+⚠ **`ClusterObjectRecord` stopped being a positional record, and the reason is worth keeping.** The
+member was first added as a fifth positional parameter with no default, on the theory that omitting it
+would be a compile error. It was not: both real construction sites use an object initializer, which
+runs a struct's parameterless constructor and leaves anything unset at its default — and an unset
+`ResourceType` reads as "belongs to a resource", which is the exact wrong answer. `required` members
+are what make the omission fail the way it was meant to. The shipping inventory is still
+`UnavailableClusterObjectInventory`, so the informer-backed one of docs/plan/09 § Observing will meet
+this as a compile error rather than as an orphan storm.
 
 ## Comparing an object you read back: containment, never equality
 
