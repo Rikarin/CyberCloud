@@ -121,6 +121,24 @@ public sealed class ProviderRegistryTests {
     }
 
     [Fact]
+    public void AProviderMayNotDeclareTheReservedNamespace() {
+        // ⚠ THE OTHER HALF OF "IsGroupScoped CANNOT BE FORGED". The platform stamps
+        // `cybercloud.io/resource-type = cybercloud.resources_resourcegroups` on the one object it
+        // writes on a resource group's behalf — the group's namespace — and DriftScanner's orphan
+        // join and ProviderConformanceTests' labels assertion both read that label to mean "not
+        // attributed to a resource, do not compare its id to a grain". A provider declaring this
+        // namespace would render objects both of them then decline to check, which is an opt-out of
+        // orphan detection and of the Labels architecture gate at once.
+        //
+        // ADR-013 already closes the other door: resource-type is one of the seven, injected by
+        // KubeCommandBuilder from the resource's own type, and WithLabels throws on an attempt to set
+        // it. A caller cannot write the label; this is what stops a caller owning a TYPE that
+        // produces it.
+        Should.Throw<InvalidOperationException>(() => ProviderRegistry.Build([new ReservedNamespaceProvider()]))
+            .Message.ShouldContain(KubeLabels.ReservedNamespace);
+    }
+
+    [Fact]
     public void AProviderThatDeclaresNothingIsABuildFailure() {
         Should.Throw<InvalidOperationException>(() => ProviderRegistry.Build([new SilentProvider()]))
             .Message.ShouldContain("declared no resource types");
@@ -149,6 +167,12 @@ public sealed class ProviderRegistryTests {
     [Fact]
     public void QuotaMeterUnknownIsNotAMeter() {
         Should.Throw<ArgumentException>(() => ProviderRegistry.Build([new UnknownMeterProvider()]));
+    }
+
+    sealed class ReservedNamespaceProvider : IResourceProvider {
+        public string ProviderNamespace => KubeLabels.ReservedNamespace;
+
+        public void Describe(IProviderBuilder builder) => builder.ResourceType("resourceGroups");
     }
 
     sealed class SilentProvider : IResourceProvider {
