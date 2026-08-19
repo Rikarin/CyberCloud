@@ -390,9 +390,47 @@ public sealed class ParentEdgeTests(IsolationCluster cluster) {
             .ShouldNotBeEmpty();
     }
 
+    /// <summary>
+    ///     ⚠ <b>No tuple survives the resource, and "the resource is gone" is a different moment for
+    ///     a type that declares a recovery window.</b>
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>THE BRANCH BELOW IS READ OFF THE REGISTRY RATHER THAN OFF A LIST OF TYPE NAMES,
+    ///         AND THAT IS THE WHOLE OF WHY THIS STAYS ONE THEORY.</b> A test named "delete leaves no
+    ///         dangling tuple" that quietly came to mean "except for the types with a window, where
+    ///         there is one and that is fine" would be the exact failure this suite exists to catch. So
+    ///         the property the name states is asserted for every target — after the resource stops
+    ///         existing, nothing points at it — and the branch is only about <i>when</i> it stops
+    ///         existing. For a hard-delete type that is when the delete converges. For a soft-delete
+    ///         type, docs/plan/08 § Soft delete makes the delete a park: the resource still exists,
+    ///         keeps its name, keeps its committed quota and can be handed back, so a tuple naming it is
+    ///         not dangling. It stops existing at the purge, and the purge is where this asserts empty.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The parked state is asserted POSITIVELY, and a <c>ShouldNotBeEmpty</c> there
+    ///         would have been the weaker assertion that lets the real leak through.</b> § Soft
+    ///         delete's fourth decision re-parents the edge <i>to the subscription</i>, and the reason is
+    ///         a lifetime one: a parked resource that kept pointing at its resource group would hold a
+    ///         tuple naming an object its tenant may delete while the window runs — a dangling edge
+    ///         that outlives the group, which is the shape this test's name is about. "Not empty" is
+    ///         satisfied by exactly that bug, so the subject's type and id are both checked.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Only <c>CyberCloud.Storage/accounts</c> takes the second branch today</b>,
+    ///         because it is the only member of <see cref="IsolationCatalog.Targets" /> that declares a
+    ///         window — the four other types that declare one are not in this catalogue, and
+    ///         <c>Storage/accounts/buckets</c> deliberately declares none, since a bucket's bytes live in
+    ///         its account's volumes and the account's window already holds them. That is coverage rather
+    ///         than behaviour, and it is worth knowing before reading a green run as broad evidence.
+    ///     </para>
+    /// </remarks>
+    /// <param name="target">The type under attack.</param>
     [Theory]
     [MemberData(nameof(Targets))]
     public async Task DeleteLeavesNoDanglingTuple(IsolationTarget target) {
+        ArgumentNullException.ThrowIfNull(target);
+
         // ⚠ A tuple pointing at an object that no longer exists is a slow leak in the tenant's tuple
         // store, and it is the kind that is never noticed: it grants nothing, costs nothing to read
         // and grows by one row per resource ever deleted. OperationGrain removes it after
@@ -444,8 +482,82 @@ public sealed class ParentEdgeTests(IsolationCluster cluster) {
 
         (await operation.GetAsync()).GetValueOrThrow().State.ShouldBe(OperationState.Succeeded);
 
+        // ⚠ The registry's own fact, which is the one the manager branches on. A list of type names
+        // here would disagree with the platform the day a provider declares or withdraws a window, and
+        // it would disagree silently — in the direction of asserting the hard-delete shape against a
+        // type that no longer has it, which is how this test first went red.
+        cluster.Registry.TryGetType(target.Type, out var registration).ShouldBeTrue(
+            $"'{target.Type}' is a target of this suite and the registry does not know it"
+        );
+
+        if (registration.SoftDeleteDays == 0) {
+            (await cluster.ParentsOfAsync(IsolationCluster.Victim, id)).ShouldBeEmpty(
+                "the resource is gone and its parent tuple is not"
+            );
+
+            return;
+        }
+
+        // ── The window: the resource still exists, so the edge is not dangling — it moved ──
+        var parked = await cluster.ParentsOfAsync(IsolationCluster.Victim, id);
+
+        parked.Count.ShouldBe(
+            1,
+            "a parked resource has exactly one parent scope, as a live one does. docs/plan/08 \u00a7 Soft "
+            + "delete MOVES the edge rather than adding to it, and two edges would leave the resource "
+            + "readable through a group it has been told it left"
+        );
+
+        parked[0].Type.ShouldBe(
+            ObjectTypes.Subscription,
+            "the parked resource still points at its resource GROUP. A tenant may delete that group "
+            + "while the window runs, which leaves a tuple naming an object that is gone \u2014 the "
+            + "dangling edge this test is named for, one lifetime removed. docs/plan/08 \u00a7 Soft "
+            + "delete's fourth decision re-parents to the subscription for exactly this reason"
+        );
+
+        parked[0].Id.ShouldBe(
+            IsolationCluster.VictimSubscription.ToString("N", CultureInfo.InvariantCulture),
+            "the edge names a subscription other than the one the resource lives in"
+        );
+
+        parked[0].Relation.ShouldBeNullOrEmpty("the parent's subject is an object, not a userset");
+
+        // ── The purge, which is where the resource actually stops existing ─────────────
+        //
+        // ⚠ Not by driving the delete further, because there is nothing further to drive: that
+        // operation reached Succeeded above and the window is a state rather than an operation.
+        //
+        // ⚠ THIS IS THE ONLY PURGE IN THE REPOSITORY THAT MEETS THE REAL SCHEMA. Every other one
+        // runs against a doubled authorizer, so "a caller who may purge can purge" was reasoning
+        // rather than a measurement — the same gap ParentEdgeTests opens by describing.
+        var purged = await cluster.Manager.PurgeAsync(
+            new() { Path = address.Path, ApiVersion = target.ApiVersion, Caller = caller },
+            TestContext.Current.CancellationToken
+        );
+
+        purged.IsSuccess.ShouldBeTrue(
+            "the purge was refused, so nothing can end the window and the edge cannot be removed: "
+            + purged.Error?.Code + " \u2014 " + purged.Error?.Message
+        );
+
+        var purge = cluster.For(IsolationCluster.Victim)
+            .GetGrain<IOperationGrain>(GrainKeys.Operation(purged.GetValueOrThrow().OperationId));
+
+        for (var i = 0; i < 6; i++) {
+            var status = await purge.DriveAsync();
+            if (status.GetValueOrThrow().IsTerminal) {
+                break;
+            }
+        }
+
+        (await purge.GetAsync()).GetValueOrThrow().State.ShouldBe(OperationState.Succeeded);
+
         (await cluster.ParentsOfAsync(IsolationCluster.Victim, id)).ShouldBeEmpty(
-            "the resource is gone and its parent tuple is not"
+            "the resource is gone and its parent tuple is not. \u26a0 A purge unlinks a SUBSCRIPTION "
+            + "edge rather than a group one \u2014 see IResourceRelationWriter.UnlinkFromSubscriptionAsync "
+            + "\u2014 so a purge that built the ordinary subject would delete a tuple that is not there, "
+            + "report success, and leave one inert row per purged resource forever"
         );
     }
 
