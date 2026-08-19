@@ -111,7 +111,8 @@ public sealed class NamespaceEnsurer(IClock clock) {
     public const int MaxEntries = 10_000;
 
     /// <summary>
-    ///     The resource type the namespace's <c>cybercloud.io/resource-type</c> label carries.
+    ///     The resource type the namespace's <c>cybercloud.io/resource-type</c> label carries —
+    ///     <see cref="KubeLabels.ResourceGroupType" />.
     /// </summary>
     /// <remarks>
     ///     <para>
@@ -131,13 +132,15 @@ public sealed class NamespaceEnsurer(IClock clock) {
     ///         what the object is.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>This type is not registered and must never be.</b> It is a label value, not an
-    ///         addressable type: no provider declares <c>CyberCloud.Resources</c>, nothing serves
-    ///         <c>PUT …/providers/CyberCloud.Resources/resourceGroups/{name}</c>, and a provider that
-    ///         later claimed that namespace would give one label value two meanings.
+    ///         ⚠ <b>The type itself lives in <see cref="KubeLabels" /> and not here, and the reason is
+    ///         a defect this decision caused.</b> Three components have to <i>recognise</i> a
+    ///         group-attributed object — the drift scan, the conformance harness's labels assertion,
+    ///         and any future cluster inventory — and none of them should have to reference the
+    ///         component that <i>writes</i> one. Keeping the vocabulary in the label assembly is what
+    ///         makes the recognition one rule rather than three spellings of it.
     ///     </para>
     /// </remarks>
-    public static ResourceTypeName GroupType { get; } = new("CyberCloud.Resources", "resourceGroups");
+    public static ResourceTypeName GroupType => KubeLabels.ResourceGroupType;
 
     /// <summary>
     ///     The <c>api-version</c> label a namespace carries. It is the platform's, not a tenant
@@ -186,7 +189,14 @@ public sealed class NamespaceEnsurer(IClock clock) {
         var key = (connection.ClusterId, ns);
         var now = clock.UtcNow;
 
-        if (ensured.TryGetValue(key, out var checkedAt) && now - checkedAt < RecheckAfter) {
+        // ⚠ THE LOWER BOUND IS NOT REDUNDANT. `now - checkedAt` is negative whenever the clock has
+        // gone backwards — an NTP correction in production, a fixture resetting its clock in a test —
+        // and a negative TimeSpan is less than RecheckAfter, so a bare upper bound would trust the
+        // memo for as long as the jump was large. Re-applying is cheap and idempotent; trusting a
+        // stale entry is a 404 on every apply into a namespace that is not there.
+        if (ensured.TryGetValue(key, out var checkedAt)
+            && now - checkedAt is { Ticks: >= 0 } age
+            && age < RecheckAfter) {
             return Result<NamespaceEnsured>.Success(NamespaceEnsured.Remembered);
         }
 
@@ -201,10 +211,14 @@ public sealed class NamespaceEnsurer(IClock clock) {
             .ConfigureAwait(false);
 
         if (applied.TryGetError(out var error)) {
-            // ⚠ The caller turns this into a RETRYABLE failure. A namespace the platform may not
-            // create is an RBAC problem on the connection's credential, which an operator fixes
-            // without the tenant re-issuing anything — so the next pass may well find the API server
-            // willing, and a terminal failure here would strand a create that was never wrong.
+            // ⚠ THE CODE IS PRESERVED, because the caller reads it to decide whether another pass
+            // could get a different answer — ReconcileOutcome.IsRetryable, and its four terminal
+            // codes. An earlier version of this method wrapped every failure as retryable on the
+            // reasoning that "a namespace the platform may not create is an operator's problem", and
+            // that reasoning is true of exactly one of the codes the API server answers with: an
+            // admission policy declining the namespace declines it every time, and rescheduling
+            // reaches the tenant an hour later as an OperationTimeout. Re-coding an error here would
+            // hide the distinction from the one place equipped to make it.
             return Result<NamespaceEnsured>.Failure(
                 new(
                     error.Code,
@@ -235,6 +249,27 @@ public sealed class NamespaceEnsurer(IClock clock) {
 
         return Result<NamespaceEnsured>.Success(new(true, outcome.Result, outcome.Message));
     }
+
+    /// <summary>
+    ///     Forgets every memoised namespace, so the next pass applies again.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>This exists because the memo is a cache of a fact about a cluster, and something
+    ///         that empties the cluster invalidates it.</b> In production the only such event is an
+    ///         operator deleting a namespace by hand, which <see cref="RecheckAfter" /> covers within
+    ///         the hour. In a test harness it happens between every test — <c>FakeKubeCluster.Reset</c>
+    ///         wipes the world in microseconds — and no interval is short enough for that.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The bug it closes is not a test-tidiness one.</b> Without it the harness's labels
+    ///         assertion saw the namespace command or not <i>depending on which test ran first</i>:
+    ///         cold memo, the namespace is applied and lands in the assertion's loop; warm memo, it
+    ///         does not. That is a check whose answer depends on its neighbours, which is worth more
+    ///         to close than the failure that revealed it.
+    ///     </para>
+    /// </remarks>
+    public void Forget() => ensured.Clear();
 
     /// <summary>
     ///     The address the namespace's seven labels are derived from: the resource group itself, as

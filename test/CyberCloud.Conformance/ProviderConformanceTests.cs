@@ -175,6 +175,23 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
 
         Cluster.World.Applied.ShouldNotBeEmpty();
 
+        // ⚠ EVERY OBJECT IN THIS PASS, and one of them is not the provider's. NamespaceEnsurer
+        // applies the resource group's namespace on the driver's path before the reconciler runs, so
+        // `Applied` holds the reconciler's objects AND that namespace. The two are held to different
+        // invariants — a namespace is attributed to the GROUP and carries a derived resource-id that
+        // no resource grain will ever own — and the split below is a fork rather than an exemption:
+        // both branches assert, and the group branch asserts MORE, because everything about a
+        // platform-written namespace is computable from the address the test already has.
+        //
+        // ⚠ IT CANNOT BE USED AS AN ESCAPE HATCH BY A RECONCILER, which is the only thing that would
+        // make this a weakening. The fork keys on `cybercloud.io/resource-type`, which is one of
+        // ADR-013's seven: KubeCommandBuilder injects it from the resource's own type and
+        // KubeLabels.IsMandatory refuses a caller that tries to set it. So a reconciler can only
+        // reach the group branch if its resource's TYPE is in CyberCloud.Resources — and
+        // ProviderRegistry.Build refuses to register a provider that declares that namespace. Both
+        // doors are shut, and neither is shut by this file.
+        var groupScoped = 0;
+
         foreach (var command in Cluster.World.Applied) {
             foreach (var label in KubeLabels.Mandatory) {
                 command.Labels.ShouldContainKey(label, $"'{command.Target}' is missing '{label}'");
@@ -182,9 +199,7 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
             }
 
             command.Labels[KubeLabels.TenantId].ShouldBe(KubeLabels.GuidValue(ConformanceIds.Tenant));
-            command.Labels[KubeLabels.ResourceId].ShouldBe(KubeLabels.GuidValue(accepted.Resource.Id));
             command.Labels[KubeLabels.ManagedBy].ShouldBe(KubeLabels.ManagedByValue);
-            command.Labels[KubeLabels.ApiVersion].ShouldBe(Case.ApiVersion);
 
             foreach (var annotation in KubeLabels.MandatoryAnnotations) {
                 command.Annotations.ShouldContainKey(annotation);
@@ -194,9 +209,70 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
 
             // ⚠ The resource-id label is what makes orphan detection a hash join rather than a scan —
             // ADR-013 — and an EMPTY GUID here is the failure that produces objects the drift scan
-            // reports as orphans forever. ReconcileContext's own remarks warn about it by name.
+            // reports as orphans forever. ReconcileContext's own remarks warn about it by name. It
+            // holds for both branches, so it is asserted before the fork.
             command.Labels[KubeLabels.ResourceId].ShouldNotBe(KubeLabels.GuidValue(Guid.Empty));
+
+            if (KubeLabels.IsGroupScoped(command.Labels)) {
+                groupScoped++;
+                AssertGroupNamespace(command);
+                continue;
+            }
+
+            command.Labels[KubeLabels.ResourceId].ShouldBe(KubeLabels.GuidValue(accepted.Resource.Id));
+            command.Labels[KubeLabels.ApiVersion].ShouldBe(Case.ApiVersion);
         }
+
+        // ⚠ EXACTLY ONE, AND ASSERTING IT IS WHAT KEEPS THE MEMO HONEST. NamespaceEnsurer caches
+        // "this namespace exists on this cluster" and would otherwise skip the apply whenever an
+        // earlier test in this class had warmed it — so this assertion passed or failed depending on
+        // which test ran first, and the filtered single-test run the Labels architecture gate makes
+        // was the only shape that ever saw the namespace. ConformanceState.Reset now calls
+        // NamespaceEnsurer.Forget, and this line is what fails if that ever stops happening.
+        groupScoped.ShouldBe(
+            1,
+            "the pass applied "
+            + groupScoped.ToString(CultureInfo.InvariantCulture)
+            + " group-attributed objects and exactly one — the resource group's namespace — is "
+            + "expected. Zero means NamespaceEnsurer's memo was still warm from an earlier test, "
+            + "which makes this assertion's result depend on test order; more than one means "
+            + "something else is writing objects under KubeLabels.ReservedNamespace."
+        );
+    }
+
+    /// <summary>
+    ///     Asserts that a group-attributed command is the namespace the platform writes, and nothing
+    ///     else.
+    /// </summary>
+    /// <param name="command">The command whose <c>resource-type</c> named a resource group.</param>
+    /// <remarks>
+    ///     ⚠ <b>Every value here is computed from the address rather than read off the command.</b>
+    ///     A branch that only checked "this looks group-scoped, carry on" would be the exemption this
+    ///     fork must not be: an object reaching it is checked against the one object that is allowed
+    ///     to reach it — the right kind, cluster-scoped, the platform's own field manager, the group's
+    ///     derived id, and the group's own name — so there is no shape a reconciler could render that
+    ///     lands here and passes.
+    /// </remarks>
+    static void AssertGroupNamespace(KubeCommand command) {
+        var address = ProviderTestCluster<TSource>.Address("world-labelled");
+
+        command.Target.Kind.Kind.ShouldBe(
+            "Namespace",
+            $"'{command.Target}' claims to belong to a resource group and the only object the "
+            + "platform writes on a group's behalf is its namespace."
+        );
+
+        command.Target.IsClusterScoped.ShouldBeTrue("a Namespace is cluster-scoped.");
+        command.Target.Name.ShouldBe(ReconcileDriver.NamespaceFor(address));
+        command.FieldManager.ShouldBe(NamespaceEnsurer.FieldManager);
+
+        command.Labels[KubeLabels.ResourceGroup].ShouldBe(address.ResourceGroup);
+
+        command.Labels[KubeLabels.ResourceId].ShouldBe(
+            KubeLabels.GuidValue(NamespaceEnsurer.IdFor(address.SubscriptionId, address.ResourceGroup)),
+            "the namespace's resource-id is derived from the group it belongs to, so it is the same "
+            + "on every silo and for every resource in the group."
+        );
     }
 
     // ── tag ─────────────────────────────────────────────────────────────────────────────────────

@@ -80,6 +80,19 @@ public sealed class DriftScanner(IClock clock) {
         var byResource = new Dictionary<Guid, List<ClusterObjectRecord>>();
 
         foreach (var record in objects.IsDefault ? [] : objects) {
+            // ⚠ NOT EVERY LABELLED OBJECT BELONGS TO A RESOURCE, and the join below assumes one does.
+            // The platform writes a resource group's namespace itself and stamps it with a resource-id
+            // DERIVED FROM THE GROUP — see NamespaceEnsurer, and the reason it is not the id of
+            // whichever resource created it: that resource can be deleted while the namespace and
+            // everything else in the group lives on. No resource grain will ever carry that GUID, so
+            // without this line every namespace on the cluster becomes a permanent orphan finding —
+            // "they are running and nothing is metering them" — about the one object on the cluster
+            // that costs nothing and that the platform put there on purpose. A scan whose findings are
+            // mostly its own normal operation is a scan nobody reads.
+            if (KubeLabels.IsGroupScoped(record.ResourceType)) {
+                continue;
+            }
+
             if (!byResource.TryGetValue(record.ResourceId, out var list)) {
                 list = [];
                 byResource[record.ResourceId] = list;

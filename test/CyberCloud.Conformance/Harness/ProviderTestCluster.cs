@@ -4,6 +4,7 @@ using CyberCloud.Core.Time;
 using CyberCloud.ResourceManager;
 using CyberCloud.ResourceManager.Actions;
 using CyberCloud.ResourceManager.Conformance;
+using CyberCloud.ResourceManager.Reconcile;
 using CyberCloud.ResourceManager.Registry;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -96,6 +97,29 @@ public static class ConformanceState<TSource>
     /// <summary>Step 8's recorded ReBAC parent edges.</summary>
     public static RecordingRelationWriter Relations { get; } = new();
 
+    /// <summary>
+    ///     The driver's namespace ensurer, held here so that <see cref="Reset" /> can empty its memo.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Static for the same reason <see cref="Cluster" /> is, and for a sharper one.</b>
+    ///     <c>NamespaceEnsurer</c> caches "the resource group's namespace exists on this cluster" and
+    ///     re-applies only after <c>NamespaceEnsurer.RecheckAfter</c> — an hour, which is right for a
+    ///     silo and useless here, because <see cref="Reset" /> empties the whole cluster between
+    ///     tests in microseconds. Left to <c>AddCyberCloudResourceManager</c>'s own
+    ///     <c>TryAddSingleton</c> the instance would be unreachable from a test, and the memo would
+    ///     survive a reset that had just deleted the very namespace it remembers.
+    ///     <para>
+    ///         ⚠ <b>What that cost, before this existed.</b>
+    ///         <c>EveryAppliedObjectCarriesTheSevenMandatoryLabelsAndBothAnnotations</c> asserts over
+    ///         <c>World.Applied</c>. With a warm memo the namespace was never re-applied, so it never
+    ///         entered <c>Applied</c>, so the assertion silently stopped covering it — and the whole
+    ///         suite passed while the single-test run the <c>Labels</c> architecture gate makes
+    ///         failed. An assertion whose subject depends on which test ran first is the failure class
+    ///         this harness exists to prevent, not one for it to have.
+    ///     </para>
+    /// </remarks>
+    public static NamespaceEnsurer Namespaces { get; } = new(Clock);
+
     /// <summary>Puts every piece back to its default.</summary>
     public static void Reset() {
         Cluster.Reset();
@@ -104,6 +128,10 @@ public static class ConformanceState<TSource>
         Locks.Reset();
         Changes.Reset();
         Relations.Reset();
+
+        // ⚠ AFTER Cluster.Reset, and the order is the whole point: the memo describes the cluster,
+        // and the cluster has just been emptied.
+        Namespaces.Forget();
     }
 }
 
@@ -570,6 +598,11 @@ public class ProviderTestCluster<TSource> : IAsyncLifetime
                     services.AddSingleton<IClusterConnectionFactory>(
                         new FakeClusterConnectionFactory(ConformanceState<TSource>.Cluster)
                     );
+
+                    // ⚠ The instance, not the type, so that Reset can empty its memo — see the
+                    // remarks on ConformanceState.Namespaces. AddCyberCloudResourceManager uses
+                    // TryAddSingleton, so registering it first is what keeps this one.
+                    services.AddSingleton(ConformanceState<TSource>.Namespaces);
 
                     // ⚠ BOTH SEAMS FROM ONE OBJECT, AND THE SUITE WOULD BE VACUOUS WITHOUT THEM.
                     // A provider whose reconciler mints a credential — CyberCloud.Storage/accounts is

@@ -1,5 +1,6 @@
 using CyberCloud.Kubernetes.Contracts;
 using CyberCloud.ResourceManager.Drift;
+using CyberCloud.ResourceManager.Reconcile;
 using CyberCloud.ResourceManager.Registry;
 using CyberCloud.ResourceManager.Tests.Infrastructure;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -120,6 +121,24 @@ public sealed class ProviderRegistryTests {
     }
 
     [Fact]
+    public void AProviderMayNotDeclareTheReservedNamespace() {
+        // ⚠ THE OTHER HALF OF "IsGroupScoped CANNOT BE FORGED". The platform stamps
+        // `cybercloud.io/resource-type = cybercloud.resources_resourcegroups` on the one object it
+        // writes on a resource group's behalf — the group's namespace — and DriftScanner's orphan
+        // join and ProviderConformanceTests' labels assertion both read that label to mean "not
+        // attributed to a resource, do not compare its id to a grain". A provider declaring this
+        // namespace would render objects both of them then decline to check, which is an opt-out of
+        // orphan detection and of the Labels architecture gate at once.
+        //
+        // ADR-013 already closes the other door: resource-type is one of the seven, injected by
+        // KubeCommandBuilder from the resource's own type, and WithLabels throws on an attempt to set
+        // it. A caller cannot write the label; this is what stops a caller owning a TYPE that
+        // produces it.
+        Should.Throw<InvalidOperationException>(() => ProviderRegistry.Build([new ReservedNamespaceProvider()]))
+            .Message.ShouldContain(KubeLabels.ReservedNamespace);
+    }
+
+    [Fact]
     public void AProviderThatDeclaresNothingIsABuildFailure() {
         Should.Throw<InvalidOperationException>(() => ProviderRegistry.Build([new SilentProvider()]))
             .Message.ShouldContain("declared no resource types");
@@ -148,6 +167,12 @@ public sealed class ProviderRegistryTests {
     [Fact]
     public void QuotaMeterUnknownIsNotAMeter() {
         Should.Throw<ArgumentException>(() => ProviderRegistry.Build([new UnknownMeterProvider()]));
+    }
+
+    sealed class ReservedNamespaceProvider : IResourceProvider {
+        public string ProviderNamespace => KubeLabels.ReservedNamespace;
+
+        public void Describe(IProviderBuilder builder) => builder.ResourceType("resourceGroups");
     }
 
     sealed class SilentProvider : IResourceProvider {
@@ -205,16 +230,57 @@ public sealed class DriftScannerTests {
     static Guid ClusterId { get; } = Guid.Parse("44444444-4444-4444-8444-444444444444");
 
     static ClusterObjectRecord Object(Guid resourceId, string hash) =>
-        new(
-            resourceId,
-            "/tenants/…/widgets/x",
-            hash,
-            new ObjectRef {
+        Object(resourceId, hash, "cybercloud.testing_widgets");
+
+    static ClusterObjectRecord Object(Guid resourceId, string hash, string resourceType) =>
+        new() {
+            ResourceId = resourceId,
+            ResourcePath = "/tenants/…/widgets/x",
+            ReconcileHash = hash,
+            ResourceType = resourceType,
+            Target = new() {
                 Kind = new() { Group = "apps", Version = "v1", Kind = "Deployment", Plural = "deployments" },
                 Namespace = "ns",
                 Name = "x"
             }
+        };
+
+    [Fact]
+    public void AResourceGroupsOwnNamespaceIsNotAnOrphan() {
+        // ⚠ THE OBJECT NO RESOURCE GRAIN WILL EVER OWN, AND IT IS NOT A FINDING. NamespaceEnsurer
+        // writes the resource group's namespace with a resource-id DERIVED FROM THE GROUP, because
+        // stamping whichever resource happened to create it would orphan the namespace the moment
+        // that one resource was deleted — while every other resource in the group is still living in
+        // it. So the derived id matches nothing in `expected` by construction, and a scan that joined
+        // on it blindly would report one permanent orphan per resource group, forever, about the one
+        // object on the cluster the platform put there on purpose.
+        var namespaceObject = Object(
+            NamespaceEnsurer.IdFor(Guid.NewGuid(), "prod"),
+            "sha256:abc",
+            KubeLabels.ResourceGroupTypeValue
         );
+
+        var report = Scanner.Scan(ClusterId, [namespaceObject], []);
+
+        report.Findings.ShouldBeEmpty(
+            "the resource group's own namespace was reported as drift. It is attributed to the group "
+            + "rather than to a resource — KubeLabels.IsGroupScoped — and the orphan join must skip it."
+        );
+    }
+
+    [Fact]
+    public void AnObjectThatOnlyLOOKSGroupScopedIsStillJoined() {
+        // The other half, so the skip above is a rule about the label rather than a hole. A real
+        // object whose resource-type is anything else is joined exactly as before, so a reconciler
+        // cannot reach the skip by getting its resource-id wrong.
+        var report = Scanner.Scan(
+            ClusterId,
+            [Object(Guid.NewGuid(), "sha256:abc", KubeLabels.ResourceGroupTypeValue + "x")],
+            []
+        );
+
+        report.Orphans.Count().ShouldBe(1);
+    }
 
     [Fact]
     public void ALabelledObjectWithNoResourceGrainIsAnOrphan() {

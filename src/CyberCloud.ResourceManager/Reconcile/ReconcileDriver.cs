@@ -203,7 +203,14 @@ public sealed class ReconcileDriver(
                     + namespaceError.Message
                 );
 
-                return new(ReconcileOutcome.Failed(namespaceError, true), log.Drain(), true);
+                // ⚠ THE CODE DECIDES, NOT THIS CALL SITE — and hard-coding `retryable: true` here was
+                // a real bug that the conformance suite's admission-refusal case caught. A namespace
+                // an admission policy refuses, or that this platform's credentials may not create,
+                // will be refused identically on every pass for the next hour; rescheduling it turns
+                // a refusal the tenant could act on into an OperationTimeout an hour later.
+                // ReconcileOutcome.FromFailure is where the four terminal codes are listed, and every
+                // reconciler in the catalogue already routes its own apply failures through it.
+                return new(ReconcileOutcome.FromFailure(namespaceError), log.Drain(), true);
             }
 
             var namespaceOutcome = namespaceReady.GetValueOrThrow();
