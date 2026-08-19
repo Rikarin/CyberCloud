@@ -1,0 +1,48 @@
+# The tenant L4 load balancer — docs/plan/14 § Load balancing, "M1 · 0.8 EM".
+#
+# ⚠ THIS CHART EXISTS BECAUSE THE SUBSTRATE'S OWN LOAD BALANCER IS TURNED OFF, WHICH IS THE ONE THING
+# TO READ BEFORE CHANGING ANYTHING HERE. Kube-OVN has a native answer for this row — a `SwitchLBRule`,
+# a VIP on the tenant's logical switch, served by OVN with no pod anywhere. Read firsthand in
+# pkg/controller/controller.go at v1.16.2: its lister, its three work queues, its event handler and
+# its three workers are ALL inside `if config.EnableLb`, and ADR-019 runs Kube-OVN with
+# ENABLE_LB=false so that Cilium owns the service datapath. A SwitchLBRule on this platform is an
+# object nothing reconciles. docs/plan/14 names the alternative in the same sentence — "an HAProxy
+# deployment for TCP with health checks and connection limits" — and that is what this renders.
+#
+# ⚠ IT IS UNDER charts/managed/ AND IT DOES NOT WRAP AN OPERATOR, which cloud-shell established is
+# allowed: `Build.Charts` requires SOURCE, conformance.yaml and both cybercloud.io/* annotations for
+# every chart here, and this one owes all three. The difference from cloud-shell is that the image is
+# somebody else's — Docker's own `library/haproxy`, unmodified — so SOURCE has an upstream to name.
+apiVersion: v2
+name: haproxy
+description: An L4 TCP load balancer inside a tenant's virtual network — an HAProxy proxy on an address of the tenant's own subnet, spreading connections across a pool of workload addresses with health checks and a connection limit.
+type: application
+
+# The chart's own version. Bumped on every change to this directory.
+version: 0.1.0
+
+# ⚠ The HAProxy line the default `version` value selects. A tenant may choose 3.4 instead; this is
+# the chart's statement of what it was written against.
+appVersion: "3.2"
+
+kubeVersion: ">=1.31.0-0"
+
+keywords:
+  - loadbalancer
+  - haproxy
+  - tcp
+  - kube-ovn
+
+home: https://github.com/cybercloud
+sources:
+  - https://github.com/cybercloud
+  - https://github.com/haproxy/haproxy
+
+maintainers:
+  - name: Cyber Cloud Platform
+
+# ⚠ These three are read by `Build.Charts` and written into `values.schema.json` as `x-cybercloud-*`.
+annotations:
+  cybercloud.io/resource-type: CyberCloud.Network/virtualNetworks/loadBalancers
+  cybercloud.io/api-version: "2026-08-01"
+  cybercloud.io/operator: none

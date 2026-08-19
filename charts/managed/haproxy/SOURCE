@@ -1,0 +1,72 @@
+# Provenance — charts/README.md § `SOURCE` is required, including when nothing was forked.
+#
+# ADR-010: "Their charts are a starting point, not a dependency. Where a chart is close, fork it into
+# charts/ with the upstream commit recorded in a SOURCE file." Nothing was forked. HAProxy publishes
+# no Helm chart of its own that fits this shape — what is wanted here is one proxy pod on a tenant's
+# OVN subnet with a generated configuration, not an ingress controller — so the two objects are
+# written here and the only thing taken from upstream is the container image.
+
+vendored: none
+upstream: https://github.com/haproxy/haproxy
+
+# The image this chart runs, unmodified.
+image: docker.io/library/haproxy
+image-source: https://github.com/docker-library/haproxy
+
+# ⚠ LICENCE. HAProxy is GPL-2.0-or-later (its libraries LGPL-2.1-or-later) and is run as an unmodified
+# upstream container image, in its own process, with nothing of this platform linked into it.
+# ADR-011's table does not name HAProxy; the row that decides it is ClamAV's — "GPL-2.0 ✓ — separate
+# process, separate container, no linking" — and charts/managed/mariadb already ships a GPL-2.0 server
+# on the same reasoning. No SSPL or BUSL component is involved.
+licence: GPL-2.0-or-later, run as a separate process in its own container
+
+# ── What was read, and where ─────────────────────────────────────────────────────────────────────
+#
+# ⚠ THE REFUTATION THIS CHART EXISTS BECAUSE OF, checked at the code rather than in a release note.
+# kube-ovn v1.16.2, pkg/controller/controller.go:
+#
+#   * line ~648  `if config.EnableLb {` — the SwitchLBRule lister and its addSwitchLBRuleQueue,
+#     delSwitchLBRuleQueue and updateSwitchLBRuleQueue, and the VpcDns lister and its two queues, are
+#     created only inside it;
+#   * line ~949  `if config.EnableLb {` — the SwitchLBRule and VpcDns event handlers are registered
+#     only inside it;
+#   * line ~1352 `if c.config.EnableLb {` — `handleAddOrUpdateSwitchLBRule`, `handleDelSwitchLBRule`,
+#     `handleUpdateSwitchLBRule`, both VpcDns workers and `resyncVpcDNSConfig` are started only
+#     inside it, together with the ordinary `Service` add/delete workers.
+#
+# ADR-019 sets ENABLE_LB=false. So on this platform's clusters a SwitchLBRule would be accepted by the
+# API server, reported Succeeded by this platform, and balance nothing — and a tenant VPC has no
+# in-VPC DNS either, which is one of the three reasons `dnsZones` is owed.
+#
+# ⚠ WHAT PUTS THE PROXY INSIDE THE TENANT'S NETWORK. kube-ovn v1.16.2, pkg/util/const.go:
+# `LogicalSwitchAnnotation = "ovn.kubernetes.io/logical_switch"` and
+# `IPPoolAnnotation = "ovn.kubernetes.io/ip_pool"`. pkg/controller/pod.go's
+# `acquireStaticAddressHelper` reads the pool annotation and splits it on commas — with the special
+# case that a TWO-entry list of DIFFERENT families is one dual-stack address rather than two servers,
+# which is why the template joins v4 and v6 with a comma and never with a semicolon.
+#
+# ⚠ THE IMAGE, read firsthand from docker-library/haproxy's 3.2/alpine Dockerfile:
+#
+#   * `USER haproxy`, with `addgroup --gid 99` / `adduser --uid 99` above it. The uid is written into
+#     the pod's securityContext EXPLICITLY, because `runAsNonRoot: true` against an image whose user
+#     is a NAME makes the kubelet refuse the container — "image has non-numeric user (haproxy),
+#     cannot verify user is non-root";
+#   * `CMD ["haproxy", "-f", "/usr/local/etc/haproxy/haproxy.cfg"]` — the mount path is the image's
+#     and not a choice. Mounting elsewhere is a proxy that silently starts with the image's example
+#     configuration;
+#   * `STOPSIGNAL SIGUSR1`, which is HAProxy's graceful stop. containerd honours the image's stop
+#     signal, so a delete drains rather than cuts.
+#
+# ⚠ THE TAGS WERE RESOLVED AGAINST THE REGISTRY, on 2026-08-19, through
+# hub.docker.com/v2/repositories/library/haproxy/tags?name=alpine: `3.2-alpine` and `3.4-alpine` both
+# exist, alongside the patch tags `3.2.22-alpine` and `3.4.3-alpine`. Even minors are HAProxy's
+# long-term-support lines, which is why 3.2 is the default. A pin nobody resolved is the defect
+# CyberCloud.ContainerService shipped; here the symptom would have been ImagePullBackOff with the
+# resource stuck InProgress and nothing naming the tag.
+#
+# ⚠ THE SYSCTL IS THE ONLY WAY A NON-ROOT PROXY BINDS PORT 80.
+# `net.ipv4.ip_unprivileged_port_start` is in the kubelet's SAFE sysctl set (Kubernetes 1.22 and
+# later; this chart's kubeVersion is >=1.31), so it needs no node allow-list. NET_BIND_SERVICE does
+# not work here: Kubernetes sets no ambient capabilities and the image's binary carries no file
+# capability, so the capability would be in the container's permitted set and not in its effective
+# one for uid 99.

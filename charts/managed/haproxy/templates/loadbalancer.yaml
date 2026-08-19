@@ -1,0 +1,145 @@
+{{/*
+An L4 load balancer — docs/plan/14 § Load balancing: "an HAProxy deployment for TCP with health checks
+and connection limits".
+
+⚠ TWO OBJECTS AND NO Service. A Kubernetes Service inside a tenant's custom VPC is served by the OVN
+load balancer that ADR-019's ENABLE_LB=false turns off, and announced — if it were a
+`type: LoadBalancer` — from the host network namespace, which has no route into an OVN logical router.
+The proxy's own pod address IS the frontend, which is why it is pinned.
+
+⚠ THE ORDER IN THIS FILE IS THE ORDER THE RECONCILER APPLIES THEM IN, and it matters for the message
+rather than for the outcome: a Deployment whose ConfigMap does not exist yet schedules a pod that
+reports CreateContainerConfigError, which reads as a broken image rather than as an apply that has not
+happened.
+*/}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "haproxy.objectName" . }}
+  labels:
+    {{- include "haproxy.platformLabels" . | nindent 4 }}
+data:
+  haproxy.cfg: |
+    {{- include "haproxy.config" . | nindent 4 }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "haproxy.objectName" . }}
+  labels:
+    {{- include "haproxy.platformLabels" . | nindent 4 }}
+spec:
+  {{/*
+    ⚠ ONE. Two proxies would need two addresses and something to share a virtual address between
+    them, and the thing that shares a VIP on this substrate is the OVN load balancer ADR-019 turns
+    off. conformance.yaml § owed, `one-proxy-is-a-single-point-of-failure`.
+  */}}
+  replicas: 1
+  {{/*
+    ⚠ Recreate, AND A ROLLING UPDATE WOULD DEADLOCK RATHER THAN MERELY CHURN. The new pod starts
+    before the old one goes and asks IPAM for the frontend address the old pod still holds;
+    `acquireStaticAddress` refuses it, the rollout stalls, and the resource sits in InProgress forever
+    on a change that looked harmless. conformance.yaml § owed, `a-config-change-drops-connections`.
+  */}}
+  strategy:
+    type: Recreate
+  {{/*
+    ⚠ IMMUTABLE ON A DEPLOYMENT — the API server refuses an update that changes it — so it is derived
+    from the object name, which is derived from the resource address and cannot change either.
+  */}}
+  selector:
+    matchLabels:
+      {{- include "haproxy.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "haproxy.selectorLabels" . | nindent 8 }}
+      annotations:
+        {{/*
+          ⚠ THE TWO KUBE-OVN ANNOTATIONS ARE WHAT MAKE THIS A TENANT'S LOAD BALANCER RATHER THAN THE
+          PLATFORM'S. Without `logical_switch` the pod joins the namespace's default subnet — Kube-OVN's
+          default VPC, which is the platform's own — and without `ip_pool` it gets whichever address
+          IPAM has free, which changes on every restart with no DNS in the VPC to hide it behind.
+        */}}
+        ovn.kubernetes.io/logical_switch: {{ include "haproxy.logicalSwitch" . | quote }}
+        ovn.kubernetes.io/ip_pool: {{ include "haproxy.addressPool" . | quote }}
+        {{/*
+          ⚠ WITHOUT THIS LINE THE UPDATE PATH IS A NO-OP THAT REPORTS SUCCESS. A ConfigMap that
+          changes does not restart the pods that mount it, and HAProxy reads its file once at start —
+          so an edited backend list would apply cleanly, read back as desired, converge, and keep
+          sending traffic to the old servers for as long as the pod lived. Putting the configuration's
+          hash in the pod template makes a config change a rollout.
+
+          ⚠ `sha256:` + hex, matching KubeLabels.ReconcileHash, so the platform has ONE hash spelling.
+          LoadBalancers.ConfigChecksumAnnotation writes the same value from the same text.
+        */}}
+        cybercloud.io/haproxy-config: {{ printf "sha256:%s" (include "haproxy.config" . | sha256sum) | quote }}
+    spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        {{/*
+          ⚠ `runAsUser` IS WRITTEN EXPLICITLY AND `runAsNonRoot` ALONE WOULD BREAK THE POD. The image
+          ends with `USER haproxy` — a NAME — and a kubelet asked to enforce runAsNonRoot against a
+          non-numeric image user refuses the container: "image has non-numeric user (haproxy), cannot
+          verify user is non-root". 99 is read from the same Dockerfile.
+        */}}
+        runAsNonRoot: true
+        runAsUser: 99
+        runAsGroup: 99
+        seccompProfile:
+          type: RuntimeDefault
+        {{/*
+          ⚠ THE ROW THAT MAKES `frontend.port: 80` POSSIBLE AT ALL. The proxy runs as uid 99 and
+          binding a port below 1024 as a non-root process fails with EACCES — HAProxy reports "cannot
+          bind socket" and exits, which presents as CrashLoopBackOff with the resource stuck in
+          InProgress. `net.ipv4.ip_unprivileged_port_start` is in the kubelet's SAFE sysctl set from
+          Kubernetes 1.22, so it needs no node allow-list. NET_BIND_SERVICE does NOT work here:
+          Kubernetes sets no ambient capabilities and the image's binary carries no file capability.
+        */}}
+        sysctls:
+          - name: net.ipv4.ip_unprivileged_port_start
+            value: "0"
+      containers:
+        - name: haproxy
+          image: {{ include "haproxy.image" . | quote }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            {{/*
+              ⚠ Read-only, and HAProxy in TCP mode needs nothing writable: it buffers in memory and
+              its only file is the configuration below, mounted read-only. That is also why this row
+              declares no storage meter.
+            */}}
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          ports:
+            - name: inbound
+              containerPort: {{ .Values.frontend.port }}
+              protocol: TCP
+          {{/*
+            ⚠ A TCP PROBE AND NOT AN HTTP GET. This is an L4 proxy: there is no path to ask for, and a
+            probe that assumed one would report a healthy proxy as unready in front of any non-HTTP
+            workload.
+          */}}
+          readinessProbe:
+            tcpSocket:
+              port: {{ .Values.frontend.port }}
+            periodSeconds: 5
+          resources:
+            {{- include "haproxy.resources" . | nindent 12 }}
+          volumeMounts:
+            - name: config
+              {{/*
+                ⚠ THE PATH IS THE IMAGE'S AND NOT A CHOICE:
+                `CMD ["haproxy", "-f", "/usr/local/etc/haproxy/haproxy.cfg"]`. Mounting anywhere else
+                is a proxy that silently starts with the image's own example configuration and listens
+                on nothing this resource asked for.
+              */}}
+              mountPath: /usr/local/etc/haproxy
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "haproxy.objectName" . }}
