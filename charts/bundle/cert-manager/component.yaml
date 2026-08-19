@@ -1,0 +1,50 @@
+# Bundle component — charts/bundle/README.md § What a component owes.
+#
+# ⚠ NOT ON THE STARTING LIST TASK #109 GAVE, AND IT IS A HARD PREREQUISITE FOR TWO PHASE-40 ROWS.
+# It was found by reading the components documents rather than the operators' documentation:
+#
+#   * cluster-api-components.yaml v1.14.0 contains `cert-manager.io/v1` Certificate and Issuer
+#     objects, and each of its three webhook Deployments mounts a Secret — `capi-webhook-service-cert`
+#     and its siblings — that only cert-manager creates. Applying that document to a cluster with no
+#     cert-manager leaves three Deployments whose pods never start, and every Cluster API webhook then
+#     fails closed: `charts/managed/kubernetes` applies cleanly and the Cluster is admitted by nothing.
+#   * The Kamaji chart ships `templates/certmanager_issuer.yaml` and
+#     `templates/certmanager_certificate.yaml` and wires its validating and mutating webhook
+#     configurations to them.
+#
+# cluster-api-provider-kubevirt's document carries cert-manager annotations too. The Kamaji CONTROL
+# PLANE PROVIDER's does not — it was checked separately rather than assumed from its sibling.
+
+component: cert-manager
+phase: 15
+licence: Apache-2.0
+install: helm
+repo: https://charts.jetstack.io
+chart: cert-manager
+version: v1.21.1
+appVersion: v1.21.1
+
+source: https://charts.jetstack.io/index.yaml
+checked: 2026-08-19
+
+serves:
+  - cert-manager.io/v1
+
+requiredBy:
+  - charts/bundle/cluster-api
+  - charts/bundle/cluster-api-provider-kubevirt
+  - charts/bundle/kamaji
+
+# ⚠ THE CHART DOES NOT INSTALL ITS OWN DEFINITIONS UNLESS ASKED. values.yaml ships `crds.enabled:
+# false`, so `helm install cert-manager jetstack/cert-manager` with default values produces a
+# controller and no Certificate kind — and the first thing that notices is the Cluster API webhook,
+# three phases later, with an error that names a Secret. install.sh passes the flag; it is recorded
+# here because a values default is the kind of fact that changes between minor releases.
+values:
+  crds.enabled: "true"
+
+notes: >
+  Phase 15 rather than 10: cert-manager's controller and its webhook must reach each other, so it
+  needs the CNI. Phase 15 rather than 40: cert-manager's own webhook has to be Ready before anything
+  in phase 40 creates a Certificate, and `helm install --wait` is the barrier that makes "installed"
+  mean "serving".

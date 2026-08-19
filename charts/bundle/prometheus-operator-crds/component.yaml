@@ -1,0 +1,39 @@
+# Bundle component — charts/bundle/README.md § What a component owes.
+#
+# ⚠ THE ONE COMPONENT HERE THAT INSTALLS NO CONTROLLER, AND THAT IS THE WHOLE POINT OF IT.
+# Three managed charts render a `monitoring.coreos.com/v1` PodMonitor — charts/managed/nats,
+# charts/managed/ferretdb and charts/managed/harbor — and nothing in this bundle reconciles one. The
+# definition still has to exist: an apply against an unknown kind is refused by the API server, and
+# the reconciler that issued it already told a caller 202. So the definitions are installed and the
+# controller is not, which is what `prometheus-operator-crds` is for.
+#
+# What scrapes them is charts/managed/monitor-workspace's VictoriaMetrics operator, whose
+# Prometheus-CRD converter reads PodMonitor and ServiceMonitor objects. That is why this row is not
+# "install kube-prometheus-stack": the platform already has a metrics stack and does not want a
+# second one.
+
+component: prometheus-operator-crds
+phase: 20
+licence: Apache-2.0
+install: helm
+repo: https://prometheus-community.github.io/helm-charts
+chart: prometheus-operator-crds
+version: 31.0.1
+appVersion: v0.93.1
+
+source: https://prometheus-community.github.io/helm-charts/index.yaml
+checked: 2026-08-19
+
+serves:
+  - monitoring.coreos.com/v1
+
+requiredBy:
+  - charts/managed/nats
+  - charts/managed/ferretdb
+  - charts/managed/harbor
+
+notes: >
+  The chart also installs monitoring.coreos.com/v1alpha1 (AlertmanagerConfig, PrometheusAgent,
+  ScrapeConfig). Those are not listed above because nothing in this platform renders them and a
+  `serves:` line is a claim the coverage check tests, not an inventory of what a chart happens to
+  contain.

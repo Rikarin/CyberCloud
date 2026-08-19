@@ -1,0 +1,202 @@
+# `charts/bundle/` — the operator layer every managed chart renders against
+
+Every chart in `charts/managed/` renders a **custom resource** and installs no controller. Three of
+them say so in the template itself:
+
+> It renders a custom resource; it does not install the operator. The operator is `charts/bundle/`'s
+> job, which is why this chart has no CRD directory and no operator Deployment.
+
+This directory is that job. It is what turns a bare Kubernetes cluster into one where
+`CyberCloud.DBforPostgreSQL/servers` converges instead of returning 202 and waiting forever.
+
+> ⚠ **This absence had already been misread twelve times.** Twelve provider agents each wrote some
+> form of "the k3s the cluster suite starts has no `<X>` operator", and each read it as a limitation
+> of the test harness. It was not a harness limitation. It was this directory not existing. The same
+> sentence appears in `test/CyberCloud.Cluster.Conformance`'s own remarks — *"the platform cluster
+> installs its CRDs from `charts/bundle/` long before a tenant creates one"* — which is why the
+> harness derives CRD stubs rather than installing real ones.
+
+## This directory holds no Helm charts
+
+Nothing here has a `Chart.yaml`, and that is deliberate rather than unfinished.
+
+`Build.Charts` globs `charts/**/Chart.yaml`, and for every chart it finds it regenerates a
+`values.schema.json` from an annotated `values.yaml`, lints it and packages it. That pipeline exists
+to describe **a resource type's configuration surface** — the annotated values file is, in
+`charts/README.md`'s words, "the single description of a managed service's configuration surface". A
+bundle component has no resource type and no tenant-facing configuration surface. Giving it a
+`Chart.yaml` would put eighteen charts through a generator whose output nobody reads and whose
+failure mode is a schema drift no API depends on.
+
+So a component is a directory holding **one file**, `component.yaml`, describing an install that
+somebody else's chart or manifest performs.
+
+> ⚠ **`SOURCE` is one file in `charts/managed/` and zero files here, and the difference is a real
+> one rather than a shortcut.** A managed chart has two separable questions — *where did these
+> templates come from* (`SOURCE`) and *what must be true once the reconciler ran*
+> (`conformance.yaml`) — because the templates are ours. A bundle component vendors nothing: the
+> provenance question and the pin question have the same answer, and splitting one answer across two
+> files is how the two come to disagree.
+
+## What a component owes
+
+`build/Build.Architecture.cs`'s **Bundle** gate fails the build when any of this is missing. It is
+listed in `ArchitectureGates` beside the other fourteen rows, and it reports `○` rather than `✔`
+if it ever inspects nothing.
+
+| Key | Required | What it is |
+|---|---|---|
+| `component` | always | The component name. Must equal the directory name |
+| `phase` | always | Install order. Must equal the phase `bundle.yaml` gives it |
+| `licence` | always | The upstream's SPDX identifier — ADR-011 |
+| `install` | always | `helm`, `helm-archive` or `manifest` |
+| `source` | always | The URL that was read to resolve the pin |
+| `checked` | always | The ISO date it was read. Not in the future |
+| `serves` | always | The `group/version` pairs the component's definitions serve |
+| `requiredBy` | always | The charts and components that need it |
+| `repo`, `chart`, `version` | `install: helm` | Chart repository, chart name, chart version |
+| `archive`, `chart`, `version` | `install: helm-archive` | Packaged-chart URL, chart name, chart version |
+| `manifest`, `release` | `install: manifest` | Manifest URL and the release tag it belongs to |
+
+### `serves:` is the load-bearing key
+
+The gate's coverage check reads every `apiVersion:` out of every `charts/managed/*/templates/` file,
+drops the Kubernetes built-in groups, and requires that **every remaining group/version is served by
+exactly one component**. A group nothing serves fails the build, naming the chart and the template.
+Two components serving the same group/version fails as well, because that is two operators owning
+one definition.
+
+Today that is **eighteen components serving twenty-one `group/version` pairs against twenty charts
+rendering sixteen**. The five that no chart renders are the reason a bundle cannot be derived from
+`charts/managed/` alone: `cluster-api-provider-kubevirt` reconciles a Machine into a `kubevirt.io/v1`
+VirtualMachine and imports its disk through `cdi.kubevirt.io/v1beta1`; Cluster API's and Kamaji's
+webhooks mount a Secret only `cert-manager.io/v1` creates; and Kamaji's own `kamaji.clastix.io/v1alpha1`
+`DataStore` is what `charts/managed/kubernetes`'s `dataStoreName: default` resolves against.
+
+That check is not decoration. It is what the ordering rule reduces to:
+
+> ⚠ **It already caught a live one.** Strimzi 1.0.0 removed `kafka.strimzi.io/v1beta2`, and 1.1.0 —
+> the newest release — serves `v1` alone with `conversion: strategy: None`. `charts/managed/kafka`
+> renders `v1beta2`. A bundle pinned at the newest Strimzi would have made every Kafka create fail
+> at the API server, for every tenant, with an error naming an api-version rather than a bundle. The
+> pin here is 0.51.0, the last release serving both. See
+> `charts/bundle/strimzi-kafka-operator/component.yaml`.
+
+Write a `serves:` line only for a group/version you read off the definitions the pin installs. It is
+a claim the build tests, not an inventory of what a chart contains — `prometheus-operator-crds`
+installs `monitoring.coreos.com/v1alpha1` and does not claim it, because nothing here renders one.
+
+## The ordering rule, and which half a machine enforces
+
+`charts/managed/opensearch/conformance.yaml` § owed, `api-group-is-deprecated`:
+
+> Closing it is a new api-version on the resource type plus a `charts/bundle/` bump, in that order,
+> and the two must not be done in one commit: a bundle that moved first would strand every existing
+> service.
+
+Two halves, enforced by two different things because only one of them is a property of files on disk.
+
+* **The direction** is the coverage check above, on every run, over every chart. A bundle that moved
+  first is a bundle whose `serves:` no longer covers what a chart renders, and that is red.
+* **The granularity** — *not in one commit* — is checked over the tip commit: a commit that changes a
+  component's `version:` or `release:` line **and** touches a `charts/managed/*/templates/` file
+  fails. A repository with no parent commit reachable, such as a shallow CI clone, is reported as
+  not inspected rather than passed.
+
+## Installing
+
+```bash
+./charts/bundle/install.sh --dry-run          # print every command, run none
+./charts/bundle/install.sh                    # apply, phase by phase
+./charts/bundle/install.sh --phase 50         # one phase
+./charts/bundle/install.sh --verify           # resolve every pin against its registry, apply nothing
+```
+
+The script reads `bundle.yaml` and each `component.yaml`; it hard-codes no version. `--verify`
+answers the question this directory rots on — *does every pin still resolve* — without needing a
+cluster.
+
+`deploy/bootstrap/` is a different job and the two must not be merged. `bootstrap/` installs
+**Cyber Cloud onto a cluster** with `kubectl` and checked-in YAML only, because it is what an
+operator runs when the platform is the thing that is broken — `deploy/README.md` § The platform's own
+cluster is not Kamaji-hosted. This directory installs **operators into a cluster the platform will
+manage**, may use `helm`, and is not part of any repair path. `deploy/managed-cluster/`, which
+`deploy/README.md` lists and which does not exist, is where an environment's overrides of this bundle
+belong.
+
+## What this bundle does not install
+
+* **A CSI driver or a storage class.** `charts/README.md` describes this directory as "operators,
+  CNI, CSI, monitoring" and the CSI is missing. Two managed charts offer the tenant a storage class
+  by name and nothing here provides one. ADR-011 has already priced the candidate — LINSTOR is
+  GPL-3.0 and DRBD is GPL-2.0, and a LINBIT support contract is "a business decision to make before
+  the first customer's data is on DRBD". That decision is not this directory's.
+* **An ingress controller or a load-balancer implementation.** `charts/managed/cloud-shell` renders a
+  `networking.k8s.io/v1` Ingress, which is a built-in kind and so does not fail the coverage check,
+  and which nothing here serves.
+* **OpenBao.** ADR-011 picks it over Vault and `docs/plan/18` puts one cluster per region with a
+  namespace per tenant. Several `conformance.yaml` files record `listKeys` having no handler for want
+  of it. It is platform infrastructure rather than a managed cluster's operator layer, so it belongs
+  to `deploy/platform/`.
+* **An operator for NATS, FerretDB, Harbor or Qdrant, because none of the four exists to install.**
+  See below.
+
+## The four rows with no operator, each checked rather than repeated
+
+ADR-010 clause 1's amendment says its survey "is a survey of *software choices* and only sometimes a
+survey of *operators*". Four rows in this catalogue are the *only sometimes*. Every claim below was
+resolved against the GitHub API on 2026-08-19.
+
+| Row | What is there | Status |
+|---|---|---|
+| NATS | `nats-io/nats-operator`, the only project that ever served a `NatsCluster` | **Archived.** Last release v0.8.3, 2021-11-20 |
+| FerretDB | Nothing. `FerretDB/ferretdb-operator` answers 404 | **Does not exist.** The row is a Deployment in front of a CloudNativePG `Cluster` |
+| Harbor | `goharbor/harbor-operator` | **Archived.** Last release v1.3.0, 2022-07-02 |
+| Qdrant | `qdrant/qdrant-operator` answers 404 | **Does not exist.** The organisation publishes API definitions, not a controller |
+
+So those four charts render plain workloads, and that is a necessity rather than a style. It is also
+why `charts/managed/harbor` renders fourteen objects — `charts/README.md`: "there is no Harbor
+operator, so the workload is the chart".
+
+⚠ **A fifth row was found while pinning this bundle and it is a different shape from all four.**
+`spotahome/redis-operator` is archived, its newest operator tag is a pre-release, and its published
+chart pins an image tag that does not exist in the registry it names. The operator exists, installs,
+and works; what it does not have is anybody to fix it. See
+`charts/bundle/redis-operator/component.yaml` and `bundle.yaml` § owed.
+
+## Verification, and its honest limit
+
+**Nothing in this directory has been installed onto a cluster by CI, and the state of the tree says
+so in `bundle.yaml` § owed rather than implying otherwise.**
+
+What *is* verified, on every build, by the Bundle gate:
+
+* every component's manifest is complete and its pin is in one place;
+* every declared licence is on ADR-011's allow-list;
+* every group/version any managed chart renders is served by exactly one component;
+* the roster and the directories agree;
+* no commit changes a pin and a managed template together.
+
+What is verified **by hand, on a date recorded in each `component.yaml`**: every chart repository,
+chart version, release tag and manifest URL was resolved against the registry or API that serves it,
+and every `serves:` line was read off the CustomResourceDefinition documents the pin actually
+installs — not off a README. `./charts/bundle/install.sh --verify` repeats that pass.
+
+What is **not** verified, and why not:
+
+Task #95 capped container-backed suites at four concurrent — `CC_TEST_CONTAINER_PARALLELISM` in
+`build/Build.Test.cs` — because a ten-CPU host starved itself running ten k3s suites at once.
+Eighteen operators, three of which run virtual machines, do not fit in that lane. A suite that
+installed two of them and asserted the bundle works would be the failure class this repository has
+shipped roughly ten times: **a check that answers a narrower question than it appears to**. So the
+honest deliverable is a documented, reproducible install procedure plus a gate over the manifests,
+and the cluster-backed proof is named as owed rather than faked.
+
+The one thing that could be added cheaply, and is the next step rather than a plan: a cluster-backed
+case behind the same skip the other cluster suites use, installing **one** phase-50 component and
+asserting that its definitions become established and that `charts/managed/<x>` applies against them.
+That proves the mechanism for one row rather than the bundle for eighteen, and it should say so in
+its own name.
+
+See [ADR-010](../../docs/plan/02-technology-decisions.md) § ADR-010, ADR-011 § The licence audit, and
+[docs/plan/12](../../docs/plan/12-managed-data-services.md) § The pattern, once.

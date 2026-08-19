@@ -1,0 +1,44 @@
+# Bundle component — charts/bundle/README.md § What a component owes.
+#
+# Kamaji itself — the hosted control-plane manager. Distinct from
+# charts/bundle/kamaji-control-plane-provider, which is the Cluster API adapter in front of it, and
+# the two are separate releases from separate repositories on separate cadences. Installing one and
+# not the other is the failure this pair of files exists to prevent.
+
+component: kamaji
+phase: 40
+licence: Apache-2.0
+install: helm
+repo: https://clastix.github.io/charts
+chart: kamaji
+version: 1.0.0
+appVersion: v1.0.0
+
+source: https://clastix.github.io/charts/index.yaml
+checked: 2026-08-19
+
+serves:
+  - kamaji.clastix.io/v1alpha1
+
+requiredBy:
+  - charts/bundle/kamaji-control-plane-provider
+  - charts/managed/kubernetes
+
+# ⚠ THE DEFAULT THAT charts/managed/kubernetes DEPENDS ON BY NAME, AND IT IS A DEFAULT RATHER THAN A
+# CONSTANT. That chart renders `dataStoreName: default` and its own template says why it matters:
+# "Kamaji's webhook refuses a name that does not resolve — '<name> DataStore does not exist', on the
+# TenantControlPlane the provider derives from this object rather than on this object. So an install
+# with `kamaji-etcd.deploy=false` fails every cluster create with nothing on the Cluster to say so."
+# This chart's values.yaml carries `datastore.enabled: true` and an empty `datastore.nameOverride`,
+# and its own comment reads "if empty and enabled=true defaults to `default`". Both halves were read
+# off chart 1.0.0. Turning `datastore.enabled` off, or setting a nameOverride, breaks every managed
+# cluster create until charts/managed/kubernetes' `dataStoreName` is changed to match.
+values:
+  datastore.enabled: "true"
+
+notes: >
+  ⚠ THE REPOSITORY'S NEWEST GITHUB RELEASE IS NOT THE PIN, AND THAT IS DELIBERATE.
+  api.github.com/repos/clastix/kamaji/releases/latest reports `26.8.4-edge`. An `-edge` tag is a
+  rolling build, and the chart repository's newest published chart is 1.0.0 at appVersion v1.0.0.
+  Pinning what the chart repository serves is pinning what `helm install` resolves; pinning the edge
+  tag would be pinning something no chart references.

@@ -1,0 +1,45 @@
+# Bundle component — charts/bundle/README.md § What a component owes.
+#
+# ⚠ THE SECOND PIN HERE THAT IS NOT THE NEWEST CHART, AND FOR A DIFFERENT REASON FROM STRIMZI'S.
+# The repository index serves chart 3.0.2, and chart 3.0.2's `appVersion` is `3.0.0-alpha`. So are
+# 3.0.1, 3.0.0, 2.8.4 and 2.8.3 — five chart releases all pointing at the same pre-release operator.
+# The newest chart whose appVersion is a released operator is 2.8.2 at 2.8.0, which is also the
+# newest tag on github.com/opensearch-project/opensearch-k8s-operator (v2.8.0, 2025-06-25).
+#
+# Pinning 3.0.2 would put an alpha controller in front of every tenant's search service. The
+# alternative was checked rather than assumed to be necessary: 2.8.2 and 3.0.2 install the SAME
+# api-groups — both ship the `opensearch.opster.io` definitions and the `opensearch.org` ones side by
+# side — so nothing this platform renders is lost by taking the older one.
+
+component: opensearch-operator
+phase: 50
+licence: Apache-2.0
+install: helm
+repo: https://opensearch-project.github.io/opensearch-k8s-operator
+chart: opensearch-operator
+version: 2.8.2
+appVersion: 2.8.0
+
+source: https://opensearch-project.github.io/opensearch-k8s-operator/index.yaml
+checked: 2026-08-19
+
+# ⚠ THE DEPRECATED GROUP, DELIBERATELY, AND THE PIN IS WHAT MAKES THAT SAFE.
+# charts/managed/opensearch/SOURCE: "opensearch.opster.io … is deprecated and will be removed in a
+# future release. Please migrate to opensearch.org/v1". Both groups exist in 2.8.2 and in 3.0.2 —
+# checked in each. The chart renders the deprecated one because it is "the group a released operator
+# in charts/bundle/ serves", and this file is where that sentence becomes a fact.
+serves:
+  - opensearch.opster.io/v1
+
+requiredBy:
+  - charts/managed/opensearch
+
+notes: >
+  ⚠ WHAT THIS PIN OWES charts/managed/opensearch/conformance.yaml § owed, `api-group-is-deprecated`.
+  That item's closing move is "a new api-version on the resource type plus a charts/bundle/ bump, in
+  that order, and the two must not be done in one commit". The bump it means is to a release that no
+  longer serves `opensearch.opster.io` — which no release does yet, so the deadline is upstream's and
+  not this platform's. When it arrives, the coverage check in the Bundle gate is what turns the
+  wrong-order commit red.
+  ⚠ `manager.watchNamespace` is empty in 2.8.2's values.yaml and the chart's own comment says the
+  default is to watch all namespaces. Checked.

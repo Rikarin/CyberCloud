@@ -1,0 +1,34 @@
+# Bundle component — charts/bundle/README.md § What a component owes.
+#
+# The RabbitMQ Cluster Operator. ⚠ MPL-2.0, which is the second non-Apache licence in this directory
+# and the reason ADR-011's allow-list is checked per component rather than asserted once. MPL-2.0 is
+# a file-level copyleft with no service clause, so offering RabbitMQ as a managed service is not the
+# use SSPL and BUSL exist to prevent — which is the question ADR-011 is actually asking.
+
+component: rabbitmq-cluster-operator
+phase: 50
+licence: MPL-2.0
+install: manifest
+release: v2.22.4
+manifest: https://github.com/rabbitmq/cluster-operator/releases/download/v2.22.4/cluster-operator.yml
+
+source: https://api.github.com/repos/rabbitmq/cluster-operator/releases/latest
+checked: 2026-08-19
+
+# One definition, one version. Read off cluster-operator.yml v2.22.4.
+serves:
+  - rabbitmq.com/v1beta1
+
+requiredBy:
+  - charts/managed/rabbitmq
+
+notes: >
+  ⚠ THE RELEASE SHIPS THREE MANIFESTS AND THEY DIFFER ONLY IN THE REGISTRY THEY PULL FROM —
+  `cluster-operator.yml` (Docker Hub), `cluster-operator-ghcr-io.yml` and
+  `cluster-operator-quay-io.yml`. The default is pinned here; an air-gapped install swaps the URL
+  rather than overriding an image, which is a nicer shape than every other component in this
+  directory offers and is worth knowing before writing a mirror map for the rest —
+  bundle.yaml § owed, `images-are-not-pinned-by-digest`.
+  ⚠ The Messaging provider's own remarks record the failure mode of installing nothing here:
+  RabbitmqClusterReconciler notes that "with no operator installed, the object never goes away at all
+  and the resource" never converges on delete. That sentence is about this component.

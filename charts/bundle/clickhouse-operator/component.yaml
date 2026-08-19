@@ -1,0 +1,50 @@
+# Bundle component — charts/bundle/README.md § What a component owes.
+#
+# Altinity's ClickHouse operator. ⚠ ONE COMPONENT, TWO API GROUPS — charts/managed/clickhouse renders
+# a `clickhouse.altinity.com/v1` ClickHouseInstallation and the
+# `clickhouse-keeper.altinity.com/v1` ClickHouseKeeperInstallation it names, and one operator serves
+# both. The starting list in Task #109 named only the first, which is why `serves:` is read off the
+# definitions rather than off a brief.
+
+component: clickhouse-operator
+phase: 50
+licence: Apache-2.0
+
+# ⚠ NOT A CHART REPOSITORY. Altinity publishes the packaged chart as a GitHub release asset, so this
+# is `helm install <name> <url-to-tgz>` rather than `helm repo add`. The pin is therefore the release
+# TAG as well as the chart version, and the two happen to agree at 0.27.3.
+install: helm-archive
+archive: https://github.com/Altinity/clickhouse-operator/releases/download/release-0.27.3/altinity-clickhouse-operator-0.27.3.tgz
+release: release-0.27.3
+chart: altinity-clickhouse-operator
+version: 0.27.3
+appVersion: 0.27.3
+
+source: https://api.github.com/repos/Altinity/clickhouse-operator/releases/latest
+checked: 2026-08-19
+
+# Read off crds/CustomResourceDefinition-clickhouseinstallations… and
+# …-clickhousekeeperinstallations…, both `served: true, storage: true` at v1.
+serves:
+  - clickhouse.altinity.com/v1
+  - clickhouse-keeper.altinity.com/v1
+
+requiredBy:
+  - charts/managed/clickhouse
+
+# ⚠ THE SECOND VALUES DEFAULT IN THIS BUNDLE THAT WOULD MAKE AN OPERATOR IGNORE EVERY TENANT, AND ITS
+# WORDING IS WHY IT WAS CAUGHT. `watchNamespaces: []` does NOT mean "all"; the chart's own comment
+# says "If empty, the operator watches only its own namespace (or all namespaces when running in
+# kube-system). Use [\".*\"] to watch all namespaces." Entries are REGEXPS, not names. So the empty
+# default produces an operator that installs cleanly, reports Ready, and reconciles nothing a tenant
+# creates. Of the nine data-service operators here, this and Strimzi are the two whose defaults had
+# to be overridden; the other seven watch every namespace out of the box and were each checked rather
+# than assumed.
+values:
+  watchNamespaces[0]: ".*"
+
+notes: >
+  charts/managed/clickhouse/values.yaml carries twelve `@internal` rows where its siblings carry ten
+  or eleven, and charts/README.md attributes two of the extras to this component's shape: it is the
+  first service in the catalogue rendering two custom resources, so it has two image escape hatches
+  where every earlier chart has one.

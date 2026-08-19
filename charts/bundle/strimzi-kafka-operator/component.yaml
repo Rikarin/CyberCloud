@@ -1,0 +1,53 @@
+# Bundle component — charts/bundle/README.md § What a component owes.
+#
+# ⚠ THE ONE PIN IN THIS DIRECTORY THAT IS DELIBERATELY NOT THE NEWEST RELEASE, AND THE REASON IS THE
+# FAILURE MODE THE WHOLE BUNDLE EXISTS TO PREVENT.
+#
+# charts/managed/kafka renders `kafka.strimzi.io/v1beta2` for both Kafka and KafkaNodePool, and
+# src/Providers/CyberCloud.Providers.Messaging declares the same. Read off the shipped definitions:
+#
+#   * 0.51.0 — `versions:` on kafkas.kafka.strimzi.io lists `v1` (served, NOT storage) and `v1beta2`
+#     (served, storage, `deprecated: true`, with a deprecationWarning naming v1). Same for
+#     kafkanodepools.
+#   * 1.0.0 and 1.1.0 — `v1` alone, with `conversion: strategy: None`.
+#
+# So a bundle pinned at 1.x accepts this platform's Kafka object at the API server only if the
+# version exists, and it does not: the create fails outright, for every tenant, with an error that
+# names an api-version rather than a bundle. That is the ordering rule in
+# charts/managed/opensearch/conformance.yaml § owed, api-group-is-deprecated, met head-on:
+# "a bundle that moved first would strand every existing service".
+#
+# MOVING IS A TWO-COMMIT CHANGE, IN THIS ORDER:
+#   1. A new api-version on CyberCloud.Messaging/kafkaClusters whose chart renders
+#      `kafka.strimzi.io/v1`, with the existing api-version still rendering v1beta2.
+#   2. This pin to 1.x, once no tenant is on the old api-version.
+
+component: strimzi-kafka-operator
+phase: 50
+licence: Apache-2.0
+install: helm
+repo: https://strimzi.io/charts
+chart: strimzi-kafka-operator
+version: 0.51.0
+appVersion: 0.51.0
+
+source: https://strimzi.io/charts/index.yaml
+checked: 2026-08-19
+
+serves:
+  - kafka.strimzi.io/v1beta2
+
+requiredBy:
+  - charts/managed/kafka
+
+notes: >
+  0.51.0 also serves `kafka.strimzi.io/v1` and `core.strimzi.io` (StrimziPodSet, an internal kind).
+  Only the version this platform renders is claimed, because a `serves:` line is what the coverage
+  check tests rather than an inventory.
+  ⚠ THE VALUES DEFAULT THAT WOULD MAKE THIS OPERATOR IGNORE EVERY TENANT. Chart 0.51.0 ships
+  `watchNamespaces: []` and `watchAnyNamespace: false`, which together mean "watch the release
+  namespace only". A reconciler applies into `ReconcileContext.Namespace` — the resource's own
+  namespace, which is not the operator's — so the object would be created, accepted, and reconciled
+  by nothing, with the operator reporting itself healthy throughout. install.sh sets the flag.
+values:
+  watchAnyNamespace: "true"

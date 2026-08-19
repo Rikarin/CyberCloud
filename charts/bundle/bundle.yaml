@@ -1,0 +1,180 @@
+# The bundle roster — charts/bundle/README.md § What a component owes.
+#
+# Every directory beside this file is a component; every component is listed here; the Bundle gate in
+# build/Build.Architecture.cs fails when those two sets differ. The roster exists so that adding a
+# component is a visible diff in one file rather than a directory somebody has to notice — the same
+# reason Build.Architecture.cs keeps `ArchitectureGates` next to the run that produces the outcomes.
+#
+# ⚠ THIS FILE CARRIES NO VERSIONS. A pin lives in exactly one place, its component's `component.yaml`,
+# because a version written twice is a version that disagrees with itself. What the roster carries is
+# the ORDER, which is a property of the set and belongs to the set.
+
+# The phases, in the order `install.sh` applies them. A phase is a barrier: every component in phase N
+# is installed and its CRDs are established before phase N+1 begins.
+phases:
+  - phase: 10
+    name: fabric
+    why: >
+      The CNI. Nothing else schedules until pods have addresses, so this is not merely first, it is
+      the only phase whose failure has no diagnostic worth reading — every later component reports
+      "pod pending" and none of them reports why.
+  - phase: 15
+    name: certificates
+    why: >
+      cert-manager, and it is here because two phase-40 components' webhooks mount a Secret only
+      cert-manager creates. ⚠ It was not on Task #109's starting list; it was found by reading
+      `cluster-api-components.yaml` and the Kamaji chart's templates rather than their READMEs. A
+      cluster missing it accepts every install and admits no Cluster.
+  - phase: 20
+    name: crds
+    why: >
+      Definitions with no controller behind them in this bundle. Three managed charts render a
+      PodMonitor and nothing here reconciles one; the definition still has to exist or the apply is
+      refused. Installed early because a CRD is cheap and a missing CRD fails an apply that already
+      returned 202 to a tenant.
+  - phase: 30
+    name: virtualisation
+    why: >
+      KubeVirt and CDI. The Cluster API infrastructure provider in phase 40 reconciles a Machine into
+      a VirtualMachine, so it needs both groups present before its first reconcile, not merely before
+      its first cluster.
+  - phase: 40
+    name: cluster-api
+    why: >
+      Core Cluster API and the two providers charts/managed/kubernetes names. Kamaji is here rather
+      than in phase 50 because the control-plane provider's webhook resolves a cluster-scoped
+      `DataStore` at admission — see kamaji/component.yaml.
+  - phase: 50
+    name: data-services
+    why: >
+      The operators behind the catalogue. They are mutually independent — no data-service operator
+      reads another's CRDs — so the order within this phase does not matter and is alphabetical.
+  - phase: 60
+    name: observability
+    why: >
+      Last, because it is the only phase whose absence degrades rather than breaks: a monitor
+      workspace that cannot be created is a missing feature, and a missing CNI is a dead cluster.
+
+components:
+  - name: kube-ovn
+    phase: 10
+  - name: cert-manager
+    phase: 15
+  - name: prometheus-operator-crds
+    phase: 20
+  - name: kubevirt
+    phase: 30
+  - name: containerized-data-importer
+    phase: 30
+  - name: cluster-api
+    phase: 40
+  - name: kamaji
+    phase: 40
+  - name: kamaji-control-plane-provider
+    phase: 40
+  - name: cluster-api-provider-kubevirt
+    phase: 40
+  - name: clickhouse-operator
+    phase: 50
+  - name: cloudnative-pg
+    phase: 50
+  - name: mariadb-operator
+    phase: 50
+  - name: opensearch-operator
+    phase: 50
+  - name: rabbitmq-cluster-operator
+    phase: 50
+  - name: redis-operator
+    phase: 50
+  - name: seaweedfs-operator
+    phase: 50
+  - name: strimzi-kafka-operator
+    phase: 50
+  - name: victoria-metrics-operator
+    phase: 60
+
+# ── The ordering rule ─────────────────────────────────────────────────────────────────────────
+#
+# charts/managed/opensearch/conformance.yaml § owed, `api-group-is-deprecated`: "Closing it is a new
+# api-version on the resource type plus a charts/bundle/ bump, in that order, and the two must not be
+# done in one commit: a bundle that moved first would strand every existing service."
+#
+# Two halves, and they are enforced by different things because only one of them is a property of a
+# file on disk.
+#
+#   * THE DIRECTION is enforced by the Bundle gate's coverage check, on every run, over every chart.
+#     A component whose pin no longer serves a group/version some chart still renders fails the
+#     build, naming both. That is the half that matters: the failure mode being prevented is an
+#     object applied, accepted by the API server, and reconciled by nothing.
+#   * THE GRANULARITY — "not in one commit" — is enforced over the tip commit only, because that is
+#     the unit the sentence is about. The gate reads HEAD; a shallow clone with no parent is reported
+#     as not inspected rather than passed.
+ordering:
+  rule: A commit must not change a component's version pin and a charts/managed/*/templates/ file.
+  enforcedBy: build/Build.Architecture.cs, BundleGate
+  citation: charts/managed/opensearch/conformance.yaml § owed, api-group-is-deprecated
+
+# ── owed ──────────────────────────────────────────────────────────────────────────────────────
+#
+# Named here rather than left to be discovered. Every item below was found while pinning this bundle
+# and none of it is speculative.
+owed:
+  - id: nothing-here-has-been-installed
+    says: >
+      ⚠ READ THIS BEFORE ANY OTHER ITEM. Every pin in this directory was resolved against the
+      registry or repository that serves it, and every `serves:` line was read off the CRD documents
+      those pins produce. NONE of it has been applied to a cluster by CI. `install.sh` is a
+      procedure that has been reasoned about and not exercised, which is a weaker claim than any
+      other file in this tree makes and is labelled as one. Closing it is the cluster-backed lane —
+      see README.md § Verification, and its honest limit, which explains why seventeen operators do
+      not fit in the Testcontainers k3s lane Task #95 capped at four concurrent suites.
+  - id: redis-operator-is-archived-and-its-chart-is-broken
+    says: >
+      ⚠ THE FOURTH SIGHTING OF ADR-010 CLAUSE 1'S AMENDMENT, AND THE FIRST WHERE THE OPERATOR EXISTS.
+      github.com/spotahome/redis-operator reports `archived: true` and was last pushed 2024-07-01.
+      Its newest chart release is `Chart-3.3.0`, 2023-08-17; its newest operator tag is `v1.3.0-rc1`,
+      a PRE-RELEASE, and the last non-prerelease is v1.2.4 from 2022-12-28. Chart 3.3.0 pins
+      `quay.io/spotahome/redis-operator:v1.3.0` and THAT TAG DOES NOT EXIST — quay.io serves
+      v1.3.0-rc1 and nothing named v1.3.0. So the chart's default values produce a Deployment that
+      cannot pull, on a project that cannot fix it. redis-operator/component.yaml pins the digest
+      instead. What is owed is the DECISION, not the workaround: an archived operator behind
+      CyberCloud.Cache/redis is a CVE with no upstream, and the alternatives are a maintained Valkey
+      operator (hyperspike/valkey-operator, unaudited) or owning the reconciler. ADR-011 is satisfied
+      either way — the licence is Apache-2.0 and the ENGINE image is already Valkey, which
+      charts/managed/valkey/values.yaml pins deliberately because spotahome's own default is
+      `redis:6.2.6-alpine`.
+  - id: strimzi-1x-drops-the-group-the-chart-renders
+    says: >
+      ⚠ THE COVERAGE CHECK EXISTS BECAUSE OF THIS ROW AND WOULD HAVE FAILED ON IT. Strimzi 1.0.0
+      removed `kafka.strimzi.io/v1beta2` from the Kafka and KafkaNodePool definitions; 1.1.0 serves
+      `v1` alone, with `conversion: strategy: None`. charts/managed/kafka renders v1beta2, so this
+      bundle pins 0.51.0 — the last release serving both, where v1beta2 is `served: true, storage:
+      true, deprecated: true`. Closing it is a new api-version on CyberCloud.Messaging/kafkaClusters
+      rendering `kafka.strimzi.io/v1`, THEN a bundle bump, in that order and not in one commit.
+  - id: no-csi
+    says: >
+      charts/README.md's tree comment says this directory is "operators, CNI, CSI, monitoring" and
+      there is no CSI component. Two managed charts carry a `@widget storageclass` row
+      (charts/managed/postgres, charts/managed/seaweedfs), so the platform hands the tenant a storage
+      class name and installs nothing that provides one. ADR-011 already prices the candidate —
+      "LINSTOR is GPL-3.0 and DRBD is GPL-2.0, and LINBIT's commercial support is how the project is
+      funded … a support contract is a business decision to make before the first customer's data is
+      on DRBD". That decision is not this directory's to make, so the row is named and left open
+      rather than pinned. A cluster installed from this bundle today needs a storage class from
+      somewhere else.
+  - id: licence-scan-is-a-declaration-not-a-scan
+    says: >
+      ADR-011 § Enforcement asks for "a build gate [that] runs a licence scan over the chart set and
+      the container images in the platform bundle". The Bundle gate checks a DECLARED SPDX id per
+      component against an allow-list. That catches a component added under SSPL or BUSL by somebody
+      who wrote the licence down honestly, and catches nothing else — it does not read a LICENSE file
+      and does not open an image. build/Build.Licence.cs is still `NotImplementedYet`, and the
+      distance between what it will do and what this gate does is the distance between a scan and an
+      attestation.
+  - id: images-are-not-pinned-by-digest
+    says: >
+      Every component but redis-operator installs at its upstream's own default image, which is a tag
+      rather than a digest. A tag is mutable and an air-gapped mirror is a values override this
+      directory does not model. Closing it is a digest per image per component and a mirror map,
+      which is the same shape charts/managed/harbor's `imageRegistry` escape hatch takes for a single
+      service.
