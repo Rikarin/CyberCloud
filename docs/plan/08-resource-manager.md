@@ -24,6 +24,9 @@ PUT /tenants/{t}/subscriptions/{s}/resourceGroups/{rg}
     5. policy evaluation (M3) — deny / modify / audit
     6. quota: IQuotaGrain.TryReserveAsync                      → 429 with which meter
     7. IResourceIndexGrain.TryClaim(path)                      → 409 if taken
+   7b. IResourceGroupGrain.BeginCreateAsync(address)           → 404 if the group does not exist
+         → records the resource as a member in Creating — 06 § Two-phase create, step 2
+         → create only; a retried PUT does not move a live member back to Creating
     8. write the ReBAC parent edge — resource:{id}#parent@resourceGroup:{sub}-{rg}
          → the manager writes it; nothing else in the platform does
          → BEFORE step 9, and that ordering is the point
@@ -67,6 +70,61 @@ of that path mints a different GUID — so it is inert storage rather than an au
 write path removes it on the one failure that leaves no resource (step 9 refusing a create), and does
 **not** remove it on failures after that, because a resource that exists with an odd-looking edge is
 one its owner can still see and delete, and a resource that exists with no edge is one nobody can.
+
+**Step 7b is a step the write path did not have, and adding it added a refusal.**
+`IResourceGroupGrain` has owned `BeginCreateAsync`, `CompleteCreateAsync`, `BeginDeleteAsync`,
+`FailDeleteAsync`, `CompleteDeleteAsync`, `ListAsync` and `ListOrphansAsync` since
+[06](06-tenancy-and-resource-model.md) § Two-phase create was written, and nothing in the platform
+called any of them: the write path claimed the index, linked the ReBAC edge and submitted desired state
+without recording membership anywhere. Every group's membership was therefore empty, which is worse
+than a missing feature — a listing built on it would have answered "this group has no resources" for a
+group full of them, and been internally consistent while doing it. The same emptiness is why the
+reaper reminder that document asks for could not have worked: `ListOrphansAsync` is what it reads.
+
+The refusal is the part that is new *behaviour* rather than new bookkeeping. A `PUT` into a resource
+group nobody had created used to succeed — step 1 validates the tenant, the subscription, the type, the
+api-version and a child's parent *resource*, and never the group — leaving a resource that belonged to
+nothing, inherited no lock or role assignment from a group, and could not be reached by anything
+walking the hierarchy downwards. It now answers `404`, which is Azure's behaviour and the same answer a
+group the caller may not see gets.
+
+⚠ **The refusal makes a gap that already existed reachable one step sooner, and the gap is not the
+resource manager's.** `ISubscriptionGrain.CreateResourceGroupAsync` exists and has no production caller;
+neither does `ISubscriptionGrain.CreateAsync` or `ITenantGrain.CreateAsync`, and the gateway serves no
+route that reaches any of them — `GatewayRoute` parses resources, actions, operations, the hub and the
+OpenAPI document, and nothing else. So on a real silo a tenant, a subscription and a resource group all
+have to be made by an operator calling grains directly, and step 1 has refused a write into a
+subscription nobody made since it was written. Step 7b refuses one into a group nobody made, in the same
+way and for the same reason. Nothing here closes that gap and nothing here widened it; what the second
+refusal does is make it impossible to create a resource that has no group, which was the state the
+platform was in.
+
+**The position is between 7 and 8 and it is the recoverable one.** A member recorded before the durable
+write and then abandoned is exactly the orphan `ListOrphansAsync` enumerates; a durable resource in no
+group's membership is invisible to every listing and to the reaper both, permanently, with its meter
+running. That is step 8's trade one line earlier. Unlike step 8, the refusal here *releases* the index
+claim rather than leaving it to expire: "the group does not exist" is a standing fact about the request
+rather than a transient failure, so the caller's next move is to create the group and send the identical
+`PUT` — and a claim left to expire would answer that retry with a `409` naming a GUID that belongs to no
+resource.
+
+**The endings are the operation grain's, and there are four of them.** A converged create, update or
+restore stamps the member with the terminal state the resource reached, which is what keeps the reaper
+off a live resource. A converged delete or purge removes it — *after* `CompleteDeleteAsync`, never at
+the accept, because a resource whose teardown is still running is still there. A failed teardown pass
+goes through `FailDeleteAsync`, which cannot remove the member and cannot move it to `Failed`: both
+would make the resource look finished while its pods still run, which
+[06](06-tenancy-and-resource-model.md) § Two-phase create calls "a billing-dispute prevention measure as
+much as a correctness one". Any other terminal failure stamps `Failed`. A soft delete removes the member
+when it parks, because a parked resource hangs off its subscription rather than its group, and a restore
+puts it back in `Creating` until its own operation converges.
+
+**What this does not deliver is the reaper or a listing.** `ListOrphansAsync` now has something to
+return and still has no production caller; `ListAsync` on the group is likewise uncalled, and
+`IResourceManager` has no `ListAsync` at all, so the portal's resource list, `cyc resource list` and any
+SDK enumeration still have nothing to call. What changed is that the inventory those three would read is
+now populated — before this, each of them could have been built, shipped, and answered "empty" for every
+group correctly.
 
 **The delete side belongs to the operation grain, not to `DeleteAsync`.** A delete is accepted long
 before it converges and the resource stays visible in `Deleting` the whole time
