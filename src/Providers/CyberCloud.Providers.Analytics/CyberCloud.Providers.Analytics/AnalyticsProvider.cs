@@ -32,12 +32,15 @@ namespace CyberCloud.Providers.Analytics;
 ///         the same four module edges, which is now the fifth data point for docs/plan/25 § R1.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Two of docs/plan/12 § The pattern, once's eight pieces are not built and one is built
-///         halfway, each named rather than implied.</b> Piece 5 — credential provisioning into the
-///         tenant's Vault — needs an OpenBao integration that does not exist, so <c>listKeys</c> has a
-///         declared response shape and no handler; ⚠ <b>on this service the consequence is a cluster
-///         that is secure and unreachable rather than one that is open</b>, which is the opposite of
-///         what <c>CyberCloud.Storage/accounts</c> found and is the better half of the same gap. Piece
+///         ⚠ <b>What this row owes against docs/plan/12 § The pattern, once's eight pieces is named
+///         rather than implied.</b> ⚠ Piece 5 — credential provisioning into the
+///         tenant's Vault — <b>is</b> built: <c>ISecretWriter</c> is the interface and
+///         <c>CyberCloud.Vault</c> ships <c>OpenBaoSecretWriter</c>. <c>listKeys</c> still has a
+///         declared response shape and no handler, and the real reason is upstream of the vault: no
+///         <c>spec.configuration.users</c> is rendered, so no credential exists to read or to
+///         correspond to a mint — <c>actions-without-handlers.txt</c> carries the line. ⚠ <b>On this
+///         service the consequence is a cluster that is secure and unreachable rather than one that is
+///         open</b>, which is the opposite of what <c>CyberCloud.Storage/accounts</c> found. Piece
 ///         6 reaches an answer neither of its branches describes — the operator scrapes every
 ///         installation itself through one cluster-wide exporter and offers no per-installation scrape
 ///         switch — so the metrics are turned on here and the object that scrapes them is owed. Piece

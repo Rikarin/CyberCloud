@@ -19,7 +19,10 @@ namespace CyberCloud.Providers.Search.Contracts;
 ///         it names <i>four</i> things and this type delivers <i>one</i> of them.</b> The role split is
 ///         built and is the interesting half; ISM policies and the snapshot repository are named at
 ///         <c>charts/managed/opensearch/conformance.yaml § owed</c> with what each actually needs, and
-///         neither is a matter of effort — both are blocked on piece 5.
+///         neither is a matter of effort. ⚠ Neither is blocked on piece 5 either, though this
+///         paragraph used to say so: <c>ISecretWriter</c> has shipped. ISM policies need a reconciler
+///         that talks to a running data plane, and the snapshot repository needs a bucket's keys read
+///         across providers — two different missing things, neither of them the vault.
 ///     </para>
 ///     <para>
 ///         ⚠ <b>ADR-011 is why this row is OpenSearch, and it is the only row in docs/plan/12 whose
@@ -583,12 +586,14 @@ public static class OpenSearchServices {
     ///     <c>secret: true</c> action is exactly the thing that should be written down before it
     ///     leaves. There is no request shape, for the reason <c>ActionRegistration</c> gives.
     ///     <para>
-    ///         ⚠ <b>The credential this would return already exists, which is not true of every
-    ///         service in the catalogue.</b> The operator generates it — see this file's header on
-    ///         <c>EnsureAdminCredentialsSecret</c> — so unlike <c>CyberCloud.Storage/accounts</c>, where
-    ///         there is no credential at all until piece 5 lands, here there is one and the platform
-    ///         has no path to read it out. That is the <c>CyberCloud.DBforPostgreSQL/servers</c>
-    ///         position exactly, and it is the second sighting of it.
+    ///         ⚠ <b>The credential this returns already exists, and that is why nothing here mints
+    ///         one.</b> The operator generates it — see this file's header on
+    ///         <c>EnsureAdminCredentialsSecret</c> — so a credential minted afterwards would be one
+    ///         the cluster never accepted. <c>OpenSearchServiceListKeysHandler</c> reads it instead,
+    ///         which is the <c>CyberCloud.DBforPostgreSQL/servers</c> shape.
+    ///         <c>CyberCloud.Storage/accounts</c> is the other shape and no longer the counterexample
+    ///         this paragraph used it as: SeaweedFS generates nothing, so that reconciler mints
+    ///         through <c>ISecretWriter</c> — the exception rather than the rule.
     ///     </para>
     /// </remarks>
     public static ResourceSchema ListKeysResponse { get; } =

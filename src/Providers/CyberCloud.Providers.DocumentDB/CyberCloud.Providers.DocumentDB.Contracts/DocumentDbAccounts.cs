@@ -64,18 +64,18 @@ namespace CyberCloud.Providers.DocumentDB.Contracts;
 ///         not.
 ///     </para>
 ///     <para>
-///         ⚠ <b>PIECE 5 IS NOT BUILT AND THIS ROW IS IN THE <i>MILDEST</i> OF THE THREE BUCKETS.</b>
-///         <c>CyberCloud.Cache/redis</c> does not come up at all; <c>CyberCloud.Storage/accounts</c>
-///         comes up and would answer every anonymous caller as an administrator. Here CloudNativePG
-///         generates the credential itself, and FerretDB neither stores nor invents one: checked in
-///         <c>website/docs/security/authentication.md</c>, <i>"FerretDB does not store authentication
-///         information (usernames and passwords) itself. Instead, it relies entirely on PostgreSQL's
-///         authentication mechanisms"</i>, and an anonymous client <i>"may still connect to FerretDB
-///         without authentication, but they cannot access or perform actions on the database"</i>. So
-///         the service works, an unauthenticated caller gets nothing, and the only thing missing is
-///         <c>listKeys</c> having somewhere to read the password back from. That is the
-///         <c>CyberCloud.DBforPostgreSQL/servers</c> answer, and it is the first time a row has
-///         reproduced it rather than added a worse one.
+///         ⚠ <b>NOTHING HERE MINTS, AND WHAT MAKES THAT SAFE IS THE ENGINE RATHER THAN THE
+///         PLATFORM.</b> CloudNativePG generates the credential itself, and FerretDB neither stores
+///         nor invents one: checked in <c>website/docs/security/authentication.md</c>, <i>"FerretDB
+///         does not store authentication information (usernames and passwords) itself. Instead, it
+///         relies entirely on PostgreSQL's authentication mechanisms"</i>, and an anonymous client
+///         <i>"may still connect to FerretDB without authentication, but they cannot access or
+///         perform actions on the database"</i>. So the service works and an unauthenticated caller
+///         gets nothing. ⚠ The paragraph that stood here said piece 5 was not built and that
+///         <c>listKeys</c> had nowhere to read the password from. Both have been false since
+///         <c>ISecretWriter</c> and <c>DocumentDbAccountListKeysHandler</c> landed: the handler reads
+///         <see cref="SuperuserSecretName" />'s two keys, and this row declines to mint because the
+///         cluster already holds a password minting could only contradict.
 ///     </para>
 ///     <para>
 ///         ⚠ <b><see cref="Schema2026" /> is the authored side of the pair</b> and

@@ -127,9 +127,11 @@ namespace CyberCloud.Providers.Search;
 ///             converge. Qdrant's chart leaves <c>service.api_key</c> <b>unset by default</b>, and a
 ///             Qdrant with no API key serves every request on port 6333 unauthenticated. That is the
 ///             SeaweedFS hazard reached through a chart default rather than through an engine's
-///             fallback, and it means <c>vectorStores</c> cannot ship an honest default until piece 5
-///             lands — which is a harder constraint than this type had, and is the thing to settle
-///             before writing any of it.
+///             fallback, and it means <c>vectorStores</c> cannot ship an honest default without
+///             minting its own API key — the <c>CyberCloud.Cache/redis</c> shape rather than this
+///             type's, because there is no operator-generated credential to read. Piece 5 has landed,
+///             so that is now a reconciler to write rather than a seam to wait for, and it is still
+///             the thing to settle before writing any of it.
 ///         </item>
 ///         <item>
 ///             The short name is free: <c>qdrant</c> collides with nothing this provider declares,

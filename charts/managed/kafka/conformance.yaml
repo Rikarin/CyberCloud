@@ -102,11 +102,14 @@ owed:
       renders block.
   - id: listkeys-has-no-handler
     says: >
-      docs/plan/12 § The pattern, once, piece 5 — credential provisioning into the tenant's Vault —
-      needs an OpenBao integration that does not exist, so listKeys has a declared response shape and
-      nothing that serves it. Until then the SCRAM credentials Strimzi's user operator generates stay
-      in a Secret in the tenant's namespace, which is a working cluster whose credentials this API
-      cannot hand out.
+      listKeys has a declared response shape and nothing that serves it — CyberCloud.Messaging/
+      kafkaClusters is on actions-without-handlers.txt with the reason.
+      ⚠ THAT REASON IS NOT PIECE 5, THOUGH THIS ROW USED TO SAY SO. Piece 5 is ISecretWriter and
+      CyberCloud.Vault ships OpenBaoSecretWriter behind it; four reconcilers mint through it. What is
+      missing here is the credential itself: no KafkaUser is rendered and the listeners declare no
+      SASL mechanism, so no SCRAM user exists and Strimzi generates no Secret for a handler to read.
+      Closing it is a listener change first, which every client already connected to an existing
+      cluster can see, and only then a user and a handler.
   - id: odd-node-count-is-unenforced
     says: >
       A KRaft quorum of two controllers tolerates no failures, so /properties/nodes wants an odd

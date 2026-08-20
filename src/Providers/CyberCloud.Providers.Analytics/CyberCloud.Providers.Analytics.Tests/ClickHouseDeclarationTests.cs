@@ -320,8 +320,8 @@ public sealed class ClickHouseDeclarationTests {
 
         configuration["users"].ShouldBeNull(
             "a users block was rendered. Any password in it would have come from the resource body, "
-            + "which is grain state — docs/plan/05 — and nothing else can supply one until piece 5 "
-            + "exists."
+            + "which is grain state — docs/plan/05 — and this reconciler mints nothing, so there is "
+            + "no other source for one. Rendering a user means minting through ISecretWriter first."
         );
 
         foreach (var forbidden in new[] { "password", "secret", "stringData" }) {

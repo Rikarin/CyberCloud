@@ -134,19 +134,18 @@ owed:
       it is not.
   - id: listkeys-has-no-handler
     says: >
-      docs/plan/12 § The pattern, once, piece 5 — credential provisioning into the tenant's Vault —
-      needs an OpenBao integration that does not exist, so listKeys has a declared response shape and
-      nothing that serves it. ISecretResolver has only a refusing implementation and CyberCloud.Vault
-      does not exist. ⚠ WHAT THIS ROW SPECIFICALLY LOSES IS SMALLER THAN WHAT THE NATS ROW LOSES, AND
-      THE DIFFERENCE IS THE OPERATOR. charts/managed/nats/conformance.yaml records that nats-server
-      with no authorization block accepts every connection in the namespace, so that service comes up
-      OPEN and the gap is a security hole. This one comes up AUTHENTICATED: the operator generates a
-      random user and a 24-byte password into <name>-default-user before the cluster boots, RabbitMQ's
-      guest/guest account is never created, and ANONYMOUS SASL is disabled by the operator's own
-      auth_mechanisms block. So what is lost is USABILITY — every field ListKeysResponse declares
-      already exists in a Secret in the namespace and the platform cannot read it out — rather than
-      safety. Closing it is a Secret read plus ISecretResolver, not a provisioning flow, which makes
-      it the cheapest listKeys in the catalogue to finish.
+      CLOSED. RabbitmqClusterListKeysHandler serves the action, and
+      CyberCloud.Messaging/rabbitmqClusters is not on actions-without-handlers.txt — a list the Action
+      handlers gate checks in both directions.
+      ⚠ THE ROW PREDICTED ITS OWN CLOSE AND MISNAMED WHAT WOULD DO IT. "CyberCloud.Vault does not
+      exist" is false — it ships OpenBaoSecretWriter behind ISecretWriter, which is piece 5 — but no
+      part of that was needed here. The row's own last sentence was the right one: closing it was a
+      Secret read rather than a provisioning flow. The cluster-operator generates a random user and a
+      24-byte password into <name>-default-user before the cluster boots, so anything the platform
+      minted afterwards would be a password RabbitMQ never accepted.
+      What the row got right and is kept: this service came up AUTHENTICATED where nats comes up OPEN,
+      because guest/guest is never created and ANONYMOUS SASL is off in the operator's own
+      auth_mechanisms block. What was lost was usability, not safety.
   - id: scale-down-is-accepted-and-ignored
     says: >
       LOWERING `nodes` SUCCEEDS AT THE API SERVER, IS REFUSED BY THE OPERATOR, AND READS BACK AS

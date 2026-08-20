@@ -186,22 +186,22 @@ owed:
       this one may not edit.
   - id: listkeys-has-no-handler
     says: >
-      docs/plan/12 § The pattern, once, piece 5 — credential provisioning into the tenant's Vault —
-      needs an OpenBao integration that does not exist, so listKeys has a declared response shape and
-      nothing that serves it. ⚠ WHAT THIS ROW SPECIFICALLY LOSES, and it is the mildest answer the
-      catalogue has given: nothing. The service works. CloudNativePG generates the credential into
-      {name}-pg-superuser and the gateway mounts it, and FerretDB neither stores nor invents a
-      credential of its own — website/docs/security/authentication.md: "FerretDB does not store
+      CLOSED. DocumentDbAccountListKeysHandler serves the action by reading {name}-pg-superuser's
+      `username` and `password` keys, and CyberCloud.DocumentDB/accounts is not on
+      actions-without-handlers.txt — a list the Action handlers gate checks in both directions, so a
+      line naming an action that now has a handler fails the build.
+      ⚠ THE REASON THIS ROW GAVE WAS ALREADY FALSE WHEN IT WAS WRITTEN, AND IT SPREAD. "Piece 5 needs
+      an OpenBao integration that does not exist" is wrong twice over: piece 5 is ISecretWriter,
+      CyberCloud.Vault ships OpenBaoSecretWriter behind it, and this row would not have needed either
+      one. CloudNativePG generates the credential at bootstrap, so what was missing was a handler that
+      READS it — anything minted afterwards would be a password the cluster never accepted. The same
+      sentence stands in five sibling conformance files; three of those rows are closed the same way.
+      What the row got right and is kept: the service works either way. FerretDB neither stores nor
+      invents a credential — website/docs/security/authentication.md: "FerretDB does not store
       authentication information (usernames and passwords) itself. Instead, it relies entirely on
       PostgreSQL's authentication mechanisms", and an anonymous client "may still connect to FerretDB
-      without authentication, but they cannot access or perform actions on the database". So a
-      running account is authenticated, closed to anonymous callers, and its password is a value the
-      tenant cannot obtain through this API — they would have to read the Secret in their own
-      namespace. That is CyberCloud.DBforPostgreSQL/servers' answer reproduced rather than a new one,
-      and it is the FIRST time a row has reproduced an earlier answer instead of adding a worse one
-      (CyberCloud.Cache/redis does not come up; CyberCloud.Storage/accounts comes up open).
-      What closes it: an ISecretResolver implementation backed by OpenBao, and a listKeys handler
-      that reads {name}-pg-superuser's `username` and `password` keys back through it.
+      without authentication, but they cannot access or perform actions on the database". So what was
+      lost was usability rather than safety.
   - id: superuser-is-the-connection-role
     says: >
       The gateway connects as the PostgreSQL SUPERUSER, and the rendered Cluster sets
@@ -291,6 +291,7 @@ owed:
       call, so a `accounts/databases` resource type would be a control-plane object the data plane
       creates behind its back — two writers, no reconciliation, and a resource that reports Succeeded
       for something a client had already made. The honest first child is `accounts/users`, which maps
-      onto a PostgreSQL role and onto FerretDB's own createUser, and it waits for piece 5 for the
-      same reason listKeys does: a user resource whose password nothing can store is a user nobody
-      can log in as.
+      onto a PostgreSQL role and onto FerretDB's own createUser. ⚠ It does NOT wait for piece 5, and
+      neither did listKeys — ISecretWriter has shipped, so a user resource this platform creates is
+      the one place here a mint would be right: the role would not exist until this platform made it,
+      so the password would be one PostgreSQL was given rather than one it never accepted.
