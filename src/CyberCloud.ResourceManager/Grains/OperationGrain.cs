@@ -256,6 +256,31 @@ public sealed class OperationGrain(
                 await FailAsync(pass.Outcome.Error!);
                 break;
 
+            case ReconcileOutcomeKind.Failed when spec.Kind == OperationKind.Delete:
+                // ⚠ A TEARDOWN PASS THAT FAILED AND WILL BE RETRIED, RECORDED AGAINST THE GROUP'S
+                // LISTING RATHER THAN ONLY AGAINST THE OPERATION.
+                //
+                // docs/plan/06 § Two-phase create: a resource whose teardown fails "is left in
+                // Deleting with a retry reminder and is *visible* in listings with that state".
+                // FailDeleteAsync is the method that says so — it deliberately cannot remove the
+                // member and deliberately cannot move it to Failed, both of which would make the
+                // resource look finished while its pods still run and its meter still ticks — and
+                // ResourceGroupMember.TeardownAttempts is a COUNT, which only means anything if this
+                // is recorded per failed pass rather than once at the end.
+                //
+                // ⚠ ON THE RETRYABLE BRANCH RATHER THAN THE TERMINAL ONE, because the terminal one
+                // is FailAsync and it records the same thing on its way out. Between them the member
+                // carries the latest reason and the number of attempts behind it, which is what an
+                // operator looking at a stuck group listing needs and what the operation's own
+                // progress array — capped, and reachable only if you know the operation id — does not
+                // give them.
+                //
+                // ⚠ Best effort. This is the retry path: the pass is coming back, and failing the
+                // delete over a bookkeeping write would turn a recoverable teardown into a stuck one.
+                _ = await Group(spec).FailDeleteAsync(spec.ResourceId, pass.Outcome.Error!.Message);
+                await ScheduleAsync(pass.Outcome);
+                break;
+
             case ReconcileOutcomeKind.Failed:
             case ReconcileOutcomeKind.InProgress:
             default:

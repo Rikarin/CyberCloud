@@ -1455,10 +1455,17 @@ public sealed class ResourceManagerService(
         // through that guard: no member exists, so it would be ADDED in Creating for a resource that is
         // Succeeded. The delete path tolerates a missing member instead; see DeleteAsync.
         //
-        // ⚠ The quota lease is released on the way out, exactly as the claim failure above does. The
-        // index claim is left to expire on its own — releasing it here would be a second write to
-        // undo a lease that the two-phase design already expires, and the claim is what makes the
-        // name unavailable to the retry that is about to arrive.
+        // ⚠ THE CLAIM IS RELEASED ON THE WAY OUT AND NOT LEFT TO EXPIRE, WHICH IS THE OPPOSITE OF
+        // WHAT STEP 8 BELOW DOES AND IS RIGHT FOR THE OPPOSITE REASON. Step 8's failure is a tuple
+        // store that was briefly unavailable — the retry that follows may well succeed, and holding
+        // the name meanwhile is a courtesy to it. This failure is a STANDING FACT about the request:
+        // the group does not exist, and it will not exist until somebody creates it. The caller's
+        // obvious next move is to create the group and send the identical PUT again, and a claim left
+        // to expire would answer that retry with "409, this name is already claimed" — naming a GUID
+        // that belongs to no resource, for five minutes, over a create that was refused. A claim held
+        // for a resource that will never exist protects nothing.
+        //
+        // The quota lease goes back the same way step 7's own failure returns it.
         //
         // ⚠ NO trace.Enter, AND THAT IS DELIBERATE RATHER THAN AN OVERSIGHT. WriteStep's values ARE
         // docs/plan/08's step numbers — `IndexClaim = 7`, `LinkParent = 8`, asserted by ordinal in
@@ -1471,6 +1478,7 @@ public sealed class ResourceManagerService(
         if (!target.Exists) {
             var joined = await Group(resolvedTarget).BeginCreateAsync(addressed);
             if (joined.TryGetError(out var joinError)) {
+                _ = await Index(resolvedTarget).ReleaseAsync(resourceId);
                 await ReleaseAsync(resolvedTarget, leases);
                 return Result<WriteAccepted>.Failure(joinError);
             }
