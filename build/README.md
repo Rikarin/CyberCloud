@@ -141,42 +141,77 @@ back with any of three answers, and the third is the one worth designing for:
 | ✘ | these projects are below it, at these rates |
 | ○ | **nothing here measured anything** — a warning locally, a hard failure on CI |
 
-The ○ exists because `dotnet-coverage` 18.9.0 fails by **exiting 0 and writing `<packages />`**.
-Nothing in the exit code says so, and the one line it prints goes to stdout in the middle of the
-test output. Enforce a floor against that report and every project reads 0 %: a red build that tells
-you to write tests when the truth is that the profiler never loaded.
+The ○ exists because a collector can fail without saying so. `dotnet-coverage` 18.9.0 did it by
+**exiting 0 and writing `<packages />`**: nothing in the exit code says so, and the one line it
+prints goes to stdout in the middle of the test output. Enforce a floor against that report and
+every project reads 0 % — a red build that tells you to write tests when the truth is that the
+profiler never loaded.
 
-`Build.Test.cs` § `CoverageCollectionIsAvailable` used to answer "can we collect here?" from a
-platform allow-list — everything except macOS/arm64 was assumed to work. Measured, all four cells,
-with the same three-line probe:
+### The collector is `coverlet`, because the floor has to be measurable where the code is written
+
+`dotnet-coverage` 18.9.0 carries native profilers for `ubuntu/x64`, `alpine/x64`, `macos/x64` and
+Windows and for nothing else; both of its `arm64` directories hold a *Windows* DLL. Measured, all
+four cells, with the three-line probe below:
 
 | Platform | Result |
 |---|---|
 | `osx-arm64` | `<packages />`, exit 0 |
 | `linux-x64`, no libxml2 | `<packages />`, exit 0, plus one hint naming libxml2 |
-| `linux-x64`, libxml2 installed | `line-rate="0.667"` — **the only cell that works** |
+| `linux-x64`, libxml2 installed | `line-rate="0.667"` — **the only cell that worked** |
 | `linux-arm64`, libxml2 installed | `<packages />`, exit 0, and no mention of libxml2 at all |
 
-The package explains all four: `tools/net8.0/any/` carries native profilers for `ubuntu/x64`,
-`alpine/x64` and `macos/x64` only, and both its `arm64` directories hold a *Windows* DLL. So the
-allow-list was wrong on two of the three platforms it waved through, and the honest question is not
-"which platform is this?" but "does it work here?".
+⚠ **So on every Apple Silicon machine the probe said no, `Test` printed ○, and an x64 CI runner was
+the first and only place the floor had ever run.** Two projects breached it unnoticed under that
+arrangement, which is what a gate nobody can run locally is for. A floor that only CI can see is a
+floor the person who could fix it never reads.
 
-It is now the second question. `Test` builds a three-line assembly into `artifacts/coverage-probe/`,
-collects over it, and requires a line rate **strictly between 0 and 1** — one covered line and one
-uncovered one, so the probe cannot pass by accident on the `line-rate="1"` an empty report reports.
-It costs about two seconds and is skipped-then-cached across runs. Two guards behind it:
+`coverlet` has no native profiler: it rewrites IL in the suite's own output directory and puts the
+assemblies back afterwards. Measured on `osx-arm64` against a project counted by hand — one class,
+three methods, two of them reached by two tests — it reports `line-rate="0.5454"`, which is 6 of 11
+sequence-point lines and is the number a person gets with a pencil. libxml2, the profiler matrix and
+the x64 pin on the CI job all stop being things this repository has to know about.
+
+⚠ **The tools are not both installed.** `.config/dotnet-tools.json` pins one collector, so every
+number in a report has one possible author. Two coverage tools disagreeing by a few points is
+survivable; two that silently disagree about *what* they measured is not.
+
+### The probe stays, and now probes the tool that is used
+
+`Build.Test.cs` § `CoverageCollectionIsAvailable` used to answer "can we collect here?" from a
+platform allow-list — everything except macOS/arm64 was assumed to work, which was wrong on two of
+the platforms it waved through. The honest question is not "which platform is this?" but "does it
+work here?", and changing collectors does not change that.
+
+`Test` builds a three-line assembly into `artifacts/coverage-probe/`, collects over it, and requires
+a line rate **strictly between 0 and 1** — one covered line and one uncovered one, so the probe
+cannot pass by accident on the `line-rate="1"` an empty report reports. It costs about two seconds
+and is skipped-then-cached across runs. ⚠ Do not turn it back into a list: an allow-list has to be
+updated every time somebody finds a new way for a tool to be missing, and the next way will not be
+one that is written down. Two guards behind it:
 
 * A probe that wrongly says **no** skips collection, leaves no report, and lands on ○ — which fails
   CI. The safe direction.
 * A probe that wrongly says **yes** is caught after the fact: `EnforceCoverageFloor` refuses to read
   a floor out of reports that between them name **no assembly at all**. That is the backstop that
-  runs against the real suites rather than a hello-world.
+  runs against the real suites rather than a hello-world, and it matters more under coverlet than it
+  did before: the probe instruments a directory holding one assembly, and the suites instrument
+  directories holding a hundred.
 
-`.github/workflows/gate.yml` asks the same question one layer up — it installs libxml2, then runs
-`.github/scripts/assert-coverage-profiler.sh` before the suites, so CI fails in fifteen seconds
-rather than after a full test run. The two probes are deliberately built from the same three lines,
-so a disagreement between them is a real disagreement about the machine.
+`.github/workflows/gate.yml` no longer runs a coverage pre-flight step. It used to install libxml2
+and then run `.github/scripts/assert-coverage-profiler.sh`, so CI failed in fifteen seconds rather
+than after a full test run — worth it when a whole platform's profiler could be missing. coverlet
+has no profiler to be missing, and a step asserting something that can no longer fail reads as
+coverage nobody has got.
+
+### A line's filename comes from its `<class>`, not its grandparent
+
+Cobertura lists most lines **twice** — once under `<class><lines>` and again under
+`<method><lines>` — and only `<class>` carries a `filename`. `CoverageReport.Read` keyed each line
+by its grandparent's `filename`, so every method-level line keyed as `(assembly, "", number)`. That
+did two wrong things at once: counted each line a second time, and collapsed line 17 of one file
+into line 17 of every other. Measured on `CyberCloud.Identity`, the old key reported **1 837 of
+2 775 lines, 66.2 %**, for an assembly that is **1 392 of 2 163, 64.4 %** — 1.8 points of inflation
+on a 70 % floor, out of a report that was correct.
 
 ### "Nothing to instrument" is not "nothing tests this"
 
