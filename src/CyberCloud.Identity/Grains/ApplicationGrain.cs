@@ -149,6 +149,27 @@ public sealed class ApplicationGrain(
                 );
             }
 
+            // ⚠ AND `UriKind.Absolute` DOES NOT MEAN WHAT THE LINE ABOVE NEEDS IT TO MEAN ON UNIX.
+            // Measured on .NET 10, macOS and Linux: `/callback` parses as `file:///callback` and
+            // `//evil.example/x` parses as `file://evil.example/x`, both with TryCreate returning
+            // true. On Windows both are refused. So the guard above held on the one platform nobody
+            // runs this on and let the second string — the protocol-relative open-redirect payload
+            // that ReturnUrl.Sanitize exists to refuse elsewhere in this tree — straight through.
+            //
+            // A `file:` redirect URI is never a legitimate one: the authorization response has
+            // nowhere to go and the browser resolves `//host/path` against the page's own scheme,
+            // which is exactly the "resolves against the attacker's choice" the message names. A
+            // custom scheme is left alone — `com.example.app:/oauth` is how OAuth 2.1 says a native
+            // client registers, and it parses correctly on every platform.
+            if (parsed.IsFile) {
+                return Result<ApplicationRegistration>.Failure(
+                    ErrorCode.InvalidRequestBody,
+                    $"'{uri}' has no scheme of its own, so it is a relative or protocol-relative "
+                    + "reference that this platform's URI parser turned into a 'file:' URI. What it "
+                    + "resolves against is the browser's context and therefore the attacker's choice."
+                );
+            }
+
             if (parsed.Fragment.Length > 0) {
                 // ⚠ OAuth 2.1 forbids a fragment in a redirect URI, and the reason is mechanical: the
                 // authorization response appends its own query or fragment, so a registered fragment

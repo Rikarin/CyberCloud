@@ -8,7 +8,7 @@ each time.
 
 ```
 CyberCloud/
-├── .config/dotnet-tools.json     # nuke, dotnet-ef, dotnet-counters, dotnet-trace, dotnet-coverage
+├── .config/dotnet-tools.json     # nuke, dotnet-ef, dotnet-counters, dotnet-trace, coverlet.console
 ├── .github/workflows/            # ci.yml, release.yml, charts.yml, e2e-nightly.yml, chaos-nightly.yml
 ├── build/                        # Nuke — the single entry point for every build action
 │   ├── _build.csproj

@@ -58,6 +58,16 @@ time.
 | **Load** | The [00](00-vision-and-principles.md) quality bar, at scale | Weekly + pre-release | Budgets met |
 | **Security** | CodeQL, `NuGetAudit`, Trivy on images, secret scanning, ZAP against staging | Every PR + nightly | No criticals |
 
+⚠ **The 70 % is unchanged and one project ships under it.** Until 2026-08-20 the floor had never run
+anywhere a developer could see it — `dotnet-coverage` ships no arm64 profiler, so `./build.sh Test`
+printed "NOT ENFORCED" on every Apple Silicon machine and an x64 CI runner produced the only numbers
+there had ever been. The collector is `coverlet` now and the gate runs everywhere. The debt it found
+is carried in `coverage-below-floor.txt`, a reviewed file in the shape of `actions-without-handlers.txt`:
+a row names a project and the rate it is held to, an unlisted project below 70 % still fails, a
+listed project that drops below its rate fails, and a listed project that reaches 70 % fails until
+its row is deleted. `build/README.md § coverage-below-floor.txt` has the reasoning. It carries **one**
+project.
+
 ### Skipped by default — the assertions that need a server, and what running them proved
 
 Tracked here rather than left in a commit message, because a test that nobody knows is skipped is

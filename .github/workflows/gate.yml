@@ -77,27 +77,30 @@ jobs:
   # ── docs/plan/23 § Test layers, rows Unit, Grain, Reconciler, Conformance, Isolation, Contract ───
   test:
     name: test
-    # ⚠ Pinned to x64, NOT `ubuntu-latest` and never an `-arm` runner. dotnet-coverage 18.9.0 ships
-    # no arm64 profiler for Linux — tools/net8.0/any/ in the package has ubuntu/x64, alpine/x64 and
-    # macos/x64 and nothing else — and its way of telling you is to exit 0 with an empty report.
-    # Measured on linux/arm64: installing libxml2 there changes nothing and the tool stops even
-    # mentioning it. The build now notices that on its own (Build.Test.cs § EnforceCoverageFloor
-    # refuses to read a floor out of a report naming no assembly), so an arm runner would fail
-    # rather than lie — but it would fail every run, which is not a thing to discover on a Tuesday.
+    # A pinned image rather than `ubuntu-latest`, so a runner-image roll is a commit here and not a
+    # Tuesday morning.
+    #
+    # ⚠ This pin used to be an ARCHITECTURE pin, and it no longer is. dotnet-coverage 18.9.0 ships no
+    # arm64 profiler for Linux or macOS — both of its arm64 directories hold a Windows DLL — and its
+    # way of saying so was to exit 0 with an empty report, so the coverage floor could only ever be
+    # measured on x64, with libxml2 installed by a step above this one. The collector is coverlet
+    # now, which rewrites IL and needs no native profiler and no libxml2, so an arm64 runner would
+    # measure the floor correctly. Nothing here depends on the architecture any more; moving it is a
+    # decision about cost and speed, not about whether the gate works.
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/dotnet
 
-      # ⚠ dotnet-coverage's native profiler links against libxml2, which is not in the runner
-      # image's declared package set. One second of apt for a dependency whose absence is otherwise
-      # completely silent.
-      - name: Install libxml2 for the coverage profiler
-        run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends libxml2
-
-      - name: Prove the coverage profiler works here
-        run: .github/scripts/assert-coverage-profiler.sh
+      # ⚠ There is no coverage pre-flight step here any more, and its absence is deliberate rather
+      # than an oversight. `.github/scripts/assert-coverage-profiler.sh` existed to fail in fifteen
+      # seconds instead of after a full test run, because dotnet-coverage's profiler was missing on
+      # whole platforms and said so only by writing an empty report. coverlet has no profiler to be
+      # missing. A step that asserts a thing that can no longer fail is a step people read as
+      # coverage they have not got, and Build.Test.cs § CoverageCollectionIsAvailable still probes
+      # the real tool before the suites run. The two steps below still check that the floor was
+      # applied and not skipped, which is the assertion that was always doing the work.
 
       # docs/plan/23 § Test layers puts Testcontainers (Redis, Postgres, NATS) under Grain and k3s
       # under Reconciler. This fails once, loudly, rather than letting five suites fail one at a
@@ -137,7 +140,12 @@ jobs:
             echo "::error title=Coverage floor::./build.sh Test exited 0 without printing the line that says the floor was applied. A green Test that never reached EnforceCoverageFloor is a floor that does not exist. docs/plan/23 § Test layers."
             exit 1
           fi
-          grep -E 'Test: coverage floor|shipping project\(s\) at or above|  (✔|✘|○) CyberCloud' "$RUNNER_TEMP/test.log"
+          # ⚠ ▪ is in the alternation, not only ✔ ✘ ○. A project pinned by coverage-below-floor.txt
+          # prints ▪ rather than ✘ — it is known debt held to a measured rate, not a break — and a
+          # summary that dropped those rows would hide every under-covered project in the tree from
+          # the one place an operator reads the numbers. Same set of markers as the architecture
+          # summary above, for the same reason.
+          grep -E 'Test: coverage floor|shipping project\(s\) at or above|  (✔|✘|○|▪) CyberCloud' "$RUNNER_TEMP/test.log"
 
       - name: Upload test results and coverage
         if: always()

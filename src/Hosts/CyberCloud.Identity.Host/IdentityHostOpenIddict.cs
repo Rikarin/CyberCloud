@@ -34,6 +34,26 @@ public static class IdentityHostOpenIddict {
     /// <summary>The device-authorization endpoint — <c>cyc login</c> on a headless box.</summary>
     public const string DeviceAuthorizationPath = "/device";
 
+    /// <summary>
+    ///     Where the person on the other machine types the user code.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Its absence was a start-up failure, not a missing feature.</b> OpenIddict's own
+    ///     post-configuration refuses the whole server with "The end-user verification endpoint must
+    ///     be enabled to use the device authorization flow" when
+    ///     <c>AllowDeviceAuthorizationFlow</c> is set and this is not — so resolving
+    ///     <c>IOptions&lt;OpenIddictServerOptions&gt;</c> threw, and every OIDC request with it.
+    ///     Nothing noticed because nothing called <see cref="AddIdentityHostOpenIddict" />; the test
+    ///     project asserted the path constants and the <em>other</em> registration.
+    ///     <para>
+    ///         ⚠ Like the other four, the page behind it is owed — see
+    ///         <see cref="IdentityEndpoints" />, which says where the pages live and which of them
+    ///         exist. A path with a passthrough and no page is a 404; a flow allowed with no path at
+    ///         all is a host that does not start.
+    ///     </para>
+    /// </remarks>
+    public const string EndUserVerificationPath = "/device/verify";
+
     /// <summary>The end-session endpoint.</summary>
     public const string EndSessionPath = "/logout";
 
@@ -102,6 +122,7 @@ public static class IdentityHostOpenIddict {
                         .SetTokenEndpointUris(TokenPath)
                         .SetUserInfoEndpointUris(UserInfoPath)
                         .SetDeviceAuthorizationEndpointUris(DeviceAuthorizationPath)
+                        .SetEndUserVerificationEndpointUris(EndUserVerificationPath)
                         .SetEndSessionEndpointUris(EndSessionPath);
 
                     // docs/plan/11 § Protocol's flow table, and nothing outside it.
@@ -137,6 +158,7 @@ public static class IdentityHostOpenIddict {
                         .EnableAuthorizationEndpointPassthrough()
                         .EnableTokenEndpointPassthrough()
                         .EnableUserInfoEndpointPassthrough()
+                        .EnableEndUserVerificationEndpointPassthrough()
                         .EnableEndSessionEndpointPassthrough();
                 }
             );

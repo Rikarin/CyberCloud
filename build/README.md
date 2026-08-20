@@ -141,42 +141,140 @@ back with any of three answers, and the third is the one worth designing for:
 | ✘ | these projects are below it, at these rates |
 | ○ | **nothing here measured anything** — a warning locally, a hard failure on CI |
 
-The ○ exists because `dotnet-coverage` 18.9.0 fails by **exiting 0 and writing `<packages />`**.
-Nothing in the exit code says so, and the one line it prints goes to stdout in the middle of the
-test output. Enforce a floor against that report and every project reads 0 %: a red build that tells
-you to write tests when the truth is that the profiler never loaded.
+The ○ exists because a collector can fail without saying so. `dotnet-coverage` 18.9.0 did it by
+**exiting 0 and writing `<packages />`**: nothing in the exit code says so, and the one line it
+prints goes to stdout in the middle of the test output. Enforce a floor against that report and
+every project reads 0 % — a red build that tells you to write tests when the truth is that the
+profiler never loaded.
 
-`Build.Test.cs` § `CoverageCollectionIsAvailable` used to answer "can we collect here?" from a
-platform allow-list — everything except macOS/arm64 was assumed to work. Measured, all four cells,
-with the same three-line probe:
+### The collector is `coverlet`, because the floor has to be measurable where the code is written
+
+`dotnet-coverage` 18.9.0 carries native profilers for `ubuntu/x64`, `alpine/x64`, `macos/x64` and
+Windows and for nothing else; both of its `arm64` directories hold a *Windows* DLL. Measured, all
+four cells, with the three-line probe below:
 
 | Platform | Result |
 |---|---|
 | `osx-arm64` | `<packages />`, exit 0 |
 | `linux-x64`, no libxml2 | `<packages />`, exit 0, plus one hint naming libxml2 |
-| `linux-x64`, libxml2 installed | `line-rate="0.667"` — **the only cell that works** |
+| `linux-x64`, libxml2 installed | `line-rate="0.667"` — **the only cell that worked** |
 | `linux-arm64`, libxml2 installed | `<packages />`, exit 0, and no mention of libxml2 at all |
 
-The package explains all four: `tools/net8.0/any/` carries native profilers for `ubuntu/x64`,
-`alpine/x64` and `macos/x64` only, and both its `arm64` directories hold a *Windows* DLL. So the
-allow-list was wrong on two of the three platforms it waved through, and the honest question is not
-"which platform is this?" but "does it work here?".
+⚠ **So on every Apple Silicon machine the probe said no, `Test` printed ○, and an x64 CI runner was
+the first and only place the floor had ever run.** Two projects breached it unnoticed under that
+arrangement, which is what a gate nobody can run locally is for. A floor that only CI can see is a
+floor the person who could fix it never reads.
 
-It is now the second question. `Test` builds a three-line assembly into `artifacts/coverage-probe/`,
-collects over it, and requires a line rate **strictly between 0 and 1** — one covered line and one
-uncovered one, so the probe cannot pass by accident on the `line-rate="1"` an empty report reports.
-It costs about two seconds and is skipped-then-cached across runs. Two guards behind it:
+`coverlet` has no native profiler: it rewrites IL in the suite's own output directory and puts the
+assemblies back afterwards. Measured on `osx-arm64` against a project counted by hand — one class,
+three methods, two of them reached by two tests — it reports `line-rate="0.5454"`, which is 6 of 11
+sequence-point lines and is the number a person gets with a pencil. libxml2, the profiler matrix and
+the x64 pin on the CI job all stop being things this repository has to know about.
+
+⚠ **The tools are not both installed.** `.config/dotnet-tools.json` pins one collector, so every
+number in a report has one possible author. Two coverage tools disagreeing by a few points is
+survivable; two that silently disagree about *what* they measured is not.
+
+### The probe stays, and now probes the tool that is used
+
+`Build.Test.cs` § `CoverageCollectionIsAvailable` used to answer "can we collect here?" from a
+platform allow-list — everything except macOS/arm64 was assumed to work, which was wrong on two of
+the platforms it waved through. The honest question is not "which platform is this?" but "does it
+work here?", and changing collectors does not change that.
+
+`Test` builds a three-line assembly into `artifacts/coverage-probe/`, collects over it, and requires
+a line rate **strictly between 0 and 1** — one covered line and one uncovered one, so the probe
+cannot pass by accident on the `line-rate="1"` an empty report reports. It costs about two seconds
+and is skipped-then-cached across runs. ⚠ Do not turn it back into a list: an allow-list has to be
+updated every time somebody finds a new way for a tool to be missing, and the next way will not be
+one that is written down. Two guards behind it:
 
 * A probe that wrongly says **no** skips collection, leaves no report, and lands on ○ — which fails
   CI. The safe direction.
 * A probe that wrongly says **yes** is caught after the fact: `EnforceCoverageFloor` refuses to read
   a floor out of reports that between them name **no assembly at all**. That is the backstop that
-  runs against the real suites rather than a hello-world.
+  runs against the real suites rather than a hello-world, and it matters more under coverlet than it
+  did before: the probe instruments a directory holding one assembly, and the suites instrument
+  directories holding a hundred.
 
-`.github/workflows/gate.yml` asks the same question one layer up — it installs libxml2, then runs
-`.github/scripts/assert-coverage-profiler.sh` before the suites, so CI fails in fifteen seconds
-rather than after a full test run. The two probes are deliberately built from the same three lines,
-so a disagreement between them is a real disagreement about the machine.
+`.github/workflows/gate.yml` no longer runs a coverage pre-flight step. It used to install libxml2
+and then run `.github/scripts/assert-coverage-profiler.sh`, so CI failed in fifteen seconds rather
+than after a full test run — worth it when a whole platform's profiler could be missing. coverlet
+has no profiler to be missing, and a step asserting something that can no longer fail reads as
+coverage nobody has got.
+
+### `coverage-below-floor.txt` — the ratchet, and why it is not an exemption list
+
+Making the floor visible locally turned a gate that had never run into one that ran and was red.
+Those reds were not regressions; they had been true for months and nobody could see them. Holding
+the measurement hostage to covering every one of them would have stranded the fix behind work nobody
+had scheduled, and letting master sit red would have taught everyone to ignore a red `Test`.
+
+So there is a checked-in baseline, modelled on `actions-without-handlers.txt` down to the shape of
+its header. A row is a project name and the rate measured the day it was written. `Build.Test.cs`
+§ `EnforceCoverageFloor` fails in **four** directions:
+
+| | Fails when |
+|---|---|
+| the floor | an **unlisted** project is below 70 % |
+| the ratchet | a **listed** project is more than half a point **below** its pin |
+| the ratchet's other half | a **listed** project is more than half a point **above** its pin — raise it |
+| the pruner | a **listed** project **meets** 70 % — delete the row |
+
+The last two are what stop it becoming a permission slip. A list nobody is forced to prune is a list
+in which no reader can tell the live rows from the dead ones, and the third rule is why
+`actions-without-handlers.txt` is believable.
+
+⚠ **The tolerance is symmetric on purpose, and that is what makes it a band rather than a budget.**
+Exact pinning is right for a closed set of action names and wrong for a ratio over every line in a
+project: extracting a method moves the number by hundredths, and a build that went red for that is a
+build people learn to re-pin without reading. But a one-way tolerance leaks — twenty commits could
+walk a project ten points down half a point at a time, each one inside the rules. Failing *upward*
+too means the pin tracks whatever the project actually reaches, so the ground under it only ever
+rises. Half a point is 1.3 lines on a 255-line project and about 15 on a 3 000-line one, which
+tightens the band exactly where a percentage is least forgiving.
+
+⚠ **Every row needs a sentence directly above it**, and the parser refuses one without. A reviewer
+cannot answer a review request that is a name and a number, and a list that costs a sentence to
+extend is a list that stays short. The file is parsed **before the suites run**, so a typo costs a
+second rather than a full test run.
+
+### A line's filename comes from its `<class>`, not its grandparent
+
+Cobertura lists most lines **twice** — once under `<class><lines>` and again under
+`<method><lines>` — and only `<class>` carries a `filename`. `CoverageReport.Read` keyed each line
+by its grandparent's `filename`, so every method-level line keyed as `(assembly, "", number)`. That
+did two wrong things at once: counted each line a second time, and collapsed line 17 of one file
+into line 17 of every other. Measured on `CyberCloud.Identity`, the old key reported **1 837 of
+2 775 lines, 66.2 %**, for an assembly that is **1 392 of 2 163, 64.4 %** — 1.8 points of inflation
+on a 70 % floor, out of a report that was correct.
+
+### A `filename` is relative to *its own report's* `<sources>` root
+
+coverlet writes the deepest directory common to the files it instrumented, so a suite that touched
+only `src/` projects writes `…/src/` and one that also touched a host writes the repository root.
+Measured over the 71 reports of one run: **56** said the repository root and **15** said `src/`.
+
+Keying on the raw string therefore split one file into two —
+`src/CyberCloud.Communication/Providers/ChannelProviders.cs` and
+`CyberCloud.Communication/Providers/ChannelProviders.cs` counted as 382 lines rather than 191 — and
+the two hit sets were never unioned, so a line covered by one suite read as uncovered because
+another suite spelled the path differently. This one **deflated**, hard:
+
+| | split key | resolved key |
+|---|---|---|
+| `CyberCloud.Communication` | 49.6 % | **70.8 %** |
+| `CyberCloud.Communication.Contracts` | 64.0 % | **92.1 %** |
+| `CyberCloud.Kubernetes` | 54.6 % | **77.3 %** |
+| `CyberCloud.ServiceDefaults` | 59.6 % | **88.4 %** |
+| `CyberCloud.Tenancy` | 60.6 % | **86.8 %** |
+| `CyberCloud.Silo.Host` | 32.5 % | 32.5 % |
+
+⚠ **Five of the six projects that looked like breaches never were**, which is why
+`coverage-below-floor.txt` has one row rather than six. The key is now the resolved absolute path,
+and a report declaring more than one `<source>` is refused rather than guessed at — with two roots a
+relative filename could belong to either, and picking one would merge some files correctly and split
+others, which is this same failure arriving silently a second time.
 
 ### "Nothing to instrument" is not "nothing tests this"
 
@@ -250,6 +348,64 @@ overlap almost completely. Full serialisation is roughly **3×** slower and a ca
 gate people stop running is the same problem wearing a different hat. ⚠ And do not add a retry:
 that turns a flaky gate into a slow one that fails at a lower rate, which is strictly harder to
 diagnose.
+
+## How many container-backed suites run at once, and how the tree knows which they are
+
+Two separate questions, and getting the second one wrong made the first one unanswerable.
+
+### The degree is derived from the host
+
+`Build.Test.cs` § `ContainerBackedSuiteDegree` is `Environment.ProcessorCount ÷ 3`, never zero, and
+`CC_TEST_CONTAINER_PARALLELISM` overrides it. It used to be the literal **4**, set when there were
+68 suites.
+
+⚠ **The obvious calibration for the 3 is not usable, and knowing why matters more than the number.**
+"Four starves a suite and three does not", measured 2026-08-19, was taken while the container-backed
+set was decided by grepping `.csproj` files — so "degree 4" meant *four mostly-cheap suites in slots
+plus up to three k3s clusters outside them*, and it means *at most four container suites* now.
+Dividing ten CPUs by a number that measured a different mechanism is arithmetic on a coincidence.
+
+The evidence for three is direct, at the corrected meaning: five full `Test` runs on this ten-CPU
+host, four green at 71 suites, and the one loss was `CyberCloud.Tenancy.Tests` failing its collection
+fixture on an Npgsql connect timeout — one of the four symptoms the failure message names — which
+then passed 131/131 in 13.6 s alone. Contention at the margin, not a degree that does not work. It
+is a budget for the *suite*, not for one container: a `.Cluster.Conformance` run holds a k3s API
+server, PostgreSQL and Redis plus its own test host. Four would be safer and costs about a third of
+the gate's wall clock here; `CC_TEST_CONTAINER_PARALLELISM` is the lever, which is why the failure
+message names it.
+
+⚠ **What the derivation models is CPU, and it is worth naming the two things it does not.** Memory
+is the obvious other candidate, and the tree cannot observe it honestly — on Linux the daemon shares
+the host's RAM, while on macOS and Windows it lives in a VM whose allocation a .NET process can only
+learn by asking `docker info`, which is a subprocess that hangs when the daemon is unhealthy, inside
+the target whose job is to tell a starved host from a broken one. The other is how many k3s clusters
+a daemon will hold, which has no API at all. The environment variable is the lever for both. A
+derivation that is wrong on some host is fine *because* the override exists and the failure message
+names it; a constant is wrong on every host but the one it was measured on, and says nothing.
+
+### Which suites are container-backed comes from the build output, not from the `.csproj`
+
+⚠ **This used to grep each project file for the word "Testcontainers", and the cap was therefore not
+capping what it said it was.** Measured over this tree on 2026-08-20: **28** project files contain
+the word, **19** suites actually ship the assemblies, and it was wrong in both directions.
+
+* **Three suites that each hold a whole k3s cluster were invisible to it** —
+  `CyberCloud.Providers.{ContainerService,Network,Terminal}.Cluster.Conformance` reach Testcontainers
+  through a project reference, so their own file never says the word. They ran ungated, at the
+  suite-level degree, *on top of* whatever the semaphore was letting through: a nominal cap of 3 was
+  really up to 6. In the run that found this, two of those three were still sitting at **zero tests
+  started after four minutes** while every other suite had finished — which is one of the four
+  symptoms the failure message names.
+* **Twelve suites that start no container were holding slots**, several of them because their
+  `.csproj` carries a ⚠ comment explaining that they deliberately do *not* use Testcontainers.
+  `CyberCloud.Identity.Tests` says "NO Testcontainers" in capitals and was gated for saying so.
+
+The evidence is now a `Testcontainers*.dll` in the suite's own output directory — the same reasoning
+as `CoverageReport.cs` § `CoverableLines` counting sequence points in a PDB rather than parsing a
+tool's stdout. A comment cannot fool it, a transitive reference cannot hide from it, and it goes
+right on its own the next time somebody adds a container to a suite through a shared fixture. A
+suite with no build output is treated as container-backed, which is the direction that costs wall
+clock rather than a starved run.
 
 ## Why the analyser exemptions are where they are
 
