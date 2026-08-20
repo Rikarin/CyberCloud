@@ -337,11 +337,15 @@ partial class Build
         //
         // ⚠ THE DEGREE IS DERIVED FROM THE HOST, NOT WRITTEN DOWN. It used to be the literal 4, set
         // when there were 68 suites, and it went stale the way a constant does: measured 2026-08-19
-        // on this ten-CPU host at 71 suites, four starves `CyberCloud.AppHost.Tests` — it exits 2 and
-        // passes 10/10 in 1 m 29 s when run alone — while three finishes the whole gate green. Two
-        // things had grown: three more container-backed suites, and `AppHost.Tests` itself, which now
-        // stands up the real topology AND asserts the namespace `ReconcileDriver` creates, holding
-        // k3s, Redis and PostgreSQL for longer per test.
+        // on this ten-CPU host at 71 suites, four starved `CyberCloud.AppHost.Tests` — it exited 2
+        // and passed 10/10 in 1 m 29 s when run alone — while three finished the whole gate green.
+        // Two things had grown: three more container-backed suites, and `AppHost.Tests` itself,
+        // which now stands up the real topology AND asserts the namespace `ReconcileDriver` creates,
+        // holding k3s, Redis and PostgreSQL for longer per test.
+        //
+        // ⚠ That measurement dates from before StartsContainers was fixed, so it is history rather
+        // than calibration — "degree 4" did not mean then what it means now. CpusPerContainerBackedSuite
+        // says what the three is actually measured against.
         //
         // ⚠ Changing 4 to 3 would have gone stale again, and in the other direction it is already
         // wrong: the right number is a property of the machine, not of the tree, and a 32-CPU runner
@@ -581,16 +585,37 @@ partial class Build
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>Three, and the three is the measurement rather than a guess.</b> On this ten-CPU
-    ///         host a degree of four starves a suite and a degree of three does not, so the budget a
-    ///         container-backed suite needs is more than 10 ÷ 4 = 2.5 CPUs and at most 10 ÷ 3 = 3.3.
-    ///         Three is the whole number in that interval, and it is the only one: it reproduces the
-    ///         measured answer on the machine the measurement was taken on.
+    ///         ⚠ <b>Three, and it is measured — but read the next paragraph before quoting the
+    ///         measurement, because the obvious one does not say what it looks like it says.</b>
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>THE "FOUR STARVES A SUITE, THREE DOES NOT" MEASUREMENT OF 2026-08-19 CANNOT BE
+    ///         USED TO CALIBRATE THIS NUMBER, AND THE REASON IS <see cref="StartsContainers" />.</b>
+    ///         It was taken while the container-backed set was decided by grepping <c>.csproj</c>
+    ///         files, which held slots for twelve suites that start no container and let three that
+    ///         each hold a k3s cluster run free. "Degree 4" then meant "four mostly-cheap suites in
+    ///         slots, plus up to three k3s clusters outside them"; it means "at most four container
+    ///         suites, full stop" now. Dividing ten CPUs by a number that measured a different
+    ///         mechanism would be arithmetic on a coincidence — the exact shape of mistake the
+    ///         detector itself was.
+    ///     </para>
+    ///     <para>
+    ///         So the evidence for three is direct, at the corrected meaning, on this ten-CPU host:
+    ///         five full <c>Test</c> runs, four green at 71 suites, and the one loss was
+    ///         <c>CyberCloud.Tenancy.Tests</c> failing its collection fixture on an Npgsql connect
+    ///         timeout — one of the four symptoms the failure message names — which then passed
+    ///         131/131 in 13.6 s when run alone. That is contention at the margin rather than a
+    ///         degree that does not work, and it is recorded here rather than smoothed over: a
+    ///         reader who sees this suite go red once in five runs should recognise it, not
+    ///         rediscover it.
     ///     </para>
     ///     <para>
     ///         ⚠ It is a budget for the <em>suite</em>, not for one container. A `.Cluster.Conformance`
     ///         run holds a k3s API server, PostgreSQL and Redis plus its own test host, and k3s alone
-    ///         spends most of its start-up saturating a core.
+    ///         spends most of its start-up saturating a core. ⚠ And it is a budget for the machine
+    ///         the measurement was taken on. Four would be the safer number and costs roughly a third
+    ///         of the gate's wall clock on a ten-core host; the lever for a host that needs it is
+    ///         <c>CC_TEST_CONTAINER_PARALLELISM</c>, which is why the failure message names it.
     ///     </para>
     /// </remarks>
     const int CpusPerContainerBackedSuite = 3;

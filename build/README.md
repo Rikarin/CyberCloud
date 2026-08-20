@@ -359,11 +359,20 @@ Two separate questions, and getting the second one wrong made the first one unan
 `CC_TEST_CONTAINER_PARALLELISM` overrides it. It used to be the literal **4**, set when there were
 68 suites.
 
-The 3 is the measurement rather than a preference. On this ten-CPU host a degree of four starves a
-suite and three does not, so a container-backed suite needs more than 10 ÷ 4 = 2.5 CPUs and at most
-10 ÷ 3 = 3.3 — and three is the only whole number in that interval. It is a budget for the *suite*,
-not for one container: a `.Cluster.Conformance` run holds a k3s API server, PostgreSQL and Redis
-plus its own test host.
+⚠ **The obvious calibration for the 3 is not usable, and knowing why matters more than the number.**
+"Four starves a suite and three does not", measured 2026-08-19, was taken while the container-backed
+set was decided by grepping `.csproj` files — so "degree 4" meant *four mostly-cheap suites in slots
+plus up to three k3s clusters outside them*, and it means *at most four container suites* now.
+Dividing ten CPUs by a number that measured a different mechanism is arithmetic on a coincidence.
+
+The evidence for three is direct, at the corrected meaning: five full `Test` runs on this ten-CPU
+host, four green at 71 suites, and the one loss was `CyberCloud.Tenancy.Tests` failing its collection
+fixture on an Npgsql connect timeout — one of the four symptoms the failure message names — which
+then passed 131/131 in 13.6 s alone. Contention at the margin, not a degree that does not work. It
+is a budget for the *suite*, not for one container: a `.Cluster.Conformance` run holds a k3s API
+server, PostgreSQL and Redis plus its own test host. Four would be safer and costs about a third of
+the gate's wall clock here; `CC_TEST_CONTAINER_PARALLELISM` is the lever, which is why the failure
+message names it.
 
 ⚠ **What the derivation models is CPU, and it is worth naming the two things it does not.** Memory
 is the obvious other candidate, and the tree cannot observe it honestly — on Linux the daemon shares
