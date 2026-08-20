@@ -1,8 +1,10 @@
+using CyberCloud.ServiceDefaults.Logging;
 using CyberCloud.ServiceDefaults.Storage;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Orleans.Clustering.Kubernetes;
 using Orleans.Configuration;
 using Serilog;
@@ -258,17 +260,55 @@ public static class OrleansApplication {
     ///         from <c>builder.Configuration</c> instead is what lets a pod's environment variables
     ///         and mounted secrets reach the logger, which is how it is configured in a cluster.
     ///     </para>
+    ///     <para>
+    ///         ⚠ <b>THE SINKS MOVED OUT OF <c>appsettings.json</c> AND INTO THIS METHOD, AND THAT IS
+    ///         THE LOG CANARY RATHER THAN A TIDY-UP.</b> docs/plan/18 § Platform security, row
+    ///         Secrets asks for a scanner on the log pipeline;
+    ///         <see cref="Logging.SecretScrubbingSink" /> is it, and it is only a control over the
+    ///         sinks it wraps. <c>ReadFrom.Configuration</c> adds sinks beside the wrapper rather
+    ///         than inside it, so a <c>Serilog:WriteTo</c> entry would be an unscrubbed egress that
+    ///         nothing failed on. Declaring the sinks here and refusing configured ones
+    ///         (<see cref="Logging.LogEgress.RefuseConfiguredSinks" />) is what makes "every line is
+    ///         scanned" a property of the host instead of a property of the current
+    ///         <c>appsettings.json</c>.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b><c>ClearProviders</c>, and what it does <i>not</i> close — because the first
+    ///         version of this note claimed the opposite and was wrong.</b> The obvious reading is
+    ///         that the console, debug and event-source providers
+    ///         <c>WebApplication.CreateBuilder</c> installs are unscrubbed egress paths, since a
+    ///         <c>Microsoft.Extensions.Logging</c> provider is fed directly and not through Serilog.
+    ///         They are not. <c>AddSerilog</c> with the default <c>writeToProviders: false</c>
+    ///         <b>replaces <c>ILoggerFactory</c></b> with <c>SerilogLoggerFactory</c>, so MEL's own
+    ///         factory is never constructed and no registered provider is ever consumed —
+    ///         <c>LogEgressTests.EveryLoggerInTheProcessIsASerilogLogger</c> is the assertion, and it
+    ///         is the one that makes the egress singular. This call removes registrations that were
+    ///         already inert, so that the service collection stops describing egress paths that do
+    ///         not exist.
+    ///     </para>
     /// </remarks>
     static void ConfigureHost(WebApplicationBuilder builder) {
         builder.Host.AddAppSettingsSecretsJson().UseAutofac();
+
+        LogEgress.RefuseConfiguredSinks(builder.Configuration);
+
+        builder.Logging.ClearProviders();
 
         builder.Services.AddSerilog((services, logger) => logger
             .ReadFrom.Configuration(builder.Configuration)
             .ReadFrom.Services(services)
             .Enrich.FromLogContext()
-            // The OTLP sink, so logs land in the same pipeline as traces (docs/plan/16). It is a
-            // no-op without OTEL_EXPORTER_OTLP_ENDPOINT, which is what makes a local run quiet.
-            .WriteTo.OpenTelemetry()
+            .WriteTo.ScrubbingSecrets(sinks => {
+                    // stdout, which in a cluster is the node's log collector. Formerly
+                    // `Serilog:WriteTo: [{ Name: Console }]` in every host's appsettings.json.
+                    sinks.Console();
+
+                    // The OTLP sink, so logs land in the same pipeline as traces (docs/plan/16). It
+                    // is a no-op without OTEL_EXPORTER_OTLP_ENDPOINT, which is what makes a local
+                    // run quiet.
+                    sinks.OpenTelemetry();
+                }
+            )
         );
     }
 

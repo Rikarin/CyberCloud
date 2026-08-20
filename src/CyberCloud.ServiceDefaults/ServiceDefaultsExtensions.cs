@@ -65,14 +65,23 @@ public static class ServiceDefaultsExtensions {
     ///     <c>Microsoft.Orleans.Application</c> here without it produces a trace that stops at the
     ///     gateway (docs/plan/04 § Silo composition), which looks like working tracing until somebody needs it.
     /// </remarks>
+    /// <remarks>
+    ///     ⚠ <b>TRACES AND METRICS ONLY, AND THE LOGS LINE THAT USED TO BE HERE HAD NEVER EXPORTED
+    ///     ANYTHING.</b> This method opened with <c>builder.Logging.AddOpenTelemetry(…)</c>, setting
+    ///     <c>IncludeFormattedMessage</c> and <c>IncludeScopes</c>, which reads as "log records are
+    ///     exported by OpenTelemetry". They were not, and neither setting had any effect:
+    ///     <c>OrleansApplication.ConfigureHost</c> calls <c>AddSerilog</c>, which replaces
+    ///     <c>ILoggerFactory</c> with <c>SerilogLoggerFactory</c>, so
+    ///     <c>Microsoft.Extensions.Logging</c> never constructs the factory that would have consumed
+    ///     the provider. Log records reached OTLP by exactly one route the whole time — Serilog's
+    ///     <c>WriteTo.OpenTelemetry()</c> sink. The line is deleted rather than kept because dead
+    ///     configuration that describes a live pipeline is how somebody later concludes the logs are
+    ///     covered by something they are not. That single route is the one
+    ///     <see cref="OrleansApplication" /> puts <c>SecretScrubbingSink</c> in front of —
+    ///     docs/plan/18 § Platform security, row Secrets.
+    /// </remarks>
     public static IHostApplicationBuilder ConfigureOpenTelemetry(this IHostApplicationBuilder builder) {
         ArgumentNullException.ThrowIfNull(builder);
-
-        builder.Logging.AddOpenTelemetry(logging => {
-                logging.IncludeFormattedMessage = true;
-                logging.IncludeScopes = true;
-            }
-        );
 
         builder.Services.AddOpenTelemetry()
             .ConfigureResource(resource => resource.AddAttributes(
