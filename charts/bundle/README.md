@@ -218,13 +218,22 @@ the same skip the other cluster suites use, installing **one** component and say
 name. That is the suite described above; it took cert-manager rather than a phase-50 row because
 cert-manager's readiness is observable from outside and a data-service operator's is not.
 
-**Costs, measured on a ten-CPU host rather than estimated:** a green run of the suite is **2 m 20 s**
-end to end — roughly 80 s for Testcontainers to bring up k3s, 45 s for the helm install with
-`--wait`, and the assertions in under a second. A red run costs more: the sabotage that removes
-`crds.enabled` takes **6 m 40 s**, because helm retries its post-install hook before giving up. The
+**Costs, measured on a ten-CPU host rather than estimated:** a green run of the suite is **2 m 20 s
+to 3 m 15 s** end to end across repeated runs — roughly 80 s for Testcontainers to bring up k3s, 45 s
+for the helm install with `--wait`, the assertions in under a second, and the rest variance in what
+the machine was already doing. A red run costs more: the sabotage that removes `crds.enabled` takes
+**6 m 40 s**, because helm retries its post-install hook before giving up. The
 suite takes `ClusterSlot`, the same cross-process permit the other fifteen k3s-backed assemblies
 take, so it does not widen the concurrency Task #95 capped — it lengthens the serial tail by about
 two minutes on a machine where a daemon answers, and by nothing at all on one where none does.
+
+**The "nothing to run" trap was checked rather than reasoned about.** A run with `helm` off `PATH`
+reports *1 passed, 1 skipped* in 414 ms — not "Zero tests ran", which `--minimum-expected-tests 1`
+treats as a failure. That is what the second, daemon-free test class is for. ⚠ The equivalent run
+with **no Docker daemon** is the one path here that has not been exercised end to end: pointing
+`DOCKER_HOST` at a dead endpoint does not reproduce it, because Testcontainers falls back to the
+default socket when the override does not answer. The two branches record their failure into the same
+field and produce the same skip, so the untested half is the container start and not the reporting.
 
 The next row is **not** a second component. It is either the **phase barrier** — two components on
 one cluster, which is the first thing `--phase 15` cannot reach — or a **`manifest:` component**,
