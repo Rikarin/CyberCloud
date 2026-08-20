@@ -96,7 +96,7 @@ partial class Build
 
     /// <summary>
     ///     The ten gates from docs/plan/23 § The architecture gates, in the order the doc lists them,
-    ///     plus the four this build adds. Named here so the target's log output is the checklist, and so
+    ///     plus the six this build adds. Named here so the target's log output is the checklist, and so
     ///     adding a gate is a visible diff against the doc rather than a silent omission.
     ///     <para>
     ///         ⚠ <b>Three of the ten are enforced by the compiler instead, and this target must not
@@ -140,6 +140,7 @@ partial class Build
         ("Plan citations", "no docs/plan/NN:LINE citation in a tracked file — docs/code-documentation-style.md § Citing the plan"),
         ("Code citations", "every <c>…Tests</c> and <c>…Tests.Method</c> in a tracked file names something this repository compiles — not in docs/plan/23"),
         ("Bundle", "every charts/bundle/ component declares a complete pin on ADR-011's allow-list, and every group/version charts/managed/ renders is served by exactly one of them — not in docs/plan/23"),
+        ("Log egress", "only CyberCloud.ServiceDefaults binds a Serilog type, and no appsettings file declares a sink, so SecretScrubbingSink wraps every one — not in docs/plan/23"),
     ];
 
     // ── The assemblies the gates read ─────────────────────────────────────────────────────────
@@ -223,8 +224,8 @@ partial class Build
         // as it goes, and those lines are unreadable above the header that says what they belong to.
         Log.Information(
             "Architecture: {Count} gates — the ten in docs/plan/23 § The architecture gates, plus "
-            + "Action handlers, Analyzer coverage, Plan citations, Code citations and Bundle, which "
-            + "that table does not list",
+            + "Action handlers, Analyzer coverage, Plan citations, Code citations, Bundle and Log "
+            + "egress, which that table does not list",
             ArchitectureGates.Length);
 
         var outcomes = new List<GateOutcome>
@@ -244,6 +245,7 @@ partial class Build
             PlanCitationGate(),
             CodeCitationGate(),
             BundleGate(),
+            LogEgressGate(),
         };
 
         Report(outcomes);
@@ -1131,6 +1133,103 @@ partial class Build
     static bool IsGrainKeyInterface(string name)
         => name.StartsWith("IGrainWith", StringComparison.Ordinal)
             && name.EndsWith("Key", StringComparison.Ordinal);
+
+    // ── Gate: log egress — docs/plan/18 § Platform security, row Secrets ───────────────────────
+
+    /// <summary>
+    ///     The assembly that owns Serilog, and the configuration files that must not add a sink to
+    ///     it. docs/plan/18 § Platform security, row Secrets — <b>not in docs/plan/23</b>.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         The Secrets row names three controls. <b>Secrets</b> above reports the first
+    ///         (CC1005, over <c>[Id]</c> members in grain state). The third — <i>"a log-scanning
+    ///         canary that alerts on a key-shaped string in the log pipeline"</i> — is
+    ///         <c>CyberCloud.ServiceDefaults.Logging.SecretScrubbingSink</c>, and it is a control
+    ///         over the sinks it wraps and no others. This row is the two ways it could stop being
+    ///         a control over all of them without a test going red.
+    ///     </para>
+    ///     <list type="number">
+    ///         <item>
+    ///             <b>A second logger.</b> An assembly that builds its own <c>LoggerConfiguration</c>
+    ///             writes to sinks nothing wrapped. Every assembly but
+    ///             <c>CyberCloud.ServiceDefaults</c> logs through
+    ///             <c>Microsoft.Extensions.Logging</c>, whose factory that assembly replaces with
+    ///             Serilog's, so a Serilog <c>AssemblyRef</c> anywhere else is a second pipeline
+    ///             being built.
+    ///         </item>
+    ///         <item>
+    ///             <b>A configured sink.</b> <c>ReadFrom.Configuration</c> adds sinks beside the
+    ///             wrapper rather than behind it. <c>LogEgress.RefuseConfiguredSinks</c> already
+    ///             makes that a startup failure; this makes it a build failure, which is where a
+    ///             committed <c>appsettings.json</c> should be caught.
+    ///         </item>
+    ///     </list>
+    ///     <para>
+    ///         ⚠ <b>What this row does NOT check, stated because the tick would otherwise be read as
+    ///         covering it.</b> It says nothing about whether the wrapper is still attached to the
+    ///         pipeline inside <c>CyberCloud.ServiceDefaults</c> — that is
+    ///         <c>CyberCloud.ServiceDefaults.Tests.Logging.LogEgressTests</c>, whose
+    ///         <c>ASecretLoggedThroughAHostsOwnLoggerDoesNotReachStandardOutput</c> drives a real
+    ///         host logger and reads the process's real stdout, and which has been checked to fail
+    ///         when the console sink is moved outside the wrapper. Metadata cannot see a method
+    ///         body, so the two halves are split between a gate and a test on purpose rather than
+    ///         by omission.
+    ///     </para>
+    /// </remarks>
+    GateOutcome LogEgressGate()
+    {
+        const string owner = "CyberCloud.ServiceDefaults";
+
+        var assemblies = ShippingAssemblies.ToList();
+
+        var violations = assemblies
+            .Where(assembly => !string.Equals(assembly.Name, owner, StringComparison.Ordinal))
+            .SelectMany(assembly => assembly.ReferencedAssemblies
+                .Where(IsSerilog)
+                .Select(reference =>
+                    $"{assembly.Name} binds a type from {reference}. Only {owner} may construct a Serilog "
+                    + "pipeline: it is the one that wraps every sink in SecretScrubbingSink, and a logger built "
+                    + "anywhere else writes to sinks nothing scans — docs/plan/18 § Platform security, row "
+                    + "Secrets. Log through Microsoft.Extensions.Logging instead."))
+            .ToList();
+
+        var settings = SourceRoots
+            .SelectMany(root => root.GlobFiles("**/appsettings*.json"))
+            .OrderBy(x => x.ToString(), StringComparer.Ordinal)
+            .ToList();
+
+        foreach (var file in settings)
+        {
+            // A string search rather than a JSON parse, and the difference matters here: the
+            // sections are found wherever they sit, including under an environment override, and a
+            // file this gate cannot parse is not a file this gate skips.
+            var text = File.ReadAllText(file);
+
+            violations.AddRange(SerilogSinkKeys
+                .Where(key => text.Contains(key, StringComparison.Ordinal))
+                .Select(key =>
+                    $"{RootDirectory.GetRelativePathTo(file)} declares {key.Trim('"')}. A sink in configuration is "
+                    + "added beside SecretScrubbingSink rather than behind it and would export log events with "
+                    + "credentials still in them; the host refuses to start with one. Declare the sink in "
+                    + "OrleansApplication.ConfigureHost — docs/plan/18 § Platform security, row Secrets."));
+        }
+
+        return GateOutcome.From(
+            "Log egress",
+            assemblies.Count + settings.Count,
+            $"shipping assembly and appsettings file(s); the scanner itself is {owner}, and that it is still "
+            + "attached is LogEgressTests rather than this row",
+            violations);
+    }
+
+    /// <summary>Serilog's own assemblies, by the shape of the simple name in an <c>AssemblyRef</c>.</summary>
+    static bool IsSerilog(string assembly)
+        => string.Equals(assembly, "Serilog", StringComparison.Ordinal)
+            || assembly.StartsWith("Serilog.", StringComparison.Ordinal);
+
+    /// <summary>The two configuration keys that create a sink.</summary>
+    static readonly string[] SerilogSinkKeys = ["\"WriteTo\"", "\"AuditTo\""];
 
     // ── Gates: generated surfaces and OpenAPI compatibility — docs/plan/02 § ADR-012 ──────────
 
