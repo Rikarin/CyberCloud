@@ -403,6 +403,17 @@ on the resource that creates a *new* resource — restore-in-place is how people
 resource's Monitoring blade. A managed service the tenant cannot see the health of is a black box they
 will not trust with production.
 
+**Storage, and what is under every service in this catalogue today.** Eleven of these charts name a
+storage class and default it to `""`, which means *the cluster's default class*. As of 2026-08-20 the
+bundle supplies one — `charts/bundle/openebs-localpv` — and it is **single-replica and node-local**.
+⚠ **So the per-service bullets above that say "on LINSTOR volumes" describe the intended block layer
+and not the installed one, and the difference has a name: a node loss loses that node's volumes.** It
+also constrains the row below: `Standard` and `Premium` reach their availability through the engine's
+own replicas (CNPG, Raft, a Kafka ISR) and get nothing from the volume underneath, so a plan tier must
+not be implemented by reducing replica count and leaning on storage redundancy that is not there.
+[24 § The replicated-storage switch](24-roadmap.md) holds the trigger, and
+`charts/bundle/openebs-localpv/component.yaml` § which stage is on holds the parts list.
+
 **HA is a plan attribute, not a checkbox.** `Basic` (single replica, no SLA, cheap), `Standard`
 (2–3 replicas, zone-spread, backups), `Premium` (multi-replica, sync, PITR, priority support). It is a
 single field on every service and it maps to concrete replica counts and anti-affinity per chart —

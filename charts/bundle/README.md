@@ -190,6 +190,11 @@ What *is* verified, on every build, by the Bundle gate:
 * every component's manifest is complete and its pin is in one place;
 * every declared licence is on ADR-011's allow-list;
 * every group/version any managed chart renders is served by exactly one component;
+* every component either declares what it serves or argues, in prose, that it serves nothing —
+  and never both. ⚠ Verified by sabotage on 2026-08-20 rather than by reading: removing
+  `servesNoDefinitions:` from `openebs-localpv/component.yaml`, replacing it with
+  `servesNoDefinitions: true`, and adding a `serves: storage.k8s.io/v1` beside it each turn this row
+  red, with a different message;
 * the roster and the directories agree;
 * no commit changes a pin and a managed template together.
 
