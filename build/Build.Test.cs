@@ -340,9 +340,14 @@ partial class Build
         // is idling at three. So it is derived, from the same `Environment.ProcessorCount` the
         // suite-level degree below already uses. See ContainerBackedSuiteDegree for the arithmetic
         // and for what the derivation deliberately does not model.
-        var containerBacked = projects
-            .Where(x => File.ReadAllText(x).Contains("Testcontainers", StringComparison.Ordinal))
-            .ToHashSet();
+        //
+        // ⚠ AND THE DEGREE WAS NEVER THE WHOLE STORY, BECAUSE THE SET IT APPLIED TO WAS WRONG.
+        // Which suites are container-backed used to be decided by grepping each `.csproj` for the
+        // word "Testcontainers": 28 files said it, 19 suites actually ship it, and three of the
+        // missing ones hold a k3s cluster each. They ran ungated on top of the semaphore, so a
+        // nominal cap of 3 was really up to 6 — which is most of why 4 starved a suite and 3 did
+        // not. See StartsContainers, which asks the built output instead.
+        var containerBacked = projects.Where(StartsContainers).ToHashSet();
 
         var derivedDegree = ContainerBackedSuiteDegree;
 
@@ -357,7 +362,7 @@ partial class Build
                 : derivedDegree;
 
         Log.Information(
-            "Test: {Container} of {Total} suite(s) reference Testcontainers and run at a parallelism of "
+            "Test: {Container} of {Total} suite(s) ship Testcontainers and run at a parallelism of "
             + "{Degree} ({Source}); the remaining {Rest} run at {Cpu}. Build.Test.cs § "
             + "ContainerBackedSuiteDegree has the measurement.",
             containerBacked.Count,
@@ -489,6 +494,70 @@ partial class Build
             + "fixture, a suite sitting at zero tests started, and a TLS reset from a k3s API server "
             + "that went away are all the same cause wearing different clothes. Run the named suite "
             + "alone before believing it, and if it passes alone, lower CC_TEST_CONTAINER_PARALLELISM.");
+    }
+
+    /// <summary>
+    ///     Whether a suite can start a container, answered from what it was built with.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>THIS USED TO GREP THE <c>.csproj</c> FOR THE WORD "Testcontainers", AND THE CAP
+    ///         ABOVE WAS THEREFORE NOT CAPPING WHAT IT SAID IT WAS.</b> Measured over this tree on
+    ///         2026-08-20: 28 project files contain the word and <b>19</b> suites actually ship the
+    ///         assemblies. It was wrong in both directions and the two errors compounded.
+    ///     </para>
+    ///     <list type="bullet">
+    ///         <item>
+    ///             <b>Three suites that hold a whole k3s cluster were invisible to it</b> —
+    ///             <c>CyberCloud.Providers.{ContainerService,Network,Terminal}.Cluster.Conformance</c>
+    ///             reach Testcontainers through a project reference, so their own file never says the
+    ///             word. They ran ungated, at the suite-level degree, <em>on top of</em> whatever the
+    ///             semaphore was letting through. A nominal cap of 3 was really up to 6.
+    ///         </item>
+    ///         <item>
+    ///             <b>Twelve suites that start no container were holding slots</b>, several of them
+    ///             because their <c>.csproj</c> carries a ⚠ comment explaining that they deliberately
+    ///             do <em>not</em> use Testcontainers. <c>CyberCloud.Identity.Tests</c> says "NO
+    ///             Testcontainers" in capitals and was gated for saying so.
+    ///         </item>
+    ///     </list>
+    ///     <para>
+    ///         ⚠ That is the whole shape of this repository's signature failure — a check that answers
+    ///         a narrower question than it appears to. "Does this file mention a package?" is not
+    ///         "does this suite start a container?", and the gap is invisible from the log line, which
+    ///         cheerfully reported a count either way. The two suites left sitting at zero tests
+    ///         started for four minutes in the 2026-08-20 run were two of the three it could not see.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ So the evidence is a built artefact rather than a string in a text file — the same
+    ///         reasoning as CoverageReport.cs § CoverableLines, which counts sequence points in a PDB
+    ///         rather than parsing a tool's stdout. A comment cannot fool it, a transitive reference
+    ///         cannot hide from it, and it goes right the next time somebody adds a container to a
+    ///         suite through a shared fixture.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>A suite whose output directory is not there is treated as container-backed</b>,
+    ///         which is the safe direction: gating a cheap suite costs a little wall clock, and
+    ///         letting an unknown one through costs the starved run this whole mechanism exists to
+    ///         prevent. It should not happen — every caller of RunSuites depends on <c>Compile</c> —
+    ///         so it is logged rather than passed over.
+    ///     </para>
+    /// </remarks>
+    bool StartsContainers(AbsolutePath project) {
+        var output = SuiteOutputDirectory(project);
+
+        if (!output.DirectoryExists()) {
+            Log.Warning(
+                "Test: {Suite} has no build output under {Output}, so whether it starts a container "
+                + "is unknown. Treating it as container-backed, which is the direction that costs "
+                + "wall clock rather than a starved run. Build.Test.cs § StartsContainers.",
+                project.NameWithoutExtension,
+                output);
+
+            return true;
+        }
+
+        return output.GlobFiles("Testcontainers*.dll").Count > 0;
     }
 
     /// <summary>
