@@ -51,7 +51,7 @@ public sealed class EmptyClusterFixture : IAsyncLifetime {
         + "on PATH. "
         + $"WOULD PROVE: {wouldProve} "
         + "This suite is present by name and skipped rather than absent, because "
-        + "charts/bundle/bundle.yaml § owed, `nothing-here-has-been-installed`, must not be readable "
+        + "charts/bundle/bundle.yaml § owed, `one-of-eighteen-has-been-installed`, must not be readable "
         + "as closed on a machine that never ran the install. "
         + "What went wrong: "
         + (failure is null ? "no exception was recorded." : failure.GetType().Name + ": " + failure.Message);
@@ -80,9 +80,10 @@ public sealed class EmptyClusterFixture : IAsyncLifetime {
 
             var kubeconfig = await k3s.GetKubeconfigAsync().ConfigureAwait(false);
 
-            // ⚠ A FILE, because install.sh is a separate process and helm reads $KUBECONFIG. Under
-            // the artifacts directory rather than the system temp so a run that dies mid-install
-            // leaves the credentials where the repository's own cleanup finds them.
+            // ⚠ A FILE, because install.sh is a separate process and helm reads $KUBECONFIG rather
+            // than anything this process could hand it in memory. Named with a GUID so two suites
+            // running at once cannot read each other's cluster, and deleted in DisposeAsync — it
+            // holds a working client certificate for the container.
             var path = Path.Combine(Path.GetTempPath(), "cybercloud-bundle-" + Guid.NewGuid().ToString("N") + ".kubeconfig");
             await File.WriteAllTextAsync(path, kubeconfig, TestContext.Current.CancellationToken).ConfigureAwait(false);
             KubeconfigPath = path;
@@ -131,13 +132,19 @@ public sealed class CertManagerComponentInstaller {
     ///     definitions.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b><c>--set crds.enabled=true</c> is the assertion with a live failure behind it.</b>
-    ///     cert-manager's chart ships <c>crds.enabled: false</c>, so a default install produces a
-    ///     controller and no <c>Certificate</c> kind — and, as
-    ///     <c>charts/bundle/cert-manager/component.yaml</c> records, the first thing that notices is a
-    ///     Cluster API webhook three phases later, reporting a missing Secret. That flag lives in the
-    ///     component's <c>values:</c> block, which is a part of the manifest format nothing else in
-    ///     the tree reads; losing it would be silent everywhere but here.
+    ///     ⚠ <b><c>--set crds.enabled=true</c> is the assertion with a measured failure behind it.</b>
+    ///     cert-manager's chart ships <c>crds.enabled: false</c>. Deleting the <c>values:</c> block
+    ///     from <c>charts/bundle/cert-manager/component.yaml</c> and running this assembly turns both
+    ///     tests red — this one in a quarter of a second, and
+    ///     <see cref="CertManagerOnAnEmptyCluster" /> six minutes later on
+    ///     <c>failed post-install: resource Job/cert-manager-system/cert-manager-startupapicheck not
+    ///     ready</c>. That flag lives in a part of the component.yaml format nothing else in the tree
+    ///     reads, so this is the only place a reviewer would see it go.
+    ///     ⚠ The <c>values:</c> block is one line of a component manifest and the assertion above
+    ///     covers exactly it. Every OTHER component's <c>values:</c> block — clickhouse-operator's
+    ///     <c>watchNamespaces</c>, strimzi's <c>watchAnyNamespace</c>, redis-operator's pinned image
+    ///     tag — is as unexercised as it was, and two of those three are the "operator watches only
+    ///     its own namespace" trap <c>charts/bundle/README.md</c> already names.
     /// </remarks>
     [Fact]
     public async Task TheDryRunNamesTheChartVersionTheComponentPinsAndPassesTheCrdsOverride() {
@@ -263,7 +270,7 @@ public sealed class CertManagerOnAnEmptyCluster(EmptyClusterFixture cluster) : I
             0,
             "charts/bundle/install.sh --phase 15 failed against a fresh k3s. This is the first thing "
             + "in the repository to run it against an API server at all — charts/bundle/bundle.yaml "
-            + "§ owed, `nothing-here-has-been-installed` — so a failure here is a defect in the "
+            + "§ owed, `one-of-eighteen-has-been-installed` — so a failure here is a defect in the "
             + "installer or in the pin, not in this test's expectations. Its output was:\n"
             + run.Output
         );

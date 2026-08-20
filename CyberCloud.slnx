@@ -528,7 +528,7 @@
         <!--
           ⚠ The first thing in this repository that installs a charts/bundle/ component onto an API
           server. ONE component of eighteen, and its test method's name says which one and what that
-          proves — charts/bundle/bundle.yaml § owed, `nothing-here-has-been-installed`, is narrowed by
+          proves — charts/bundle/bundle.yaml § owed, `one-of-eighteen-has-been-installed`, is narrowed by
           it and not closed. It sits under test/ because a suite that runs a container has to be a
           test project and nothing under charts/ builds; it ends in `.Cluster.Conformance` because
           Directory.Build.props § Project role detection and build/Build.Test.cs § SuiteOwning both

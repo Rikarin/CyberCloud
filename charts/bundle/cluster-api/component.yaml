@@ -41,5 +41,11 @@ notes: >
   file a reviewer reads.
   ⚠ ONE THING THE COMPONENT DOCUMENT DOES THAT clusterctl WOULD HAVE DONE FOR YOU: it declares
   `cert-manager` annotations on its webhook configurations. Cluster API's webhooks are served with
-  cert-manager-issued certificates, and this bundle does not install cert-manager. See
-  README.md § What this bundle does not install.
+  cert-manager-issued certificates, so this component is inert on a cluster with no cert-manager —
+  which is why charts/bundle/cert-manager is phase 15 and this one is phase 40.
+  ⚠ THE SENTENCE ABOVE ONCE READ "and this bundle does not install cert-manager. See README.md
+  § What this bundle does not install." IT WAS FALSE FROM THE COMMIT THAT ADDED cert-manager: the
+  component exists, bundle.yaml gives it phase 15, and that README section lists a CSI, an ingress
+  controller and OpenBao — never cert-manager. A file pointing at a section that does not say what it
+  is cited for is the shape of drift the docs/plan citation gate exists to catch one level up, and
+  nothing gates a `notes:` block. Corrected 2026-08-20 while task #119 installed that component.

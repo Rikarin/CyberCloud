@@ -119,15 +119,29 @@ ordering:
 # Named here rather than left to be discovered. Every item below was found while pinning this bundle
 # and none of it is speculative.
 owed:
-  - id: nothing-here-has-been-installed
+  - id: one-of-eighteen-has-been-installed
     says: >
-      ⚠ READ THIS BEFORE ANY OTHER ITEM. Every pin in this directory was resolved against the
-      registry or repository that serves it, and every `serves:` line was read off the CRD documents
-      those pins produce. NONE of it has been applied to a cluster by CI. `install.sh` is a
-      procedure that has been reasoned about and not exercised, which is a weaker claim than any
-      other file in this tree makes and is labelled as one. Closing it is the cluster-backed lane —
-      see README.md § Verification, and its honest limit, which explains why seventeen operators do
-      not fit in the Testcontainers k3s lane Task #95 capped at four concurrent suites.
+      ⚠ READ THIS BEFORE ANY OTHER ITEM. It used to read `nothing-here-has-been-installed` and it no
+      longer can. ONE component — cert-manager, phase 15 — is installed onto a real API server by
+      test/CyberCloud.Bundle.Cluster.Conformance, which runs THIS DIRECTORY'S OWN `install.sh` against
+      a fresh k3s and then asserts that `cert-manager.io/v1` is served and that a self-signed
+      Certificate reaches Ready with a parseable certificate in the Secret it names. Sabotage-verified
+      both ways: deleting the `values:` block from cert-manager/component.yaml turns the run red, and
+      so does removing the `--set` from the installer.
+      WHAT THAT PROVES: the install MECHANISM. `install.sh` runs unattended against a cluster it is
+      handed; it reads a pin out of a component.yaml rather than carrying one; its `--wait` makes
+      "installed" mean "serving"; and a `serves:` line is true of the cluster afterwards.
+      WHAT IT DOES NOT PROVE, AND THE DISTANCE IS THE WHOLE OF THIS ROW: that the other SEVENTEEN
+      pins install. Nothing has exercised the PHASE BARRIER — the test uses `--phase 15`, whose own
+      usage text says it "skips that guarantee" — so the ordering `phases:` above encodes is still
+      reasoned rather than run. Nothing has exercised any `manifest:` component, so the two-document
+      apply with the establishment wait between them is unexercised, and `kubectl` has never been
+      invoked by this script under test at all. Nothing has installed two components onto one cluster.
+      Nothing has applied a charts/managed/ custom resource against a bundle-installed definition,
+      which is the sentence the whole directory exists for.
+      One row of eighteen is a beginning that can be pointed at, and calling it more than that would
+      be the failure class this directory's README already names twice. Closing the rest is a lane
+      question, not a willingness question — see README.md § Verification, and its honest limit.
   - id: redis-operator-is-archived-and-its-chart-is-broken
     says: >
       ⚠ THE FOURTH SIGHTING OF ADR-010 CLAUSE 1'S AMENDMENT, AND THE FIRST WHERE THE OPERATOR EXISTS.

@@ -9,7 +9,7 @@ namespace CyberCloud.Bundle.Cluster.Conformance;
 /// <remarks>
 ///     <para>
 ///         ⚠ <b>The script is the subject, so the test may not do the script's job.</b>
-///         <c>charts/bundle/bundle.yaml</c> § owed, <c>nothing-here-has-been-installed</c>, is about
+///         <c>charts/bundle/bundle.yaml</c> § owed, <c>one-of-eighteen-has-been-installed</c>, is about
 ///         <c>install.sh</c> specifically: <i>"a procedure that has been reasoned about and not
 ///         exercised"</i>. A test that ran <c>helm upgrade --install</c> itself with the same
 ///         arguments would prove that helm installs cert-manager, which nobody doubted, and would

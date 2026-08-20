@@ -4,7 +4,7 @@
       The first thing in this repository that installs a charts/bundle/ component onto an API server.
 
       ⚠ IT COVERS ONE COMPONENT OF EIGHTEEN, AND ITS NAME IS THE ONLY HONEST PLACE TO SAY SO.
-      charts/bundle/bundle.yaml § owed, `nothing-here-has-been-installed`, is the row this project
+      charts/bundle/bundle.yaml § owed, `one-of-eighteen-has-been-installed`, is the row this project
       narrows rather than closes: every pin in that directory was resolved against a registry and none
       of it had ever been applied. Applying one component proves THE INSTALL MECHANISM — that
       install.sh reads a pin out of a component.yaml, invokes helm unattended, waits for the right
