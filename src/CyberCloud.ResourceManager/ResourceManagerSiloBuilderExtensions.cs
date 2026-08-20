@@ -41,7 +41,9 @@ public static class ResourceManagerSiloBuilderExtensions {
     ///         <see cref="NotSupportedPolicyEvaluator" /> says no policy engine ran rather than
     ///         allowing; <see cref="UnavailableSecretResolver" /> refuses rather than returning empty;
     ///         <see cref="UnavailableClusterObjectInventory" /> fails rather than reporting an empty
-    ///         cluster. Each of those is a place where the plausible default is the dangerous one, and
+    ///         cluster; <see cref="UnavailableNamespaceInventory" /> fails rather than reporting an
+    ///         empty namespace, which is the answer that would authorize deleting it. Each of those is
+    ///         a place where the plausible default is the dangerous one, and
     ///         the reasons are on the types. <c>TryAdd</c> throughout, so a host that has the real
     ///         thing registers it first and keeps it.
     ///     </para>
@@ -108,6 +110,7 @@ public static class ResourceManagerSiloBuilderExtensions {
         services.TryAddSingleton<IClusterConnectionFactory, NoClusterConnectionFactory>();
         services.TryAddSingleton<IClusterConnectionRegistrar, UnavailableClusterConnectionRegistrar>();
         services.TryAddSingleton<IClusterObjectInventory, UnavailableClusterObjectInventory>();
+        services.TryAddSingleton<INamespaceInventory, UnavailableNamespaceInventory>();
         services.TryAddSingleton<IResourceAuthorizer, ReBacResourceAuthorizer>();
 
         // Writes the resource -> resourceGroup `parent` edge at step 8 of the write path. It belongs
