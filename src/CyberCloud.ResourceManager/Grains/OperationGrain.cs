@@ -604,9 +604,12 @@ public sealed class OperationGrain(
         // one line up discards its result for the same reason: the operation is already reporting a
         // failure with a reason, and there is no later drive in which to converge a bookkeeping write.
         // What is lost is a stale label on one listing entry, against an operation that already failed.
-        _ = spec.Kind == OperationKind.Delete
-            ? await Group(spec).FailDeleteAsync(spec.ResourceId, error.Message)
-            : await Group(spec).CompleteCreateAsync(spec.ResourceId, ProvisioningState.Failed);
+        if (spec.Kind == OperationKind.Delete) {
+            _ = await Group(spec).FailDeleteAsync(spec.ResourceId, error.Message);
+        }
+        else {
+            await StampMemberAsync(spec, ProvisioningState.Failed);
+        }
 
         await TerminateAsync(Contracts.OperationState.Failed, error);
     }
