@@ -286,6 +286,55 @@ gate people stop running is the same problem wearing a different hat. ⚠ And do
 that turns a flaky gate into a slow one that fails at a lower rate, which is strictly harder to
 diagnose.
 
+## How many container-backed suites run at once, and how the tree knows which they are
+
+Two separate questions, and getting the second one wrong made the first one unanswerable.
+
+### The degree is derived from the host
+
+`Build.Test.cs` § `ContainerBackedSuiteDegree` is `Environment.ProcessorCount ÷ 3`, never zero, and
+`CC_TEST_CONTAINER_PARALLELISM` overrides it. It used to be the literal **4**, set when there were
+68 suites.
+
+The 3 is the measurement rather than a preference. On this ten-CPU host a degree of four starves a
+suite and three does not, so a container-backed suite needs more than 10 ÷ 4 = 2.5 CPUs and at most
+10 ÷ 3 = 3.3 — and three is the only whole number in that interval. It is a budget for the *suite*,
+not for one container: a `.Cluster.Conformance` run holds a k3s API server, PostgreSQL and Redis
+plus its own test host.
+
+⚠ **What the derivation models is CPU, and it is worth naming the two things it does not.** Memory
+is the obvious other candidate, and the tree cannot observe it honestly — on Linux the daemon shares
+the host's RAM, while on macOS and Windows it lives in a VM whose allocation a .NET process can only
+learn by asking `docker info`, which is a subprocess that hangs when the daemon is unhealthy, inside
+the target whose job is to tell a starved host from a broken one. The other is how many k3s clusters
+a daemon will hold, which has no API at all. The environment variable is the lever for both. A
+derivation that is wrong on some host is fine *because* the override exists and the failure message
+names it; a constant is wrong on every host but the one it was measured on, and says nothing.
+
+### Which suites are container-backed comes from the build output, not from the `.csproj`
+
+⚠ **This used to grep each project file for the word "Testcontainers", and the cap was therefore not
+capping what it said it was.** Measured over this tree on 2026-08-20: **28** project files contain
+the word, **19** suites actually ship the assemblies, and it was wrong in both directions.
+
+* **Three suites that each hold a whole k3s cluster were invisible to it** —
+  `CyberCloud.Providers.{ContainerService,Network,Terminal}.Cluster.Conformance` reach Testcontainers
+  through a project reference, so their own file never says the word. They ran ungated, at the
+  suite-level degree, *on top of* whatever the semaphore was letting through: a nominal cap of 3 was
+  really up to 6. In the run that found this, two of those three were still sitting at **zero tests
+  started after four minutes** while every other suite had finished — which is one of the four
+  symptoms the failure message names.
+* **Twelve suites that start no container were holding slots**, several of them because their
+  `.csproj` carries a ⚠ comment explaining that they deliberately do *not* use Testcontainers.
+  `CyberCloud.Identity.Tests` says "NO Testcontainers" in capitals and was gated for saying so.
+
+The evidence is now a `Testcontainers*.dll` in the suite's own output directory — the same reasoning
+as `CoverageReport.cs` § `CoverableLines` counting sequence points in a PDB rather than parsing a
+tool's stdout. A comment cannot fool it, a transitive reference cannot hide from it, and it goes
+right on its own the next time somebody adds a container to a suite through a shared fixture. A
+suite with no build output is treated as container-backed, which is the direction that costs wall
+clock rather than a starved run.
+
 ## Why the analyser exemptions are where they are
 
 `_build.csproj` is the one project exempted from warnings-as-errors, because Nuke's target fields are
