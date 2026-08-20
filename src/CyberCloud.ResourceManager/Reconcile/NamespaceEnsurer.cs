@@ -312,25 +312,32 @@ public sealed class NamespaceEnsurer(IClock clock) {
         ArgumentNullException.ThrowIfNull(connection);
         ArgumentException.ThrowIfNullOrEmpty(ns);
 
+        // ⚠ `default(NamespaceReclaim)` carries a NULL namespace, not an empty one — a struct's fields
+        // start at their defaults and `string` has no empty default. The comparison below is written
+        // so that the value a caller gets from an unassigned field reaches the refusal rather than a
+        // NullReferenceException, which is how the check was written first and how the test for it
+        // failed.
         if (!string.Equals(reclaim.Namespace, ns, StringComparison.Ordinal)
             || reclaim.ClusterId != connection.ClusterId) {
             return Result.Failure(
                 ErrorCode.Conflict,
-                $"The reclaim verdict was decided about namespace "
-                + $"'{(reclaim.Namespace.Length == 0 ? "<none>" : reclaim.Namespace)}' on cluster "
-                + $"{reclaim.ClusterId:D} and the delete addresses '{ns}' on cluster "
+                "The reclaim verdict was decided about namespace "
+                + $"'{(string.IsNullOrEmpty(reclaim.Namespace) ? "<none>" : reclaim.Namespace)}' on "
+                + $"cluster {reclaim.ClusterId:D} and the delete addresses '{ns}' on cluster "
                 + $"{connection.ClusterId:D}. A verdict is evidence about one namespace on one "
-                + "cluster and does not carry to another.",
-                ns
+                + "cluster and does not carry to another."
             );
         }
 
         if (!reclaim.Deletable) {
+            // ⚠ No `target`. An Error's target is an RFC 6901 JSON Pointer into the request body
+            // (docs/plan/08 § Errors) and a namespace name is not one — Error's constructor throws on
+            // it. There is no property of a request to point at here; the namespace is named in the
+            // message instead.
             return Result.Failure(
                 ErrorCode.Conflict,
                 $"The namespace '{ns}' on cluster {connection.ClusterId:D} may not be deleted. "
-                + reclaim.Explain(),
-                ns
+                + reclaim.Explain()
             );
         }
 
