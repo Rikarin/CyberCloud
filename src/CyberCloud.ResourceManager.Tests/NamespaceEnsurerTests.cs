@@ -2,6 +2,7 @@ using CyberCloud.Core.Time;
 using CyberCloud.Kubernetes.Contracts;
 using CyberCloud.ResourceManager.Reconcile;
 using System.Collections.Concurrent;
+using System.Collections.Immutable;
 using System.Globalization;
 using System.Text.Json;
 
@@ -283,7 +284,223 @@ public sealed class NamespaceEnsurerTests {
             .ToString("D", CultureInfo.InvariantCulture)
             .ShouldBe("b23123a5-817d-896f-83f9-167e38bc9124");
 
+    // ── The delete, and the four ways it must refuse ─────────────────────────────────────────────
+
+    [Fact]
+    public async Task AnEmptyNamespaceOfAnEmptyGroupIsDeleted() {
+        var (ensurer, connection) = Build();
+
+        var deleted = await DeleteAsync(ensurer, connection, Reclaim());
+
+        deleted.IsSuccess.ShouldBeTrue(deleted.TryGetError(out var why) ? why.Message : string.Empty);
+        connection.Deleted.Count.ShouldBe(1);
+
+        var command = connection.Deleted[0].Command;
+
+        command.Target.IsClusterScoped.ShouldBeTrue();
+        command.Target.Kind.Kind.ShouldBe("Namespace");
+        command.Target.Name.ShouldBe(Namespace);
+
+        connection.Deleted[0].Policy.ShouldBe(
+            CascadePolicy.Foreground,
+            "a proven-empty namespace has no dependents, so Foreground costs nothing and makes "
+            + "'deleted' mean gone rather than marked."
+        );
+    }
+
+    [Fact]
+    public async Task ANamespaceHoldingSomethingThisPlatformDidNotWriteIsNotDeleted() {
+        // ⚠ THE SABOTAGE CASE. A tenant's own claim, in the platform's namespace, carrying none of
+        // ADR-013's seven — which is also the exact shape of the volume a soft-deleted resource is
+        // restored from, because a StatefulSet's volumeClaimTemplate is rendered without labels.
+        var (ensurer, connection) = Build();
+
+        var reclaim = Reclaim(
+            occupants: [
+                Occupant("PersistentVolumeClaim", "data-harbor-database-0", managed: false)
+            ]
+        );
+
+        reclaim.Deletable.ShouldBeFalse();
+
+        reclaim.OperatorReclaimable.ShouldBeTrue(
+            "the platform holds nothing here and something else does, which is a person's decision "
+            + "and not a sweeper's."
+        );
+
+        var refused = await DeleteAsync(ensurer, connection, reclaim);
+
+        refused.TryGetError(out var error).ShouldBeTrue("a namespace with anything in it is not deletable.");
+        error.Code.ShouldBe(ErrorCode.Conflict);
+        error.Message.ShouldContain("data-harbor-database-0");
+        error.Message.ShouldContain(KubeLabels.ManagedBy);
+
+        connection.Deleted.ShouldBeEmpty("the refusal must happen before the API server is told anything.");
+    }
+
+    [Fact]
+    public async Task ANamespaceHoldingOnlyObjectsThisPlatformWroteIsStillNotDeleted() {
+        // The weaker rule — "delete when nothing lacks managed-by" — would fire here, and here is
+        // where it takes a live resource's pods with it.
+        var (ensurer, connection) = Build();
+
+        var reclaim = Reclaim(occupants: [Occupant("StatefulSet", "harbor-core", managed: true)]);
+
+        reclaim.Deletable.ShouldBeFalse();
+        reclaim.OperatorReclaimable.ShouldBeFalse("something of ours is still in there.");
+
+        (await DeleteAsync(ensurer, connection, reclaim)).IsFailure.ShouldBeTrue();
+        connection.Deleted.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task AGroupThatStillHoldsAMemberKeepsItsNamespaceEvenWhenTheNamespaceLooksEmpty() {
+        // ⚠ This is the ordering, as an assertion. The namespace goes last: after every member has
+        // gone, never alongside one. A member left Deleting because its teardown failed is the case
+        // that matters — docs/plan/06 § Two-phase create keeps it listed precisely so that nothing
+        // downstream treats it as finished.
+        var (ensurer, connection) = Build();
+
+        var reclaim = Reclaim(
+            members: [
+                new() {
+                    ResourceId = Address.Id,
+                    CanonicalPath = Address.CanonicalPath,
+                    State = ProvisioningState.Deleting,
+                    LastFailure = "the Harbor core StatefulSet still has a terminating pod",
+                    TeardownAttempts = 3
+                }
+            ]
+        );
+
+        reclaim.Deletable.ShouldBeFalse();
+        reclaim.OperatorReclaimable.ShouldBeFalse();
+
+        var refused = await DeleteAsync(ensurer, connection, reclaim);
+
+        refused.TryGetError(out var error).ShouldBeTrue();
+        error.Message.ShouldContain("Deleting");
+        connection.Deleted.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task AVerdictAboutAnotherNamespaceDoesNotAuthorizeThisOne() {
+        var (ensurer, connection) = Build();
+
+        var elsewhere = NamespaceReclaim.Decide(Cluster, Namespace + "-staging", [], []);
+        elsewhere.Deletable.ShouldBeTrue("that namespace is empty; this test is about which namespace.");
+
+        var refused = await DeleteAsync(ensurer, connection, elsewhere);
+
+        refused.TryGetError(out var error).ShouldBeTrue();
+        error.Code.ShouldBe(ErrorCode.Conflict);
+        connection.Deleted.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task ADefaultVerdictAuthorizesNothing() {
+        // The value a caller gets from `default`, an unassigned field, or a struct array. It must not
+        // be a licence.
+        var (ensurer, connection) = Build();
+
+        default(NamespaceReclaim).Deletable.ShouldBeFalse();
+
+        (await DeleteAsync(ensurer, connection, default)).IsFailure.ShouldBeTrue();
+        connection.Deleted.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task DeletingTheNamespaceDropsItsMemoSoTheNextPassRecreatesIt() {
+        // ⚠ Without this the delete leaves a silo believing the namespace exists for the rest of
+        // RecheckAfter, and every apply into it answers 404 for an hour.
+        var (ensurer, connection) = Build();
+
+        await EnsureAsync(ensurer, connection);
+        connection.Applied.Count.ShouldBe(1);
+
+        (await EnsureAsync(ensurer, connection)).GetValueOrThrow().Written.ShouldBeFalse();
+
+        (await DeleteAsync(ensurer, connection, Reclaim())).IsSuccess.ShouldBeTrue();
+
+        (await EnsureAsync(ensurer, connection)).GetValueOrThrow()
+            .Written.ShouldBeTrue("the memo must not outlive the object it remembers.");
+
+        connection.Applied.Count.ShouldBe(2);
+    }
+
+    [Fact]
+    public async Task ANamespaceThatIsAlreadyGoneIsASuccessfulDelete() {
+        var (ensurer, connection) = Build();
+        connection.DeleteRefusal = ErrorCode.ResourceNotFound;
+
+        (await DeleteAsync(ensurer, connection, Reclaim())).IsSuccess.ShouldBeTrue(
+            "absence is the goal, so a delete that finds nothing has reached it."
+        );
+    }
+
+    [Fact]
+    public async Task ARefusedDeleteKeepsTheClusterSCodeAndNamesTheNamespace() {
+        var (ensurer, connection) = Build();
+        connection.DeleteRefusal = ErrorCode.AuthorizationFailed;
+
+        var failed = await DeleteAsync(ensurer, connection, Reclaim());
+
+        failed.TryGetError(out var error).ShouldBeTrue();
+
+        error.Code.ShouldBe(
+            ErrorCode.AuthorizationFailed,
+            "a credential that may not delete namespaces will not be able to an hour from now either; "
+            + "re-coding it as retryable is the mistake NamespaceEnsurer.EnsureAsync already records."
+        );
+
+        error.Message.ShouldContain(Namespace);
+    }
+
+    [Fact]
+    public async Task TheShippedNamespaceInventoryRefusesRatherThanReportingAnEmptyNamespace() {
+        // ⚠ The one that would authorize a delete by saying nothing. Pinned here rather than left to
+        // the composition root, because "returns empty" is the plausible stub and it is the fatal one.
+        var listed = await new UnavailableNamespaceInventory()
+            .ListAllAsync(Cluster, Namespace, TestContext.Current.CancellationToken);
+
+        listed.TryGetError(out var error).ShouldBeTrue();
+        error.Message.ShouldContain(Namespace);
+    }
+
     // ── The harness ──────────────────────────────────────────────────────────────────────────────
+
+    static NamespaceReclaim Reclaim(
+        IReadOnlyList<ResourceGroupMember>? members = null,
+        ImmutableArray<NamespaceOccupant> occupants = default
+    ) =>
+        NamespaceReclaim.Decide(
+            Cluster,
+            Namespace,
+            members ?? [],
+            occupants.IsDefault ? [] : occupants
+        );
+
+    static NamespaceOccupant Occupant(string kind, string name, bool managed) =>
+        new() {
+            Kind = kind,
+            Name = name,
+            Labels = managed
+                ? ImmutableDictionary<string, string>.Empty.Add(KubeLabels.ManagedBy, KubeLabels.ManagedByValue)
+                : ImmutableDictionary<string, string>.Empty
+        };
+
+    static Task<Result> DeleteAsync(
+        NamespaceEnsurer ensurer,
+        RecordingConnection connection,
+        NamespaceReclaim reclaim
+    ) =>
+        ensurer.DeleteAsync(
+            NamespaceEnsurer.GroupAddress(Address),
+            Namespace,
+            connection,
+            reclaim,
+            TestContext.Current.CancellationToken
+        );
 
     static (NamespaceEnsurer Ensurer, RecordingConnection Connection) Build() =>
         (new(new MovableClock()), new(Cluster));
@@ -314,6 +531,7 @@ public sealed class NamespaceEnsurerTests {
     /// </remarks>
     sealed class RecordingConnection(Guid cluster) : IKubeClusterConnection {
         readonly ConcurrentQueue<KubeCommand> applied = new();
+        readonly ConcurrentQueue<(KubeCommand Command, CascadePolicy Policy)> deleted = new();
 
         public Guid ClusterId => cluster;
 
@@ -365,13 +583,23 @@ public sealed class NamespaceEnsurerTests {
                 Result<KubeObject>.Failure(ErrorCode.ResourceNotFound, $"{target} is not in this recorder.")
             );
 
+        public ErrorCode? DeleteRefusal { get; set; }
+
+        public IReadOnlyList<(KubeCommand Command, CascadePolicy Policy)> Deleted => [.. deleted];
+
         public Task<Result> DeleteAsync(
             KubeCommand command,
             CascadePolicy policy = CascadePolicy.Background,
             CancellationToken cancellationToken = default
-        ) =>
-            Task.FromResult(
-                Result.Failure(ErrorCode.InternalError, "The recorder is never asked to delete a namespace.")
+        ) {
+            ArgumentNullException.ThrowIfNull(command);
+            deleted.Enqueue((command, policy));
+
+            return Task.FromResult(
+                DeleteRefusal is { } refusal
+                    ? Result.Failure(refusal, $"Cluster {cluster:D} refused to delete {command.Target}.")
+                    : Result.Success
             );
+        }
     }
 }
