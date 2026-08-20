@@ -118,9 +118,20 @@ rather than "I put a database on NFS". The docs name the workloads it is for and
 ## Block storage
 
 Covered in [13](13-compute-vm-containers.md) as `CyberCloud.Compute/disks`. LINSTOR/DRBD, replication
-factor as a tier property, hot-attach, snapshot, resize (grow only). ⚠ ADR-011's licensing note about
-LINBIT applies: running GPL-3 LINSTOR is fine, and a support contract is a business decision to make
-before customer data lives on DRBD.
+factor as a tier property, hot-attach, snapshot, resize (grow only).
+
+⚠ **CORRECTED 2026-08-20. This paragraph used to end "a support contract is a business decision to
+make before customer data lives on DRBD".** That decision is made:
+[ADR-011](02-technology-decisions.md) § footnote 1 — **no LINBIT contract; the platform runs LINSTOR
+and DRBD unsupported**, with [ADR-020](02-technology-decisions.md)'s Talos system extension in place of
+the failure mode support would cover. The licence half was never in doubt and is unchanged.
+
+⚠ **What is not yet true, and this section is where it would be believed.** Nothing in
+`charts/bundle/` installs LINSTOR today. The bundle's storage component is single-replica and local
+(`charts/bundle/openebs-localpv/`), so **replication factor is not a tier property yet and a
+node loss loses that node's disks**. [24 § The replicated-storage switch](24-roadmap.md) holds the
+trigger and `charts/bundle/openebs-localpv/component.yaml` § the replicated stage holds the
+parts list.
 
 ## Archive and tiering — M3
 

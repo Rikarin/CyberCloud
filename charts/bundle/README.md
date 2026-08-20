@@ -25,7 +25,7 @@ Nothing here has a `Chart.yaml`, and that is deliberate rather than unfinished.
 to describe **a resource type's configuration surface** — the annotated values file is, in
 `charts/README.md`'s words, "the single description of a managed service's configuration surface". A
 bundle component has no resource type and no tenant-facing configuration surface. Giving it a
-`Chart.yaml` would put eighteen charts through a generator whose output nobody reads and whose
+`Chart.yaml` would put nineteen charts through a generator whose output nobody reads and whose
 failure mode is a schema drift no API depends on.
 
 So a component is a directory holding **one file**, `component.yaml`, describing an install that
@@ -52,7 +52,8 @@ if it ever inspects nothing.
 | `install` | always | `helm`, `helm-archive` or `manifest` |
 | `source` | always | The URL that was read to resolve the pin |
 | `checked` | always | The ISO date it was read. Not in the future |
-| `serves` | always | The `group/version` pairs the component's definitions serve |
+| `serves` | unless `servesNoDefinitions` | The `group/version` pairs the component's definitions serve |
+| `servesNoDefinitions` | when `serves` is absent | Why this component installs no CustomResourceDefinition. At least 60 characters of prose |
 | `requiredBy` | always | The charts and components that need it |
 | `repo`, `chart`, `version` | `install: helm` | Chart repository, chart name, chart version |
 | `archive`, `chart`, `version` | `install: helm-archive` | Packaged-chart URL, chart name, chart version |
@@ -66,9 +67,19 @@ exactly one component**. A group nothing serves fails the build, naming the char
 Two components serving the same group/version fails as well, because that is two operators owning
 one definition.
 
-Today that is **eighteen components serving twenty-one `group/version` pairs against twenty charts
-rendering sixteen**. The five that no chart renders are the reason a bundle cannot be derived from
-`charts/managed/` alone: `cluster-api-provider-kubevirt` reconciles a Machine into a `kubevirt.io/v1`
+> ⚠ **One component installs no definitions at all, and the escape is written down rather than
+> faked.** `charts/bundle/openebs-localpv` installs a ServiceAccount, a ClusterRole, a
+> ClusterRoleBinding, a Deployment and a `StorageClass` — five Kubernetes built-ins and no custom
+> resource. It declares `servesNoDefinitions:` with the reason, which the gate requires to be at least
+> sixty characters of prose because a boolean is a checkbox and a checkbox is how an exception becomes
+> the default. The trap it exists to close was available and cheap: `storage.k8s.io/v1` matches the
+> gate's `group/version` pattern, satisfies the old check, and asserts that a component *serves* a
+> group the API server has served since 1.6. A component may declare `serves:` or
+> `servesNoDefinitions:`, never both.
+
+Today that is **nineteen components serving twenty-one `group/version` pairs against twenty-one charts
+rendering sixteen**, one of the nineteen serving none. The five that no chart renders are the reason
+a bundle cannot be derived from `charts/managed/` alone: `cluster-api-provider-kubevirt` reconciles a Machine into a `kubevirt.io/v1`
 VirtualMachine and imports its disk through `cdi.kubevirt.io/v1beta1`; Cluster API's and Kamaji's
 webhooks mount a Secret only `cert-manager.io/v1` creates; and Kamaji's own `kamaji.clastix.io/v1alpha1`
 `DataStore` is what `charts/managed/kubernetes`'s `dataStoreName: default` resolves against.
@@ -126,11 +137,16 @@ belong.
 
 ## What this bundle does not install
 
-* **A CSI driver or a storage class.** `charts/README.md` describes this directory as "operators,
-  CNI, CSI, monitoring" and the CSI is missing. Two managed charts offer the tenant a storage class
-  by name and nothing here provides one. ADR-011 has already priced the candidate — LINSTOR is
-  GPL-3.0 and DRBD is GPL-2.0, and a LINBIT support contract is "a business decision to make before
-  the first customer's data is on DRBD". That decision is not this directory's.
+* **A CSI driver, and a replicated storage class.** ✅ The *storage class* half of this bullet closed
+  on 2026-08-20 — `charts/bundle/openebs-localpv` installs the default class the eleven managed charts
+  that name one were waiting for. Two things it is not, both said here because both are easy to
+  assume. It is **not a CSI driver**: `provisioner: openebs.io/local` is a pre-CSI external
+  provisioner with no `CSIDriver` object and no node plugin. And it is **not replicated**: one copy,
+  on the node the pod landed on, with a requested size that nothing enforces. A node loss loses that
+  node's volumes. The replicated stage is declared and off —
+  `openebs-localpv/component.yaml` § which stage is on has the parts list, `bundle.yaml` § owed,
+  `the-replicated-stage-is-not-installed`, has the debt, and ADR-011 footnote 1 has the decision
+  behind it: **no LINBIT contract; the platform runs LINSTOR and DRBD unsupported.**
 * **An ingress controller or a load-balancer implementation.** `charts/managed/cloud-shell` renders a
   `networking.k8s.io/v1` Ingress, which is a built-in kind and so does not fail the coverage check,
   and which nothing here serves.
@@ -186,7 +202,7 @@ What is **not** verified, and why not:
 
 Task #95 capped container-backed suites at four concurrent — `CC_TEST_CONTAINER_PARALLELISM` in
 `build/Build.Test.cs` — because a ten-CPU host starved itself running ten k3s suites at once.
-Eighteen operators, three of which run virtual machines, do not fit in that lane. A suite that
+Nineteen components, three of which run virtual machines, do not fit in that lane. A suite that
 installed two of them and asserted the bundle works would be the failure class this repository has
 shipped roughly ten times: **a check that answers a narrower question than it appears to**. So the
 honest deliverable is a documented, reproducible install procedure plus a gate over the manifests,

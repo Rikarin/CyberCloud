@@ -33,7 +33,7 @@ status board.
 |---|---|---|
 | 00 | [Vision and Principles](00-vision-and-principles.md) | Non-negotiables, layer discipline, the quality bar, what Cyber Cloud is *not* |
 | 01 | [The Azure Parity Catalogue](01-azure-parity-catalogue.md) | **The audit.** ~200 Azure products against what we build, defer or decline — with the reason on every declined row, and the scope total |
-| 02 | [Technology Decisions](02-technology-decisions.md) | Every dependency, pinned version, and the eighteen ADRs |
+| 02 | [Technology Decisions](02-technology-decisions.md) | Every dependency, pinned version, and the twenty ADRs |
 | 03 | [Repository Layout](03-repository-layout.md) | Folder tree, project graph, the provider template, the six assembly-graph rules |
 | 04 | [Orleans Topology](04-orleans-topology.md) | The three clusters, grain taxonomy, placement, streams, reminders, failure and upgrade, sizing |
 | 05 | [State and Storage](05-state-and-storage.md) | Every store and what its load scales with; the Hot/Durable split; sharding; the shard map; backup |

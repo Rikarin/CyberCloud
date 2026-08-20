@@ -32,6 +32,17 @@ phases:
       PodMonitor and nothing here reconciles one; the definition still has to exist or the apply is
       refused. Installed early because a CRD is cheap and a missing CRD fails an apply that already
       returned 202 to a tenant.
+  - phase: 25
+    name: storage
+    why: >
+      The default StorageClass, and it is this early because three later phases provision claims
+      before any tenant does: KubeVirt's DataVolumes in phase 30, Kamaji's etcd in phase 40 — whose
+      failure mode docs/plan/09 already names as "storage class unavailable" — and every data-service
+      operator in phase 50. ⚠ It is a StorageClass and a provisioner, NOT a CSI driver, and the
+      component says so in its own first paragraph. The class installed here is single-replica and
+      node-local with no kernel module in it, which is what lets the bundle install onto a cluster we
+      did not build; the replicated path is declared in openebs-localpv/component.yaml § which stage
+      is on, and nothing here installs it.
   - phase: 30
     name: virtualisation
     why: >
@@ -62,6 +73,8 @@ components:
     phase: 15
   - name: prometheus-operator-crds
     phase: 20
+  - name: openebs-localpv
+    phase: 25
   - name: kubevirt
     phase: 30
   - name: containerized-data-importer
@@ -151,17 +164,51 @@ owed:
       bundle pins 0.51.0 — the last release serving both, where v1beta2 is `served: true, storage:
       true, deprecated: true`. Closing it is a new api-version on CyberCloud.Messaging/kafkaClusters
       rendering `kafka.strimzi.io/v1`, THEN a bundle bump, in that order and not in one commit.
-  - id: no-csi
+  - id: the-replicated-stage-is-not-installed
     says: >
-      charts/README.md's tree comment says this directory is "operators, CNI, CSI, monitoring" and
-      there is no CSI component. Two managed charts carry a `@widget storageclass` row
-      (charts/managed/postgres, charts/managed/seaweedfs), so the platform hands the tenant a storage
-      class name and installs nothing that provides one. ADR-011 already prices the candidate —
-      "LINSTOR is GPL-3.0 and DRBD is GPL-2.0, and LINBIT's commercial support is how the project is
-      funded … a support contract is a business decision to make before the first customer's data is
-      on DRBD". That decision is not this directory's to make, so the row is named and left open
-      rather than pinned. A cluster installed from this bundle today needs a storage class from
-      somewhere else.
+      ✅ THIS ROW USED TO BE `no-csi` AND THE FIRST HALF OF IT IS CLOSED. charts/bundle/openebs-localpv
+      installs a DEFAULT StorageClass, so a cluster built from this bundle provisions claims and every
+      stateful managed service can converge. ⚠ THE OLD ROW ALSO UNDERSTATED ITS OWN SUBJECT BY NINE
+      CHARTS AND IS CORRECTED HERE. It said "two managed charts carry a `@widget storageclass` row
+      (charts/managed/postgres, charts/managed/seaweedfs)". Counted on 2026-08-20: ELEVEN charts name
+      a storage class in a template — clickhouse, cloud-shell, ferretdb, harbor, mariadb, nats,
+      opensearch, postgres, rabbitmq, seaweedfs, valkey — and eleven carry the `@widget storageclass`
+      row, which is not the same eleven: kafka has the widget and renders no claim of its own, and
+      cloud-shell renders a claim with no widget. charts/README.md and README.md carried the same
+      two-chart sentence and are corrected with it.
+      WHAT IS STILL OWED IS THE SECOND STAGE, AND IT IS A STAGE RATHER THAN A GAP. What is installed
+      is single-replica and node-local: one copy, no DRBD, no kernel module, and a requested size that
+      nothing enforces. A node loss loses that node's volumes. That is the right default — it is what
+      makes this bundle installable on a cluster we did not build, which is docs/plan/09's phase 0 —
+      and it is not what a paying customer's data sits on. The parts list for turning the replicated
+      stage on is openebs-localpv/component.yaml § which stage is on, and the trigger is
+      docs/plan/24 § The replicated-storage switch.
+      ⚠ ONE PART OF THAT LIST IS A CONTRADICTION IN THIS REPOSITORY RATHER THAN A TASK. ADR-011's
+      table marks LINSTOR (GPL-3.0) and DRBD (GPL-2.0) ✓ on their own terms, and
+      build/Build.Bundle.cs § BundleLicenceAllowList is an ALLOW-list holding Apache-2.0,
+      BSD-3-Clause, MIT and MPL-2.0 — so the gate fails a component the ADR permits. ADR-011
+      § Enforcement's wording, "fails on any SSPL/BUSL/AGPL image outside an allow-list", is what
+      makes that easy to read the wrong way round. Widening the list with the reason beside it is the
+      sanctioned move and is deliberately not done in advance of the component that needs it.
+  - id: nothing-has-provisioned-a-volume
+    says: >
+      ⚠ THE STORAGE COMPONENT'S PIN RESOLVES, ITS CHART RENDERS, AND NO CLAIM HAS EVER BEEN BOUND
+      THROUGH IT BY ANYTHING IN THIS TREE. What was checked on 2026-08-20, firsthand: the index serves
+      localpv-provisioner 4.6.0, `helm template` at that version emits exactly five objects, the
+      StorageClass is `openebs-hostpath` with `provisioner: openebs.io/local` and
+      `volumeBindingMode: WaitForFirstConsumer`, and the default-class annotation appears only under
+      `hostpathClass.isDefaultClass`. That is a claim about a chart and about nothing else.
+      ⚠ THE OBVIOUS TEST WOULD ANSWER A NARROWER QUESTION THAN IT APPEARS TO, AND THE NARROWNESS IS
+      SPECIFIC TO THIS COMPONENT. The Testcontainers k3s that test/CyberCloud.Bundle.Cluster.Conformance
+      starts ALREADY HAS a default StorageClass — k3s bundles Rancher's local-path provisioner and
+      marks it default, which charts/managed/cloud-shell/SOURCE already reasons about. So a suite that
+      installed this component and bound a claim would bind it through whichever of the two defaults
+      the admission plugin picked, and would pass identically if this component had never been
+      installed. Closing this row means asserting against the class BY NAME —
+      `storageClassName: openebs-hostpath` on the claim, a pod to trigger WaitForFirstConsumer, and
+      the bound PersistentVolume's `spec.storageClassName` read back — and it means asserting that
+      the default annotation landed on OUR class, which is the assertion the `values:` block exists
+      for and the one a two-default cluster makes interesting rather than trivial.
   - id: licence-scan-is-a-declaration-not-a-scan
     says: >
       ADR-011 § Enforcement asks for "a build gate [that] runs a licence scan over the chart set and

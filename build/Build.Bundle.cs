@@ -24,6 +24,7 @@
 // failure class this repository has shipped roughly ten times:
 //
 //   * a component.yaml missing a key, or naming a directory it is not in                  → Manifest
+//   * a component declaring neither `serves:` nor a written `servesNoDefinitions:`         → Manifest
 //   * a component declaring a licence outside ADR-011's allow-list                        → Licence
 //   * bundle.yaml and the directories disagreeing about which components exist            → Roster
 //   * a managed chart rendering a group no component serves, OR a pin that stopped
@@ -70,6 +71,19 @@ partial class Build
     ///         conditional the row's own text has to carry. A conditional that a build gate turns
     ///         into an unconditional yes is a gate that retires the condition, so an AGPL component
     ///         fails here and the failure is where the argument gets written down.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>GPL-2.0 and GPL-3.0 are absent, and "the gate fails on SSPL/BUSL/AGPL" is not
+    ///         what this list does.</b> ADR-011 § Enforcement is worded as a deny-list — <i>"fails on
+    ///         any SSPL/BUSL/AGPL image outside an allow-list"</i> — and reading it that way gives the
+    ///         wrong answer for every licence in neither set. This is an ALLOW-list: a component
+    ///         declaring GPL-3.0 fails here, exactly as an SSPL one does. ADR-011's table marks
+    ///         LINSTOR (GPL-3.0), DRBD (GPL-2.0) and ClamAV (GPL-2.0) ✓ on their own terms, so the
+    ///         two documents disagree the moment a GPL component is added — and the moment is
+    ///         `charts/bundle/bundle.yaml` § owed, <c>the-replicated-stage-is-not-installed</c>.
+    ///         Widening the list is the sanctioned move and it is deliberately not done in advance:
+    ///         an allowance with no component behind it is a permission nobody argued for, and the
+    ///         argument is the artifact this list exists to produce.
     ///     </para>
     ///     <para>
     ///         ⚠ <b>What this checks is a DECLARATION, and the distance from what ADR-011
@@ -245,14 +259,7 @@ partial class Build
                     + "component that gets installed are different things");
             }
 
-            if (serves.Count == 0)
-            {
-                violations.Add(
-                    $"{relative} declares no `serves:` entries. A component that serves no "
-                    + "group/version covers no chart, and the coverage check is the only thing "
-                    + "standing between a bundle bump and every tenant's create failing at the API "
-                    + "server — charts/bundle/README.md § `serves:` is the load-bearing key");
-            }
+            violations.AddRange(ServesViolations(relative, file, serves));
 
             foreach (var entry in serves.Where(entry => !GroupVersion.IsMatch(entry)))
             {
@@ -270,6 +277,97 @@ partial class Build
 
         return components;
     }
+
+    /// <summary>
+    ///     A component declares the definitions it serves, or declares in writing that it installs
+    ///     none.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>The escape exists because the rule "every component installs a
+    ///         CustomResourceDefinition" was true of eighteen operators and is false of the
+    ///         nineteenth.</b> <c>charts/bundle/openebs-localpv</c> installs a Deployment, a
+    ///         ClusterRole and a <c>StorageClass</c>. Every kind in it is a Kubernetes built-in, so
+    ///         there is nothing honest to write on a <c>serves:</c> line — and the dishonest thing
+    ///         was available and tempting: <c>storage.k8s.io/v1</c> matches
+    ///         <see cref="GroupVersion" />, would have satisfied the old check, and would have been a
+    ///         claim that a component *serves* a group the API server has served since 1.6.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>A written reason rather than a boolean, and the length floor is the point.</b>
+    ///         <c>servesNoDefinitions: true</c> is a checkbox, and a checkbox is what turns an
+    ///         exception into the default. The floor is deliberately low enough that one real
+    ///         sentence clears it and high enough that no word does — a reviewer reading the diff
+    ///         sees an argument, which is the only thing that can be wrong in a way somebody
+    ///         notices.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Declaring both is a violation rather than a precedence rule.</b> A component
+    ///         that lists a group/version AND says it installs no definitions has one of the two
+    ///         wrong, and picking a winner would silently discard whichever half was the truth.
+    ///     </para>
+    /// </remarks>
+    static IEnumerable<string> ServesViolations(
+        string relative,
+        AbsolutePath file,
+        // List rather than IReadOnlyList: CA1859 is an error here and this is a private helper — the
+        // same reason ShippingAssemblyPaths and ShippingProjectFiles do it in Build.Architecture.cs.
+        List<string> serves)
+    {
+        var reason = ReadBundleReason(file, "servesNoDefinitions");
+
+        if (serves.Count > 0)
+        {
+            if (reason is not null)
+            {
+                yield return
+                    $"{relative} declares {serves.Count} `serves:` entr(y/ies) AND "
+                    + "`servesNoDefinitions:`. One of the two is wrong, and this gate will not choose "
+                    + "which: the escape is for a component that installs no CustomResourceDefinition "
+                    + "at all, and a component that installs one owes the coverage check a line";
+            }
+
+            yield break;
+        }
+
+        if (reason is null)
+        {
+            yield return
+                $"{relative} declares no `serves:` entries. A component that serves no "
+                + "group/version covers no chart, and the coverage check is the only thing "
+                + "standing between a bundle bump and every tenant's create failing at the API "
+                + "server — charts/bundle/README.md § `serves:` is the load-bearing key. ⚠ If this "
+                + "component genuinely installs no CustomResourceDefinition — a CSI or a storage "
+                + "class installs Kubernetes built-ins and nothing else — say so in "
+                + $"`servesNoDefinitions:`, in at least {ServesNoDefinitionsMinimumReason} characters "
+                + "of prose. Do NOT reach for a built-in group such as `storage.k8s.io/v1` to satisfy "
+                + "the line: it parses, it passes, and it claims something no component in this "
+                + "directory does";
+
+            yield break;
+        }
+
+        if (reason.Length < ServesNoDefinitionsMinimumReason)
+        {
+            yield return
+                $"{relative} declares `servesNoDefinitions:` in {reason.Length} character(s) and the "
+                + $"floor is {ServesNoDefinitionsMinimumReason}. This is the one check in this file "
+                + "that a component can turn off, so what it costs is a sentence saying which kinds "
+                + "the component does install and why none of them is a definition. A one-word reason "
+                + "is a checkbox, and a checkbox is how an exception becomes the default";
+        }
+    }
+
+    /// <summary>
+    ///     The shortest <c>servesNoDefinitions:</c> this gate will accept, in characters.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ Chosen against the two strings it has to separate rather than picked round.
+    ///     <c>"true"</c>, <c>"no CRDs"</c> and <c>"it is a CSI"</c> are 4, 7 and 11; the shortest
+    ///     honest reason names the kinds the component installs and is a clause longer than any of
+    ///     them. Sixty is above the first group and below anything a reviewer would call an argument.
+    /// </remarks>
+    const int ServesNoDefinitionsMinimumReason = 60;
 
     static IEnumerable<string> LicenceViolations(string relative, Dictionary<string, string> scalars)
     {
@@ -714,6 +812,56 @@ partial class Build
         RegexOptions.Compiled);
 
     // ── The one reader this file adds ─────────────────────────────────────────────────────────
+
+    /// <summary>
+    ///     A top-level key's prose, following a <c>&gt;</c> or <c>|</c> folding indicator into the
+    ///     block it introduces, or <see langword="null" /> when the key is absent.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <see cref="ReadFlatKeys" /> reads the same key as the literal string <c>"&gt;"</c>,
+    ///     which is a folding indicator and not a reason — so a gate that measured that value would
+    ///     accept every folded block in the directory as one character of prose and reject it. Every
+    ///     multi-line field a <c>component.yaml</c> carries today (<c>notes:</c>, and now
+    ///     <c>servesNoDefinitions:</c>) is written folded, so reading the block is the normal case
+    ///     rather than a tolerance.
+    /// </remarks>
+    static string? ReadBundleReason(AbsolutePath file, string key)
+    {
+        var lines = file.ReadAllLines();
+
+        for (var index = 0; index < lines.Length; index++)
+        {
+            if (!lines[index].StartsWith(key + ":", StringComparison.Ordinal))
+                continue;
+
+            var inline = lines[index][(key.Length + 1)..].Trim();
+
+            if (inline.Length > 0 && inline is not (">" or "|" or ">-" or "|-" or ">+" or "|+"))
+                return Unquote(inline);
+
+            var block = new List<string>();
+
+            for (var next = index + 1; next < lines.Length; next++)
+            {
+                var line = lines[next];
+
+                if (line.Trim().Length == 0)
+                    continue;
+
+                if (!char.IsWhiteSpace(line[0]))
+                    break;
+
+                var trimmed = line.Trim();
+
+                if (trimmed[0] != '#')
+                    block.Add(trimmed);
+            }
+
+            return string.Join(' ', block);
+        }
+
+        return null;
+    }
 
     /// <summary>
     ///     The entries of a top-level block sequence — <c>serves:</c> and nothing else today.

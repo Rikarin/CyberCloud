@@ -17,22 +17,39 @@ charts/
 > by a directory name. A managed Kubernetes cluster is a catalogue row like every other. `bundle/` is
 > unaffected and is still what gets installed *into* a cluster once one exists.
 
-> ⚠ **`bundle/` landed 2026-08-19 and the tree comment above lost a word to it.** It reads "operators,
-> CNI, CSI, monitoring" and there is no CSI component: two managed charts offer the tenant a storage
-> class by name and nothing installs one. ADR-011 has already priced the candidate — LINSTOR is
-> GPL-3.0, DRBD is GPL-2.0, and a LINBIT support contract is a decision to make before the first
-> customer's data is on DRBD. The row is named in `charts/bundle/bundle.yaml` § owed rather than
-> quietly pinned.
+> ⚠ **`bundle/` landed 2026-08-19 owing the tree comment above a word, and paid it on 2026-08-20 —
+> with a correction to the sentence that named the debt.** The comment reads "operators, CNI, CSI,
+> monitoring". `charts/bundle/openebs-localpv` is now what stands behind the third word, and **it is
+> a StorageClass and a provisioner rather than a CSI driver** — `provisioner: openebs.io/local`, no
+> `CSIDriver` object, no node plugin. It provides the **default** class, which is what eleven charts
+> here need: they default `storage.class` to `""`, and an empty class means *the cluster's default*.
+>
+> ⚠ **This paragraph used to say "two managed charts offer the tenant a storage class by name", and
+> it was wrong by nine.** Counted 2026-08-20: **eleven** charts name a storage class in a template —
+> clickhouse, cloud-shell, ferretdb, harbor, mariadb, nats, opensearch, postgres, rabbitmq, seaweedfs,
+> valkey — and eleven carry a `@widget storageclass` row, which is a *different* eleven (kafka has
+> the widget and renders no claim; cloud-shell renders a claim with no widget). Until this landed,
+> **no stateful managed service could converge on a real cluster**: the claim was created, nothing
+> provisioned it, and there was no error anywhere for anyone to read.
+>
+> What is installed is single-replica and node-local — one copy, no DRBD, no kernel module — which is
+> what makes the bundle installable on a cluster we did not build. The replicated stage is declared
+> and off; `charts/bundle/openebs-localpv/component.yaml` § which stage is on says what turning it on
+> costs, and ADR-011's footnote 1 records the decision behind it (no LINBIT contract; the platform
+> runs LINSTOR and DRBD unsupported).
 
 ## `bundle/` — the operator layer, which is not a chart family
 
 **Every chart under `managed/` renders a custom resource and installs no controller.** Three say so in
 the template itself: *"It renders a custom resource; it does not install the operator. The operator is
-`charts/bundle/`'s job."* [`charts/bundle/`](bundle/README.md) is that job — **eighteen components
+`charts/bundle/`'s job."* [`charts/bundle/`](bundle/README.md) is that job — **nineteen components
 serving twenty-one `group/version` pairs**: the sixteen this catalogue renders, plus five nothing here
 renders and something here needs. Those five are the reason a bundle cannot be derived from the charts
 alone — `cluster-api-provider-kubevirt` reconciles a Machine into a `kubevirt.io/v1` VirtualMachine, and
-Cluster API's and Kamaji's webhooks mount a Secret only cert-manager creates.
+Cluster API's and Kamaji's webhooks mount a Secret only cert-manager creates. ⚠ **Nineteen components
+and twenty-one pairs is not an arithmetic slip:** the nineteenth, `openebs-localpv`, installs no
+CustomResourceDefinition at all and says so in `servesNoDefinitions:` rather than claiming a built-in
+group to satisfy the check.
 
 > ⚠ **This directory's absence had been misread twelve times.** Twelve provider agents each wrote some
 > form of "the k3s the cluster suite starts has no `<X>` operator" and read it as a limitation of the
