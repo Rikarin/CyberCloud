@@ -494,6 +494,19 @@ public sealed class ResourceManagerCluster : IAsyncLifetime {
     public IResourceIndexGrain Index(ResourceId address) =>
         For(address.TenantId).GetGrain<IResourceIndexGrain>(GrainKeys.PathIndex(address));
 
+    /// <summary>
+    ///     The resource group grain whose membership the write and delete paths maintain.
+    /// </summary>
+    /// <param name="address">Any address in the group. Only its subscription and group name are read.</param>
+    /// <remarks>
+    ///     ⚠ Taken from an <b>address</b> rather than from a subscription and a name, so a test cannot
+    ///     assert against a different group than the one it wrote into by mistyping a string — which
+    ///     is a membership test that passes because it found nothing where it was looking.
+    /// </remarks>
+    public IResourceGroupGrain Group(ResourceId address) =>
+        For(address.TenantId)
+            .GetGrain<IResourceGroupGrain>(GrainKeys.ResourceGroup(address.SubscriptionId, address.ResourceGroup));
+
     /// <summary>The resource grain.</summary>
     public IResourceGrain Resource(Guid tenant, Guid resourceId) =>
         For(tenant).GetGrain<IResourceGrain>(GrainKeys.Resource(resourceId));
