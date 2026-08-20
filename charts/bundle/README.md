@@ -166,8 +166,29 @@ and works; what it does not have is anybody to fix it. See
 
 ## Verification, and its honest limit
 
-**Nothing in this directory has been installed onto a cluster by CI, and the state of the tree says
-so in `bundle.yaml` § owed rather than implying otherwise.**
+**One of the eighteen components is installed onto a real cluster by CI. Seventeen are not, and the
+state of the tree says which in `bundle.yaml` § owed rather than implying otherwise.**
+
+`test/CyberCloud.Bundle.Cluster.Conformance` starts an empty k3s, runs **this directory's own
+`install.sh`** — not a re-implementation of it — with `--phase 15`, and then asserts the two things
+a CRD apply could not fake: that `cert-manager.io/v1` is served afterwards, and that a self-signed
+`Certificate` reaches `Ready` with a parseable certificate in the Secret it names. The second
+assertion is the one that needs the controller running, the webhook admitting and the issuer
+reconciling.
+
+What that supports is **the install mechanism**: the script runs unattended against a cluster it is
+handed, reads a pin out of a `component.yaml` rather than carrying one, and its `--wait` makes
+"installed" mean "serving". What it does not support is the roster. Seventeen pins are still
+resolved-but-never-applied; no `manifest:` component has been applied, so `kubectl` has never been
+invoked by this script under test; and the phase barrier is unexercised, because `--phase` is the
+flag whose own usage text says it *"skips that guarantee"*. `bundle.yaml` § owed,
+`one-of-eighteen-has-been-installed`, keeps the full list.
+
+> ⚠ **A defect the install found rather than the reading.** `cert-manager/component.yaml` recorded
+> that dropping `crds.enabled: true` would produce "a controller and no Certificate kind", noticed
+> three phases later by a Cluster API webhook. Running it says otherwise: the chart's own
+> post-install `startupapicheck` Job fails and `helm` exits non-zero after about six minutes. The
+> flag's absence is loud, not silent — better than the file assumed, and now recorded there.
 
 What *is* verified, on every build, by the Bundle gate:
 
@@ -192,11 +213,33 @@ shipped roughly ten times: **a check that answers a narrower question than it ap
 honest deliverable is a documented, reproducible install procedure plus a gate over the manifests,
 and the cluster-backed proof is named as owed rather than faked.
 
-The one thing that could be added cheaply, and is the next step rather than a plan: a cluster-backed
-case behind the same skip the other cluster suites use, installing **one** phase-50 component and
-asserting that its definitions become established and that `charts/managed/<x>` applies against them.
-That proves the mechanism for one row rather than the bundle for eighteen, and it should say so in
-its own name.
+That paragraph used to end with the next step rather than a plan — one cluster-backed case, behind
+the same skip the other cluster suites use, installing **one** component and saying so in its own
+name. That is the suite described above; it took cert-manager rather than a phase-50 row because
+cert-manager's readiness is observable from outside and a data-service operator's is not.
+
+**Costs, measured on a ten-CPU host rather than estimated:** a green run of the suite is **2 m 20 s
+to 3 m 15 s** end to end across repeated runs — roughly 80 s for Testcontainers to bring up k3s, 45 s
+for the helm install with `--wait`, the assertions in under a second, and the rest variance in what
+the machine was already doing. A red run costs more: the sabotage that removes `crds.enabled` takes
+**6 m 40 s**, because helm retries its post-install hook before giving up. The
+suite takes `ClusterSlot`, the same cross-process permit the other fifteen k3s-backed assemblies
+take, so it does not widen the concurrency Task #95 capped — it lengthens the serial tail by about
+two minutes on a machine where a daemon answers, and by nothing at all on one where none does.
+
+**The "nothing to run" trap was checked rather than reasoned about.** A run with `helm` off `PATH`
+reports *1 passed, 1 skipped* in 414 ms — not "Zero tests ran", which `--minimum-expected-tests 1`
+treats as a failure. That is what the second, daemon-free test class is for. ⚠ The equivalent run
+with **no Docker daemon** is the one path here that has not been exercised end to end: pointing
+`DOCKER_HOST` at a dead endpoint does not reproduce it, because Testcontainers falls back to the
+default socket when the override does not answer. The two branches record their failure into the same
+field and produce the same skip, so the untested half is the container start and not the reporting.
+
+The next row is **not** a second component. It is either the **phase barrier** — two components on
+one cluster, which is the first thing `--phase 15` cannot reach — or a **`manifest:` component**,
+which would be the first time `install.sh`'s `kubectl` path and its establishment wait ran at all.
+Both are strictly more than "one more operator installs", and either would want the nightly lane
+rather than this one.
 
 See [ADR-010](../../docs/plan/02-technology-decisions.md) § ADR-010, ADR-011 § The licence audit, and
 [docs/plan/12](../../docs/plan/12-managed-data-services.md) § The pattern, once.

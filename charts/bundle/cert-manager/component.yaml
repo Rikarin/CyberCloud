@@ -40,6 +40,16 @@ requiredBy:
 # controller and no Certificate kind — and the first thing that notices is the Cluster API webhook,
 # three phases later, with an error that names a Secret. install.sh passes the flag; it is recorded
 # here because a values default is the kind of fact that changes between minor releases.
+#
+# ⚠ MEASURED RATHER THAN REASONED, 2026-08-20, BY DELETING THE TWO LINES BELOW AND RUNNING THE
+# INSTALL. Without them `helm upgrade --install` does not quietly produce a controller with no
+# Certificate kind — it FAILS, after about six minutes, with `failed post-install: resource
+# Job/cert-manager-system/cert-manager-startupapicheck not ready. status: Failed`. The chart ships a
+# post-install hook Job that creates a SelfSubjectAccessReview against the API it just installed, so
+# the chart itself catches the missing definitions. That makes the flag's absence loud rather than
+# silent, which is better than this note assumed, and it is also the second reason `--wait` means
+# "serving": the hook cannot pass until the webhook admits. See
+# test/CyberCloud.Bundle.Cluster.Conformance.
 values:
   crds.enabled: "true"
 
@@ -48,3 +58,10 @@ notes: >
   needs the CNI. Phase 15 rather than 40: cert-manager's own webhook has to be Ready before anything
   in phase 40 creates a Certificate, and `helm install --wait` is the barrier that makes "installed"
   mean "serving".
+  ⚠ THIS IS THE ONE COMPONENT IN THE BUNDLE THAT HAS BEEN INSTALLED ONTO A CLUSTER BY A TEST.
+  test/CyberCloud.Bundle.Cluster.Conformance runs `install.sh --phase 15` against a fresh k3s and
+  asserts that `cert-manager.io/v1` is served afterwards and that a self-signed Certificate reaches
+  Ready with a parseable certificate in the Secret it names. The namespace that produces is
+  `cert-manager-system`, from install.sh's `<component>-system` rule, and NOT the upstream default
+  `cert-manager`; nothing in this bundle depends on the name, because a cert-manager annotation names
+  an Issuer rather than a namespace, but a values file copied from upstream documentation will.

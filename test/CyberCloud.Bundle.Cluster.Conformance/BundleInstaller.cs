@@ -1,0 +1,204 @@
+using System.Diagnostics;
+using System.Text;
+
+namespace CyberCloud.Bundle.Cluster.Conformance;
+
+/// <summary>
+///     Runs <c>charts/bundle/install.sh</c> — the real installer, not a re-implementation of it.
+/// </summary>
+/// <remarks>
+///     <para>
+///         ⚠ <b>The script is the subject, so the test may not do the script's job.</b>
+///         <c>charts/bundle/bundle.yaml</c> § owed, <c>one-of-eighteen-has-been-installed</c>, is about
+///         <c>install.sh</c> specifically: <i>"a procedure that has been reasoned about and not
+///         exercised"</i>. A test that ran <c>helm upgrade --install</c> itself with the same
+///         arguments would prove that helm installs cert-manager, which nobody doubted, and would
+///         leave the ordering, the flag handling, the bash 3.2 array expansions and the
+///         <c>component.yaml</c> reader exactly as unexercised as they were.
+///     </para>
+///     <para>
+///         ⚠ <b><c>--phase 15</c>, and that narrows what the run proves.</b> The script's own usage
+///         text says <c>--phase</c> <i>"skips that guarantee and is for repairing one row, not for
+///         installing"</i> — the guarantee being the phase barrier. So this exercises the installer's
+///         per-component path and NOT its ordering: a defect in the barrier between phases would not
+///         be caught here. Installing every phase would mean eighteen operators and three virtual
+///         machines in a Testcontainers lane Task #95 capped at four concurrent suites, which is the
+///         reason the bundle had no cluster-backed proof at all.
+///     </para>
+/// </remarks>
+public static class BundleInstaller {
+    /// <summary>The phase <c>bundle.yaml</c> gives cert-manager. Read from the file, not typed here.</summary>
+    public const string CertManagerComponent = "cert-manager";
+
+    /// <summary>How long the installer gets before the test gives up on it.</summary>
+    /// <remarks>
+    ///     ⚠ Longer than <c>install.sh</c>'s own <c>--timeout 10m</c> on the helm call, so a helm
+    ///     timeout surfaces as helm's message rather than as this harness killing the process. A
+    ///     harness that times out first turns every slow install into the same uninformative failure.
+    /// </remarks>
+    public static readonly TimeSpan Budget = TimeSpan.FromMinutes(12);
+
+    /// <summary>The repository root — the directory holding <c>CyberCloud.slnx</c>.</summary>
+    /// <remarks>
+    ///     ⚠ Walked upward to the solution file rather than counted in <c>..</c> segments, which is
+    ///     what every other file-reading test in this repository does: the number of segments between
+    ///     a test assembly and the root is a property of the artifacts layout, and it changes without
+    ///     anybody deciding to change it.
+    /// </remarks>
+    public static string RepositoryRoot {
+        get {
+            var directory = new DirectoryInfo(AppContext.BaseDirectory);
+
+            while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "CyberCloud.slnx"))) {
+                directory = directory.Parent;
+            }
+
+            return directory?.FullName
+                ?? throw new InvalidOperationException(
+                    "No CyberCloud.slnx above " + AppContext.BaseDirectory + ", so charts/bundle/ "
+                    + "cannot be found."
+                );
+        }
+    }
+
+    /// <summary>The installer.</summary>
+    public static string Script => Path.Combine(RepositoryRoot, "charts", "bundle", "install.sh");
+
+    /// <summary>A component's manifest.</summary>
+    /// <param name="component">The component's directory name.</param>
+    public static string ComponentFile(string component) =>
+        Path.Combine(RepositoryRoot, "charts", "bundle", component, "component.yaml");
+
+    /// <summary>
+    ///     The value of a top-level scalar in a <c>component.yaml</c>, or <see langword="null" />.
+    /// </summary>
+    /// <param name="component">The component's directory name.</param>
+    /// <param name="key">The key.</param>
+    /// <remarks>
+    ///     ⚠ <b>The same deliberately narrow reader <c>install.sh</c>'s <c>key()</c> is, and for the
+    ///     same reason rather than by copying.</b> The point of reading the pin here is that the
+    ///     assertion and the script arrive at the value independently; a YAML library would still be
+    ///     an independent path, but it would also accept documents the script's awk cannot, and then
+    ///     a component.yaml that this suite reads and the installer silently does not would look
+    ///     green. The Bundle gate already rejects anything outside this subset.
+    /// </remarks>
+    public static string? Pin(string component, string key) {
+        foreach (var line in File.ReadLines(ComponentFile(component))) {
+            if (line.Length == 0 || !char.IsLetter(line[0])) {
+                continue;
+            }
+
+            var colon = line.IndexOf(':', StringComparison.Ordinal);
+
+            if (colon < 0 || !line.AsSpan(0, colon).SequenceEqual(key)) {
+                continue;
+            }
+
+            return line[(colon + 1)..].Trim().Trim('"');
+        }
+
+        return null;
+    }
+
+    /// <summary>What a run of the installer did.</summary>
+    /// <param name="ExitCode">Its exit code.</param>
+    /// <param name="Output">Standard output and standard error, interleaved in arrival order.</param>
+    public sealed record Run(int ExitCode, string Output);
+
+    /// <summary>
+    ///     Runs <c>install.sh</c> with the given arguments.
+    /// </summary>
+    /// <param name="arguments">Everything after the script path.</param>
+    /// <param name="kubeconfig">
+    ///     A kubeconfig file for the run to act against, or <see langword="null" /> for a run that
+    ///     touches no cluster.
+    /// </param>
+    /// <param name="cancellationToken">The test's token.</param>
+    /// <remarks>
+    ///     ⚠ <b><c>KUBECONFIG</c> is set to the container's file for every run that has one, and it is
+    ///     never left unset for a run that applies.</b> <c>install.sh</c> falls back to the ambient
+    ///     kubeconfig, so a bug that dropped the environment here would install cert-manager into
+    ///     whatever cluster the developer running the suite was last pointed at. This is the same
+    ///     hazard <c>Build.E2E.cs</c> § <c>ExerciseBootstrap</c> guards with an unresolvable context,
+    ///     and the guard here is that the applying test passes a path and the dry-run test passes
+    ///     none — a dry run executes nothing, so it has nothing to point anywhere.
+    /// </remarks>
+    public static async Task<Run> RunAsync(
+        string arguments,
+        string? kubeconfig,
+        CancellationToken cancellationToken
+    ) {
+        var start = new ProcessStartInfo("bash") {
+            WorkingDirectory = RepositoryRoot,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false
+        };
+
+        start.ArgumentList.Add(Script);
+
+        foreach (var argument in arguments.Split(' ', StringSplitOptions.RemoveEmptyEntries)) {
+            start.ArgumentList.Add(argument);
+        }
+
+        if (kubeconfig is not null) {
+            start.Environment["KUBECONFIG"] = kubeconfig;
+        }
+
+        using var process = new Process { StartInfo = start };
+        var output = new StringBuilder();
+
+        process.OutputDataReceived += (_, e) => Append(output, e.Data);
+        process.ErrorDataReceived += (_, e) => Append(output, e.Data);
+
+        process.Start();
+        process.BeginOutputReadLine();
+        process.BeginErrorReadLine();
+
+        using var budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        budget.CancelAfter(Budget);
+
+        try {
+            await process.WaitForExitAsync(budget.Token).ConfigureAwait(false);
+        } catch (OperationCanceledException) {
+            Kill(process);
+            throw;
+        }
+
+        return new(process.ExitCode, output.ToString());
+    }
+
+    static void Append(StringBuilder output, string? line) {
+        if (line is null) {
+            return;
+        }
+
+        lock (output) {
+            output.AppendLine(line);
+        }
+    }
+
+    static void Kill(Process process) {
+        try {
+            process.Kill(entireProcessTree: true);
+        } catch (InvalidOperationException) {
+            // It exited between the timeout and the kill. Nothing to do and nothing to report.
+        }
+    }
+
+    /// <summary>
+    ///     Whether a command answers on <c>PATH</c>, so a missing tool is a named skip rather than a
+    ///     process-start exception.
+    /// </summary>
+    /// <param name="command">The command.</param>
+    /// <remarks>
+    ///     ⚠ Checks exactly what the phase under test needs and nothing else. Phase 15 is one
+    ///     <c>helm upgrade --install</c>, so <c>kubectl</c> is not required and is not checked — a
+    ///     precondition wider than the run is a suite that skips on a machine where it would have
+    ///     passed, which is the quieter half of the same failure as one that runs when it should not.
+    /// </remarks>
+    public static bool OnPath(string command) =>
+        (Environment.GetEnvironmentVariable("PATH") ?? string.Empty)
+        .Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries)
+        .Any(directory => File.Exists(Path.Combine(directory, command)));
+}

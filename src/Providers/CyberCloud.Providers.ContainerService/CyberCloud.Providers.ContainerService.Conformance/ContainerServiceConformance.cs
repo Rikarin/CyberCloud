@@ -107,10 +107,25 @@ public sealed class ManagedClusterCase : IProviderCaseSource {
     /// <summary>The Cluster as the control-plane provider leaves it, endpoint patched on.</summary>
     /// <param name="ns">The namespace.</param>
     /// <param name="name">The resource's own name.</param>
+    /// <remarks>
+    ///     ⚠ <b>The <c>apiVersion</c> and <c>kind</c> are read off
+    ///     <see cref="ManagedClusters.ClusterKind" /> rather than written here, because this body had
+    ///     already drifted.</b> It said <c>cluster.x-k8s.io/v1beta1</c> while its own key —
+    ///     <see cref="ManagedClusters.ClusterRef" />, built from the same
+    ///     <see cref="ManagedClusters.ClusterKind" /> — said <c>v1beta2</c>, as do both
+    ///     <c>charts/managed/kubernetes</c> and <c>charts/managed/kubernetes-agentpool</c>. The
+    ///     disagreement was inert only because <see cref="FakeKubeCluster" /> looks an object up by its
+    ///     reference and never reads the body's own <c>apiVersion</c>; the first check that reads the
+    ///     body would have disagreed with every check that reads the key, and the disagreement would
+    ///     have looked like a regression in whichever change made the body matter. Cluster API v1.14.0
+    ///     — the pin in <c>charts/bundle/cluster-api/component.yaml</c> — serves both, with
+    ///     <c>v1beta1</c> marked <c>deprecated: true, storage: false</c>, so the drift would not have
+    ///     been caught by an apply either.
+    /// </remarks>
     static string EndpointedCluster(string ns, string name) =>
         new JsonObject {
-            ["apiVersion"] = "cluster.x-k8s.io/v1beta1",
-            ["kind"] = "Cluster",
+            ["apiVersion"] = ManagedClusters.ClusterKind.ApiVersion,
+            ["kind"] = ManagedClusters.ClusterKind.Kind,
             ["metadata"] = new JsonObject { ["name"] = name, ["namespace"] = ns },
             ["spec"] = new JsonObject {
                 ["controlPlaneEndpoint"] = new JsonObject {
