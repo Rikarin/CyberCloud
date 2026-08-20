@@ -59,15 +59,26 @@ namespace CyberCloud.Providers.DocumentDB;
 ///         row. It is <b>not fixed here</b>, because this provider does not own that one.
 ///     </para>
 ///     <para>
-///         ⚠ <b>PIECE 5 IS NOT BUILT AND THIS IS THE MILDEST OF THE THREE ANSWERS THE CATALOGUE HAS
-///         GIVEN.</b> CloudNativePG generates the credential, and FerretDB neither stores nor invents
-///         one — it forwards a client's credentials to PostgreSQL and returns PostgreSQL's verdict, so
-///         an anonymous caller connects and can do nothing. The service therefore works and
-///         <c>listKeys</c> merely has nowhere to read the password back from, which is the
-///         <c>CyberCloud.DBforPostgreSQL/servers</c> answer rather than
-///         <c>CyberCloud.Cache/redis</c>' (does not start) or <c>CyberCloud.Storage/accounts</c>'
-///         (starts open). It is the first row to <i>reproduce</i> an earlier answer instead of adding
-///         a worse one.
+///         ⚠ <b>THIS ROW MINTS NOTHING, AND IT IS A CHOICE RATHER THAN A GAP.</b> docs/plan/12 § The
+///         pattern, once, piece 5 is built: <c>ISecretWriter</c> is the interface,
+///         <c>CyberCloud.Vault</c> ships <c>OpenBaoSecretWriter</c>, and
+///         <c>CyberCloud.Storage/accounts</c>, <c>CyberCloud.Monitor/workspaces</c>,
+///         <c>CyberCloud.ContainerRegistry/registries</c> and <c>CyberCloud.Cache/redis</c> mint
+///         through it. Here CloudNativePG generates the credential at bootstrap, so the password the
+///         cluster accepts exists before this reconciler could write one — minting afterwards would
+///         publish a credential the database never took while every component reported success.
+///         <c>DocumentDbAccountListKeysHandler</c> reads it instead, which is the rule everywhere
+///         except <c>CyberCloud.Cache/redis</c>, whose operator generates nothing and whose reconciler
+///         therefore mints.
+///     </para>
+///     <para>
+///         ⚠ <b>FerretDB adds nothing to that story, which is why an unauthenticated caller gets
+///         nowhere.</b> It neither stores nor invents a credential — it forwards a client's to
+///         PostgreSQL and returns PostgreSQL's verdict, so an anonymous caller connects and can do
+///         nothing. ⚠ The three-way comparison this paragraph used to draw has expired in all three
+///         directions: <c>CyberCloud.DBforPostgreSQL/servers</c> no longer merely fails to hand the
+///         password out, <c>CyberCloud.Cache/redis</c> no longer fails to start, and
+///         <c>CyberCloud.Storage/accounts</c> no longer comes up open.
 ///     </para>
 ///     <para>
 ///         ⚠ <b>No <c>SupportsSoftDelete</c>, for the reason the five providers before this one give</b>:

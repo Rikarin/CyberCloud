@@ -723,11 +723,18 @@ public static class PostgresServers {
     ///         <c>bootstrap.initdb.secret.name</c> is the seam that makes that possible: the operator
     ///         reads the password out of a <c>Secret</c> in the namespace, so the only component that
     ///         ever holds the plaintext is whatever writes that <c>Secret</c> — docs/plan/12 § The
-    ///         pattern, once, piece 5, "credential provisioning into the tenant's Vault", which needs
-    ///         the OpenBao integration that does not exist. Until it does, the operator generates its
-    ///         own password when the <c>Secret</c> is absent, which is a working database whose
-    ///         credentials <c>listKeys</c> cannot yet hand out — a gap that is visible rather than a
-    ///         plaintext password in grain state, which would not be.
+    ///         pattern, once, piece 5, "credential provisioning into the tenant's Vault".
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Piece 5 is built and this row still declines to use it.</b> <c>ISecretWriter</c>
+    ///         is the interface and <c>CyberCloud.Vault</c> ships <c>OpenBaoSecretWriter</c>, so the
+    ///         "until it does" this paragraph used to end on has passed. Leaving
+    ///         <c>bootstrap.initdb.secret</c> unrendered is now the deliberate choice: CloudNativePG
+    ///         generates its own password into <c>{cluster}-app</c> before the cluster reports ready,
+    ///         and a credential minted after that is one the server never accepted.
+    ///         <c>PostgresServerListKeysHandler</c> reads the operator's Secret, so the gap this
+    ///         paragraph recorded — a working database whose credentials <c>listKeys</c> cannot hand
+    ///         out — is closed.
     ///     </para>
     /// </remarks>
     public static string ClusterJson(string name, JsonElement desired) {

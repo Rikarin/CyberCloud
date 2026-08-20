@@ -797,8 +797,15 @@ public static class MariaDbServers {
     ///     </para>
     ///     <para>
     ///         ⚠ <b>Both passwords appear as <i>references by name</i> and never as values, and neither
-    ///         <c>Secret</c> is written by this reconciler</b> — docs/plan/12 § The pattern, once,
-    ///         piece 5, which needs the OpenBao integration that does not exist.
+    ///         <c>Secret</c> is written by this reconciler.</b> ⚠ The reason is <b>not</b> that
+    ///         docs/plan/12 § The pattern, once, piece 5 is unbuilt — it is built and named
+    ///         <c>ISecretWriter</c>, <c>CyberCloud.Vault</c> ships <c>OpenBaoSecretWriter</c>, and four
+    ///         reconcilers mint through it. This row declines to, and <c>generate: true</c> below is
+    ///         why: mariadb-operator creates the value and puts it in the database at bootstrap, so a
+    ///         password minted here afterwards would be one the server never accepted, published while
+    ///         every component reported success. <c>MariaDbServerListKeysHandler</c> reads what the
+    ///         operator wrote, which is what makes the credential it hands out the credential the
+    ///         database has.
     ///     </para>
     ///     <para>
     ///         ⚠ <b><c>generate: true</c> is load-bearing rather than polite, and this operator is a

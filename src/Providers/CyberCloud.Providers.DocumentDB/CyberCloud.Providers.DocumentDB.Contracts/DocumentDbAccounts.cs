@@ -389,10 +389,19 @@ public static class DocumentDbAccounts {
     /// <param name="name">The resource's own name.</param>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>Written by the operator, never by this provider, and that is what makes this row
-    ///         usable without piece 5.</b> <c>internal/controller/cluster_create.go</c> generates it
-    ///         with <c>password.Generate(64, 10, 0, false, true)</c> when
+    ///         ⚠ <b>Written by the operator, never by this provider.</b>
+    ///         <c>internal/controller/cluster_create.go</c> generates it with
+    ///         <c>password.Generate(64, 10, 0, false, true)</c> when
     ///         <see cref="EnableSuperuserAccess" /> is on and no <c>spec.superuserSecret</c> is given.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>This row mints nothing into the vault, and the reason is not that piece 5 is
+    ///         missing.</b> docs/plan/12 § The pattern, once, piece 5 is built — <c>ISecretWriter</c>
+    ///         is the interface and <c>CyberCloud.Vault</c> ships <c>OpenBaoSecretWriter</c>. The
+    ///         reason is the paragraph above: CloudNativePG has already put a password in the database
+    ///         by the time this reconciler could write one, so a minted credential would be a password
+    ///         the cluster never accepted while everything reported success.
+    ///         <c>DocumentDbAccountListKeysHandler</c> reads these two keys instead.
     ///     </para>
     ///     <para>
     ///         ⚠ <b>The <c>uri</c> key of THIS secret is unusable and the <c>uri</c> key of the
