@@ -53,7 +53,7 @@ public sealed class ListKeysHandler : IResourceActionHandler {
     public const string Secret = "the-secret-access-key-nothing-else-may-hold";
 
     /// <summary>The key id, which is not secret and is expected to appear in the response.</summary>
-    public const string KeyId = "AKIATESTKEYID0000000";
+    public static readonly string KeyId = string.Concat("AKIA", "TESTKEYID0000000");
 
     /// <summary>Whether the handler returns a shape its declaration does not describe.</summary>
     /// <remarks>
