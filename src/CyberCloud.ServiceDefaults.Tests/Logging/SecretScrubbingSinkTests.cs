@@ -116,6 +116,29 @@ public class SecretScrubbingSinkTests {
     }
 
     [Fact]
+    public void APropertyTheTemplatePutInACredentialPositionGoesEvenThoughItsValueLooksLikeNothing() {
+        var sink = new CollectingSink();
+        using var logger = Pipeline(sink);
+
+        // ⚠ THE HOLE THE TEMPLATE FIX OPENED, AND THE REASON TO LOOK FOR IT. The template matches
+        // the connection-string rule and the {Pw} token sits inside the match, so the rendered
+        // message comes out clean — while the property itself is an ordinary password with no
+        // recognisable shape, so nothing fires on it and the OTLP sink exports it as a structured
+        // attribute beside a message that no longer mentions it. Checking the rendering alone would
+        // have shown this working.
+        logger.Information("connecting with Password={Pw} to {Host}", "correct horse battery", "db-0");
+
+        var event_ = sink.Events.ShouldHaveSingleItem();
+
+        event_.Properties["Pw"].ToString().ShouldNotContain("correct horse battery");
+        event_.Properties["Host"].ToString().ShouldContain("db-0", Case.Sensitive, "an innocent property is untouched");
+
+        var writer = new StringWriter();
+        event_.RenderMessage(writer);
+        writer.ToString().ShouldNotContain("correct horse battery");
+    }
+
+    [Fact]
     public void ASecretNestedInsideADestructuredObjectIsFound() {
         var sink = new CollectingSink();
         using var logger = Pipeline(sink);

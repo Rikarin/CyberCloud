@@ -108,16 +108,20 @@ sealed class SecretScrubbingSink : ILogEventSink, IDisposable {
         var fired = new List<string>();
 
         var template = logEvent.MessageTemplate;
+        HashSet<string>? swallowed = null;
+
         if (SecretShapedText.TryRedact(template.Text, out var cleanTemplate, out var templateRules)) {
             // ⚠ Re-parsed rather than carried as literal text. A redaction replaces a run that
-            // contains no braces with a marker that contains none either, so every {Property} token
-            // in the template survives the round trip and the event still renders against its own
-            // properties. A marker pasted in as a literal would break that binding.
-            template = TemplateParser.Parse(cleanTemplate);
+            // contains no braces with a marker that contains none either, so a {Property} token that
+            // was outside the match survives the round trip and the event still renders against its
+            // own properties. A marker pasted in as a literal would break that binding.
+            var parsed = TemplateParser.Parse(cleanTemplate);
+            swallowed = Swallowed(template, parsed);
+            template = parsed;
             fired.AddRange(templateRules);
         }
 
-        var properties = ScrubProperties(logEvent.Properties, fired);
+        var properties = ScrubProperties(logEvent.Properties, fired, swallowed);
         var exception = ScrubException(logEvent.Exception, fired);
 
         if (fired.Count == 0) {
@@ -145,17 +149,68 @@ sealed class SecretScrubbingSink : ILogEventSink, IDisposable {
     }
 
     /// <summary>
+    ///     The rule name reported for a property the message template put in a credential position.
+    /// </summary>
+    /// <remarks>
+    ///     Named separately from <see cref="SecretShapedText" />'s rules because it is not one: the
+    ///     value was not recognised, its <i>position</i> was.
+    /// </remarks>
+    public const string TemplatePositionRule = "MessageTemplatePosition";
+
+    /// <summary>
+    ///     The properties a redaction of the template swallowed the token for.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>THE HOLE THIS CLOSES IS THE ONE THE TEMPLATE FIX OPENED.</b>
+    ///         <c>logger.LogInformation("Password={Pw}", pw)</c> puts the credential in a property
+    ///         and the word <c>Password=</c> in the template, so the connection-string rule matches
+    ///         the template — including the <c>{Pw}</c> token, which sits exactly where a value goes
+    ///         — and the rendered message comes out clean. The property does not: <c>pw</c> is very
+    ///         likely an ordinary password with no recognisable shape, so nothing fires on it, and
+    ///         the OTLP sink exports it as a structured attribute beside a message that no longer
+    ///         mentions it. Redacted in the text, present in the record, which is the worst of both.
+    ///     </para>
+    ///     <para>
+    ///         A token the template lost is a property the template said was a secret, whatever the
+    ///         value looks like, so it goes too.
+    ///     </para>
+    /// </remarks>
+    static HashSet<string>? Swallowed(MessageTemplate before, MessageTemplate after) {
+        var kept = after.Tokens
+            .OfType<PropertyToken>()
+            .Select(x => x.PropertyName)
+            .ToHashSet(StringComparer.Ordinal);
+
+        var lost = before.Tokens
+            .OfType<PropertyToken>()
+            .Select(x => x.PropertyName)
+            .Where(x => !kept.Contains(x))
+            .ToHashSet(StringComparer.Ordinal);
+
+        return lost.Count == 0 ? null : lost;
+    }
+
+    /// <summary>
     ///     The properties, or <see langword="null" /> when none of them carried anything.
     /// </summary>
     static List<LogEventProperty>? ScrubProperties(
         IReadOnlyDictionary<string, LogEventPropertyValue> properties,
-        List<string> fired
+        List<string> fired,
+        HashSet<string>? swallowed
     ) {
         List<LogEventProperty>? scrubbed = null;
         var seen = 0;
 
         foreach (var property in properties) {
-            var clean = ScrubValue(property.Value, fired);
+            LogEventPropertyValue clean;
+
+            if (swallowed?.Contains(property.Key) == true) {
+                clean = new ScalarValue(SecretShapedText.RedactionPrefix + TemplatePositionRule + "]");
+                fired.Add(TemplatePositionRule);
+            } else {
+                clean = ScrubValue(property.Value, fired);
+            }
 
             if (scrubbed is null && !ReferenceEquals(clean, property.Value)) {
                 // The first dirty property. Everything before it was clean and is copied across
