@@ -64,18 +64,18 @@ namespace CyberCloud.Providers.DocumentDB.Contracts;
 ///         not.
 ///     </para>
 ///     <para>
-///         ⚠ <b>PIECE 5 IS NOT BUILT AND THIS ROW IS IN THE <i>MILDEST</i> OF THE THREE BUCKETS.</b>
-///         <c>CyberCloud.Cache/redis</c> does not come up at all; <c>CyberCloud.Storage/accounts</c>
-///         comes up and would answer every anonymous caller as an administrator. Here CloudNativePG
-///         generates the credential itself, and FerretDB neither stores nor invents one: checked in
-///         <c>website/docs/security/authentication.md</c>, <i>"FerretDB does not store authentication
-///         information (usernames and passwords) itself. Instead, it relies entirely on PostgreSQL's
-///         authentication mechanisms"</i>, and an anonymous client <i>"may still connect to FerretDB
-///         without authentication, but they cannot access or perform actions on the database"</i>. So
-///         the service works, an unauthenticated caller gets nothing, and the only thing missing is
-///         <c>listKeys</c> having somewhere to read the password back from. That is the
-///         <c>CyberCloud.DBforPostgreSQL/servers</c> answer, and it is the first time a row has
-///         reproduced it rather than added a worse one.
+///         ⚠ <b>NOTHING HERE MINTS, AND WHAT MAKES THAT SAFE IS THE ENGINE RATHER THAN THE
+///         PLATFORM.</b> CloudNativePG generates the credential itself, and FerretDB neither stores
+///         nor invents one: checked in <c>website/docs/security/authentication.md</c>, <i>"FerretDB
+///         does not store authentication information (usernames and passwords) itself. Instead, it
+///         relies entirely on PostgreSQL's authentication mechanisms"</i>, and an anonymous client
+///         <i>"may still connect to FerretDB without authentication, but they cannot access or
+///         perform actions on the database"</i>. So the service works and an unauthenticated caller
+///         gets nothing. ⚠ The paragraph that stood here said piece 5 was not built and that
+///         <c>listKeys</c> had nowhere to read the password from. Both have been false since
+///         <c>ISecretWriter</c> and <c>DocumentDbAccountListKeysHandler</c> landed: the handler reads
+///         <see cref="SuperuserSecretName" />'s two keys, and this row declines to mint because the
+///         cluster already holds a password minting could only contradict.
 ///     </para>
 ///     <para>
 ///         ⚠ <b><see cref="Schema2026" /> is the authored side of the pair</b> and
@@ -389,10 +389,19 @@ public static class DocumentDbAccounts {
     /// <param name="name">The resource's own name.</param>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>Written by the operator, never by this provider, and that is what makes this row
-    ///         usable without piece 5.</b> <c>internal/controller/cluster_create.go</c> generates it
-    ///         with <c>password.Generate(64, 10, 0, false, true)</c> when
+    ///         ⚠ <b>Written by the operator, never by this provider.</b>
+    ///         <c>internal/controller/cluster_create.go</c> generates it with
+    ///         <c>password.Generate(64, 10, 0, false, true)</c> when
     ///         <see cref="EnableSuperuserAccess" /> is on and no <c>spec.superuserSecret</c> is given.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>This row mints nothing into the vault, and the reason is not that piece 5 is
+    ///         missing.</b> docs/plan/12 § The pattern, once, piece 5 is built — <c>ISecretWriter</c>
+    ///         is the interface and <c>CyberCloud.Vault</c> ships <c>OpenBaoSecretWriter</c>. The
+    ///         reason is the paragraph above: CloudNativePG has already put a password in the database
+    ///         by the time this reconciler could write one, so a minted credential would be a password
+    ///         the cluster never accepted while everything reported success.
+    ///         <c>DocumentDbAccountListKeysHandler</c> reads these two keys instead.
     ///     </para>
     ///     <para>
     ///         ⚠ <b>The <c>uri</c> key of THIS secret is unusable and the <c>uri</c> key of the

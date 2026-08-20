@@ -32,12 +32,15 @@ namespace CyberCloud.Providers.Analytics;
 ///         the same four module edges, which is now the fifth data point for docs/plan/25 § R1.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Two of docs/plan/12 § The pattern, once's eight pieces are not built and one is built
-///         halfway, each named rather than implied.</b> Piece 5 — credential provisioning into the
-///         tenant's Vault — needs an OpenBao integration that does not exist, so <c>listKeys</c> has a
-///         declared response shape and no handler; ⚠ <b>on this service the consequence is a cluster
-///         that is secure and unreachable rather than one that is open</b>, which is the opposite of
-///         what <c>CyberCloud.Storage/accounts</c> found and is the better half of the same gap. Piece
+///         ⚠ <b>What this row owes against docs/plan/12 § The pattern, once's eight pieces is named
+///         rather than implied.</b> ⚠ Piece 5 — credential provisioning into the
+///         tenant's Vault — <b>is</b> built: <c>ISecretWriter</c> is the interface and
+///         <c>CyberCloud.Vault</c> ships <c>OpenBaoSecretWriter</c>. <c>listKeys</c> still has a
+///         declared response shape and no handler, and the real reason is upstream of the vault: no
+///         <c>spec.configuration.users</c> is rendered, so no credential exists to read or to
+///         correspond to a mint — <c>actions-without-handlers.txt</c> carries the line. ⚠ <b>On this
+///         service the consequence is a cluster that is secure and unreachable rather than one that is
+///         open</b>, which is the opposite of what <c>CyberCloud.Storage/accounts</c> found. Piece
 ///         6 reaches an answer neither of its branches describes — the operator scrapes every
 ///         installation itself through one cluster-wide exporter and offers no per-installation scrape
 ///         switch — so the metrics are turned on here and the object that scrapes them is owed. Piece
@@ -106,20 +109,20 @@ public sealed class AnalyticsProvider : IResourceProvider {
                 secret: true,
                 response: ClickHouseClusters.ListKeysResponse
             )
-            // ⚠ `clickhouse`, AND THE CHECK CyberCloud.Storage/accounts DEMANDS WAS RUN BY HAND
-            // AGAINST LITERALS. CliEmitter derives the CLI GROUP key from the provider namespace's
-            // last segment, lower-cased, so this namespace is already the group `analytics`; the six
-            // group keys in the tree are sample, dbforpostgresql, cache, messaging, storage and
-            // analytics, and `clickhouse` is none of them. It is also not one of the seven short names
-            // already declared — widget, postgres, valkey, kafka, nats, objectstore, bucket. Both
-            // halves are asserted against typed-out literals in ClickHouseDeclarationTests, because
-            // System.CommandLine's ValidTokens builds ONE dictionary of every command token and every
-            // alias in the whole tree and a collision throws "An item with the same key has already
-            // been added" on the FIRST PARSE OF ANY COMMAND LINE.
+            // ⚠ `clickhouse`, AND `analytics` IS THE ONE WORD THIS NAMESPACE COULD NOT HAVE.
+            // CliEmitter derives the CLI GROUP key from the provider namespace's last segment,
+            // lower-cased, so this namespace is already the group `analytics` — and a short name
+            // equal to its OWN group's key gives `cyc analytics analytics` two meanings. CliTokens
+            // carries the rule and CliTokenTests carries the measurements.
             //
-            // ⚠ ProviderRegistry.Build still refuses only a DUPLICATE short name and still never
-            // compares one against a group name — `short-name-collides-with-the-group` stays owed, and
-            // this type is the third that had to satisfy it by hand.
+            // ⚠ THE LIST THAT USED TO SAY SO IS GONE, AND IT ASKED THE WRONG QUESTION. This
+            // paragraph held six group keys and seven short names as literals, and the same list in
+            // the network suite was stale on two consecutive passes. Measured against
+            // System.CommandLine 2.0.10 the token dictionary is per PARENT command, so five of those
+            // six comparisons could never have failed. ProviderRegistry.Build now derives the
+            // question from what is registered and refuses the silo naming both ends;
+            // ClickHouseDeclarationTests.NoShortNameHereGivesACycTokenTwoMeanings asks it for this
+            // provider.
             .Display(
                 "ClickHouse cluster",
                 "ClickHouse clusters",

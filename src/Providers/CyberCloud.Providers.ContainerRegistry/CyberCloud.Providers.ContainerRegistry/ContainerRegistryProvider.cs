@@ -114,17 +114,16 @@ namespace CyberCloud.Providers.ContainerRegistry;
 public sealed class ContainerRegistryProvider : IResourceProvider {
     /// <summary>The CLI short form this type takes.</summary>
     /// <remarks>
-    ///     ⚠ <b>Checked by hand against three dictionaries, for the reason
-    ///     <c>charts/managed/seaweedfs/conformance.yaml § owed</c>'s
-    ///     <c>short-name-collides-with-the-group</c> records and the sixth type in a row has had to
-    ///     satisfy.</b> <c>CliEmitter</c> derives the CLI group key from the provider namespace's last
-    ///     segment, lower-cased, so this namespace is already the group <c>containerregistry</c>;
-    ///     System.CommandLine's <c>ValidTokens</c> builds ONE dictionary of every command token and
-    ///     every alias in the tree, so a group and an alias that share a string throw
-    ///     <c>ArgumentException: An item with the same key has already been added</c> on the first
-    ///     parse of <i>any</i> command line. <c>registry</c> is not one of the twelve group keys, not
-    ///     one of the sixteen declared short names, and not one of <c>CommandTree.ReservedGroups</c>'
-    ///     nine — <c>ContainerRegistryDeclarationTests</c> asserts all three against literals.
+    ///     ⚠ <b>Derived rather than checked by hand, and the three dictionaries this used to be
+    ///     compared against were the wrong question.</b> <c>CliEmitter</c> derives the CLI group key
+    ///     from the provider namespace's last segment, lower-cased, so this namespace is already the
+    ///     group <c>containerregistry</c>, and <c>registry</c> has to stay clear of that key and of
+    ///     any sibling's command or short name. It does not have to stay clear of the other eleven
+    ///     group keys or of <c>CommandTree.ReservedGroups</c>' nine: the token dictionary is per
+    ///     parent command, so an alias under <c>containerregistry</c> and a root command can never be
+    ///     one token. <c>CliTokens</c> carries the rule and <c>CliTokenTests</c> carries the
+    ///     measurements; <c>ContainerRegistryDeclarationTests.NoShortNameHereGivesACycTokenTwoMeanings</c>
+    ///     asks it for this provider and <c>ProviderRegistry.Build</c> asks it over the whole tree.
     ///     <para>
     ///         ⚠ <b>Not <c>acr</c>, which docs/plan/21 § Grammar's example pattern would suggest.</b>
     ///         That paragraph's two examples are <c>aks</c> and <c>postgres</c> — a vendor acronym and

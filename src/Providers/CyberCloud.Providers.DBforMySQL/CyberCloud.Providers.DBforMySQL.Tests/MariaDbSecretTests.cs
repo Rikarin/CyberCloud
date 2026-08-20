@@ -104,7 +104,10 @@ public sealed class MariaDbSecretTests {
         // — carrying `Generate: true` — ONLY when the field is the zero value. `GeneratedSecretKeyRef`
         // has a `generate` bool whose own default is FALSE. So rendering the reference at all REPLACES
         // the operator's generous default, and a reference written without the flag is a server that
-        // waits forever for a Secret nothing in this platform writes: piece 5 does not exist.
+        // waits forever for a Secret nothing writes. Piece 5 exists — ISecretWriter, and
+        // CyberCloud.Vault's OpenBaoSecretWriter behind it — but this reconciler deliberately does
+        // not mint here, because the operator puts the password in the database at bootstrap and one
+        // minted afterwards is a password the server never accepted.
         //
         // The failure mode is silent in every direction — the CR is valid, the operator is content, the
         // apply succeeds, `Matches` is satisfied, and the pods never become ready.

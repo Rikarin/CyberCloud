@@ -4,7 +4,9 @@
 #
 # ⚠ THAT ROW NAMES FOUR THINGS AND THIS CHART DELIVERS ONE. The node-role split is built; ISM policies
 # and the snapshot repository are in conformance.yaml § owed with what each actually needs, and
-# neither is blocked on effort — both need piece 5.
+# neither is blocked on effort. ⚠ Neither needs piece 5, though this comment used to say both did —
+# ISecretWriter has shipped. ISM needs a reconciler that talks to a running data plane; the snapshot
+# repository needs a bucket's keys read across providers.
 #
 # ⚠ IT IS THE FIRST M3 ROW TO SHIP. Nothing about the shape changed: one chart, one SOURCE, one
 # conformance.yaml, the same seven @internal identity rows every managed chart has.

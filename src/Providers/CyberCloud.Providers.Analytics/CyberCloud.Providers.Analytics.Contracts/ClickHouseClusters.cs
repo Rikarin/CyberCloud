@@ -100,7 +100,9 @@ namespace CyberCloud.Providers.Analytics.Contracts;
 ///         § owed</c>, <c>s3-cold-tier</c>. It needs a bucket endpoint and an access-key pair, which is
 ///         <c>CyberCloud.Storage/accounts</c>; a provider may not reference another provider (rule 2)
 ///         and the sanctioned route — a resource id through <c>CyberCloud.ResourceManager</c> — has no
-///         reader a reconciler can call. The credential half is piece 5, which does not exist either.
+///         reader a reconciler can call. ⚠ The credential half is <b>not</b> the blocker, though this
+///         paragraph used to say so: piece 5 is built and <c>ISecretWriter</c> can mint a key pair.
+///         What is missing is the read across providers, which is the seam named above.
 ///     </para>
 ///     <para>
 ///         ⚠ <b><see cref="Schema2026" /> is the authored side of the pair</b> and

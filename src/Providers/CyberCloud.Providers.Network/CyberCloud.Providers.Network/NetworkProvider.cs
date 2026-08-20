@@ -240,20 +240,20 @@ namespace CyberCloud.Providers.Network;
 ///         owed.
 ///     </para>
 ///     <para>
-///         ⚠ <b>THE SHORT NAMES WERE CHECKED AGAINST EVERY GROUP KEY AND EVERY EXISTING SHORT NAME AS
-///         LITERALS, AND AGAINST EACH OTHER.</b> <c>CliEmitter</c> derives the CLI group key from the
-///         provider namespace, so this namespace's group is already <c>network</c> — which is why
-///         neither type is called that, exactly as <c>CyberCloud.Storage/accounts</c> ships as
-///         <c>objectstore</c> rather than the <c>storage</c> docs/plan/21 § Grammar would spell.
-///         System.CommandLine's <c>ValidTokens</c> is <b>one dictionary</b> of every command token and
-///         every alias in the tree, so a group and an alias that share a string throw
-///         <c>ArgumentException: An item with the same key has already been added</c> on the first
-///         parse of <i>any</i> command line — a failure that names neither the provider nor the
-///         string. <c>NetworkDeclarationTests</c> asserts both short names against the ten group keys
-///         and the twelve existing short names, as literals, and against each other.
-///         ⚠ <c>ProviderRegistry.Build</c> still refuses only a <b>duplicate</b> short name and still
-///         never compares one against a group name; <c>short-name-collides-with-the-group</c> stays
-///         owed and this family is the second and third type to have to satisfy it by hand.
+///         ⚠ <b>THE SHORT NAMES HAVE TO STAY CLEAR OF THIS GROUP'S KEY AND OF EACH OTHER, AND OF
+///         NOTHING ELSE.</b> <c>CliEmitter</c> derives the CLI group key from the provider namespace,
+///         so this namespace's group is already <c>network</c> — which is why no type here is called
+///         that, exactly as <c>CyberCloud.Storage/accounts</c> ships as <c>objectstore</c> rather than
+///         the <c>storage</c> docs/plan/21 § Grammar would spell. A token given two meanings throws
+///         <c>ArgumentException: An item with the same key has already been added</c> on every parse
+///         that reaches the group, naming neither the provider nor the string. <c>CliTokens</c>
+///         carries the rule and <c>CliTokenTests</c> carries the measurements.
+///         ⚠ The literal lists that used to live here — every group key and every declared short name
+///         in the tree — went stale on two consecutive passes and asked the wrong question besides:
+///         the token dictionary is per <b>parent</b> command, so a short name equal to another group's
+///         key cannot collide. <c>ProviderRegistry.Build</c> derives the question from what is
+///         registered and refuses the silo naming both ends, which closed
+///         <c>short-name-collides-with-the-group</c>.
 ///     </para>
 ///     <para>
 ///         ⚠ <b>NO <c>SupportsSoftDelete</c> ON ANY OF THE THREE — AND THE REASON EVERY PROVIDER IN
@@ -399,14 +399,12 @@ public sealed class NetworkProvider : IResourceProvider {
                 response: NetworkSecurityGroups.EffectiveRulesResponse,
                 handler: typeof(ShowEffectiveRulesHandler)
             )
-            // ⚠ `secgroup` — checked against the eleven group keys (sample, dbforpostgresql, cache,
-            // messaging, storage, search, documentdb, analytics, dbformysql, network,
-            // containerservice) and against every existing short name, as literals, and against
-            // `vnet` and `subnet`. NOT `sg`, which is Kube-OVN's own shortName: two characters is a
-            // prefix somebody will collide with, and System.CommandLine's ValidTokens is ONE
-            // dictionary of every command token and alias in the tree, so a collision throws
-            // `ArgumentException` on the first parse of ANY command line, naming neither the provider
-            // nor the string. NetworkDeclarationTests asserts it.
+            // ⚠ `secgroup` AND NOT `sg`, WHICH IS KUBE-OVN'S OWN shortName. Two characters is a token
+            // somebody else will reach for, and the second claim on it throws `ArgumentException` on
+            // every `cyc network …` parse, naming neither the provider nor the string. What it has to
+            // stay clear of is this group's key and its siblings' names — CliTokens carries the rule,
+            // ProviderRegistry.Build enforces it, and
+            // NetworkDeclarationTests.TheShortNamesAreTheOnesTheProviderMeantToDeclare pins the word.
             .Display(
                 "Security group",
                 "Security groups",
@@ -454,16 +452,13 @@ public sealed class NetworkProvider : IResourceProvider {
                 response: PublicIpAddresses.AllocationResponse,
                 handler: typeof(ShowAllocationHandler)
             )
-            // ⚠ `publicip` — checked against the fourteen group keys (sample, dbforpostgresql, cache,
-            // messaging, storage, search, documentdb, analytics, dbformysql, network,
-            // containerservice, monitor, terminal, containerregistry) and against every existing short
-            // name (widget, postgres, valkey, kafka, nats, rabbitmq, objectstore, bucket, opensearch,
-            // docdb, clickhouse, mariadb, aks, nodepool, workspace, shell, registry), as literals, and
-            // against this family's own `vnet`, `subnet` and `secgroup`. NOT `pip` and NOT `eip`:
-            // three characters is a prefix somebody will collide with, `eip` is the substrate's word
-            // rather than the product's, and System.CommandLine's ValidTokens is ONE dictionary of
-            // every command token and alias in the tree — a collision throws `ArgumentException` on
-            // the first parse of ANY command line, naming neither the provider nor the string.
+            // ⚠ `publicip`, AND NOT `pip` OR `eip`. Three characters is a token somebody else will
+            // reach for, and `eip` is the SUBSTRATE'S word rather than the product's — docs/plan/21
+            // § Grammar spells the type `publicIpAddresses`, and a tenant who has never heard of
+            // Kube-OVN should be able to guess it. What the word has to stay clear of is this group's
+            // key and its siblings' names; CliTokens carries the rule and ProviderRegistry.Build
+            // enforces it, deriving the question from what is registered rather than from the lists
+            // of group keys and short names this paragraph used to carry.
             .Display(
                 "Public IP address",
                 "Public IP addresses",
@@ -509,16 +504,16 @@ public sealed class NetworkProvider : IResourceProvider {
                 response: LoadBalancers.BackendsResponse,
                 handler: typeof(ShowBackendsHandler)
             )
-            // ⚠ `loadbalancer` — checked against the fourteen group keys (sample, dbforpostgresql,
-            // cache, messaging, storage, search, documentdb, analytics, dbformysql, network,
-            // containerservice, monitor, terminal, containerregistry), against every existing short
-            // name (widget, postgres, valkey, kafka, nats, rabbitmq, objectstore, bucket, opensearch,
-            // docdb, clickhouse, mariadb, aks, nodepool, workspace, shell, registry), against
-            // CommandTree.ReservedGroups' nine, and against this family's own `vnet`, `subnet`,
-            // `secgroup` and `publicip`. NOT `lb`: two characters is the collision `secgroup` was
-            // renamed to avoid, and System.CommandLine's ValidTokens is ONE dictionary of every
-            // command token and alias in the tree — a collision throws `ArgumentException` on the
-            // first parse of ANY command line, naming neither the provider nor the string.
+            // ⚠ `loadbalancer`, AND NOT `lb`: two characters is the token `secgroup` was named to
+            // stay off, and docs/plan/21 § Grammar spells the type `loadBalancers` — a tenant who has
+            // never heard of HAProxy should be able to guess it. CliTokens carries what the word has
+            // to stay clear of and ProviderRegistry.Build enforces it.
+            //
+            // ⚠ CommandTree.ReservedGroups WAS ON THAT LIST AND COULD NEVER HAVE FAILED. A short name
+            // is an alias under `network` and a reserved group is a ROOT command, so the two are
+            // never one token. The half that is real — a generated GROUP taking one of the nine —
+            // CommandTree throws on while the root command is built, and cyc.Tests.ReservedGroupTests
+            // asserts it over the whole tree rather than one family at a time.
             .Display(
                 "Load balancer",
                 "Load balancers",

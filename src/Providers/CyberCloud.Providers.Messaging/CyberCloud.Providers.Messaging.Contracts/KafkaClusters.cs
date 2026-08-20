@@ -651,10 +651,12 @@ public static class KafkaClusters {
     ///         ⚠ <b>No credentials in this document, and none in grain state.</b> Strimzi's entity
     ///         operator provisions SCRAM users through its own <c>KafkaUser</c> flow, reading and
     ///         writing <c>Secret</c>s in the namespace, so the only component that ever holds a
-    ///         plaintext password is the operator. That is docs/plan/12 § The pattern, once, piece 5,
-    ///         and the half of it that needs OpenBao — the tenant's Vault path — does not exist yet;
-    ///         until it does, <c>listKeys</c> has a declared shape and no handler, which is a visible
-    ///         gap rather than a password in a resource body.
+    ///         plaintext password is the operator. ⚠ <c>listKeys</c> has a declared shape and no
+    ///         handler, and the reason is <b>not</b> a missing vault path — piece 5 is
+    ///         <c>ISecretWriter</c> and it has shipped. It is that no <c>KafkaUser</c> is rendered and
+    ///         the listeners declare no SASL mechanism, so no SCRAM user exists for a handler to read
+    ///         — <c>actions-without-handlers.txt</c> carries the line. A visible gap rather than a
+    ///         password in a resource body.
     ///     </para>
     /// </remarks>
     public static string KafkaJson(string name, JsonElement desired) {

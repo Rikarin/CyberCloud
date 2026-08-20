@@ -88,10 +88,16 @@ namespace CyberCloud.Providers.Messaging;
 ///         measured for what a nested type would and would not be here.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Two of docs/plan/12 § The pattern, once's eight pieces are not built and are named
-///         rather than implied.</b> Piece 5 — credential provisioning into the tenant's Vault — needs
-///         an OpenBao integration that does not exist, so <c>listKeys</c> has a declared response
-///         shape and no handler. Piece 6 — the scrape object — is the case that document's own
+///         ⚠ <b>What this provider owes against docs/plan/12 § The pattern, once's eight pieces is
+///         named rather than implied.</b> ⚠ Piece 5 — credential provisioning into the tenant's Vault
+///         — <b>is</b> built: <c>ISecretWriter</c> is the interface and <c>CyberCloud.Vault</c> ships
+///         <c>OpenBaoSecretWriter</c>. <c>rabbitmqClusters</c> serves <c>listKeys</c> through
+///         <c>RabbitmqClusterListKeysHandler</c>, reading the credential the cluster-operator
+///         generated. <c>kafkaClusters</c> and <c>natsClusters</c> still declare the action with no
+///         handler, and the reason is upstream of the vault rather than the vault: no <c>KafkaUser</c>
+///         and no SASL mechanism on the listeners, no <c>authorization</c> block in nats.conf, so
+///         neither has a credential to hand out — <c>actions-without-handlers.txt</c> carries both
+///         lines. Piece 6 — the scrape object — is the case that document's own
 ///         correction describes as the fallback: <b>Strimzi does not emit a <c>PodMonitor</c> or a
 ///         <c>ServiceMonitor</c> of its own</b>, unlike CloudNativePG, so "ask the operator for the
 ///         scrape object wherever the operator accepts the request" has no request to make here. What
@@ -265,15 +271,15 @@ public sealed class MessagingProvider : IResourceProvider {
             .Display(
                 "RabbitMQ cluster",
                 "RabbitMQ clusters",
-                // ⚠ CHECKED AGAINST EVERY CLI GROUP KEY AS A LITERAL, NOT AGAINST THE SHORT NAMES.
-                // ProviderRegistry.Build refuses a duplicate short name and never compares one to a
-                // group NAME, and CliEmitter.GroupOf derives a group from the provider namespace's
-                // last segment lower-cased. System.CommandLine's ValidTokens is one dictionary over
-                // the whole tree, so a short name equal to any group would make EVERY `cyc` parse
-                // throw — not just this type's. The groups in the tree today are `messaging`,
-                // `dbforpostgresql`, `cache`, `storage` and `sample`; `rabbitmq` is none of them, and
-                // RabbitmqDeclarationTests pins the comparison against typed-out literals so that
-                // re-casing a namespace constant cannot leave it green.
+                // ⚠ `messaging` IS THE ONE WORD THIS NAMESPACE COULD NOT HAVE, AND IT IS THE ONLY
+                // GROUP KEY THAT MATTERS HERE. CliEmitter.GroupOf derives a group from the provider
+                // namespace's last segment lower-cased, and a short name equal to its OWN group's key
+                // gives `cyc messaging messaging` two meanings. The list of every other group key
+                // this paragraph used to carry was the wrong question: the token dictionary is per
+                // PARENT command, so a short name equal to another group's key parses cleanly.
+                // CliTokens carries the rule, CliTokenTests carries the measurements, and
+                // RabbitmqDeclarationTests.TheShortNameIsNoneOfTheCliGroupNamesTheNamespacesAlreadyProduce
+                // asks the derived question here.
                 shortName: "rabbitmq",
                 summary: "A managed RabbitMQ cluster on the RabbitMQ Cluster Operator, with quorum "
                 + "queues as the default queue type and the management UI reachable only in-cluster."

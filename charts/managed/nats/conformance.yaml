@@ -136,18 +136,27 @@ owed:
       one. A real NATS account is an NKey and a signed JWT, issued by nsc against an operator key and
       served by an account resolver, which is a credential-issuance flow rather than an object to
       apply. `natsClusters/streams` over NACK's Stream CRD is the honest first child; accounts wait
-      for the same OpenBao integration piece 5 does.
+      on that issuance flow. ⚠ They do NOT wait on piece 5, though this row used to say so — piece 5
+      is ISecretWriter and it has shipped. A vault to keep an NKey in is not the missing half; nsc,
+      an operator key and an account resolver are.
   - id: listkeys-has-no-handler
     says: >
-      docs/plan/12 § The pattern, once, piece 5 — credential provisioning into the tenant's Vault —
-      needs an OpenBao integration that does not exist, so listKeys has a declared response shape and
-      nothing that serves it. ⚠ AND THE GAP COSTS MORE HERE THAN IT DID ON KAFKA. Strimzi's entity
-      operator generates SCRAM users by itself, so a Kafka cluster is authenticated and the platform
-      merely cannot hand the password out. nats-server with no authorization block accepts every
-      connection in the namespace. This is the spotahome case docs/plan/12 § Valkey describes,
-      reached from the other side: there is nothing to render a reference TO yet, so the servers come
-      up open. Closing it is an `authorization` block in nats.conf reading a Secret the platform
-      wrote — one property, once there is a Vault to write it from.
+      listKeys has a declared response shape and nothing that serves it —
+      CyberCloud.Messaging/natsClusters is on actions-without-handlers.txt with the reason: no
+      `authorization` block is written into nats.conf, so there is no user and no password.
+      ⚠ THE VAULT THIS ROW WAITED FOR HAS ARRIVED, AND THE ROW STAYS OPEN ANYWAY. Piece 5 is
+      ISecretWriter and CyberCloud.Vault ships OpenBaoSecretWriter behind it, so "once there is a
+      Vault to write it from" is satisfied; what is still missing is the `authorization` block that
+      would give the minted credential something to authenticate against.
+      ⚠ AND THE GAP COSTS MORE HERE THAN IT DOES ON KAFKA, THOUGH NOT FOR THE REASON THIS ROW GAVE.
+      It said Strimzi's entity operator generates SCRAM users by itself; charts/managed/kafka records
+      that no KafkaUser is rendered and the listeners declare no SASL mechanism, so no SCRAM user
+      exists there either. The difference is what the engine does without one: nats-server with no
+      authorization block accepts every connection in the namespace.
+      This is the spotahome case docs/plan/12 § Valkey describes, reached from the other side: there
+      is nothing to render a reference TO yet, so the servers come up open —
+      CyberCloud.Cache/redis is the precedent for how it closes, its reconciler minting through
+      ISecretWriter and rendering the Secret from what the vault returned.
   - id: pod-labels
     says: >
       ADR-013's seven labels are injected by KubeCommand onto each OBJECT's metadata. The pods a

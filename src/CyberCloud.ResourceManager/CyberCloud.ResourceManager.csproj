@@ -12,10 +12,11 @@
       reference CyberCloud.Authorization.Contracts, so the rule is mechanical for providers and a
       review rule only here, where there is one file to review.
 
-      ⚠ IT REFERENCES CyberCloud.Kubernetes AND NOT ONLY ITS .Contracts, for one reason: the reconcile
-      driver has to hand a reconciler a live IKubeClusterConnection, and IClusterConnectionGrain is
-      the only thing that produces one. It still names no k8s.Models type — docs/plan/03
-      § Assembly graph rules, rule 3 is about the Kubernetes model types, not about the assembly.
+      ⚠ IT REFERENCES CyberCloud.Kubernetes.Contracts AND NOT CyberCloud.Kubernetes, though it does
+      hand a reconciler a live IKubeClusterConnection over IClusterConnectionGrain. Both of those are
+      contracts and both live in the .Contracts assembly, so the edge stays where module-layering.txt
+      already has it and no k8s.Models type is bound on the path — docs/plan/03 § Assembly graph
+      rules, rule 3 is about the Kubernetes model types. ClusterConnections.cs carries the argument.
     -->
 
     <ItemGroup>

@@ -126,18 +126,22 @@ owed:
       grain or an upstream field, and that makes it the first evidence about what that seam costs.
   - id: listkeys-has-no-handler
     says: >
-      docs/plan/12 § The pattern, once, piece 5 — credential provisioning into the tenant's Vault —
-      needs an OpenBao integration that does not exist, so listKeys has a declared response shape and
-      nothing that serves it. ⚠ AND THE FAILURE MODE IS THE BEST ONE IN THE CATALOGUE, WHICH IS WORTH
-      AS MUCH AS THE GAP. charts/managed/seaweedfs found the same missing piece producing an
+      listKeys has a declared response shape and nothing that serves it — CyberCloud.Analytics/
+      clickHouseClusters is on actions-without-handlers.txt with the reason.
+      ⚠ THAT REASON IS NOT PIECE 5, THOUGH THIS ROW USED TO SAY SO. Piece 5 is ISecretWriter and
+      CyberCloud.Vault ships OpenBaoSecretWriter behind it. What is missing here is the credential:
+      no `spec.configuration.users` is rendered, so there is no user for a handler to read and none
+      for a mint to correspond to. Closing it is a reconciler change that CONFIGURES a user first.
+      ⚠ AND THE FAILURE MODE IS THE BEST ONE IN THE CATALOGUE, WHICH IS WORTH
+      AS MUCH AS THE GAP. charts/managed/seaweedfs found a missing credential producing an
       ANONYMOUS ADMINISTRATOR; charts/managed/nats found servers that accept every connection in the
-      namespace; charts/managed/postgres found a working database whose password cannot be handed
-      out. Here the operator's own hardening guide says a CHI with no `configuration.users` gets
-      `default` with an empty password behind a host_regexp AND an explicit pod-IP allow-list covering
-      THIS CLUSTER'S OWN PODS, and `clickhouse_operator` behind the operator pod's IP. So the cluster
-      comes up SECURE AND UNREACHABLE. Four services in, the answer to "is it usable without piece 5"
-      is a property of the ENGINE and not of the platform, and the spread runs from
-      administrable-by-anyone to reachable-by-nobody.
+      namespace; charts/managed/postgres found a working database whose password could not be handed
+      out, which its own listKeys handler has since closed. Here the operator's own hardening guide
+      says a CHI with no `configuration.users` gets `default` with an empty password behind a
+      host_regexp AND an explicit pod-IP allow-list covering THIS CLUSTER'S OWN PODS, and
+      `clickhouse_operator` behind the operator pod's IP. So the cluster comes up SECURE AND
+      UNREACHABLE. Four services in, what a missing credential costs is a property of the ENGINE and
+      not of the platform, and the spread runs from administrable-by-anyone to reachable-by-nobody.
   - id: scrape-object
     says: >
       docs/plan/12 § The pattern, once, piece 6 reaches an answer NEITHER OF ITS TWO BRANCHES

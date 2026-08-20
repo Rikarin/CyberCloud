@@ -89,10 +89,11 @@ public sealed class StorageBucketDeclarationTests {
     [Fact]
     public void TheShortNameIsNeitherAGroupNameNorTheAccountsAlias() {
         // ⚠ THE COLLISION THE PARENT FOUND, CHECKED AGAIN FOR THE SECOND TYPE IN THE NAMESPACE.
-        // CliEmitter derives the CLI GROUP key from the provider namespace, and System.CommandLine's
-        // ValidTokens builds ONE dictionary over every command token AND every alias in the whole
-        // tree — so a group and an alias sharing a string throw `An item with the same key has
-        // already been added` on the first parse of ANY command line, before any verb runs.
+        // CliEmitter derives the CLI GROUP key from the provider namespace, and System.CommandLine
+        // keeps one token dictionary per PARENT command — so a short name equal to its own group's
+        // key, to a sibling's command name, or to a sibling's short name throws `An item with the
+        // same key has already been added` on every parse that reaches the group, before any verb
+        // runs. CliTokens carries the rule and CliTokenTests carries the measurements.
         //
         // ⚠ IT IS NO LONGER SATISFIED BY HAND, AND THE LIST THAT USED TO DO IT IS GONE. This test
         // held five group keys as literals — `sample`, `dbforpostgresql`, `cache`, `messaging`,
