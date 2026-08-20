@@ -140,7 +140,12 @@ jobs:
             echo "::error title=Coverage floor::./build.sh Test exited 0 without printing the line that says the floor was applied. A green Test that never reached EnforceCoverageFloor is a floor that does not exist. docs/plan/23 § Test layers."
             exit 1
           fi
-          grep -E 'Test: coverage floor|shipping project\(s\) at or above|  (✔|✘|○) CyberCloud' "$RUNNER_TEMP/test.log"
+          # ⚠ ▪ is in the alternation, not only ✔ ✘ ○. A project pinned by coverage-below-floor.txt
+          # prints ▪ rather than ✘ — it is known debt held to a measured rate, not a break — and a
+          # summary that dropped those rows would hide every under-covered project in the tree from
+          # the one place an operator reads the numbers. Same set of markers as the architecture
+          # summary above, for the same reason.
+          grep -E 'Test: coverage floor|shipping project\(s\) at or above|  (✔|✘|○|▪) CyberCloud' "$RUNNER_TEMP/test.log"
 
       - name: Upload test results and coverage
         if: always()

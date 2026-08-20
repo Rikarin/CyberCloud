@@ -203,6 +203,42 @@ than after a full test run — worth it when a whole platform's profiler could b
 has no profiler to be missing, and a step asserting something that can no longer fail reads as
 coverage nobody has got.
 
+### `coverage-below-floor.txt` — the ratchet, and why it is not an exemption list
+
+Making the floor visible locally turned a gate that had never run into one that ran and was red.
+Those reds were not regressions; they had been true for months and nobody could see them. Holding
+the measurement hostage to covering every one of them would have stranded the fix behind work nobody
+had scheduled, and letting master sit red would have taught everyone to ignore a red `Test`.
+
+So there is a checked-in baseline, modelled on `actions-without-handlers.txt` down to the shape of
+its header. A row is a project name and the rate measured the day it was written. `Build.Test.cs`
+§ `EnforceCoverageFloor` fails in **four** directions:
+
+| | Fails when |
+|---|---|
+| the floor | an **unlisted** project is below 70 % |
+| the ratchet | a **listed** project is more than half a point **below** its pin |
+| the ratchet's other half | a **listed** project is more than half a point **above** its pin — raise it |
+| the pruner | a **listed** project **meets** 70 % — delete the row |
+
+The last two are what stop it becoming a permission slip. A list nobody is forced to prune is a list
+in which no reader can tell the live rows from the dead ones, and the third rule is why
+`actions-without-handlers.txt` is believable.
+
+⚠ **The tolerance is symmetric on purpose, and that is what makes it a band rather than a budget.**
+Exact pinning is right for a closed set of action names and wrong for a ratio over every line in a
+project: extracting a method moves the number by hundredths, and a build that went red for that is a
+build people learn to re-pin without reading. But a one-way tolerance leaks — twenty commits could
+walk a project ten points down half a point at a time, each one inside the rules. Failing *upward*
+too means the pin tracks whatever the project actually reaches, so the ground under it only ever
+rises. Half a point is 1.3 lines on a 255-line project and about 15 on a 3 000-line one, which
+tightens the band exactly where a percentage is least forgiving.
+
+⚠ **Every row needs a sentence directly above it**, and the parser refuses one without. A reviewer
+cannot answer a review request that is a name and a number, and a list that costs a sentence to
+extend is a list that stays short. The file is parsed **before the suites run**, so a typo costs a
+second rather than a full test run.
+
 ### A line's filename comes from its `<class>`, not its grandparent
 
 Cobertura lists most lines **twice** — once under `<class><lines>` and again under
@@ -212,6 +248,33 @@ did two wrong things at once: counted each line a second time, and collapsed lin
 into line 17 of every other. Measured on `CyberCloud.Identity`, the old key reported **1 837 of
 2 775 lines, 66.2 %**, for an assembly that is **1 392 of 2 163, 64.4 %** — 1.8 points of inflation
 on a 70 % floor, out of a report that was correct.
+
+### A `filename` is relative to *its own report's* `<sources>` root
+
+coverlet writes the deepest directory common to the files it instrumented, so a suite that touched
+only `src/` projects writes `…/src/` and one that also touched a host writes the repository root.
+Measured over the 71 reports of one run: **56** said the repository root and **15** said `src/`.
+
+Keying on the raw string therefore split one file into two —
+`src/CyberCloud.Communication/Providers/ChannelProviders.cs` and
+`CyberCloud.Communication/Providers/ChannelProviders.cs` counted as 382 lines rather than 191 — and
+the two hit sets were never unioned, so a line covered by one suite read as uncovered because
+another suite spelled the path differently. This one **deflated**, hard:
+
+| | split key | resolved key |
+|---|---|---|
+| `CyberCloud.Communication` | 49.6 % | **70.8 %** |
+| `CyberCloud.Communication.Contracts` | 64.0 % | **92.1 %** |
+| `CyberCloud.Kubernetes` | 54.6 % | **77.3 %** |
+| `CyberCloud.ServiceDefaults` | 59.6 % | **88.4 %** |
+| `CyberCloud.Tenancy` | 60.6 % | **86.8 %** |
+| `CyberCloud.Silo.Host` | 32.5 % | 32.5 % |
+
+⚠ **Five of the six projects that looked like breaches never were**, which is why
+`coverage-below-floor.txt` has one row rather than six. The key is now the resolved absolute path,
+and a report declaring more than one `<source>` is refused rather than guessed at — with two roots a
+relative filename could belong to either, and picking one would merge some files correctly and split
+others, which is this same failure arriving silently a second time.
 
 ### "Nothing to instrument" is not "nothing tests this"
 

@@ -9,6 +9,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -235,11 +236,18 @@ partial class Build
         TestResultsDirectory.CreateOrCleanDirectory();
         CoverageDirectory.CreateOrCleanDirectory();
 
+        // ⚠ Read HERE, before a single suite starts, and not where it is used ten minutes later.
+        // A malformed row — a missing rate, a pin without a reason above it, a project named twice —
+        // is a typo, and finding a typo at the end of a full test run is how a file becomes one
+        // people edit by copying an existing line and hoping. The parse is milliseconds; the wait
+        // it removes is the whole gate.
+        var baseline = CoverageBaseline();
+
         Log.Information("Test: running {Count} test project(s)", projects.Count);
 
         RunSuites(nameof(Test), projects, environment: null, collectCoverage: true);
 
-        EnforceCoverageFloor();
+        EnforceCoverageFloor(baseline);
     }
 
     // ── Running a suite ───────────────────────────────────────────────────────────────────────
@@ -343,10 +351,12 @@ partial class Build
         //
         // ⚠ AND THE DEGREE WAS NEVER THE WHOLE STORY, BECAUSE THE SET IT APPLIED TO WAS WRONG.
         // Which suites are container-backed used to be decided by grepping each `.csproj` for the
-        // word "Testcontainers": 28 files said it, 19 suites actually ship it, and three of the
-        // missing ones hold a k3s cluster each. They ran ungated on top of the semaphore, so a
-        // nominal cap of 3 was really up to 6 — which is most of why 4 starved a suite and 3 did
-        // not. See StartsContainers, which asks the built output instead.
+        // word "Testcontainers": counted 2026-08-20 over 71 suites, 28 files said it and 19 suites
+        // actually shipped it, and three of the missing ones held a k3s cluster each. They ran
+        // ungated on top of the semaphore, so a nominal cap of 3 was really up to 6 — which is most
+        // of why 4 starved a suite and 3 did not. See StartsContainers, which asks the built output
+        // instead. ⚠ Every count in this comment is a dated measurement of a tree that grows; the
+        // arithmetic below reads the suites it is given and none of these numbers is wired into it.
         var containerBacked = projects.Where(StartsContainers).ToHashSet();
 
         var derivedDegree = ContainerBackedSuiteDegree;
@@ -417,7 +427,7 @@ partial class Build
                     + $"--report-xunit-trx-filename {name}.trx --results-directory {TestResultsDirectory}";
 
                 // ⚠ coverlet instruments the suite's OWN output directory and nothing else, which is
-                // what makes running 71 of these at once safe: it rewrites the IL of the assemblies
+                // what makes running all of them at once safe: it rewrites the IL of the assemblies
                 // on disk, runs the target, then puts them back, and every suite has its own copy of
                 // every dependency under artifacts/bin/<project>/<configuration>. Point two suites at
                 // one directory and they would corrupt each other's assemblies; the artifacts layout
@@ -435,7 +445,10 @@ partial class Build
                 // A command line containing a `"` therefore comes back double-quoted end to end with
                 // its inner quotes escaped, so `dotnet` is asked to run one command named
                 // `coverlet /path --target dotnet …` and answers "Could not execute because the
-                // specified command or file was not found". Observed on all 71 suites at once.
+                // specified command or file was not found" — an error about `dotnet` that is really
+                // an error about a quote. Observed on every suite at once, all of them failing in
+                // about ten seconds, which is the shape to recognise it by: a real tooling problem
+                // does not arrive simultaneously everywhere and does not arrive that fast.
                 //
                 // So the interpolated literal has to be AT the call, `run` has to arrive as a hole,
                 // and it is pre-quoted because a hole is quoted only when the handler thinks it needs
@@ -503,8 +516,11 @@ partial class Build
     ///     <para>
     ///         ⚠ <b>THIS USED TO GREP THE <c>.csproj</c> FOR THE WORD "Testcontainers", AND THE CAP
     ///         ABOVE WAS THEREFORE NOT CAPPING WHAT IT SAID IT WAS.</b> Measured over this tree on
-    ///         2026-08-20: 28 project files contain the word and <b>19</b> suites actually ship the
-    ///         assemblies. It was wrong in both directions and the two errors compounded.
+    ///         2026-08-20, at 71 suites: 28 project files contained the word and <b>19</b> suites
+    ///         actually shipped the assemblies. It was wrong in both directions and the two errors
+    ///         compounded. ⚠ Those are dated counts of a tree that grows a suite most weeks, and
+    ///         nothing below reads them — they are here to say how large the gap was, not how large
+    ///         it is.
     ///     </para>
     ///     <list type="bullet">
     ///         <item>
@@ -956,7 +972,12 @@ partial class Build
     ///         The third one is ○ — neither a tick nor a cross — and it is a hard failure on CI.
     ///     </para>
     /// </remarks>
-    void EnforceCoverageFloor()
+    /// <param name="baseline">
+    ///     The reviewed rows of <see cref="CoverageBaselineFile" />, already parsed. ⚠ Passed in
+    ///     rather than read here so a malformed row fails before the suites run rather than after —
+    ///     see the call site.
+    /// </param>
+    void EnforceCoverageFloor(Dictionary<string, CoverageReport.Pin> baseline)
     {
         var reports = CoverageReportFile is not null
             ? [(AbsolutePath)CoverageReportFile]
@@ -1029,19 +1050,29 @@ partial class Build
         var nothingToCover = ProjectsWithNothingToCover(coverage!.MentionedAssemblies);
 
         Log.Information(
-            "Test: coverage floor {Floor:P0} per project, over {Reports} report(s) — docs/plan/23 § Test layers",
+            "Test: coverage floor {Floor:P0} per project, over {Reports} report(s), with {Pinned} "
+            + "project(s) pinned by {File} — docs/plan/23 § Test layers",
             CoverageFloor,
-            reports.Count);
+            reports.Count,
+            baseline.Count,
+            CoverageBaselineFile.Name);
 
         foreach (var module in coverage.Modules.Where(x => shipping.Contains(x.Assembly, StringComparer.Ordinal)))
         {
+            // ⚠ A pinned project gets its own marker rather than a ✘, and the pin is printed beside
+            // the rate. ✘ has to keep meaning "this run broke something": a reader scanning 68 rows
+            // for a cross must not find six that were already true this morning, or they stop
+            // scanning. ▪ says "known debt, and this is the number it is held to".
+            var pinned = baseline.TryGetValue(module.Assembly, out var pin);
+
             Log.Information(
-                "  {Marker} {Assembly,-46} {Rate,7:P1}  ({Covered} of {Coverable} lines)",
-                module.Rate >= CoverageFloor ? "✔" : "✘",
+                "  {Marker} {Assembly,-46} {Rate,7:P1}  ({Covered} of {Coverable} lines){Pin}",
+                module.Rate >= CoverageFloor ? "✔" : pinned ? "▪" : "✘",
                 module.Assembly,
                 module.Rate,
                 module.Covered,
-                module.Coverable);
+                module.Coverable,
+                pinned ? $"  pinned {pin!.Rate:P1} — {CoverageBaselineFile.Name} line {pin.Line}" : string.Empty);
         }
 
         foreach (var project in nothingToCover.OrderBy(x => x, StringComparer.Ordinal))
@@ -1053,16 +1084,23 @@ partial class Build
                 "no coverable line to instrument — CoverageReport.cs § CoverableLines");
         }
 
-        var violations = coverage.Violations(shipping, CoverageFloor, nothingToCover);
+        var violations = coverage.Violations(
+            shipping,
+            CoverageFloor,
+            nothingToCover,
+            baseline,
+            CoverageBaselineFile.Name);
 
         if (violations.Count == 0)
         {
             Log.Information(
                 "Test: {Count} shipping project(s) at or above the {Floor:P0} floor ({Empty} of them "
-                + "with no executable code at all)",
+                + "with no executable code at all, {Pinned} below it and pinned by {File})",
                 shipping.Count,
                 CoverageFloor,
-                nothingToCover.Count);
+                nothingToCover.Count,
+                baseline.Count,
+                CoverageBaselineFile.Name);
 
             return;
         }
@@ -1071,10 +1109,91 @@ partial class Build
             Log.Error("Test: {Violation}", violation);
 
         Assert.Fail(
-            $"{violations.Count} of {shipping.Count} shipping project(s) are below the "
-            + $"{CoverageFloor:P0} coverage floor, listed above. docs/plan/23 § Test layers. ⚠ The "
+            $"{violations.Count} coverage violation(s) over {shipping.Count} shipping project(s), "
+            + $"listed above. docs/plan/23 § Test layers puts the floor at {CoverageFloor:P0}. ⚠ The "
             + "fix is a test, never an exclusion — a floor with a list of exemptions is a floor "
-            + "shaped like whatever the tree happened to be on the day it was added.");
+            + $"shaped like whatever the tree happened to be on the day it was added. {CoverageBaselineFile.Name} "
+            + "is not that list: every row in it names a measured rate the project may not fall "
+            + "below, must be deleted the moment the project reaches the floor, and is a review "
+            + "request rather than a build fix.");
+    }
+
+    /// <summary>The reviewed list of projects below the floor, with the rate each is held to.</summary>
+    AbsolutePath CoverageBaselineFile => RootDirectory / "coverage-below-floor.txt";
+
+    /// <summary>
+    ///     Each pinned project against its measured rate and the 1-based line it is written on.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>A row without a reason is refused, and that is the point of the file rather than
+    ///         a formatting rule.</b> The whole value of <c>actions-without-handlers.txt</c> is that
+    ///         every row says what is missing and what closing it would take, so the next person's
+    ///         decision is cheap. A bare list of names and numbers is a list somebody adds to at 6pm;
+    ///         a list where adding a row means writing a sentence a reviewer will read is a list that
+    ///         stays short. The comment must be the line immediately above the row, with no blank
+    ///         line between them, so a reason cannot drift away from what it explains.
+    ///     </para>
+    ///     <para>
+    ///         Deliberately the same shape as Build.Architecture.cs § ActionsWithoutHandlers, down to
+    ///         reporting a duplicate by both line numbers: two pins for one project means one of them
+    ///         is not the measurement.
+    ///     </para>
+    /// </remarks>
+    // Dictionary rather than IReadOnlyDictionary: CA1859 is an error here and this is internal to
+    // the build — the same concession Build.Test.cs § ProjectsIn already makes.
+    Dictionary<string, CoverageReport.Pin> CoverageBaseline()
+    {
+        Assert.FileExists(
+            CoverageBaselineFile,
+            $"{CoverageBaselineFile.Name} is missing. It is the reviewed list of projects below the "
+            + $"{CoverageFloor:P0} floor and the rate each is held to; without it this gate cannot "
+            + "tell debt somebody signed off from a regression this change introduced, and treating "
+            + "all of it as new would fail the build over the former.");
+
+        var rows = new Dictionary<string, CoverageReport.Pin>(StringComparer.Ordinal);
+        var lines = CoverageBaselineFile.ReadAllLines();
+
+        for (var i = 0; i < lines.Length; i++)
+        {
+            var line = lines[i].Trim();
+
+            if (line.Length == 0 || line.StartsWith('#'))
+                continue;
+
+            var parts = line.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+            Assert.True(
+                parts.Length == 2,
+                $"{CoverageBaselineFile.Name} line {i + 1} is '{line}'. A row is the project name, "
+                + "whitespace, and the measured rate as a percentage with one decimal — for example "
+                + "'CyberCloud.Silo.Host    32.5'.");
+
+            Assert.True(
+                double.TryParse(parts[1], NumberStyles.Float, CultureInfo.InvariantCulture, out var percent)
+                && percent >= 0
+                && percent < CoverageFloor * 100,
+                $"{CoverageBaselineFile.Name} line {i + 1} pins {parts[0]} at '{parts[1]}'. That has to "
+                + $"be a number between 0 and {CoverageFloor * 100:F0} — a pin at or above the floor "
+                + "is not debt, it is a project that belongs out of this file entirely.");
+
+            // ⚠ The reason, and it is required. See the remarks: the line immediately above, no blank
+            // line between, so it cannot drift away from the row it explains.
+            Assert.True(
+                i > 0 && lines[i - 1].TrimStart().StartsWith('#') && lines[i - 1].Trim().TrimStart('#').Trim().Length > 0,
+                $"{CoverageBaselineFile.Name} line {i + 1} pins {parts[0]} and the line above it is not "
+                + "a comment. Every row needs a sentence directly above it saying what is uncovered "
+                + "and what closing it would take — a row is a review request, and a reviewer cannot "
+                + "answer one that is a name and a number.");
+
+            Assert.True(
+                rows.TryAdd(parts[0], new(percent / 100, i + 1)),
+                $"{CoverageBaselineFile.Name} pins '{parts[0]}' twice, on lines "
+                + $"{rows.GetValueOrDefault(parts[0])?.Line} and {i + 1}. Two rates for one project "
+                + "means one of them is not the measurement.");
+        }
+
+        return rows;
     }
 
     /// <summary>
