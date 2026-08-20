@@ -106,20 +106,20 @@ public sealed class AnalyticsProvider : IResourceProvider {
                 secret: true,
                 response: ClickHouseClusters.ListKeysResponse
             )
-            // ⚠ `clickhouse`, AND THE CHECK CyberCloud.Storage/accounts DEMANDS WAS RUN BY HAND
-            // AGAINST LITERALS. CliEmitter derives the CLI GROUP key from the provider namespace's
-            // last segment, lower-cased, so this namespace is already the group `analytics`; the six
-            // group keys in the tree are sample, dbforpostgresql, cache, messaging, storage and
-            // analytics, and `clickhouse` is none of them. It is also not one of the seven short names
-            // already declared — widget, postgres, valkey, kafka, nats, objectstore, bucket. Both
-            // halves are asserted against typed-out literals in ClickHouseDeclarationTests, because
-            // System.CommandLine's ValidTokens builds ONE dictionary of every command token and every
-            // alias in the whole tree and a collision throws "An item with the same key has already
-            // been added" on the FIRST PARSE OF ANY COMMAND LINE.
+            // ⚠ `clickhouse`, AND `analytics` IS THE ONE WORD THIS NAMESPACE COULD NOT HAVE.
+            // CliEmitter derives the CLI GROUP key from the provider namespace's last segment,
+            // lower-cased, so this namespace is already the group `analytics` — and a short name
+            // equal to its OWN group's key gives `cyc analytics analytics` two meanings. CliTokens
+            // carries the rule and CliTokenTests carries the measurements.
             //
-            // ⚠ ProviderRegistry.Build still refuses only a DUPLICATE short name and still never
-            // compares one against a group name — `short-name-collides-with-the-group` stays owed, and
-            // this type is the third that had to satisfy it by hand.
+            // ⚠ THE LIST THAT USED TO SAY SO IS GONE, AND IT ASKED THE WRONG QUESTION. This
+            // paragraph held six group keys and seven short names as literals, and the same list in
+            // the network suite was stale on two consecutive passes. Measured against
+            // System.CommandLine 2.0.10 the token dictionary is per PARENT command, so five of those
+            // six comparisons could never have failed. ProviderRegistry.Build now derives the
+            // question from what is registered and refuses the silo naming both ends;
+            // ClickHouseDeclarationTests.NoShortNameHereGivesACycTokenTwoMeanings asks it for this
+            // provider.
             .Display(
                 "ClickHouse cluster",
                 "ClickHouse clusters",

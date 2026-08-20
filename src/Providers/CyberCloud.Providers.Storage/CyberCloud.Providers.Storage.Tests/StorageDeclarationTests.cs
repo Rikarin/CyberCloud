@@ -80,10 +80,11 @@ public sealed class StorageDeclarationTests {
         // ⚠ THE COLLISION THIS PROVIDER FOUND, AND THE ONE THE ALIAS TABLE WALKS STRAIGHT INTO.
         // docs/plan/21 § Grammar's table would spell this alias `storage`, exactly as it spells
         // `postgres` for `dbforpostgresql server`. CliEmitter derives the GROUP key from the provider
-        // namespace, so `CyberCloud.Storage` is already the group `storage` — and System.CommandLine's
-        // ValidTokens builds ONE dictionary over every command token AND every alias in the tree, so
-        // the two throw `An item with the same key has already been added. Key: storage` on the first
-        // parse of any command line, before any verb runs.
+        // namespace, so `CyberCloud.Storage` is already the group `storage` — and a short name equal
+        // to its OWN group's key gives `cyc storage storage` two meanings, which System.CommandLine
+        // answers with `An item with the same key has already been added. Key: storage` on every
+        // parse that reaches the group, before any verb runs. CliTokens carries the rule and
+        // CliTokenTests carries the measurements.
         //
         // ⚠ THE REGISTRY CHECKS THIS NOW, AND THIS TEST NO LONGER HAS TO. The paragraph here used to
         // read "nothing in the registry checks this … cyc.Tests' EveryVerbInTheTreeIsReachable
@@ -101,8 +102,8 @@ public sealed class StorageDeclarationTests {
         // nothing; only this says it is not the one word this namespace could not have.
         registration.Display.Alias.ShouldNotBe(
             "storage",
-            "the short name equals the group name CyberCloud.Storage produces, so every `cyc` "
-            + "invocation throws before it parses."
+            "the short name equals the group key CyberCloud.Storage produces, so every `cyc` "
+            + "invocation that reaches the group throws before it parses."
         );
     }
 

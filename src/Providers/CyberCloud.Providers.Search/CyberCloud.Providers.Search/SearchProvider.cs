@@ -79,13 +79,15 @@ namespace CyberCloud.Providers.Search;
 ///     <para>
 ///         ⚠ <b>The short name is <c>opensearch</c> and the obvious <c>search</c> is a hard
 ///         collision.</b> <c>CliEmitter.GroupOf</c> is the provider namespace's last segment
-///         lower-cased, so <c>CyberCloud.Search</c> is already the group <c>search</c> — and
-///         System.CommandLine's <c>ValidTokens</c> builds ONE dictionary of every command token and
-///         every alias in the whole tree, so a group and an alias sharing a string throw on the first
-///         parse of any command line. <c>CyberCloud.Storage/accounts</c> found this and shipped as
-///         <c>objectstore</c>; this is the second namespace whose natural short name is its own group
-///         name, and the first to have <b>two</b> short names to keep clear of it and of each other.
-///         <c>OpenSearchDeclarationTests</c> asserts both halves against literals.
+///         lower-cased, so <c>CyberCloud.Search</c> is already the group <c>search</c> — and a short
+///         name equal to its <i>own</i> group's key gives <c>cyc search search</c> two meanings, which
+///         <c>System.CommandLine</c> throws on for every parse that reaches the group.
+///         <c>CyberCloud.Storage/accounts</c> found this and shipped as <c>objectstore</c>; this is
+///         the second namespace whose natural short name is its own group name, and the first to have
+///         <b>two</b> short names to keep clear of it and of each other. <c>CliTokens</c> carries the
+///         rule and <c>CliTokenTests</c> carries the measurements;
+///         <c>OpenSearchDeclarationTests.NoShortNameHereGivesACycTokenTwoMeanings</c> asks the
+///         derived question for this provider.
 ///     </para>
 ///     <para>
 ///         ⚠ <b>THIS NAMESPACE IS DESIGNED FOR TWO TYPES AND SHIPS ONE.</b> docs/plan/12 § The

@@ -43,10 +43,11 @@ public sealed class DocumentDbDeclarationTests {
         // MECHANICAL.
         //
         // `documentdb` is the CLI GROUP this namespace already produces — CliEmitter.GroupOf is the
-        // provider namespace's last segment, lower-cased — and System.CommandLine's ValidTokens
-        // builds ONE dictionary over every command token AND every alias in the whole tree, so a
-        // group and an alias sharing a string throw `An item with the same key has already been
-        // added. Key: documentdb` on the first parse of ANY command line. That is
+        // provider namespace's last segment, lower-cased — and a short name equal to its OWN group's
+        // key gives `cyc documentdb documentdb` two meanings, which System.CommandLine answers with
+        // `An item with the same key has already been added. Key: documentdb` on every parse that
+        // reaches the group. CliTokens carries the rule and CliTokenTests carries the
+        // measurements, including that a short name equal to ANOTHER group's key is harmless. That is
         // CyberCloud.Storage/accounts' finding; this is the SECOND namespace it applies to, which is
         // what turns a near miss into a rule: whenever docs/plan/21 § Grammar's alias table would
         // spell the alias the way the namespace is spelled, it collides.
@@ -72,8 +73,8 @@ public sealed class DocumentDbDeclarationTests {
         // that let a casing sabotage stay green on an earlier provider.
         registration.Display.Alias.ShouldNotBe(
             "documentdb",
-            "the short name equals the group name CyberCloud.DocumentDB produces, so every `cyc` "
-            + "invocation throws before it parses."
+            "the short name equals the group key CyberCloud.DocumentDB produces, so every `cyc` "
+            + "invocation that reaches the group throws before it parses."
         );
 
         foreach (var trademark in new[] { "mongo", "mongodb" }) {

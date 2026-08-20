@@ -128,23 +128,21 @@ public sealed class ContainerServiceProvider : IResourceProvider {
                 response: ManagedClusters.ListCredentialsResponse,
                 handler: typeof(ManagedClusterListCredentialsHandler)
             )
-            // ⚠ `aks` AND `nodepool`, AND THE CHECK CyberCloud.Storage/accounts DEMANDS WAS RUN BY
-            // HAND AGAINST LITERALS. CliEmitter derives the CLI GROUP key from the provider
-            // namespace's last segment, lower-cased, so this namespace is already the group
-            // `containerservice`; the ten group keys in the tree are sample, dbforpostgresql,
-            // dbformysql, cache, messaging, search, storage, documentdb, analytics and
-            // containerservice, and neither alias is one of them. Neither is one of the twelve short
-            // names already declared — widget, postgres, mariadb, valkey, kafka, nats, rabbitmq,
-            // objectstore, bucket, docdb, opensearch, clickhouse — and neither is one of
-            // CommandTree.ReservedGroups' nine. All three halves are asserted against typed-out
-            // literals in ManagedClusterDeclarationTests, because System.CommandLine's ValidTokens
-            // builds ONE dictionary of every command token and every alias in the whole tree and a
-            // collision throws "An item with the same key has already been added" on the FIRST PARSE
-            // OF ANY COMMAND LINE.
+            // ⚠ `aks` AND `nodepool`, AND WHAT THEY HAVE TO STAY CLEAR OF IS THIS GROUP AND EACH
+            // OTHER. CliEmitter derives the CLI GROUP key from the provider namespace's last segment,
+            // lower-cased, so this namespace is already the group `containerservice`; a short name
+            // equal to its own group's key, to a sibling's command name, or to a sibling's short name
+            // gives one `cyc containerservice …` token two meanings. CliTokens carries the rule and
+            // CliTokenTests carries the measurements.
             //
-            // ⚠ ProviderRegistry.Build still refuses only a DUPLICATE short name and still never
-            // compares one against a group name — `short-name-collides-with-the-group` stays owed, and
-            // these are the fourth and fifth types that had to satisfy it by hand.
+            // ⚠ THE THREE LISTS THIS PARAGRAPH HELD ARE GONE, AND TWO OF THEM ASKED THE WRONG
+            // QUESTION. Measured against System.CommandLine 2.0.10 the token dictionary is per PARENT
+            // command, so neither the nine other group keys nor CommandTree.ReservedGroups' nine can
+            // collide with an alias that sits under `containerservice` — a reserved group is a ROOT
+            // command, and CommandTree throws on a generated GROUP taking one of the nine while the
+            // root command is built, which cyc.Tests.ReservedGroupTests asserts over the whole tree.
+            // ProviderRegistry.Build derives the real question from what is registered;
+            // ManagedClusterDeclarationTests.NoShortNameHereGivesACycTokenTwoMeanings asks it here.
             .Display(
                 "Managed Kubernetes cluster",
                 "Managed Kubernetes clusters",

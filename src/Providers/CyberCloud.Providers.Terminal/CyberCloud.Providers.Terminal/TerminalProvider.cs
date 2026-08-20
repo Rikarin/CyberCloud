@@ -56,19 +56,22 @@ namespace CyberCloud.Providers.Terminal;
 ///     </para>
 /// </remarks>
 public sealed class TerminalProvider : IResourceProvider {
-    /// <summary>The CLI alias, and the one string this row had to check against sixteen others.</summary>
+    /// <summary>The CLI alias, and the one string this namespace could not have taken.</summary>
     /// <remarks>
     ///     ⚠ <b><c>terminal</c> IS ALREADY TAKEN BY THIS PROVIDER'S OWN GROUP.</b> <c>CliEmitter</c>
     ///     derives the CLI group key from the provider namespace's last segment, lower-cased, so
     ///     <c>CyberCloud.Terminal</c> is the group <c>terminal</c> before any alias is declared — the
     ///     same trap <c>CyberCloud.Storage/accounts</c> hit and ships as <c>objectstore</c> to avoid.
-    ///     System.CommandLine's <c>ValidTokens</c> builds <b>one</b> dictionary over every command
-    ///     token and every alias in the whole tree, so a group and an alias sharing a string throw
-    ///     <c>ArgumentException: An item with the same key has already been added</c> on the first
-    ///     parse of <i>any</i> command line, naming neither the provider nor the string.
-    ///     <c>ConsoleDeclarationTests</c> checks this one against the eleven group keys, the sixteen
-    ///     declared aliases and the nine reserved groups, as literals, because
-    ///     <c>ProviderRegistry.Build</c> compares none of them.
+    ///     A short name equal to its <i>own</i> group's key gives <c>cyc terminal terminal</c> two
+    ///     meanings, and <c>System.CommandLine</c> throws
+    ///     <c>ArgumentException: An item with the same key has already been added</c> on every parse
+    ///     that reaches the group, naming neither the provider nor the string.
+    ///     <c>CliTokens</c> carries the rule and <c>CliTokenTests</c> carries the
+    ///     measurements — including that the dictionary is per parent command, so a short name equal
+    ///     to some other group's key is harmless.
+    ///     <c>ConsoleDeclarationTests.NoShortNameHereGivesACycTokenTwoMeanings</c> asks the derived
+    ///     question for this provider, and <c>ProviderRegistry.Build</c> asks it over the whole tree
+    ///     at silo start.
     /// </remarks>
     public const string ShortName = "shell";
 

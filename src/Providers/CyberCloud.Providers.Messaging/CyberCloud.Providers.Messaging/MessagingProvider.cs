@@ -265,15 +265,15 @@ public sealed class MessagingProvider : IResourceProvider {
             .Display(
                 "RabbitMQ cluster",
                 "RabbitMQ clusters",
-                // ⚠ CHECKED AGAINST EVERY CLI GROUP KEY AS A LITERAL, NOT AGAINST THE SHORT NAMES.
-                // ProviderRegistry.Build refuses a duplicate short name and never compares one to a
-                // group NAME, and CliEmitter.GroupOf derives a group from the provider namespace's
-                // last segment lower-cased. System.CommandLine's ValidTokens is one dictionary over
-                // the whole tree, so a short name equal to any group would make EVERY `cyc` parse
-                // throw — not just this type's. The groups in the tree today are `messaging`,
-                // `dbforpostgresql`, `cache`, `storage` and `sample`; `rabbitmq` is none of them, and
-                // RabbitmqDeclarationTests pins the comparison against typed-out literals so that
-                // re-casing a namespace constant cannot leave it green.
+                // ⚠ `messaging` IS THE ONE WORD THIS NAMESPACE COULD NOT HAVE, AND IT IS THE ONLY
+                // GROUP KEY THAT MATTERS HERE. CliEmitter.GroupOf derives a group from the provider
+                // namespace's last segment lower-cased, and a short name equal to its OWN group's key
+                // gives `cyc messaging messaging` two meanings. The list of every other group key
+                // this paragraph used to carry was the wrong question: the token dictionary is per
+                // PARENT command, so a short name equal to another group's key parses cleanly.
+                // CliTokens carries the rule, CliTokenTests carries the measurements, and
+                // RabbitmqDeclarationTests.TheShortNameIsNoneOfTheCliGroupNamesTheNamespacesAlreadyProduce
+                // asks the derived question here.
                 shortName: "rabbitmq",
                 summary: "A managed RabbitMQ cluster on the RabbitMQ Cluster Operator, with quorum "
                 + "queues as the default queue type and the management UI reachable only in-cluster."

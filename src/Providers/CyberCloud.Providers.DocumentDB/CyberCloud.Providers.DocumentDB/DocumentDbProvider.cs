@@ -129,22 +129,24 @@ public sealed class DocumentDbProvider : IResourceProvider {
             // ⚠ `docdb`, AND THE THREE OBVIOUS ALTERNATIVES ARE EACH WRONG FOR A DIFFERENT REASON.
             //
             // `documentdb` is the CLI GROUP this namespace already produces — CliEmitter.GroupOf is
-            // the provider namespace's last segment, lower-cased — and System.CommandLine's
-            // ValidTokens builds ONE dictionary over every command token and every alias in the whole
-            // tree, so a group and an alias sharing a string throw `An item with the same key has
-            // already been added` on the first parse of ANY command line. That is
-            // CyberCloud.Storage/accounts' finding, and this is the SECOND namespace whose natural
-            // short name is its own group name — which turns it from a near miss into a pattern:
-            // whenever docs/plan/21 § Grammar's alias table would spell an alias the same way the
-            // namespace does, it collides.
+            // the provider namespace's last segment, lower-cased — and a short name equal to its OWN
+            // group's key gives `cyc documentdb documentdb` two meanings, which System.CommandLine
+            // answers with `An item with the same key has already been added` on every parse that
+            // reaches the group. CliTokens carries the rule and CliTokenTests carries the
+            // measurements. That is CyberCloud.Storage/accounts' finding, and this is the SECOND
+            // namespace whose natural short name is its own group name — which turns it from a near
+            // miss into a pattern: whenever docs/plan/21 § Grammar's alias table would spell an alias
+            // the same way the namespace does, it collides.
             //
             // `mongo` and `mongodb` are refused on ADR-011 grounds rather than mechanical ones. A
             // short name is what a human types and what appears in every example, and this service is
             // not MongoDB — DocumentDbDeclarationTests asserts against both strings.
             //
-            // ⚠ ProviderRegistry.Build still refuses only a DUPLICATE short name and still never
-            // compares one against a group name; DerivedSurfaces.CliProblems does not either. Both
-            // checks below are by hand, against literals.
+            // ⚠ ProviderRegistry.Build refuses the first of the three now, deriving the question
+            // from what is registered through CliTokens. Nothing will ever check the second: `mongo`
+            // collides with no token, so only a literal in
+            // DocumentDbDeclarationTests.TheShortNameIsNeitherTheGroupNameNorTheTrademark can state
+            // the ADR-011 half.
             .Display(
                 "Document database account",
                 "Document database accounts",
