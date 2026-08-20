@@ -1784,6 +1784,54 @@ etcd object and no compute. Closing it needs a group-delete choreography that fi
 namespace holds nothing but objects this platform wrote, and the safe order is the one docs/plan/06
 § Two-phase create already uses in reverse.
 
+⚠ **STILL OWED, AND THE SENTENCE ABOVE ABOUT WHAT CLOSING IT NEEDS IS WRONG IN ITS LAST CLAUSE.**
+"Proves the namespace holds nothing but objects this platform wrote" is the *weak* rule, and it is the
+one that destroys a tenant. What shipped is the strong rule and the shape of the proof, with no caller:
+
+- **`NamespaceReclaim.Decide` is the rule, and it says *nothing at all*, not *nothing foreign*.** It
+  takes the group's members and a listing of everything in the namespace and answers `Deletable` only
+  when both are empty. `NamespaceEnsurer.DeleteAsync` refuses without such a verdict, re-checks that
+  the verdict names this cluster and this namespace, and cannot be given a hand-built one — the
+  constructor is private and `default(NamespaceReclaim)` authorizes nothing.
+- **Why the weak rule is fatal, in three ways at once.** It deletes the objects of a resource whose
+  membership was never recorded — nothing in the write path calls `IResourceGroupGrain.BeginCreateAsync`
+  (docs/plan/08 § Soft delete), so every group's member list is empty and "empty" is evidence of
+  nothing. It deletes the objects of a resource that is simply live. And it deletes the volumes of
+  every resource inside its recovery window: a parked resource's data plane *is* torn down and its
+  claims are exactly what a restore restores from, so a namespace delete during a window turns every
+  restore in that group into a lie.
+- **⚠ The volume claims carry none of the seven labels, which is the finding that decides the whole
+  question.** `KubeCommandBuilder.Inject` writes the labels into the top-level `metadata.labels` and
+  does not walk into a nested template, and every provider's `volumeClaimTemplate` metadata is a bare
+  `name` — see `ContainerRegistries.ClaimTemplate`. So the `PersistentVolumeClaim`s a `StatefulSet`
+  makes look *foreign* to every rule the platform has. A managed-only listing cannot see them at all,
+  and the strong rule refuses over them. **Both answers are the same answer: the namespace of any
+  group that ever ran a stateful type is never `Deletable`, because docs/plan/08 § Soft delete records
+  that a purge still leaves the volumes and `IResourceReconciler` has no member that asks for them.**
+  `NamespaceReclaim.OperatorReclaimable` is what that case reports, and reporting it is the feature —
+  option "record the namespace as reclaimable for an operator" is the right answer for those groups
+  until the purge learns to remove the disks it kept.
+- **⚠ There is no seam that can answer "what is in this namespace", and `IClusterObjectInventory` is
+  not it.** That one selects on `cybercloud.io/managed-by=cybercloud`, which excludes precisely the
+  objects a delete has to find, so it is empty exactly when the delete is most dangerous.
+  `INamespaceInventory` is the right shape and its only implementation,
+  `UnavailableNamespaceInventory`, refuses — an empty listing is a licence to delete, so a stub must
+  never produce one. A real one is a discovery of every namespaced `APIResource` the cluster serves,
+  CRDs included, and a list per kind; the informer bridge of docs/plan/09 § Observing does not deliver
+  it, because `IClusterConnectionGrain.WatchAsync` watches one kind under a label selector.
+- **⚠ The memo is per silo, so a namespace delete is not a local act.** `NamespaceEnsurer.RecheckAfter`
+  is an hour and the memo lives in the ensurer instance. `DeleteAsync` drops its own entry, but every
+  other silo still believes the namespace exists and will not re-apply it, so a group whose namespace
+  is deleted and then immediately reused fails its reconciles elsewhere with a `404` for up to an hour.
+  Closing that needs an invalidation the memo has no channel for.
+- **What is left owed, in order.** A group-delete choreography on `IResourceGroupGrain` — refuse or
+  cascade is still open, and the *ordering* is settled either way: seal the group, then the members,
+  then the namespace, which is docs/plan/06 § Two-phase create in reverse. The membership wiring that
+  makes `ListAsync` mean anything. A real `INamespaceInventory`. A purge that removes the volumes it
+  kept. And the memo invalidation. **Until the first two, `NamespaceEnsurer.DeleteAsync` has no caller,
+  and adding one that reads today's `ListAsync` would delete the namespace of every populated group in
+  the platform.**
+
 ### Closed: the drift scan no longer calls a namespace an orphan
 
 This was owed when the namespace write landed and is now closed, because the same recognition rule the

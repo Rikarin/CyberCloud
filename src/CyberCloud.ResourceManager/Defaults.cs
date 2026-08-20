@@ -309,3 +309,40 @@ public sealed class UnavailableClusterObjectInventory : IClusterObjectInventory 
             )
         );
 }
+
+/// <summary>
+///     The <see cref="INamespaceInventory" /> every silo registers, because there is no other one.
+/// </summary>
+/// <remarks>
+///     ⚠ <b>Fails rather than returning empty, and here the stakes are higher than the drift
+///     inventory's.</b> An empty namespace listing is not a wrong report — it is a licence to run a
+///     recursive delete over whatever is actually in there: a tenant's database, an operator's
+///     <c>Secret</c>, and the volume claims docs/plan/08 § Soft delete keeps so that a restore has
+///     something to restore from. <c>NamespaceReclaim.Decide</c> reads "no occupants" as
+///     <c>Deletable</c>, which is correct given a <i>complete</i> listing and catastrophic given a
+///     silent one, so the only safe stub is one that never answers.
+///     <para>
+///         ⚠ <b>The real one is not a smaller version of this and is not owed to
+///         <c>UnavailableClusterObjectInventory</c>'s informer.</b> Listing a namespace's whole
+///         contents is a discovery of every namespaced <c>APIResource</c> the cluster serves, CRDs
+///         included, and a list per kind. <see cref="INamespaceInventory" /> says what that costs.
+///     </para>
+/// </remarks>
+public sealed class UnavailableNamespaceInventory : INamespaceInventory {
+    /// <inheritdoc />
+    public Task<Result<ImmutableArray<NamespaceOccupant>>> ListAllAsync(
+        Guid clusterId,
+        string ns,
+        CancellationToken cancellationToken = default
+    ) =>
+        Task.FromResult(
+            Result<ImmutableArray<NamespaceOccupant>>.Failure(
+                ErrorCode.InternalError,
+                $"No namespace inventory is wired, so nothing can say what namespace '{ns}' on cluster "
+                + $"{clusterId:D} holds. This fails rather than reporting an empty namespace, because "
+                + "an empty namespace is the one answer that authorizes deleting it — and deleting a "
+                + "namespace is a recursive delete of every object inside, including the volume claims "
+                + "a soft-deleted resource is restored from. Nothing may be reclaimed on a guess."
+            )
+        );
+}

@@ -59,6 +59,15 @@ public readonly record struct ReconcilePass(
 ///         alternative — a sweeper that deletes namespaces it believes are empty — is how a tenant's
 ///         running database disappears. <c>src/Providers/README.md</c> § Namespaces records it as
 ///         owed with what closing it needs.
+///         <para>
+///             ⚠ <c>NamespaceEnsurer.DeleteAsync</c> and <c>NamespaceReclaim</c> exist and this driver
+///             does not call them, which is the same decision rather than a contradiction of it. They
+///             are the evidence rule as code — a delete that refuses unless the namespace holds
+///             nothing at all — and the thing that would call them is a resource-group delete, which
+///             has nowhere to live until <c>IResourceGroupGrain</c> gains one and until the write path
+///             starts recording membership. A pass over one resource is the wrong place for a
+///             group-scoped act in any case: it knows one member's state and nothing about the others.
+///         </para>
 ///     </para>
 /// </remarks>
 public sealed class ReconcileDriver(

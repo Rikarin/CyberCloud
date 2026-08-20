@@ -78,8 +78,12 @@ public readonly record struct NamespaceEnsured(bool Written, ApplyResult Result,
 ///         ADR-013's builder injects all seven or refuses to build.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Nothing deletes the namespace, deliberately.</b> See
-///         <see cref="ReconcileDriver" />'s remarks and <c>src/Providers/README.md</c> § Namespaces.
+///         ⚠ <b>Nothing deletes the namespace, and <see cref="DeleteAsync" /> is not a counter-example
+///         to that.</b> It exists so the evidence rule is code rather than a paragraph, it refuses
+///         unless <see cref="NamespaceReclaim" /> proves the namespace holds nothing at all, and no
+///         production path calls it — because the thing that would call it, a resource-group delete,
+///         has nowhere to live yet. See <see cref="ReconcileDriver" />'s remarks and
+///         <c>src/Providers/README.md</c> § Namespaces.
 ///     </para>
 /// </remarks>
 /// <param name="clock">The clock the re-check interval is measured on.</param>
@@ -248,6 +252,125 @@ public sealed class NamespaceEnsurer(IClock clock) {
         }
 
         return Result<NamespaceEnsured>.Success(new(true, outcome.Result, outcome.Message));
+    }
+
+    /// <summary>
+    ///     Deletes the namespace <paramref name="ns" />, and only on a verdict that says it is empty.
+    /// </summary>
+    /// <param name="id">The resource group's address — <see cref="GroupAddress" />'s output.</param>
+    /// <param name="ns">The namespace. Must be the one <paramref name="reclaim" /> was decided about.</param>
+    /// <param name="connection">The cluster. Must be the one <paramref name="reclaim" /> was decided about.</param>
+    /// <param name="reclaim">
+    ///     The verdict, from <see cref="NamespaceReclaim.Decide" />. ⚠ There is no overload without
+    ///     one and there must never be: the parameter is the only thing standing between this method
+    ///     and a recursive delete of a tenant's data.
+    /// </param>
+    /// <param name="cancellationToken">The caller's budget.</param>
+    /// <returns>
+    ///     Success once the API server has accepted the delete, or the verdict's refusal as a
+    ///     <see cref="ErrorCode.Conflict" /> naming what is still in there. An absent namespace is a
+    ///     success — the goal is its absence.
+    /// </returns>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>NOTHING IN THIS TREE CALLS THIS, AND THAT IS THE STATE OF THE FEATURE RATHER THAN
+    ///         AN OVERSIGHT.</b> The caller would be a resource-group delete, and
+    ///         <c>IResourceGroupGrain</c> has no method that deletes the group itself — it has
+    ///         <c>BeginDeleteAsync</c>/<c>CompleteDeleteAsync</c> for its <i>members</i>. Worse, the
+    ///         membership those methods maintain is not recorded by anything in production
+    ///         (docs/plan/08 § Soft delete), so <c>ListAsync</c> answers empty for every group in the
+    ///         platform and half of <see cref="NamespaceReclaim.Decide" />'s evidence is currently
+    ///         vacuous. The other half — the namespace's own contents — is what makes this safe to
+    ///         have in the tree meanwhile: it refuses on any object at all.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The verdict is re-checked against this cluster and this namespace, and that is not
+    ///         belt-and-braces.</b> A verdict is a value; a caller holding one about
+    ///         <c>{sub}-staging</c> and passing it with <c>{sub}-prod</c> is one variable name away,
+    ///         and the mistake is invisible at the call site because both arguments are strings. It
+    ///         also rejects <c>default(NamespaceReclaim)</c>, whose namespace is empty.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The memo entry goes with the namespace, and this is the half a delete gets wrong
+    ///         silently.</b> A deleted namespace whose memo still says "ensured 4 minutes ago" makes
+    ///         the next apply into it answer <c>404</c>, for the rest of <see cref="RecheckAfter" />.
+    ///         Removing the entry closes that <i>on this silo</i> — and only on this silo, which is a
+    ///         real limitation and is recorded in <c>src/Providers/README.md</c> § Namespaces: every
+    ///         other silo keeps its own memo and will not re-apply the namespace for up to an hour, so
+    ///         a group whose namespace is deleted and then immediately reused fails its reconciles
+    ///         elsewhere. Closing that needs an invalidation the memo has no channel for, and it is
+    ///         one of the reasons the delete has no caller.
+    ///     </para>
+    /// </remarks>
+    public async Task<Result> DeleteAsync(
+        ResourceId id,
+        string ns,
+        IKubeClusterConnection connection,
+        NamespaceReclaim reclaim,
+        CancellationToken cancellationToken = default
+    ) {
+        ArgumentNullException.ThrowIfNull(connection);
+        ArgumentException.ThrowIfNullOrEmpty(ns);
+
+        // ⚠ `default(NamespaceReclaim)` carries a NULL namespace, not an empty one — a struct's fields
+        // start at their defaults and `string` has no empty default. The comparison below is written
+        // so that the value a caller gets from an unassigned field reaches the refusal rather than a
+        // NullReferenceException, which is how the check was written first and how the test for it
+        // failed.
+        if (!string.Equals(reclaim.Namespace, ns, StringComparison.Ordinal)
+            || reclaim.ClusterId != connection.ClusterId) {
+            return Result.Failure(
+                ErrorCode.Conflict,
+                "The reclaim verdict was decided about namespace "
+                + $"'{(string.IsNullOrEmpty(reclaim.Namespace) ? "<none>" : reclaim.Namespace)}' on "
+                + $"cluster {reclaim.ClusterId:D} and the delete addresses '{ns}' on cluster "
+                + $"{connection.ClusterId:D}. A verdict is evidence about one namespace on one "
+                + "cluster and does not carry to another."
+            );
+        }
+
+        if (!reclaim.Deletable) {
+            // ⚠ No `target`. An Error's target is an RFC 6901 JSON Pointer into the request body
+            // (docs/plan/08 § Errors) and a namespace name is not one — Error's constructor throws on
+            // it. There is no property of a request to point at here; the namespace is named in the
+            // message instead.
+            return Result.Failure(
+                ErrorCode.Conflict,
+                $"The namespace '{ns}' on cluster {connection.ClusterId:D} may not be deleted. "
+                + reclaim.Explain()
+            );
+        }
+
+        var deleted = await KubeCommand.For(connection)
+            .WithTenantId(id.TenantId)
+            .WithResourceId(id)
+            .WithKind(Kind)
+            .WithApiVersion(GroupApiVersion)
+            .WithFieldManager(FieldManager)
+            .ObjectJson(Body(ns))
+            // ⚠ Foreground, and the reason is that it costs nothing here. A proven-empty namespace has
+            // no dependents for the garbage collector to walk, so the objection that makes a
+            // reconciler choose Background — a bounded pass budget running out while the collector
+            // works — cannot arise. What Foreground buys is that "deleted" means gone rather than
+            // marked, which is what a later read-back has to be able to rely on.
+            .DeleteAsync(CascadePolicy.Foreground, cancellationToken)
+            .ConfigureAwait(false);
+
+        // The memo is dropped whether or not the delete succeeded. A failed delete may still have
+        // removed the object — a timeout on the response says nothing about the request — and the cost
+        // of being wrong is one extra apply.
+        ensured.TryRemove((connection.ClusterId, ns), out _);
+
+        if (deleted.TryGetError(out var error) && error.Code != ErrorCode.ResourceNotFound) {
+            return Result.Failure(
+                error.Code,
+                $"The namespace '{ns}' could not be deleted on cluster {connection.ClusterId:D}: "
+                + error.Message,
+                error.Target
+            );
+        }
+
+        return Result.Success;
     }
 
     /// <summary>

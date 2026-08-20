@@ -554,6 +554,63 @@ is transactional over a set, which the platform has no shape for.
 ⚠ **No provider should declare `SupportsSoftDelete` until the above is built.** The five stated
 reasons in the tree are correct and stay correct; the declaration is the last step, not the first.
 
+### Reclaiming a resource group's namespace, and why the recovery window forbids the obvious version
+
+Every non-teardown reconcile pass creates `{subscriptionId:N}-{resourceGroup}` on the cluster it is
+about to write to (`NamespaceEnsurer`), and nothing removes it, so a tenant who deletes every resource
+in a group leaves a labelled empty namespace per cluster the group ever touched, indefinitely. Small
+per group; unbounded over time. `src/Providers/README.md` § Namespaces carries the mechanism. What
+belongs here is the interaction with the section above, because **it is the reason the cheap version
+of this cleanup cannot ship**.
+
+**Decided: a namespace is deletable only when it holds nothing at all, and never when it holds only
+objects the platform did not write.** The tempting rule is the second one — delete when nothing carries
+`cybercloud.io/managed-by` — and it destroys a tenant three ways. It deletes the objects of a resource
+whose membership was never recorded, which is every resource today. It deletes the objects of a
+resource that is live and simply not being deleted. And it deletes the volumes of every resource
+inside its recovery window, which is the one this section owns: **a soft-deleted resource's data plane
+is torn down and its `PersistentVolumeClaim`s are what a restore restores from**, so a namespace
+delete during a window turns every restore in that group into a lie — and the tenant is *told* it came
+back, which § Deleting a parent resource that has children already names as worse than not restoring.
+
+⚠ **The volume claims carry none of ADR-013's seven labels, and that single fact settles the design.**
+`KubeCommandBuilder` injects the labels into an object's own `metadata.labels` and does not descend
+into a `volumeClaimTemplate`, so the claims the StatefulSet controller creates from it are unlabelled.
+They are therefore invisible to any managed-only listing — including the drift inventory — and they
+read as *foreign* to any rule that tests for `managed-by`. Both readings converge on the same
+conclusion: **the namespace of a group that ever ran a stateful type never becomes empty**, because the
+paragraph above records that a purge still leaves the volumes and `IResourceReconciler` has no member
+that asks for them. So for exactly those groups the answer is not a delete at all — it is to record the
+namespace as reclaimable and let an operator decide, which is what `NamespaceReclaim.OperatorReclaimable`
+reports. **Making the purge remove the disks it kept is what would turn that back into a delete**, and
+it is the same owed item, reached from the other end.
+
+**What exists: the rule, the seam and the gate. What does not: a caller.** `NamespaceReclaim.Decide`
+weighs the group's members against a listing of everything in the namespace;
+`NamespaceEnsurer.DeleteAsync` refuses without a verdict that says both are empty and that names this
+cluster and this namespace. Three things keep it uncalled, and each is a decision somebody else's task
+has to take:
+
+- **There is no group delete.** `IResourceGroupGrain` has `BeginDeleteAsync`/`CompleteDeleteAsync` for
+  its *members* and no method that deletes the group itself. Whether a group refuses while it holds
+  members or cascades is open; the ordering is not, and it is § Two-phase create in reverse — seal the
+  group so it stops accepting members, then the members, then the namespace last. Sealing first is
+  also the only thing that closes the race where a resource is created between the listing and the
+  delete.
+- **Membership is not recorded**, so `IResourceGroupGrain.ListAsync` answers empty for every group and
+  half the evidence is vacuous. A delete wired to it today would fire on every populated group in the
+  platform.
+- **Nothing can list a namespace.** `IClusterObjectInventory` selects on `managed-by`, which excludes
+  the objects the decision has to find; `INamespaceInventory` is the right question and its only
+  implementation refuses, because an empty listing is a licence to delete. A real one needs a
+  discovery of every namespaced `APIResource` the cluster serves and a list per kind, which
+  [09](09-kubernetes-fabric.md) § Observing's label-selected informer does not provide.
+
+⚠ **And the delete is not a local act even once all three land.** `NamespaceEnsurer` memoises "this
+namespace exists" per silo for an hour, so a namespace deleted on one silo stays believed-in on the
+others and a group whose namespace is reused immediately fails its reconciles elsewhere until the memo
+expires. Whatever calls the delete needs an invalidation the memo has no channel for.
+
 ## The provider registry
 
 ```csharp
