@@ -421,16 +421,41 @@ partial class Build
                 // ⚠ It also instruments only what has a portable PDB beside it, so the NuGet
                 // dependencies in that directory are skipped without a filter having to name them —
                 // 12 CyberCloud assemblies out of 102 DLLs, measured on CyberCloud.Identity.Tests.
-                var arguments = withCoverage
-                    ? $"coverlet {SuiteOutputDirectory(project)} --target dotnet --targetargs \"{run}\" "
-                      + $"--format cobertura --output {CoverageDirectory / $"{name}.cobertura.xml"}"
-                    : run;
+                //
+                // ⚠ THE TWO CALLS ARE NOT A TIDINESS FAILURE, THEY ARE THE ONLY SHAPE THAT WORKS, and
+                // the reason is worth writing down because the wrong shape fails in a way that reads
+                // like a missing tool. Nuke's ArgumentStringHandler is an interpolated-string handler:
+                // each HOLE is quoted if it needs quoting, and a whole string handed over as one
+                // argument goes through its implicit operator, which is `$"{value}"` — a single hole.
+                // A command line containing a `"` therefore comes back double-quoted end to end with
+                // its inner quotes escaped, so `dotnet` is asked to run one command named
+                // `coverlet /path --target dotnet …` and answers "Could not execute because the
+                // specified command or file was not found". Observed on all 71 suites at once.
+                //
+                // So the interpolated literal has to be AT the call, `run` has to arrive as a hole,
+                // and it is pre-quoted because a hole is quoted only when the handler thinks it needs
+                // it — an already-double-quoted value is passed through untouched, which is the one
+                // way to say "this argument is one argument" and be sure of it.
+                if (withCoverage)
+                {
+                    var report = CoverageDirectory / $"{name}.cobertura.xml";
+                    var instrumented = SuiteOutputDirectory(project);
+                    var targetArguments = $"\"{run}\"";
 
-                DotNetTasks.DotNet(
-                    arguments,
-                    workingDirectory: RootDirectory,
-                    environmentVariables: environmentVariables,
-                    exitHandler: process => exitCode = process.ExitCode);
+                    DotNetTasks.DotNet(
+                        $"coverlet {instrumented} --target dotnet --targetargs {targetArguments} --format cobertura --output {report}",
+                        workingDirectory: RootDirectory,
+                        environmentVariables: environmentVariables,
+                        exitHandler: process => exitCode = process.ExitCode);
+                }
+                else
+                {
+                    DotNetTasks.DotNet(
+                        run,
+                        workingDirectory: RootDirectory,
+                        environmentVariables: environmentVariables,
+                        exitHandler: process => exitCode = process.ExitCode);
+                }
 
                 if (exitCode != 0)
                     failures.Add($"{name} exited {exitCode}");
