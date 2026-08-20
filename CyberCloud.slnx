@@ -525,6 +525,17 @@
           provider's own `.Cluster.Conformance` project.
         -->
         <Project Path="test/CyberCloud.Cluster.Conformance/CyberCloud.Cluster.Conformance.csproj" />
+        <!--
+          ⚠ The first thing in this repository that installs a charts/bundle/ component onto an API
+          server. ONE component of eighteen, and its test method's name says which one and what that
+          proves — charts/bundle/bundle.yaml § owed, `nothing-here-has-been-installed`, is narrowed by
+          it and not closed. It sits under test/ because a suite that runs a container has to be a
+          test project and nothing under charts/ builds; it ends in `.Cluster.Conformance` because
+          Directory.Build.props § Project role detection and build/Build.Test.cs § SuiteOwning both
+          classify by suffix, and because that suffix already means "needs a daemon, skips loudly
+          without one" in fifteen other assemblies here.
+        -->
+        <Project Path="test/CyberCloud.Bundle.Cluster.Conformance/CyberCloud.Bundle.Cluster.Conformance.csproj" />
         <Project Path="test/CyberCloud.Isolation/CyberCloud.Isolation.csproj" />
     </Folder>
 </Solution>

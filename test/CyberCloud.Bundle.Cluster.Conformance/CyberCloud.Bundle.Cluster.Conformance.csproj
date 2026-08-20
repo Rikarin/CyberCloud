@@ -1,0 +1,78 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      The first thing in this repository that installs a charts/bundle/ component onto an API server.
+
+      ⚠ IT COVERS ONE COMPONENT OF EIGHTEEN, AND ITS NAME IS THE ONLY HONEST PLACE TO SAY SO.
+      charts/bundle/bundle.yaml § owed, `nothing-here-has-been-installed`, is the row this project
+      narrows rather than closes: every pin in that directory was resolved against a registry and none
+      of it had ever been applied. Applying one component proves THE INSTALL MECHANISM — that
+      install.sh reads a pin out of a component.yaml, invokes helm unattended, waits for the right
+      thing, and leaves a cluster where the group the component claims to serve is served. It proves
+      nothing whatever about the other seventeen pins. A suite that installed two and called itself
+      `TheBundleInstalls` would be the failure class this repository has shipped repeatedly — a check
+      that answers a narrower question than it appears to — so the test method here is named for the
+      sentence it can defend and for no more of one.
+
+      ⚠ WHY cert-manager AND NOT SOME OTHER ROW. charts/bundle/README.md § Installing and
+      cert-manager/component.yaml both make it the natural first: it is phase 15, it depends on
+      nothing else in the bundle except a CNI k3s already has, two phase-40 components' webhooks mount
+      Secrets only it creates, and — the property that makes it TESTABLE rather than merely first —
+      its readiness is observable from outside. A Certificate either reaches `Ready` or it does not.
+      An operator whose only observable is "the Deployment is up" would let this suite pass over a
+      controller that reconciles nothing.
+
+      ⚠ WHY IT IS UNDER test/ AND NOT UNDER charts/. Nothing under charts/ builds; `Build.Charts`
+      globs Chart.yaml and charts/bundle/ deliberately has none — charts/bundle/README.md § This
+      directory holds no Helm charts. A gate that runs a container has to be a test project, and
+      docs/plan/03 § test/ is where a cross-cutting suite belongs.
+
+      ⚠ THE NAME'S SUFFIX IS LOAD-BEARING, EXACTLY AS IT IS FOR EVERY *.Cluster.Conformance PROJECT.
+      Directory.Build.props § Project role detection and build/Build.Test.cs § SuiteOwning both
+      classify by the SUFFIX and nothing else. `CyberCloud.Bundle` or `CyberCloud.Bundle.Cluster`
+      would build as a LIBRARY and then fail `AssertEveryTestProjectIsOwned`, which is the check that
+      makes "a test project no target runs" unrepresentable. `.Cluster.Conformance` is claimed by both
+      rules with no edit to either, and it carries the meaning the other fifteen assemblies with that
+      suffix carry: this needs a Docker daemon, and it skips loudly rather than silently when none
+      answers.
+
+      ⚠ IT IS NOT COUNTED BY THE Labels ARCHITECTURE GATE, AND THAT IS DELIBERATE ON BOTH SIDES.
+      Build.Architecture.cs § LabelsGate selects `.Conformance` projects under src/Providers and
+      excludes `.Cluster.Conformance`, for a reason its own remark states at length: a filtered run
+      whose only match is a skipped test reports "Zero tests ran", which the runner's
+      `minimum-expected-tests 1` option treats as failure, so an architecture gate pointed at a
+      Docker-backed suite would pass or fail on
+      whether a daemon happened to be running. This project is under test/ and ends in
+      `.Cluster.Conformance`, so it is outside that selection twice over. The same trap is why
+      CertManagerComponentInstaller below holds a test that needs no daemon: see its remarks.
+    -->
+
+    <ItemGroup>
+        <PackageReference Include="xunit.v3"/>
+        <PackageReference Include="Shouldly"/>
+        <PackageReference Include="Testcontainers.K3s"/>
+        <!-- The raw client, for the half of every assertion here that is deliberately NOT our code. -->
+        <PackageReference Include="KubernetesClient"/>
+    </ItemGroup>
+
+    <ItemGroup Label="Global usings">
+        <Using Include="Xunit"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <!--
+          ⚠ FOR TWO CONSTANTS AND ONE LOCK, AND THE LOCK IS THE REASON. ClusterSlot is documented as
+          "one cross-process permit to hold a k3s container … shared by every assembly that runs a
+          cluster-backed suite"; an assembly that started its own k3s WITHOUT taking it would be the
+          sixteenth container-backed suite competing for the four-suite budget Task #95 set, which is
+          the starvation that cap exists to prevent. ClusterInfrastructure.K3sImage comes with it, so
+          this suite cannot drift onto a different API server from the ones it sits beside.
+
+          It does drag Orleans, PostgreSQL and Redis in as transitive package references. Nothing here
+          binds to a type from any of them, and the alternative — copying an image tag and a lock-file
+          name into a second file — is how the two come to disagree.
+        -->
+        <ProjectReference Include="../CyberCloud.Cluster.Conformance/CyberCloud.Cluster.Conformance.csproj"/>
+    </ItemGroup>
+
+</Project>
