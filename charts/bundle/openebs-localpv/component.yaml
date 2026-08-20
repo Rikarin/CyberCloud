@@ -1,0 +1,149 @@
+# Bundle component — charts/bundle/README.md § What a component owes.
+#
+# THE STORAGE CLASS. Eleven of the twenty-one charts under charts/managed/ name a storage class, and
+# until this component landed the bundle provided none — charts/README.md described this directory as
+# "operators, CNI, CSI, monitoring" and the third word had nothing behind it. What that meant in
+# practice is that no stateful managed service could converge on a real cluster: the reconciler
+# applied a custom resource, the operator created a PersistentVolumeClaim, and the claim stayed
+# Pending forever with no error anywhere in the platform.
+#
+# ⚠ IT IS NOT A CSI DRIVER, AND CALLING IT ONE WOULD BE THE FAILURE CLASS THIS TREE KEEPS SHIPPING.
+# `provisioner: openebs.io/local` is an external dynamic provisioner in the pre-CSI shape: no
+# CSIDriver object, no node plugin, no `csi.storage.k8s.io/*` parameters. It provisions a directory on
+# the node a pod lands on and binds it as a PersistentVolume. Everything charts/managed/ asks of it —
+# a class name, a bound claim, a mounted path — it does. Everything a CSI gives that this does not is
+# in `the replicated stage` below.
+
+component: openebs-localpv
+phase: 25
+licence: Apache-2.0
+install: helm
+repo: https://openebs.github.io/dynamic-localpv-provisioner
+chart: localpv-provisioner
+version: 4.6.0
+appVersion: 4.6.0
+
+# Where the pin was read, and when. The repository index rather than a release page: the index is what
+# `helm install` resolves against, so it is the only reading that answers the question being asked.
+#
+# ⚠ THE INDEX SERVES FOUR NEWER ENTRIES AND NONE OF THEM IS A RELEASE. 4.6.1-prerelease,
+# 4.6.0-prerelease, 4.6.0-develop and 4.7.0-develop all sort above 4.6.0 under SemVer's own rules read
+# carelessly, and `--version '>4.6.0'` would take one. 4.6.0 is the newest entry that is not a
+# pre-release — the same trap redis-operator/component.yaml records from the other direction, where
+# the newest tag WAS the pre-release and the chart pinned an image built from it.
+#
+# ⚠ THE UMBRELLA `openebs` CHART IS NOT THIS CHART AND LAGS IT. `https://openebs.github.io/openebs`
+# serves `openebs` 4.5.1, which bundles this provisioner along with Mayastor, LVM-LocalPV and
+# ZFS-LocalPV. This directory wants one provisioner and no engines, so it takes the component
+# repository directly.
+source: https://openebs.github.io/dynamic-localpv-provisioner/index.yaml
+checked: 2026-08-20
+
+# ⚠ THE ONE VALUE WITHOUT WHICH THIS COMPONENT DOES NOTHING, AND THE CHART'S DEFAULT IS THE WRONG ONE.
+# values.yaml ships `hostpathClass.isDefaultClass: false`, so a default install creates the
+# `openebs-hostpath` class and marks nothing default. Every managed chart that offers a storage class
+# defaults it to `""` — charts/managed/postgres/values.yaml, and ten more — and an empty
+# `storageClassName` means "the cluster's default class", not "any class". So without this flag the
+# bundle installs a storage class that eleven charts are configured never to name, and the claims stay
+# Pending exactly as they did with no component here at all.
+#
+# This is the same shape as cert-manager's `crds.enabled`, and it is recorded here for the same
+# reason: a values default is the kind of fact that changes between minor releases, and the failure it
+# produces names a PersistentVolumeClaim rather than this file. Verified against the pulled 4.6.0
+# chart on 2026-08-20 — `templates/hostpath-class.yaml` writes
+# `storageclass.kubernetes.io/is-default-class: "true"` only under this conditional.
+values:
+  hostpathClass.isDefaultClass: "true"
+
+# ── serves: nothing, and the escape is declared rather than faked ─────────────────────────────
+#
+# build/Build.Bundle.cs § ServesViolations.
+servesNoDefinitions: >
+  Rendered at the pinned version and read: this component installs a ServiceAccount, a ClusterRole,
+  a ClusterRoleBinding, a Deployment and a StorageClass. Every one of those kinds is a Kubernetes
+  built-in that the API server has served since long before this bundle, so there is no
+  CustomResourceDefinition here and nothing for the coverage check to cover. ⚠ `storage.k8s.io/v1`
+  was available, would have matched the gate's group/version pattern and would have been a lie: this
+  component does not serve that group, it puts one object into it.
+
+requiredBy:
+  - charts/managed/clickhouse
+  - charts/managed/cloud-shell
+  - charts/managed/ferretdb
+  - charts/managed/harbor
+  - charts/managed/mariadb
+  - charts/managed/nats
+  - charts/managed/opensearch
+  - charts/managed/postgres
+  - charts/managed/rabbitmq
+  - charts/managed/seaweedfs
+  - charts/managed/valkey
+
+# ── which stage is on, and what the other one costs ───────────────────────────────────────────
+#
+# ⚠ THE SINGLE-REPLICA LOCAL STAGE IS ON. THE REPLICATED STAGE IS OFF AND IS NOT INSTALLED BY
+# ANYTHING IN THIS DIRECTORY.
+#
+# WHAT IS ON. One replica, on the node the pod was scheduled to, under
+# /var/openebs/local. No DRBD, no kernel module, no LVM volume group, no ZFS pool, no node
+# prerequisite of any kind. That is what makes docs/plan/09 § The platform's own cluster's PHASE 0
+# possible: phase 0 installs onto an existing cluster we did not build, and a storage component that
+# hard-requires a kernel extension fails on every host that is not ours. A storage layer that only
+# works on our own hardware is a storage layer the first deployment step cannot use.
+#
+# WHAT IS ON COSTS, said plainly rather than left to be discovered:
+#
+#   * A NODE LOSS LOSES THAT NODE'S VOLUMES. There is one copy. docs/plan/24 § The replicated-storage
+#     switch carries this as the GA condition it is.
+#   * THE REQUESTED SIZE IS NOT ENFORCED. A hostpath volume is a directory; a 10Gi claim gets a
+#     directory that can grow to fill the disk, and a noisy neighbour is a node-level outage rather
+#     than a full volume. The chart can enable XFS or ext4 project quota (`hostpathClass.xfsQuota`),
+#     which needs the backing filesystem to support it — not turned on here, because a quota that
+#     silently does nothing on the wrong filesystem is worse than an absence that is written down.
+#   * `volumeBindingMode: WaitForFirstConsumer`, which is correct for node-local storage and is a
+#     behaviour some readiness checks get wrong. charts/managed/cloud-shell/SOURCE already reasons
+#     about it against k3s' bundled provisioner: a claim with no pod scheduled against it stays
+#     Pending, correctly, so "Bound" is not a convergence condition for a workload with no pod yet.
+#
+# WHAT TURNING THE REPLICATED STAGE ON COSTS. Five things, and only the first is a helm install:
+#
+#   1. A LINSTOR CONTROL PLANE. piraeus-operator v2.11.0 (2026-08-04), which bundles LINSTOR 1.34.2,
+#      linstor-csi 1.12.0 and drbd-reactor 1.12.0. ⚠ It publishes NO HELM CHART: piraeus.io's index
+#      serves linstor-affinity-controller, linstor-cluster, linstor-scheduler, piraeus-ha-controller
+#      and snapshot-controller, and the operator itself installs by kustomize. `install: helm` cannot
+#      express that; `install: manifest` can, against a release asset. Verified 2026-08-20.
+#   2. THE LICENCE ALLOW-LIST WIDENED, WITH THE REASON WRITTEN NEXT TO IT. LINSTOR is GPL-3.0 and
+#      DRBD is GPL-2.0. ⚠ Neither is on build/Build.Bundle.cs § BundleLicenceAllowList, which is an
+#      ALLOW-list and not a deny-list — so a GPL component fails that gate today, exactly as an SSPL
+#      one would. ADR-011's table marks both ✓ on their own terms; the gate has not been told.
+#   3. DRBD ON THE NODE, WHICH IS A REPROVISION AND NOT AN INSTALL. ADR-020 — Talos Linux carries it
+#      as a system extension: `ghcr.io/siderolabs/drbd:9.3.3-v1.13.9` against Talos v1.13.9, both read
+#      on 2026-08-20. Talos has no package manager and no shell, so this is a machine-config change
+#      and a reboot per node. Piraeus's own default is the other path — `LB_HOW: compile`, which
+#      builds the module from source on each node at boot and couples the fleet to kernel upgrades;
+#      on Talos the loader is set to `deps_only` and loads what the extension already provided.
+#   4. A BACKING POOL PER NODE. LINSTOR writes into LVM, LVM-thin, ZFS or a file pool, and none of
+#      those is what a hostpath directory is. This is where "no migration of volumes" stops being
+#      true and is the reason the sentence is not repeated here: switching provisioner means every
+#      existing PersistentVolume is on the old one. The switch is cheap while the data is a design
+#      partner's and expensive after — docs/plan/24 § The replicated-storage switch holds the trigger
+#      for that reason.
+#   5. A DEFAULT-CLASS HANDOVER. Two classes both annotated default is not "the newer one wins"; the
+#      admission plugin has two candidates and the outcome is not a thing to discover during a
+#      migration.
+#
+# ⚠ THE THING TO WATCH, AND IT IS WATCH RATHER THAN ADOPT. cozystack/blockstor — announced
+# 2026-08-04, Apache-2.0, clean-room, speaking LINSTOR's REST API well enough for linstor-csi and
+# piraeus-operator to drive it, with LVM/LVM-thin/ZFS/ZFS-thin/file backends and a documented mode
+# that runs WITHOUT DRBD as plain local storage. If it matures it removes item 2 above entirely and
+# most of item 3. It is v0.1.17 (2026-07-04) and Cozystack's own packages/system/ still ships
+# piraeus-operator and LINSTOR rather than it. A 0.x control plane is not where a customer's block
+# storage goes, and this note says watch for that reason. Read 2026-08-20.
+
+notes: >
+  Phase 25 rather than 20: phase 20 is definitions with no controller behind them, and this has a
+  controller. Phase 25 rather than 50: KubeVirt's DataVolumes in phase 30, Kamaji's etcd in phase 40
+  and every data-service operator in phase 50 provision claims, and docs/plan/09 § Kubernetes in
+  Kubernetes already names "storage class unavailable" as the failure mode of its second creation
+  step. Phase 25 rather than 10: the provisioner is a pod and its helper pods are pods, so it needs
+  the CNI, and `helm install --wait` is what makes "installed" mean "provisioning".

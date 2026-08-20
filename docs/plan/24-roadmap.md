@@ -167,7 +167,7 @@ that makes something look like a good cut under deadline pressure and be the wro
 ## The three decisions that must be made before phase 2 starts
 
 Each is a business decision with an engineering consequence, and each blocks work if it is left open.
-**Two are now answered. Answered 2026-08-11.**
+**All three are now answered — two on 2026-08-11, the third on 2026-08-20.**
 
 1. ✅ **Public authoritative DNS: we run it.** ([14](14-networking.md)) Anycast nameservers are in the
    infrastructure plan. The provider is 1.5 EM; ⚠ the *operations* are the cost, and that half is now
@@ -181,38 +181,47 @@ Each is a business decision with an engineering consequence, and each blocks wor
    gets the IP blocked in a day. And the cheap thing that is easy to forget:
    **the platform's own transactional sending IPs are separate from tenant sending IPs**, so a
    tenant's reputation problem cannot take down our OTPs.
-3. ⏳ **LINBIT support contract for LINSTOR/DRBD?** (ADR-011) — still open, and **not urgent**.
-   It decides whether customer data goes onto DRBD in M1 or whether M1 uses a simpler storage class.
-   ⚠ The licences are not the question — GPL-2/GPL-3 restrict distribution, not use, so *running*
-   LINSTOR and DRBD as a service is fine either way. The question is **support on a synchronous
+3. ✅ **No LINBIT support contract. The platform runs LINSTOR and DRBD unsupported, the way Cozystack
+   does.** (ADR-011) ⚠ The licences were never the question — GPL-2/GPL-3 restrict distribution, not
+   use, so *running* LINSTOR and DRBD as a service is fine either way, and ADR-011's own footnote said
+   so before this row was written. What was being priced is **support and indemnity on a synchronous
    block-replication layer sitting underneath customer data**, where a bad failover is a data-loss
-   event rather than a slow page. See [§ The LINBIT decision, deferred](#the-linbit-decision-deferred).
+   event rather than a slow page. That is a purchase, not an obligation, and the answer is no. What
+   changed to make it affordable is [ADR-020](02-technology-decisions.md) — **Talos Linux as the node
+   OS**, so DRBD is a signed system extension rather than a module built from source on each node at
+   boot. See [§ The replicated-storage switch](#the-replicated-storage-switch), which is what is left
+   of this row: the contract question is closed, the *when do we replicate* question is not.
 
-### The LINBIT decision, deferred
+### The replicated-storage switch
 
-**Taking this document's own default: M1 uses a simpler storage class, and the contract question is
-revisited before the first *paying* customer's data lands on replicated block storage.**
+⚠ **This section used to be *The LINBIT decision, deferred*, and the decision it deferred is now
+made — see item 3 above.** What survives is the half that was never about a contract: **the platform
+ships with single-replica local storage on and replicated storage off, and something has to say when
+that flips.**
 
-Why deferring is safe rather than lazy:
+**Where it stands today.** `charts/bundle/openebs-localpv/` is the bundle's default storage
+class: one replica, node-local, no DRBD and no kernel module. That is deliberate and it is what makes
+[09 § phase 0](09-kubernetes-fabric.md) possible at all — phase 0 installs the platform onto *an
+existing cluster we did not build*, and a storage component that hard-requires a kernel extension
+fails on any host that is not ours.
 
-- M1 tenants are **design partners on manual contracts** ([22 § Effort](22-billing-metering-and-quota.md)),
-  so the blast radius of a storage incident is a conversation, not a claim.
-- Nothing in M1's exit story ([§ Phase 2](#phase-2--m1-a-tenant-can-log-in-and-run-something)) needs
-  *replicated* block storage. It needs storage that works.
-- Buying support now means buying it against a guessed node count. The quote is per-node and the
-  number is unknown until the fabric is real.
-
-⚠ **What the deferral actually costs, so it is a decision and not an omission.** LINSTOR is what
+**What being on the default costs, so it is a decision and not an omission.** LINSTOR is what
 [15 § Block storage](15-storage-blob-file.md) and [13 § Virtual Machines](13-compute-vm-containers.md)
 name for KubeVirt disks, and `kubevirt-csi` in [09](09-kubernetes-fabric.md) is specified against it.
-A simpler class for M1 means either accepting **no replication** — a node loss loses that node's
-volumes — or standing up an alternative, and [15 § Object storage](15-storage-blob-file.md) already
-warns that the obvious alternative, Ceph, "is an order of magnitude more operational work — a Ceph
-cluster is a full-time role". So the M1 choice is realistically local-path with no replication and
-VMs that do not survive a node loss, which is acceptable for design partners and is **not** acceptable
-at GA.
+Running without it means accepting **no replication** — a node loss loses that node's volumes, and the
+VMs on them do not come back. That is acceptable for design partners, who are on manual contracts
+([22 § Effort](22-billing-metering-and-quota.md)) so that the blast radius of a storage incident is a
+conversation rather than a claim. It is **not** acceptable at GA. The alternative alternative, Ceph, is
+not cheaper: [15 § Object storage](15-storage-blob-file.md) already warns it "is an order of magnitude
+more operational work — a Ceph cluster is a full-time role".
 
-**The trigger to decide, written down so it is not missed:** before any customer who is *paying*
-has data on replicated block storage. At that point the inputs exist — real node count, real workload,
-a real quote — and the answer is likely yes, because LINBIT's support is how DRBD is funded and the
-failure mode it covers is the one nobody debugs from documentation.
+**The trigger, written down so it is not missed:** before any customer who is *paying* has data on
+block storage that must survive a node loss. Throwing the switch is not one commit, and the parts are
+listed in `charts/bundle/openebs-localpv/component.yaml` § the replicated stage rather than
+here, because that is the file somebody edits to do it.
+
+⚠ **The one part of the switch that is not a Kubernetes change.** Replicated storage means DRBD on the
+node, and DRBD on the node means [ADR-020](02-technology-decisions.md)'s Talos machine configuration
+carries the `drbd` system extension. That is a **reprovision of the node**, not a package install —
+Talos has no package manager and no shell. So the switch has a lead time measured in node reboots, and
+the cheapest time to have decided it is before the fleet is built.

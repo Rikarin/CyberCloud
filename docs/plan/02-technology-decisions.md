@@ -611,12 +611,49 @@ footnote.
 | Terraform (≥ 1.6) | BUSL | ✗ as a managed service. We *publish a provider* for it, which is fine |
 | Elasticsearch | SSPL/Elastic | ✗ — **OpenSearch** (Apache-2.0) |
 | Grafana | AGPL-3.0 | ⚠ Offerable as a managed instance (we distribute, we do not modify). Our *portal* must not embed or link Grafana code — it embeds rendered dashboards by URL |
-| Harbor, KubeVirt, Kube-OVN, Cilium, CloudNativePG, Strimzi, SeaweedFS, Kamaji, LINSTOR¹ | Apache-2.0 | ✓ |
+| Harbor, KubeVirt, Kube-OVN, Cilium, CloudNativePG, Strimzi, SeaweedFS, Kamaji | Apache-2.0 | ✓ |
 | ClamAV | GPL-2.0 | ✓ — separate process, separate container, no linking |
+| LINSTOR¹ | GPL-3.0 | ✓ — run, not distributed, not linked |
+| DRBD¹ | GPL-2.0 | ✓ — a kernel module we load, not code we ship |
 
-¹ ⚠ **LINSTOR is GPL-3.0 and DRBD is GPL-2.0**, and LINBIT's commercial support is how the project is
-funded. Running them is fine; a support contract is a business decision to make before the first
-customer's data is on DRBD, not after.
+> ⚠ **CORRECTED 2026-08-20. LINSTOR used to sit in the Apache-2.0 row with a footnote saying it is
+> GPL-3.0.** The row and its own footnote disagreed, and the row is the half a reader skims. Two
+> rows now, each carrying its real identifier. The verdict does not change and never depended on the
+> mistake: GPL-2 and GPL-3 restrict *distribution*, and the platform runs this software rather than
+> shipping it.
+
+¹ ✅ **DECIDED 2026-08-20 — no LINBIT support contract. The platform runs LINSTOR and DRBD
+unsupported, the way Cozystack does.** This footnote used to end *"a support contract is a business
+decision to make before the first customer's data is on DRBD, not after"*, and the decision is now
+made rather than deferred.
+
+⚠ **The question was never a licence question, which is why it read wrong on this page for nine
+days.** It was filed here because the word *licence* appears in it, but the sentence above already
+settles the licence: running GPL software as a service is fine, and this footnote said so from the
+start. What was actually being priced is **support and indemnity on a synchronous block-replication
+layer underneath customer data** — a commercial relationship, not an obligation. Filed under a
+licence audit it reads as a thing the platform owes; named correctly it is a thing the platform may
+buy, and has decided not to.
+
+**What the platform carries instead of a contract**, because "unsupported" is only a decision if the
+substitute is written down:
+
+* **Talos Linux as the node OS** (ADR-020), so DRBD arrives as a signed system extension assembled by
+  Image Factory rather than a module compiled from source on each node at boot. That removes the
+  failure mode support would most often be called about — a kernel upgrade that leaves the module
+  unbuildable — and it is what makes running unsupported affordable.
+* **No customer data on replicated block storage until the switch is deliberately thrown.** The
+  bundle's default storage class is single-replica and local, with no DRBD in it at all
+  (`charts/bundle/openebs-localpv/component.yaml`); the replicated path is declared and off.
+* **The GA condition stated as a condition, not a plan.** Single-replica local storage means a node
+  loss loses that node's volumes. That is acceptable for design partners and is not acceptable at GA
+  — [24 § The replicated-storage switch](24-roadmap.md) holds the trigger.
+
+⚠ **The thing to watch, recorded as watch and not as adopt.** Blockstor — see
+`charts/bundle/openebs-localpv/component.yaml` § the replicated stage — would remove the
+GPL-3.0 half of this footnote entirely if it matures, because it is an Apache-2.0 control plane
+speaking LINSTOR's API. It is `0.x`. A `0.x` control plane is not where a customer's block storage
+goes, and this is a note in a licence audit rather than a decision in it.
 
 **Enforcement.** A build gate runs a licence scan over the chart set and the container images in the
 platform bundle, and fails on any SSPL/BUSL/AGPL image outside an allow-list with a written reason.
@@ -873,3 +910,84 @@ enables it (`gatewayAPI.enabled: true`, with an Envoy DaemonSet). [14](14-networ
 listener isolation and a Coraza WAF filter chain, and a shared Cilium-managed Envoy is a harder place
 to put both. ⚠ This is worth a measured comparison before the M2 application-gateway work rather than
 a decision taken here — it is the one place where "use Cilium for that too" may also be right.
+
+### ADR-020 — Talos Linux is the node OS on every machine this platform owns
+
+**Decision, 2026-08-20.** The physical fleet runs **Talos Linux**: an immutable, API-managed Kubernetes
+OS with no shell, no SSH daemon and no package manager. Node configuration is a machine config applied
+over Talos' own gRPC API, and anything that would be a package elsewhere — a kernel module, a firmware
+blob, a CSI helper — is a **system extension** baked into the boot image by Talos' Image Factory.
+
+**Scope, stated first because the obvious wider reading is wrong and this repository already
+contradicts it.**
+
+| Machine | OS | Who decides |
+|---|---|---|
+| The platform's own cluster ([09 § the bootstrap](09-kubernetes-fabric.md), phases 0–3) | **Talos** | This ADR |
+| The management cluster's hosts — the ones running KubeVirt, and the ones a replicated storage layer would put DRBD on | **Talos** | This ADR |
+| Worker nodes *inside* an in-house tenant cluster | ⚠ **Not Talos.** Ubuntu 24.04 | `charts/managed/kubernetes-agentpool` |
+| A tenant's BYO cluster | Whatever they run | Not ours |
+
+⚠ **Row three is a real exception and it was checked rather than assumed.**
+`charts/managed/kubernetes-agentpool` renders a `KubeadmConfigTemplate` and boots
+`quay.io/capk/ubuntu-2404-container-disk` through cloud-init — Cluster API's kubeadm bootstrap
+provider, which is the shape ADR-009 chose. Those nodes are KubeVirt VMs; they get their storage as
+virtual disks from the host, so **nothing in a tenant cluster needs DRBD or any other host extension**,
+and the reason to move them to Talos would be uniformity rather than capability. Writing this ADR as
+"Talos everywhere" would have made a chart that works today read as a defect. It is not one, and
+changing it is a separate decision with its own cost — a Talos control plane is not a Kamaji-hosted
+one, which is the whole of ADR-009.
+
+**Why, and it is one reason rather than a list: it is what makes running LINSTOR/DRBD without a
+support contract affordable** (ADR-011 § footnote 1, closed the same day).
+
+Piraeus' default DRBD loader is `LB_HOW: compile` — its own documentation: *"Build the DRBD module
+from source and try to load all optional modules from the host."* That runs on every node at every
+boot. It couples the whole fleet to kernel upgrades, needs a toolchain and kernel headers on machines
+that should carry neither, and under Secure Boot needs a signing story for a module built minutes ago
+on the node itself. That is the failure mode a support contract most often gets called about, and it
+is a failure mode the OS can delete rather than insure.
+
+On Talos the module is not built. It is declared:
+
+* `siderolabs/extensions` publishes a **`drbd`** extension, built against one specific Talos release
+  and tagged with it. **Verified 2026-08-20: `ghcr.io/siderolabs/drbd:9.3.3-v1.13.9`** — DRBD 9.3.3
+  against Talos **v1.13.9** (released 2026-08-19, Kubernetes 1.36.3, Linux 6.18.44). ⚠ **The
+  `-v<talos-version>` suffix is not decoration: an extension is built for one kernel, so a Talos
+  upgrade is an extension upgrade and the two versions move together or not at all.** That is the
+  coupling, and it is now visible in a tag instead of hidden in a build that happens at boot.
+* The machine config names the extension and `machine.kernel.modules`, Image Factory assembles a boot
+  image, and the loader is set to `deps_only` — *"Only try loading the optional modules. No DRBD
+  module will be loaded"* — so Piraeus uses what is already there.
+
+**What it costs, stated rather than discovered.**
+
+* **There is no shell.** No `ssh`, no `kubectl exec` onto the host, no `apt`, no editing a file on a
+  node. Every runbook that would have said "log in and check" says "read it over the Talos API" or it
+  does not work. ⚠ Checked on 2026-08-20: **nothing in this repository assumes otherwise** —
+  `deploy/bootstrap/` is `kubectl` and checked-in YAML with no host step in it, and the only `apt` in
+  the tree is a GitHub Actions runner installing `libxml2`, which is CI's machine and not a node.
+  This ADR is therefore a decision with no migration attached, which is the cheapest moment to take
+  it.
+* **A change to a node is a reboot.** Adding the `drbd` extension to an existing fleet is a new boot
+  image and a rolling reprovision, not an install. [24 § The replicated-storage switch](24-roadmap.md)
+  carries that lead time.
+* **The image is ours to produce and to pin.** Cozystack publishes a prebuilt Image Factory schematic
+  bundling the extensions it needs — `drbd`, `zfs`, `amd-ucode`, `intel-ucode`, `amdgpu`, `i915`,
+  `bnx2-bnx2x`, `intel-ice-firmware`, `qlogic-firmware`. ⚠ **Their schematic ID is deliberately not
+  copied into this tree.** The published one was read on 2026-08-20 from a *blog post* rather than
+  from their install documentation, and it is pinned against Talos **v1.13.6** while the current
+  release is v1.13.9. A pin nobody resolved is the defect class this repository has already shipped
+  twice, and a content-addressed hash is the most convincing possible form of it. The extension list
+  is useful and is repeated above; the schematic is generated from our own machine config when there
+  is a fleet to generate it for.
+
+**Rejected: a general-purpose distribution with a configuration-management tool.** It is the familiar
+option and it buys the ability to fix a node by hand, which is precisely the property that makes a
+fleet stop being reproducible. It also brings back the `compile`-at-boot problem this ADR exists to
+remove.
+
+**What is deliberately not decided here:** which machine-config management the fleet uses, how images
+are served (PXE, ISO, a factory URL), and whether tenant-cluster workers eventually move to Talos.
+Those need a fleet to decide against. `deploy/managed-cluster/`, which `deploy/README.md` already
+lists and which does not exist, is where the machine configs will live.

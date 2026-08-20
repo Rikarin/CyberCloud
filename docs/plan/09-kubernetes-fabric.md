@@ -154,9 +154,18 @@ Management cluster (ours)
 │   ├─ etcd cluster            ← etcd-operator, dedicated, 3 replicas
 │   ├─ KamajiControlPlane      ← kube-apiserver + controller-manager + scheduler AS PODS
 │   ├─ KubevirtMachine ×N      ← real VMs, real kernels, real kubelets  ← the isolation boundary
-│   ├─ kubevirt-csi            ← tenant PVCs backed by LINSTOR volumes in the management cluster
+│   ├─ kubevirt-csi            ← tenant PVCs backed by management-cluster volumes  ⚠ see below
 │   └─ the bundle              ← CNI, CSI, metrics-server, cert-manager, monitoring agents
 ```
+
+⚠ **`kubevirt-csi`'s line used to say "backed by LINSTOR volumes", and as of 2026-08-20 that is a plan
+rather than a fact.** What `charts/bundle/` installs is `openebs-localpv` — a **single-replica,
+node-local** class with no DRBD and no kernel module, which is what lets the bundle install onto a
+cluster the platform did not build (phase 0 below). The consequence for this diagram is concrete: a
+tenant cluster's PVCs, and the VM root disks under them, **do not survive the loss of the management
+node they landed on**. That is right for design partners and wrong at GA;
+[24 § The replicated-storage switch](24-roadmap.md) holds the trigger and
+`charts/bundle/openebs-localpv/component.yaml` holds the parts list.
 
 **The shape, said plainly:** the control plane is *shared infrastructure running isolated processes*;
 the workloads are *isolated VMs*. A tenant's pods never share a kernel with another tenant's. That is
@@ -239,9 +248,14 @@ be repaired through the platform. The answer, in three parts:
    environment up from `deploy/bootstrap/` is what would make it true**, and it is the cheapest way to
    buy the guarantee. Until that edge exists the directory rots at exactly the rate of anything nobody
    runs. Same claim, same correction, in [03 § deploy/](03-repository-layout.md).
-3. **Cluster B's control plane is not Kamaji-hosted by us.** It is a standalone cluster (Talos or
-   whatever the operator runs), because a hosted control plane whose host is the thing that broke is
-   not recoverable. In-house *tenant* clusters are Kamaji-hosted; the platform's cluster is not.
+3. **Cluster B's control plane is not Kamaji-hosted by us.** It is a standalone cluster, because a
+   hosted control plane whose host is the thing that broke is not recoverable. In-house *tenant*
+   clusters are Kamaji-hosted; the platform's cluster is not. ⚠ **This used to read "Talos or whatever
+   the operator runs", and the vagueness is now spent:** [ADR-020](02-technology-decisions.md) makes
+   Talos the node OS on every machine the platform owns, which includes this one. What does **not**
+   change is the exception ADR-020 names — the worker nodes *inside* an in-house tenant cluster are
+   KubeVirt VMs booting `quay.io/capk/ubuntu-2404-container-disk` through Cluster API's kubeadm
+   bootstrap provider, and they stay that way.
 
 That third point is a constraint on the migration, and it is written down now because it is much
 cheaper to honour than to discover.
