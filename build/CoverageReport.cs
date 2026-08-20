@@ -24,8 +24,17 @@ using System.Xml.Linq;
 ///     saying of what, and the two answers differ by a lot on the same suite. Lines is the reading
 ///     that matches the number: a 70 % branch floor is a considerably stricter gate than most teams
 ///     mean by "70 % coverage", and choosing the stricter reading of an ambiguous requirement is how
-///     a gate ends up disabled. ⚠ dotnet-coverage reports <c>branch-rate="1"</c> for every assembly
-///     in this repository, so a branch floor would additionally be measuring nothing.
+///     a gate ends up disabled.
+///     <para>
+///         ⚠ <b>That second reason used to be "and branch coverage is not measured here anyway",
+///         and it has stopped being true.</b> dotnet-coverage reported <c>branch-rate="1"</c> for
+///         every assembly in this repository, so under it a branch floor would have gated on
+///         nothing. coverlet reports real branch rates — measured on <c>CyberCloud.Identity</c>,
+///         58.7 % branch against 64.4 % line — so a branch floor is now a decision somebody could
+///         make rather than a thing that would silently pass. It is still not made here: the number
+///         in docs/plan/23 is one number, and changing what it means is a change to that document
+///         and not to this file.
+///     </para>
 /// </remarks>
 sealed class CoverageReport
 {
@@ -64,8 +73,9 @@ sealed class CoverageReport
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>Several reports rather than one, merged here rather than by
-    ///         <c>dotnet-coverage merge</c>.</b> Every suite produces its own report and most
+    ///         ⚠ <b>Several reports rather than one, merged here rather than by the collector's own
+    ///         merge — <c>coverlet --merge-with</c>, or <c>dotnet-coverage merge</c> before
+    ///         it.</b> Every suite produces its own report and most
     ///         assemblies appear in several of them — <c>CyberCloud.Core</c> is loaded by nearly
     ///         every suite in the tree. Summing per-report totals would count the same line once per
     ///         suite that loaded it, which inflates both halves of the ratio and, worse, makes the
@@ -82,6 +92,18 @@ sealed class CoverageReport
     ///         four hundred and a report with none are both "0.00" to two places — and the failure
     ///         message wants to say "3 of 412 lines", which is the sentence that tells somebody
     ///         whether the project has no tests or a broken one.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The file a line belongs to comes from its nearest <c>&lt;class&gt;</c> ancestor,
+    ///         not from its grandparent.</b> Cobertura lists most lines TWICE — once under
+    ///         <c>&lt;class&gt;&lt;lines&gt;</c> and again under
+    ///         <c>&lt;method&gt;&lt;lines&gt;</c> — and the grandparent of the second copy is the
+    ///         <c>&lt;method&gt;</c>, which carries no <c>filename</c>. Every method-level line in
+    ///         the report therefore keyed as (assembly, "", number), which did two wrong things at
+    ///         once: it counted each line a second time, and it collapsed line 17 of one file into
+    ///         line 17 of every other. Measured on <c>CyberCloud.Identity</c>: the old key reported
+    ///         <b>1 837 of 2 775 lines, 66.2 %</b> for an assembly that is <b>1 392 of 2 163,
+    ///         64.4 %</b> — a 1.8-point inflation of a 70 % floor, from a report that was correct.
     ///     </para>
     /// </remarks>
     public static CoverageReport Read(params string[] paths)
@@ -104,7 +126,7 @@ sealed class CoverageReport
                 {
                     var key = (
                         assembly,
-                        line.Parent?.Parent?.Attribute("filename")?.Value ?? string.Empty,
+                        line.Ancestors("class").FirstOrDefault()?.Attribute("filename")?.Value ?? string.Empty,
                         line.Attribute("number")?.Value ?? string.Empty);
 
                     var count = int.TryParse(
@@ -150,15 +172,22 @@ sealed class CoverageReport
     ///         Orleans' source generator emits carrying <c>[GeneratedCode]</c>,
     ///         <c>[EditorBrowsable]</c> and <c>[ExcludeFromCodeCoverage]</c>. Count them and the
     ///         assembly looks coverable; discount them and it has nothing to cover — which is the
-    ///         answer <c>dotnet-coverage</c> itself reaches, out loud, as
-    ///         <c>Module was not instrumented. Reason: optimized_or_instrumented</c>.
+    ///         answer both collectors reach on their own. <c>dotnet-coverage instrument</c> said so
+    ///         out loud, as <c>Module was not instrumented. Reason: optimized_or_instrumented</c>;
+    ///         coverlet, which honours <c>[ExcludeFromCodeCoverage]</c> by the same rule this method
+    ///         applies, simply emits no line for any of them and the four assemblies are absent from
+    ///         the report.
     ///     </para>
     ///     <para>
-    ///         ⚠ Reads the PDB rather than shelling out to <c>dotnet-coverage instrument</c>, which
-    ///         would also answer the question. Two reasons: that command exits <b>0</b> whether it
-    ///         instrumented or refused, so the answer is a line of stdout either way; and its refusal
-    ///         reason is <c>optimized_or_instrumented</c>, which also fires for an assembly compiled
-    ///         with optimizations on. An excuse that widens whenever somebody passes
+    ///         ⚠ Reads the PDB rather than asking a collector to instrument the assembly and reading
+    ///         what it says, which would also answer the question. Two reasons, and the first is why
+    ///         this survived the change of collector unaltered: an answer that comes from parsing a
+    ///         tool's stdout is an answer that changes when the tool changes its wording, and this
+    ///         one is a count in a compiled artefact that no tool is involved in. The second is the
+    ///         specific trap in the old route — <c>dotnet-coverage instrument</c> exits <b>0</b>
+    ///         whether it instrumented or refused, and its refusal reason,
+    ///         <c>optimized_or_instrumented</c>, also fires for an assembly compiled with
+    ///         optimizations on. An excuse that widens whenever somebody passes
     ///         <c>--configuration Release</c> is a floor that stops gating without saying so.
     ///     </para>
     /// </remarks>

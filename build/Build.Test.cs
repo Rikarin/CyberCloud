@@ -254,7 +254,7 @@ partial class Build
     ///     deployment-driven targets pass a base URL or a kube context.
     /// </param>
     /// <param name="collectCoverage">
-    ///     Whether to wrap each host in <c>dotnet-coverage</c>. Only <c>Test</c> does: docs/plan/23
+    ///     Whether to wrap each host in <c>coverlet</c>. Only <c>Test</c> does: docs/plan/23
     ///     § Test layers puts the coverage floor on the Unit row, and instrumenting a load run would
     ///     change the numbers the load run exists to measure.
     /// </param>
@@ -291,10 +291,10 @@ partial class Build
         // here depends on that; it is there so a developer running `dotnet test` by hand, or an IDE
         // doing it for them, gets the same answer as CI.
         // ⚠ One invocation is built by hand rather than through DotNetTasks.DotNetRun's CombineWith,
-        // and the reason is the coverage prefix. `dotnet-coverage collect … -- dotnet run …` puts a
-        // process in front of the one the settings object describes, and no ToolSettings can express
-        // that. Every argument below is the one CombineWith produced; the shape of the command is
-        // unchanged, which is checkable by eye against the invocation Nuke logs.
+        // and the reason is the coverage prefix. `coverlet … --target dotnet --targetargs "run …"`
+        // puts a process in front of the one the settings object describes, and no ToolSettings can
+        // express that. Every argument below is the one CombineWith produced; the shape of the
+        // command is unchanged, which is checkable by eye against the invocation Nuke logs.
         var environmentVariables = environment is null
             ? null
             : EnvironmentInfo.Variables
@@ -303,9 +303,9 @@ partial class Build
 
         var failures = new ConcurrentBag<string>();
 
-        // ⚠ Asked once, here, and not inside the loop. CoverageCollectionIsAvailable now runs a real
-        // dotnet-coverage collection to answer, and doing that from N threads at once would race on
-        // the memo field and build the same probe project N times.
+        // ⚠ Asked once, here, and not inside the loop. CoverageCollectionIsAvailable runs a real
+        // collection to answer, and doing that from N threads at once would race on the memo field
+        // and build the same probe project N times.
         var withCoverage = collectCoverage && CoverageCollectionIsAvailable;
 
         // ⚠ CONTAINER-BACKED SUITES RUN AT A LOWER DEGREE THAN THE REST, AND THE NUMBER IS MEASURED
@@ -327,26 +327,45 @@ partial class Build
         // A retry would be the wrong fix: it hides the two real regressions along with the three fake
         // ones. Capping the concurrency removes the cause instead.
         //
-        // ⚠ FOUR IS A STARTING POINT AND IS EXPECTED TO NEED TUNING. It is not derived from anything
-        // except that runs deadlocked with four or more `.Cluster.Conformance` suites live and did not
-        // below that. `CC_TEST_CONTAINER_PARALLELISM` overrides it so a host with more memory need not
-        // edit this file, and so the number can be raised with evidence rather than by hope.
+        // ⚠ THE DEGREE IS DERIVED FROM THE HOST, NOT WRITTEN DOWN. It used to be the literal 4, set
+        // when there were 68 suites, and it went stale the way a constant does: measured 2026-08-19
+        // on this ten-CPU host at 71 suites, four starves `CyberCloud.AppHost.Tests` — it exits 2 and
+        // passes 10/10 in 1 m 29 s when run alone — while three finishes the whole gate green. Two
+        // things had grown: three more container-backed suites, and `AppHost.Tests` itself, which now
+        // stands up the real topology AND asserts the namespace `ReconcileDriver` creates, holding
+        // k3s, Redis and PostgreSQL for longer per test.
+        //
+        // ⚠ Changing 4 to 3 would have gone stale again, and in the other direction it is already
+        // wrong: the right number is a property of the machine, not of the tree, and a 32-CPU runner
+        // is idling at three. So it is derived, from the same `Environment.ProcessorCount` the
+        // suite-level degree below already uses. See ContainerBackedSuiteDegree for the arithmetic
+        // and for what the derivation deliberately does not model.
         var containerBacked = projects
             .Where(x => File.ReadAllText(x).Contains("Testcontainers", StringComparison.Ordinal))
             .ToHashSet();
 
+        var derivedDegree = ContainerBackedSuiteDegree;
+
+        // ⚠ The override still wins, and it has to. The derivation models CPU and nothing else, and a
+        // host whose Docker daemon has less memory than its core count implies is exactly the case
+        // the arithmetic gets wrong — see the failure message at the bottom of this method, which
+        // tells a reader to run the named suite alone and then lower this.
         var containerDegree =
             int.TryParse(Environment.GetEnvironmentVariable("CC_TEST_CONTAINER_PARALLELISM"), out var configured)
             && configured > 0
                 ? configured
-                : 4;
+                : derivedDegree;
 
         Log.Information(
             "Test: {Container} of {Total} suite(s) reference Testcontainers and run at a parallelism of "
-            + "{Degree}; the remaining {Rest} run at {Cpu}. Build.Test.cs § RunSuites has the measurement.",
+            + "{Degree} ({Source}); the remaining {Rest} run at {Cpu}. Build.Test.cs § "
+            + "ContainerBackedSuiteDegree has the measurement.",
             containerBacked.Count,
             projects.Count,
             containerDegree,
+            containerDegree == derivedDegree
+                ? $"{Environment.ProcessorCount} CPU(s) ÷ {CpusPerContainerBackedSuite}"
+                : $"CC_TEST_CONTAINER_PARALLELISM, overriding the derived {derivedDegree}",
             projects.Count - containerBacked.Count,
             Environment.ProcessorCount
         );
@@ -392,9 +411,19 @@ partial class Build
                     + $"--project {project} -- --minimum-expected-tests 1 --report-xunit-trx "
                     + $"--report-xunit-trx-filename {name}.trx --results-directory {TestResultsDirectory}";
 
+                // ⚠ coverlet instruments the suite's OWN output directory and nothing else, which is
+                // what makes running 71 of these at once safe: it rewrites the IL of the assemblies
+                // on disk, runs the target, then puts them back, and every suite has its own copy of
+                // every dependency under artifacts/bin/<project>/<configuration>. Point two suites at
+                // one directory and they would corrupt each other's assemblies; the artifacts layout
+                // means they never share one.
+                //
+                // ⚠ It also instruments only what has a portable PDB beside it, so the NuGet
+                // dependencies in that directory are skipped without a filter having to name them —
+                // 12 CyberCloud assemblies out of 102 DLLs, measured on CyberCloud.Identity.Tests.
                 var arguments = withCoverage
-                    ? $"dotnet-coverage collect --nologo --output-format cobertura "
-                      + $"--output {CoverageDirectory / $"{name}.cobertura.xml"} -- dotnet {run}"
+                    ? $"coverlet {SuiteOutputDirectory(project)} --target dotnet --targetargs \"{run}\" "
+                      + $"--format cobertura --output {CoverageDirectory / $"{name}.cobertura.xml"}"
                     : run;
 
                 DotNetTasks.DotNet(
@@ -437,6 +466,54 @@ partial class Build
             + "alone before believing it, and if it passes alone, lower CC_TEST_CONTAINER_PARALLELISM.");
     }
 
+    /// <summary>
+    ///     The CPUs a container-backed suite is assumed to need to itself.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>Three, and the three is the measurement rather than a guess.</b> On this ten-CPU
+    ///         host a degree of four starves a suite and a degree of three does not, so the budget a
+    ///         container-backed suite needs is more than 10 ÷ 4 = 2.5 CPUs and at most 10 ÷ 3 = 3.3.
+    ///         Three is the whole number in that interval, and it is the only one: it reproduces the
+    ///         measured answer on the machine the measurement was taken on.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ It is a budget for the <em>suite</em>, not for one container. A `.Cluster.Conformance`
+    ///         run holds a k3s API server, PostgreSQL and Redis plus its own test host, and k3s alone
+    ///         spends most of its start-up saturating a core.
+    ///     </para>
+    /// </remarks>
+    const int CpusPerContainerBackedSuite = 3;
+
+    /// <summary>
+    ///     How many container-backed suites may be live at once, derived from this host.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>What this models is CPU, and it is worth being explicit about the two things it
+    ///         does not.</b> Memory is the obvious other candidate — a Docker daemon with 8 GB will
+    ///         thrash long before its core count says it should — and the tree cannot observe it
+    ///         honestly: on Linux the daemon shares the host's RAM and
+    ///         <see cref="GC" />'s view of it is the right one, while on macOS and Windows the daemon
+    ///         lives in a VM with its own allocation that a .NET process can only learn by asking
+    ///         `docker info`, which is a subprocess that hangs when the daemon is unhealthy — inside
+    ///         the target whose whole job is to tell a starved host from a broken one. The other is
+    ///         how many k3s clusters a daemon will hold, which has no API at all.
+    ///     </para>
+    ///     <para>
+    ///         So this is deliberately the constraint the tree can read for nothing, and
+    ///         <c>CC_TEST_CONTAINER_PARALLELISM</c> is the lever for the ones it cannot. ⚠ A
+    ///         derivation that is wrong on some host is fine <em>because</em> the override exists and
+    ///         the failure message names it; a constant is wrong on every host but the one it was
+    ///         measured on, and says nothing.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ Never zero. A one-CPU machine runs the container-backed suites one at a time, slowly,
+    ///         rather than deadlocking on a semaphore nobody can enter.
+    ///     </para>
+    /// </remarks>
+    static int ContainerBackedSuiteDegree =>
+        Math.Max(1, Environment.ProcessorCount / CpusPerContainerBackedSuite);
 
     /// <summary>
     ///     Whether a suite <em>declares</em> a test matching a filter, without running it.
@@ -502,6 +579,20 @@ partial class Build
     /// <summary>Where each suite's Cobertura report lands, and where the merged one is written.</summary>
     AbsolutePath CoverageDirectory => ArtifactsDirectory / "coverage";
 
+    /// <summary>
+    ///     Where a suite's assemblies are, which is what <c>coverlet</c> instruments.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ The same expression as Build.Architecture.cs § ShippingAssemblyPaths, and it has to stay
+    ///     the same one: <c>Directory.Build.props</c> sets <c>ArtifactsPath</c>, so the layout is
+    ///     <c>artifacts/bin/&lt;project&gt;/&lt;configuration&gt;</c> for every project in the tree,
+    ///     shipping or suite. A wrong directory here does not fail — coverlet finds nothing to
+    ///     instrument, the suite still runs, and the report comes back empty, which is the shape of
+    ///     failure this file spends the rest of its length refusing to accept quietly.
+    /// </remarks>
+    AbsolutePath SuiteOutputDirectory(AbsolutePath project) =>
+        ArtifactsDirectory / "bin" / project.NameWithoutExtension / Configuration.ToLowerInvariant();
+
     /// <summary>docs/plan/23 § Test layers, row Unit: "Coverage ≥ 70 % per project".</summary>
     const double CoverageFloor = 0.70;
 
@@ -509,71 +600,51 @@ partial class Build
     ///     A report to enforce the floor against instead of collecting one.
     /// </summary>
     /// <remarks>
-    ///     ⚠ Exists because collection and enforcement are not always on the same machine — see
-    ///     <see cref="CoverageCollectionIsAvailable" />, which is a whole platform on which they
-    ///     cannot be.
+    ///     ⚠ Exists because collection and enforcement are not always on the same machine:
+    ///     docs/plan/23 § CI shape parallelises <c>pr.yml</c>, so the job that runs the suites and
+    ///     the job that reads the answer can be two jobs. It was also the escape hatch for the
+    ///     platform <see cref="CoverageCollectionIsAvailable" /> used to have to say no on, which is
+    ///     no longer a reason to reach for it — the floor is measurable everywhere now.
     /// </remarks>
     [Parameter("A Cobertura report to enforce the coverage floor against instead of collecting one.")]
     readonly string? CoverageReportFile;
 
     /// <summary>
-    ///     Whether <c>dotnet-coverage</c> can actually instrument on this machine, answered by
-    ///     instrumenting something and looking at what came back.
+    ///     Whether coverage can actually be collected on this machine, answered by instrumenting
+    ///     something and looking at what came back.
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>dotnet-coverage 18.9.0 fails to instrument by exiting 0 and writing
-    ///         <c>&lt;packages /&gt;</c>.</b> Nothing in the exit code, and nothing in the report's
-    ///         schema, separates that from a genuine run. The one line it prints —
-    ///         "No code coverage data available. Profiler was not initialized" — goes to stdout in
-    ///         the middle of the test output.
+    ///         ⚠ <b>THE COLLECTOR IS <c>coverlet</c>, AND THE REASON IS THAT THE FLOOR HAS TO BE
+    ///         MEASURABLE WHERE THE CODE IS WRITTEN.</b> It used to be <c>dotnet-coverage</c>, which
+    ///         ships native profilers for <c>ubuntu/x64</c>, <c>alpine/x64</c>, <c>macos/x64</c> and
+    ///         Windows and for nothing else — both of its arm64 directories hold
+    ///         <c>MicrosoftInstrumentationEngine_arm64.dll</c>, a <em>Windows</em> DLL. So on every
+    ///         Apple Silicon and every arm64 Linux machine the probe below correctly said "no", the
+    ///         floor correctly reported ○, and the result was that <b>an x64 CI runner was the first
+    ///         and only place the floor had ever run</b>. Two projects breached it unnoticed under
+    ///         that arrangement, which is what a gate nobody can run locally is for.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>This used to be a platform allow-list, and the allow-list was wrong.</b> It
-    ///         excluded macOS/arm64 and returned <see langword="true" /> everywhere else, which is
-    ///         false on at least two other platforms. Measured, all four cells, with the same
-    ///         three-line probe this property builds:
-    ///     </para>
-    ///     <list type="table">
-    ///         <item>
-    ///             <term>osx-arm64</term>
-    ///             <description>
-    ///                 <c>&lt;packages /&gt;</c>, exit 0. No macOS arm64 profiler in the package.
-    ///             </description>
-    ///         </item>
-    ///         <item>
-    ///             <term>linux-x64, no libxml2</term>
-    ///             <description>
-    ///                 <c>&lt;packages /&gt;</c>, exit 0, and the one hint: "Verify that glibc
-    ///                 (&gt;=2.27), libxml2 and all .NET dependencies are installed". The
-    ///                 <c>mcr.microsoft.com/dotnet/sdk:10.0</c> image does not carry libxml2, and
-    ///                 neither does the GitHub runner image's declared package set.
-    ///             </description>
-    ///         </item>
-    ///         <item>
-    ///             <term>linux-x64, libxml2 installed</term>
-    ///             <description><c>line-rate="0.667"</c> — the only cell that works.</description>
-    ///         </item>
-    ///         <item>
-    ///             <term>linux-arm64, libxml2 installed</term>
-    ///             <description>
-    ///                 <c>&lt;packages /&gt;</c>, exit 0, and no mention of libxml2 at all, because
-    ///                 libxml2 is not the problem. There is no linux-arm64 profiler either.
-    ///             </description>
-    ///         </item>
-    ///     </list>
-    ///     <para>
-    ///         The package explains all four: <c>tools/net8.0/any/</c> carries native profilers for
-    ///         <c>ubuntu/x64</c>, <c>alpine/x64</c> and <c>macos/x64</c> only. Its two arm64
-    ///         directories hold <c>MicrosoftInstrumentationEngine_arm64.dll</c> — a Windows DLL.
+    ///         coverlet has no native profiler at all: it rewrites IL, in the suite's own output
+    ///         directory, and puts the assemblies back afterwards. Measured on osx-arm64 against a
+    ///         project whose lines were counted by hand — one class with three methods, two of them
+    ///         reached by two tests — it reported <c>line-rate="0.5454"</c>, which is 6 of 11
+    ///         sequence-point lines and is the number a person gets with a pencil. libxml2, the
+    ///         profiler matrix and the x64 pin on the CI job all stop being things this repository
+    ///         has to know about.
     ///     </para>
     ///     <para>
-    ///         ⚠ So the honest question is not "which platform is this?" but "does it work here?",
-    ///         and the second one is answerable in about two seconds. An allow-list has to be updated
-    ///         every time somebody finds a new way for the tool to be missing; a probe finds the next
-    ///         one on its own. <c>.github/scripts/assert-coverage-profiler.sh</c> asks the same
-    ///         question one layer up, before the suites run, and is deliberately built the same way
-    ///         so the two can be compared line by line.
+    ///         ⚠ <b>The probe stays, and it now probes the tool that is actually used.</b> Its
+    ///         history is worth keeping because the failure it was built for was so quiet:
+    ///         <c>dotnet-coverage</c> 18.9.0 fails by exiting <b>0</b> and writing
+    ///         <c>&lt;packages /&gt;</c>, with its one line of explanation — "No code coverage data
+    ///         available. Profiler was not initialized" — buried in the middle of the test output.
+    ///         Before the probe this was a platform allow-list that excluded macOS/arm64 and waved
+    ///         everything else through, and it was wrong on two of the platforms it waved through.
+    ///         ⚠ <b>Do not turn it back into a list.</b> An allow-list has to be updated every time
+    ///         somebody finds a new way for a tool to be missing; a probe finds the next one itself,
+    ///         and the next one will not be the one written down here.
     ///     </para>
     ///     <para>
     ///         ⚠ A wrong answer here is survivable in one direction only, and it is the right one:
@@ -604,8 +675,14 @@ partial class Build
     ///         ⚠ <b>One covered line and one uncovered line, on purpose.</b> A probe whose every line
     ///         is covered reports <c>line-rate="1"</c>, which is also what the empty report at the
     ///         top of a broken run reports. Requiring a rate strictly between 0 and 1 means the probe
-    ///         cannot pass by accident — the profiler has to have both found the assembly and
+    ///         cannot pass by accident — the collector has to have both found the assembly and
     ///         recorded which lines actually ran.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <c>--include-test-assembly</c> because <c>Probe.dll</c> is not one and coverlet has
+    ///         to be told so. Its default is to leave the assembly it was pointed at out of the
+    ///         report, which for this probe would produce an empty one — the exact answer the probe
+    ///         exists to distinguish from a broken collector.
     ///     </para>
     ///     <para>
     ///         ⚠ The three stopper files are what keep the probe a probe. <c>artifacts/</c> is inside
@@ -644,21 +721,23 @@ partial class Build
 
             Log.Warning(
                 "Test: could not build the coverage probe in {Probe} (exit {Exit}), so whether "
-                + "dotnet-coverage {Version} works here is unknown. Treating it as unavailable, which "
+                + "coverlet {Version} works here is unknown. Treating it as unavailable, which "
                 + "makes the floor say it was not measured rather than guess a number.",
                 probe,
                 buildExitCode,
-                DotNetCoverageVersion);
+                CoverletVersion);
 
             return false;
         }
 
         report.DeleteFile();
 
-        // ⚠ No exit-code check: the failure this exists to catch exits 0. The report is the answer.
+        // ⚠ No exit-code check: the failure class this exists to catch exits 0 — dotnet-coverage did
+        // it by writing <packages />, and any collector can do it by instrumenting nothing. The
+        // report is the answer.
         DotNetTasks.DotNet(
-            $"dotnet-coverage collect --nologo --output-format cobertura --output {report} "
-            + $"-- dotnet {assembly}",
+            $"coverlet {probe / "bin"} --target dotnet --targetargs \"{assembly}\" "
+            + $"--include-test-assembly --format cobertura --output {report}",
             workingDirectory: RootDirectory,
             logOutput: false,
             logInvocation: false,
@@ -667,9 +746,9 @@ partial class Build
         if (!report.FileExists())
         {
             Log.Warning(
-                "Test: dotnet-coverage {Version} wrote no report for the probe at all on {Platform}. "
+                "Test: coverlet {Version} wrote no report for the probe at all on {Platform}. "
                 + "Coverage will not be collected.",
-                DotNetCoverageVersion,
+                CoverletVersion,
                 EnvironmentInfo.Platform);
 
             return false;
@@ -681,13 +760,14 @@ partial class Build
         if (probed is null)
         {
             Log.Warning(
-                "Test: dotnet-coverage {Version} cannot instrument on {Platform}/{Architecture} — it "
-                + "exited 0 and wrote a report with nothing in it. The coverage floor will report "
-                + "that it was not measured rather than report every project at 0 %. On Linux/x64 "
-                + "the usual cause is a missing libxml2 (apt-get install -y libxml2); on any arm64 "
-                + "host the tool ships no profiler at all and an x64 runner is the only fix. "
-                + "Build.Test.cs § CoverageCollectionIsAvailable has the measured matrix.",
-                DotNetCoverageVersion,
+                "Test: coverlet {Version} cannot instrument on {Platform}/{Architecture} — it wrote a "
+                + "report with nothing usable in it. The coverage floor will report that it was not "
+                + "measured rather than report every project at 0 %. coverlet rewrites IL and needs "
+                + "no native profiler, so unlike the dotnet-coverage this replaced there is no "
+                + "platform on which this is expected: check that the probe assembly has a portable "
+                + "PDB beside it, which is what coverlet looks for. Build.Test.cs § "
+                + "CoverageCollectionIsAvailable has the history.",
+                CoverletVersion,
                 EnvironmentInfo.Platform,
                 System.Runtime.InteropServices.RuntimeInformation.OSArchitecture);
 
@@ -695,9 +775,9 @@ partial class Build
         }
 
         Log.Information(
-            "Test: dotnet-coverage {Version} instruments correctly here — the probe came back at "
+            "Test: coverlet {Version} instruments correctly here — the probe came back at "
             + "{Rate:P1} ({Covered} of {Coverable} lines), so the coverage floor below is measured.",
-            DotNetCoverageVersion,
+            CoverletVersion,
             probed.Rate,
             probed.Covered,
             probed.Coverable);
@@ -724,8 +804,8 @@ partial class Build
                 "Directory.Build.props declares no <TargetFramework>, so the coverage probe cannot "
                 + "be pinned to the same one as the rest of the tree.");
 
-        // ⚠ Deliberately the same three lines as .github/scripts/assert-coverage-profiler.sh, so a
-        // disagreement between this probe and that one is a real disagreement about the machine.
+        // ⚠ Three lines, one of them never called, so the answer is checkable by hand: a working
+        // collector has to report 2 of 3 and nothing else can.
         Write(probe / "Program.cs", """
             public static class Probe
             {
@@ -794,16 +874,18 @@ partial class Build
             ? null
             : CoverageReport.Read(reports.Select(x => x.ToString()).ToArray());
 
-        // ⚠ THE TRIPWIRE. A report that mentions no assembly at all is what dotnet-coverage writes
-        // when its profiler never loaded — <packages /> , exit 0, on three of the four platforms in
-        // § CoverageCollectionIsAvailable. Reading a floor out of it would report every shipping
-        // project at 0 % and blame the tests, which is a red build with a confident wrong diagnosis.
+        // ⚠ THE TRIPWIRE. A report that mentions no assembly at all is what a collector writes when
+        // it instrumented nothing — dotnet-coverage did it as <packages /> with exit 0 on three of
+        // the four platforms in § CoverageCollectionIsAvailable, and coverlet does it by finding no
+        // portable PDB in the directory it was pointed at. Reading a floor out of that would report
+        // every shipping project at 0 % and blame the tests, which is a red build with a confident
+        // wrong diagnosis.
         //
-        // ⚠ It is also the backstop for the probe. The probe decides whether to collect at all; this
-        // decides whether what came back means anything, and it is the one of the two that runs
-        // against the real suites. A probe that passes on a machine where the real collection then
-        // fails — a profiler that loads for a hello-world and not for a 40-assembly test host, an
-        // environment variable set for one and not the other — lands here.
+        // ⚠ It is also the backstop for the probe, and switching collectors did not retire it — if
+        // anything it matters more, because the probe now instruments a directory holding ONE
+        // assembly and the suites instrument directories holding a hundred. The probe decides
+        // whether to collect at all; this decides whether what came back means anything, and it is
+        // the one of the two that runs against the real suites.
         //
         // Zero, not "fewer than expected": 39 suites that between them touch every assembly in the
         // tree cannot honestly produce a report naming none of them, and any threshold above zero
@@ -814,16 +896,17 @@ partial class Build
         {
             var why = reports.Count == 0
                 ? CoverageCollectionIsAvailable
-                    ? $"dotnet-coverage {DotNetCoverageVersion} produced no report, which on a "
-                      + "machine where the probe passed means the collection itself failed; its "
-                      + "output is above"
-                    : $"dotnet-coverage {DotNetCoverageVersion} cannot instrument on "
+                    ? $"coverlet {CoverletVersion} produced no report, which on a machine where the "
+                      + "probe passed means the collection itself failed; its output is above"
+                    : $"coverlet {CoverletVersion} cannot instrument on "
                       + $"{EnvironmentInfo.Platform}/{System.Runtime.InteropServices.RuntimeInformation.OSArchitecture}, "
                       + "which the probe above established by trying it"
-                : $"{reports.Count} report(s) came back naming no assembly at all, so "
-                  + $"dotnet-coverage {DotNetCoverageVersion}'s profiler did not load for the suites "
-                  + "even though the probe said it would. On Linux/x64 install libxml2; on arm64 "
-                  + "there is no profiler to load. Build.Test.cs § CoverageCollectionIsAvailable";
+                : $"{reports.Count} report(s) came back naming no assembly at all, so coverlet "
+                  + $"{CoverletVersion} instrumented nothing for the suites even though the probe "
+                  + "said it would. It instruments the assemblies it finds a portable PDB beside in "
+                  + "the suite's own output directory, so the usual cause is that Build.Test.cs § "
+                  + "SuiteOutputDirectory no longer names the directory the build writes to. "
+                  + "Build.Test.cs § CoverageCollectionIsAvailable";
 
             var message =
                 "Test: the coverage floor was NOT ENFORCED. docs/plan/23 § Test layers requires "
@@ -939,5 +1022,5 @@ partial class Build
             .ToHashSet(StringComparer.Ordinal);
 
     /// <summary>The pinned version, for the message. .config/dotnet-tools.json is the pin.</summary>
-    const string DotNetCoverageVersion = "18.9.0";
+    const string CoverletVersion = "10.0.1";
 }
