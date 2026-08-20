@@ -357,6 +357,23 @@ public sealed class ResourceManagerService(
 
         var snapshot = beginning.GetValueOrThrow();
 
+        // ── The group's side of delete step 1: the member is marked Deleting AND STAYS LISTED ────
+        //
+        // ⚠ AFTER THE RESOURCE GRAIN AND NOT BEFORE IT. The resource grain's BeginDeleteAsync is the
+        // single writer and can still refuse — an If-Match that does not match, a state that is not
+        // deletable. Marking membership first would leave a live resource showing as Deleting in the
+        // group's listing after a delete that was refused, and nothing would put it back.
+        //
+        // ⚠ A MISSING MEMBER IS TOLERATED HERE AND IS REFUSED ON THE CREATE, AND THE ASYMMETRY IS THE
+        // RULE RATHER THAN AN INCONSISTENCY. The create is where the invariant is established, so it
+        // must not be allowed to skip; the delete is where a resource that predates the step above —
+        // one created while nothing recorded membership — would otherwise become undeletable forever,
+        // because there is no member to mark and no way for the caller to make one. Refusing here
+        // would strand exactly the resources this change is meant to bring into the listing. There is
+        // nothing to mark, so not marking it is the whole of the correct behaviour, and the resource's
+        // own state is what the delete actually turns on.
+        _ = await Group(target).BeginDeleteAsync(target.Id.Id);
+
         // ⚠ THE PARENT'S GUID IS RESOLVED HERE, ONCE, WHILE SOMEONE IS STILL WAITING FOR AN ANSWER.
         //
         // The unlink runs from OperationGrain's reminder after CompleteDeleteAsync, off the request
@@ -582,6 +599,30 @@ public sealed class ResourceManagerService(
 
         if (reparented.TryGetError(out var reparentError)) {
             return Result<WriteAccepted>.Failure(reparentError);
+        }
+
+        // ── AND THE RESOURCE REJOINS ITS GROUP'S MEMBERSHIP ─────────────────────────────────────
+        //
+        // ⚠ THE EXACT REVERSE OF OperationGrain.ParkAsync, WHICH TOOK IT OUT. A soft-deleted resource
+        // is not addressable at its old path and its ReBAC parent names its SUBSCRIPTION rather than
+        // its group, so it is not in the group any more — leaving it in the group's membership would
+        // make every listing of that group answer with a name that resolves to the canonical 404, and
+        // a caller who may list a group but may not read the resource would learn that the name is
+        // held by something. That is the enumeration oracle docs/plan/08 § Soft delete refuses a
+        // 410 Gone over.
+        //
+        // ⚠ BeginCreateAsync AND NOT SOME "restore" METHOD, because the member comes back in exactly
+        // the state a create's does: Creating, until the restore's operation converges and
+        // CompleteCreateAsync stamps it terminal. A restore re-applies the data plane — it is not
+        // instantaneous — and a member that reappeared as Succeeded would say the resource was back
+        // before its pods were.
+        //
+        // ⚠ STRICT, unlike the delete path's tolerance: a restore into a group that no longer exists
+        // is a restore with nowhere to put the resource, and it is refused before the data plane comes
+        // back up rather than after.
+        var rejoined = await Group(addressed).BeginCreateAsync(addressed.Id);
+        if (rejoined.TryGetError(out var rejoinError)) {
+            return Result<WriteAccepted>.Failure(rejoinError);
         }
 
         trace.Enter(WriteStep.SubmitDesired);
@@ -1373,6 +1414,66 @@ public sealed class ResourceManagerService(
             // colliding creates consume a subscription's allowance with nothing to show for it.
             await ReleaseAsync(resolvedTarget, leases);
             return Result<WriteAccepted>.Failure(claimError);
+        }
+
+        // ── 7b. Record the membership. Two-phase create, step 2, from the GROUP's side ──────────
+        //
+        // ⚠ THIS IS THE STEP THAT MAKES A RESOURCE GROUP A LIFECYCLE UNIT RATHER THAN A STRING IN A
+        // PATH. IResourceGroupGrain has owned BeginCreateAsync, CompleteCreateAsync, BeginDeleteAsync,
+        // FailDeleteAsync, CompleteDeleteAsync, ListAsync and ListOrphansAsync since docs/plan/06
+        // § Two-phase create was written, and until this line nothing in the write path called any of
+        // them. A group's membership was therefore empty for every group that ever existed — so a
+        // listing built on it would have answered "no resources" for a group full of them, and the
+        // reaper reminder that document asks for would have swept nothing because ListOrphansAsync had
+        // nothing to read.
+        //
+        // ⚠ AND IT IS A NEW FAILURE MODE, NOT ONLY A NEW RECORD: a write into a resource group that
+        // does not exist is now refused with ResourceGroupNotFound, which the gateway shapes to a 404.
+        // It used to succeed — ResolveAsync validates the tenant, the subscription, the type, the
+        // api-version and a child's parent RESOURCE, and never the group — leaving a resource that
+        // belonged to nothing, inherited no lock and no role assignment from its group, and could not
+        // be found by anything that walked the hierarchy downwards. Azure refuses the same write for
+        // the same reason.
+        //
+        // ⚠ AFTER THE INDEX CLAIM AND BEFORE THE DURABLE WRITE, WHICH IS THE WINDOW
+        // IResourceGroupGrain.BeginCreateAsync NAMES ("after TryClaimAsync and before ConfirmAsync")
+        // AND THE ONE FAILURE MODE THAT IS RECOVERABLE.
+        //
+        //   • BEFORE step 9 rather than after it, because the orphan this ordering produces — a member
+        //     in Creating with no resource behind it — is precisely what ListOrphansAsync enumerates
+        //     and the reaper sweeps. The other order produces a durable resource that is in no group's
+        //     membership, which nothing enumerates and nothing sweeps: invisible to a listing, forever,
+        //     with its meter running. Same trade as step 8 one screen down — an inert record beats an
+        //     invisible resource at every fork.
+        //   • AFTER step 7 rather than before it, because a member recorded for a name somebody else
+        //     wins the race for is an orphan created by a request that was correctly refused.
+        //
+        // ⚠ ON THE CREATE ONLY, for the reason step 8 gives and one of its own: BeginCreateAsync is
+        // idempotent on a member it already holds and returns without touching it — deliberately, so a
+        // retried PUT cannot put a live resource back into Creating and hand it to the reaper. Calling
+        // it on an update of a resource that predates this step would be the one case that slips
+        // through that guard: no member exists, so it would be ADDED in Creating for a resource that is
+        // Succeeded. The delete path tolerates a missing member instead; see DeleteAsync.
+        //
+        // ⚠ The quota lease is released on the way out, exactly as the claim failure above does. The
+        // index claim is left to expire on its own — releasing it here would be a second write to
+        // undo a lease that the two-phase design already expires, and the claim is what makes the
+        // name unavailable to the retry that is about to arrive.
+        //
+        // ⚠ NO trace.Enter, AND THAT IS DELIBERATE RATHER THAN AN OVERSIGHT. WriteStep's values ARE
+        // docs/plan/08's step numbers — `IndexClaim = 7`, `LinkParent = 8`, asserted by ordinal in
+        // ApiVersionAndSchemaTests — and WriteTrace.Canonical is that closed twelve. There is no
+        // number between 7 and 8, a thirteenth member appended at the end would break the "strictly
+        // increasing prefix of the canonical order" property every trace is checked against, and the
+        // enum is a serialized wire type carrying an [Alias]. So this work is recorded inside step 7's
+        // span, which is where it belongs anyway: docs/plan/06 § Two-phase create's steps 1 and 2 are
+        // the claim and this, and step 7 is what docs/plan/08 calls the two-phase create.
+        if (!target.Exists) {
+            var joined = await Group(resolvedTarget).BeginCreateAsync(addressed);
+            if (joined.TryGetError(out var joinError)) {
+                await ReleaseAsync(resolvedTarget, leases);
+                return Result<WriteAccepted>.Failure(joinError);
+            }
         }
 
         // ── 8. The ReBAC parent edge — BEFORE the resource is durable ───────────────────────────
@@ -2260,6 +2361,19 @@ public sealed class ResourceManagerService(
 
     IOperationGrain Operation(WriteTarget target, Guid operationId) =>
         Tenant(target).GetGrain<IOperationGrain>(GrainKeys.Operation(operationId));
+
+    /// <summary>
+    ///     The resource group this address names — the grain that owns membership.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ Built from the <b>address</b> and never from anything the caller supplied separately.
+    ///     <c>IResourceGroupGrain.BeginCreateAsync</c> re-checks the tenant, the subscription and the
+    ///     group name against its own key and refuses an address that points elsewhere, so a wrong
+    ///     key here is a refusal rather than a membership record in somebody else's group.
+    /// </remarks>
+    IResourceGroupGrain Group(WriteTarget target) =>
+        Tenant(target)
+            .GetGrain<IResourceGroupGrain>(GrainKeys.ResourceGroup(target.Id.SubscriptionId, target.Id.ResourceGroup));
 
     TenantGrainFactory Tenant(WriteTarget target) =>
         grains.ForTenant(target.Id.TenantId.ToString("D", CultureInfo.InvariantCulture));

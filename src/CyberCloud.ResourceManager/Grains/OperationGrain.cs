@@ -293,6 +293,12 @@ public sealed class OperationGrain(
             state.State.CancelTeardownDone = true;
             await ReleaseAsync(spec);
             await FinishResourceAsync(spec, ProvisioningState.Canceled, null);
+
+            // ⚠ AND THE MEMBER IS STAMPED Canceled RATHER THAN REMOVED. A cancelled create leaves a
+            // resource grain behind in Canceled — FinishResourceAsync above is what puts it there —
+            // so the group still contains it and a listing that dropped it would hide a resource that
+            // is still addressable. CompleteCreateAsync takes Canceled for exactly this ending.
+            await StampMemberAsync(spec, ProvisioningState.Canceled);
             await TerminateAsync(Contracts.OperationState.Canceled, null);
             return;
         }
@@ -394,6 +400,34 @@ public sealed class OperationGrain(
                 return;
             }
 
+            // ── AND THE RESOURCE LEAVES ITS GROUP'S MEMBERSHIP, LAST OF ALL ─────────────────────
+            //
+            // ⚠ THE CLOSING HALF OF ResourceManagerService.DeleteAsync'S BeginDeleteAsync, AND IT IS
+            // HERE FOR THE REASON THE UNLINK AND THE UNCOUNT ABOVE ARE. docs/plan/06 § Two-phase
+            // create: a resource whose teardown fails "is left in Deleting … and is *visible* in
+            // listings with that state — never silently gone while its pods still run and its meter
+            // still ticks. That last clause is a billing-dispute prevention measure as much as a
+            // correctness one." The member is what a listing reads, so removing it at the accept
+            // would be the silent disappearance that sentence forbids — the listing would go quiet
+            // while the pods came down, and a teardown that then failed would leave a billed
+            // resource nothing lists.
+            //
+            // ⚠ AND IT IS RETRIED RATHER THAN BEST-EFFORT, LIKE ITS TWO NEIGHBOURS. A member left
+            // behind for a resource that no longer exists is a listing that names something whose
+            // every read is a 404 — and ResourceGroupGrain refuses to delete a group that still has
+            // members, so the leak is not merely cosmetic. CompleteDeleteAsync is idempotent on a
+            // member that is already gone, which is what makes the retry safe.
+            //
+            // ⚠ A PURGE FINDS NOTHING TO REMOVE AND SUCCEEDS, WHICH IS CORRECT RATHER THAN A GAP.
+            // ParkAsync took the member out when the soft delete converged — the resource stopped
+            // being in the group at that moment, not at the purge — so by the time a purge runs the
+            // group has not held it for the length of the recovery window.
+            var unlisted = await Group(spec).CompleteDeleteAsync(spec.ResourceId);
+            if (unlisted.TryGetError(out var unlistError)) {
+                await ScheduleAsync(ReconcileOutcome.Failed(unlistError, true));
+                return;
+            }
+
             await ReturnCommittedQuotaAsync(spec);
             await TerminateAsync(Contracts.OperationState.Succeeded, null);
             return;
@@ -401,6 +435,20 @@ public sealed class OperationGrain(
 
         await CommitAsync(spec);
         await FinishResourceAsync(spec, ProvisioningState.Succeeded, null);
+
+        // ⚠ THE MEMBER REACHES THE SAME TERMINAL STATE THE RESOURCE JUST DID, AND THIS IS WHAT KEEPS
+        // THE REAPER OFF A LIVE RESOURCE. ResourceManagerService's step 7b records the member in
+        // Creating; IResourceGroupGrain.ListOrphansAsync enumerates members that have been Creating
+        // for longer than a threshold, and docs/plan/06 § Two-phase create has a per-subscription
+        // reaper reminder sweep them. A create that converged and never stamped its member would be
+        // swept as an orphan — a live, billed resource torn down by a reaper because nothing told the
+        // group it had finished.
+        //
+        // ⚠ ON THE UPDATE AND THE RESTORE TOO, not only the create. An update's member is already
+        // terminal and this rewrites the same value, which costs one call and buys the property that
+        // the listed state and the resource's state cannot drift; a restore's member was put back in
+        // Creating by RestoreAsync and this is what finishes it.
+        await StampMemberAsync(spec, ProvisioningState.Succeeded);
         await TerminateAsync(Contracts.OperationState.Succeeded, null);
     }
 
@@ -464,6 +512,27 @@ public sealed class OperationGrain(
             return;
         }
 
+        // ── AND IT LEAVES THE GROUP'S MEMBERSHIP, WHICH IS NOT THE DELETE THIS PATH REFUSED TO DO ─
+        //
+        // ⚠ THE GROUP'S CompleteDeleteAsync, NOT THE RESOURCE'S — and the remarks above forbid only
+        // the second. IResourceGrain.CompleteDeleteAsync throws away the stored desired state a
+        // restore re-applies, which is why this path must not call it; IResourceGroupGrain's removes
+        // one entry from a listing and destroys nothing. The two share a name and nothing else.
+        //
+        // ⚠ AND THE RESOURCE REALLY HAS LEFT THE GROUP BY THIS LINE. The reparent one call up moved
+        // its ReBAC parent edge to the SUBSCRIPTION, which is docs/plan/08 § Soft delete's whole
+        // model of the recovery window: "the people who can see a deleted resource become the people
+        // who hold subscription-scoped rights". Its old path is unaddressable, so a member left
+        // behind would put a name into the group's listing whose every read is the canonical 404 —
+        // handing a caller who may list the group but may not read the resource exactly the
+        // "something is held here" signal that document refuses a 410 Gone over. RestoreAsync's
+        // BeginCreateAsync is the exact reverse and puts it back.
+        var unlisted = await Group(spec).CompleteDeleteAsync(spec.ResourceId);
+        if (unlisted.TryGetError(out var unlistError)) {
+            await ScheduleAsync(ReconcileOutcome.Failed(unlistError, true));
+            return;
+        }
+
         Append(
             Progress(
                 "parked",
@@ -491,6 +560,29 @@ public sealed class OperationGrain(
         // gone while its pods still run and its meter still ticks." The resource grain enforces that
         // itself; passing Failed for a delete records the reason without moving the state.
         await FinishResourceAsync(spec, ProvisioningState.Failed, error);
+
+        // ── AND THE GROUP'S LISTING IS TOLD, IN THE ONE SHAPE THAT DOES NOT LIE ─────────────────
+        //
+        // ⚠ A FAILED TEARDOWN GOES THROUGH FailDeleteAsync, WHICH DELIBERATELY CANNOT CLEAR THE
+        // MEMBER AND DELIBERATELY CANNOT MOVE IT TO Failed. Both would make the resource look
+        // finished while its pods still run and its meter still ticks — the exact sentence
+        // docs/plan/06 § Two-phase create calls "a billing-dispute prevention measure as much as a
+        // correctness one". It records the reason and the attempt count against a member that stays
+        // Deleting and stays listed, which is what an operator needs in order to find it.
+        //
+        // ⚠ EVERY OTHER KIND STAMPS Failed, WHICH IS THE STATE THE RESOURCE ITSELF JUST REACHED. A
+        // create that failed terminally leaves a resource in Failed that its owner can still see and
+        // delete; a listing showing it as Creating would be a listing that says a dead create is
+        // still running, and — worse — ListOrphansAsync would hand it to the reaper.
+        //
+        // ⚠ BEST EFFORT, BECAUSE THIS IS A TERMINAL ENDING WITH NO RETRY BEHIND IT. FinishResourceAsync
+        // one line up discards its result for the same reason: the operation is already reporting a
+        // failure with a reason, and there is no later drive in which to converge a bookkeeping write.
+        // What is lost is a stale label on one listing entry, against an operation that already failed.
+        _ = spec.Kind == OperationKind.Delete
+            ? await Group(spec).FailDeleteAsync(spec.ResourceId, error.Message)
+            : await Group(spec).CompleteCreateAsync(spec.ResourceId, ProvisioningState.Failed);
+
         await TerminateAsync(Contracts.OperationState.Failed, error);
     }
 
@@ -685,6 +777,45 @@ public sealed class OperationGrain(
         return removed.ToResult();
     }
 
+    /// <summary>
+    ///     Stamps the group's membership record with the terminal state the resource just reached.
+    /// </summary>
+    /// <param name="spec">The operation's spec.</param>
+    /// <param name="terminal">The terminal state.</param>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>A member that is not there is not an error, and this is the one place that
+    ///         tolerance lives.</b> <c>ResourceManagerService</c>'s step 7b records a member for every
+    ///         create, so every resource created after it exists in some group's membership. A
+    ///         resource created <i>before</i> it has none, and an update or a delete of one reaches
+    ///         here with nothing to stamp. Refusing would fail an operation whose work landed, and
+    ///         retrying would fail it an hour later at <c>ReconcileSchedule</c>'s ceiling — both of
+    ///         them reporting a failure for a write that succeeded. There is nothing to stamp, so not
+    ///         stamping it is the whole of the correct behaviour.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Best effort beyond that too, and deliberately not retried.</b> Every caller has
+    ///         already written the resource's own terminal state, which is what a read returns; this
+    ///         is the listing's copy of it. Scheduling a retry would keep an operation whose work is
+    ///         finished in <c>Running</c> over a label, and a poller would see a create that had
+    ///         converged still reporting progress. A stale label loses to a stuck operation.
+    ///     </para>
+    /// </remarks>
+    async Task StampMemberAsync(OperationSpec spec, ProvisioningState terminal) {
+        var stamped = await Group(spec).CompleteCreateAsync(spec.ResourceId, terminal);
+
+        if (stamped.TryGetError(out var stampError) && stampError.Code != ErrorCode.ResourceNotFound) {
+            Append(
+                Progress(
+                    "membership",
+                    $"'{spec.ResourcePath}' reached {terminal} and its resource group's listing could "
+                    + $"not be stamped with it: {stampError.Message}. The resource is correct; what is "
+                    + "stale is the state the group's listing shows for it."
+                )
+            );
+        }
+    }
+
     // ── Internals ──────────────────────────────────────────────────────────────────────────────
 
     async Task FinishResourceAsync(OperationSpec spec, ProvisioningState terminal, Error? error) {
@@ -747,6 +878,23 @@ public sealed class OperationGrain(
 
     IQuotaGrain Quota(OperationSpec spec) =>
         Tenant(spec).GetGrain<IQuotaGrain>(GrainKeys.Subscription(spec.SubscriptionId));
+
+    /// <summary>
+    ///     The resource group whose membership this operation's endings maintain.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>The group NAME comes from <see cref="Address" />, which reparses
+    ///     <see cref="OperationSpec.ResourcePath" />, and the subscription comes from the spec's own
+    ///     field.</b> Both are what the spec durably recorded, so this converges from a reminder after
+    ///     the resource itself is gone — which is exactly when the delete path's last two calls run.
+    ///     A second copy of the group name on the spec would be a second thing that can disagree with
+    ///     the path, which is the argument <see cref="Address" /> already makes.
+    /// </remarks>
+    IResourceGroupGrain Group(OperationSpec spec) =>
+        Tenant(spec)
+            .GetGrain<IResourceGroupGrain>(
+                GrainKeys.ResourceGroup(spec.SubscriptionId, Address(spec).ResourceGroup)
+            );
 
     TenantGrainFactory Tenant(OperationSpec spec) =>
         grains.ForTenant(spec.TenantId.ToString("D", CultureInfo.InvariantCulture));
