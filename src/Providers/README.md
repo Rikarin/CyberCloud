@@ -1789,7 +1789,12 @@ that, and every one of its four decisions was forced by something measured again
   newer api-version, and on every reconcile after that** — a rejected apply does not heal. The other
   six are fixed by the resource's identity and its path. `KubeLabels.LifetimeStable` is that set, and
   the conformance gate asserts the seventh is *absent* so the exclusion stays a decision rather than
-  becoming an omission.
+  becoming an omission. ⚠ **The refusal does not name the offending field** — it lists the fields that
+  *may* change and says the rest are forbidden — so an operator reading it in a log is told a
+  `StatefulSet` apply was rejected and not what did it. That is a second reason the exclusion is
+  enforced at the builder rather than left to be diagnosed. `ClaimTemplateLabelTests` is the whole
+  measurement against a real k3s, sabotage arm included: it renders `api-version` into the template by
+  hand, applies twice at two versions, and asserts the second is refused.
 - **The descent is declared per command, not discovered.** Three nested-template shapes are rendered
   in this tree and they want three different answers. A `PodTemplateSpec` already gets its labels from
   the selector, and stamping it would change `spec.template` — a rolling restart. A Cluster API
