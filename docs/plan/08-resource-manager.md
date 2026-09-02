@@ -88,16 +88,39 @@ nothing, inherited no lock or role assignment from a group, and could not be rea
 walking the hierarchy downwards. It now answers `404`, which is Azure's behaviour and the same answer a
 group the caller may not see gets.
 
-⚠ **The refusal makes a gap that already existed reachable one step sooner, and the gap is not the
-resource manager's.** `ISubscriptionGrain.CreateResourceGroupAsync` exists and has no production caller;
-neither does `ISubscriptionGrain.CreateAsync` or `ITenantGrain.CreateAsync`, and the gateway serves no
-route that reaches any of them — `GatewayRoute` parses resources, actions, operations, the hub and the
+⚠ **The refusal made a gap that already existed reachable one step sooner, and the gap was not the
+resource manager's.** `ISubscriptionGrain.CreateResourceGroupAsync` existed with no production caller;
+neither had `ISubscriptionGrain.CreateAsync` or `ITenantGrain.CreateAsync`, and the gateway served no
+route that reached any of them — `GatewayRoute` parsed resources, actions, operations, the hub and the
 OpenAPI document, and nothing else. So on a real silo a tenant, a subscription and a resource group all
-have to be made by an operator calling grains directly, and step 1 has refused a write into a
+had to be made by an operator calling grains directly, and step 1 has refused a write into a
 subscription nobody made since it was written. Step 7b refuses one into a group nobody made, in the same
-way and for the same reason. Nothing here closes that gap and nothing here widened it; what the second
-refusal does is make it impossible to create a resource that has no group, which was the state the
-platform was in.
+way and for the same reason.
+
+**That gap is now closed for two of the three, by a component beside this one rather than inside it.**
+`IScopeManager` serves a **scope** address — `/tenants/{t}/subscriptions/{s}` and that plus
+`/resourceGroups/{rg}`, the first four and six segments of § Identifiers' path — under a sixth
+`RouteKind`. It is not this write path and deliberately not: eight of the twelve steps have nothing to
+act on for a scope (no provider, so no registry lookup; no schema per api-version; no meter; no index
+entry, since a group's name is made unique by the subscription's own activation; no membership record;
+no desired state, no reconciler and therefore no operation), and giving `WriteTrace.Canonical` a second
+legal shape would cost the trace the property it exists for. What a scope *does* keep is steps 3, 4, 8
+and 11 in that order — the check, the lock, the ReBAC edge and the change event.
+
+**A tenant is the third and stays outside the request pipeline, which is a decision rather than the
+remainder of the work.** [10](10-gateway-and-api.md) § Request pipeline resolves a request's tenant
+from the token and answers `404` to every surface naming a different one — the path included, read
+straight off the `/tenants/{id}` prefix — so a request that created tenant B would have to name B in a
+path that has already been refused. Exempting the route means letting a caller-controlled value select
+the tenant, which is the one change that document says must never be made. Tenant creation is therefore
+`IScopeManager.CreateTenantAsync`: a platform-operator seam off the request path, checked against
+[06](06-tenancy-and-resource-model.md) § Platform administration's `platform:root#operator` — the first
+caller that relation has ever had — and taking the tenant's first owner **in its request** rather than
+defaulting it to the operator, because `tenant` is the only type `CyberCloudSchema` gives no `parent`
+relation and a direct `#owner` tuple is the only thing that can make a new tenant visible to anybody.
+§ Platform administration's own answer, that tenants are a `CyberCloud.Platform/tenants` resource under
+the platform tenant, remains where this should eventually move; it cannot be where it starts, because
+that route's path names the platform tenant's own subscription and resource group and those are scopes.
 
 **The position is between 7 and 8 and it is the recoverable one.** A member recorded before the durable
 write and then abandoned is exactly the orphan `ListOrphansAsync` enumerates; a durable resource in no
