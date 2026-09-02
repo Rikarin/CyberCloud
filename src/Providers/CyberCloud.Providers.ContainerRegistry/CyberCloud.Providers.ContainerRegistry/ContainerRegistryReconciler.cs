@@ -144,6 +144,10 @@ public sealed class ContainerRegistryReconciler(IClock clock) : IResourceReconci
                 .InNamespace(context.Namespace)
                 .WithKind(target.Kind)
                 .WithApiVersion(context.ApiVersion)
+                // ⚠ Not the seven, and not the object's own labels. This puts the six lifetime-stable
+                // labels into the claim template so that the PersistentVolumeClaims the StatefulSet
+                // controller makes are findable by selector — see ContainerRegistries.ClaimTemplatePath.
+                .WithTemplateLabels(ContainerRegistries.ClaimTemplatePath)
                 .ObjectJson(body)
                 .ApplyAsync(cancellationToken);
 

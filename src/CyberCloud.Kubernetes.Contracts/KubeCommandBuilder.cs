@@ -39,6 +39,7 @@ sealed class KubeCommandBuilder(IKubeClusterConnection connection, IChartRendere
     readonly Dictionary<string, string> extraLabels = new(StringComparer.Ordinal);
     readonly Dictionary<string, string> extraAnnotations = new(StringComparer.Ordinal);
     readonly List<JsonObject> ownerReferences = [];
+    readonly List<string> templatePaths = [];
 
     Guid tenantId;
     Guid? subscriptionOverride;
@@ -127,6 +128,25 @@ sealed class KubeCommandBuilder(IKubeClusterConnection connection, IChartRendere
             Require(LabelSyntax.ValidateValue(value, key), nameof(extra));
 
             extraLabels[key] = value;
+        }
+
+        return this;
+    }
+
+    IKubeCommandBuilder IKubeCommandBuilder.WithTemplateLabels(params string[] paths) {
+        ArgumentNullException.ThrowIfNull(paths);
+
+        foreach (var path in paths) {
+            if (string.IsNullOrEmpty(path) || path.Split('/').Any(string.IsNullOrEmpty)) {
+                throw new ArgumentException(
+                    $"'{path}' is not a field path. A template path is one or more non-empty "
+                    + "field names separated by '/', from the root of the body — for example "
+                    + "'spec/volumeClaimTemplates'.",
+                    nameof(paths)
+                );
+            }
+
+            templatePaths.Add(path);
         }
 
         return this;
@@ -351,6 +371,7 @@ sealed class KubeCommandBuilder(IKubeClusterConnection connection, IChartRendere
         }
 
         Inject(document, kind, ns, name, labels, annotations, ownerReferences);
+        StampTemplates(document, templatePaths, labels);
 
         return Result<KubeCommand>.Success(
             new() {
@@ -428,6 +449,103 @@ sealed class KubeCommandBuilder(IKubeClusterConnection connection, IChartRendere
 
             metadata["ownerReferences"] = array;
         }
+    }
+
+    /// <summary>
+    ///     Writes <see cref="KubeLabels.LifetimeStable" /> into the <c>metadata.labels</c> of every
+    ///     nested template the caller declared with <c>WithTemplateLabels</c>.
+    /// </summary>
+    /// <param name="document">The object, already injected at the top level.</param>
+    /// <param name="paths">The declared field paths.</param>
+    /// <param name="labels">
+    ///     The command's labels. Only the <see cref="KubeLabels.LifetimeStable" /> members are taken
+    ///     — never <see cref="KubeLabels.ApiVersion" />, and never a caller's extra label, because
+    ///     neither is guaranteed to hold the same value on the next reconcile and the fields this
+    ///     writes into are, on the one kind that matters, refused any change at all.
+    /// </param>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>Nothing here creates a key it has no value for.</b> A path that does not resolve,
+    ///         resolves to a scalar, or resolves to an array of scalars is skipped in silence — that
+    ///         is the <c>Deployment</c> arm of a render function whose <c>StatefulSet</c> arm has a
+    ///         claim template, and it is <c>defaults.templates.dataVolumeClaimTemplate</c>, which is a
+    ///         string naming a template rather than a template.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>A template that already carries a <c>metadata</c> that is not an object is left
+    ///         alone rather than replaced.</b> Overwriting it would turn a body the API server would
+    ///         have rejected with a clear message into one it rejects with a confusing one.
+    ///     </para>
+    /// </remarks>
+    static void StampTemplates(
+        JsonObject document,
+        List<string> paths,
+        Dictionary<string, string> labels
+    ) {
+        if (paths.Count == 0) {
+            return;
+        }
+
+        var stable = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var key in KubeLabels.LifetimeStable) {
+            if (labels.TryGetValue(key, out var value)) {
+                stable[key] = value;
+            }
+        }
+
+        foreach (var path in paths) {
+            switch (Resolve(document, path)) {
+                case JsonArray array:
+                    foreach (var item in array) {
+                        StampTemplate(item as JsonObject, stable);
+                    }
+
+                    break;
+
+                case JsonObject template:
+                    StampTemplate(template, stable);
+                    break;
+            }
+        }
+    }
+
+    /// <summary>Walks a <c>/</c>-separated field path, answering <see langword="null" /> if it ends.</summary>
+    /// <param name="document">The object to walk from.</param>
+    /// <param name="path">The path.</param>
+    static JsonNode? Resolve(JsonObject document, string path) {
+        JsonNode? current = document;
+
+        foreach (var segment in path.Split('/')) {
+            if (current is not JsonObject step) {
+                return null;
+            }
+
+            current = step[segment];
+        }
+
+        return current;
+    }
+
+    /// <summary>Merges the labels into one template's <c>metadata.labels</c>.</summary>
+    /// <param name="template">The template, or <see langword="null" /> for a non-object array entry.</param>
+    /// <param name="labels">The lifetime-stable labels.</param>
+    static void StampTemplate(JsonObject? template, Dictionary<string, string> labels) {
+        if (template is null) {
+            return;
+        }
+
+        if (template["metadata"] is not JsonObject metadata) {
+            // ⚠ Present-but-not-an-object is somebody else's problem to report; absent is ours to
+            // fill, and only because there is a value to put in it.
+            if (template.ContainsKey("metadata")) {
+                return;
+            }
+
+            metadata = [];
+            template["metadata"] = metadata;
+        }
+
+        metadata["labels"] = Merge(metadata["labels"] as JsonObject, labels);
     }
 
     /// <summary>

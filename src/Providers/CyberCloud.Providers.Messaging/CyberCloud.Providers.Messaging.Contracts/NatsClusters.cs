@@ -139,6 +139,21 @@ public static class NatsClusters {
         new() { Group = "apps", Version = "v1", Kind = "StatefulSet", Plural = "statefulsets" };
 
     /// <summary>
+    ///     Where the rendered <c>StatefulSet</c> keeps its JetStream claim template, for
+    ///     <c>IKubeCommandBuilder.WithTemplateLabels</c>.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>The claims hold the JetStream file store, which is every stream and every consumer
+    ///     this broker has.</b> They are made by the StatefulSet controller rather than applied by
+    ///     this provider, so ADR-013's seven never reached them: the builder writes into an object's
+    ///     own <c>metadata.labels</c> and a claim is a different object. Declaring the path stamps
+    ///     <see cref="KubeLabels.LifetimeStable" /> onto the template, and the controller copies a
+    ///     template's labels onto each claim it creates. It is a no-op on the <c>ConfigMap</c>, the
+    ///     two <c>Service</c>s and the <c>PodMonitor</c>.
+    /// </remarks>
+    public const string ClaimTemplatePath = "spec/volumeClaimTemplates";
+
+    /// <summary>
     ///     Prometheus Operator's <c>PodMonitor</c> — docs/plan/12 § The pattern, once, piece 6.
     /// </summary>
     /// <remarks>
