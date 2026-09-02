@@ -631,17 +631,23 @@ is torn down and its `PersistentVolumeClaim`s are what a restore restores from**
 delete during a window turns every restore in that group into a lie — and the tenant is *told* it came
 back, which § Deleting a parent resource that has children already names as worse than not restoring.
 
-⚠ **The volume claims carry none of ADR-013's seven labels, and that single fact settles the design.**
-`KubeCommandBuilder` injects the labels into an object's own `metadata.labels` and does not descend
-into a `volumeClaimTemplate`, so the claims the StatefulSet controller creates from it are unlabelled.
-They are therefore invisible to any managed-only listing — including the drift inventory — and they
-read as *foreign* to any rule that tests for `managed-by`. Both readings converge on the same
-conclusion: **the namespace of a group that ever ran a stateful type never becomes empty**, because the
-paragraph above records that a purge still leaves the volumes and `IResourceReconciler` has no member
-that asks for them. So for exactly those groups the answer is not a delete at all — it is to record the
-namespace as reclaimable and let an operator decide, which is what `NamespaceReclaim.OperatorReclaimable`
-reports. **Making the purge remove the disks it kept is what would turn that back into a delete**, and
-it is the same owed item, reached from the other end.
+⚠ **The volume claims carried none of ADR-013's seven labels, and the half of that which is now closed
+does not move the design.** `KubeCommandBuilder` injected the labels into an object's own
+`metadata.labels` and did not descend into a `volumeClaimTemplate`, so the claims the StatefulSet
+controller created from it were invisible to any managed-only listing — including the drift inventory
+— and read as *foreign* to any rule that tests for `managed-by`. `IKubeCommandBuilder.WithTemplateLabels`
+now stamps the template with the six labels that cannot change for the life of a resource;
+`src/Providers/README.md` § Labelling a nested claim template carries the mechanism, why the seventh is
+excluded, and what stays owed — chiefly that **every claim that already exists is unlabelled and stays
+that way**, because the StatefulSet controller labels a claim once, at creation. The conclusion here is
+unchanged and does not depend on the labels: **the namespace of a group that ever ran a stateful type
+never becomes empty**, because the paragraph above records that a purge still leaves the volumes and
+`IResourceReconciler` has no member that asks for them. So for exactly those groups the answer is not a
+delete at all — it is to record the namespace as reclaimable and let an operator decide, which is what
+`NamespaceReclaim.OperatorReclaimable` reports. ⚠ **That flag's predicate now needs the same owed
+work**: it requires every occupant to be unmanaged, which was true only while the claims were
+unlabelled. **Making the purge remove the disks it kept is what would turn that back into a delete**,
+and it is the same owed item, reached from the other end.
 
 **What exists: the rule, the seam and the gate. What does not: a caller.** `NamespaceReclaim.Decide`
 weighs the group's members against a listing of everything in the namespace;
