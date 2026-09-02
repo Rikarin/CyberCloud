@@ -38,6 +38,21 @@ namespace CyberCloud.Bundle.Cluster.Conformance;
 ///         hid a real defect underneath a green full suite.
 ///     </para>
 ///     <para>
+///         ⚠ <b>THE PRICE OF THAT CHOICE, MEASURED AND NOT YET EXPLAINED. One full-assembly run in
+///         eight started the SECOND k3s and did not get one</b>, and the openebs class reported
+///         <c>Skipped: 1</c> where the other seven reported none; four deliberate attempts to
+///         reproduce it were all green. The suspected cause is container-start pressure while the
+///         first cluster is still being torn down — two k3s starts per process is new with the
+///         second installing class, and <c>ClusterSlot</c> does not serialise them because it is
+///         taken once per PROCESS and held for its life, which is what makes it a cross-process
+///         permit rather than a per-fixture one.
+///         ⚠ It degrades to a SKIP and not to a red, which is this assembly's contract and is why it
+///         is easy to miss: the daemonless companions always run, so
+///         <c>--minimum-expected-tests 1</c> is satisfied and the run says "Passed!". The skip text
+///         names the component and the sentence that went unchecked — read the count, not the word.
+///         Owed: either a retry around the container start, or a reason.
+///     </para>
+///     <para>
 ///         ⚠ <b>Postgres and Redis are not started, unlike the provider suites' fixture.</b> Nothing
 ///         here has a grain, a reminder or a durable shard: the subject is a shell script and an API
 ///         server. Starting the other two would add a minute to a lane already measured in minutes to
