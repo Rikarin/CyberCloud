@@ -22,31 +22,92 @@ static class ResponseBodies {
         var buffer = new System.Buffers.ArrayBufferWriter<byte>(512);
 
         using (var writer = new Utf8JsonWriter(buffer)) {
+            WriteResource(writer, snapshot);
+        }
+
+        return Encoding.UTF8.GetString(buffer.WrittenSpan);
+    }
+
+    /// <summary>
+    ///     Renders a page of a collection, in the <c>{ "value": [ … ], "nextLink": … }</c> shape.
+    /// </summary>
+    /// <param name="page">The page the resource manager built.</param>
+    /// <param name="nextLink">The absolute next-page URL, or empty when there is no next page.</param>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>Each element is the same object <see cref="Resource" /> writes, member for
+    ///         member.</b> A list that rendered a thinner resource than a <c>GET</c> does would make
+    ///         a generated SDK's collection type and its resource type two different shapes with one
+    ///         name, and the first place anybody would notice is a deserializer dropping a field.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b><c>nextLink</c> is omitted rather than written as <c>null</c> or <c>""</c> when
+    ///         there is no next page.</b> That is the Azure shape an <c>AsyncPageable&lt;T&gt;</c>
+    ///         stops on; an empty string is a URL a polite client will happily request.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>There is no <c>count</c>, and the omission is the security property rather than
+    ///         an unfinished feature.</b> The page holds what the caller may read — see
+    ///         <c>ResourceListPage</c> — so a total would say how many resources exist that they may
+    ///         not, which is the enumeration oracle docs/plan/07 § The enforcement seam closes one
+    ///         resource at a time.
+    ///     </para>
+    /// </remarks>
+    public static string Collection(ResourceListPage page, string nextLink) {
+        ArgumentNullException.ThrowIfNull(page);
+        ArgumentNullException.ThrowIfNull(nextLink);
+
+        var buffer = new System.Buffers.ArrayBufferWriter<byte>(1024);
+
+        using (var writer = new Utf8JsonWriter(buffer)) {
             writer.WriteStartObject();
-            writer.WriteString("id", snapshot.Path);
-            writer.WriteString("name", snapshot.Name);
-            writer.WriteString("type", snapshot.Type);
-            writer.WriteString("location", snapshot.Location);
-            writer.WriteString("provisioningState", snapshot.ProvisioningState.ToString());
-            writer.WriteString("etag", snapshot.Etag);
-            writer.WritePropertyName("properties");
-            WriteRaw(writer, snapshot.Properties);
+            writer.WritePropertyName("value");
+            writer.WriteStartArray();
 
-            if (!snapshot.Tags.IsEmpty) {
-                writer.WritePropertyName("tags");
-                writer.WriteStartObject();
+            foreach (var snapshot in page.Resources) {
+                WriteResource(writer, snapshot);
+            }
 
-                foreach (var (key, value) in snapshot.Tags) {
-                    writer.WriteString(key, value);
-                }
+            writer.WriteEndArray();
 
-                writer.WriteEndObject();
+            if (nextLink.Length > 0) {
+                writer.WriteString("nextLink", nextLink);
             }
 
             writer.WriteEndObject();
         }
 
         return Encoding.UTF8.GetString(buffer.WrittenSpan);
+    }
+
+    /// <summary>The one resource object, written into whichever document is being built.</summary>
+    /// <remarks>
+    ///     ⚠ One writer for both callers. Two copies would be two chances for a resource read on its
+    ///     own and the same resource inside a listing to disagree about their own shape.
+    /// </remarks>
+    static void WriteResource(Utf8JsonWriter writer, ResourceSnapshot snapshot) {
+        writer.WriteStartObject();
+        writer.WriteString("id", snapshot.Path);
+        writer.WriteString("name", snapshot.Name);
+        writer.WriteString("type", snapshot.Type);
+        writer.WriteString("location", snapshot.Location);
+        writer.WriteString("provisioningState", snapshot.ProvisioningState.ToString());
+        writer.WriteString("etag", snapshot.Etag);
+        writer.WritePropertyName("properties");
+        WriteRaw(writer, snapshot.Properties);
+
+        if (!snapshot.Tags.IsEmpty) {
+            writer.WritePropertyName("tags");
+            writer.WriteStartObject();
+
+            foreach (var (key, value) in snapshot.Tags) {
+                writer.WriteString(key, value);
+            }
+
+            writer.WriteEndObject();
+        }
+
+        writer.WriteEndObject();
     }
 
     /// <summary>

@@ -23,9 +23,15 @@ namespace CyberCloud.ResourceManager.Contracts;
 ///         <c>ForTenant</c>, which is what <c>CC1006</c> checks.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Every method returns the trace.</b> The ordering of the steps <i>is</i> the security
-///         property, and a trace turns it into an assertion rather than a review item — see
-///         <see cref="WriteTrace" />.
+///         ⚠ <b>Every method that runs the twelve steps returns the trace.</b> The ordering of the
+///         steps <i>is</i> the security property, and a trace turns it into an assertion rather than
+///         a review item — see <see cref="WriteTrace" />. This summary read "every method" until
+///         2026-09-02 and that was never true: <see cref="WriteTrace" /> lives on
+///         <see cref="WriteAccepted" /> and on nothing else, so <see cref="ReadAsync" />,
+///         <see cref="ListAsync" /> and <see cref="GetOperationAsync" /> return none — correctly,
+///         because none of them runs a step that writes. The sentence mattered because a new read
+///         method written to satisfy it would either invent a trace nobody asserts on or carry a
+///         wire type through a path with nothing to record.
 ///     </para>
 /// </remarks>
 public interface IResourceManager {
@@ -53,6 +59,60 @@ public interface IResourceManager {
     ///     exist <i>and</i> for one the caller may not see, which is the same answer on purpose.
     /// </returns>
     Task<Result<ResourceSnapshot>> ReadAsync(WriteRequest request, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Lists one resource type inside one resource group — the collection <c>GET</c>.
+    /// </summary>
+    /// <param name="request">The request, carrying a <c>ResourceCollectionId</c> path.</param>
+    /// <param name="cancellationToken">Cancels the listing.</param>
+    /// <returns>
+    ///     A page of the resources the caller may read. ⚠ An empty page and a page short of
+    ///     <see cref="ListRequest.PageSize" /> both mean "that is what you may see", never "that is
+    ///     all there is" — see <see cref="ResourceListPage" />.
+    /// </returns>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>The filter is not optional and it is a <c>Check</c> per member.</b> ReBAC's
+    ///         <c>ListObjects</c> is M2 (docs/plan/07 § What is not built), so there is no way to ask
+    ///         the engine "which resources may this caller read"; the only question available is
+    ///         "may this caller read <i>this</i> resource", asked once per candidate. Without it a
+    ///         listing is a way to read the names of resources the caller has no permission on —
+    ///         which is precisely the enumeration oracle § The enforcement seam answers <c>404</c>
+    ///         to prevent one resource at a time, handed back wholesale.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>What that costs, honestly.</b> One <c>ICheckGrain</c> call per member examined,
+    ///         each to a distinct activation keyed on that resource's GUID, plus one resource read
+    ///         per member that survives the filter. There is no batching to hide behind:
+    ///         <c>CheckGrain</c>'s cache is per object, so a cold group pays an activation and a
+    ///         hot-tier state read per member and a warm one still pays a grain call per member. That
+    ///         is why <see cref="ListRequest.MaxPageSize" /> exists and is a cap rather than a hint:
+    ///         it makes the cost of one request bounded by the platform instead of chosen by the
+    ///         caller. At a 500-resource group the answer is five pages, not one request that fans
+    ///         out five hundred ways.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The group's membership is the enumeration source, and nothing else can be.</b>
+    ///         <c>IResourceIndexGrain</c> is path→GUID and one-way; the resource-graph projection is
+    ///         eventually consistent by design (docs/plan/08 § The resource-graph projection) and a
+    ///         listing built on it would answer for a state that has not happened yet.
+    ///         <c>IResourceGroupGrain.ListAsync</c> is the one activation that already serialises
+    ///         "what is in this group", and it deliberately includes members in
+    ///         <c>ProvisioningState.Deleting</c> — docs/plan/06 § Two-phase create keeps a resource
+    ///         whose teardown failed visible <i>because</i> its pods still run and its meter still
+    ///         ticks.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>It does not run the twelve steps and does not carry a <see cref="WriteTrace" />,
+    ///         which is the same shape <see cref="ReadAsync" /> has.</b> Steps 4 to 11 write, and a
+    ///         listing writes nothing: there is no body to validate, no lock to resolve (a
+    ///         <c>ReadOnly</c> lock does not hide a resource), no policy to evaluate, no quota, no
+    ///         index claim and no operation. What it does keep is the part of step 1 that is a
+    ///         security property — the tenant and subscription ownership checks, in that order,
+    ///         before the registry is consulted — and step 3, once per member.
+    ///     </para>
+    /// </remarks>
+    Task<Result<ResourceListPage>> ListAsync(ListRequest request, CancellationToken cancellationToken = default);
 
     /// <summary>
     ///     The delete path — the reverse of the write path, and docs/plan/06 § Two-phase create calls

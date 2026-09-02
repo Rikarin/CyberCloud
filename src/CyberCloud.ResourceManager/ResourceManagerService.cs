@@ -174,6 +174,196 @@ public sealed class ResourceManagerService(
     }
 
     /// <inheritdoc />
+    public async Task<Result<ResourceListPage>> ListAsync(
+        ListRequest request,
+        CancellationToken cancellationToken = default
+    ) {
+        ArgumentNullException.ThrowIfNull(request);
+
+        // ── Step 1, the part of it a listing has ───────────────────────────────────────────────
+        //
+        // ⚠ NO WriteTraceBuilder, AND THAT IS NOT AN OMISSION. The trace records the twelve steps of
+        // docs/plan/08 § The write path, end to end and WriteTrace lives on WriteAccepted alone; a
+        // listing reaches no step past 3 because there is nothing to validate, lock, evaluate,
+        // reserve, claim or submit. ReadAsync above is the same shape for the same reason.
+        var parsed = ResourceCollectionId.ParsePath(request.Path);
+        if (parsed.TryGetError(out var pathError)) {
+            return Result<ResourceListPage>.Failure(pathError);
+        }
+
+        var collection = parsed.GetValueOrThrow();
+
+        // ⚠ THE SAME TWO OWNERSHIP CHECKS AS ResolveAsync, IN THE SAME ORDER, FOR THE SAME REASON.
+        // Everything below them describes the platform to the caller — the registry names
+        // api-versions, the group grain says which names are live — and a description handed out
+        // through a path the caller does not own is an oracle even when no data comes with it. A
+        // listing is the largest such description this API has, so skipping either check here would
+        // be worse than skipping it on a read.
+        if (collection.TenantId != request.Caller.TenantId) {
+            return CollectionNotFound(request.Path);
+        }
+
+        var subscription = await grains
+            .ForTenant(collection.TenantId.ToString("D", CultureInfo.InvariantCulture))
+            .GetGrain<ISubscriptionGrain>(GrainKeys.Subscription(collection.SubscriptionId))
+            .GetAsync();
+
+        if (subscription.IsFailure) {
+            return CollectionNotFound(request.Path);
+        }
+
+        var resolution = registry.Resolve(collection.Type, request.ApiVersion);
+        if (resolution.TryGetError(out var registryError)) {
+            return Result<ResourceListPage>.Failure(registryError);
+        }
+
+        var found = resolution.GetValueOrThrow();
+
+        var tenant = grains.ForTenant(collection.TenantId.ToString("D", CultureInfo.InvariantCulture));
+
+        var members = await tenant
+            .GetGrain<IResourceGroupGrain>(
+                GrainKeys.ResourceGroup(collection.SubscriptionId, collection.ResourceGroup)
+            )
+            .ListAsync();
+
+        // ⚠ A GROUP THAT DOES NOT EXIST IS THE CANONICAL 404 AND NOT AN EMPTY PAGE. An empty page
+        // says "this group holds none of these", which is a statement about a group the caller has
+        // been told exists. IResourceGroupGrain.ListAsync answers ResourceGroupNotFound for one that
+        // was never created, and that answer is worth keeping — but it is rendered here as the same
+        // absence every other unfindable thing gets, because a distinct message would let a caller
+        // enumerate which group names are live in a subscription one probe at a time.
+        if (members.IsFailure) {
+            return CollectionNotFound(request.Path);
+        }
+
+        // ⚠ ORDERED BY CANONICAL PATH, ORDINALLY, AND THE ORDER IS WHAT MAKES PAGING WORK. The
+        // continuation is "resume after this path" rather than an index, so the walk needs a total
+        // order that two requests agree on without either holding state. CanonicalPath is unique
+        // within a group by construction — it is what IResourceIndexGrain hashes — and it is stable
+        // across everything except a rename, which is a delete and a create at this level.
+        //
+        // ⚠ FILTERED TO THE TYPE THE PATH NAMES. Membership is per group and holds every type; the
+        // address here is a collection OF ONE TYPE, so a member of another type is not a hidden
+        // resource, it is a resource at a different address.
+        var canonicalPrefix = ResourceCollectionIdCanonicalPrefix(collection);
+
+        var candidates = members
+            .GetValueOrThrow()
+            .Where(x => x.CanonicalPath.StartsWith(canonicalPrefix, StringComparison.Ordinal)
+                && x.CanonicalPath.IndexOf('/', canonicalPrefix.Length) < 0)
+            .Where(x => string.CompareOrdinal(x.CanonicalPath, request.Continuation) > 0)
+            .OrderBy(x => x.CanonicalPath, StringComparer.Ordinal)
+            .Take(request.PageSize)
+            .ToArray();
+
+        // ── Step 3, once per member ────────────────────────────────────────────────────────────
+        //
+        // ⚠ THE FILTER, AND IT IS THE WHOLE SECURITY PROPERTY OF THIS METHOD. docs/plan/07 § What is
+        // not built puts ListObjects at M2, so there is no way to ask the engine which resources a
+        // caller may read; the only question available is "may this caller read THIS resource",
+        // asked once per candidate. A listing without it returns the names of resources the caller
+        // has no permission on — the enumeration oracle the enforcement seam answers 404 to prevent
+        // one resource at a time, handed back wholesale.
+        //
+        // ⚠ BOTH PERMISSIONS ARE THE READ PERMISSION, so every refusal is a 404 that never reaches
+        // the caller: it is a member that is not in the page. There is no third case for a GET, and
+        // there is deliberately no count of what was dropped — see ResourceListPage.
+        //
+        // ⚠ THE CHECK IS ON THE RESOURCE'S OWN GUID, WHICH THE MEMBERSHIP RECORD ALREADY CARRIES.
+        // Building the address from the path alone would leave Id = Guid.Empty, and
+        // ReBacResourceAuthorizer reads that as a create and checks the RESOURCE GROUP instead —
+        // which is a different question with a different answer, and one that answers "yes" for
+        // every member of a group the caller holds any role on. That is the failure this comment
+        // exists to stop somebody re-introducing: it would look like a working filter and would
+        // filter nothing.
+        //
+        // ⚠ NOT fullyConsistent. docs/plan/07 § Consistency reserves that for "deletion, key export,
+        // billing changes, anything where a stale allow is a real incident"; a read is not on that
+        // list, and paying a durable read per member on top of a grain call per member would make
+        // the cost of a page unbounded in the one dimension MaxPageSize was chosen to bound.
+        var visible = new List<ResourceGroupMember>(candidates.Length);
+
+        foreach (var member in candidates) {
+            var authorized = await authorizer.AuthorizeAsync(
+                collection.Member(NameOf(member.CanonicalPath)).WithId(member.ResourceId),
+                found.Registration.ReadPermission,
+                found.Registration.ReadPermission,
+                request.Caller,
+                false,
+                cancellationToken
+            );
+
+            if (authorized.IsSuccess) {
+                visible.Add(member);
+            }
+        }
+
+        var snapshots = ImmutableArray.CreateBuilder<ResourceSnapshot>(visible.Count);
+
+        foreach (var member in visible) {
+            var snapshot = await tenant
+                .GetGrain<IResourceGrain>(GrainKeys.Resource(member.ResourceId))
+                .GetAsync(found.ApiVersion.Value, ReadablePointers(found.Schema));
+
+            // ⚠ A member whose grain cannot answer is DROPPED rather than failing the page. The one
+            // way this happens is the window docs/plan/06 § Two-phase create opens on purpose: a
+            // member is recorded at step 2 and the durable state is written at step 9, so a create
+            // in flight is in the membership before it has a grain to read. Failing the whole
+            // listing because somebody else is mid-create would make a group's listing unavailable
+            // exactly while it is changing.
+            if (snapshot.IsSuccess) {
+                snapshots.Add(snapshot.GetValueOrThrow());
+            }
+        }
+
+        // ⚠ THE TOKEN IS THE LAST MEMBER EXAMINED AND NOT THE LAST ONE RETURNED. Paging bounds the
+        // members the filter runs over, because that is what costs; a page made entirely of members
+        // the caller cannot read must still advance, or a caller with narrow rights in a wide group
+        // loops on the same page forever.
+        var continuation = candidates.Length == request.PageSize ? candidates[^1].CanonicalPath : "";
+
+        return Result<ResourceListPage>.Success(
+            new() { Resources = snapshots.ToImmutable(), Continuation = continuation }
+        );
+    }
+
+    /// <summary>The canonical-path prefix every member of a collection shares.</summary>
+    /// <remarks>
+    ///     ⚠ <b>Built from a member address rather than from <c>ResourceCollectionId.Path</c>,
+    ///     because the two case-fold differently.</b> <c>ResourceGroupMember.CanonicalPath</c> is
+    ///     <c>ResourceId.CanonicalPath</c>, which lower-cases the provider namespace and the type
+    ///     while <c>Path</c> preserves their case — see <c>ResourceId.CanonicalPath</c>. Comparing a
+    ///     collection's <c>Path</c> against a member's <c>CanonicalPath</c> ordinally would match
+    ///     nothing for every provider whose namespace is not already lower-case, which is all of
+    ///     them.
+    /// </remarks>
+    static string ResourceCollectionIdCanonicalPrefix(ResourceCollectionId collection) {
+        // ResourceNaming forbids '/' in a name, and "a" is a legal one, so appending it and cutting
+        // it back off yields exactly the prefix a member of this collection carries.
+        var probe = collection.Member("a").CanonicalPath;
+
+        return probe[..^1];
+    }
+
+    /// <summary>The resource's own name — the last segment of its path.</summary>
+    static string NameOf(string canonicalPath) {
+        var lastSlash = canonicalPath.LastIndexOf('/');
+
+        return lastSlash < 0 ? canonicalPath : canonicalPath[(lastSlash + 1)..];
+    }
+
+    /// <summary>
+    ///     The <c>404</c> a collection gets, worded like every other absence.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ Identical for "no such subscription", "another tenant's group" and "a group that was
+    ///     never created". Three messages would be the enumeration oracle the status code closed.
+    /// </remarks>
+    static Result<ResourceListPage> CollectionNotFound(string path) =>
+        Result<ResourceListPage>.Failure(ErrorCode.ResourceNotFound, $"'{path}' does not exist.");
+
+    /// <inheritdoc />
     public async Task<Result<WriteAccepted>> DeleteAsync(
         WriteRequest request,
         CancellationToken cancellationToken = default

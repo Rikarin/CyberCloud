@@ -45,9 +45,16 @@ sealed class RouteStage(IProviderRegistry registry, GatewayOptions options) : IG
             return Stop(null);
         }
 
-        var registration = route.Kind is RouteKind.Resource or RouteKind.Action
-            ? Lookup(route.Resource.Type)
-            : null;
+        // ⚠ A COLLECTION IS LOOKED UP LIKE A RESOURCE, off its own address's type. Skipping it would
+        // let a GET on a type the registry does not serve resolve an api-version against no
+        // registration — so a retired version would be accepted here and refused two stages later,
+        // and an unknown type would get its 404 from the resource manager rather than from the stage
+        // that owns "is this a path this gateway serves".
+        var registration = route.Kind switch {
+            RouteKind.Resource or RouteKind.Action => Lookup(route.Resource.Type),
+            RouteKind.Collection => Lookup(route.Collection.Type),
+            _ => null
+        };
 
         var version = ApiVersioning.Resolve(request.Query, registration, options.CurrentApiVersion);
         if (version.TryGetError(out var versionError)) {
@@ -59,7 +66,8 @@ sealed class RouteStage(IProviderRegistry registry, GatewayOptions options) : IG
         // ⚠ An unknown type is a 404 and it is the canonical one. A distinct "no such provider"
         // message would tell a caller which provider namespaces exist, which is a small leak that
         // becomes a large one once providers are per-customer.
-        if (route.Kind is RouteKind.Resource or RouteKind.Action && registration is null) {
+        if (route.Kind is RouteKind.Resource or RouteKind.Action or RouteKind.Collection
+            && registration is null) {
             return Stop(GatewayOutcome.Failure(StatusCodes.Status404NotFound, GatewayErrors.NotFound(path)));
         }
 

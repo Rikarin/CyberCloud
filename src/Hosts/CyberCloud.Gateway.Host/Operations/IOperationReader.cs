@@ -87,4 +87,36 @@ static class GatewayRouterPaths {
             CultureInfo.InvariantCulture,
             $"{baseUri.TrimEnd('/')}/operations/{operationId:D}?api-version={apiVersion}"
         );
+
+    /// <summary>
+    ///     The absolute <c>nextLink</c> of a collection page, or empty when there is no next page.
+    /// </summary>
+    /// <param name="baseUri">The public base, from configuration — never <c>Request.Host</c>.</param>
+    /// <param name="collectionPath">The collection's path.</param>
+    /// <param name="apiVersion">The api-version to keep paging at.</param>
+    /// <param name="continuation">
+    ///     The previous page's continuation, or empty. ⚠ It is a resource path and therefore contains
+    ///     <c>/</c>, so it is percent-encoded — an unescaped one would produce a URL whose query
+    ///     string a client re-parses into a different value than the one that was handed out.
+    /// </param>
+    /// <remarks>
+    ///     ⚠ <b>An absolute URL rather than a token in the body, because that is what makes
+    ///     <c>AsyncPageable&lt;T&gt;</c> work with no bespoke code</b> — the same argument
+    ///     docs/plan/10 § Long-running operations makes for <c>Azure-AsyncOperation</c>. A client that
+    ///     has to reassemble the next request from a bare token has to know the endpoint's paging
+    ///     parameter, which is exactly the per-endpoint knowledge a generated SDK does not have.
+    /// </remarks>
+    public static string NextLink(
+        string baseUri,
+        string collectionPath,
+        string apiVersion,
+        string continuation
+    ) =>
+        continuation.Length == 0
+            ? string.Empty
+            : string.Create(
+                CultureInfo.InvariantCulture,
+                $"{baseUri.TrimEnd('/')}{collectionPath}?api-version={apiVersion}"
+                + $"&$skipToken={Uri.EscapeDataString(continuation)}"
+            );
 }
