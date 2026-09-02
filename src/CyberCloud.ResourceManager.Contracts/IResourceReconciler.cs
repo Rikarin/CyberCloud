@@ -439,9 +439,9 @@ public interface IResourceReconciler {
     ///         takes the default is a leak rather than a compile error.</b> Twenty-two reconcilers
     ///         implement this interface and most own no disk at all, so a required member would be
     ///         twenty-two edits to state the same nothing. What closes the gap is a check rather than
-    ///         a signature: <c>RetainedVolumeDeclarationTests</c> renders each provider's own
-    ///         documents, finds every <c>volumeClaimTemplates</c> array in them, and fails the build
-    ///         for a reconciler that answers with fewer claims than its documents create.
+    ///         a signature: <c>ProviderConformanceTests</c> reads every <c>volumeClaimTemplates</c>
+    ///         array out of the documents a provider actually applied, plants the claims Kubernetes
+    ///         would create from them, and fails the family whose final teardown leaves one behind.
     ///     </para>
     /// </remarks>
     Task<Result<ImmutableArray<RetainedVolume>>> RetainedVolumesAsync(

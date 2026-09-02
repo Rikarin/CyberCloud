@@ -498,10 +498,62 @@ answer synchronously and correctly, because it did nothing — a design that tea
 and cannot put it back has not implemented soft delete, it has implemented a slower delete. It starts
 an `OperationKind.Restore` over the stored body, reserving nothing.
 
-⚠ **Two things follow that are owed rather than done, and the second is smaller than it was.** A purge
-still leaves the volumes, because ending a window has to remove exactly what a teardown keeps and
-`IResourceReconciler` has no member that asks for that — so a purged resource returns its quota and
-leaves its disks. And **nothing sweeps an expired window**: an entry past `RecoverableUntil` refuses a
+⚠ **Two things followed that were owed rather than done, and the first is now built.** A purge left
+the volumes, because ending a window has to remove exactly what a teardown keeps and
+`IResourceReconciler` had no member that asks for that — so a purged resource returned its quota and
+left its disks.
+
+⚠ **CLOSED 2026-09-02, AND THE SHAPE OF THE FIX IS THE PART WORTH KEEPING.**
+`IResourceReconciler.RetainedVolumesAsync` is that member. The provider **names** the claims and the
+labels that prove them; the manager **destroys** them, through one `VolumeReclaimer` rather than once
+per provider — because this is the only path on which the platform is supposed to destroy a tenant's
+data, and a volume named by pattern rather than by ownership is how the wrong one goes. The reclaimer
+reads every claim back from the API server before it deletes anything, checks each declared label
+against the object the server is holding, and refuses the **whole** reclaim, non-retryably, naming the
+claim and the label that disagreed. `RetainedVolumeTests` makes every one of those refusals fire and
+asserts the claim is still there afterwards.
+
+- **Where it runs.** The branch of `OperationGrain.ConvergedAsync` that a hard delete and a purge
+  share, which a soft delete does not reach — it returns one branch above at `ParkAsync`. So the same
+  line closes a second leak the owed item did not name: **a hard delete of a type with no window left
+  its claims too**, because deleting a `StatefulSet` leaves them whether a window is involved or not.
+  `CyberCloud.Messaging/natsClusters` is the first type to be fixed by that half.
+- **Where in the order, and both halves are forced rather than chosen.** *Before*
+  `IResourceGrain.CompleteDeleteAsync`, because the claim names are derived from the desired body and
+  that call is what throws the body away. *Before* `ReturnCommittedQuotaAsync`, because this step can
+  fail: returning the allowance first and failing second would let a tenant spend a budget their own
+  disks are still occupying. A purge that half-succeeds is left `Deleting`, with the reason on the
+  resource, its name already released and its quota still held — and the retry re-reads every claim,
+  so an interrupted reclaim costs a pass rather than correctness.
+- **The evidence is the set's `spec.selector.matchLabels`, not ADR-013's seven, and that is a
+  workaround with a stated end.** `KubeCommandBuilder.Inject` writes the seven into a document's
+  top-level `metadata.labels` and does not descend into a nested `volumeClaimTemplate`, so a claim the
+  `StatefulSet` controller creates carries none of them — and `IKubeClusterConnection` has no list
+  member either, so a label selector could not find one today even if it were labelled. What a claim
+  *does* carry is the set's selector, which Kubernetes copies onto every claim the template produces.
+  The failure direction is the safe one: a claim that came back without those labels is **refused**
+  and its disk survives. When the seven reach the template, a provider moves the declaration to
+  `cybercloud.io/resource-id` and nothing else changes.
+- **⚠ What this unblocks is `NamespaceReclaim`, and that is a bigger consequence than the disks.**
+  `NamespaceReclaim.Decide` refuses unless the namespace holds *nothing at all*, so a resource group
+  that had ever run a stateful type reported `OperatorReclaimable` for ever — the claims were the
+  permanent occupant. Removing them at the final teardown is what makes `Deletable` reachable.
+
+⚠ **What remains owed here is narrower than what it replaced, and it is two things.** **A type whose
+claims belong to an operator cannot name them.** Of the five types declaring a window, only
+`CyberCloud.ContainerRegistry/registries` renders its own `StatefulSet`s;
+`CyberCloud.DBforPostgreSQL/servers`, `CyberCloud.DBforMySQL/servers` and `CyberCloud.Storage/accounts`
+apply a CloudNativePG `Cluster`, a `MariaDB` and a `Seaweed` respectively, and nothing in this
+repository records how those operators name the claims they create — so their purges still leave their
+disks, and each closes its own by writing the naming rule down and declaring it.
+⚠ **`CyberCloud.Monitor/workspaces` is not in that list and that is a finding rather than an
+omission:** it renders a `ConfigMap`, a `Secret` and a `VMUser` and creates no claim at all, so this
+gap never applied to it. And **a set scaled down before it was deleted leaves the claims of the
+ordinals it shed**, which the desired body cannot name — probing past the replica count would mean
+deleting objects nothing in the desired state accounts for, with the guard as the only thing between
+that and a tenant's data.
+
+And **nothing sweeps an expired window**: an entry past `RecoverableUntil` refuses a
 restore and holds its name and its committed quota until somebody purges it by hand. It no longer
 holds a running data plane, which is what made it urgent. ⚠ **What a sweeper needs before it can be
 built is a decision this section cannot take on its own: an expiry is not a request, so there is
