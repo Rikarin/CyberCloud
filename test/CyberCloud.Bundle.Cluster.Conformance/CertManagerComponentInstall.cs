@@ -26,6 +26,18 @@ namespace CyberCloud.Bundle.Cluster.Conformance;
 ///         image, and the sentence that was not checked.
 ///     </para>
 ///     <para>
+///         ⚠ <b>It is an <see cref="IClassFixture{TFixture}" /> and NOT a collection fixture, so each
+///         installing class gets its own k3s and its own <c>InitializeAsync</c>.</b> That is a cost —
+///         a second container start per class, serialised by <c>ClusterSlot</c> and by this
+///         assembly's <c>CollectionBehavior</c> — and it is paid on purpose. A shared cluster would
+///         make every class's subject depend on which classes ran before it: the cert-manager class
+///         asserts <c>cert-manager.io/v1</c> is NOT served before it installs, and the openebs class
+///         asserts <c>openebs-hostpath</c> does not exist, and both of those assertions are about a
+///         cluster nothing else has touched. That failure — a test whose input set differs between a
+///         full-suite run and a filtered one — is one this repository has actually shipped, and it
+///         hid a real defect underneath a green full suite.
+///     </para>
+///     <para>
 ///         ⚠ <b>Postgres and Redis are not started, unlike the provider suites' fixture.</b> Nothing
 ///         here has a grain, a reminder or a durable shard: the subject is a shell script and an API
 ///         server. Starting the other two would add a minute to a lane already measured in minutes to
@@ -43,15 +55,26 @@ public sealed class EmptyClusterFixture : IAsyncLifetime {
     public IKubernetes? Client { get; private set; }
 
     /// <summary>Why a test did not run, in the form every cluster-backed suite here uses.</summary>
+    /// <param name="component">The <c>charts/bundle/</c> component the calling test installs.</param>
+    /// <param name="owedRow">The <c>bundle.yaml</c> § owed id the calling test narrows.</param>
     /// <param name="wouldProve">What the calling test would have proved.</param>
-    public string Skip(string wouldProve) =>
-        "SKIPPED — charts/bundle/ cert-manager: no empty cluster to install onto, so nothing was "
+    /// <remarks>
+    ///     ⚠ <b>The component and the owed row are parameters rather than the literals they used to
+    ///     be, and that is not tidying.</b> This message named cert-manager and
+    ///     <c>one-of-eighteen-has-been-installed</c> in its own text while the fixture is shared by
+    ///     every class in the assembly. The moment a second class took the fixture, a machine with no
+    ///     Docker daemon would have printed a skip about cert-manager for a run that was about the
+    ///     storage class — a report that is worse than none, because it reads as if the row it names
+    ///     were the one left unchecked.
+    /// </remarks>
+    public string Skip(string component, string owedRow, string wouldProve) =>
+        $"SKIPPED — charts/bundle/ {component}: no empty cluster to install onto, so nothing was "
         + "checked. "
         + $"NEEDS: a Docker daemon able to run {ClusterInfrastructure.K3sImage}, and `bash` and `helm` "
         + "on PATH. "
         + $"WOULD PROVE: {wouldProve} "
         + "This suite is present by name and skipped rather than absent, because "
-        + "charts/bundle/bundle.yaml § owed, `one-of-eighteen-has-been-installed`, must not be readable "
+        + $"charts/bundle/bundle.yaml § owed, `{owedRow}`, must not be readable "
         + "as closed on a machine that never ran the install. "
         + "What went wrong: "
         + (failure is null ? "no exception was recorded." : failure.GetType().Name + ": " + failure.Message);
@@ -245,6 +268,8 @@ public sealed class CertManagerOnAnEmptyCluster(EmptyClusterFixture cluster) : I
         Assert.SkipWhen(
             cluster.Client is null || cluster.KubeconfigPath is null,
             cluster.Skip(
+                BundleInstaller.CertManagerComponent,
+                "one-of-eighteen-has-been-installed",
                 "that charts/bundle/install.sh --phase 15 installs the cert-manager component onto a "
                 + "fresh API server unattended, that cert-manager.io/v1 — the component's only "
                 + "`serves:` line — is served afterwards, and that a self-signed Certificate reaches "

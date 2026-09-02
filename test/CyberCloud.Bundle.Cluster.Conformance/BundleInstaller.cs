@@ -30,6 +30,11 @@ public static class BundleInstaller {
     /// <summary>The phase <c>bundle.yaml</c> gives cert-manager. Read from the file, not typed here.</summary>
     public const string CertManagerComponent = "cert-manager";
 
+    /// <summary>
+    ///     The component that installs the storage class eleven <c>charts/managed/</c> charts need.
+    /// </summary>
+    public const string OpenEbsLocalPvComponent = "openebs-localpv";
+
     /// <summary>How long the installer gets before the test gives up on it.</summary>
     /// <remarks>
     ///     ⚠ Longer than <c>install.sh</c>'s own <c>--timeout 10m</c> on the helm call, so a helm
@@ -95,6 +100,56 @@ public static class BundleInstaller {
             }
 
             return line[(colon + 1)..].Trim().Trim('"');
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    ///     The value of an entry in a <c>component.yaml</c>'s <c>values:</c> block, or
+    ///     <see langword="null" /> when the block or the entry is absent.
+    /// </summary>
+    /// <param name="component">The component's directory name.</param>
+    /// <param name="name">The helm value's dotted name, exactly as the block spells it.</param>
+    /// <remarks>
+    ///     ⚠ <b><see cref="Pin" /> cannot read these and would silently return <see langword="null" />
+    ///     for every one of them.</b> Its loop skips any line that does not begin with a letter, and
+    ///     every <c>values:</c> entry is indented — so a test that asked <c>Pin</c> for
+    ///     <c>hostpathClass.isDefaultClass</c> would get nothing back and, unless it asserted
+    ///     non-null, would pass over a component.yaml with the flag deleted. That is the failure this
+    ///     method exists to make unavailable.
+    ///     ⚠ It mirrors <c>install.sh</c>'s <c>helm_sets()</c> awk, including the part that is easy to
+    ///     miss: a top-level line that is not <c>values:</c> ENDS the block, and a comment line —
+    ///     which begins with <c>#</c> and so matches neither of awk's patterns — does not. The
+    ///     openebs-localpv manifest has a fourteen-line comment directly above its <c>values:</c>
+    ///     block and none inside it, but a reader that got that rule backwards would disagree with
+    ///     the installer the first time somebody annotated an entry.
+    /// </remarks>
+    public static string? Value(string component, string name) {
+        var inside = false;
+
+        foreach (var line in File.ReadLines(ComponentFile(component))) {
+            if (line.Length == 0) {
+                continue;
+            }
+
+            if (char.IsLetter(line[0])) {
+                inside = line.StartsWith("values:", StringComparison.Ordinal);
+                continue;
+            }
+
+            if (!inside || line.Length < 3 || line[0] != ' ' || line[1] != ' ' || !char.IsLetter(line[2])) {
+                continue;
+            }
+
+            var entry = line[2..];
+            var colon = entry.IndexOf(':', StringComparison.Ordinal);
+
+            if (colon < 0 || !entry.AsSpan(0, colon).SequenceEqual(name)) {
+                continue;
+            }
+
+            return entry[(colon + 1)..].Trim().Trim('"');
         }
 
         return null;
