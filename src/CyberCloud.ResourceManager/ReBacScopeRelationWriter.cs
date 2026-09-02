@@ -46,7 +46,7 @@ public sealed class ReBacScopeRelationWriter(IGrainFactory grains, ILogger<ReBac
     ///     <see cref="ReBacResourceRelationWriter.ParentRelation" /> is: naming a <i>defined</i>
     ///     relation that the object type does not declare is written successfully against a relation
     ///     no rewrite follows, so every create reports success and every scope is invisible, with
-    ///     nothing in any log. <c>ScopeParentEdgeTests</c> reads this constant to assert it is one
+    ///     nothing in any log. <c>ScopeCreationTests</c> reads this constant to assert it is one
     ///     <c>CyberCloudSchema</c> rewrites through on both scope types.
     /// </remarks>
     public const string ParentRelation = Relations.Parent;

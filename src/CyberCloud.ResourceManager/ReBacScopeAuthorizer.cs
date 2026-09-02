@@ -32,7 +32,7 @@ namespace CyberCloud.ResourceManager;
 ///         gives the tuple as <c>platform:root#operator@user:X</c>;
 ///         <c>CyberCloudSchema</c> defines the type, the relation and
 ///         <c>Permissions.Administer</c> over it; nothing checked it. <c>PlatformObjectId</c> below is
-///         the only place the id <c>root</c> is spelled, and <c>ScopeAuthorizationTests</c> drives a
+///         the only place the id <c>root</c> is spelled, and <c>ScopeCreationTests</c> drives a
 ///         real tuple through the real schema rather than pinning the string — a permission that
 ///         evaluates false is indistinguishable from one that denies, and the enforcement seam turns
 ///         both into the same answer.
@@ -203,7 +203,7 @@ public sealed class ReBacScopeAuthorizer(IGrainFactory grains, ILogger<ReBacScop
     ///     <c>ResourceId</c> there. A disagreement would put a resource's <c>parent</c> edge on one
     ///     object and the group's own role assignments on another, so a group owner would be unable to
     ///     see the resources in their own group while every test of either half passed.
-    ///     <c>ScopeObjectIdAgreementTests</c> is the assertion, and it compares the two functions
+    ///     <c>ScopeCreationTests</c> is the assertion, and it compares the two functions
     ///     rather than pinning either one's output.
     /// </remarks>
     public static (string Type, string Id) ObjectOf(ScopeId scope) =>
