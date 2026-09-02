@@ -239,6 +239,189 @@ public abstract class ClusterConformanceTests<TSource>(ClusterConformanceFixture
         }
     }
 
+    // ── 1b. The claims a teardown keeps, on a real API server ──────────────────────────────────
+
+    /// <summary>
+    ///     ⚠ <b>The claims a real <c>StatefulSet</c> controller made outlive the teardown, and the
+    ///     purge removes them.</b>
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>This is the one assertion in the repository that observes the Kubernetes
+    ///         behaviour the whole recovery window rests on rather than assuming it.</b> docs/plan/08
+    ///         § Soft delete says a soft-deleted resource keeps its disks because <i>"deleting a
+    ///         <c>StatefulSet</c> does not delete the <c>PersistentVolumeClaim</c>s its
+    ///         <c>volumeClaimTemplate</c> created"</i> — that is the API server's behaviour and no
+    ///         provider's, so a fake cluster can only ever model it. Here the claims are made by the
+    ///         real controller, survive a real teardown, and are read back with the raw
+    ///         <c>KubernetesClient</c> around every line of our own code.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>It also verifies the evidence the purge's guard is built on.</b>
+    ///         <c>VolumeReclaimer</c> refuses to delete a claim that does not carry the labels its
+    ///         provider named, and the labels a claim carries are the set's own
+    ///         <c>spec.selector.matchLabels</c> — copied by the controller, not written by us, and
+    ///         therefore exactly the sort of thing that is true until it is not. The assertion below
+    ///         reads them off the stored object. If Kubernetes ever stopped copying them the purge
+    ///         would <i>refuse</i> rather than delete, which is the safe direction; this is what would
+    ///         say so out loud.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>A family whose objects create no claim on a real cluster SKIPS.</b> Most of the
+    ///         catalogue delegates its storage to an operator whose claims this repository cannot
+    ///         name, and a suite that asserted over an empty list would report the green its own
+    ///         vacuity guard exists to refuse.
+    ///     </para>
+    /// </remarks>
+    [Fact]
+    public async Task TheClaimsAStatefulSetLeavesBehindOutliveTheTeardownAndThePurgeRemovesThem() {
+        var harness = Fixture.Require(
+            "that a real StatefulSet controller leaves its volumeClaimTemplate's claims behind when "
+            + "the set is deleted — which is what docs/plan/08 § Soft delete's recovery window is "
+            + "made of — and that a purge then removes exactly those."
+        );
+
+        var token = TestContext.Current.CancellationToken;
+        const string name = "real-claims";
+
+        harness.Registry.TryGetType(Case.Type, out var registration).ShouldBeTrue();
+        var recoverable = registration.SoftDeleteDays > 0;
+
+        var accepted = (await WriteAsync(harness, name)).GetValueOrThrow();
+        var status = await ConvergeAsync(harness, accepted.OperationId);
+        status.State.ShouldBe(OperationState.Succeeded, status.Error?.Message);
+
+        var claims = await ClaimsInNamespaceAsync(harness, token);
+
+        if (claims.Count == 0) {
+            Assert.Skip(
+                $"SKIPPED — {Case.DisplayName} created no PersistentVolumeClaim on a real cluster, so "
+                + "there is nothing a teardown could keep and nothing a purge could remove. A family "
+                + "whose storage belongs to an operator is legitimate; this is the suite saying so "
+                + "rather than passing over an empty list."
+            );
+        }
+
+        // ⚠ The evidence the guard checks, read off the object the API server made.
+        foreach (var claim in claims) {
+            claim.Value.ShouldNotBeNull(
+                $"the claim '{claim.Key}' the StatefulSet controller created carries no labels at "
+                + "all, so nothing connects it to the resource that owns it and VolumeReclaimer "
+                + "would refuse to remove it. Kubernetes copies a set's spec.selector.matchLabels "
+                + "onto every claim its volumeClaimTemplate produces — that is the ownership "
+                + "evidence RetainedVolume.OwnedBy is built from."
+            );
+        }
+
+        var deleted = await harness.Manager.DeleteAsync(
+            new() {
+                Path = ClusterConformanceHarness<TSource>.Address(name).Path,
+                ApiVersion = Case.ApiVersion,
+                Caller = ClusterConformanceHarness<TSource>.Caller()
+            },
+            token
+        );
+
+        deleted.IsSuccess.ShouldBeTrue(deleted.Error?.Message);
+
+        var teardown = await ConvergeAsync(harness, deleted.GetValueOrThrow().OperationId);
+        teardown.State.ShouldBe(
+            OperationState.Succeeded,
+            $"the teardown ended {teardown.State}: {teardown.Error?.Message}"
+        );
+
+        if (!recoverable) {
+            (await ClaimsInNamespaceAsync(harness, token, expectSome: false)).ShouldBeEmpty(
+                "this type declares no recovery window, so its delete is final — and a final "
+                + "teardown that leaves the claims returns the tenant's quota and keeps their disks."
+            );
+
+            return;
+        }
+
+        // ── The property the window is made of, observed rather than assumed ────────────────────
+        var kept = await ClaimsInNamespaceAsync(harness, token);
+
+        kept.Keys.ShouldBe(
+            claims.Keys,
+            ignoreOrder: true,
+            "a soft delete removed a claim on a real API server. Deleting a StatefulSet is not "
+            + "supposed to delete the claims its volumeClaimTemplate made, and that behaviour is the "
+            + "whole of what this type's recovery window hands back."
+        );
+
+        var purged = await harness.Manager.PurgeAsync(
+            new() {
+                Path = ClusterConformanceHarness<TSource>.Address(name).Path,
+                ApiVersion = Case.ApiVersion,
+                Caller = ClusterConformanceHarness<TSource>.Caller()
+            },
+            token
+        );
+
+        purged.IsSuccess.ShouldBeTrue(purged.Error?.Message);
+
+        var ended = await ConvergeAsync(harness, purged.GetValueOrThrow().OperationId);
+        ended.State.ShouldBe(
+            OperationState.Succeeded,
+            $"the purge ended {ended.State}: {ended.Error?.Message}"
+        );
+
+        (await ClaimsInNamespaceAsync(harness, token, expectSome: false)).ShouldBeEmpty(
+            "the purge left the volumes behind. docs/plan/08 § Soft delete: ending a window has to "
+            + "remove exactly what a teardown keeps, or a purged resource returns its quota, frees "
+            + "its name and leaves its disks allocated with nothing pointing at them."
+        );
+    }
+
+    /// <summary>
+    ///     Every <c>PersistentVolumeClaim</c> the real cluster is holding in this suite's namespace,
+    ///     by name, with its labels.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>The raw client, and the whole namespace rather than a predicted list of names.</b>
+    ///         A test that asked the API server only for the claims it expected could not tell a
+    ///         purge that removed the right ones from a purge that removed those and left others —
+    ///         and "the namespace holds nothing" is also the condition <c>NamespaceReclaim.Decide</c>
+    ///         requires before a resource group's namespace can ever be deleted.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>It polls, because the claims are made by a controller rather than by us.</b> The
+    ///         <c>StatefulSet</c> controller creates a pod's claims when it creates the pod, which is
+    ///         some time after the apply the reconcile loop converged on. A single read here would be
+    ///         a test that skipped for timing reasons and reported it as a family with no storage.
+    ///     </para>
+    /// </remarks>
+    static async Task<Dictionary<string, IDictionary<string, string>?>> ClaimsInNamespaceAsync(
+        ClusterConformanceHarness<TSource> harness,
+        CancellationToken cancellationToken,
+        bool expectSome = true
+    ) {
+        Dictionary<string, IDictionary<string, string>?> found = [];
+
+        for (var attempt = 0; attempt < 10; attempt++) {
+            using var listed = await harness.Raw.CoreV1.ListNamespacedPersistentVolumeClaimWithHttpMessagesAsync(
+                ClusterConformanceHarness<TSource>.Namespace,
+                cancellationToken: cancellationToken
+            );
+
+            found = listed.Body.Items.ToDictionary<V1PersistentVolumeClaim, string, IDictionary<string, string>?>(
+                x => x.Metadata.Name,
+                x => x.Metadata.Labels,
+                StringComparer.Ordinal
+            );
+
+            if (expectSome ? found.Count > 0 : found.Count == 0) {
+                return found;
+            }
+
+            await Task.Delay(BetweenDrives, cancellationToken);
+        }
+
+        return found;
+    }
+
     // ── 2. A field conflict with another manager becomes a named DriftEvent ────────────────────
 
     [Fact]

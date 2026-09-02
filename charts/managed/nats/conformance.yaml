@@ -207,6 +207,18 @@ owed:
       dashboard chart-side even where the scrape object is the operator's. The PodMonitor and its
       exporter are here; the dashboard is not. It is the half of piece 6 no service in the catalogue
       has yet delivered, so this item is the first sighting rather than the second.
+  - id: scaled-down-ordinals-outlive-the-delete
+    says: >
+      A hard delete of this type now removes the JetStream file stores its teardown left —
+      NatsClusters.RetainedClaims names store-{name}-0 … store-{name}-{servers-1} and VolumeReclaimer
+      verifies each against the set's own PodLabels before deleting it, which closes the leak every
+      delete of a stateful type had. ⚠ WHAT IS STILL OWED IS THE SHED ORDINALS. A cluster scaled from
+      five servers to three and then deleted leaves store-{name}-3 and store-{name}-4 behind, because
+      the desired body names the count the resource ENDED on and nothing records the high-water mark.
+      Probing past the count would mean deleting objects nothing in the desired state accounts for,
+      with the guard as the only thing between that and a tenant's streams, so it is recorded rather
+      than guessed. Closing it needs the resource to remember the largest server count it ever ran —
+      an observed-state field, written by the reconciler, read here.
   - id: backup
     says: >
       Piece 7, declined with a reason — the shape docs/plan/12 § piece 7 settles on. A JetStream file

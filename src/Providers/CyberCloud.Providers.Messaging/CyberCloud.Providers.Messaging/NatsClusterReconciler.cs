@@ -1,3 +1,6 @@
+// ⚠ For `Result<T>` on the retained-volume seam. Safe beside the GlobalUsings ErrorCode alias, which
+// is what disambiguates the one name this namespace collides with.
+using CyberCloud.Core;
 using CyberCloud.Core.Time;
 using System.Collections.Immutable;
 using System.Text.Json;
@@ -193,9 +196,33 @@ public sealed class NatsClusterReconciler(IClock clock) : IResourceReconciler {
             }
         }
 
+        // ⚠ THE FILE STORES SURVIVE THIS, AND UNTIL RetainedVolumesAsync BELOW NOTHING EVER REMOVED
+        // THEM. The cascade note above says the collector takes "every pod, every PVC" — it takes the
+        // pods, and it does not take the claims: a claim created from a volumeClaimTemplate has no
+        // owner reference to the set, which is Kubernetes' own behaviour and is what makes a recovery
+        // window possible for the types that declare one. This type declares none, so its claims were
+        // simply left, unreferenced and unbilled, after every hard delete.
         context.Log.Report("deleted", $"the NATS objects of '{name}' are gone", 100);
         return ReconcileOutcome.Converged;
     }
+
+    /// <inheritdoc />
+    /// <remarks>
+    ///     ⚠ <b>One claim per server, named from the desired body</b> — see
+    ///     <see cref="NatsClusters.RetainedClaims" />, which carries the argument and the caveat about
+    ///     a cluster that was scaled down before it was deleted. This runs on the convergence of a
+    ///     hard delete and of a purge and on nothing else, so nothing here can reach a resource that
+    ///     is coming back.
+    /// </remarks>
+    public Task<Result<ImmutableArray<RetainedVolume>>> RetainedVolumesAsync(
+        ReconcileContext context,
+        CancellationToken cancellationToken = default
+    ) =>
+        Task.FromResult(
+            Result<ImmutableArray<RetainedVolume>>.Success(
+                NatsClusters.RetainedClaims(context.Namespace, context.Id.Name, context.Desired)
+            )
+        );
 
     /// <inheritdoc />
     public async Task<ObservedState> ObserveAsync(

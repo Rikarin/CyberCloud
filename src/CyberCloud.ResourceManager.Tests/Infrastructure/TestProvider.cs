@@ -52,6 +52,23 @@ public static class FakeWorld {
     /// </remarks>
     public static ConcurrentDictionary<Guid, string> ProduceClusterAt { get; } = new();
 
+    /// <summary>
+    ///     Resources whose teardown deliberately keeps a volume, and what the claim is called.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Standing in for the three families with a <c>volumeClaimTemplate</c>, and it is a
+    ///     switch rather than a constant because the interesting assertion is what a purge does when
+    ///     the volumes CANNOT be removed.</b> This harness registers
+    ///     <c>NoClusterConnectionFactory</c>, so a resource here has no API server to delete a claim
+    ///     from — which is exactly the state <c>VolumeReclaimer</c> refuses to converge on, and the
+    ///     reason it refuses is that converging would report disks destroyed that are still there.
+    ///     What that buys the suite is the ORDERING assertion: the committed quota must still be held
+    ///     after a purge whose reclaim did not finish. The removal itself is proved against a real
+    ///     API server in the cluster-backed conformance suites, where a claim is a real object made
+    ///     by a real <c>StatefulSet</c> controller.
+    /// </remarks>
+    public static ConcurrentDictionary<Guid, string> KeepsVolume { get; } = new();
+
     /// <summary>Forgets everything.</summary>
     public static void Reset() {
         Applied.Clear();
@@ -61,6 +78,7 @@ public static class FakeWorld {
         FailWith.Clear();
         FailTeardownWith.Clear();
         ProduceClusterAt.Clear();
+        KeepsVolume.Clear();
     }
 }
 
@@ -205,8 +223,38 @@ public sealed class SoftDeletableReconciler(Core.Time.IClock clock) : IResourceR
         inner.DeleteAsync(context, cancellationToken);
 
     /// <inheritdoc />
+    /// <inheritdoc />
     public Task<ObservedState> ObserveAsync(ObserveContext context, CancellationToken cancellationToken = default) =>
         inner.ObserveAsync(context, cancellationToken);
+
+    /// <inheritdoc />
+    /// <remarks>
+    ///     ⚠ Answers from <see cref="FakeWorld.KeepsVolume" /> so one type can play both halves: a
+    ///     soft-deletable resource that keeps a disk and one that keeps nothing. The default —
+    ///     nothing kept — is what every existing purge assertion in this suite runs against, so
+    ///     adding the seam did not change what they mean.
+    /// </remarks>
+    public Task<Result<ImmutableArray<RetainedVolume>>> RetainedVolumesAsync(
+        ReconcileContext context,
+        CancellationToken cancellationToken = default
+    ) {
+        if (!FakeWorld.KeepsVolume.TryGetValue(context.Id.Id, out var claim)) {
+            return Task.FromResult(Result<ImmutableArray<RetainedVolume>>.Success([]));
+        }
+
+        return Task.FromResult(
+            Result<ImmutableArray<RetainedVolume>>.Success(
+                RetainedVolume.OfSet(
+                    context.Namespace,
+                    claim,
+                    context.Id.Name,
+                    1,
+                    ImmutableDictionary<string, string>.Empty.Add("app.kubernetes.io/instance", context.Id.Name),
+                    "the vault's stored secrets"
+                )
+            )
+        );
+    }
 }
 
 /// <summary>

@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Text.Json;
 
 namespace CyberCloud.ResourceManager.Contracts;
@@ -396,4 +397,55 @@ public interface IResourceReconciler {
     ///     a write would turn a diff into a change.
     /// </returns>
     Task<ObservedState> ObserveAsync(ObserveContext context, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     The volumes <see cref="DeleteAsync" /> deliberately left behind, which a final teardown —
+    ///     a hard delete or a purge — must remove.
+    /// </summary>
+    /// <param name="context">
+    ///     The same context <see cref="DeleteAsync" /> saw, and the reason this is a member rather
+    ///     than a constant: the claim names come from the desired body, which is where the replica
+    ///     count and the volume sizes live. ⚠ It is read <b>before</b> the resource grain is cleared,
+    ///     because clearing it is what takes the desired body away.
+    /// </param>
+    /// <param name="cancellationToken">Cancels the enumeration. Nothing here writes.</param>
+    /// <returns>
+    ///     Every claim this resource owns, each carrying the labels that prove it. An empty array
+    ///     means "this type keeps nothing", which is the honest answer for a type with no
+    ///     <c>volumeClaimTemplate</c> and is the default below.
+    /// </returns>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>The provider names and the manager destroys, and the split is the point.</b>
+    ///         docs/plan/08 § Soft delete's owed item reads <i>"a purge still leaves the volumes,
+    ///         because ending a window has to remove exactly what a teardown keeps and
+    ///         <c>IResourceReconciler</c> has no member that asks for that"</i>. This is that member.
+    ///         Only the provider knows the shape — <c>ContainerRegistries.ClaimTemplate</c> and its
+    ///         equivalents — and only the manager knows a purge is happening, so a provider that
+    ///         deleted its own claims would need a "this teardown is the final one" flag on
+    ///         <see cref="ReconcileContext" /> and would then hold the guard, once per provider. It
+    ///         is held once instead, in <c>VolumeReclaimer</c>, because this is the one path on which
+    ///         the platform destroys a tenant's data and the wrong volume has no recovery.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>This member is <i>not</i> called on a soft delete</b>, which is the whole
+    ///         separation: <c>OperationGrain.ConvergedAsync</c> reaches the reclaim only on the
+    ///         branch a hard delete and a purge share, and a soft delete returns one branch above it
+    ///         at <c>ParkAsync</c>. The claims surviving that teardown are what a restore restores
+    ///         from.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The default returns nothing, and a type with a <c>volumeClaimTemplate</c> that
+    ///         takes the default is a leak rather than a compile error.</b> Twenty-two reconcilers
+    ///         implement this interface and most own no disk at all, so a required member would be
+    ///         twenty-two edits to state the same nothing. What closes the gap is a check rather than
+    ///         a signature: <c>ProviderConformanceTests</c> reads every <c>volumeClaimTemplates</c>
+    ///         array out of the documents a provider actually applied, plants the claims Kubernetes
+    ///         would create from them, and fails the family whose final teardown leaves one behind.
+    ///     </para>
+    /// </remarks>
+    Task<Result<ImmutableArray<RetainedVolume>>> RetainedVolumesAsync(
+        ReconcileContext context,
+        CancellationToken cancellationToken = default
+    ) => Task.FromResult(Result<ImmutableArray<RetainedVolume>>.Success([]));
 }

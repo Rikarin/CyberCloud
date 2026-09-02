@@ -448,6 +448,84 @@ public static class ContainerRegistries {
     public static ObjectRef RegistryServiceRef(string ns, string name) =>
         new() { Kind = ServiceKind, Namespace = ns, Name = RegistryName(name) };
 
+    /// <summary>
+    ///     The three <c>PersistentVolumeClaim</c>s a teardown of this type deliberately leaves
+    ///     standing, each with the labels that prove whose they are.
+    /// </summary>
+    /// <param name="ns">The resource's namespace.</param>
+    /// <param name="name">The resource's own name.</param>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>These three are the whole of what a recovery window on this type is worth.</b>
+    ///         <see cref="StatefulSetKind" />'s remarks say a <c>StatefulSet</c> was chosen over a
+    ///         <c>Deployment</c> with a claim beside it precisely so that the claims outlive the
+    ///         teardown — the images, the metadata database and the job queue. So this is the same
+    ///         list read in the other direction: what a soft delete keeps is exactly what a purge
+    ///         must remove, and one list saying both is what keeps them from drifting apart.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Ordinal <c>0</c> only, and that is a fact about this type rather than a
+    ///         simplification.</b> All three sets are rendered with <c>replicas: 1</c> as a literal —
+    ///         see <c>DatabaseSetJson</c>, <c>RedisSetJson</c> and <c>RegistrySetJson</c> — and the
+    ///         registry's volume is <c>ReadWriteOnce</c>, which a second replica could not mount. A
+    ///         type whose replica count came from the desired body would read it here;
+    ///         <c>RetainedVolume.OfSet</c> takes the count for that reason.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The ownership labels are <see cref="PodLabels" /> and NOT ADR-013's seven, and
+    ///         the reason is that the seven are not on these objects.</b>
+    ///         <c>KubeCommandBuilder.Inject</c> writes them into the top-level
+    ///         <c>metadata.labels</c> of the document it sends and does not descend into a nested
+    ///         <c>volumeClaimTemplate</c>, so a claim created by the <c>StatefulSet</c> controller
+    ///         carries none of them. What it does carry is the set's own
+    ///         <c>spec.selector.matchLabels</c>, which Kubernetes copies onto every claim the
+    ///         template produces — and that selector is <see cref="PodLabels" />, written by this
+    ///         file. ⚠ <b>The failure direction is the safe one:</b> if a claim ever came back
+    ///         without them the purge <i>refuses</i> and the disk survives, rather than deleting on a
+    ///         name alone. When the seven reach the template — ADR-013's gap, tracked separately —
+    ///         this becomes <c>cybercloud.io/resource-id</c> and nothing else here changes.
+    ///     </para>
+    /// </remarks>
+    public static ImmutableArray<RetainedVolume> RetainedClaims(string ns, string name) {
+        ArgumentException.ThrowIfNullOrEmpty(ns);
+        ArgumentException.ThrowIfNullOrEmpty(name);
+
+        return
+        [
+            .. RetainedVolume.OfSet(
+                ns,
+                DataVolume,
+                DatabaseName(name),
+                1,
+                Ownership(name, DatabaseComponent),
+                "Harbor's metadata database — every project, repository, tag and audit row"
+            ),
+            .. RetainedVolume.OfSet(
+                ns,
+                DataVolume,
+                RedisName(name),
+                1,
+                Ownership(name, RedisComponent),
+                "the job service's queue — every in-flight garbage collection and replication job"
+            ),
+            .. RetainedVolume.OfSet(
+                ns,
+                RegistryVolume,
+                RegistryName(name),
+                1,
+                Ownership(name, RegistryComponent),
+                "the image layers themselves"
+            )
+        ];
+    }
+
+    /// <summary>
+    ///     One component's <see cref="PodLabels" /> as the dictionary a
+    ///     <see cref="RetainedVolume" /> checks against.
+    /// </summary>
+    static ImmutableDictionary<string, string> Ownership(string name, string component) =>
+        PodLabels(name, component).ToImmutableDictionary(x => x.Key, x => x.Value, StringComparer.Ordinal);
+
     /// <summary>The core <c>Deployment</c>.</summary>
     public static ObjectRef CoreDeploymentRef(string ns, string name) =>
         new() { Kind = DeploymentKind, Namespace = ns, Name = CoreName(name) };
@@ -773,6 +851,19 @@ public static class ContainerRegistries {
     ///     in there.
     /// </remarks>
     public const string RedisVolumeSize = "1Gi";
+
+    /// <summary>
+    ///     The <c>volumeClaimTemplate</c> name the database and Redis sets both use.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>A constant because a purge reads it, and until then it was a string literal written
+    ///     twice.</b> The claim a <c>volumeClaimTemplate</c> creates is named
+    ///     <c>{volume}-{set}-{ordinal}</c>, so this word is half of the name
+    ///     <see cref="RetainedClaims" /> hands the purge — and a rename here that did not reach there
+    ///     would be a purge that predicts a name nothing holds, converges on the absence, and leaves
+    ///     the disk.
+    /// </remarks>
+    public const string DataVolume = "data";
 
     /// <summary>The volume name and mount path the registry's images live at.</summary>
     public const string RegistryVolume = "storage";
@@ -1239,7 +1330,7 @@ public static class ContainerRegistries {
                 new JsonObject { ["name"] = "PGDATA", ["value"] = "/var/lib/postgresql/data/pgdata" }
             },
             ["volumeMounts"] = new JsonArray {
-                new JsonObject { ["name"] = "data", ["mountPath"] = "/var/lib/postgresql/data" }
+                new JsonObject { ["name"] = DataVolume, ["mountPath"] = "/var/lib/postgresql/data" }
             },
             ["resources"] = ControlPlaneResources(),
             // ⚠ `pg_isready` and not a TCP probe. PostgreSQL binds its port before it has finished
@@ -1255,7 +1346,7 @@ public static class ContainerRegistries {
             replicas: 1,
             containers: [container],
             volumes: null,
-            claim: ClaimTemplate("data", DatabaseVolumeSize, StorageClass(desired)),
+            claim: ClaimTemplate(DataVolume, DatabaseVolumeSize, StorageClass(desired)),
             serviceName: DatabaseName(name)
         );
     }
@@ -1269,7 +1360,7 @@ public static class ContainerRegistries {
             ["image"] = Image(RedisImageRepository, desired),
             ["ports"] = new JsonArray { ContainerPort("redis", RedisPort) },
             ["volumeMounts"] = new JsonArray {
-                new JsonObject { ["name"] = "data", ["mountPath"] = "/var/lib/redis" }
+                new JsonObject { ["name"] = DataVolume, ["mountPath"] = "/var/lib/redis" }
             },
             ["resources"] = ControlPlaneResources(),
             ["readinessProbe"] = TcpProbe(RedisPort, 10, 3)
@@ -1282,7 +1373,7 @@ public static class ContainerRegistries {
             replicas: 1,
             containers: [container],
             volumes: null,
-            claim: ClaimTemplate("data", RedisVolumeSize, StorageClass(desired)),
+            claim: ClaimTemplate(DataVolume, RedisVolumeSize, StorageClass(desired)),
             serviceName: RedisName(name)
         );
     }

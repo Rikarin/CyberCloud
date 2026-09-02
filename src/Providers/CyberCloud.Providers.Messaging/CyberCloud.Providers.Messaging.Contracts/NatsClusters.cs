@@ -269,6 +269,53 @@ public static class NatsClusters {
     public static ObjectRef PodMonitorRef(string ns, string name) =>
         new() { Kind = PodMonitorKind, Namespace = ns, Name = name };
 
+    /// <summary>
+    ///     The JetStream file stores a teardown leaves standing — one per server — with the labels
+    ///     that prove whose they are.
+    /// </summary>
+    /// <param name="ns">The resource's namespace.</param>
+    /// <param name="name">The resource's own name.</param>
+    /// <param name="desired">The validated desired body, which is where the server count lives.</param>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>This type declares no recovery window and still leaks its disks, which is the
+    ///         same defect one step earlier than docs/plan/08 § Soft delete states it.</b> That
+    ///         section's owed item is about a purge; but deleting a <c>StatefulSet</c> leaves its
+    ///         claims whether or not a window is involved, so a plain hard delete of a
+    ///         <c>CyberCloud.Messaging/natsClusters</c> has always returned the tenant's quota and
+    ///         kept their JetStream volumes. <c>NatsClusterReconciler.DeleteAsync</c>'s own comment
+    ///         says the background cascade leaves them to the collector, and the collector does not
+    ///         come for a claim: nothing owns it.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>One claim per server, and the count is read from the body rather than fixed.</b>
+    ///         <see cref="Servers" /> defaults to three, so the common case is
+    ///         <c>store-{name}-0 … store-{name}-2</c>. ⚠ A cluster scaled DOWN before it was deleted
+    ///         leaves the claims of the ordinals it shed, and those are not in this list — the body
+    ///         names the count it ended on and nothing records the high-water mark. See
+    ///         <c>RetainedVolume.OfSet</c>, which carries the same caveat for every caller.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ The ownership labels are <see cref="PodLabels" />, which is the set's own
+    ///         <c>spec.selector.matchLabels</c> and therefore what Kubernetes copies onto each claim
+    ///         the template creates. ADR-013's seven are not on these objects — the command builder
+    ///         does not descend into a nested template — so they cannot be the evidence yet.
+    ///     </para>
+    /// </remarks>
+    public static ImmutableArray<RetainedVolume> RetainedClaims(string ns, string name, JsonElement desired) {
+        ArgumentException.ThrowIfNullOrEmpty(ns);
+        ArgumentException.ThrowIfNullOrEmpty(name);
+
+        return RetainedVolume.OfSet(
+            ns,
+            StoreVolume,
+            name,
+            Servers(desired),
+            PodLabels(name).ToImmutableDictionary(x => x.Key, x => x.Value, StringComparer.Ordinal),
+            "one server's JetStream file store — its streams, its consumers and their messages"
+        );
+    }
+
     /// <summary>The in-cluster client URL <c>listKeys</c> hands out.</summary>
     /// <param name="ns">The resource's namespace.</param>
     /// <param name="name">The resource's own name.</param>

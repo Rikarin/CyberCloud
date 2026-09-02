@@ -281,8 +281,22 @@ owed:
       a purged registry returns its committed quota and leaves its disks allocated, which is the
       quota and the cluster disagreeing. ⚠ Closing it needs a purge to reach the provider with a
       DIFFERENT question from a delete's — "remove what a teardown deliberately keeps" — and there is
-      no IResourceReconciler member for it. ⚠ THIS IS NOW THE LARGEST GAP IN THIS ROW'S RECOVERY
-      WINDOW, because the one it was blocked behind is closed.
+      no IResourceReconciler member for it.
+      ⚠ CLOSED. IResourceReconciler.RetainedVolumesAsync is that member and this row implements it:
+      ContainerRegistries.RetainedClaims names data-{name}-database-0, data-{name}-redis-0 and
+      storage-{name}-registry-0, each carrying the component's PodLabels as the evidence the delete
+      is allowed. VolumeReclaimer reads each claim back from the API server, refuses the whole
+      reclaim if one label disagrees, and runs from the branch of OperationGrain.ConvergedAsync that
+      a hard delete and a purge share and a soft delete does not reach — before the resource grain is
+      cleared, because the claim names come out of the desired body that clears with it, and before
+      the committed quota goes back, so a purge that could not reach the disks leaves the allowance
+      they occupy held. The shared provider suite plants the claims this row's own documents would
+      create and asserts they survive the soft delete and are gone after the purge; the cluster-backed
+      suite does the same round trip against a real StatefulSet controller.
+      ⚠ WHAT IS STILL OWED IS ONE ORDINAL RULE RATHER THAN THE MECHANISM: a set scaled down before it
+      was deleted leaves the claims of the ordinals it shed, and the desired body names only the count
+      the resource ended on. All three of this row's sets are replicas: 1 as a literal, so this row
+      cannot reach that case; a type whose replica count comes from its body can.
   - id: restore-and-purge-have-no-route
     says: >
       ResourceManagerService.RestoreAsync and PurgeAsync exist and are tested by SoftDeletePathTests
