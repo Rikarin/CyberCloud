@@ -258,6 +258,18 @@ public sealed class IsolationCluster : IAsyncLifetime {
     public IProviderRegistry Registry { get; private set; } = null!;
 
     /// <summary>
+    ///     The scope path, held the way a gateway holds it, over the real authorization engine.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Real seams on both sides, for the reason <see cref="Manager" /> has them.</b> The
+    ///     scope path's whole job is to write two <c>parent</c> tuples and check a permission through
+    ///     the rewrites they enable, so a doubled authorizer or a doubled relation writer would leave
+    ///     it asserting that its author's beliefs are self-consistent. This is the only suite in the
+    ///     repository that drives <c>ScopeManagerService</c> against <c>CyberCloudSchema</c>.
+    /// </remarks>
+    public IScopeManager Scopes { get; private set; } = null!;
+
+    /// <summary>
     ///     The test vault both halves share — the silo mints into it, the client reads out of it.
     /// </summary>
     /// <remarks>
@@ -299,6 +311,26 @@ public sealed class IsolationCluster : IAsyncLifetime {
     /// <param name="subject">The subject id.</param>
     public static CallerContext Caller(Guid tenant, string subject) =>
         new() { TenantId = tenant, SubjectType = "user", SubjectId = subject, CorrelationId = "isolation" };
+
+    /// <summary>Grants a user <c>owner</c> directly on a tenant.</summary>
+    /// <param name="tenant">The tenant.</param>
+    /// <param name="user">Who gets it.</param>
+    /// <remarks>
+    ///     ⚠ <b>Direct, because there is no other kind on a tenant.</b> <c>CyberCloudSchema</c> gives
+    ///     <c>tenant</c> no <c>parent</c> relation — nothing is above it — so no rewrite can produce
+    ///     <c>owner</c> here and a tenant with no direct tuple is one nobody can act on. That is the
+    ///     fact <c>IScopeManager.CreateTenantAsync</c> is built around.
+    /// </remarks>
+    public Task GrantTenantOwnerAsync(Guid tenant, string user) =>
+        WriteTupleAsync(
+            tenant,
+            Authorization.Contracts.ObjectRef.Of(
+                ObjectTypes.Tenant,
+                tenant.ToString("N", CultureInfo.InvariantCulture)
+            ),
+            Relations.Owner,
+            SubjectRef.Of(ObjectTypes.User, user)
+        );
 
     /// <summary>Grants a user <c>owner</c> on a subscription's resource group.</summary>
     /// <param name="tenant">The tenant the group is in.</param>
@@ -490,6 +522,13 @@ public sealed class IsolationCluster : IAsyncLifetime {
             // credential the victim's create minted is really there to be stolen.
             new ActionDispatcher(Handlers, new NoClusterConnectionFactory(), Vault),
             NullLogger<ResourceManagerService>.Instance
+        );
+
+        Scopes = new ScopeManagerService(
+            new ReBacScopeAuthorizer(cluster.GrainFactory, NullLogger<ReBacScopeAuthorizer>.Instance),
+            new ReBacScopeRelationWriter(cluster.GrainFactory, NullLogger<ReBacScopeRelationWriter>.Instance),
+            cluster.GrainFactory,
+            NullLogger<ScopeManagerService>.Instance
         );
 
         // ⚠ The subscriptions and their groups are real records now, because step 1 of the write path

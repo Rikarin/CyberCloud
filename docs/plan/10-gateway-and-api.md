@@ -13,11 +13,34 @@ does not move grains.
 Internet
   └─ Envoy Gateway (TLS, HTTP/2+3, per-IP shed)
       └─ CyberCloud.Gateway.Host  (N pods)
-          ├─ /            REST  — the resource API
+          ├─ /            REST  — the resource API, and the scope API below it
           ├─ /hubs/*      SignalR — portal live updates, terminal, operation progress
           ├─ /.well-known OIDC discovery (proxied from Identity)
           └─ /openapi     the generated document, per api-version
 ```
+
+**The scope API is the first four and six segments of the resource path, and it is a different
+component behind the same door.** `GET` and `PUT` on `/tenants/{t}/subscriptions/{s}` and on that plus
+`/resourceGroups/{rg}` reach `IScopeManager`; everything longer reaches `IResourceManager`. The two
+grammars are disjoint — a resource address is at least ten segments and must contain `/providers/` —
+so the router tries both without a precedence rule. A scope answers `201` on a create and `200` on a
+repeat rather than the resource path's `202`: a subscription and a resource group are one grain
+activation each and converge before the call returns, so there is nothing to poll and an
+`Azure-AsyncOperation` header would name a URL that answers `404`. `DELETE` on a scope answers `405`,
+because deleting a resource group is the reverse of [06](06-tenancy-and-resource-model.md) § Two-phase
+create — everything in it, in dependency order, as one long-running operation — and that is not built.
+
+⚠ **`/tenants/{t}` routes and a tenant is still not creatable over HTTP, and the two facts are the same
+fact.** A caller may `GET` the tenant they hold a token for. They cannot `PUT` one, because stage 3
+below resolves the request's tenant from the token and refuses any path naming a different one — so the
+only tenant a request can address is one that already exists. Tenant creation is
+`IScopeManager.CreateTenantAsync`, off this pipeline entirely;
+[08](08-resource-manager.md) § The write path, end to end carries the argument and what was rejected.
+
+⚠ **The scope API is not in the generated OpenAPI document, and that is owed rather than decided.**
+§ API versioning's document is generated from the provider registry, and a scope has no provider — so
+`cyc`, the SDK and the portal forms know nothing about these two addresses. Closing it means teaching
+the generator a surface that is not a resource type.
 
 ## Request pipeline
 

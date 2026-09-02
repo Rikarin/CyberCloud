@@ -30,6 +30,7 @@ namespace CyberCloud.Gateway.Host.Pipeline.Stages;
 /// </remarks>
 sealed class DispatchStage(
     IResourceManager manager,
+    IScopeManager scopes,
     IOperationReader operations,
     GatewayOptions options
 )
@@ -49,6 +50,7 @@ sealed class DispatchStage(
         return context.Route.Kind switch {
             RouteKind.Operation => await OperationAsync(context, path, cancellationToken),
             RouteKind.Resource => await ResourceAsync(context, path, cancellationToken),
+            RouteKind.Scope => await ScopeAsync(context, path, cancellationToken),
             RouteKind.Action => await ActionAsync(context, path, cancellationToken),
             // A hub request leaves the pipeline here and is served by SignalR's own middleware; the
             // pipeline's job for it was stages 1 to 5.
@@ -108,6 +110,83 @@ sealed class DispatchStage(
         return accepted.TryGetError(out var error)
             ? ResultShaper.Shape(error, path)
             : Accepted(context, accepted.GetValueOrThrow());
+    }
+
+    /// <summary>
+    ///     A scope — docs/plan/06 § The hierarchy's subscription and resource group.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b><c>201</c> on a create and <c>200</c> on a repeat, with no <c>202</c> and no
+    ///         <c>Azure-AsyncOperation</c> anywhere.</b> A subscription and a resource group are one
+    ///         grain activation each and converge before the call returns, so there is nothing to
+    ///         poll — and a <c>202</c> here would advertise an operation URL that answers <c>404</c>
+    ///         to every client polite enough to follow it, which is the mistake
+    ///         <see cref="ActionAsync" /> already avoids for a synchronous action.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>No authorization here, exactly as for a resource.</b> The check is
+    ///         <c>IScopeManager</c>'s, against the same engine behind the same seam. A permission
+    ///         check appearing in this file would be a <i>second</i> seam —
+    ///         <c>GatewayIsolationTests</c> reads this project's source for that.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b><c>DELETE</c> is deliberately not served and answers <c>405</c>.</b> Deleting a
+    ///         resource group is the reverse of docs/plan/06 § Two-phase create — the harder half:
+    ///         everything in it goes, in dependency order, as one operation, which is a long-running
+    ///         operation with a teardown that can fail and a group that must stay visible in
+    ///         <c>Deleting</c> while it does. None of that is built, and a <c>DELETE</c> that removed
+    ///         the group record while its resources kept running would leave a tenant billed for pods
+    ///         nothing lists.
+    ///     </para>
+    /// </remarks>
+    async Task<GatewayOutcome> ScopeAsync(
+        GatewayRequestContext context,
+        string path,
+        CancellationToken cancellationToken
+    ) {
+        var method = context.Http.Request.Method;
+
+        var request = new ScopeRequest {
+            // ⚠ The rebuilt path, carrying the TOKEN's tenant. Never context.Http.Request.Path.
+            Path = context.Route.ResourcePath,
+            Body = context.Body,
+            Caller = context.Caller
+        };
+
+        if (HttpMethods.IsGet(method)) {
+            var read = await scopes.ReadAsync(request, cancellationToken);
+
+            return read.TryGetError(out var readError)
+                ? ResultShaper.Shape(readError, path)
+                : new() { StatusCode = StatusCodes.Status200OK, Json = ResponseBodies.Scope(read.GetValueOrThrow()) };
+        }
+
+        if (!HttpMethods.IsPut(method)) {
+            return new GatewayOutcome {
+                StatusCode = StatusCodes.Status405MethodNotAllowed,
+                Error = new(
+                    ErrorCode.InvalidRequestBody,
+                    $"{method} is not supported on a scope. A subscription and a resource group are "
+                    + "read with GET and created with PUT; POST is an action on an existing resource "
+                    + "and never a create (docs/plan/08 § The write path, end to end), and a scope "
+                    + "delete is the reverse of docs/plan/06 § Two-phase create and is not built."
+                )
+            }.WithHeader(GatewayHeaders.Allow, "GET, PUT");
+        }
+
+        var created = await scopes.CreateAsync(request, cancellationToken);
+
+        if (created.TryGetError(out var error)) {
+            return ResultShaper.Shape(error, path);
+        }
+
+        var snapshot = created.GetValueOrThrow();
+
+        return new() {
+            StatusCode = snapshot.Created ? StatusCodes.Status201Created : StatusCodes.Status200OK,
+            Json = ResponseBodies.Scope(snapshot)
+        };
     }
 
     async Task<GatewayOutcome> ActionAsync(

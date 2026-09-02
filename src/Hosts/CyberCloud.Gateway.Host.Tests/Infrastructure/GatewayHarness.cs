@@ -69,6 +69,9 @@ sealed class GatewayHarness {
     /// <summary>The grain factory that must never be touched.</summary>
     public IGrainFactory Grains { get; } = Substitute.For<IGrainFactory>();
 
+    /// <summary>The recording scope manager stage 8 dispatches a scope route to.</summary>
+    public RecordingScopeManager Scopes { get; } = new();
+
     /// <summary>The operation reader, scripted so an LRO poll needs no cluster.</summary>
     public ScriptedOperationReader Operations { get; } = new();
 
@@ -121,7 +124,7 @@ sealed class GatewayHarness {
                 new RateLimitStage(new GatewayRateLimiter(Counters)),
                 new RouteStage(new OneTypeRegistry(), Options),
                 new ValidateStage(Options),
-                new DispatchStage(Manager, Operations, Options)
+                new DispatchStage(Manager, Scopes, Operations, Options)
             ],
             NullLogger<GatewayPipeline>.Instance
         );
@@ -149,6 +152,17 @@ sealed class GatewayHarness {
         string impersonatedBy = ""
     ) =>
         tokens.Issue(new(tenantId, subjectType, subjectId, "", impersonatedBy, Clock.UtcNow.AddMinutes(10)));
+
+    /// <summary>The scope path of a tenant's <c>prod</c> group — the parent of <see cref="ResourcePath" />.</summary>
+    /// <param name="tenantId">Which tenant's path to spell.</param>
+    /// <param name="group">The group name.</param>
+    public static string GroupPath(Guid tenantId, string group = "prod") =>
+        $"/tenants/{tenantId:D}/subscriptions/{Subscription:D}/resourceGroups/{group}";
+
+    /// <summary>The scope path of a tenant's subscription.</summary>
+    /// <param name="tenantId">Which tenant's path to spell.</param>
+    public static string SubscriptionPath(Guid tenantId) =>
+        $"/tenants/{tenantId:D}/subscriptions/{Subscription:D}";
 
     /// <summary>The happy-path resource path for a tenant.</summary>
     /// <param name="tenantId">Which tenant's path to spell.</param>

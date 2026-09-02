@@ -11,6 +11,29 @@ enum RouteKind {
     /// <summary>A resource, by id. <c>GET</c>, <c>PUT</c>, <c>PATCH</c>, <c>DELETE</c>.</summary>
     Resource,
 
+    /// <summary>
+    ///     A scope — a tenant, a subscription or a resource group. <c>GET</c> and <c>PUT</c>.
+    ///     docs/plan/06 § The hierarchy.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>The sixth kind, and it is a contract change rather than an addition.</b> Every kind in
+    ///     this enum is asserted somewhere and <see cref="GatewayRouter.Resolve" /> is a total function
+    ///     over a closed set, so a new member changes what <see cref="Unknown" /> means: paths that
+    ///     used to be <see cref="ErrorCode.InvalidResourceId" /> — a <c>400</c> — are now routed.
+    ///     <c>ScopeRoutingTests</c> pins both halves, the admitted shapes and the ones that still
+    ///     answer <c>400</c>.
+    ///     <para>
+    ///         ⚠ <b>It is separate from <see cref="Resource" /> for the reason <see cref="Action" /> is
+    ///         separate from it: the dispatch target differs.</b> A scope goes to
+    ///         <c>IScopeManager</c> and a resource to <c>IResourceManager</c> — see
+    ///         <c>IScopeManager</c>'s remarks on why those are two components. Folding the two kinds
+    ///         together would mean <c>DispatchStage</c> re-deciding, per request, which manager a
+    ///         <see cref="Resource" /> route meant, which is the decision this stage exists to make
+    ///         once.
+    ///     </para>
+    /// </remarks>
+    Scope,
+
     /// <summary>A <c>POST</c> action on an existing resource — <c>restart</c>, <c>rotateKeys</c>.</summary>
     Action,
 
@@ -40,18 +63,33 @@ enum RouteKind {
 /// <param name="Action">The action name, for <see cref="RouteKind.Action" />.</param>
 /// <param name="OperationId">The operation, for <see cref="RouteKind.Operation" />.</param>
 /// <param name="HubName">The hub, for <see cref="RouteKind.Hub" />.</param>
+/// <param name="Scope">
+///     The scope, for <see cref="RouteKind.Scope" />. ⚠ Its tenant is the <i>token's</i> too, and for
+///     the same reason — see the remarks on this type.
+/// </param>
 readonly record struct GatewayRoute(
     RouteKind Kind,
     ResourceId Resource,
     string Action,
     Guid OperationId,
-    string HubName
+    string HubName,
+    ScopeId Scope = default
 ) {
     /// <summary>Nothing matched.</summary>
     public static GatewayRoute None { get; } = new(RouteKind.Unknown, default, "", Guid.Empty, "");
 
     /// <summary>The address dispatch uses — rebuilt, so it always carries the token's tenant.</summary>
-    public string ResourcePath => Kind is RouteKind.Resource or RouteKind.Action ? Resource.Path : "";
+    /// <remarks>
+    ///     ⚠ <b>A scope's path is rebuilt here exactly as a resource's is</b>, from a
+    ///     <see cref="ScopeId" /> whose <c>TenantId</c> came from <c>CallerContext</c>. The second
+    ///     defence is only a defence if every kind that reaches a manager goes through it.
+    /// </remarks>
+    public string ResourcePath =>
+        Kind switch {
+            RouteKind.Resource or RouteKind.Action => Resource.Path,
+            RouteKind.Scope => Scope.Path,
+            _ => ""
+        };
 }
 
 /// <summary>
@@ -107,6 +145,36 @@ static class GatewayRouter {
 
         if (string.Equals(path, OpenApiPath, StringComparison.Ordinal)) {
             return Result<GatewayRoute>.Success(new(RouteKind.OpenApi, default, "", Guid.Empty, ""));
+        }
+
+        // ── A scope, before the resource/action split. docs/plan/06 § The hierarchy. ────────────
+        //
+        // ⚠ THE TWO GRAMMARS ARE DISJOINT AND THE ORDER IS THEREFORE FREE — which is worth stating,
+        // because if it were not free this would be a precedence rule nobody wrote down. A scope
+        // address is 2, 4 or 6 segments; a resource address is at least 10 and must contain
+        // `/providers/`. ScopeIdTests drives the whole overlap rather than asserting the claim.
+        //
+        // ⚠ IT IS BEFORE THE POST BRANCH, WHICH CHANGES WHAT A POST TO A SCOPE ANSWERS AND IMPROVES
+        // IT. ResolveAction strips the last segment unconditionally, so `POST /tenants/{t}/
+        // subscriptions/{s}` used to be read as an action named `{s}` on the resource
+        // `/tenants/{t}/subscriptions` and refused as a malformed resource id. It is now routed as a
+        // scope and refused by the manager with a sentence that names the verb — docs/plan/08 § The
+        // write path, end to end: POST "appears only for actions on an existing resource … never for
+        // creation".
+        if (ScopeId.TryParsePath(path, out var scope)) {
+            return Result<GatewayRoute>.Success(
+                new(
+                    RouteKind.Scope,
+                    default,
+                    "",
+                    Guid.Empty,
+                    "",
+                    // ⚠ The token's tenant, never the path's — the same rebuild ResolveResource does
+                    // and for the same reason. Stage 3 has already refused any disagreement; this is
+                    // the defence that still holds if somebody deletes that one.
+                    scope with { TenantId = tenantId }
+                )
+            );
         }
 
         return string.Equals(method, HttpMethods.Post, StringComparison.Ordinal)

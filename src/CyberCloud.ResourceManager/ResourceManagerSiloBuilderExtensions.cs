@@ -135,6 +135,19 @@ public static class ResourceManagerSiloBuilderExtensions {
         services.TryAddSingleton<ActionDispatcher>();
         services.TryAddSingleton<IResourceManager, ResourceManagerService>();
 
+        // ── The scope path. docs/plan/06 § The hierarchy — a subscription and a resource group. ───
+        //
+        // ⚠ THESE THREE LINES ARE THE WHOLE OF WHAT MAKES SCOPE CREATION REACHABLE, AND A MISSING
+        // ProjectReference IS THE FAILURE THIS ASSEMBLY HAS ALREADY SHIPPED ONCE. No host referenced
+        // CyberCloud.Authorization, so every check failed and the enforcement seam turned each
+        // failure into a 404; the symptom was "nothing exists" rather than "nothing is wired". The
+        // scope seams are registered here, beside the resource ones, so that any host that composes
+        // the resource manager composes both — a gateway that had IScopeManager and no
+        // IScopeAuthorizer would not start, which is the failure worth having.
+        services.TryAddSingleton<IScopeAuthorizer, ReBacScopeAuthorizer>();
+        services.TryAddSingleton<IScopeRelationWriter, ReBacScopeRelationWriter>();
+        services.TryAddSingleton<IScopeManager, ScopeManagerService>();
+
         // ── The SignalR connection grain's dependencies. docs/plan/10 § SignalR ──────────────────
         //
         // ⚠ IN THIS LIST BECAUSE THE GRAIN IS IN THIS ASSEMBLY, AND IT IS IN THIS ASSEMBLY BECAUSE

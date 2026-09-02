@@ -60,6 +60,19 @@ namespace CyberCloud.AppHost.Tests;
 ///         happened.
 ///     </para>
 ///     <para>
+///         ⚠ <b>AND THE SCOPES ARE THE PLATFORM'S NOW, WHICH IS A THIRD DEFECT OF THE SAME SHAPE.</b>
+///         This file used to create its subscription and its resource group by reaching for
+///         <c>ISubscriptionGrain</c> and <c>IResourceGroupGrain</c>, and to grant its caller
+///         <c>owner</c> on the group with a tuple it wrote itself — with remarks calling that
+///         <i>"the seeding a real deployment does when a subscription is created"</i>. It was not:
+///         nothing in the platform could create either scope, and nothing wrote the
+///         <c>resourceGroup#parent@subscription</c> or <c>subscription#parent@tenant</c> edges either,
+///         so <i>every</i> harness in the repository stood on a scope tree it had built and a grant it
+///         had placed one level too low. Both scopes now come from <c>IScopeManager</c> out of the
+///         same real container, and the only tuple this file writes is on the <b>tenant</b> — which is
+///         the one grant no rewrite can produce, because <c>tenant</c> has no <c>parent</c>.
+///     </para>
+///     <para>
 ///         ⚠ <b>What it still cannot prove.</b> The gateway's nine HTTP stages are not in this path:
 ///         <see cref="IResourceManager" /> is resolved from the real
 ///         <c>GatewayComposition.BuildAsync</c> container — the same object graph
@@ -139,12 +152,19 @@ public sealed class ReconcileThroughTheRealHostTests(LocalTopology topology) : I
 
         raw = await ConnectToK3sAsync(token);
 
-        await SeedSubscriptionAsync(token);
-        await GrantAsync(token);
-        await AttachClusterAsync(token);
-
+        // ⚠ THE GATEWAY IS BUILT BEFORE THE SEEDING NOW, BECAUSE THE SEEDING GOES THROUGH IT.
+        // The subscription and the resource group used to be created by reaching for
+        // ISubscriptionGrain and IResourceGroupGrain from this test, which is what every harness in
+        // the repository does and is exactly why nobody noticed that nothing in the platform could
+        // create either. They are created by IScopeManager now — resolved from the same real
+        // container IResourceManager comes out of — so this file no longer stands on a scope tree
+        // it built itself.
         gateway = await BuildGatewayAsync();
         await gateway.StartAsync(token);
+
+        await BootstrapTenantAsync(token);
+        await CreateScopesThroughTheRealManagerAsync(token);
+        await AttachClusterAsync(token);
     }
 
     /// <inheritdoc />
@@ -401,64 +421,47 @@ public sealed class ReconcileThroughTheRealHostTests(LocalTopology topology) : I
     // ── Seeding — everything the write path reads and does not create ────────────────────────────
 
     /// <summary>
-    ///     Creates the subscription and the resource group step 1 resolves against.
+    ///     The one thing that is still done by hand, and the one thing that has to be.
     /// </summary>
     /// <param name="cancellationToken">The test's token.</param>
     /// <remarks>
-    ///     Step 1 answers a bare <c>404</c> for a subscription the tenant does not have, and the lock
-    ///     walk in step 4 reads both scopes above the resource. Quota needs no seeding:
-    ///     <c>QuotaGrain</c> carries a default of 1 000 for <c>QuotaMeter.Resources</c>, which is the
-    ///     one meter a widget draws.
+    ///     <para>
+    ///         ⚠ <b>A tenant record and one direct <c>tenant:{t}#owner</c> tuple. Everything below
+    ///         this line goes through the platform.</b> <c>CyberCloudSchema</c> gives <c>tenant</c>
+    ///         no <c>parent</c> relation — nothing is above it — so no rewrite can produce a grant on
+    ///         one and only a direct tuple can. That is not a gap in the platform; it is why
+    ///         <c>IScopeManager.CreateTenantAsync</c> exists as a platform-operator seam off the
+    ///         request pipeline, and why its request carries the owner rather than defaulting it.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>What is <i>not</i> asserted here, said plainly.</b> This does not call
+    ///         <c>CreateTenantAsync</c>: that method also assigns a durable shard and registers a
+    ///         tenant-directory entry, and driving those needs a configured shard map this topology
+    ///         does not seed. So the bootstrap's own ordering — the owner edge before the directory
+    ///         entry, so that no request can reach a tenant nobody owns — is still owed a test. Its
+    ///         two refusals are covered by <c>ScopeCreationTests</c>.
+    ///     </para>
     /// </remarks>
-    async Task SeedSubscriptionAsync(CancellationToken cancellationToken) {
+    async Task BootstrapTenantAsync(CancellationToken cancellationToken) {
         var tenant = topology.Client.ForTenant(Tenancy(Tenant));
 
-        var subscription = await tenant
-            .GetGrain<ISubscriptionGrain>(GrainKeys.Subscription(Subscription))
-            .CreateAsync("phase 1");
+        var record = await tenant
+            .GetGrain<ITenantGrain>(GrainKeys.Tenant(Tenant))
+            .CreateAsync("phase-1-tenant", "Phase 1", "eu-central");
 
-        subscription.IsSuccess.ShouldBeTrue(subscription.Error?.Message);
-
-        var group = await tenant
-            .GetGrain<IResourceGroupGrain>(GrainKeys.ResourceGroup(Subscription, ResourceGroup))
-            .CreateAsync(Tenant, "eu-central");
-
-        group.IsSuccess.ShouldBeTrue(group.Error?.Message);
-
-        cancellationToken.ThrowIfCancellationRequested();
-    }
-
-    /// <summary>
-    ///     Makes the caller an owner of the resource group, in the real ReBAC store.
-    /// </summary>
-    /// <param name="cancellationToken">The test's token.</param>
-    /// <remarks>
-    ///     <para>
-    ///         ⚠ <b>A tuple, not a substituted authorizer, and that is the point of this method.</b>
-    ///         Step 3 of a create checks <c>write</c> on the <i>resource group</i> — the resource has
-    ///         no GUID yet, so <c>ReBacResourceAuthorizer.CheckedObject</c> falls back to the parent
-    ///         scope. <c>CyberCloudSchema</c> gives <c>write</c> to <c>contributor</c> and
-    ///         <c>contributor</c> to <c>owner</c>, so one owner tuple is the whole grant and the
-    ///         rewrite rules are what turn it into an answer.
-    ///     </para>
-    ///     <para>
-    ///         This is the seeding a real deployment does when a subscription is created. Nothing in
-    ///         the tree writes it yet, which is why it is here rather than in the fixture.
-    ///     </para>
-    /// </remarks>
-    async Task GrantAsync(CancellationToken cancellationToken) {
-        var group = AuthObjectRef
-            .Create(
-                ObjectTypes.ResourceGroup,
-                Subscription.ToString("N", CultureInfo.InvariantCulture) + "-" + ResourceGroup
-            )
-            .GetValueOrThrow();
+        record.IsSuccess.ShouldBeTrue(record.Error?.Message);
 
         var subject = SubjectRef.Create(SubjectTypes.User, Subject).GetValueOrThrow();
-        var tuple = RelationTuple.Create(group, Relations.Owner, subject).GetValueOrThrow();
 
-        var written = await topology.Client
-            .ForTenant(Tenancy(Tenant))
+        var tuple = RelationTuple.Create(
+            AuthObjectRef
+                .Create(ObjectTypes.Tenant, Tenant.ToString("N", CultureInfo.InvariantCulture))
+                .GetValueOrThrow(),
+            Relations.Owner,
+            subject
+        ).GetValueOrThrow();
+
+        var written = await tenant
             .GetGrain<ITupleStoreGrain>(GrainKeys.TupleStore(Tenant))
             .WriteAsync(tuple);
 
@@ -469,6 +472,77 @@ public sealed class ReconcileThroughTheRealHostTests(LocalTopology topology) : I
         );
 
         cancellationToken.ThrowIfCancellationRequested();
+    }
+
+    /// <summary>
+    ///     Creates the subscription and the resource group <b>through the real scope manager</b>.
+    /// </summary>
+    /// <param name="cancellationToken">The test's token.</param>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>THESE ARE THE FIRST TWO STEPS OF THE M1 EXIT STORY AND NOTHING HAD EVER RUN
+    ///         THEM.</b> <c>ISubscriptionGrain.CreateAsync</c> and <c>CreateResourceGroupAsync</c> had
+    ///         no non-test caller in the tree, so every harness — including the version of this file
+    ///         that carried a <c>SeedSubscriptionAsync</c> — created its scopes by reaching for the
+    ///         grains. The platform can do it now, and this is where that is proved against the
+    ///         processes that ship.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Nothing here writes a role tuple, and the absence is the assertion.</b> The old
+    ///         <c>GrantAsync</c> wrote <c>resourceGroup:{sub}-{rg}#owner@user:{subject}</c> directly,
+    ///         with remarks calling it <i>"the seeding a real deployment does when a subscription is
+    ///         created"</i>. It is not seeding any more: the only grant in this file is on the
+    ///         <b>tenant</b>, and the two calls below are authorized through
+    ///         <c>From("parent", "owner")</c> — the <c>subscription#parent@tenant</c> edge the first
+    ///         call writes is what makes the second one legal. Step 3 of the widget's <c>PUT</c> then
+    ///         checks <c>write</c> on the group and resolves four hops up to that same tuple.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b><see cref="IScopeManager" /> is resolved from the gateway's container</b>, for the
+    ///         reason <see cref="IResourceManager" /> is: it is the object graph
+    ///         <c>GatewayComposition.BuildAsync</c> produces, with the real
+    ///         <c>ReBacScopeAuthorizer</c> and the real <c>ReBacScopeRelationWriter</c> over the real
+    ///         schema, against grains living in the two silo processes.
+    ///     </para>
+    /// </remarks>
+    async Task CreateScopesThroughTheRealManagerAsync(CancellationToken cancellationToken) {
+        var scopes = gateway.Services.GetRequiredService<IScopeManager>();
+
+        var subscription = await scopes.CreateAsync(
+            new() {
+                Path = ScopeId.Subscription(Tenant, Subscription).Path,
+                Body = """{"displayName":"phase 1"}""",
+                Caller = Caller
+            },
+            cancellationToken
+        );
+
+        subscription.IsSuccess.ShouldBeTrue(
+            "the scope path refused a subscription the tenant's owner is entitled to create: "
+            + $"{subscription.Error?.Code} — {subscription.Error?.Message}. A ResourceNotFound here "
+            + "is the enforcement seam answering for a check that could not be made — the tenant "
+            + "owner tuple, or the silo's CyberCloud.Authorization reference."
+        );
+
+        subscription.GetValueOrThrow()
+            .Created.ShouldBeTrue("a subscription nothing held cannot already exist.");
+
+        var group = await scopes.CreateAsync(
+            new() {
+                Path = ScopeId.Group(Tenant, Subscription, ResourceGroup).Path,
+                Body = """{"location":"eu-central"}""",
+                Caller = Caller
+            },
+            cancellationToken
+        );
+
+        group.IsSuccess.ShouldBeTrue(
+            "the scope path refused a resource group in a subscription the same caller had just "
+            + $"created: {group.Error?.Code} — {group.Error?.Message}. The only grant in this test "
+            + "is on the tenant, so this is the subscription's parent edge failing to carry it down."
+        );
+
+        group.GetValueOrThrow().Created.ShouldBeTrue();
     }
 
     /// <summary>
