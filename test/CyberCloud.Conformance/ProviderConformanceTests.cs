@@ -5,6 +5,7 @@ using CyberCloud.ResourceManager.Reconcile;
 using System.Collections.Immutable;
 using System.Globalization;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 
 namespace CyberCloud.Conformance;
 
@@ -420,6 +421,180 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
     ///         taken.
     ///     </para>
     /// </remarks>
+    /// <summary>
+    ///     ⚠ <b>The claims a teardown deliberately leaves survive it, and the teardown that ends the
+    ///     resource for good removes them.</b>
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>This is the assertion docs/plan/08 § Soft delete's owed item was waiting for:</b>
+    ///         <i>"a purge still leaves the volumes, because ending a window has to remove exactly
+    ///         what a teardown keeps"</i>. Deleting a <c>StatefulSet</c> does not delete the
+    ///         <c>PersistentVolumeClaim</c>s its <c>volumeClaimTemplate</c> made — that is what makes
+    ///         a recovery window worth having — and until <c>IResourceReconciler</c> gained
+    ///         <c>RetainedVolumesAsync</c> nothing ever removed them, so a purged resource returned
+    ///         its quota and left its disks.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The claims are PLANTED rather than created, because the fake cluster runs no
+    ///         controllers</b>, and how they are planted is the load-bearing part. Kubernetes composes
+    ///         a claim's name as <c>{volume}-{set}-{ordinal}</c> and copies the set's
+    ///         <c>spec.selector.matchLabels</c> onto it; both halves are read <i>out of the document
+    ///         the provider actually applied</i> rather than supplied by the case, so a provider
+    ///         cannot make this pass by describing claims it does not create. The same round trip
+    ///         against a real API server, where the controller makes the claims itself, is what
+    ///         proves the model — <c>CyberCloud.Cluster.Conformance</c>.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The branch is the registry's, exactly as in
+    ///         <see cref="DeleteTearsDownTheDataPlaneAndTheResourceIsGone" />.</b> A type with a
+    ///         window must keep its claims through the soft delete — asserting they are gone there
+    ///         would be asserting a restore has nothing to restore from — and lose them at the purge.
+    ///         A type with no window loses them at the delete, which is the same defect one step
+    ///         earlier and is the reason this test is not filed under soft delete.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>A family that renders no <c>volumeClaimTemplate</c> SKIPS and says so.</b> Most of
+    ///         the catalogue owns no disk, and a test that iterated an empty collection and reported
+    ///         success would be the vacuous green this suite's own vacuity guard exists to refuse.
+    ///     </para>
+    /// </remarks>
+    [Fact]
+    public async Task TheClaimsATeardownKeepsSurviveItAndTheFinalTeardownRemovesThem() {
+        ProviderTestCluster<TSource>.Reset();
+
+        Cluster.Registry.TryGetType(Case.Type, out var registration).ShouldBeTrue();
+        var recoverable = registration.SoftDeleteDays > 0;
+
+        var accepted = (await CreateAsync("keeps-disks")).GetValueOrThrow();
+        await ConvergeAsync(accepted);
+
+        var claims = ClaimsOf(Cluster.World.Applied);
+
+        if (claims.Count == 0) {
+            Assert.Skip(
+                $"SKIPPED — {Case.DisplayName} renders no volumeClaimTemplate, so its teardown keeps "
+                + "no volumes and there is nothing for a purge to remove. Asserting over an empty "
+                + "collection would report a green this family did not earn."
+            );
+        }
+
+        // ⚠ The StatefulSet controller's job, done by hand because this cluster has no controllers.
+        // The name and the labels both come from the applied document — see the remarks.
+        foreach (var (target, json) in claims) {
+            Cluster.World.MutateBehindTheirBack(target, json);
+            Cluster.World.Holds(target).ShouldBeTrue();
+        }
+
+        var deleted = await DeleteAsync("keeps-disks");
+        deleted.IsSuccess.ShouldBeTrue(deleted.Error?.Message);
+
+        var status = await ConvergeAsync(deleted.GetValueOrThrow());
+        status.State.ShouldBe(
+            OperationState.Succeeded,
+            $"the teardown ended {status.State}: {status.Error?.Message}"
+        );
+
+        if (!recoverable) {
+            foreach (var (target, _) in claims) {
+                Cluster.World.Holds(target).ShouldBeFalse(
+                    $"'{target}' is still in the cluster after a converged hard delete. The resource "
+                    + "is gone, its name is free and its quota is back — and its disk is still "
+                    + "allocated, unreferenced and unbilled, until an operator finds it."
+                );
+            }
+
+            return;
+        }
+
+        // ── The window's half: the disks are what a restore restores from ───────────────────────
+        foreach (var (target, _) in claims) {
+            Cluster.World.Holds(target).ShouldBeTrue(
+                $"'{target}' was removed by a SOFT delete on a type that declares a "
+                + $"{registration.SoftDeleteDays.ToString(CultureInfo.InvariantCulture)}-day window. "
+                + "The claims are the data a restore hands back; removing them makes the window an "
+                + "advertisement."
+            );
+        }
+
+        // ── And the purge's half: ending the window ends the disks ──────────────────────────────
+        var purged = await PurgeAsync("keeps-disks");
+        purged.IsSuccess.ShouldBeTrue(purged.Error?.Message);
+
+        var ended = await ConvergeAsync(purged.GetValueOrThrow());
+        ended.State.ShouldBe(
+            OperationState.Succeeded,
+            $"the purge ended {ended.State}: {ended.Error?.Message}"
+        );
+
+        foreach (var (target, _) in claims) {
+            Cluster.World.Holds(target).ShouldBeFalse(
+                $"'{target}' survived the purge. docs/plan/08 § Soft delete: ending a window has to "
+                + "remove exactly what a teardown keeps, or a purged resource returns its quota and "
+                + "leaves its disks."
+            );
+        }
+    }
+
+    /// <summary>
+    ///     Every claim a <c>volumeClaimTemplate</c> in these commands would create, as the API server
+    ///     would hold it.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Read out of the applied documents and out of nothing else.</b> The name is
+    ///     Kubernetes' <c>{volume}-{set}-{ordinal}</c>; the labels are the set's own
+    ///     <c>spec.selector.matchLabels</c>, which the <c>StatefulSet</c> controller copies onto each
+    ///     claim it creates. A claim planted from anywhere else would be this suite deciding what a
+    ///     provider owns.
+    /// </remarks>
+    static List<(ObjectRef Target, string Json)> ClaimsOf(IEnumerable<KubeCommand> applied) {
+        var claims = new List<(ObjectRef, string)>();
+
+        foreach (var command in applied) {
+            if (JsonNode.Parse(command.Body) is not JsonObject document
+                || document["spec"] is not JsonObject spec
+                || spec["volumeClaimTemplates"] is not JsonArray templates) {
+                continue;
+            }
+
+            var replicas = spec["replicas"]?.GetValue<int>() ?? 1;
+            var selector = (spec["selector"] as JsonObject)?["matchLabels"] as JsonObject;
+
+            foreach (var template in templates.OfType<JsonObject>()) {
+                if ((template["metadata"] as JsonObject)?["name"]?.GetValue<string>() is not { Length: > 0 } volume) {
+                    continue;
+                }
+
+                for (var ordinal = 0; ordinal < replicas; ordinal++) {
+                    var target = new ObjectRef {
+                        Kind = RetainedVolume.ClaimKind,
+                        Namespace = command.Target.Namespace,
+                        Name = RetainedVolume.NameFor(volume, command.Target.Name, ordinal)
+                    };
+
+                    var metadata = new JsonObject {
+                        ["name"] = target.Name, ["namespace"] = target.Namespace
+                    };
+
+                    if (selector is not null) {
+                        metadata["labels"] = selector.DeepClone();
+                    }
+
+                    claims.Add(
+                        (target,
+                            new JsonObject {
+                                ["apiVersion"] = "v1",
+                                ["kind"] = "PersistentVolumeClaim",
+                                ["metadata"] = metadata
+                            }.ToJsonString())
+                    );
+                }
+            }
+        }
+
+        return claims;
+    }
+
     [Fact]
     public async Task DeleteTearsDownTheDataPlaneAndTheResourceIsGone() {
         ProviderTestCluster<TSource>.Reset();
@@ -1268,6 +1443,18 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
     ///     stored desired state — a soft delete tears the data plane down, so there is something to
     ///     apply. Drive the returned operation with <see cref="ConvergeAsync" />.
     /// </remarks>
+    /// <summary>Purges a soft-deleted resource, ending its window.</summary>
+    /// <param name="name">The resource name.</param>
+    protected Task<Result<WriteAccepted>> PurgeAsync(string name) =>
+        Cluster.Manager.PurgeAsync(
+            new() {
+                Path = ProviderTestCluster<TSource>.Address(name).Path,
+                ApiVersion = Case.ApiVersion,
+                Caller = ProviderTestCluster<TSource>.Caller()
+            },
+            TestContext.Current.CancellationToken
+        );
+
     protected Task<Result<WriteAccepted>> RestoreAsync(string name) =>
         Cluster.Manager.RestoreAsync(
             new() {
