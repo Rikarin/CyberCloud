@@ -219,6 +219,27 @@ public static class ContainerRegistries {
     public static GroupVersionKind StatefulSetKind { get; } =
         new() { Group = "apps", Version = "v1", Kind = "StatefulSet", Plural = "statefulsets" };
 
+    /// <summary>
+    ///     Where a rendered <c>StatefulSet</c> keeps its claim template, for
+    ///     <c>IKubeCommandBuilder.WithTemplateLabels</c>.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>The claims a <c>volumeClaimTemplate</c> makes are the whole content of this type's
+    ///     recovery window, so they are the objects it can least afford to be unable to find.</b> The
+    ///     seven labels go into an object's own <c>metadata.labels</c>; a claim the StatefulSet
+    ///     controller creates is a different object, and until this path was declared it carried
+    ///     nothing but the selector's <c>matchLabels</c> — so a managed-only listing saw an empty
+    ///     namespace exactly when a soft-deleted registry's images were sitting in it. Passing this
+    ///     is what puts <see cref="KubeLabels.LifetimeStable" /> on the template, and the StatefulSet
+    ///     controller copies a template's labels onto each claim it creates.
+    ///     <para>
+    ///         ⚠ It is a no-op on the three <c>Deployment</c>s and on the nine objects that are
+    ///         neither — the path simply does not resolve — which is why the reconciler passes it for
+    ///         every object rather than branching on the kind.
+    ///     </para>
+    /// </remarks>
+    public const string ClaimTemplatePath = "spec/volumeClaimTemplates";
+
     /// <summary>Prometheus Operator's <c>PodMonitor</c> — docs/plan/12 § The pattern, once, piece 6.</summary>
     /// <remarks>
     ///     ⚠ <b>Piece 6's SECOND branch, discharged for the reason <c>charts/managed/nats</c>

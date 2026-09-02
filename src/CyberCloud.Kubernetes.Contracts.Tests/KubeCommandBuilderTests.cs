@@ -118,6 +118,175 @@ public sealed class KubeCommandBuilderTests {
         labelled.ReconcileHash.ShouldBe(command.ReconcileHash);
     }
 
+    // ── Nested claim templates ─────────────────────────────────────────────────────────────────
+
+    const string StatefulSetJson = """
+        {
+          "metadata": { "name": "main" },
+          "spec": {
+            "replicas": 2,
+            "template": { "metadata": { "labels": { "app": "main" } }, "spec": {} },
+            "volumeClaimTemplates": [ { "metadata": { "name": "data" }, "spec": {} } ]
+          }
+        }
+        """;
+
+    [Fact]
+    public void WithoutWithTemplateLabelsAClaimTemplateCarriesNothing() {
+        // ⚠ THE SABOTAGE ARM. This is the defect as it shipped: the seven land in the object's own
+        // metadata.labels and a claim the StatefulSet controller makes from this template carries
+        // none of them. A guard that has never been made to fire has not been verified, so the
+        // un-declared shape is asserted to be exactly as bare as it was.
+        var command = Builder()
+            .WithKind(Deployments)
+            .InNamespace("tenant-space")
+            .ObjectJson(StatefulSetJson)
+            .Build();
+
+        var template = ClaimTemplate(command.Body);
+        template.GetProperty("metadata").TryGetProperty("labels", out _).ShouldBeFalse();
+    }
+
+    [Fact]
+    public void WithTemplateLabelsPutsTheSixLifetimeStableLabelsOnTheClaimTemplate() {
+        var command = Builder()
+            .WithKind(Deployments)
+            .InNamespace("tenant-space")
+            .WithTemplateLabels("spec/volumeClaimTemplates")
+            .ObjectJson(StatefulSetJson)
+            .Build();
+
+        var labels = ClaimTemplate(command.Body).GetProperty("metadata").GetProperty("labels");
+
+        foreach (var key in KubeLabels.LifetimeStable) {
+            labels.GetProperty(key).GetString().ShouldBe(command.Labels[key]);
+        }
+
+        // ⚠ SIX, NOT SEVEN, and this is the assertion that keeps it that way. api-version is stamped
+        // from the request, and an apply that changes ANYTHING under a live StatefulSet's
+        // spec.volumeClaimTemplates is refused — measured against rancher/k3s:v1.35.7-k3s1:
+        // "spec: Forbidden: updates to statefulset spec for fields other than 'replicas',
+        // 'ordinals', 'template', 'updateStrategy', 'revisionHistoryLimit',
+        // 'persistentVolumeClaimRetentionPolicy' and 'minReadySeconds' are forbidden". A template
+        // carrying api-version is rejected on the tenant's first call at a newer version, and a
+        // rejected apply does not heal.
+        labels.TryGetProperty(KubeLabels.ApiVersion, out _).ShouldBeFalse();
+        labels.EnumerateObject().Count().ShouldBe(KubeLabels.LifetimeStable.Length);
+    }
+
+    [Fact]
+    public void ThePodTemplateIsUntouched() {
+        // ⚠ The reason the descent is declared rather than discovered. A pod template's labels are
+        // the workload's selector, and stamping the platform's labels there would change
+        // spec.template — which is a rolling restart of every pod on every reconcile the labels move.
+        var command = Builder()
+            .WithKind(Deployments)
+            .InNamespace("tenant-space")
+            .WithTemplateLabels("spec/volumeClaimTemplates")
+            .ObjectJson(StatefulSetJson)
+            .Build();
+
+        using var document = JsonDocument.Parse(command.Body);
+        var pod = document.RootElement.GetProperty("spec").GetProperty("template");
+
+        pod.GetProperty("metadata").GetProperty("labels").EnumerateObject().Count().ShouldBe(1);
+    }
+
+    [Fact]
+    public void ATemplatePathThatDoesNotResolveIsANoOpRatherThanANewKey() {
+        // ⚠ "Absent is not null". One render function serves the Deployment arm and the StatefulSet
+        // arm of the same provider, so the declared path is missing from most bodies — and adding
+        // `"volumeClaimTemplates": null` to a Deployment would be a 500 from the API server.
+        var command = Complete().WithTemplateLabels("spec/volumeClaimTemplates").Build();
+
+        using var document = JsonDocument.Parse(command.Body);
+        document.RootElement.GetProperty("spec")
+            .TryGetProperty("volumeClaimTemplates", out _)
+            .ShouldBeFalse();
+    }
+
+    [Fact]
+    public void ATemplatePathPointingAtAStringIsIgnored() {
+        // ⚠ A ClickHouseInstallation's `defaults.templates.dataVolumeClaimTemplate` NAMES a template
+        // rather than being one, which is why "descend into everything called *Template" is wrong.
+        var command = Builder()
+            .WithKind(Deployments)
+            .InNamespace("tenant-space")
+            .WithTemplateLabels("spec/dataVolumeClaimTemplate")
+            .ObjectJson("""{"metadata":{"name":"main"},"spec":{"dataVolumeClaimTemplate":"data"}}""")
+            .Build();
+
+        using var document = JsonDocument.Parse(command.Body);
+        document.RootElement.GetProperty("spec")
+            .GetProperty("dataVolumeClaimTemplate")
+            .GetString()
+            .ShouldBe("data");
+    }
+
+    [Fact]
+    public void ATemplateWithNoMetadataGetsOne() {
+        // The Altinity shape: `{ name, spec }` with the ObjectMeta never rendered.
+        var command = Builder()
+            .WithKind(Deployments)
+            .InNamespace("tenant-space")
+            .WithTemplateLabels("spec/templates/volumeClaimTemplates")
+            .ObjectJson(
+                """
+                {
+                  "metadata": { "name": "main" },
+                  "spec": { "templates": { "volumeClaimTemplates": [ { "name": "data", "spec": {} } ] } }
+                }
+                """
+            )
+            .Build();
+
+        using var document = JsonDocument.Parse(command.Body);
+        var template = document.RootElement.GetProperty("spec")
+            .GetProperty("templates")
+            .GetProperty("volumeClaimTemplates")[0];
+
+        template.GetProperty("name").GetString().ShouldBe("data");
+        template.GetProperty("metadata")
+            .GetProperty("labels")
+            .GetProperty(KubeLabels.ManagedBy)
+            .GetString()
+            .ShouldBe(KubeLabels.ManagedByValue);
+    }
+
+    [Fact]
+    public void ATemplatePathIsRejectedWhenItIsNotAPath() {
+        var builder = Builder().WithKind(Deployments);
+
+        Should.Throw<ArgumentException>(() => builder.WithTemplateLabels("spec//claims"));
+        Should.Throw<ArgumentException>(() => builder.WithTemplateLabels(""));
+    }
+
+    [Fact]
+    public void StampingATemplateDoesNotChangeTheReconcileHash() {
+        // The hash is over the DESIRED body, before injection — so declaring a template path does not
+        // make every object look changed on the pass that adopts it.
+        var plain = Builder()
+            .WithKind(Deployments)
+            .InNamespace("tenant-space")
+            .ObjectJson(StatefulSetJson)
+            .Build();
+
+        var stamped = Builder()
+            .WithKind(Deployments)
+            .InNamespace("tenant-space")
+            .WithTemplateLabels("spec/volumeClaimTemplates")
+            .ObjectJson(StatefulSetJson)
+            .Build();
+
+        stamped.ReconcileHash.ShouldBe(plain.ReconcileHash);
+    }
+
+    static JsonElement ClaimTemplate(string body) =>
+        JsonDocument.Parse(body)
+            .RootElement.GetProperty("spec")
+            .GetProperty("volumeClaimTemplates")[0]
+            .Clone();
+
     // ── Owner references ───────────────────────────────────────────────────────────────────────
 
     [Fact]

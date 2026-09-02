@@ -305,6 +305,10 @@ public sealed class NatsClusterReconciler(IClock clock) : IResourceReconciler {
             .InNamespace(context.Namespace)
             .WithKind(kind)
             .WithApiVersion(context.ApiVersion)
+            // ⚠ Six labels, into the JetStream claim template — see NatsClusters.ClaimTemplatePath.
+            // Not the seventh: a live StatefulSet refuses any change to volumeClaimTemplates, and
+            // api-version is the one of the seven that changes between requests.
+            .WithTemplateLabels(NatsClusters.ClaimTemplatePath)
             .ObjectJson(json)
             .ApplyAsync(cancellationToken);
 

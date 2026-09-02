@@ -5,6 +5,7 @@ using CyberCloud.ResourceManager.Reconcile;
 using System.Collections.Immutable;
 using System.Globalization;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 
 namespace CyberCloud.Conformance;
 
@@ -213,6 +214,14 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
             // holds for both branches, so it is asserted before the fork.
             command.Labels[KubeLabels.ResourceId].ShouldNotBe(KubeLabels.GuidValue(Guid.Empty));
 
+            // ⚠ AND THE OBJECTS THE PROVIDER DOES NOT APPLY. Everything above reads
+            // `command.Labels`, which is the object's own metadata.labels — and a claim a
+            // StatefulSet's volumeClaimTemplate makes is a DIFFERENT OBJECT that nothing in this
+            // platform ever applies. Asserting only over commands is the failure class this repo has
+            // shipped thirteen times: a check that answers a narrower question than its name. See
+            // AssertClaimTemplatesAreLabelled.
+            AssertClaimTemplatesAreLabelled(command);
+
             if (KubeLabels.IsGroupScoped(command.Labels)) {
                 groupScoped++;
                 AssertGroupNamespace(command);
@@ -238,6 +247,121 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
             + "which makes this assertion's result depend on test order; more than one means "
             + "something else is writing objects under KubeLabels.ReservedNamespace."
         );
+    }
+
+    /// <summary>
+    ///     Asserts that every claim template nested inside an applied body carries the six
+    ///     lifetime-stable labels, and that it does not carry the seventh.
+    /// </summary>
+    /// <param name="command">Any applied command.</param>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>This asks a question the rest of the assertion cannot.</b> Everything else here
+    ///         reads <c>command.Labels</c> — an object's own <c>metadata.labels</c>, which
+    ///         <c>KubeCommandBuilder</c> fills unconditionally. A
+    ///         <c>PersistentVolumeClaim</c> made from a <c>volumeClaimTemplate</c> is a separate
+    ///         object that this platform never applies, so no command describes it and the labels
+    ///         gate was green over every provider that renders one while the claims carried nothing
+    ///         but the workload selector's <c>matchLabels</c>. That is the gap that made a
+    ///         managed-only listing report an empty namespace precisely when a tenant's restorable
+    ///         volumes were in it.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The templates are found by SHAPE and by name, over the whole body, rather than
+    ///         from whatever the provider declared.</b> A check that read
+    ///         <c>WithTemplateLabels</c>'s own argument would pass for a provider that declared
+    ///         nothing, which is the only way this can be got wrong. Walking the body means a
+    ///         provider that renders a claim template and forgets to declare it fails here.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The seventh is asserted ABSENT, and that is a decision rather than an
+    ///         oversight.</b> <c>cybercloud.io/api-version</c> is stamped from the request that
+    ///         caused the reconcile, so it differs between reconciles — and a live
+    ///         <c>StatefulSet</c>'s <c>spec.volumeClaimTemplates</c> refuses every change, measured
+    ///         against the cluster lane's own k3s pin. A template carrying it would make the resource
+    ///         unreconcilable the first time a tenant called at a newer api-version. See
+    ///         <see cref="KubeLabels.LifetimeStable" />.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>What it does NOT cover: <c>dataVolumeTemplates</c>.</b>
+    ///         <c>CyberCloud.ContainerService/agentPools</c> renders one inside a
+    ///         <c>KubevirtMachineTemplate</c>, and a Cluster API infrastructure machine template is a
+    ///         thing the CAPI contract rotates rather than edits — so stamping it risks the same
+    ///         rejected-forever apply this assertion's own exclusion exists to avoid, on a kind
+    ///         nothing here can measure. It is named in <c>src/Providers/README.md § Namespaces</c>
+    ///         as owed rather than silently skipped.
+    ///     </para>
+    /// </remarks>
+    static void AssertClaimTemplatesAreLabelled(KubeCommand command) {
+        var body = JsonNode.Parse(command.Body);
+
+        foreach (var template in ClaimTemplates(body)) {
+            var labels = (template["metadata"] as JsonObject)?["labels"] as JsonObject;
+
+            labels.ShouldNotBeNull(
+                $"'{command.Target}' renders a claim template with no metadata.labels, so the "
+                + "PersistentVolumeClaims it produces are invisible to every selector this platform "
+                + "has — including the managed-only listing a soft-deleted resource's volumes have "
+                + "to be found by. Pass the template's path to WithTemplateLabels."
+            );
+
+            foreach (var key in KubeLabels.LifetimeStable) {
+                labels[key]?.GetValue<string>().ShouldBe(
+                    command.Labels[key],
+                    $"'{command.Target}'s claim template is missing '{key}', or disagrees with the "
+                    + "object's own label of the same name."
+                );
+            }
+
+            labels.ContainsKey(KubeLabels.ApiVersion).ShouldBeFalse(
+                $"'{command.Target}'s claim template carries '{KubeLabels.ApiVersion}'. That label "
+                + "is stamped from the request, and a StatefulSet's spec.volumeClaimTemplates is "
+                + "refused every change once the set exists — so the next reconcile at a different "
+                + "api-version would be rejected, and so would every one after it."
+            );
+        }
+    }
+
+    /// <summary>
+    ///     Every claim template anywhere in a rendered body — <c>volumeClaimTemplates</c> entries and
+    ///     a lone <c>volumeClaimTemplate</c>.
+    /// </summary>
+    /// <param name="node">The body, or a subtree of it.</param>
+    /// <remarks>
+    ///     ⚠ Keyed on the name <b>and</b> the shape. Two of this platform's rendered bodies carry a
+    ///     key ending in <c>Template</c> whose value is a <see langword="string" /> naming a template
+    ///     — a <c>ClickHouseInstallation</c>'s <c>defaults.templates.podTemplate</c> and its
+    ///     <c>dataVolumeClaimTemplate</c> — so a name-only rule would try to read
+    ///     <c>metadata.labels</c> off a string.
+    /// </remarks>
+    static IEnumerable<JsonObject> ClaimTemplates(JsonNode? node) {
+        switch (node) {
+            case JsonObject map:
+                foreach (var (key, value) in map) {
+                    if (key is "volumeClaimTemplates" && value is JsonArray array) {
+                        foreach (var entry in array.OfType<JsonObject>()) {
+                            yield return entry;
+                        }
+                    } else if (key is "volumeClaimTemplate" && value is JsonObject one) {
+                        yield return one;
+                    }
+
+                    foreach (var found in ClaimTemplates(value)) {
+                        yield return found;
+                    }
+                }
+
+                break;
+
+            case JsonArray items:
+                foreach (var item in items) {
+                    foreach (var found in ClaimTemplates(item)) {
+                        yield return found;
+                    }
+                }
+
+                break;
+        }
     }
 
     /// <summary>

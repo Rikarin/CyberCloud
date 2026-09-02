@@ -115,6 +115,52 @@ public static class KubeLabels {
     public static ImmutableArray<string> MandatoryAnnotations { get; } =
         [ResourcePathAnnotation, ReconcileHashAnnotation];
 
+    /// <summary>
+    ///     The six of <see cref="Mandatory" /> whose value cannot change for the life of a resource
+    ///     — everything except <see cref="ApiVersion" />.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>This exists for one job: labelling a nested template that a controller copies
+    ///         once and that an API server will not let anyone change afterwards.</b> The seven are
+    ///         written into an object's own <c>metadata.labels</c>, which is mutable on every kind, so
+    ///         nothing there needs this distinction. A <c>StatefulSet</c>'s
+    ///         <c>spec.volumeClaimTemplates</c> is a different field with a different rule, and
+    ///         <c>IKubeCommandBuilder.WithTemplateLabels</c> is the only caller.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b><see cref="ApiVersion" /> is excluded because it is per-request, and that single
+    ///         fact is what makes the difference between a one-time migration and a resource that can
+    ///         never be reconciled again.</b> <c>KubeCommandBuilder</c> stamps it from the api-version
+    ///         of the request that caused the reconcile, so it changes whenever a tenant calls at a
+    ///         newer version. Measured against <c>rancher/k3s:v1.35.7-k3s1</c> — the pin the
+    ///         cluster-backed conformance lane uses — an apply that changes <i>anything</i> under a
+    ///         live <c>StatefulSet</c>'s <c>spec.volumeClaimTemplates</c> is rejected:
+    ///         <i>
+    ///             "spec: Forbidden: updates to statefulset spec for fields other than 'replicas',
+    ///             'ordinals', 'template', 'updateStrategy', 'revisionHistoryLimit',
+    ///             'persistentVolumeClaimRetentionPolicy' and 'minReadySeconds' are forbidden"
+    ///         </i>
+    ///         . A claim template carrying <c>api-version</c> would therefore brick the resource on
+    ///         the tenant's first call at a new api-version — a rejected apply does not heal, so every
+    ///         later reconcile is rejected too. The other six are fixed by the resource's identity and
+    ///         its path, so a template stamped with them is stable forever after it is written once.
+    ///     </para>
+    /// </remarks>
+    public static ImmutableArray<string> LifetimeStable { get; } = [
+        TenantId,
+        SubscriptionId,
+        ResourceGroup,
+        ResourceId,
+        ResourceType,
+        ManagedBy
+    ];
+
+    /// <summary>Whether <paramref name="key" /> is one of <see cref="LifetimeStable" />.</summary>
+    /// <param name="key">A label key.</param>
+    public static bool IsLifetimeStable(string? key) =>
+        key is not null && LifetimeStable.Contains(key, StringComparer.Ordinal);
+
     /// <summary>Whether <paramref name="key" /> is one of the seven a caller may not set or replace.</summary>
     public static bool IsMandatory(string? key) => key is not null && Mandatory.Contains(key, StringComparer.Ordinal);
 

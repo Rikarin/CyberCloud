@@ -196,6 +196,51 @@ public interface IKubeCommandBuilder {
     /// </exception>
     IKubeCommandBuilder WithLabels(params (string Key, string Value)[] extra);
 
+    /// <summary>
+    ///     Declares nested object templates inside this body whose <c>metadata.labels</c> must also
+    ///     carry the platform's labels — a <c>volumeClaimTemplate</c> and nothing else, so far.
+    /// </summary>
+    /// <param name="paths">
+    ///     <c>/</c>-separated field paths from the root of the body to a template object or to an
+    ///     array of them — for example <c>spec/volumeClaimTemplates</c>. A path that does not resolve
+    ///     in this body is a no-op, which is what lets one render function serve a kind that
+    ///     sometimes has the field and sometimes does not.
+    /// </param>
+    /// <exception cref="ArgumentException">A path is empty or has an empty segment.</exception>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>Why the caller declares the paths instead of the builder discovering them.</b> The
+    ///         objects this platform applies carry at least three nested-template shapes and they do
+    ///         not want the same treatment. A <c>PodTemplateSpec</c> already gets its labels a
+    ///         different way — from the selector the workload was rendered with — and stamping the
+    ///         platform's labels there would change the pod template, which is a rolling restart. A
+    ///         Cluster API infrastructure machine template's <c>dataVolumeTemplates</c> lives inside an
+    ///         object the CAPI contract treats as immutable and rotates rather than edits. And several
+    ///         fields whose names end in <c>Template</c> hold a <b>string</b>: a
+    ///         <c>ClickHouseInstallation</c>'s <c>defaults.templates.podTemplate</c> and
+    ///         <c>dataVolumeClaimTemplate</c> both name a template rather than being one. A rule of
+    ///         the form "descend into anything called <c>*Template</c>" hits all three. The knowledge
+    ///         of which nested field is a claim template belongs to whoever knows the kind's schema,
+    ///         which is the reconciler, so it is passed rather than guessed.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Only <see cref="KubeLabels.LifetimeStable" /> is written here, never the seventh.</b>
+    ///         See that member: a live <c>StatefulSet</c>'s <c>spec.volumeClaimTemplates</c> cannot be
+    ///         changed at all, so a template carrying the per-request <c>api-version</c> label would
+    ///         make the resource unreconcilable the first time a tenant called at a newer version.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>This changes the applied body of an object that may already exist, and for a
+    ///         <c>StatefulSet</c> that apply is refused.</b> Adopting it on a cluster that already
+    ///         runs one needs the set deleted with <c>--cascade=orphan</c> — measured to leave the
+    ///         pods and the claims in place — and the next reconcile re-creates it. The claims that
+    ///         already exist stay unlabelled either way: the StatefulSet controller stamps a claim
+    ///         when it creates it and never revisits one. <c>src/Providers/README.md § Namespaces</c>
+    ///         carries both halves.
+    ///     </para>
+    /// </remarks>
+    IKubeCommandBuilder WithTemplateLabels(params string[] paths);
+
     /// <summary>Adds annotations. May not replace the two mandatory ones.</summary>
     /// <param name="extra">The additional annotations.</param>
     /// <exception cref="ArgumentException">A key is mandatory, or the key is not legal syntax.</exception>

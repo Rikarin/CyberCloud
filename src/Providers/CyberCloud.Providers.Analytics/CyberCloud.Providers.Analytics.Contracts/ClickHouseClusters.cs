@@ -201,6 +201,37 @@ public static class ClickHouseClusters {
             Plural = "clickhousekeeperinstallations"
         };
 
+    /// <summary>
+    ///     Where both installations keep their claim templates, for
+    ///     <c>IKubeCommandBuilder.WithTemplateLabels</c>.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>The <c>templates.volumeClaimTemplates</c> entries are shaped
+    ///         <c>{ name, spec }</c> with no <c>metadata</c> at all, so declaring this path adds one
+    ///         rather than editing one.</b> The Altinity operator's <c>VolumeClaimTemplate</c> carries
+    ///         an <c>ObjectMeta</c> beside its <c>name</c> and its <c>spec</c>; the platform simply
+    ///         never rendered it.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>What is proved here is weaker than for a native <c>StatefulSet</c>, and the
+    ///         difference is worth naming.</b> When the platform renders a <c>StatefulSet</c>, the
+    ///         Kubernetes StatefulSet controller creates the claims and copying a template's labels
+    ///         onto them is its documented, measured behaviour. Here the platform renders a custom
+    ///         resource and the <i>operator</i> derives the StatefulSets — so what this repository can
+    ///         assert is that the rendered body carries the labels, not that the operator propagates
+    ///         them. Nothing in the tree runs the Altinity operator, so the second half is owed; the
+    ///         cluster-backed lane's CRD stub is derived from the applied objects and has no schema,
+    ///         so it cannot catch a pruned field either.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ It is deliberately not <c>defaults/templates/dataVolumeClaimTemplate</c>, which holds
+    ///         a <b>string</b> naming the template rather than a template — the exact shape that makes
+    ///         "descend into anything called <c>*Template</c>" the wrong rule.
+    ///     </para>
+    /// </remarks>
+    public const string ClaimTemplatePath = "spec/templates/volumeClaimTemplates";
+
     /// <summary>The <c>ClickHouseInstallation</c> a cluster owns.</summary>
     /// <param name="ns">The resource's namespace.</param>
     /// <param name="name">The resource's own name.</param>

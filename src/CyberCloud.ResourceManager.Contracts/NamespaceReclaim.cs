@@ -74,15 +74,32 @@ public readonly record struct NamespaceOccupant {
     ///     platform wrote it.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b><see langword="false" /> does not mean "not ours". It means "nobody can tell".</b> The
-    ///     <c>PersistentVolumeClaim</c>s a <c>StatefulSet</c>'s <c>volumeClaimTemplate</c> creates are
-    ///     made by the StatefulSet controller from a template the platform renders <i>without</i>
-    ///     labels — <c>KubeCommandBuilder</c> injects the seven into the top-level
-    ///     <c>metadata.labels</c> and does not walk into a nested template — so they carry none of
-    ///     ADR-013's seven. docs/plan/08 § Soft delete makes those exact claims the thing a restore
-    ///     restores from. An unmanaged object is therefore either somebody else's or the most
-    ///     safety-critical thing in the namespace, and <see cref="NamespaceReclaim" /> treats both the
-    ///     same way: it stops.
+    ///     ⚠ <b><see langword="false" /> does not mean "not ours". It means "nobody can tell".</b> An
+    ///     unmanaged object is either somebody else's or the most safety-critical thing in the
+    ///     namespace, and <see cref="NamespaceReclaim" /> treats both the same way: it stops.
+    ///     <para>
+    ///         ⚠ <b>The <c>PersistentVolumeClaim</c>s a <c>StatefulSet</c>'s
+    ///         <c>volumeClaimTemplate</c> creates used to be the headline example of that, and as of
+    ///         <c>IKubeCommandBuilder.WithTemplateLabels</c> they are not — with two qualifications
+    ///         that matter here.</b> A claim created from a template stamped with
+    ///         <see cref="KubeLabels.LifetimeStable" /> carries <c>managed-by</c> and reads as
+    ///         <see cref="IsManaged" />. But the StatefulSet controller labels a claim once, when it
+    ///         creates it, and never revisits one — so <b>every claim that already exists is still
+    ///         unlabelled and always will be</b> — and only the families that declared a template
+    ///         path render one. docs/plan/08 § Soft delete makes those exact claims the thing a
+    ///         restore restores from, so the conservative reading of an unlabelled claim is the one
+    ///         to keep.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The change moves a namespace of leftover volumes out of
+    ///         <see cref="NamespaceReclaim.OperatorReclaimable" /> and into neither verdict, and that is owed rather
+    ///         than intended.</b> That flag requires <i>every</i> occupant to be unmanaged. A group
+    ///         whose only remaining objects are its own now-labelled claims satisfies neither it nor
+    ///         <see cref="NamespaceReclaim.Deletable" />, so it reports as a plain refusal. Nothing regresses today —
+    ///         <see cref="NamespaceReclaim.Decide" /> has no caller and <see cref="INamespaceInventory" />'s only
+    ///         implementation refuses — and the predicate belongs to the purge that removes the disks
+    ///         it kept rather than to the labelling. <c>src/Providers/README.md § Namespaces</c>.
+    ///     </para>
     /// </remarks>
     public bool IsManaged =>
         Labels.TryGetValue(KubeLabels.ManagedBy, out var value)

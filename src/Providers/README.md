@@ -1771,6 +1771,67 @@ the wrong answer; it stops asking. `EveryAppliedObjectCarriesTheSevenMandatoryLa
 now asserts it saw **exactly one** group-attributed object, so a memo that stops being cleared fails
 loudly rather than quietly narrowing the check.
 
+### Labelling a nested claim template
+
+ADR-013's seven land in an object's own `metadata.labels`. A `PersistentVolumeClaim` made from a
+`StatefulSet`'s `volumeClaimTemplate` is a **different object that this platform never applies**, so
+no `KubeCommand` describes it and the `Labels` gate was green over three families whose claims carried
+nothing but the workload selector's `matchLabels`. `IKubeCommandBuilder.WithTemplateLabels` closes
+that, and every one of its four decisions was forced by something measured against
+`rancher/k3s:v1.35.7-k3s1` — the pin the cluster-backed lane already uses.
+
+- **⚠ SIX LABELS, NOT SEVEN, AND THE SEVENTH IS THE WHOLE DIFFICULTY.** An apply that changes
+  *anything* under a live `StatefulSet`'s `spec.volumeClaimTemplates` is refused: *"spec: Forbidden:
+  updates to statefulset spec for fields other than 'replicas', 'ordinals', 'template',
+  'updateStrategy', 'revisionHistoryLimit', 'persistentVolumeClaimRetentionPolicy' and
+  'minReadySeconds' are forbidden"*. `cybercloud.io/api-version` is stamped from the request that
+  caused the reconcile, so a template carrying it would be **rejected on the tenant's first call at a
+  newer api-version, and on every reconcile after that** — a rejected apply does not heal. The other
+  six are fixed by the resource's identity and its path. `KubeLabels.LifetimeStable` is that set, and
+  the conformance gate asserts the seventh is *absent* so the exclusion stays a decision rather than
+  becoming an omission. ⚠ **The refusal does not name the offending field** — it lists the fields that
+  *may* change and says the rest are forbidden — so an operator reading it in a log is told a
+  `StatefulSet` apply was rejected and not what did it. That is a second reason the exclusion is
+  enforced at the builder rather than left to be diagnosed. `ClaimTemplateLabelTests` is the whole
+  measurement against a real k3s, sabotage arm included: it renders `api-version` into the template by
+  hand, applies twice at two versions, and asserts the second is refused.
+- **The descent is declared per command, not discovered.** Three nested-template shapes are rendered
+  in this tree and they want three different answers. A `PodTemplateSpec` already gets its labels from
+  the selector, and stamping it would change `spec.template` — a rolling restart. A Cluster API
+  infrastructure machine template's `dataVolumeTemplates` (`CyberCloud.ContainerService/agentPools`)
+  lives in an object the CAPI contract rotates rather than edits, which is the same
+  rejected-forever hazard on a kind nothing here can measure — **owed, and named rather than silently
+  skipped**. And two keys ending in `Template` hold a *string*: a `ClickHouseInstallation`'s
+  `defaults.templates.podTemplate` and its `dataVolumeClaimTemplate` both *name* a template. "Descend
+  into anything called `*Template`" hits all three. Whoever knows the kind's schema passes the path:
+  `ContainerRegistries.ClaimTemplatePath`, `NatsClusters.ClaimTemplatePath`,
+  `ClickHouseClusters.ClaimTemplatePath`. A path that does not resolve is a no-op, which is what lets
+  one render function serve a `Deployment` arm and a `StatefulSet` arm.
+- **⚠ The gate walks the rendered body rather than reading what the provider declared.** A check keyed
+  on `WithTemplateLabels`'s own argument would pass for a provider that declared nothing, which is the
+  only way this can be got wrong. `AssertClaimTemplatesAreLabelled` finds claim templates by name
+  **and** shape anywhere in the body, so a provider that renders one and forgets to declare it fails.
+  It was run red first: with the declaration removed, ContainerRegistry's `Labels` assertion fails
+  with *"renders a claim template with no metadata.labels"*.
+- **⚠ WHAT IS PROVED IS NARROWER FOR A CRD THAN FOR A `StatefulSet`, and the difference is worth
+  naming.** Where the platform renders the `StatefulSet` — ContainerRegistry and NATS — the Kubernetes
+  StatefulSet controller creates the claims and copies the template's labels onto each, measured. For
+  `ClickHouseInstallation` the *operator* expands the templates, so what the gate asserts is that the
+  rendered body carries the labels, not that the claims do; nothing in this tree runs the Altinity
+  operator, and the cluster lane's CRD stub is derived from the applied objects and so has no schema
+  to prune against either. **Owed.**
+
+**⚠ Existing claims stay unlabelled, and nothing here can change that.** The StatefulSet controller
+stamps a claim when it creates it and never revisits one — measured, including across a
+`--cascade=orphan` delete and re-create of the set. Two consequences. Adopting this on a cluster that
+already runs a `StatefulSet` needs that orphan-cascade delete, because the *next* apply is the
+forbidden update above; the pods and the claims survive it and the next reconcile re-creates the set.
+And the claims that already exist can only be labelled by writing to them directly, which nothing in
+this platform does — `IResourceReconciler` has no member that addresses a claim, and a blind
+server-side apply of a label-only `PersistentVolumeClaim` would *create* an invalid one whenever the
+controller had not made it yet. **Owed, and it is the same owed item the purge reaches from the other
+end.**
+
 ### ⚠ Owed: nothing deletes a namespace
 
 **No component removes a namespace when its resource group is emptied or removed, and that is a
@@ -1800,17 +1861,25 @@ one that destroys a tenant. What shipped is the strong rule and the shape of the
   every resource inside its recovery window: a parked resource's data plane *is* torn down and its
   claims are exactly what a restore restores from, so a namespace delete during a window turns every
   restore in that group into a lie.
-- **⚠ The volume claims carry none of the seven labels, which is the finding that decides the whole
-  question.** `KubeCommandBuilder.Inject` writes the labels into the top-level `metadata.labels` and
-  does not walk into a nested template, and every provider's `volumeClaimTemplate` metadata is a bare
-  `name` — see `ContainerRegistries.ClaimTemplate`. So the `PersistentVolumeClaim`s a `StatefulSet`
-  makes look *foreign* to every rule the platform has. A managed-only listing cannot see them at all,
-  and the strong rule refuses over them. **Both answers are the same answer: the namespace of any
-  group that ever ran a stateful type is never `Deletable`, because docs/plan/08 § Soft delete records
-  that a purge still leaves the volumes and `IResourceReconciler` has no member that asks for them.**
-  `NamespaceReclaim.OperatorReclaimable` is what that case reports, and reporting it is the feature —
-  option "record the namespace as reclaimable for an operator" is the right answer for those groups
-  until the purge learns to remove the disks it kept.
+- **⚠ The volume claims carried none of the seven labels — CLOSED for new claims, and permanently
+  open for the ones that already exist.** `KubeCommandBuilder.Inject` wrote the labels into the
+  top-level `metadata.labels` and did not walk into a nested template, and every provider's
+  `volumeClaimTemplate` metadata was a bare `name`, so the `PersistentVolumeClaim`s a `StatefulSet`
+  makes read as *foreign* to every rule the platform has. `IKubeCommandBuilder.WithTemplateLabels`
+  now stamps the template — see § Labelling a nested claim template for what that does and does not
+  buy, and for why it is six labels rather than seven. **What it does not change is the verdict:
+  the namespace of a group that ever ran a stateful type is still never `Deletable`, because
+  docs/plan/08 § Soft delete records that a purge still leaves the volumes and `IResourceReconciler`
+  has no member that asks for them.** ⚠ It also does not weaken `NamespaceReclaim.Decide` to
+  *nothing we wrote*: the unlabelled claims were only one of that rule's three reasons, and the other
+  two — membership is never recorded, and a live resource's objects are indistinguishable from a
+  finished one's — are untouched.
+- **⚠ It moves a namespace of leftover volumes out of `OperatorReclaimable`, and that is owed.** That
+  flag requires *every* occupant to be unmanaged, which was true only because the claims were
+  unlabelled. A group whose sole remaining objects are its own labelled claims now satisfies neither
+  it nor `Deletable` and reports as a plain refusal. Nothing regresses today — `Decide` has no caller
+  — and the predicate belongs to the purge that removes the disks it kept rather than to the
+  labelling, so it is left for whoever builds that.
 - **⚠ There is no seam that can answer "what is in this namespace", and `IClusterObjectInventory` is
   not it.** That one selects on `cybercloud.io/managed-by=cybercloud`, which excludes precisely the
   objects a delete has to find, so it is empty exactly when the delete is most dangerous.

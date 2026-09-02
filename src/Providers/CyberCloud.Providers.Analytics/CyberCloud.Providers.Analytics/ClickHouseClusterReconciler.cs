@@ -292,6 +292,10 @@ public sealed class ClickHouseClusterReconciler(IClock clock) : IResourceReconci
             .InNamespace(context.Namespace)
             .WithKind(kind)
             .WithApiVersion(context.ApiVersion)
+            // ⚠ Both installations keep their claim templates at the same path, and the entries have
+            // no metadata of their own — see ClickHouseClusters.ClaimTemplatePath, including what
+            // this does and does not prove about a CRD the operator, not this platform, expands.
+            .WithTemplateLabels(ClickHouseClusters.ClaimTemplatePath)
             .ObjectJson(objectJson)
             .ApplyAsync(cancellationToken);
 
