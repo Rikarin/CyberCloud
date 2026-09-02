@@ -20,6 +20,17 @@ namespace CyberCloud.ResourceManager.Contracts.Generation;
 /// <param name="PurgeProtectionPointer">Where the purge-protection flag is, or <c>""</c>.</param>
 /// <param name="Actions">The declared actions.</param>
 /// <param name="Deprecated">Whether this api-version is under a retirement notice.</param>
+/// <param name="CollectionPath">
+///     The path of this type's collection <c>GET</c>, or <c>""</c> when the document declares none.
+///     <para>
+///         ⚠ <b>Read out of the document rather than derived from <paramref name="Path" />.</b>
+///         Stripping <c>/{resourceName}</c> would give the same answer today and would be an
+///         assumption about the emitter rather than a fact about the document — so a surface would
+///         emit a URL for a path that is not there, and the first thing anyone would notice is a
+///         <c>404</c> from a generated client. An empty string here means the document has no such
+///         path, which is a thing a surface can decide what to do about.
+///     </para>
+/// </param>
 public sealed record DocumentType(
     string ResourceType,
     string Path,
@@ -33,7 +44,8 @@ public sealed record DocumentType(
     string PurgePermission,
     string PurgeProtectionPointer,
     ImmutableArray<DocumentAction> Actions,
-    bool Deprecated
+    bool Deprecated,
+    string CollectionPath
 ) {
     /// <summary>The provider namespace — everything before the <c>/</c>.</summary>
     public string ProviderNamespace {
@@ -126,8 +138,17 @@ public static class DocumentReader {
         var found = new List<DocumentType>();
 
         foreach (var path in paths) {
+            // ⚠ THREE PATH SHAPES NOW CARRY x-cybercloud-resource-type AND ONLY ONE OF THEM IS A
+            // TYPE. An action was always separated here, which is why soft delete's `restore` and
+            // `purge` needed no change to any emitter. A COLLECTION is the first shape that is
+            // neither a resource nor an action, and without the second test below it reads as a
+            // second type of the same name: CliEmitter throws on the duplicate command name,
+            // SdkEmitter throws on the duplicate model name, FormsEmitter's indexer silently replaces
+            // the real one, and DerivedSurfaceTests' "one command per resource type" invariant is the
+            // thing that would have caught it.
             if (path.Value is not JsonObject item
                 || item["x-cybercloud-action"] is not null
+                || item["x-cybercloud-collection"] is not null
                 || Text(item["x-cybercloud-resource-type"]) is not { Length: > 0 } resourceType) {
                 continue;
             }
@@ -147,11 +168,35 @@ public static class DocumentReader {
                 Text(item["x-cybercloud-purge-permission"]),
                 Text(item["x-cybercloud-purge-protection-pointer"]),
                 ActionsOf(paths, schemas, path.Key, resourceType),
-                Flag(item["get"]?["deprecated"])
+                Flag(item["get"]?["deprecated"]),
+                CollectionOf(paths, resourceType)
             ));
         }
 
         return [.. found.OrderBy(x => x.ResourceType, StringComparer.Ordinal)];
+    }
+
+    /// <summary>
+    ///     The collection path declared for one resource type, or <c>""</c>.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Matched on the type and the collection flag, and NOT on a path prefix.</b> A prefix
+    ///     test is what <see cref="ActionsOf" /> uses and it is right there because an action's path
+    ///     is strictly longer than its resource's. A collection's is strictly <i>shorter</i>, so the
+    ///     same test would find nothing — and the reverse test, "the resource path starts with this
+    ///     one", matches every ancestor collection as well: <c>…/servers</c> is a prefix of
+    ///     <c>…/servers/{n}/databases/{n}</c>, so a database would take its parent's collection.
+    /// </remarks>
+    static string CollectionOf(JsonObject paths, string resourceType) {
+        foreach (var path in paths) {
+            if (path.Value is JsonObject item
+                && Flag(item["x-cybercloud-collection"])
+                && string.Equals(Text(item["x-cybercloud-resource-type"]), resourceType, StringComparison.Ordinal)) {
+                return path.Key;
+            }
+        }
+
+        return string.Empty;
     }
 
     static ImmutableArray<DocumentAction> ActionsOf(

@@ -626,6 +626,21 @@ public static class SdkEmitter {
             .Append("    public const string PathTemplate = ")
             .Append(Quote(type.Path))
             .Append(";\n")
+            // ⚠ THIS CONST IS THE FIX FOR A URL THIS CLASS HAS ALWAYS PROMISED AND THE PLATFORM
+            // NEVER SERVED. GetAllAsync below has been emitted since this file was written, and
+            // CyberCloud.Sdk/EmitterContract.cs documents the hand-written half GETting
+            // "{scope}/providers/{ns}/{type}" — a path that appeared in no emitted document and on no
+            // gateway route, so the only honest thing the hand-written half could do was not exist.
+            // The template is now read off the document rather than reassembled by the SDK, which is
+            // what stops the two from being "two constants in assemblies that cannot see each other".
+            .Append("\n    /// <summary>The collection URL template GetAllAsync pages.</summary>\n")
+            .Append("    /// <remarks>⚠ It ends on the type rather than on a name, which is what makes it a\n")
+            .Append("    /// collection address and not a resource one — the two grammars are disjoint, see\n")
+            .Append("    /// ResourceCollectionId. Empty when this api-version's document declares no such\n")
+            .Append("    /// path, in which case GetAllAsync has nothing to page.</remarks>\n")
+            .Append("    public const string CollectionPathTemplate = ")
+            .Append(Quote(type.CollectionPath))
+            .Append(";\n")
             .Append("\n    /// <inheritdoc cref=\"GeneratedApiVersion.Value\" />\n")
             .Append("    public const string ApiVersion = ")
             .Append(Quote(version))
