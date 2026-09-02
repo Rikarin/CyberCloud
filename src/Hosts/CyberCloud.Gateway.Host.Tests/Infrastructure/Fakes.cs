@@ -130,6 +130,37 @@ sealed class RecordingResourceManager : IResourceManager {
     public Task<Result<WriteAccepted>> DeleteAsync(WriteRequest request, CancellationToken cancellationToken = default) =>
         Record(request, OnWrite);
 
+    /// <summary>Every collection path this manager was asked to list, in order.</summary>
+    /// <remarks>
+    ///     ⚠ <b>Separate from <see cref="Paths" />, and it has to be.</b> A collection path is not a
+    ///     <c>ResourceId</c> — <c>ResourceCollectionId</c>'s remarks give the grammar — so a test that
+    ///     looked for it in <see cref="Paths" /> would be asking whether a resource path that cannot
+    ///     exist was dispatched, and would pass whatever the gateway did.
+    /// </remarks>
+    public ConcurrentQueue<string> Collections { get; } = new();
+
+    /// <summary>What <see cref="ListAsync" /> answers. Default: one resource.</summary>
+    public Func<ListRequest, Result<ResourceListPage>> OnList { get; set; } =
+        request => Result<ResourceListPage>.Success(new() {
+            Resources = [new() { Path = request.Path + "/main", Name = "main" }]
+        });
+
+    /// <inheritdoc />
+    /// <remarks>
+    ///     ⚠ <b>This side of the seam proves routing and nothing else.</b> The filter that decides
+    ///     what a listing may contain is <c>ResourceManagerService.ListAsync</c>'s, and a route added
+    ///     only here would demonstrate a <c>200</c> with a body this class wrote — see the remarks on
+    ///     <c>ReconcileThroughTheRealHostTests</c>, which is the suite that meets this one at
+    ///     <see cref="IResourceManager" />.
+    /// </remarks>
+    public Task<Result<ResourceListPage>> ListAsync(ListRequest request, CancellationToken cancellationToken = default) {
+        ArgumentNullException.ThrowIfNull(request);
+        Collections.Enqueue(request.Path);
+        callers.Enqueue(request.Caller);
+
+        return Task.FromResult(OnList(request));
+    }
+
     /// <summary>Every action name this manager was asked to run, in order.</summary>
     /// <remarks>
     ///     ⚠ <b>Separate from <see cref="Paths" />, because the path does not carry the action.</b>

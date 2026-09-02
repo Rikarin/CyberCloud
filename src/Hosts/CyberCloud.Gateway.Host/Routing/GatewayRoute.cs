@@ -37,6 +37,17 @@ enum RouteKind {
     /// <summary>A <c>POST</c> action on an existing resource — <c>restart</c>, <c>rotateKeys</c>.</summary>
     Action,
 
+    /// <summary>
+    ///     A collection of one resource type inside one resource group. <c>GET</c> only.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Not a verb on <see cref="Resource" />, because the two are different addresses.</b>
+    ///     <c>ResourceCollectionId</c> and <c>ResourceId</c> partition the paths that carry the fixed
+    ///     prefix — one ends on a type, the other on a name — so which of them a path is, is decided
+    ///     by the path and never by the method.
+    /// </remarks>
+    Collection,
+
     /// <summary>The LRO polling endpoint. docs/plan/10 § Long-running operations.</summary>
     Operation,
 
@@ -67,13 +78,18 @@ enum RouteKind {
 ///     The scope, for <see cref="RouteKind.Scope" />. ⚠ Its tenant is the <i>token's</i> too, and for
 ///     the same reason — see the remarks on this type.
 /// </param>
+/// <param name="Collection">
+///     The collection, for <see cref="RouteKind.Collection" />. ⚠ Its tenant is the <i>token's</i>
+///     too, rebuilt for the reason <see cref="Resource" />'s is.
+/// </param>
 readonly record struct GatewayRoute(
     RouteKind Kind,
     ResourceId Resource,
     string Action,
     Guid OperationId,
     string HubName,
-    ScopeId Scope = default
+    ScopeId Scope = default,
+    ResourceCollectionId Collection = default
 ) {
     /// <summary>Nothing matched.</summary>
     public static GatewayRoute None { get; } = new(RouteKind.Unknown, default, "", Guid.Empty, "");
@@ -82,7 +98,8 @@ readonly record struct GatewayRoute(
     /// <remarks>
     ///     ⚠ <b>A scope's path is rebuilt here exactly as a resource's is</b>, from a
     ///     <see cref="ScopeId" /> whose <c>TenantId</c> came from <c>CallerContext</c>. The second
-    ///     defence is only a defence if every kind that reaches a manager goes through it.
+    ///     defence is only a defence if every kind that reaches a manager goes through it —
+    ///     which is why <see cref="CollectionPath" /> below is rebuilt the same way.
     /// </remarks>
     public string ResourcePath =>
         Kind switch {
@@ -90,6 +107,9 @@ readonly record struct GatewayRoute(
             RouteKind.Scope => Scope.Path,
             _ => ""
         };
+
+    /// <summary>The collection address dispatch uses — rebuilt, carrying the token's tenant.</summary>
+    public string CollectionPath => Kind is RouteKind.Collection ? Collection.Path : "";
 }
 
 /// <summary>
@@ -179,12 +199,49 @@ static class GatewayRouter {
 
         return string.Equals(method, HttpMethods.Post, StringComparison.Ordinal)
             ? ResolveAction(path, tenantId)
-            : ResolveResource(path, tenantId);
+            : ResolveResource(path, method, tenantId);
     }
 
-    static Result<GatewayRoute> ResolveResource(string path, Guid tenantId) {
+    /// <summary>
+    ///     A non-<c>POST</c> path is a resource or a collection, and the path alone says which.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>The collection is tried second and only on a <c>GET</c>, and the order is not
+    ///         arbitrary.</b> The two grammars are disjoint — <c>ResourceCollectionId</c>'s remarks
+    ///         set out why an even tail is a resource and an odd one is a collection — so neither
+    ///         parser can accept the other's path and the order cannot change which one matches. What
+    ///         it does change is the <i>message</i> a malformed path gets, and
+    ///         <c>ResourceId.ParsePath</c>'s is the one nearly every caller needs.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>A <c>PUT</c>, <c>PATCH</c> or <c>DELETE</c> on a collection path is a <c>400</c>
+    ///         with the resource parser's message and is deliberately not a <c>405</c>.</b> There is
+    ///         no bulk write and no bulk delete: docs/plan/06 § Two-phase create makes a resource
+    ///         group the lifecycle unit and a resource the thing written, and an endpoint that
+    ///         deleted "every widget here" would tear down an unknown number of resources the caller
+    ///         never named — the same refusal <c>ResourceManagerService.DeleteAsync</c> makes for a
+    ///         parent with children.
+    ///     </para>
+    /// </remarks>
+    static Result<GatewayRoute> ResolveResource(string path, string method, Guid tenantId) {
         var parsed = ResourceId.ParsePath(path);
+
         if (parsed.TryGetError(out var error)) {
+            if (HttpMethods.IsGet(method) && ResourceCollectionId.TryParsePath(path, out var collection)) {
+                return Result<GatewayRoute>.Success(new(
+                    RouteKind.Collection,
+                    default,
+                    "",
+                    Guid.Empty,
+                    "",
+                    // ⚠ NAMED, because this record now carries two optional address kinds. The
+                    // positional form put a collection into Scope and still compiled for as long as
+                    // the two were one parameter apart.
+                    Collection: collection with { TenantId = tenantId }
+                ));
+            }
+
             return Result<GatewayRoute>.Failure(error);
         }
 

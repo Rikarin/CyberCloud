@@ -186,6 +186,44 @@ public static class CliEmitter {
 
         verbs["show"] = Verb("show", "Read a " + type.DisplayName + ".", "GET", type, version, [], longRunning: false);
 
+        // ⚠ EMITTED ONLY WHEN THE DOCUMENT DECLARES THE PATH. `cyc … list` with no collection path
+        // behind it is a verb whose URL does not exist — and this file's whole premise is that a
+        // generated surface cannot claim something the registry does not say. DocumentType's
+        // CollectionPath is empty when the document has no such path, which is the fact to branch on
+        // rather than an assumption that every type has one.
+        if (type.CollectionPath.Length > 0) {
+            var list = Verb(
+                "list",
+                "List the " + type.DisplayPlural + " in a resource group.",
+                "GET",
+                type,
+                version,
+                [],
+                longRunning: false,
+                named: false
+            );
+
+            list["path"] = type.CollectionPath;
+
+            // ⚠ PAGED, AND THE HOST HAS TO KNOW IT EVEN THOUGH IT CANNOT YET ACT ON IT. docs/plan/07
+            // puts ListObjects at M2, so the platform filters a listing one permission check per
+            // member and caps the page (ListRequest.MaxPageSize) — a host that read one page and
+            // stopped would silently truncate, and a listing is the one response whose truncation
+            // looks exactly like a small result.
+            //
+            // ⚠ AND THERE IS DELIBERATELY NO `pageFlags` HERE. The obvious member is a list of the
+            // flags that drive paging — `--top`, `--skip-token` — and it would be two constants in
+            // assemblies that cannot see each other: CliFlag can bind a body pointer (JsonPointer) or
+            // a path placeholder (PathPlaceholder) and has no QUERY binding at all, so `cyc` would
+            // accept both flags, parse both, and send neither. A flag that is accepted and ignored is
+            // worse than a flag that is absent. The verb says it is paged; wiring the query is a
+            // change to CliFlag and to the host, and until that lands `cyc … list` fetches the first
+            // page.
+            list["paged"] = true;
+
+            verbs["list"] = list;
+        }
+
         verbs["delete"] = Verb(
             "delete",
             // ⚠ "Recoverable for N day(s)" is now a statement about what the platform does rather
@@ -235,12 +273,13 @@ public static class CliEmitter {
         DocumentType type,
         string version,
         ImmutableArray<CliFlag> body,
-        bool longRunning
+        bool longRunning,
+        bool named = true
     ) {
         var flags = new JsonArray();
         var seen = new HashSet<string>(StringComparer.Ordinal);
 
-        foreach (var flag in Address(type).AddRange(body).OrderBy(x => x.Name, StringComparer.Ordinal)) {
+        foreach (var flag in Address(type, named).AddRange(body).OrderBy(x => x.Name, StringComparer.Ordinal)) {
             // ⚠ THE SIBLING OF THE `commands[name] = …` BUG, AND IT FAILS THE OTHER WAY ROUND. A
             // JsonObject indexer REPLACES, so a colliding command name left one type out of the tree
             // and the loss was invisible because an object cannot hold one key twice. A JsonArray
@@ -326,6 +365,10 @@ public static class CliEmitter {
     ///     The flags that address a resource. Every verb takes them and none of them is in the body.
     /// </summary>
     /// <param name="type">The resource type, whose path template supplies the placeholders.</param>
+    /// <param name="named">
+    ///     Whether the verb addresses one resource. <see langword="false" /> for <c>list</c>, whose
+    ///     path ends on the type and therefore has no <c>{resourceName}</c> to fill.
+    /// </param>
     /// <remarks>
     ///     <para>
     ///         ⚠ <b>Read off the path template's own placeholders rather than listed, and until
@@ -351,14 +394,20 @@ public static class CliEmitter {
     ///         which server a database is in is part of the address rather than part of the context.
     ///     </para>
     /// </remarks>
-    static ImmutableArray<CliFlag> Address(DocumentType type) {
+    static ImmutableArray<CliFlag> Address(DocumentType type, bool named = true) {
         var flags = ImmutableArray.CreateBuilder<CliFlag>();
 
-        flags.Add(
-            new("--name", "string", "The resource's name within its group.", Required: true) {
-                PathPlaceholder = DocumentReader.ResourceNamePlaceholder
-            }
-        );
+        // ⚠ EVERY VERB BUT `list` NAMES A RESOURCE, AND `list` MUST NOT. Its path ends on the type,
+        // so there is no {resourceName} placeholder for a --name to fill; emitting one anyway would
+        // give the host a flag that binds to nothing, which is the "a placeholder with no flag"
+        // failure the remarks above describe, running in the other direction.
+        if (named) {
+            flags.Add(
+                new("--name", "string", "The resource's name within its group.", Required: true) {
+                    PathPlaceholder = DocumentReader.ResourceNamePlaceholder
+                }
+            );
+        }
 
         flags.Add(
             new(

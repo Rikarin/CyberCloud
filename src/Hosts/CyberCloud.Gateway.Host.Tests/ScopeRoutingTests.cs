@@ -186,9 +186,13 @@ public sealed class ScopeRoutingTests {
     // ── The shapes that must still refuse ──────────────────────────────────────────────────────
 
     [Theory]
-    // A resource path with a broken tail is still a 400 and must not be swallowed by the scope
-    // grammar — the two are disjoint and this is the assertion of it from the gateway's side.
-    [InlineData("/tenants/{t}/subscriptions/{s}/resourceGroups/prod/providers/CyberCloud.DBforPostgreSQL/servers")]
+    // ⚠ A CASE WAS REMOVED HERE AND ITS REMOVAL IS THE POINT.
+    // `/…/resourceGroups/prod/providers/CyberCloud.DBforPostgreSQL/servers` was asserted as a 400 —
+    // "a resource path with a broken tail must not be swallowed by the scope grammar". That address
+    // is now a COLLECTION: `ResourceCollectionId` defines a collection as exactly the odd-tail
+    // complement `ResourceId.ParsePath` refuses, and the two landed in the same batch. The scope
+    // grammar still does not swallow it, which is what this theory was really guarding, and
+    // `CollectionRoutingTests` is where that address is asserted positively now.
     // Three segments: not a scope shape and not a resource one.
     [InlineData("/tenants/{t}/subscriptions")]
     // The literal is wrong.

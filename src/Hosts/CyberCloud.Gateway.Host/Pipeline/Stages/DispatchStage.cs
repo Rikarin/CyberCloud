@@ -51,6 +51,7 @@ sealed class DispatchStage(
             RouteKind.Operation => await OperationAsync(context, path, cancellationToken),
             RouteKind.Resource => await ResourceAsync(context, path, cancellationToken),
             RouteKind.Scope => await ScopeAsync(context, path, cancellationToken),
+            RouteKind.Collection => await CollectionAsync(context, path, cancellationToken),
             RouteKind.Action => await ActionAsync(context, path, cancellationToken),
             // A hub request leaves the pipeline here and is served by SignalR's own middleware; the
             // pipeline's job for it was stages 1 to 5.
@@ -186,6 +187,68 @@ sealed class DispatchStage(
         return new() {
             StatusCode = snapshot.Created ? StatusCodes.Status201Created : StatusCodes.Status200OK,
             Json = ResponseBodies.Scope(snapshot)
+        };
+    }
+
+    /// <summary>
+    ///     The collection <c>GET</c>. Straight to <c>IResourceManager.ListAsync</c>, which owns the
+    ///     per-member filter.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>There is no check here either, and on this endpoint the temptation is larger.</b>
+    ///         A listing is the one response whose <i>size</i> depends on authorization, so the
+    ///         obvious shortcut is to ask once at this layer and hand the manager a pre-filtered set.
+    ///         That would be the second enforcement seam docs/plan/10 § Request pipeline exists to
+    ///         prevent, and it would be the one that gets forgotten when the rule changes:
+    ///         <c>GatewayIsolationTests</c> asserts this assembly cannot even name
+    ///         <c>IResourceAuthorizer</c>.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b><c>$top</c> is parsed leniently and <c>$skipToken</c> is passed through
+    ///         verbatim.</b> A <c>$top</c> that is not a number is <i>ignored</i> rather than
+    ///         refused, because the page size is a hint the platform clamps anyway — see
+    ///         <c>ListRequest.PageSize</c>. A <c>$skipToken</c> naming a path in another tenant
+    ///         changes nothing: the manager resumes at "the next member of THIS group whose path
+    ///         sorts after this string", and the group it walks came from the rebuilt address.
+    ///     </para>
+    /// </remarks>
+    async Task<GatewayOutcome> CollectionAsync(
+        GatewayRequestContext context,
+        string path,
+        CancellationToken cancellationToken
+    ) {
+        var query = context.Http.Request.Query;
+
+        var listed = await manager.ListAsync(
+            new() {
+                // ⚠ The rebuilt path, carrying the TOKEN's tenant. Never context.Http.Request.Path.
+                Path = context.Route.CollectionPath,
+                ApiVersion = context.ApiVersion.Value,
+                Caller = context.Caller,
+                Top = int.TryParse(query["$top"], CultureInfo.InvariantCulture, out var top) ? top : 0,
+                Continuation = query["$skipToken"].ToString()
+            },
+            cancellationToken
+        );
+
+        if (listed.TryGetError(out var error)) {
+            return ResultShaper.Shape(error, path);
+        }
+
+        var page = listed.GetValueOrThrow();
+
+        return new() {
+            StatusCode = StatusCodes.Status200OK,
+            Json = ResponseBodies.Collection(
+                page,
+                GatewayRouterPaths.NextLink(
+                    options.PublicBaseUri,
+                    context.Route.CollectionPath,
+                    context.ApiVersion.Value,
+                    page.Continuation
+                )
+            )
         };
     }
 

@@ -164,6 +164,19 @@ public static class OpenApiEmitter {
             var resourcePath = PathOf(type.Type);
             paths[resourcePath] = ResourcePathItem(type, component, retiresOn);
 
+            // ⚠ THE COLLECTION PATH IS A SECOND PATH FOR ONE TYPE, WHICH IS THE FIRST TIME THIS
+            // DOCUMENT HAS HAD ONE THAT IS NOT AN ACTION — and that is why the item below carries
+            // x-cybercloud-collection. DocumentReader.TypesOf keys a type on
+            // x-cybercloud-resource-type and skips only items carrying x-cybercloud-action, so
+            // without a second discriminator this path would read as a SECOND resource type of the
+            // same name: CliEmitter throws on the duplicate command name, SdkEmitter throws on the
+            // duplicate model name, and FormsEmitter silently replaces the real one. That is exactly
+            // why soft delete's restore and purge needed no emitter change — they are actions, and
+            // the reader already separated those.
+            var collectionComponent = CollectionComponentOf(component);
+            schemas[collectionComponent] = CollectionSchema(type, component, collectionComponent);
+            paths[CollectionPathOf(type.Type)] = CollectionPathItem(type, collectionComponent, retiresOn);
+
             foreach (var action in type.Actions.OrderBy(x => x.Name, StringComparer.Ordinal)) {
                 // ⚠ An action's request and response are components rather than inline schemas, for
                 // the reason every other body is one: an SDK generator names a model after the
@@ -618,6 +631,168 @@ public static class OpenApiEmitter {
     /// <summary>The component key of an action's request or response schema.</summary>
     static string ActionComponentOf(string typeComponent, string action, string role) =>
         typeComponent + "." + Capitalise(action) + role;
+
+    /// <summary>The component key of a type's list envelope.</summary>
+    static string CollectionComponentOf(string typeComponent) => typeComponent + ".List";
+
+    /// <summary>
+    ///     The collection path — <see cref="PathOf" /> without the trailing <c>/{resourceName}</c>.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>Derived from <see cref="PathOf" /> rather than rebuilt, so the two cannot
+    ///         disagree.</b> Two interleavers would be two chances for a collection and the resources
+    ///         in it to name different ancestors, and the disagreement is silent: both paths parse,
+    ///         both look right, and a client pages a collection that holds none of the resources it
+    ///         then reads.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The result ends on a type segment, which is exactly what
+    ///         <c>ResourceId.ParsePath</c> refuses and <c>ResourceCollectionId.ParsePath</c>
+    ///         requires.</b> The two grammars partition the paths carrying the fixed prefix — an even
+    ///         tail is a resource, an odd one is a collection — so the gateway decides which of them a
+    ///         URL is from the URL alone, and never from the method.
+    ///     </para>
+    /// </remarks>
+    static string CollectionPathOf(ResourceTypeName type) {
+        const string Suffix = "/{resourceName}";
+        var path = PathOf(type);
+
+        return path[..^Suffix.Length];
+    }
+
+    /// <summary>
+    ///     The list envelope: <c>{ "value": [ … ], "nextLink": … }</c>.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>A component rather than an inline schema, for the reason an action's request and
+    ///     response are components:</b> an SDK generator names a model after the component key, and
+    ///     an inline schema gets an invented name that changes when the generator does.
+    /// </remarks>
+    static JsonObject CollectionSchema(ResourceTypeRegistration type, string component, string self) =>
+        new() {
+            ["type"] = "object",
+            ["title"] = self,
+            ["description"] =
+                "One page of " + type.Type + ". ⚠ The page holds what the caller may read: a "
+                + "listing runs a permission check per member (docs/plan/07 § The enforcement seam), "
+                + "so a short or empty page means \"that is what you may see\" and never \"that is "
+                + "all there is\". Stop when nextLink is absent, never when a page is smaller than "
+                + "you asked for.",
+            ["properties"] = new JsonObject {
+                ["nextLink"] = new JsonObject {
+                    ["type"] = "string",
+                    ["description"] =
+                        "The absolute URL of the next page. Absent on the last page — there is no "
+                        + "empty-string form, because an empty URL is one a polite client requests."
+                },
+                ["value"] = new JsonObject {
+                    ["type"] = "array",
+                    ["description"] = "The resources on this page, ordered by id.",
+                    ["items"] = Ref("schemas", component)
+                }
+            },
+            // ⚠ `value` is required and `nextLink` is not, so a client can always enumerate and only
+            // has to test for another page. There is deliberately no `count`: a total would say how
+            // many resources exist that the caller may not see, which is the enumeration oracle
+            // docs/plan/07 § The enforcement seam closes one resource at a time.
+            ["required"] = new JsonArray { "value" },
+            ["additionalProperties"] = false
+        };
+
+    /// <summary>
+    ///     The collection path item — a <c>GET</c> and nothing else.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>No <c>put</c>, no <c>patch</c>, no <c>delete</c>, and their absence is a decision.</b>
+    ///     docs/plan/06 § Two-phase create makes the resource group the lifecycle unit and the
+    ///     resource the thing written; a <c>DELETE</c> here would tear down an unknown number of
+    ///     resources the caller never named, which is the same refusal
+    ///     <c>ResourceManagerService.DeleteAsync</c> makes for a parent that still has children.
+    /// </remarks>
+    static JsonObject CollectionPathItem(
+        ResourceTypeRegistration type,
+        string collectionComponent,
+        DateOnly? retiresOn
+    ) {
+        var item = new JsonObject {
+            ["parameters"] = CollectionParameters(type.Type),
+            ["get"] = new JsonObject {
+                ["operationId"] = OperationIdOf(type.Type, "List"),
+                ["summary"] = "List the " + type.Type + " in a resource group.",
+                ["description"] =
+                    "Returns one page of the resources of this type in the resource group the path "
+                    + "names, including any that are being deleted — docs/plan/06 § Two-phase create "
+                    + "keeps a resource whose teardown has not converged visible with that state, "
+                    + "because its pods still run and its meter still ticks.",
+                ["responses"] = new JsonObject {
+                    ["200"] = new JsonObject {
+                        ["description"] = "One page.",
+                        ["content"] = new JsonObject {
+                            ["application/json"] = new JsonObject {
+                                ["schema"] = Ref("schemas", collectionComponent)
+                            }
+                        }
+                    }
+                }.WithErrors(),
+                ["x-cybercloud-permission"] = type.ReadPermission
+            },
+            ["x-cybercloud-resource-type"] = type.Type.ToString(),
+            // ⚠ THE DISCRIMINATOR, AND IT IS THE WHOLE OF ISSUE #11. See the call site.
+            ["x-cybercloud-collection"] = true
+        };
+
+        return Deprecate(item, retiresOn);
+    }
+
+    /// <summary>
+    ///     <see cref="ResourceParameters" /> without <c>ResourceName</c>, plus the paging query.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Dropping <c>ResourceName</c> is not optional and <see cref="OpenApiStructure" /> is
+    ///     what enforces it.</b> That validator checks the declared parameters against the template in
+    ///     both directions, so a collection path that reused <see cref="ResourceParameters" /> would
+    ///     declare a <c>{resourceName}</c> that appears nowhere in its template and fail
+    ///     <c>Generate</c> — which is the right failure and is why this is a second builder rather
+    ///     than a flag.
+    /// </remarks>
+    static JsonArray CollectionParameters(ResourceTypeName type) {
+        var parameters = ResourceParameters(type);
+
+        for (var i = parameters.Count - 1; i >= 0; i--) {
+            if (parameters[i] is JsonObject reference
+                && reference["$ref"]?.GetValue<string>() == "#/components/parameters/ResourceName") {
+                parameters.RemoveAt(i);
+            }
+        }
+
+        parameters.Add(
+            new JsonObject {
+                ["name"] = "$top",
+                ["in"] = "query",
+                ["required"] = false,
+                ["description"] =
+                    "How many resources to examine. ⚠ A cap the platform clamps and not a promise: "
+                    + "the filter runs once per member, so this bounds the work and not the number of "
+                    + "results.",
+                ["schema"] = new JsonObject { ["type"] = "integer", ["minimum"] = 1 }
+            }
+        );
+
+        parameters.Add(
+            new JsonObject {
+                ["name"] = "$skipToken",
+                ["in"] = "query",
+                ["required"] = false,
+                ["description"] =
+                    "Where to resume. Take it from the previous page's nextLink rather than "
+                    + "constructing one.",
+                ["schema"] = new JsonObject { ["type"] = "string" }
+            }
+        );
+
+        return parameters;
+    }
 
     static JsonObject ActionPathItem(
         ResourceTypeRegistration type,

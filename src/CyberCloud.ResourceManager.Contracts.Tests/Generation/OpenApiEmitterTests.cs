@@ -359,9 +359,26 @@ public sealed class OpenApiEmitterTests {
 
         OpenApiStructure.Validate(document).ShouldBeEmpty();
 
-        document["paths"]!.AsObject().Count.ShouldBe(3);
+        // Two resource paths, two collection paths, and /operations/{operationId}. ⚠ The count was 3
+        // until a type gained a collection path; it is asserted at all because a path that silently
+        // replaced another would leave the document valid and one provider missing, which is the
+        // failure `paths[key] = …` makes invisible.
+        document["paths"]!.AsObject().Count.ShouldBe(5);
         document["components"]!["schemas"]!.AsObject().ShouldContainKey("CyberCloud.DBforMySQL.servers");
         document["components"]!["schemas"]!.AsObject().ShouldContainKey("CyberCloud.DBforPostgreSQL.servers");
+
+        // ⚠ THE CLAIM THIS CASE IS ACTUALLY ABOUT, asserted directly rather than through a count.
+        // OpenApiStructure.Validate above already rejects a duplicate operationId, but a count of
+        // paths says nothing about operation names — and the collection GET added a fifth
+        // operationId per type, which is the first new one since this case was written.
+        var operations = document["paths"]!
+            .AsObject()
+            .SelectMany(x => x.Value!.AsObject())
+            .Where(x => x.Value is JsonObject verb && verb["operationId"] is not null)
+            .Select(x => x.Value!["operationId"]!.GetValue<string>())
+            .ToList();
+
+        operations.Distinct(StringComparer.Ordinal).Count().ShouldBe(operations.Count);
     }
 
     [Fact]
