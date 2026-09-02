@@ -92,11 +92,11 @@ public readonly record struct NamespaceOccupant {
     ///     </para>
     ///     <para>
     ///         ⚠ <b>The change moves a namespace of leftover volumes out of
-    ///         <see cref="OperatorReclaimable" /> and into neither verdict, and that is owed rather
+    ///         <see cref="NamespaceReclaim.OperatorReclaimable" /> and into neither verdict, and that is owed rather
     ///         than intended.</b> That flag requires <i>every</i> occupant to be unmanaged. A group
     ///         whose only remaining objects are its own now-labelled claims satisfies neither it nor
-    ///         <see cref="Deletable" />, so it reports as a plain refusal. Nothing regresses today —
-    ///         <see cref="Decide" /> has no caller and <see cref="INamespaceInventory" />'s only
+    ///         <see cref="NamespaceReclaim.Deletable" />, so it reports as a plain refusal. Nothing regresses today —
+    ///         <see cref="NamespaceReclaim.Decide" /> has no caller and <see cref="INamespaceInventory" />'s only
     ///         implementation refuses — and the predicate belongs to the purge that removes the disks
     ///         it kept rather than to the labelling. <c>src/Providers/README.md § Namespaces</c>.
     ///     </para>
