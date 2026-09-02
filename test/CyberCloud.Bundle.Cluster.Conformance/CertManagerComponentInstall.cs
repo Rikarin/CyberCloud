@@ -60,12 +60,12 @@ public sealed class EmptyClusterFixture : IAsyncLifetime {
     /// <param name="wouldProve">What the calling test would have proved.</param>
     /// <remarks>
     ///     ⚠ <b>The component and the owed row are parameters rather than the literals they used to
-    ///     be, and that is not tidying.</b> This message named cert-manager and
-    ///     <c>one-of-eighteen-has-been-installed</c> in its own text while the fixture is shared by
-    ///     every class in the assembly. The moment a second class took the fixture, a machine with no
-    ///     Docker daemon would have printed a skip about cert-manager for a run that was about the
-    ///     storage class — a report that is worse than none, because it reads as if the row it names
-    ///     were the one left unchecked.
+    ///     be, and that is not tidying.</b> This message named cert-manager and cert-manager's owed
+    ///     row in its own text, while the fixture type is used by every installing class in the
+    ///     assembly. The moment a second class took it, a machine with no Docker daemon would have
+    ///     printed a skip about cert-manager for a run that was about the storage class — a report
+    ///     that is worse than none, because it reads as if the row it names were the one left
+    ///     unchecked.
     /// </remarks>
     public string Skip(string component, string owedRow, string wouldProve) =>
         $"SKIPPED — charts/bundle/ {component}: no empty cluster to install onto, so nothing was "
@@ -221,14 +221,14 @@ public sealed class CertManagerComponentInstaller {
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>ONE COMPONENT OF EIGHTEEN. This class proves the install MECHANISM, not the
+///         ⚠ <b>ONE COMPONENT OF NINETEEN. This class proves the install MECHANISM, not the
 ///         roster.</b> What a green run here supports, exactly: <c>charts/bundle/install.sh</c> can
 ///         be driven unattended against a fresh API server; it reads a pin out of a
 ///         <c>component.yaml</c> and installs it; <c>--wait</c> means what
 ///         <c>cert-manager/component.yaml</c> says it means, so "installed" implies "serving"; and
 ///         the one <c>serves:</c> line that component declares is true of the cluster afterwards.
 ///         What a green run here does NOT support: that the other seventeen pins install, that the
-///         phase barriers order them correctly, that seventeen operators fit on one node, or that a
+///         phase barriers order them correctly, that nineteen operators fit on one node, or that a
 ///         managed chart's custom resource reconciles. <c>charts/bundle/bundle.yaml</c> § owed keeps
 ///         that list; this class narrows the first row of it and closes nothing.
 ///     </para>
@@ -269,7 +269,7 @@ public sealed class CertManagerOnAnEmptyCluster(EmptyClusterFixture cluster) : I
             cluster.Client is null || cluster.KubeconfigPath is null,
             cluster.Skip(
                 BundleInstaller.CertManagerComponent,
-                "one-of-eighteen-has-been-installed",
+                "two-of-nineteen-have-been-installed",
                 "that charts/bundle/install.sh --phase 15 installs the cert-manager component onto a "
                 + "fresh API server unattended, that cert-manager.io/v1 — the component's only "
                 + "`serves:` line — is served afterwards, and that a self-signed Certificate reaches "
@@ -295,7 +295,7 @@ public sealed class CertManagerOnAnEmptyCluster(EmptyClusterFixture cluster) : I
             0,
             "charts/bundle/install.sh --phase 15 failed against a fresh k3s. This is the first thing "
             + "in the repository to run it against an API server at all — charts/bundle/bundle.yaml "
-            + "§ owed, `one-of-eighteen-has-been-installed` — so a failure here is a defect in the "
+            + "§ owed, `two-of-nineteen-have-been-installed` — so a failure here is a defect in the "
             + "installer or in the pin, not in this test's expectations. Its output was:\n"
             + run.Output
         );

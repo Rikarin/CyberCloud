@@ -3,24 +3,37 @@
     <!--
       The first thing in this repository that installs a charts/bundle/ component onto an API server.
 
-      ⚠ IT COVERS ONE COMPONENT OF EIGHTEEN, AND ITS NAME IS THE ONLY HONEST PLACE TO SAY SO.
-      charts/bundle/bundle.yaml § owed, `one-of-eighteen-has-been-installed`, is the row this project
+      ⚠ IT COVERS TWO COMPONENTS OF NINETEEN, AND ITS NAME IS THE ONLY HONEST PLACE TO SAY SO.
+      charts/bundle/bundle.yaml § owed, `two-of-nineteen-have-been-installed`, is the row this project
       narrows rather than closes: every pin in that directory was resolved against a registry and none
-      of it had ever been applied. Applying one component proves THE INSTALL MECHANISM — that
+      of it had ever been applied. Applying a component proves THE INSTALL MECHANISM — that
       install.sh reads a pin out of a component.yaml, invokes helm unattended, waits for the right
       thing, and leaves a cluster where the group the component claims to serve is served. It proves
       nothing whatever about the other seventeen pins. A suite that installed two and called itself
       `TheBundleInstalls` would be the failure class this repository has shipped repeatedly — a check
-      that answers a narrower question than it appears to — so the test method here is named for the
-      sentence it can defend and for no more of one.
+      that answers a narrower question than it appears to — so the test methods here are named for the
+      sentence each can defend and for no more of one.
 
-      ⚠ WHY cert-manager AND NOT SOME OTHER ROW. charts/bundle/README.md § Installing and
-      cert-manager/component.yaml both make it the natural first: it is phase 15, it depends on
-      nothing else in the bundle except a CNI k3s already has, two phase-40 components' webhooks mount
-      Secrets only it creates, and — the property that makes it TESTABLE rather than merely first —
-      its readiness is observable from outside. A Certificate either reaches `Ready` or it does not.
-      An operator whose only observable is "the Deployment is up" would let this suite pass over a
-      controller that reconciles nothing.
+      ⚠ THE DENOMINATOR IN THAT FIRST LINE READ "EIGHTEEN" UNTIL 2026-09-02 AND WAS WRONG. bundle.yaml
+      lists nineteen components and charts/bundle/ holds nineteen directories; openebs-localpv landed
+      and nobody re-counted the prose. The same stale eighteen was in charts/bundle/README.md,
+      deploy/README.md and build/Build.Bundle.cs' comments. A count written in words is a claim
+      nothing checks, which is why bundle.yaml § owed now carries the correction rather than a fourth
+      copy of the number.
+
+      ⚠ WHY cert-manager AND WHY openebs-localpv, AND NOT SOME OTHER ROW. charts/bundle/README.md
+      § Installing and cert-manager/component.yaml both make cert-manager the natural first: it is
+      phase 15, it depends on nothing else in the bundle except a CNI k3s already has, two phase-40
+      components' webhooks mount Secrets only it creates, and — the property that makes it TESTABLE
+      rather than merely first — its readiness is observable from outside. A Certificate either
+      reaches `Ready` or it does not. An operator whose only observable is "the Deployment is up"
+      would let this suite pass over a controller that reconciles nothing.
+      openebs-localpv is the natural second for the opposite reason: it is the row eleven charts under
+      charts/managed/ depend on, and its observable is one a careless test gets WRONG rather than
+      misses. k3s already ships a default StorageClass, so "a claim reached Bound" is true of a
+      cluster this installer never touched — measured, not assumed; see
+      OpenEbsLocalPvOnAnEmptyCluster's remarks and bundle.yaml § owed,
+      `one-volume-has-been-provisioned`.
 
       ⚠ WHY IT IS UNDER test/ AND NOT UNDER charts/. Nothing under charts/ builds; `Build.Charts`
       globs Chart.yaml and charts/bundle/ deliberately has none — charts/bundle/README.md § This

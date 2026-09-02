@@ -148,7 +148,7 @@ public sealed class OpenEbsLocalPvComponentInstaller {
 ///         installed this component, created a bare <c>PersistentVolumeClaim</c> and waited for
 ///         <c>Bound</c> would bind through whichever default the admission plugin picked and would
 ///         be green over a cluster where <c>install.sh</c> had never run. Four things make the
-///         difference, and <c>bundle.yaml</c> § owed, <c>nothing-has-provisioned-a-volume</c>, names
+///         difference, and <c>bundle.yaml</c> § owed, <c>one-volume-has-been-provisioned</c>, names
 ///         all four: the claim names <c>openebs-hostpath</c> explicitly; a pod exists, because
 ///         <c>WaitForFirstConsumer</c> means a claim with no consumer stays Pending and proves
 ///         nothing; the bound volume's class is read back off the API server; and the default-class
@@ -254,7 +254,7 @@ public sealed class OpenEbsLocalPvOnAnEmptyCluster(EmptyClusterFixture cluster) 
             cluster.Client is null || cluster.KubeconfigPath is null,
             cluster.Skip(
                 BundleInstaller.OpenEbsLocalPvComponent,
-                "nothing-has-provisioned-a-volume",
+                "one-volume-has-been-provisioned",
                 "that charts/bundle/install.sh --phase 25 installs the storage component onto a fresh "
                 + "API server unattended, that the class it installs is annotated default on a "
                 + "cluster that already had a different default, and that a claim naming "

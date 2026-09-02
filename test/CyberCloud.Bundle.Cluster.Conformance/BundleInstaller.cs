@@ -9,7 +9,7 @@ namespace CyberCloud.Bundle.Cluster.Conformance;
 /// <remarks>
 ///     <para>
 ///         ⚠ <b>The script is the subject, so the test may not do the script's job.</b>
-///         <c>charts/bundle/bundle.yaml</c> § owed, <c>one-of-eighteen-has-been-installed</c>, is about
+///         <c>charts/bundle/bundle.yaml</c> § owed, <c>two-of-nineteen-have-been-installed</c>, is about
 ///         <c>install.sh</c> specifically: <i>"a procedure that has been reasoned about and not
 ///         exercised"</i>. A test that ran <c>helm upgrade --install</c> itself with the same
 ///         arguments would prove that helm installs cert-manager, which nobody doubted, and would
@@ -21,7 +21,7 @@ namespace CyberCloud.Bundle.Cluster.Conformance;
 ///         text says <c>--phase</c> <i>"skips that guarantee and is for repairing one row, not for
 ///         installing"</i> — the guarantee being the phase barrier. So this exercises the installer's
 ///         per-component path and NOT its ordering: a defect in the barrier between phases would not
-///         be caught here. Installing every phase would mean eighteen operators and three virtual
+///         be caught here. Installing every phase would mean nineteen operators and three virtual
 ///         machines in a Testcontainers lane Task #95 capped at four concurrent suites, which is the
 ///         reason the bundle had no cluster-backed proof at all.
 ///     </para>

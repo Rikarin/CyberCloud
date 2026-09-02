@@ -14,9 +14,13 @@
 # helm, and is on no repair path.
 #
 # ⚠ WHAT HAS AND HAS NOT BEEN EXERCISED. Every URL and version below was resolved against its
-# registry on the date each component records. The APPLY path has not been run against a cluster by
-# CI — charts/bundle/README.md § Verification, and its honest limit. `--verify` is the half that is
-# reproducible without one, and it is the half to run first.
+# registry on the date each component records. The APPLY path is run against a real API server by
+# test/CyberCloud.Bundle.Cluster.Conformance for TWO of the nineteen components — `--phase 15` and
+# `--phase 25`, each against its own fresh k3s. Seventeen have never been applied by anything, no
+# `manifest:` component has, so the `kubectl` branch below has never executed under test, and
+# `--phase` is by its own usage text the flag that skips the barrier — so the phase ordering is
+# unexercised too. charts/bundle/README.md § Verification, and its honest limit. `--verify` is the
+# half that is reproducible with no cluster at all, and it is the half to run first.
 
 set -euo pipefail
 

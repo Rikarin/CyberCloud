@@ -132,27 +132,43 @@ ordering:
 # Named here rather than left to be discovered. Every item below was found while pinning this bundle
 # and none of it is speculative.
 owed:
-  - id: one-of-eighteen-has-been-installed
+  - id: two-of-nineteen-have-been-installed
     says: >
-      ⚠ READ THIS BEFORE ANY OTHER ITEM. It used to read `nothing-here-has-been-installed` and it no
-      longer can. ONE component — cert-manager, phase 15 — is installed onto a real API server by
-      test/CyberCloud.Bundle.Cluster.Conformance, which runs THIS DIRECTORY'S OWN `install.sh` against
-      a fresh k3s and then asserts that `cert-manager.io/v1` is served and that a self-signed
+      ⚠ READ THIS BEFORE ANY OTHER ITEM. It used to read `nothing-here-has-been-installed`, then
+      `one-of-eighteen-has-been-installed`, and neither number in the second name was right by the
+      time it was read. ⚠ THE DENOMINATOR WAS ALREADY WRONG WHEN openebs-localpv LANDED AND NOBODY
+      RE-COUNTED: `components:` above holds NINETEEN rows and charts/bundle/ holds nineteen
+      directories, counted on 2026-09-02. "Eighteen" survived into README.md, deploy/README.md and
+      build/Build.Bundle.cs' prose because a count written in words is not a count anything checks —
+      the same shape as the two-charts-name-a-storage-class sentence that
+      `the-replicated-stage-is-not-installed` corrects nine charts below its own subject.
+      TWO components are installed onto a real API server by
+      test/CyberCloud.Bundle.Cluster.Conformance, which runs THIS DIRECTORY'S OWN `install.sh`
+      against a fresh k3s in both cases:
+      cert-manager, phase 15 — `cert-manager.io/v1` is served afterwards and a self-signed
       Certificate reaches Ready with a parseable certificate in the Secret it names. Sabotage-verified
       both ways: deleting the `values:` block from cert-manager/component.yaml turns the run red, and
       so does removing the `--set` from the installer.
+      openebs-localpv, phase 25 — see `one-volume-has-been-provisioned` below.
       WHAT THAT PROVES: the install MECHANISM. `install.sh` runs unattended against a cluster it is
       handed; it reads a pin out of a component.yaml rather than carrying one; its `--wait` makes
       "installed" mean "serving"; and a `serves:` line is true of the cluster afterwards.
       WHAT IT DOES NOT PROVE, AND THE DISTANCE IS THE WHOLE OF THIS ROW: that the other SEVENTEEN
-      pins install. Nothing has exercised the PHASE BARRIER — the test uses `--phase 15`, whose own
+      pins install. Nothing has exercised the PHASE BARRIER — both tests use `--phase`, whose own
       usage text says it "skips that guarantee" — so the ordering `phases:` above encodes is still
       reasoned rather than run. Nothing has exercised any `manifest:` component, so the two-document
       apply with the establishment wait between them is unexercised, and `kubectl` has never been
-      invoked by this script under test at all. Nothing has installed two components onto one cluster.
+      invoked by this script under test at all.
+      ⚠ NOTHING HAS INSTALLED TWO COMPONENTS ONTO ONE CLUSTER, AND THE TWO ROWS ABOVE DO NOT ADD UP
+      TO THAT. Each takes its own fresh k3s from its own IClassFixture instance, deliberately: a
+      shared cluster would make each class's subject depend on which classes ran before it, and
+      "a test whose subject depends on what ran before it" is a failure this repository has shipped
+      and found a production defect hiding under. So the phase barrier, the co-tenancy of two
+      operators on one node, and any interaction between components remain unexercised, and buying
+      them means paying that risk down some other way rather than by deleting a fixture.
       Nothing has applied a charts/managed/ custom resource against a bundle-installed definition,
       which is the sentence the whole directory exists for.
-      One row of eighteen is a beginning that can be pointed at, and calling it more than that would
+      Two rows of nineteen is a beginning that can be pointed at, and calling it more than that would
       be the failure class this directory's README already names twice. Closing the rest is a lane
       question, not a willingness question — see README.md § Verification, and its honest limit.
   - id: redis-operator-is-archived-and-its-chart-is-broken
@@ -204,25 +220,44 @@ owed:
       § Enforcement's wording, "fails on any SSPL/BUSL/AGPL image outside an allow-list", is what
       makes that easy to read the wrong way round. Widening the list with the reason beside it is the
       sanctioned move and is deliberately not done in advance of the component that needs it.
-  - id: nothing-has-provisioned-a-volume
+  - id: one-volume-has-been-provisioned
     says: >
-      ⚠ THE STORAGE COMPONENT'S PIN RESOLVES, ITS CHART RENDERS, AND NO CLAIM HAS EVER BEEN BOUND
-      THROUGH IT BY ANYTHING IN THIS TREE. What was checked on 2026-08-20, firsthand: the index serves
-      localpv-provisioner 4.6.0, `helm template` at that version emits exactly five objects, the
-      StorageClass is `openebs-hostpath` with `provisioner: openebs.io/local` and
-      `volumeBindingMode: WaitForFirstConsumer`, and the default-class annotation appears only under
-      `hostpathClass.isDefaultClass`. That is a claim about a chart and about nothing else.
-      ⚠ THE OBVIOUS TEST WOULD ANSWER A NARROWER QUESTION THAN IT APPEARS TO, AND THE NARROWNESS IS
-      SPECIFIC TO THIS COMPONENT. The Testcontainers k3s that test/CyberCloud.Bundle.Cluster.Conformance
-      starts ALREADY HAS a default StorageClass — k3s bundles Rancher's local-path provisioner and
-      marks it default, which charts/managed/cloud-shell/SOURCE already reasons about. So a suite that
-      installed this component and bound a claim would bind it through whichever of the two defaults
-      the admission plugin picked, and would pass identically if this component had never been
-      installed. Closing this row means asserting against the class BY NAME —
-      `storageClassName: openebs-hostpath` on the claim, a pod to trigger WaitForFirstConsumer, and
-      the bound PersistentVolume's `spec.storageClassName` read back — and it means asserting that
-      the default annotation landed on OUR class, which is the assertion the `values:` block exists
-      for and the one a two-default cluster makes interesting rather than trivial.
+      ✅ THIS ROW USED TO BE `nothing-has-provisioned-a-volume` AND THAT SENTENCE IS NO LONGER TRUE.
+      test/CyberCloud.Bundle.Cluster.Conformance § OpenEbsLocalPvOnAnEmptyCluster runs THIS
+      DIRECTORY'S OWN `install.sh --phase 25` against a fresh k3s and then binds a claim through the
+      class it installs. The four assertions this row used to ask for, all present, all firsthand:
+      the claim names `storageClassName: openebs-hostpath` EXPLICITLY; a pod mounts it, writes a file
+      and reads the bytes back, because WaitForFirstConsumer means a claim with no consumer proves
+      nothing; the bound PersistentVolume's `spec.storageClassName` and provisioned-by annotation are
+      read back OFF THE API SERVER rather than off the claim; and the default-class annotation is
+      asserted to be on OUR class.
+      ⚠ THE TRAP THIS ROW WARNED ABOUT WAS REAL AND WAS MEASURED RATHER THAN REASONED ABOUT. A
+      throwaway probe on 2026-09-02, against the same fixture with NOTHING INSTALLED: the fresh k3s
+      serves exactly one StorageClass — `local-path`, annotated default, and itself
+      `volumeBindingMode: WaitForFirstConsumer` — and a BARE claim plus a pod reaches `Bound` with the
+      pod `Succeeded`, on a PersistentVolume of class `local-path` at
+      `/var/lib/rancher/k3s/storage/pvc-…`. So the obvious test would have been green over a cluster
+      install.sh never touched, and — because k3s's own class already waits for a first consumer —
+      even "there is a pod" would not have distinguished it. What does the distinguishing is the
+      explicit name, the volume's class read back, and the volume's node-local path: openebs writes
+      under `/var/openebs/local` and Rancher under `/var/lib/rancher/k3s/storage`, so the path is the
+      one assertion that survives a mix-up in every other one, and it is asserted.
+      ⚠ THE DEFAULT-CLASS ASSERTION IS THE ONE WITH A SILENT FAILURE BEHIND IT, AND IT IS
+      SABOTAGE-VERIFIED. Deleting the `values:` block from openebs-localpv/component.yaml turns the
+      run red twice — once in the daemonless companion, in a tenth of a second, on the manifest; and
+      once on the cluster, on the missing annotation. Neither `helm` nor `install.sh` reports
+      anything in that state: the install succeeds, the Deployment goes Ready, the class exists, and
+      the eleven managed charts that leave `storageClassName` at `""` keep silently using k3s's
+      provisioner. That is why the flag is asserted in two places and not one.
+      ⚠ ONE VOLUME IS NOT THE SENTENCE THE DIRECTORY EXISTS FOR. What is bound is a 64Mi directory by
+      a test's own hand-written claim. NOTHING HAS APPLIED A charts/managed/ CUSTOM RESOURCE AGAINST
+      A BUNDLE-INSTALLED DEFINITION, so the path that actually matters — a reconciler applies a
+      resource, an operator creates the claim, the claim binds — is still unexercised end to end, and
+      it is the row `two-of-nineteen-have-been-installed` keeps. The smallest honest next step is
+      named there and is a phase-50 operator, not a bigger storage test.
+      ⚠ AND IT IS ONE COPY OF A DIRECTORY ON ONE NODE, WITH NO QUOTA. Binding a volume says nothing
+      about surviving the loss of the node it is on — `the-replicated-stage-is-not-installed` is
+      where that lives, and this row closing does not move it.
   - id: licence-scan-is-a-declaration-not-a-scan
     says: >
       ADR-011 § Enforcement asks for "a build gate [that] runs a licence scan over the chart set and
