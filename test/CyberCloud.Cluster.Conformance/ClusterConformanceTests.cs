@@ -291,7 +291,7 @@ public abstract class ClusterConformanceTests<TSource>(ClusterConformanceFixture
         var status = await ConvergeAsync(harness, accepted.OperationId);
         status.State.ShouldBe(OperationState.Succeeded, status.Error?.Message);
 
-        var claims = await ClaimsInNamespaceAsync(harness, token);
+        var claims = await ClaimsOfResourceAsync(harness, accepted.Resource.Id, token);
 
         if (claims.Count == 0) {
             Assert.Skip(
@@ -331,7 +331,7 @@ public abstract class ClusterConformanceTests<TSource>(ClusterConformanceFixture
         );
 
         if (!recoverable) {
-            (await ClaimsInNamespaceAsync(harness, token, expectSome: false)).ShouldBeEmpty(
+            (await ClaimsOfResourceAsync(harness, accepted.Resource.Id, token, expectSome: false)).ShouldBeEmpty(
                 "this type declares no recovery window, so its delete is final — and a final "
                 + "teardown that leaves the claims returns the tenant's quota and keeps their disks."
             );
@@ -340,7 +340,7 @@ public abstract class ClusterConformanceTests<TSource>(ClusterConformanceFixture
         }
 
         // ── The property the window is made of, observed rather than assumed ────────────────────
-        var kept = await ClaimsInNamespaceAsync(harness, token);
+        var kept = await ClaimsOfResourceAsync(harness, accepted.Resource.Id, token);
 
         kept.Keys.ShouldBe(
             claims.Keys,
@@ -367,7 +367,7 @@ public abstract class ClusterConformanceTests<TSource>(ClusterConformanceFixture
             $"the purge ended {ended.State}: {ended.Error?.Message}"
         );
 
-        (await ClaimsInNamespaceAsync(harness, token, expectSome: false)).ShouldBeEmpty(
+        (await ClaimsOfResourceAsync(harness, accepted.Resource.Id, token, expectSome: false)).ShouldBeEmpty(
             "the purge left the volumes behind. docs/plan/08 § Soft delete: ending a window has to "
             + "remove exactly what a teardown keeps, or a purged resource returns its quota, frees "
             + "its name and leaves its disks allocated with nothing pointing at them."
@@ -393,8 +393,25 @@ public abstract class ClusterConformanceTests<TSource>(ClusterConformanceFixture
     ///         a test that skipped for timing reasons and reported it as a family with no storage.
     ///     </para>
     /// </remarks>
-    static async Task<Dictionary<string, IDictionary<string, string>?>> ClaimsInNamespaceAsync(
+    /// <summary>The claims in the namespace that belong to <paramref name="resourceId" />.</summary>
+    /// <remarks>
+    ///     ⚠ <b>SCOPED TO ONE RESOURCE, AND IT WAS NAMESPACE-WIDE.</b> Every class in this suite
+    ///     shares one k3s and one namespace, so a namespace-wide list returns the claims of every
+    ///     <i>other</i> test's resource too. The final "the purge removed them" assertion therefore
+    ///     failed for a reason that had nothing to do with the purge — fifteen claims across five
+    ///     sibling resources, none of them the one under test, whose own claims had been removed
+    ///     correctly. The earlier assertions did not catch it because <b>both sides</b> of the
+    ///     comparison were namespace-wide and so agreed.
+    ///     <para>
+    ///         The filter is <c>cybercloud.io/resource-id</c>, which a claim carries only because
+    ///         <c>WithTemplateLabels</c> puts the six lifetime-stable labels into a
+    ///         <c>volumeClaimTemplate</c>. Before that this scoping could not have been written —
+    ///         which is why the test was, correctly, namespace-wide when it was drafted.
+    ///     </para>
+    /// </remarks>
+    static async Task<Dictionary<string, IDictionary<string, string>?>> ClaimsOfResourceAsync(
         ClusterConformanceHarness<TSource> harness,
+        Guid resourceId,
         CancellationToken cancellationToken,
         bool expectSome = true
     ) {
@@ -403,6 +420,7 @@ public abstract class ClusterConformanceTests<TSource>(ClusterConformanceFixture
         for (var attempt = 0; attempt < 10; attempt++) {
             using var listed = await harness.Raw.CoreV1.ListNamespacedPersistentVolumeClaimWithHttpMessagesAsync(
                 ClusterConformanceHarness<TSource>.Namespace,
+                labelSelector: $"{KubeLabels.ResourceId}={KubeLabels.GuidValue(resourceId)}",
                 cancellationToken: cancellationToken
             );
 
