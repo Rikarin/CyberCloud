@@ -1018,6 +1018,94 @@ public sealed class SoftDeletePathTests(ResourceManagerCluster cluster) {
             TestContext.Current.CancellationToken
         );
 
+    /// <summary>
+    ///     ⚠ <b>A purge that cannot remove the volumes its teardown kept does not converge, and does
+    ///     not hand the quota back.</b>
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         docs/plan/08 § Soft delete's owed item — <i>"a purge still leaves the volumes … so a
+    ///         purged resource returns its quota and leaves its disks"</i> — is two failures in one
+    ///         sentence, and this pins the second. The disks are the harder half and are proved
+    ///         against a real API server; the ORDERING is provable here, and it is the half that
+    ///         decides what an operator is left with when the removal fails. A purge that returned the
+    ///         allowance and then failed to reach the claims would let the tenant spend a budget their
+    ///         own storage is still occupying.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The failure is produced by the harness having no cluster to reach rather than by a
+    ///         stub outcome</b>, which is the state <c>NoClusterConnectionFactory</c> puts every
+    ///         resource here in. <c>VolumeReclaimer</c> refuses to converge on it precisely because
+    ///         converging would report disks destroyed that were never reached — so what this asserts
+    ///         is the refusal itself, not a mock's opinion of one.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>And the same resource with no volumes declared purges cleanly</b>, in the same
+    ///         test, so the refusal is attributable to the volumes rather than to anything else this
+    ///         harness cannot do.
+    ///     </para>
+    /// </remarks>
+    [Fact]
+    public async Task APurgeThatCannotRemoveTheVolumesItKeptDoesNotReturnTheQuota() {
+        ResourceManagerCluster.ResetDoubles();
+        var address = VaultAddress("keeps-a-disk");
+
+        var quota = cluster.Quota(ResourceManagerCluster.Tenant, Subscription);
+        var vcpuBefore = (await quota.GetUsageAsync(QuotaMeter.Vcpu)).GetValueOrThrow().Committed;
+
+        var created = await Create(address, size: 3);
+        created.IsSuccess.ShouldBeTrue(created.Error?.Message);
+        await Converge(created.GetValueOrThrow());
+
+        var resourceId = created.GetValueOrThrow().Resource.Id;
+        FakeWorld.KeepsVolume[resourceId] = "data";
+
+        var deleted = await Delete(address);
+        await Converge(deleted.GetValueOrThrow());
+
+        (await quota.GetUsageAsync(QuotaMeter.Vcpu)).GetValueOrThrow().Committed.ShouldBe(vcpuBefore + 3);
+
+        var purged = await Purge(address);
+        purged.IsSuccess.ShouldBeTrue(purged.Error?.Message);
+
+        var operation = cluster.Operation(ResourceManagerCluster.Tenant, purged.GetValueOrThrow().OperationId);
+
+        OperationStatus status = default!;
+        for (var i = 0; i < 5; i++) {
+            status = (await operation.DriveAsync()).GetValueOrThrow();
+        }
+
+        status.State.ShouldNotBe(
+            OperationState.Succeeded,
+            "the purge reported success while the claim it named was never reached — that is the "
+            + "defect docs/plan/08 § Soft delete records, reported as a green operation"
+        );
+
+        (await quota.GetUsageAsync(QuotaMeter.Vcpu)).GetValueOrThrow()
+            .Committed.ShouldBe(
+                vcpuBefore + 3,
+                "the reclaim runs BEFORE the committed quota goes back, so a purge that could not "
+                + "remove the disks leaves the allowance they occupy held"
+            );
+
+        // ── And the same resource, with nothing kept, purges ────────────────────────────────────
+        FakeWorld.KeepsVolume.TryRemove(resourceId, out _);
+
+        for (var i = 0; i < 5; i++) {
+            status = (await operation.DriveAsync()).GetValueOrThrow();
+            if (status.IsTerminal) {
+                break;
+            }
+        }
+
+        status.State.ShouldBe(
+            OperationState.Succeeded,
+            $"the purge did not finish once there was nothing left to reclaim: {status.Error?.Message}"
+        );
+
+        (await quota.GetUsageAsync(QuotaMeter.Vcpu)).GetValueOrThrow().Committed.ShouldBe(vcpuBefore);
+    }
+
     Task<Result<WriteAccepted>> Create(ResourceId address, int size = 2, bool? purgeProtection = null) =>
         cluster.Manager.WriteAsync(
             new() {
