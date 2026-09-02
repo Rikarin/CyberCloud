@@ -221,18 +221,31 @@ public sealed class ResourceManagerService(
 
         var tenant = grains.ForTenant(collection.TenantId.ToString("D", CultureInfo.InvariantCulture));
 
-        var members = await tenant
-            .GetGrain<IResourceGroupGrain>(
-                GrainKeys.ResourceGroup(collection.SubscriptionId, collection.ResourceGroup)
-            )
-            .ListAsync();
+        var group = tenant.GetGrain<IResourceGroupGrain>(
+            GrainKeys.ResourceGroup(collection.SubscriptionId, collection.ResourceGroup)
+        );
 
-        // ⚠ A GROUP THAT DOES NOT EXIST IS THE CANONICAL 404 AND NOT AN EMPTY PAGE. An empty page
-        // says "this group holds none of these", which is a statement about a group the caller has
-        // been told exists. IResourceGroupGrain.ListAsync answers ResourceGroupNotFound for one that
-        // was never created, and that answer is worth keeping — but it is rendered here as the same
-        // absence every other unfindable thing gets, because a distinct message would let a caller
-        // enumerate which group names are live in a subscription one probe at a time.
+        // ⚠ A GROUP THAT DOES NOT EXIST IS THE CANONICAL 404 AND NOT AN EMPTY PAGE, AND ASKING TAKES
+        // AN EXPLICIT GetAsync BECAUSE ListAsync CANNOT SAY.
+        //
+        // IResourceGroupGrain.ListAsync reads state.Members and answers Success with an empty list
+        // whatever the grain holds — a group that was never created and a group that is genuinely
+        // empty are the same answer to it. That is defensible on the grain, which owns membership and
+        // not existence, and it is not defensible here: an empty page is a statement about a group,
+        // so answering one for a group nobody made lets a caller enumerate which group names are live
+        // in a subscription one probe at a time. GetAsync is the method that distinguishes them, and
+        // it addresses the SAME ACTIVATION, so this is a second call and not a second entity that can
+        // disagree with the first.
+        //
+        // ⚠ The refusal is rendered as the canonical absence and never as ResourceGroupNotFound,
+        // for the reason the subscription check above gives — docs/plan/07 § The enforcement seam.
+        var exists = await group.GetAsync();
+        if (exists.IsFailure) {
+            return CollectionNotFound(request.Path);
+        }
+
+        var members = await group.ListAsync();
+
         if (members.IsFailure) {
             return CollectionNotFound(request.Path);
         }

@@ -43,10 +43,23 @@ public sealed class SwitchableAuthorizer : IResourceAuthorizer {
     /// <summary>Every <c>(actionPermission, readPermission)</c> pair the write path asked about.</summary>
     public static ConcurrentQueue<string> Asked { get; } = new();
 
+    /// <summary>
+    ///     Resources this caller cannot read at all — a <c>404</c> whatever permission is asked for.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Keyed on the resource's GUID and not on a permission, because a listing's filter is
+    ///     the one caller that varies the answer <i>per resource</i>.</b> <see cref="Granted" /> is a
+    ///     permission set, so with it alone every member of a group gets the same verdict and a
+    ///     filter that returned everything or nothing would pass — which is exactly the shape of a
+    ///     check that answers a narrower question than it appears to.
+    /// </remarks>
+    public static ConcurrentDictionary<Guid, bool> Hidden { get; } = new();
+
     /// <summary>Lets everything through again.</summary>
     public static void Reset() {
         Granted.Clear();
         Asked.Clear();
+        Hidden.Clear();
         Restricted = false;
     }
 
@@ -71,6 +84,14 @@ public sealed class SwitchableAuthorizer : IResourceAuthorizer {
         CancellationToken cancellationToken = default
     ) {
         Asked.Enqueue(actionPermission);
+
+        // ⚠ Before the permission set, and it answers the canonical 404 without consulting it. A
+        // resource the caller cannot see is not a resource they hold no permission on — it is one
+        // whose existence they are not told about, which is the whole of docs/plan/07 § The
+        // enforcement seam and the property a listing has to reproduce for every member.
+        if (id.Id != Guid.Empty && Hidden.ContainsKey(id.Id)) {
+            return Task.FromResult(Result.Failure(ErrorCode.ResourceNotFound, $"'{id.Path}' does not exist."));
+        }
 
         if (!Restricted || Granted.ContainsKey(actionPermission)) {
             return Task.FromResult(Result.Success);
