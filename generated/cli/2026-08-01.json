@@ -295,11 +295,7 @@
                   "env": "CYC_TENANT"
                 }
               ],
-              "paged": true,
-              "pageFlags": [
-                "--top",
-                "--skip-token"
-              ]
+              "paged": true
             },
             "list-keys": {
               "name": "list-keys",
@@ -857,11 +853,7 @@
                   "env": "CYC_TENANT"
                 }
               ],
-              "paged": true,
-              "pageFlags": [
-                "--top",
-                "--skip-token"
-              ]
+              "paged": true
             },
             "list-keys": {
               "name": "list-keys",
@@ -1411,11 +1403,7 @@
                   "env": "CYC_TENANT"
                 }
               ],
-              "paged": true,
-              "pageFlags": [
-                "--top",
-                "--skip-token"
-              ]
+              "paged": true
             },
             "list-credentials": {
               "name": "list-credentials",
@@ -1971,11 +1959,7 @@
                   "env": "CYC_TENANT"
                 }
               ],
-              "paged": true,
-              "pageFlags": [
-                "--top",
-                "--skip-token"
-              ]
+              "paged": true
             },
             "list-credentials": {
               "name": "list-credentials",
@@ -2452,11 +2436,7 @@
                   "env": "CYC_TENANT"
                 }
               ],
-              "paged": true,
-              "pageFlags": [
-                "--top",
-                "--skip-token"
-              ]
+              "paged": true
             },
             "show": {
               "name": "show",
@@ -2996,11 +2976,7 @@
                   "env": "CYC_TENANT"
                 }
               ],
-              "paged": true,
-              "pageFlags": [
-                "--top",
-                "--skip-token"
-              ]
+              "paged": true
             },
             "list-keys": {
               "name": "list-keys",
@@ -3707,11 +3683,7 @@
                   "env": "CYC_TENANT"
                 }
               ],
-              "paged": true,
-              "pageFlags": [
-                "--top",
-                "--skip-token"
-              ]
+              "paged": true
             },
             "list-keys": {
               "name": "list-keys",
@@ -4429,11 +4401,7 @@
                   "env": "CYC_TENANT"
                 }
               ],
-              "paged": true,
-              "pageFlags": [
-                "--top",
-                "--skip-token"
-              ]
+              "paged": true
             },
             "list-keys": {
               "name": "list-keys",
@@ -5037,11 +5005,7 @@
                   "env": "CYC_TENANT"
                 }
               ],
-              "paged": true,
-              "pageFlags": [
-                "--top",
-                "--skip-token"
-              ]
+              "paged": true
             },
             "list-keys": {
               "name": "list-keys",
@@ -5659,11 +5623,7 @@
                   "env": "CYC_TENANT"
                 }
               ],
-              "paged": true,
-              "pageFlags": [
-                "--top",
-                "--skip-token"
-              ]
+              "paged": true
             },
             "list-keys": {
               "name": "list-keys",
@@ -6230,11 +6190,7 @@
                   "env": "CYC_TENANT"
                 }
               ],
-              "paged": true,
-              "pageFlags": [
-                "--top",
-                "--skip-token"
-              ]
+              "paged": true
             },
             "list-keys": {
               "name": "list-keys",
@@ -6770,11 +6726,7 @@
                   "env": "CYC_TENANT"
                 }
               ],
-              "paged": true,
-              "pageFlags": [
-                "--top",
-                "--skip-token"
-              ]
+              "paged": true
             },
             "list-keys": {
               "name": "list-keys",
@@ -7308,11 +7260,7 @@
                   "env": "CYC_TENANT"
                 }
               ],
-              "paged": true,
-              "pageFlags": [
-                "--top",
-                "--skip-token"
-              ]
+              "paged": true
             },
             "show": {
               "name": "show",
@@ -7675,11 +7623,7 @@
                   "env": "CYC_TENANT"
                 }
               ],
-              "paged": true,
-              "pageFlags": [
-                "--top",
-                "--skip-token"
-              ]
+              "paged": true
             },
             "show": {
               "name": "show",
@@ -8159,11 +8103,7 @@
                   "pathPlaceholder": "virtualNetworksName"
                 }
               ],
-              "paged": true,
-              "pageFlags": [
-                "--top",
-                "--skip-token"
-              ]
+              "paged": true
             },
             "show": {
               "name": "show",
@@ -8736,11 +8676,7 @@
                   "pathPlaceholder": "virtualNetworksName"
                 }
               ],
-              "paged": true,
-              "pageFlags": [
-                "--top",
-                "--skip-token"
-              ]
+              "paged": true
             },
             "show": {
               "name": "show",
@@ -9241,11 +9177,7 @@
                   "pathPlaceholder": "virtualNetworksName"
                 }
               ],
-              "paged": true,
-              "pageFlags": [
-                "--top",
-                "--skip-token"
-              ]
+              "paged": true
             },
             "list-address-usage": {
               "name": "list-address-usage",
@@ -9690,11 +9622,7 @@
                   "env": "CYC_TENANT"
                 }
               ],
-              "paged": true,
-              "pageFlags": [
-                "--top",
-                "--skip-token"
-              ]
+              "paged": true
             },
             "ping": {
               "name": "ping",
@@ -10177,11 +10105,7 @@
                   "env": "CYC_TENANT"
                 }
               ],
-              "paged": true,
-              "pageFlags": [
-                "--top",
-                "--skip-token"
-              ]
+              "paged": true
             },
             "list-keys": {
               "name": "list-keys",
@@ -10712,11 +10636,7 @@
                   "env": "CYC_TENANT"
                 }
               ],
-              "paged": true,
-              "pageFlags": [
-                "--top",
-                "--skip-token"
-              ]
+              "paged": true
             },
             "list-keys": {
               "name": "list-keys",
@@ -11277,11 +11197,7 @@
                   "env": "CYC_TENANT"
                 }
               ],
-              "paged": true,
-              "pageFlags": [
-                "--top",
-                "--skip-token"
-              ]
+              "paged": true
             },
             "show": {
               "name": "show",
@@ -11771,11 +11687,7 @@
                   "env": "CYC_TENANT"
                 }
               ],
-              "paged": true,
-              "pageFlags": [
-                "--top",
-                "--skip-token"
-              ]
+              "paged": true
             },
             "show": {
               "name": "show",

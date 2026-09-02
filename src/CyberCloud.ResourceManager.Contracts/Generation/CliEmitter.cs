@@ -205,12 +205,21 @@ public static class CliEmitter {
 
             list["path"] = type.CollectionPath;
 
-            // ⚠ Paged, and the host has to know it. docs/plan/07 puts ListObjects at M2, so the
-            // platform filters a listing one permission check per member and caps the page — a host
-            // that read one page and stopped would silently truncate, and a host that looped without
-            // knowing the parameter names could not follow the pages at all.
+            // ⚠ PAGED, AND THE HOST HAS TO KNOW IT EVEN THOUGH IT CANNOT YET ACT ON IT. docs/plan/07
+            // puts ListObjects at M2, so the platform filters a listing one permission check per
+            // member and caps the page (ListRequest.MaxPageSize) — a host that read one page and
+            // stopped would silently truncate, and a listing is the one response whose truncation
+            // looks exactly like a small result.
+            //
+            // ⚠ AND THERE IS DELIBERATELY NO `pageFlags` HERE. The obvious member is a list of the
+            // flags that drive paging — `--top`, `--skip-token` — and it would be two constants in
+            // assemblies that cannot see each other: CliFlag can bind a body pointer (JsonPointer) or
+            // a path placeholder (PathPlaceholder) and has no QUERY binding at all, so `cyc` would
+            // accept both flags, parse both, and send neither. A flag that is accepted and ignored is
+            // worse than a flag that is absent. The verb says it is paged; wiring the query is a
+            // change to CliFlag and to the host, and until that lands `cyc … list` fetches the first
+            // page.
             list["paged"] = true;
-            list["pageFlags"] = new JsonArray { "--top", "--skip-token" };
 
             verbs["list"] = list;
         }

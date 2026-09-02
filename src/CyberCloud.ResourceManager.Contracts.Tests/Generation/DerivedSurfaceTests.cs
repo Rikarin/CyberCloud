@@ -663,6 +663,10 @@ public sealed class DerivedSurfaceTests {
             .CollectionPath);
 
         list["paged"]!.GetValue<bool>().ShouldBeTrue();
+
+        // ⚠ And no `pageFlags`, because CliFlag has no query binding — see the emitter. A member
+        // naming flags no verb declares is the failure this suite exists to catch.
+        list["pageFlags"].ShouldBeNull();
         Flag("list", "--name").ShouldBeNull("list addresses a collection and has no resource to name");
         Flag("list", "--resource-group").ShouldNotBeNull();
 
