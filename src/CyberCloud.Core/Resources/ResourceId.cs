@@ -69,9 +69,14 @@ public readonly record struct ResourceId(
     Guid Id,
     string ParentNames = ""
 ) {
-    const string TenantsSegment = "tenants";
-    const string SubscriptionsSegment = "subscriptions";
-    const string ResourceGroupsSegment = "resourceGroups";
+    // ⚠ internal rather than private since ScopeId shares them. A scope address is the first two,
+    // four or six segments of this path (docs/plan/06 § The hierarchy over § Identifiers), so the
+    // two parsers must agree on the literals byte for byte — a second `"resourceGroups"` in
+    // ScopeId.cs is a string that can drift, and the drift would make one of the two grammars
+    // unreachable while both still compiled.
+    internal const string TenantsSegment = "tenants";
+    internal const string SubscriptionsSegment = "subscriptions";
+    internal const string ResourceGroupsSegment = "resourceGroups";
     const string ProvidersSegment = "providers";
 
     /// <summary>The lifecycle boundary's name. Validated on construction and on <c>with</c>.</summary>

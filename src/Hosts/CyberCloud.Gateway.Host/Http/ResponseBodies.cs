@@ -49,6 +49,38 @@ static class ResponseBodies {
         return Encoding.UTF8.GetString(buffer.WrittenSpan);
     }
 
+    /// <summary>Renders a scope — docs/plan/06 § The hierarchy's subscription or resource group.</summary>
+    /// <param name="scope">The scope as the manager reports it.</param>
+    /// <remarks>
+    ///     ⚠ <b>The same four top-level names a resource carries — <c>id</c>, <c>name</c>,
+    ///     <c>type</c>, <c>location</c> — and deliberately no <c>provisioningState</c> and no
+    ///     <c>etag</c>.</b> Azure's own resource group renders exactly that shape, and a client that
+    ///     already reads a resource reads a scope with no branch. The two absences are real rather
+    ///     than unfinished: a scope has no two-phase create, so it is never in a transient state worth
+    ///     naming, and no <c>If-Match</c> concurrency, so an <c>etag</c> would be a value nothing on
+    ///     this path accepts back.
+    /// </remarks>
+    public static string Scope(ScopeSnapshot scope) {
+        ArgumentNullException.ThrowIfNull(scope);
+
+        var buffer = new System.Buffers.ArrayBufferWriter<byte>(256);
+
+        using (var writer = new Utf8JsonWriter(buffer)) {
+            writer.WriteStartObject();
+            writer.WriteString("id", scope.Path);
+            writer.WriteString("name", scope.Name);
+            writer.WriteString("type", scope.Type);
+
+            if (scope.Location.Length > 0) {
+                writer.WriteString("location", scope.Location);
+            }
+
+            writer.WriteEndObject();
+        }
+
+        return Encoding.UTF8.GetString(buffer.WrittenSpan);
+    }
+
     /// <summary>
     ///     Renders an operation, with the progress array of docs/plan/10 § Long-running operations.
     /// </summary>

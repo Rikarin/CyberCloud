@@ -35,6 +35,17 @@ static class GatewayHeaders {
     /// </remarks>
     public const string CacheControl = "Cache-Control";
 
+    /// <summary>
+    ///     The verbs an address does accept, sent with a <c>405</c>. Required by RFC 9110 § 15.5.6.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>A <c>405</c> without this header is a protocol violation and, more usefully, a dead
+    ///     end for the caller</b> — it says "not that verb" and not "which verb". A scope is the one
+    ///     address in this API that answers <c>405</c> at all; every other unsupported shape is a
+    ///     <c>404</c> or a <c>400</c>, because for a resource the set of verbs is the same everywhere.
+    /// </remarks>
+    public const string Allow = "Allow";
+
     /// <summary>How many reads the subscription has left in the window.</summary>
     public const string RemainingSubscriptionReads = "x-ms-ratelimit-remaining-subscription-reads";
 
