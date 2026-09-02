@@ -236,3 +236,90 @@ sealed class ScriptedOperationReader : IOperationReader {
         return Task.FromResult(OnRead(operationId));
     }
 }
+
+/// <summary>
+///     A scope manager that records every scope path it was asked about and answers from a script.
+/// </summary>
+/// <remarks>
+///     ⚠ <b>The same substitution <see cref="RecordingResourceManager" /> is, and the same warning
+///     applies to it.</b> A scope route proven only against this fake proves that stage 6 admits the
+///     path and that stage 8 hands it to the right manager. It proves nothing about whether the real
+///     <c>ScopeManagerService</c> checks a permission, writes a parent edge, or creates anything —
+///     the two meet at <c>IScopeManager</c> and neither this suite nor the manager's own covers the
+///     join. <c>test/CyberCloud.Isolation</c> and <c>CyberCloud.AppHost.Tests</c> are where the real
+///     one is driven.
+/// </remarks>
+sealed class RecordingScopeManager : IScopeManager {
+    readonly ConcurrentQueue<string> paths = new();
+    readonly ConcurrentQueue<CallerContext> callers = new();
+
+    /// <summary>Every scope path this manager was asked about, in order.</summary>
+    public IReadOnlyCollection<string> Paths => paths;
+
+    /// <summary>The caller the gateway built for each of those requests, in order.</summary>
+    public IReadOnlyCollection<CallerContext> Callers => callers;
+
+    /// <summary>What <see cref="CreateAsync" /> answers. Default: a group that was created.</summary>
+    public Func<ScopeRequest, Result<ScopeSnapshot>> OnCreate { get; set; } =
+        request => Result<ScopeSnapshot>.Success(
+            new() {
+                Path = request.Path,
+                Kind = ScopeKind.ResourceGroup,
+                Name = "prod",
+                Type = ScopeTypeNames.ResourceGroup,
+                Location = "eu-central",
+                Created = true
+            }
+        );
+
+    /// <summary>What <see cref="ReadAsync" /> answers. Default: a group that exists.</summary>
+    public Func<ScopeRequest, Result<ScopeSnapshot>> OnRead { get; set; } =
+        request => Result<ScopeSnapshot>.Success(
+            new() {
+                Path = request.Path,
+                Kind = ScopeKind.ResourceGroup,
+                Name = "prod",
+                Type = ScopeTypeNames.ResourceGroup,
+                Location = "eu-central"
+            }
+        );
+
+    /// <inheritdoc />
+    public Task<Result<ScopeSnapshot>> CreateAsync(
+        ScopeRequest request,
+        CancellationToken cancellationToken = default
+    ) =>
+        Record(request, OnCreate);
+
+    /// <inheritdoc />
+    public Task<Result<ScopeSnapshot>> ReadAsync(
+        ScopeRequest request,
+        CancellationToken cancellationToken = default
+    ) =>
+        Record(request, OnRead);
+
+    /// <inheritdoc />
+    /// <remarks>
+    ///     ⚠ <b>Throws, because nothing in the gateway may reach it and this is how that is
+    ///     asserted.</b> <c>IScopeManager.CreateTenantAsync</c> is the platform-operator bootstrap
+    ///     path and there is no route to it — a fake that answered politely would let a future
+    ///     dispatch line reach it and every test would still pass.
+    /// </remarks>
+    public Task<Result<ScopeSnapshot>> CreateTenantAsync(
+        TenantCreateRequest request,
+        CallerContext caller,
+        CancellationToken cancellationToken = default
+    ) =>
+        throw new InvalidOperationException(
+            "The gateway reached IScopeManager.CreateTenantAsync. Nothing in the request pipeline "
+            + "may: stage 3 resolves the tenant from the token and refuses any path naming a "
+            + "different one, so a tenant-create route cannot exist without breaching that boundary."
+        );
+
+    Task<Result<ScopeSnapshot>> Record(ScopeRequest request, Func<ScopeRequest, Result<ScopeSnapshot>> answer) {
+        ArgumentNullException.ThrowIfNull(request);
+        paths.Enqueue(request.Path);
+        callers.Enqueue(request.Caller);
+        return Task.FromResult(answer(request));
+    }
+}
