@@ -359,6 +359,135 @@ public sealed class ReconcileDriver(
         return new(outcome, log.Drain(), true);
     }
 
+    /// <summary>
+    ///     Removes the volumes the resource's converged teardown deliberately kept. The last step of
+    ///     a hard delete and of a purge, and no part of a soft delete.
+    /// </summary>
+    /// <param name="spec">The operation, which names the resource and the tenant.</param>
+    /// <param name="cancellationToken">Cancels the reclaim.</param>
+    /// <returns>
+    ///     A pass whose outcome is <see cref="ReconcileOutcome.Converged" /> once every claim the
+    ///     provider declared reads back as gone. <c>VolumeReclaimer</c> holds the guard.
+    /// </returns>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>Its own entry point rather than a phase of <see cref="RunAsync" />, because it
+    ///         runs at a different <i>time</i> and not merely with a different flag.</b> A pass is
+    ///         driven until the reconciler converges; this runs once, after it has, and only on the
+    ///         two operation kinds that end a resource for good. Folding it into the pass would mean
+    ///         a soft delete's teardown could reach it, and a soft delete's whole job is to leave
+    ///         these claims standing — docs/plan/08 § Soft delete, <i>"what a restore restores from is
+    ///         the half a teardown never touches"</i>.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The resolution below repeats <see cref="RunAsync" />'s prologue and every one of
+    ///         its endings is different, which is why it is repeated rather than shared.</b> A
+    ///         resource grain that is already empty converges a teardown pass and here means the
+    ///         desired body that <i>names the claims</i> is gone; a type with no reconciler has no
+    ///         claims to name; and a missing cluster connection converges a teardown and must never
+    ///         converge this — see <c>VolumeReclaimer</c>.
+    ///     </para>
+    /// </remarks>
+    public async Task<ReconcilePass> ReclaimVolumesAsync(
+        OperationSpec spec,
+        CancellationToken cancellationToken = default
+    ) {
+        ArgumentNullException.ThrowIfNull(spec);
+
+        var resource = Resource(spec);
+        var input = await resource.GetReconcileInputAsync();
+
+        if (input.TryGetError(out var inputError)) {
+            // ⚠ A GRAIN WITH NO STATE CANNOT NAME ITS OWN CLAIMS, AND THIS RETRIES RATHER THAN
+            // CONVERGING. The caller runs this BEFORE IResourceGrain.CompleteDeleteAsync precisely so
+            // the body is still there; reaching this line means something cleared it first, and
+            // converging would report volumes removed that nothing ever looked for.
+            return new(ReconcileOutcome.Failed(inputError, true), [], false);
+        }
+
+        var reconcileInput = input.GetValueOrThrow();
+
+        var address = ResourceId.ParsePath(reconcileInput.Path);
+        if (address.TryGetError(out var addressError)) {
+            return new(ReconcileOutcome.Failed(addressError), [], false);
+        }
+
+        var id = address.GetValueOrThrow().WithId(reconcileInput.ResourceId);
+
+        if (!registry.TryGetType(id.Type, out var registration)) {
+            return new(
+                ReconcileOutcome.Failed(
+                    ErrorCode.InvalidResourceType,
+                    $"'{id.Type}' has no registration, so the volumes '{id.Path}' kept cannot be "
+                    + "identified. A purge that cannot ask the provider what it kept leaves the disks "
+                    + "rather than guessing at them."
+                ),
+                [],
+                false
+            );
+        }
+
+        // A type with no reconciler applied nothing, so it kept nothing. Nothing to remove.
+        if (registration.ReconcilerType is null) {
+            return new(ReconcileOutcome.Converged, [], false);
+        }
+
+        if (services.GetService(registration.ReconcilerType) is not IResourceReconciler reconciler) {
+            return new(
+                ReconcileOutcome.Failed(
+                    new Error(
+                        ErrorCode.InternalError,
+                        $"'{registration.ReconcilerType.FullName}' is declared as the reconciler for "
+                        + $"'{id.Type}' and is not registered in the container, so nothing can say "
+                        + "which volumes this purge should remove."
+                    ),
+                    true
+                ),
+                [],
+                false
+            );
+        }
+
+        var log = new CollectingReconcileLog(clock);
+
+        var context = new ReconcileContext(
+            id,
+            reconcileInput.ApiVersion,
+            ParseOrEmpty(reconcileInput.Desired),
+            reconcileInput.Observed,
+            NamespaceFor(id),
+            clusters.Connect(reconcileInput.ClusterId),
+            secrets,
+            log
+        ) {
+            SecretWriter = secretWriter
+        };
+
+        using var budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        budget.CancelAfter(PassBudget);
+
+        try {
+            var outcome = await VolumeReclaimer.ReclaimAsync(reconciler, context, budget.Token);
+            return new(outcome, log.Drain(), true);
+        }
+        catch (OperationCanceledException) when (budget.IsCancellationRequested && !cancellationToken.IsCancellationRequested) {
+            return new(
+                ReconcileOutcome.Failed(
+                    new Error(
+                        ErrorCode.ProvisioningFailed,
+                        $"Removing the volumes '{id.Path}' kept did not finish within "
+                        + $"{PassBudget.TotalSeconds.ToString(CultureInfo.InvariantCulture)} seconds. "
+                        + "The next attempt re-reads every claim, so a partially finished reclaim "
+                        + "costs a pass rather than correctness."
+                    ),
+                    true
+                ),
+                log.Drain(),
+                true
+            );
+        }
+    }
+
     /// <summary>Reads the world back and records it on the resource grain.</summary>
     /// <remarks>
     ///     ⚠ A failed observation is <b>not</b> a failed pass. Observation is how we learn, not how we

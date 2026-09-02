@@ -340,6 +340,56 @@ public sealed class OperationGrain(
         }
 
         if (spec.Kind is OperationKind.Delete or OperationKind.Purge) {
+            // ── AND THE VOLUMES THE TEARDOWN DELIBERATELY KEPT GO NOW, FIRST OF EVERYTHING BELOW ──
+            //
+            // ⚠ THIS BRANCH IS REACHED BY A HARD DELETE AND BY A PURGE AND BY NOTHING ELSE, WHICH IS
+            // WHY THE RECLAIM BELONGS ON IT RATHER THAN INSIDE A RECONCILER. A soft delete returned
+            // one branch up, at ParkAsync, and the claims it left standing are what
+            // docs/plan/08 § Soft delete calls "the half a teardown never touches" — the disks a
+            // restore restores from. Ending the window is the only moment they may go, and this line
+            // is that moment for the purge and the equivalent one for a type that never had a window.
+            //
+            // ⚠ BEFORE IResourceGrain.CompleteDeleteAsync, AND THAT ORDER IS FORCED RATHER THAN
+            // CHOSEN. The claim names are derived from the DESIRED BODY — the replica count of each
+            // StatefulSet is what says how many ordinals exist — and CompleteDeleteAsync is the call
+            // that throws that body away. Reclaiming afterwards would ask a provider to name claims
+            // out of an empty grain, which is the same "purge leaves the volumes" defect with an
+            // extra step in front of it.
+            //
+            // ⚠ AND BEFORE ReturnCommittedQuotaAsync FOR THE OPPOSITE REASON: THIS ONE CAN FAIL, AND
+            // A PURGE THAT HALF-SUCCEEDS MUST LEAVE SOMETHING AN OPERATOR CAN FINISH. Returning the
+            // quota first and failing here would report an allowance the tenant may spend while their
+            // disks are still allocated against it. Failing first leaves the operation Deleting, with
+            // the reason on the resource, its name still released (the request path did that, for the
+            // hard delete's reason) and its quota still held — and the retry re-reads every claim, so
+            // a reclaim interrupted halfway costs a pass rather than correctness.
+            //
+            // ⚠ THE CANCELLED-CREATE TEARDOWN ABOVE DELIBERATELY DOES NOT REACH THIS. That branch is
+            // shared by a cancelled create and a cancelled UPDATE, and an update's resource existed
+            // before the operation did — removing its disks because a change to it was cancelled is
+            // the one mistake on this path that cannot be undone. A cancelled create's claims are
+            // recorded as owed in docs/plan/08 § Soft delete instead of guessed at here.
+            var reclaimed = await driver.ReclaimVolumesAsync(spec);
+
+            foreach (var entry in reclaimed.Progress) {
+                Append(entry);
+            }
+
+            if (reclaimed.Outcome.Kind != ReconcileOutcomeKind.Converged) {
+                // ⚠ A REFUSAL IS TERMINAL AND A WAIT IS NOT, and VolumeReclaimer is what distinguishes
+                // them. A claim that is not this resource's will not become this resource's on the
+                // next attempt, so retrying it is thirty-nine more chances to destroy it; that comes
+                // back non-retryable and fails the operation with the claim and the label named. A
+                // claim still held by a terminating pod comes back InProgress and is re-driven.
+                if (reclaimed.Outcome.Kind == ReconcileOutcomeKind.Failed && !reclaimed.Outcome.Retryable) {
+                    await FailAsync(reclaimed.Outcome.Error!);
+                    return;
+                }
+
+                await ScheduleAsync(reclaimed.Outcome);
+                return;
+            }
+
             // ⚠ Only now is the grain state removed — the reconciler READ THE OBJECTS BACK AS GONE.
             // docs/plan/06 § Two-phase create's harder half: the index was released first so the name
             // was immediately reusable, the data plane came down second, and the grain goes last.

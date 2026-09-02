@@ -2,6 +2,7 @@
 // beside the ErrorCode alias.
 using CyberCloud.Core;
 using CyberCloud.Core.Time;
+using System.Collections.Immutable;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
@@ -469,8 +470,10 @@ public sealed class ContainerRegistryReconciler(IClock clock) : IResourceReconci
         // with a claim beside it. So a soft-deleted registry's layers, its database and its job queue
         // are all still on disk for the window docs/plan/08 promises, and a restore has something to
         // restore. ⚠ What ends them is the StorageClass's reclaim policy once somebody removes the
-        // claims, which nothing in this platform does yet — charts/managed/harbor/conformance.yaml
-        // § owed, `purge-leaves-the-volumes-behind`.
+        // claims, and RetainedVolumesAsync below is now that somebody: the convergence of a hard
+        // delete and of a purge runs VolumeReclaimer over the three claims it names, and a soft
+        // delete's convergence does not — charts/managed/harbor/conformance.yaml § owed,
+        // `purge-leaves-the-volumes-behind`.
         //
         // ⚠ THE VAULT ENTRY IS NOT REMOVED EITHER, for the reason StorageAccountReconciler gives: a
         // teardown re-driven from a reminder would race its own retry, minting a second credential set
@@ -481,6 +484,34 @@ public sealed class ContainerRegistryReconciler(IClock clock) : IResourceReconci
 
         return ReconcileOutcome.Converged;
     }
+
+    /// <inheritdoc />
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>The other half of <see cref="DeleteAsync" />'s closing paragraph, and it closes
+    ///         the item that paragraph records as owed.</b> That comment says the images, the database
+    ///         and the job queue are all still on disk after a teardown, <i>"what ends them is the
+    ///         StorageClass's reclaim policy once somebody removes the claims, which nothing in this
+    ///         platform does yet"</i>. This is the somebody. It names the three claims and the labels
+    ///         that prove them; <c>VolumeReclaimer</c>, driven from a hard delete's or a purge's
+    ///         convergence, is what removes them.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>It does not look at the cluster and it does not need the credentials</b> — the
+    ///         claim names are a function of the resource's own name, so this answers the same on a
+    ///         cluster that is unreachable. Whether the claims are <i>there</i> is the reclaimer's
+    ///         question, and it asks the API server rather than this.
+    ///     </para>
+    /// </remarks>
+    public Task<Result<ImmutableArray<RetainedVolume>>> RetainedVolumesAsync(
+        ReconcileContext context,
+        CancellationToken cancellationToken = default
+    ) =>
+        Task.FromResult(
+            Result<ImmutableArray<RetainedVolume>>.Success(
+                ContainerRegistries.RetainedClaims(context.Namespace, context.Id.Name)
+            )
+        );
 
     /// <summary>The smallest object a delete command will accept.</summary>
     /// <remarks>
