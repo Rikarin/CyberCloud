@@ -9,7 +9,7 @@ namespace CyberCloud.Bundle.Cluster.Conformance;
 /// <remarks>
 ///     <para>
 ///         ⚠ <b>The script is the subject, so the test may not do the script's job.</b>
-///         <c>charts/bundle/bundle.yaml</c> § owed, <c>one-of-eighteen-has-been-installed</c>, is about
+///         <c>charts/bundle/bundle.yaml</c> § owed, <c>two-of-nineteen-have-been-installed</c>, is about
 ///         <c>install.sh</c> specifically: <i>"a procedure that has been reasoned about and not
 ///         exercised"</i>. A test that ran <c>helm upgrade --install</c> itself with the same
 ///         arguments would prove that helm installs cert-manager, which nobody doubted, and would
@@ -21,7 +21,7 @@ namespace CyberCloud.Bundle.Cluster.Conformance;
 ///         text says <c>--phase</c> <i>"skips that guarantee and is for repairing one row, not for
 ///         installing"</i> — the guarantee being the phase barrier. So this exercises the installer's
 ///         per-component path and NOT its ordering: a defect in the barrier between phases would not
-///         be caught here. Installing every phase would mean eighteen operators and three virtual
+///         be caught here. Installing every phase would mean nineteen operators and three virtual
 ///         machines in a Testcontainers lane Task #95 capped at four concurrent suites, which is the
 ///         reason the bundle had no cluster-backed proof at all.
 ///     </para>
@@ -29,6 +29,11 @@ namespace CyberCloud.Bundle.Cluster.Conformance;
 public static class BundleInstaller {
     /// <summary>The phase <c>bundle.yaml</c> gives cert-manager. Read from the file, not typed here.</summary>
     public const string CertManagerComponent = "cert-manager";
+
+    /// <summary>
+    ///     The component that installs the storage class eleven <c>charts/managed/</c> charts need.
+    /// </summary>
+    public const string OpenEbsLocalPvComponent = "openebs-localpv";
 
     /// <summary>How long the installer gets before the test gives up on it.</summary>
     /// <remarks>
@@ -95,6 +100,56 @@ public static class BundleInstaller {
             }
 
             return line[(colon + 1)..].Trim().Trim('"');
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    ///     The value of an entry in a <c>component.yaml</c>'s <c>values:</c> block, or
+    ///     <see langword="null" /> when the block or the entry is absent.
+    /// </summary>
+    /// <param name="component">The component's directory name.</param>
+    /// <param name="name">The helm value's dotted name, exactly as the block spells it.</param>
+    /// <remarks>
+    ///     ⚠ <b><see cref="Pin" /> cannot read these and would silently return <see langword="null" />
+    ///     for every one of them.</b> Its loop skips any line that does not begin with a letter, and
+    ///     every <c>values:</c> entry is indented — so a test that asked <c>Pin</c> for
+    ///     <c>hostpathClass.isDefaultClass</c> would get nothing back and, unless it asserted
+    ///     non-null, would pass over a component.yaml with the flag deleted. That is the failure this
+    ///     method exists to make unavailable.
+    ///     ⚠ It mirrors <c>install.sh</c>'s <c>helm_sets()</c> awk, including the part that is easy to
+    ///     miss: a top-level line that is not <c>values:</c> ENDS the block, and a comment line —
+    ///     which begins with <c>#</c> and so matches neither of awk's patterns — does not. The
+    ///     openebs-localpv manifest has a fourteen-line comment directly above its <c>values:</c>
+    ///     block and none inside it, but a reader that got that rule backwards would disagree with
+    ///     the installer the first time somebody annotated an entry.
+    /// </remarks>
+    public static string? Value(string component, string name) {
+        var inside = false;
+
+        foreach (var line in File.ReadLines(ComponentFile(component))) {
+            if (line.Length == 0) {
+                continue;
+            }
+
+            if (char.IsLetter(line[0])) {
+                inside = line.StartsWith("values:", StringComparison.Ordinal);
+                continue;
+            }
+
+            if (!inside || line.Length < 3 || line[0] != ' ' || line[1] != ' ' || !char.IsLetter(line[2])) {
+                continue;
+            }
+
+            var entry = line[2..];
+            var colon = entry.IndexOf(':', StringComparison.Ordinal);
+
+            if (colon < 0 || !entry.AsSpan(0, colon).SequenceEqual(name)) {
+                continue;
+            }
+
+            return entry[(colon + 1)..].Trim().Trim('"');
         }
 
         return null;

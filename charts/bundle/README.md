@@ -182,23 +182,44 @@ and works; what it does not have is anybody to fix it. See
 
 ## Verification, and its honest limit
 
-**One of the eighteen components is installed onto a real cluster by CI. Seventeen are not, and the
+**Two of the nineteen components are installed onto a real cluster by CI. Seventeen are not, and the
 state of the tree says which in `bundle.yaml` § owed rather than implying otherwise.**
 
-`test/CyberCloud.Bundle.Cluster.Conformance` starts an empty k3s, runs **this directory's own
-`install.sh`** — not a re-implementation of it — with `--phase 15`, and then asserts the two things
-a CRD apply could not fake: that `cert-manager.io/v1` is served afterwards, and that a self-signed
-`Certificate` reaches `Ready` with a parseable certificate in the Secret it names. The second
-assertion is the one that needs the controller running, the webhook admitting and the issuer
-reconciling.
+> ⚠ **The denominator here read "eighteen" until 2026-09-02 and had been wrong since
+> `openebs-localpv` landed.** `bundle.yaml`'s `components:` holds nineteen rows and this directory
+> holds nineteen subdirectories. A count written in words is a claim nothing checks, and this one
+> outlived its own correction in `deploy/README.md` and in `build/Build.Bundle.cs`' prose too.
+
+`test/CyberCloud.Bundle.Cluster.Conformance` starts an empty k3s — **a fresh one per test class, so
+neither component's assertions are about a cluster the other one touched** — and runs **this
+directory's own `install.sh`**, not a re-implementation of it.
+
+**cert-manager, `--phase 15`.** Asserts the two things a CRD apply could not fake: that
+`cert-manager.io/v1` is served afterwards, and that a self-signed `Certificate` reaches `Ready` with
+a parseable certificate in the Secret it names. The second assertion is the one that needs the
+controller running, the webhook admitting and the issuer reconciling.
+
+**openebs-localpv, `--phase 25`.** Asserts that a claim **naming `openebs-hostpath` explicitly**
+binds — once a pod mounts it, because the class is `WaitForFirstConsumer` — to a `PersistentVolume`
+whose class, provisioner and node-local path the API server agrees are this component's; and that
+the default-class annotation landed on **our** class, on a cluster that now has two defaults.
+
+> ⚠ **Every clause of that second paragraph is load-bearing, and the reason was measured rather than
+> argued.** k3s ships Rancher's `local-path` and marks it default. A probe run against this fixture
+> with nothing installed binds a bare claim, succeeds its pod, and produces a `local-path` volume
+> under `/var/lib/rancher/k3s/storage` — so the obvious version of this test is green with the
+> component uninstalled, and since k3s's own class also waits for a first consumer, "there is a pod"
+> does not distinguish it either. `bundle.yaml` § owed, `one-volume-has-been-provisioned`, has the
+> readings.
 
 What that supports is **the install mechanism**: the script runs unattended against a cluster it is
 handed, reads a pin out of a `component.yaml` rather than carrying one, and its `--wait` makes
 "installed" mean "serving". What it does not support is the roster. Seventeen pins are still
 resolved-but-never-applied; no `manifest:` component has been applied, so `kubectl` has never been
-invoked by this script under test; and the phase barrier is unexercised, because `--phase` is the
-flag whose own usage text says it *"skips that guarantee"*. `bundle.yaml` § owed,
-`one-of-eighteen-has-been-installed`, keeps the full list.
+invoked by this script under test; nothing has installed two components onto **one** cluster; and
+the phase barrier is unexercised, because `--phase` is the flag whose own usage text says it
+*"skips that guarantee"*. `bundle.yaml` § owed, `two-of-nineteen-have-been-installed`, keeps the
+full list.
 
 > ⚠ **A defect the install found rather than the reading.** `cert-manager/component.yaml` recorded
 > that dropping `crds.enabled: true` would produce "a controller and no Certificate kind", noticed

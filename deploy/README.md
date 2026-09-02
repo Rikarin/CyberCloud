@@ -19,14 +19,14 @@ cluster and only one of them is on a repair path.
 
 | | `deploy/bootstrap/` | `charts/bundle/` |
 |---|---|---|
-| Installs | Cyber Cloud itself | eighteen third-party operators, a CNI and cert-manager |
+| Installs | Cyber Cloud itself | nineteen third-party operators, a CNI, cert-manager and a storage class |
 | Onto | the cluster the platform runs on | a cluster the platform will manage |
 | Tools | `kubectl` and checked-in YAML only | `helm` and `kubectl` |
 | Run when | the platform is the broken thing | a managed cluster is being prepared |
 
 Everything in `bootstrap/` is `kubectl` and checked-in YAML because **its availability is what is being
 repaired** — see § The platform's own cluster is not Kamaji-hosted below. `charts/bundle/install.sh` is
-under no such constraint: it uses `helm`, it reads its pins out of eighteen `component.yaml` files, and
+under no such constraint: it uses `helm`, it reads its pins out of nineteen `component.yaml` files, and
 nothing about a broken platform makes it unusable, because nothing about it involves the platform.
 
 So `bootstrap.sh` must not grow a `--bundle` flag and `install.sh` must not learn to install a silo.
