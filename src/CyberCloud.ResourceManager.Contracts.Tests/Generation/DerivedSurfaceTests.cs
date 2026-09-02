@@ -576,4 +576,121 @@ public sealed class DerivedSurfaceTests {
             write: false
         ).Documents.SelectMany(x => x.Problems).ShouldBeEmpty();
     }
+
+    // ── The collection path ────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    ///     ⚠ <b>A collection path carries <c>x-cybercloud-resource-type</c> and does <i>not</i> read
+    ///     as a second type of that name.</b>
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         This is the whole of the reader problem a listing ran into.
+    ///         <c>DocumentReader.TypesOf</c> keys a type on <c>x-cybercloud-resource-type</c> and
+    ///         skipped only items carrying <c>x-cybercloud-action</c> — which is why soft delete's
+    ///         <c>restore</c> and <c>purge</c> needed no emitter change, and why a collection is the
+    ///         first path shape that is neither a resource nor an action.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Asserted as a count per type, not as "the emitters do not throw".</b> Both
+    ///         <c>CliEmitter</c> and <c>SdkEmitter</c> throw on the duplicate and
+    ///         <c>TheVerbTreeHasExactlyOneCommandPerResourceType…</c> above would catch it — but
+    ///         <c>FormsEmitter</c>'s <c>forms[type] = …</c> is an indexer and silently replaces, so
+    ///         "nothing threw" is not the property. One <c>DocumentType</c> per type is.
+    ///     </para>
+    /// </remarks>
+    [Fact]
+    public void ACollectionPathIsNotReadAsASecondResourceTypeOfTheSameName() {
+        var document = Document;
+
+        var collections = document["paths"]!.AsObject()
+            .Where(x => x.Value!["x-cybercloud-collection"] is not null)
+            .ToList();
+
+        collections.ShouldNotBeEmpty("the fixture emits no collection path, so this case proves nothing");
+
+        foreach (var collection in collections) {
+            DocumentReader.Text(collection.Value!["x-cybercloud-resource-type"])
+                .ShouldNotBeEmpty("a collection path that named no type could not be paired with one");
+        }
+
+        DocumentReader.TypesOf(document)
+            .GroupBy(x => x.ResourceType, StringComparer.Ordinal)
+            .ShouldAllBe(x => x.Count() == 1);
+    }
+
+    /// <summary>
+    ///     ⚠ <b>Every type's <c>CollectionPath</c> is a path the document actually declares.</b>
+    /// </summary>
+    /// <remarks>
+    ///     It is read out of the document rather than derived from <c>Path</c> precisely so that this
+    ///     can be checked — a derived one would agree with itself and disagree with the document. A
+    ///     surface that emitted a URL for a path that is not there produces a client whose first
+    ///     symptom is a <c>404</c> from a method that compiles.
+    /// </remarks>
+    [Fact]
+    public void EveryTypesCollectionPathIsInTheDocumentAndIsNotItsResourcePath() {
+        var document = Document;
+        var paths = document["paths"]!.AsObject();
+
+        foreach (var type in DocumentReader.TypesOf(document)) {
+            type.CollectionPath.ShouldNotBeEmpty($"'{type.ResourceType}' declares no collection path");
+            paths.ContainsKey(type.CollectionPath).ShouldBeTrue(type.CollectionPath);
+            type.CollectionPath.ShouldNotBe(type.Path);
+
+            // ⚠ The item path is the collection path plus one name segment, and neither the emitter
+            // nor the reader assumes it: this is the fact both of them have to keep true.
+            type.Path.ShouldBe(type.CollectionPath + "/{resourceName}");
+        }
+    }
+
+    /// <summary>
+    ///     ⚠ <b>The <c>list</c> verb points at the collection path and carries no <c>--name</c>.</b>
+    /// </summary>
+    /// <remarks>
+    ///     A <c>--name</c> on <c>list</c> is a flag that binds to no placeholder, which is the
+    ///     "a placeholder with no flag" failure <c>CliEmitter.Address</c>'s remarks describe running
+    ///     the other way. The ancestor flags <i>are</i> still required — a nested collection is
+    ///     addressed through its parent.
+    /// </remarks>
+    [Fact]
+    public void TheListVerbAddressesTheCollectionAndNamesNoResource() {
+        var list = Command["verbs"]!["list"]!;
+
+        list["method"]!.GetValue<string>().ShouldBe("GET");
+        list["path"]!.GetValue<string>().ShouldBe(DocumentReader.TypesOf(Document)
+            .Single(x => x.ResourceType == Fixtures.Namespace + "/servers")
+            .CollectionPath);
+
+        list["paged"]!.GetValue<bool>().ShouldBeTrue();
+        Flag("list", "--name").ShouldBeNull("list addresses a collection and has no resource to name");
+        Flag("list", "--resource-group").ShouldNotBeNull();
+
+        var nested = Cli["groups"]!["dbforpostgresql"]!["commands"]!["servers-databases"]!["verbs"]!["list"]!;
+
+        nested["flags"]!.AsArray()
+            .Select(x => DocumentReader.Text(x?["name"]))
+            .ShouldContain("--servers-name", "a nested collection is addressed through its parent");
+    }
+
+    /// <summary>
+    ///     ⚠ <b>The SDK's collection class carries the collection template, which is the URL its
+    ///     <c>GetAllAsync</c> has always promised and nothing served.</b>
+    /// </summary>
+    /// <remarks>
+    ///     <c>AppendCollection</c> has emitted <c>GetAllAsync</c> since the emitter was written, and
+    ///     <c>CyberCloud.Sdk/EmitterContract.cs</c> documents the hand-written half GETting a
+    ///     collection URL — a path that appeared in no emitted document and on no gateway route. Two
+    ///     constants in assemblies that cannot see each other is the failure that pattern is: the
+    ///     method compiled, the contract read correctly, and the request would have 404'd.
+    /// </remarks>
+    [Fact]
+    public void TheSdkCollectionCarriesTheTemplateItsListingPages() {
+        foreach (var type in DocumentReader.TypesOf(Document)) {
+            Sdk.ShouldContain(
+                "public const string CollectionPathTemplate = \"" + type.CollectionPath + "\";",
+                customMessage: $"'{type.ResourceType}' has no collection template to page"
+            );
+        }
+    }
 }
