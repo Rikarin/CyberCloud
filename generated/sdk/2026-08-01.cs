@@ -302,7 +302,7 @@ public enum ValkeyCacheFsync {
 }
 
 /// <summary>The values /properties/persistence/mode accepts. ⚠ Closed: the write path refuses anything else.</summary>
-public enum ValkeyCacheMode {
+public enum ValkeyCachePersistenceMode {
     /// <summary>Never assigned. Not a value the API accepts.</summary>
     Unknown = 0,
 
@@ -413,7 +413,7 @@ public sealed partial class ValkeyCacheData {
     /// <summary>None keeps nothing, RDB snapshots periodically, AOF appends every write.</summary>
     /// <remarks>Defaults to "AOF" when left unset.</remarks>
     [JsonPropertyName("mode")]
-    public ValkeyCacheMode? Mode { get; set; }
+    public ValkeyCachePersistenceMode? Mode { get; set; }
 
     /// <summary>Persistent volume size in Kubernetes quantity form. Unused when the mode is None, which keeps the data directory in memory.</summary>
     /// <remarks>Defaults to "8Gi" when left unset.</remarks>
@@ -2013,6 +2013,20 @@ public sealed partial class KafkaClusterResource {
     public partial Task<Operation> DeleteAsync(
         WaitUntil waitUntil,
         CancellationToken cancellationToken = default);
+
+    /// <summary>The values /securityProtocol accepts. ⚠ Closed: the write path refuses anything else.</summary>
+    public enum ListKeysResultSecurityProtocol {
+        /// <summary>Never assigned. Not a value the API accepts.</summary>
+        Unknown = 0,
+
+        /// <summary>SASL_SSL</summary>
+        [JsonStringEnumMemberName("SASL_SSL")]
+        SASLSSL = 1,
+
+        /// <summary>SASL_PLAINTEXT</summary>
+        [JsonStringEnumMemberName("SASL_PLAINTEXT")]
+        SASLPLAINTEXT = 2
+    }
 
     /// <summary>What listKeys returns. ⚠ Secret material: never log or cache this.</summary>
     public sealed partial class ListKeysResult {

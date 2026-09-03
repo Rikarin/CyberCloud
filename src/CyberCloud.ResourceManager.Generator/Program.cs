@@ -27,6 +27,7 @@ static class Program {
         string? output = null;
         string? derived = null;
         string? charts = null;
+        string? typescript = null;
         string? report = null;
         var write = true;
         var providerAssemblies = new List<string>();
@@ -47,6 +48,15 @@ static class Program {
                     charts = arguments[++i];
                     break;
 
+                // ⚠ Separate for the same reason and a different one: docs/plan/03 § Assembly graph
+                // rules, rule 6 says the generator owns portal/libs/api, and Build.Architecture
+                // enforces that by reading the head of every file THERE. Writing under generated/
+                // and copying across would make the gate inspect a copy, and the copy step would be
+                // the one part of the chain nothing checked.
+                case "--typescript" when i + 1 < arguments.Length:
+                    typescript = arguments[++i];
+                    break;
+
                 case "--report" when i + 1 < arguments.Length:
                     report = arguments[++i];
                     break;
@@ -62,8 +72,8 @@ static class Program {
                 default:
                     Console.Error.WriteLine(
                         $"Unrecognised argument '{arguments[i]}'. Usage: --output <dir> "
-                        + "[--derived-output <dir>] [--charts <dir>] [--report <file>] [--check] "
-                        + "[--provider-assembly <path>]..."
+                        + "[--derived-output <dir>] [--charts <dir>] [--typescript <dir>] "
+                        + "[--report <file>] [--check] [--provider-assembly <path>]..."
                     );
 
                     return BadArguments;
@@ -106,6 +116,18 @@ static class Program {
                 Console.WriteLine(line);
             }
 
+            // ⚠ The portal's TypeScript client reads the documents this process emitted, exactly as
+            // the three above do — docs/plan/21 § Generation's one hop, and issue #21's decision.
+            // Generating it from the registry instead would put it outside the compatibility diff
+            // that protects the other four.
+            var client = typescript is { Length: > 0 }
+                ? TypeScriptSurfaces.Generate(OpenApiArtifacts.Documents(registry), typescript, write)
+                : new TypeScriptReport([], [], []);
+
+            foreach (var line in TypeScriptSurfaces.Describe(client)) {
+                Console.WriteLine(line);
+            }
+
             // ⚠ Said on every run, including the clean ones. docs/plan/02 § ADR-012 names five
             // surfaces; a log that did not say which of them ran reads like the pipeline is finished
             // whatever it did.
@@ -113,10 +135,17 @@ static class Program {
                 derived is { Length: > 0 }
                     ? "Four of ADR-012's five surfaces: the OpenAPI document, the cyc verb tree, the "
                       + ".NET SDK and the portal forms. The last three are generated from the first — "
-                      + "docs/plan/21 § Generation. ⚠ The TypeScript, Python and Go SDKs and the "
-                      + "Terraform provider are docs/plan/21 § Other SDKs and are not written."
+                      + "docs/plan/21 § Generation. ⚠ The Python and Go SDKs and the Terraform "
+                      + "provider are docs/plan/21 § Other SDKs and are not written."
                     : "OpenAPI only: no --derived-output was given, so the cyc verb tree, the .NET SDK "
                       + "and the portal forms were not written."
+            );
+
+            Console.WriteLine(
+                typescript is { Length: > 0 }
+                    ? "The portal's TypeScript client ran — issue #21, generated from the published "
+                      + "document rather than from the registry."
+                    : "No --typescript was given, so the portal's TypeScript client was not written."
             );
 
             Console.WriteLine(
@@ -137,7 +166,7 @@ static class Program {
                 File.WriteAllBytes(
                     report,
                     DeterministicJson.ToBytes(
-                        Render(registry, generated, surfaces, annotations, providerAssemblies.Count)
+                        Render(registry, generated, surfaces, annotations, client, providerAssemblies.Count)
                     )
                 );
             }
@@ -164,6 +193,7 @@ static class Program {
         GenerationReport generated,
         DerivedReport surfaces,
         ChartAnnotationReport annotations,
+        TypeScriptReport client,
         int assembliesScanned
     ) {
         var documents = new JsonArray();
@@ -230,6 +260,17 @@ static class Program {
             }
         }
 
+        var typescript = new JsonArray();
+
+        foreach (var file in client.Files) {
+            typescript.Add(new JsonObject {
+                ["apiVersion"] = file.ApiVersion,
+                ["drifted"] = file.Drifted,
+                ["file"] = file.File,
+                ["published"] = file.Published
+            });
+        }
+
         return new JsonObject {
             ["actions"] = actions,
             ["apiVersions"] = generated.ApiVersions,
@@ -241,7 +282,7 @@ static class Program {
             ["chartManagedCharts"] = annotations.ManagedCharts,
             ["chartTypesNamingAChart"] = annotations.TypesNamingAChart,
             ["chartUnpaired"] = Lines(annotations.Unpaired),
-            ["clean"] = generated.IsClean && surfaces.IsClean && annotations.IsClean,
+            ["clean"] = generated.IsClean && surfaces.IsClean && annotations.IsClean && client.IsClean,
             // ⚠ A separate array rather than merged into `documents`: the two are gated differently.
             // A published OpenAPI document is diffed for compatibility; a derived surface is not,
             // because docs/plan/21 § Generation makes it a function of the document that already was.
@@ -250,7 +291,13 @@ static class Program {
             ["documents"] = documents,
             ["providers"] = generated.Providers,
             ["resourceTypes"] = generated.ResourceTypes,
-            ["stale"] = Lines(generated.Stale)
+            ["stale"] = Lines(generated.Stale),
+            // ⚠ A fourth array, and a fourth for the same reason the third is separate: this one is
+            // written to portal/libs/api rather than to generated/, so the verdict a target forms
+            // about it names a different directory.
+            ["typescript"] = typescript,
+            ["typescriptProblems"] = Lines(client.Problems),
+            ["typescriptStale"] = Lines(client.Stale)
         };
     }
 
