@@ -202,6 +202,54 @@ public interface IResourceManager {
     Task<Result<WriteAccepted>> PurgeAsync(WriteRequest request, CancellationToken cancellationToken = default);
 
     /// <summary>
+    ///     Ends a recovery window that has already ended. The clock-driven half of purge, with no
+    ///     caller and no <c>Check</c>.
+    /// </summary>
+    /// <param name="request">The parked resource's path and the api-version it is stored under.</param>
+    /// <param name="cancellationToken">Cancels the request. ⚠ Not the operation it starts.</param>
+    /// <returns>
+    ///     The accepted operation, or the canonical absence for a path that holds no parked resource
+    ///     <i>and</i> for one whose window has not ended yet — which are deliberately the same
+    ///     answer.
+    /// </returns>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>THIS IS THE DECISION docs/plan/08 § Soft delete DEFERRED TO
+    ///         docs/plan/07 § Azure RBAC, AND IT IS THE SECOND OF THE TWO SHAPES THAT SECTION
+    ///         OFFERED.</b> <i>"An expiry is not a request, so there is nobody to authorize it, and
+    ///         <see cref="PurgeAsync" /> checks <c>PurgePermission</c> against a caller. Either the
+    ///         platform gains a system principal, or the purge splits into an authorized front and a
+    ///         mechanism the clock may drive."</i> This is the mechanism. There is no system
+    ///         principal, and the reason is on <see cref="ExpiredPurgeRequest" />.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>What it does NOT inherit from the front, and why each one.</b> The
+    ///         <b>permission</b> is gone because there is no subject to check it against — its place
+    ///         is taken by <c>IResourceIndexGrain.ResolveExpiredAsync</c>, a precondition nothing can
+    ///         be granted. <b>Purge protection</b> is gone because the flag does not mean what
+    ///         refusing here would make it mean: <see cref="PurgeAsync" />'s own refusal says the
+    ///         resource <i>"cannot be purged before its recovery window ends"</i> and the write
+    ///         path's says <i>"wait for the recovery window to end"</i>, so a protected resource
+    ///         whose window has ended is exactly the case the flag was always going to release.
+    ///         Refusing it here would turn an opt-in that cannot be turned off into a resource that
+    ///         can never be destroyed, which is not a protection anybody chose.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The lock check IS inherited, and that asymmetry is the point.</b> A
+    ///         <c>CanNotDelete</c> lock is a tenant's standing refusal of destruction, written
+    ///         deliberately and visible in their own portal. A clock must not overrule it: the window
+    ///         ends, the mechanism refuses, and the resource stays parked until somebody removes the
+    ///         lock. That is a resource held past its window — which is what this member exists to
+    ///         stop — and it is held by a decision its owner made and can see, which is the
+    ///         difference.
+    ///     </para>
+    /// </remarks>
+    Task<Result<WriteAccepted>> PurgeExpiredAsync(
+        ExpiredPurgeRequest request,
+        CancellationToken cancellationToken = default
+    );
+
+    /// <summary>
     ///     Reads a long-running operation's status. The <c>GET /operations/{opId}</c> of
     ///     docs/plan/10 § Long-running operations and docs/plan/08 § Long-running operations.
     /// </summary>

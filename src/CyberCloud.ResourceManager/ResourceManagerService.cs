@@ -954,6 +954,110 @@ public sealed class ResourceManagerService(
             return Result<WriteAccepted>.Failure(authError);
         }
 
+        return await PurgeCoreAsync(addressed, trace, request.Caller, request.Path, cancellationToken);
+    }
+
+    /// <inheritdoc />
+    /// <remarks>
+    ///     ⚠ <b>THE WHOLE OF WHAT MAKES THIS SAFE IS THAT IT REACHES <see cref="PurgeCoreAsync" />
+    ///     THROUGH A DIFFERENT FRONT RATHER THAN THROUGH A DIFFERENT SUBJECT.</b> The mechanism below
+    ///     is byte for byte the one an authorized purge runs; what changes is the precondition in
+    ///     front of it. <see cref="PurgeAsync" /> asks the authorizer whether a caller may destroy
+    ///     this; this asks the index grain whether the window it was destroying <i>into</i> has ended.
+    ///     Neither is a weaker version of the other and neither can be reached from the other's input.
+    /// </remarks>
+    public async Task<Result<WriteAccepted>> PurgeExpiredAsync(
+        ExpiredPurgeRequest request,
+        CancellationToken cancellationToken = default
+    ) {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var trace = new WriteTraceBuilder();
+        trace.Enter(WriteStep.ResolveRegistration);
+
+        // ⚠ THE PATH'S OWN TENANT, AND IT IS A ROUTING KEY RATHER THAN A CLAIM OF IDENTITY.
+        // ResolveAsync compares address.TenantId against Caller.TenantId and every grain below it is
+        // reached through ForTenant, so something has to name the tenant or nothing is addressable.
+        // What is deliberately NOT filled in is SubjectType/SubjectId: this caller names no subject,
+        // so if a Check were ever reached from here it would find no tuple and DENY. The safe
+        // direction, by construction rather than by discipline.
+        var parsed = ResourceId.ParsePath(request.Path);
+        if (parsed.TryGetError(out var pathError)) {
+            return Result<WriteAccepted>.Failure(pathError);
+        }
+
+        var caller = new CallerContext {
+            TenantId = parsed.GetValueOrThrow().TenantId,
+            SubjectId = string.Empty,
+            CorrelationId = request.CorrelationId
+        };
+
+        var resolved = await ResolveAsync(
+            new WriteRequest { Path = request.Path, ApiVersion = request.ApiVersion, Caller = caller },
+            trace
+        );
+
+        if (resolved.TryGetError(out var resolveError)) {
+            return Result<WriteAccepted>.Failure(resolveError);
+        }
+
+        var target = resolved.GetValueOrThrow();
+
+        var parked = await RestorableAsync(target);
+        if (parked.TryGetError(out var parkedError)) {
+            return Result<WriteAccepted>.Failure(parkedError);
+        }
+
+        var addressed = target with { Id = target.Id.WithId(parked.GetValueOrThrow()) };
+
+        // ── The precondition that stands where the permission stands on the other front ─────────
+        //
+        // ⚠ ASKED OF THE INDEX GRAIN AND NOT COMPUTED HERE, which is the one thing about this method
+        // that is not obvious. IResourceIndexGrain.SoftDeleteAsync takes a DURATION rather than a
+        // deadline so that one activation both stamps and reads the window; reading RecoverableUntil
+        // out of GetAsync and comparing it against this process's clock would put the skew back on
+        // the single path where being early destroys a resource somebody could still have restored.
+        // ResolveExpiredAsync is the same clock that refuses the restore, so the two answers are
+        // complements rather than two opinions.
+        //
+        // ⚠ NO trace step, because there is no step for it. WriteTrace records docs/plan/08's twelve
+        // and this is not one of them — inventing a step would make WriteTrace.IsCanonicalPrefix
+        // false for every other path.
+        var expired = await Index(addressed).ResolveExpiredAsync();
+
+        if (expired.TryGetError(out var expiredError)) {
+            return Result<WriteAccepted>.Failure(expiredError);
+        }
+
+        return await PurgeCoreAsync(addressed, trace, caller, request.Path, cancellationToken);
+    }
+
+    /// <summary>
+    ///     Everything a purge does once something has established that it may happen: the lock check,
+    ///     the purge-protection check, the index release, the operation and the notification.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>Shared by the authorized front and the clock-driven one, and sharing it is the
+    ///         decision rather than a tidying.</b> docs/plan/07 § Azure RBAC records why: a purge that
+    ///         the clock drove through a <i>different</i> body would be a second implementation of
+    ///         the platform's one irreversible operation, and the two would drift in the direction
+    ///         nobody is watching — the one nobody types.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>It takes a <see cref="CallerContext" /> for the AUDIT and never for a check.</b>
+    ///         Nothing below here authorizes anything; the caller reaches <c>OperationSpec.Caller</c>
+    ///         and stops. On the expired path it names no subject, so the operation record says a
+    ///         purge happened and does not say who asked — which is the truth.
+    ///     </para>
+    /// </remarks>
+    async Task<Result<WriteAccepted>> PurgeCoreAsync(
+        WriteTarget addressed,
+        WriteTraceBuilder trace,
+        CallerContext caller,
+        string path,
+        CancellationToken cancellationToken
+    ) {
         trace.Enter(WriteStep.Locks);
 
         var lockLevel = await locks.ResolveAsync(addressed.Id, cancellationToken);
@@ -961,10 +1065,15 @@ public sealed class ResourceManagerService(
             return Result<WriteAccepted>.Failure(lockError);
         }
 
+        // ⚠ AND THE CLOCK DOES NOT OUTRANK A LOCK EITHER. A CanNotDelete lock is a tenant's standing
+        // refusal of destruction, written deliberately and visible in their own portal; an expiry
+        // that overruled it would make the lock mean "until the platform disagrees". So a locked
+        // resource whose window has ended stays parked — held past its window, which is what the
+        // sweeper exists to stop, by a decision its owner made and can see, which is the difference.
         if (lockLevel.GetValueOrThrow() is LockLevel.CanNotDelete or LockLevel.ReadOnly) {
             return Result<WriteAccepted>.Failure(
                 ErrorCode.ScopeLocked,
-                $"'{request.Path}' is covered by a {lockLevel.GetValueOrThrow()} lock, so it cannot be "
+                $"'{path}' is covered by a {lockLevel.GetValueOrThrow()} lock, so it cannot be "
                 + "purged. A purge destroys more than a delete does, so a lock that refuses the delete "
                 + "refuses this too — docs/plan/06 § Tags, locks."
             );
@@ -990,13 +1099,24 @@ public sealed class ResourceManagerService(
         // ⚠ It is checked AFTER the enforcement seam, so it tells an unauthorized caller nothing:
         // they were answered 404 above. To an authorized one it is a 409 that names what to do, which
         // is nothing — that is what the flag means.
-        if (IsPurgeProtected(addressed.Registration, snapshot.Properties)) {
+        //
+        // ⚠ AND IT ENDS WHEN THE WINDOW ENDS, WHICH IS WHAT BOTH OF ITS OWN MESSAGES ALREADY
+        // PROMISED AND WHAT THE CODE DID NOT DO. This refusal says the resource "cannot be purged
+        // BEFORE its recovery window ends" and PurgeProtectionRefusalAsync's says "wait for the
+        // recovery window to end" — while the condition was the flag alone, so the flag refused
+        // every purge for ever and the resource became permanently undestroyable: unrestorable past
+        // its window, unpurgeable by anybody, holding its name and its committed quota with no
+        // request that changes the answer. That is not an opt-in anybody chose. The condition is now
+        // the flag AND a window that has not ended, asked of the grain that owns the deadline, so
+        // the two sentences are true.
+        if (IsPurgeProtected(addressed.Registration, snapshot.Properties)
+            && (await Index(addressed).ResolveExpiredAsync()).IsFailure) {
             return Result<WriteAccepted>.Failure(
                 ErrorCode.Conflict,
-                $"'{request.Path}' has purge protection enabled, so it cannot be purged before its "
+                $"'{path}' has purge protection enabled, so it cannot be purged before its "
                 + "recovery window ends. The flag cannot be turned off once on — that is what makes it "
-                + "worth anything — so there is no request that changes this answer. docs/plan/08 "
-                + "§ Soft delete."
+                + "worth anything — so there is no request that changes this answer before then. "
+                + "docs/plan/08 § Soft delete."
             );
         }
 
@@ -1039,7 +1159,7 @@ public sealed class ResourceManagerService(
                     CommittedQuota = CommittedBy(addressed.Registration, snapshot.Properties),
                     IndexClaimed = false,
                     ParentResourceId = await ParentIdOf(addressed),
-                    Caller = request.Caller
+                    Caller = caller
                 }
             );
 

@@ -188,6 +188,27 @@ sealed class RecordingResourceManager : IResourceManager {
 
     /// <inheritdoc />
     /// <remarks>
+    ///     ⚠ <b>Refuses rather than recording, because NO GATEWAY ROUTE MAY REACH IT.</b>
+    ///     <c>PurgeExpiredAsync</c> is the clock-driven half of purge and takes no
+    ///     <c>CallerContext</c> — it authorizes nothing, by design — so a route that reached it would
+    ///     be an unauthenticated destroy. This fake is the gateway's view of the resource manager, and
+    ///     a fake that answered <c>202</c> here would let exactly that wiring mistake go green.
+    /// </remarks>
+    public Task<Result<WriteAccepted>> PurgeExpiredAsync(
+        ExpiredPurgeRequest request,
+        CancellationToken cancellationToken = default
+    ) =>
+        Task.FromResult(
+            Result<WriteAccepted>.Failure(
+                ErrorCode.InternalError,
+                "The gateway reached PurgeExpiredAsync. That member has no caller and runs no "
+                + "authorization check — it is driven by an expired recovery window and by nothing "
+                + "else — so a request that reaches it is an unauthenticated purge."
+            )
+        );
+
+    /// <inheritdoc />
+    /// <remarks>
     ///     ⚠ <b>Enqueues before it records.</b> A sabotage that routed <c>GET</c> here was survived by an
     ///     assertion of <c>Status.ShouldNotBe(200)</c> — this fake answers <c>202</c>, and 202 ≠ 200, so
     ///     the assertion held for a reason unrelated to what it claimed. <see cref="Actions" /> is what

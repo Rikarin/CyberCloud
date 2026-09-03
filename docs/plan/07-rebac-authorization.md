@@ -107,6 +107,74 @@ owner whose `DELETE` parked it. ⚠ **Owed: whether `purge` deserves a grantable
 which is the only thing that makes "may delete, may not destroy" expressible for a role rather than
 for a deny assignment.
 
+⚠ **And the owed item above is blocked by something narrower and more concrete than "a
+role-assignment story": there is no way to write a role tuple at all.** The tuple *store* exists —
+`ITupleStoreGrain.WriteAsync` — and `IObjectRelationsGrain`'s own remarks forbid reaching past it.
+What sits above it is one grant: `IScopeRelationWriter.GrantOwnerAsync`, called when a scope is
+created. There is no `PUT /roleAssignments`, no `IScopeManager` member that grants, and nothing
+anywhere that writes `contributor` or `reader` either. So the reads described above are real —
+`GET /roleAssignments` lists tuples, `ICheckGrain.ListRoleAssignmentsAsync` walks ancestors — and the
+write half of the same feature is absent. **Adding a `purger` relation today would add a relation
+nothing can write**, which is worse than the gap it closes: a schema version bump, a permission that
+looks grantable in the document, and no request that grants it.
+
+⚠ **The second finding is about `delete` rather than about `purge`, and it is why the separation
+cannot be expressed even in principle.** Azure's own version of "may delete, may not destroy" is
+*Contributor* holding `delete` while `deletedVaults/purge/action` sits in its `notActions` — the
+separation lives between two roles that both exist. Here `delete` is `Rel("owner")` and `write` is
+`Rel("contributor")`, so **a Contributor cannot delete at all**, which is stricter than the Azure
+role this schema says it is a view of. Every principal holding `delete` is an owner, every owner
+holds `purge`, and no grant can come between them. So the real question the owed item asks is
+*"should `delete` be `Rel("contributor")`"*, and that is a widening of the platform's most
+destructive verb rather than an addition — it is not a change to make in passing, and it is recorded
+here so that the next reader starts from it instead of from the `purger` relation, which does not fix
+anything on its own.
+
+**Decided: an expired recovery window is ended by a mechanism, and the platform gains no system
+principal.** [08](08-resource-manager.md) § Soft delete deferred this here and stated the fork
+exactly — *"an expiry is not a request, so there is nobody to authorize it, and `PurgeAsync` checks
+`PurgePermission` against a caller. Either the platform gains a system principal, or the purge splits
+into an authorized front and a mechanism the clock may drive."* The split is built:
+`IResourceManager.PurgeExpiredAsync` takes an `ExpiredPurgeRequest`, which has no `CallerContext`,
+and both fronts run the same `PurgeCoreAsync`. Three reasons, in the order they mattered:
+
+- **A system principal is a subject that passes every check, and this document has no way to bound
+  one.** It would be checked through the same seam as everybody else, so bounding it means a relation
+  it holds and others do not — and the paragraphs above are the finding that no relation can be
+  granted to anybody. The bound would be a comment.
+- **The precondition is stronger than the permission, in the sense that matters.** A right is
+  granted, denied, inherited and impersonated; a deadline that has passed can only be waited for.
+  What stands where the `Check` stands is `IResourceIndexGrain.ResolveExpiredAsync`, and it is a
+  member on that grain rather than a comparison at the caller for the reason `SoftDeleteAsync` takes
+  a *duration*: one activation stamps the window and reads it, so *"may this still be restored"* and
+  *"is this window over"* are two readings of one clock. A caller-side comparison would put a skew
+  back on the one path where being early destroys something still restorable.
+- **The two fronts share the body, and sharing it is the decision.** A purge the clock drove through
+  a second implementation would drift in the direction nobody is watching — the one nobody types.
+
+⚠ **One thing the mechanism does not inherit and one it does, and the asymmetry is the whole of the
+design.** It does **not** inherit purge protection, because the flag's own two messages already
+promise that the window ends it. It **does** inherit the lock check: a `CanNotDelete` lock is a
+tenant's standing, visible refusal of destruction, and a clock that overruled it would make the lock
+mean *"until the platform disagrees"*. A locked resource whose window has ended therefore stays
+parked — held past its window, which is the thing being fixed, by a decision its owner made and can
+see, which is the difference.
+
+⚠ **And the purge-protection reading above was a live defect rather than a subtlety.** The condition
+was the flag alone, while the refusal it produced said the resource *"cannot be purged **before** its
+recovery window ends"* and the write path's said *"wait for the recovery window to end"*. So a
+purge-protected resource became permanently undestroyable the moment its window closed:
+unrestorable, unpurgeable by anybody, holding its name and its committed quota, with — as its own
+message said — no request that changes the answer. The condition is now the flag **and** a window
+that has not ended, asked of the grain that owns the deadline.
+
+⚠ **What is still owed is the caller of the mechanism, and it is deliberately small.** Nothing yet
+drives `PurgeExpiredAsync` on a clock; it is a method with two tests and no scheduler. The shape that
+fits this platform is a durable reminder registered when the resource is parked and firing at its
+deadline, rather than a scan — there is no enumeration of parked resources anywhere (see § Storage:
+the index is one grain per path and one-way), so a sweeper that *searched* would need an index that
+does not exist, while a reminder needs only the moment the window is opened.
+
 ⚠ **And it is the second permission carrying `& !Rel("suspended")`.** § The model's sketch above
 shows the negation on `assignRole` alone, and `CyberCloudSchema`'s own remarks used to call that
 permission the only one to carry it; both now describe a pair. Adding a negation is a schema change

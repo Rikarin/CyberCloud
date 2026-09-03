@@ -585,6 +585,25 @@ platform gains a system principal, or the purge splits into an authorized front 
 clock may drive. Both are decisions about who the platform is when it acts for itself, which is
 [07](07-rebac-authorization.md)'s question rather than this one's.
 
+⚠ **[07](07-rebac-authorization.md) § Azure RBAC has now taken it, and it took the second fork: the
+purge splits, and there is no system principal.** `IResourceManager.PurgeExpiredAsync` takes an
+`ExpiredPurgeRequest` — a record whose *whole content is the absence of a `CallerContext`* — and runs
+the same `PurgeCoreAsync` an authorized purge runs. What stands where the `Check` stands is
+`IResourceIndexGrain.ResolveExpiredAsync`, which is `RecoverableUntil` read against the clock that
+stamped it, so *"may this still be restored"* and *"is this window over"* cannot disagree. The
+reasoning, the two things the mechanism does and does not inherit, and the purge-protection defect
+this uncovered are all there rather than here.
+
+⚠ **What is still owed is one thing and it is the caller.** Nothing drives `PurgeExpiredAsync` on a
+clock yet. ⚠ **A sweeper that searched could not be built even now, and the reason is worth stating
+where somebody will look for it: there is no enumeration of parked resources anywhere.** The index is
+one grain per path and one-way, `IKubeClusterConnection` has no list member, and — the one most
+likely to be assumed otherwise — **a parked resource has left its resource group's membership**:
+`OperationGrain.ParkAsync` calls the *group's* `CompleteDeleteAsync` deliberately, because a member
+left behind would put a name into a listing whose every read is the canonical `404`. So the shape
+that fits is a durable reminder registered at the moment the window opens, which needs no index at
+all.
+
 **Decided: committed quota is NOT returned on delete for a soft-deletable type. It is returned on
 purge.** ⚠ **This is the decision most easily got wrong from Azure by analogy, because Azure does
 three different things and the pattern is not the one it looks like.** A soft-deleted Key Vault bills
