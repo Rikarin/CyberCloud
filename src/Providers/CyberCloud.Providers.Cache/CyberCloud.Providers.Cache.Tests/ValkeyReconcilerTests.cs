@@ -485,6 +485,113 @@ public sealed class ValkeyReconcilerTests {
         ValkeyCaches.Matches("not json at all", desired.RootElement).ShouldBeFalse();
     }
 
+    [Fact]
+    public void TheKeptClaimsAreNamedFromTheRenderedTemplateAndTheOperatorsSetName() {
+        // ⚠ THE AGREEMENT ASSERTION, AND THE REASON IS THAT ONE HALF OF THE NAME IS NOT OURS.
+        // `keepAfterDeletion: true` makes spotahome withhold the owner reference that would let the
+        // collector take the claim — generator.go's `if !rf.Spec.Redis.Storage.KeepAfterDeletion {
+        // pvc.OwnerReferences = ownerRefs }` — so the claim outlives everything, and this type has no
+        // recovery window for it to outlive INTO. What removes it is RetainedClaims, which has to
+        // predict a name Kubernetes composed from a template WE render and a StatefulSet the OPERATOR
+        // renders. The template half is read back out of the applied document here rather than
+        // restated, because a rename in Storage() that did not reach RetainedClaims is a purge that
+        // silently reclaims nothing.
+        using var desired = JsonDocument.Parse(ValkeyCaches.Body(ClusterId, replicas: 2));
+
+        var storage = Redis(ValkeyCaches.RedisFailoverJson("observed", desired.RootElement))["storage"]!.AsObject();
+
+        // The flag and the reclaim are one decision. If the flag ever goes back to false the operator
+        // takes the claims and this list must go with it.
+        storage["keepAfterDeletion"]!.GetValue<bool>().ShouldBeTrue();
+
+        var template = (storage["persistentVolumeClaim"]!["metadata"] as JsonObject)!["name"]!.GetValue<string>();
+
+        var claims = ValkeyCaches.RetainedClaims("ns", "observed", desired.RootElement);
+
+        claims.Length.ShouldBe(2);
+        claims.Select(x => x.Claim.Name).ShouldBe(
+            [
+                RetainedVolume.NameFor(template, "rfr-observed", 0),
+                RetainedVolume.NameFor(template, "rfr-observed", 1)
+            ]
+        );
+
+        // ⚠ `rfr-` is names.go's GetRedisName and not a guess — see OperatorSetName's remarks for why
+        // reading an archived project's convention is safe here and would not be elsewhere.
+        ValkeyCaches.OperatorSetName("observed").ShouldBe("rfr-observed");
+
+        foreach (var claim in claims) {
+            claim.Claim.Kind.ShouldBe(RetainedVolume.ClaimKind);
+            claim.Claim.Namespace.ShouldBe("ns");
+            claim.OwnedBy["app.kubernetes.io/name"].ShouldBe("observed");
+            claim.OwnedBy["app.kubernetes.io/component"].ShouldBe("redis");
+            claim.OwnedBy["app.kubernetes.io/part-of"].ShouldBe("redis-failover");
+        }
+    }
+
+    [Fact]
+    public void ACacheThatPersistsNothingKeepsNothing() {
+        // ⚠ `None` renders an emptyDir and no `persistentVolumeClaim` at all, so there is no template,
+        // no claim and nothing for a reclaim to remove. Naming one anyway would be a purge acting on a
+        // claim that never existed — which VolumeReclaimer treats as absence and converges on, so the
+        // damage would be silent rather than loud.
+        using var desired = JsonDocument.Parse(ValkeyCaches.Body(ClusterId, persistence: "None"));
+
+        Redis(ValkeyCaches.RedisFailoverJson("observed", desired.RootElement))["storage"]!
+            .AsObject()
+            .ContainsKey("persistentVolumeClaim")
+            .ShouldBeFalse();
+
+        ValkeyCaches.RetainedClaims("ns", "observed", desired.RootElement).ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task TheFinalTeardownRemovesTheDataDirectoriesTheOperatorKept() {
+        // ⚠ THE ONE THAT WOULD HAVE CAUGHT THE LEAK. Before this the reconciler took
+        // IResourceReconciler's default — an empty array, meaning "this type keeps nothing" — while
+        // rendering a claim the operator was explicitly told to keep. Every delete of a
+        // CyberCloud.Cache/redis therefore returned the tenant's quota, freed the name, and left the
+        // disk allocated with nothing referencing it.
+        //
+        // The claims are PLANTED, because this connection runs no StatefulSet controller: the name is
+        // Kubernetes' {volume}-{set}-{ordinal} and the labels are the operator's own selector, which
+        // the controller copies onto every claim its template makes.
+        var connection = new RecordingConnection();
+        using var desired = JsonDocument.Parse(ValkeyCaches.Body(ClusterId, replicas: 2));
+        var context = Context(connection, desired.RootElement);
+
+        var planted = ValkeyCaches.RetainedClaims(context.Namespace, "observed", desired.RootElement);
+        planted.Length.ShouldBe(2);
+
+        foreach (var claim in planted) {
+            connection.Objects[RecordingConnection.Key(claim.Claim)] = new JsonObject {
+                ["metadata"] = new JsonObject {
+                    ["name"] = claim.Claim.Name,
+                    ["namespace"] = claim.Claim.Namespace,
+                    ["labels"] = new JsonObject(
+                        claim.OwnedBy.Select(x => KeyValuePair.Create(x.Key, (JsonNode?)JsonValue.Create(x.Value)))
+                    )
+                }
+            }.ToJsonString();
+        }
+
+        var outcome = await VolumeReclaimer.ReclaimAsync(
+            new ValkeyCacheReconciler(new FixedClock()),
+            context,
+            TestContext.Current.CancellationToken
+        );
+
+        outcome.IsConverged.ShouldBeTrue(outcome.ToString());
+
+        foreach (var claim in planted) {
+            connection.Objects.ContainsKey(RecordingConnection.Key(claim.Claim)).ShouldBeFalse(
+                $"'{claim.Claim}' survived the final teardown. `keepAfterDeletion: true` asks spotahome "
+                + "to leave it, and CyberCloud.Cache/redis declares no recovery window, so nothing "
+                + "else is ever coming back for it."
+            );
+        }
+    }
+
     // ── Harness ───────────────────────────────────────────────────────────────────────────────
 
     static readonly Guid ClusterId = Guid.Parse("eeeeeeee-0000-4000-8000-000000000005");

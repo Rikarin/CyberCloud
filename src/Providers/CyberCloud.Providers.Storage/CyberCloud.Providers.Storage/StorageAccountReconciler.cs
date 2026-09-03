@@ -2,6 +2,7 @@
 // the ErrorCode alias.
 using CyberCloud.Core;
 using CyberCloud.Core.Time;
+using System.Collections.Immutable;
 using System.Text.Json.Nodes;
 
 namespace CyberCloud.Providers.Storage;
@@ -393,9 +394,34 @@ public sealed class StorageAccountReconciler(IClock clock) : IResourceReconciler
         // first. What is left behind is one KV document per deleted account, inert, addressed by a
         // GUID no resource carries any more. Sweeping it belongs to a vault lifecycle job
         // (docs/plan/18 § Rotation is the same machinery) rather than to a reconcile pass.
+        // ⚠ AND THE OBJECTS THEMSELVES SURVIVE THIS, WHICH IS WHAT MAKES THE SEVEN-DAY WINDOW REAL.
+        // The Seaweed CR going away cascades to the two StatefulSets and stops there: the operator
+        // pins its claim retention policy's `whenDeleted` to Retain as a CONSTANT
+        // (internal/controller/pv_reclaim.go), writes no owner reference onto a claim template, and
+        // registers no finalizer. So the volume servers' disks and the filer's metadata store are all
+        // still there — and until RetainedVolumesAsync below, so were they after a PURGE.
         context.Log.Report("deleted", $"the objects of '{name}' are gone", 100);
         return ReconcileOutcome.Converged;
     }
+
+    /// <inheritdoc />
+    /// <remarks>
+    ///     ⚠ <b>One claim per volume server plus the filer's, named the OPERATOR's way</b> — see
+    ///     <see cref="StorageAccounts.RetainedClaims" />, which carries the reading of the operator's
+    ///     source, the reason the claims survive a teardown at all, and the version coupling that
+    ///     naming another project's objects creates. This runs on the convergence of a hard delete
+    ///     and of a purge and on nothing else, so a soft delete's claims — the ones a restore hands
+    ///     back — are never reached.
+    /// </remarks>
+    public Task<Result<ImmutableArray<RetainedVolume>>> RetainedVolumesAsync(
+        ReconcileContext context,
+        CancellationToken cancellationToken = default
+    ) =>
+        Task.FromResult(
+            Result<ImmutableArray<RetainedVolume>>.Success(
+                StorageAccounts.RetainedClaims(context.Namespace, context.Id.Name, context.Desired)
+            )
+        );
 
     /// <summary>
     ///     The smallest object a delete command will accept.

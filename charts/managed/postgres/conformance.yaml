@@ -154,3 +154,42 @@ owed:
       to its extension name and its preload requirement, which is a schema-shaped change rather than
       a rendering one. Closing it also wants one run against a real cluster per allowed value, which
       is what `extensions-are-the-allow-list` above already asks for and nothing yet runs.
+  - id: the-recovery-window-is-hollow-because-cloudnativepg-owns-its-claims
+    says: >
+      ⚠ THIS TYPE DOES NOT LEAK ITS VOLUMES, AND THE REASON IT DOES NOT IS WORSE THAN THE LEAK.
+      Issue #65 lists CyberCloud.DBforPostgreSQL/servers among the three operator-delegated types
+      whose claims a purge leaves behind, alongside DBforMySQL/servers and Storage/accounts. Read
+      against CloudNativePG v1.30.0 — the version charts/bundle/cloudnative-pg/component.yaml pins —
+      that premise is false for this row, and only for this row. CloudNativePG creates its PVCs
+      itself rather than through a volumeClaimTemplate, and it stamps an OWNER REFERENCE onto every
+      one of them: pkg/reconciler/persistentvolumeclaim/build.go calls `.WithClusterInheritance(cluster)`,
+      which is `cluster.SetInheritedDataAndOwnership(objectMeta)` (api/v1/cluster_funcs.go), which is
+      `utils.SetAsOwnedBy(obj, cluster.ObjectMeta, cluster.TypeMeta)` with `Controller: true`
+      (pkg/utils/ownership.go). There is no reclaim or retain setting anywhere in the operator —
+      `.spec.storage.pvcTemplate` is a PersistentVolumeClaimSpec and can reach no metadata — and the
+      only owner-reference removal in the whole tree is the human-driven
+      `kubectl cnpg destroy --keep-pvc`.
+      ⚠ SO A PURGE LEAVES NOTHING, AND A SOFT DELETE LEAVES NOTHING EITHER. That is the finding.
+      PostgresServerReconciler.DeleteAsync deletes the Cluster on every teardown, and a soft delete
+      is a teardown — ProviderConformanceTests says so in as many words: "a soft delete tears the
+      data plane down like any other delete; what the window preserves is the name, the stored
+      desired state, the committed quota and the volumes". The first three survive here and the
+      fourth does not: Kubernetes garbage-collects `{name}-{serial}`, `{name}-{serial}-wal` and every
+      tablespace claim as soon as the Cluster is gone. So PostgresServers.SoftDeleteDays = 7 promises
+      a window whose restore comes back to an initdb.
+      ⚠ AND NOTHING IN THIS TREE CAN SEE IT. ProviderConformanceTests' retained-volume case reads
+      volumeClaimTemplates out of the documents a provider APPLIED and skips a family that renders
+      none — this provider applies a Cluster and a Pooler, so it skips, and the skip is correct.
+      The cluster-backed suites start a bare k3s with no CloudNativePG operator, so no run in this
+      repository has ever had a controller present to garbage-collect anything. The window has been
+      green since it was declared and has never once been exercised against the operator that
+      empties it.
+      ⚠ WHAT CLOSING IT LOOKS LIKE, so that the next person does not start from the leak. Either the
+      soft-delete teardown stops deleting the Cluster for this family — which contradicts the
+      contract every other type keeps and leaves a parked resource's pods running and unbilled — or
+      it strips the claims' owner references before deleting, which is what `--keep-pvc` does and
+      what a RetainedVolumesAsync-shaped seam cannot express, because that member NAMES claims for a
+      purge to remove and this needs claims DETACHED before a delete. A third answer is to withdraw
+      SupportsSoftDelete(7) from this type until one of the two exists, on the same argument
+      PostgresProvider already makes in its own remarks: "a recovery window the platform does not
+      honour is a promise made" to a tenant who will find out when they use it.

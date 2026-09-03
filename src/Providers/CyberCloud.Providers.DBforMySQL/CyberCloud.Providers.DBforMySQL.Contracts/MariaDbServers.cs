@@ -637,6 +637,144 @@ public static class MariaDbServers {
     public static ObjectRef ServerRef(string ns, string name) =>
         new() { Kind = ServerKind, Namespace = ns, Name = name };
 
+    // ── What the operator makes, named the operator's way ─────────────────────────────────────
+
+    /// <summary>
+    ///     The data <c>volumeClaimTemplate</c>'s <c>metadata.name</c>, which the operator writes.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <c>pkg/builder/statefulset_builder.go</c>'s <c>StorageVolume = "storage"</c>, used by
+    ///     <c>mariadbVolumeClaimTemplates</c>. See <see cref="OperatorSetName" /> for why reading
+    ///     another project's constant is the only option here and what it costs.
+    /// </remarks>
+    public const string StorageVolume = "storage";
+
+    /// <summary>The Galera configuration <c>volumeClaimTemplate</c>'s <c>metadata.name</c>.</summary>
+    /// <remarks>
+    ///     ⚠ <c>pkg/controller/galera/resources/resources.go</c>'s
+    ///     <c>GaleraConfigVolume = "galera"</c>. ⚠ <b>It exists because of a default rather than
+    ///     because this platform asked for it.</b> <see cref="ServerJson" /> renders
+    ///     <c>spec.galera = { enabled: true }</c> and nothing else; the operator's
+    ///     <c>Galera.SetDefaults</c> then fills in a 100 MiB <c>config.volumeClaimTemplate</c>,
+    ///     because <c>config.reuseStorageVolume</c> defaults to <c>false</c>. So an HA server has a
+    ///     second claim per instance that no line in this repository asks for, and a purge that
+    ///     removed only the first would leave three disks behind.
+    /// </remarks>
+    public const string GaleraVolume = "galera";
+
+    /// <summary>
+    ///     The name the operator gives the <c>StatefulSet</c> it renders for a <c>MariaDB</c>: the
+    ///     <c>MariaDB</c>'s own name, unsuffixed.
+    /// </summary>
+    /// <param name="name">The resource's own name.</param>
+    /// <remarks>
+    ///     ⚠ <b>Unsuffixed, which is a fact about this operator and not a family habit</b> — the
+    ///     headless Service beside it <i>is</i> suffixed (<c>{name}-internal</c>), so "the set is
+    ///     called what the CR is called" has to be read rather than assumed.
+    ///     <c>internal/controller/mariadb_controller.go</c>'s <c>reconcileStatefulSet</c> passes
+    ///     <c>client.ObjectKeyFromObject(mariadb)</c> straight through to
+    ///     <c>BuildMariadbStatefulSet</c>. The operator's own <c>MariaDB.PVCKey</c> composes the same
+    ///     claim name this file predicts: <c>fmt.Sprintf("%s-%s-%d", name, m.Name, index)</c>.
+    ///     <para>
+    ///         ⚠ <b>THIS IS VERSION-COUPLED TO A MAINTAINED PROJECT, WHICH IS THE UNCOMFORTABLE PART
+    ///         AND IS SAID RATHER THAN HIDDEN.</b> This platform does not render the
+    ///         <c>StatefulSet</c>, so the claims are named by mariadb-operator; the reading above is
+    ///         of the version <c>charts/bundle/mariadb-operator/component.yaml</c> pins, and that pin
+    ///         moves. ⚠ <b>The failure direction on a WRONG name is the quiet one and it is worth
+    ///         being precise about:</b> <c>VolumeReclaimer</c>'s ownership guard protects against
+    ///         destroying somebody else's disk, not against missing our own — a claim named wrongly
+    ///         simply is not found, the reclaim converges, and the volume is left exactly as it is
+    ///         left today. So a bump that renames a claim is a leak that comes back, never a delete
+    ///         that goes wrong.
+    ///     </para>
+    /// </remarks>
+    public static string OperatorSetName(string name) => name;
+
+    /// <summary>
+    ///     The labels the operator puts in the <c>StatefulSet</c>'s
+    ///     <c>spec.selector.matchLabels</c>, and therefore what Kubernetes copies onto every claim
+    ///     its templates create.
+    /// </summary>
+    /// <param name="name">The resource's own name.</param>
+    /// <remarks>
+    ///     ⚠ <b>Two labels and no more</b> — <c>pkg/builder/labels/labels.go</c>'s
+    ///     <c>WithMariaDBSelectorLabels</c> is <c>WithApp("mariadb").WithInstance(mdb.Name)</c>. ⚠ NOT
+    ///     ADR-013's seven: those are injected onto the <c>MariaDB</c>'s own <c>metadata.labels</c>
+    ///     and no builder descends into a template the operator renders. The evidence a purge acts on
+    ///     is therefore <c>instance</c> carrying this resource's name, inside a namespace that is one
+    ///     resource group on one cluster.
+    /// </remarks>
+    public static ImmutableDictionary<string, string> OperatorSelectorLabels(string name) =>
+        ImmutableDictionary.CreateRange(
+            StringComparer.Ordinal,
+            [
+                KeyValuePair.Create("app.kubernetes.io/name", "mariadb"),
+                KeyValuePair.Create("app.kubernetes.io/instance", name)
+            ]
+        );
+
+    /// <summary>
+    ///     The claims a teardown of this type leaves standing, with the labels that prove whose they
+    ///     are — one data volume per instance, and one Galera configuration volume per instance when
+    ///     the server is highly available.
+    /// </summary>
+    /// <param name="ns">The resource's namespace.</param>
+    /// <param name="name">The resource's own name.</param>
+    /// <param name="desired">The validated desired body: the topology, which is what fixes the count.</param>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>Nothing in mariadb-operator removes these, and that was read rather than
+    ///         assumed.</b> <c>mariadbVolumeClaimTemplates</c> gives the templates a
+    ///         <c>Name</c>, <c>Labels</c> and <c>Annotations</c> and no <c>OwnerReferences</c>; the
+    ///         one <c>SetControllerReference</c> in <c>BuildMariadbStatefulSet</c> targets the
+    ///         <c>StatefulSet</c>. There is no <c>MariaDB</c> finalizer.
+    ///         <c>spec.storage.pvcRetentionPolicy</c> would hand the question to Kubernetes and this
+    ///         platform does not render it — deliberately, see <c>MariaDbServerReconciler</c> — so
+    ///         the claims outlive the resource. This is what ends them.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The Galera claim is the one a reading of this repository alone would miss</b> —
+    ///         see <see cref="GaleraVolume" />. It is the operator's default rather than our request,
+    ///         and it is per instance like the data volume.
+    ///     </para>
+    /// </remarks>
+    public static ImmutableArray<RetainedVolume> RetainedClaims(string ns, string name, JsonElement desired) {
+        ArgumentException.ThrowIfNullOrEmpty(ns);
+        ArgumentException.ThrowIfNullOrEmpty(name);
+
+        var instances = Replicas(desired);
+        var owned = OperatorSelectorLabels(name);
+        var set = OperatorSetName(name);
+
+        var claims = ImmutableArray.CreateBuilder<RetainedVolume>(instances * 2);
+
+        claims.AddRange(
+            RetainedVolume.OfSet(
+                ns,
+                StorageVolume,
+                set,
+                instances,
+                owned,
+                "one instance's MariaDB data directory — every table, index and binary log it holds"
+            )
+        );
+
+        if (IsHighlyAvailable(desired)) {
+            claims.AddRange(
+                RetainedVolume.OfSet(
+                    ns,
+                    GaleraVolume,
+                    set,
+                    instances,
+                    owned,
+                    "one instance's Galera state — the cluster UUID and sequence number it rejoins on"
+                )
+            );
+        }
+
+        return claims.ToImmutable();
+    }
+
     /// <summary>The <c>Secret</c> the operator reads the root password from.</summary>
     /// <param name="name">The resource's own name.</param>
     /// <remarks>

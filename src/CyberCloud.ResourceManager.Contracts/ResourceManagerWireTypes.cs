@@ -249,6 +249,53 @@ public sealed record WriteRequest {
 }
 
 /// <summary>
+///     A request to end a recovery window that has already ended — the clock-driven half of purge,
+///     which has no caller.
+/// </summary>
+/// <remarks>
+///     <para>
+///         ⚠ <b>The absence of a <see cref="CallerContext" /> is the type's whole content, and it is
+///         a separate record rather than a <see cref="WriteRequest" /> with an empty
+///         <see cref="WriteRequest.Caller" /> for that reason.</b> docs/plan/08 § Soft delete:
+///         <i>"an expiry is not a request, so there is nobody to authorize it, and PurgeAsync checks
+///         PurgePermission against a caller"</i>. A shape that could carry a caller would invite one
+///         — and a caller here would be a subject the platform had invented in order to pass its own
+///         check, which is the system principal docs/plan/07 declined.
+///     </para>
+///     <para>
+///         ⚠ <b>What replaces the permission is a precondition the platform cannot delegate:</b> the
+///         index grain must answer <c>ResolveExpiredAsync</c>, which is <c>IndexEntry.RecoverableUntil</c>
+///         read against the clock that stamped it. A right can be granted, denied, inherited and
+///         impersonated; a deadline that has passed can only be waited for.
+///     </para>
+///     <para>
+///         ⚠ <b>There is no api-version-free form and there cannot be.</b> The registration is what
+///         names the type's purge behaviour and its committed quota, and both are read per
+///         api-version — so whatever drives this records the version the resource was stored under
+///         and hands it back.
+///     </para>
+/// </remarks>
+[GenerateSerializer]
+[Alias("CyberCloud.ResourceManager.ExpiredPurgeRequest")]
+public sealed record ExpiredPurgeRequest {
+    /// <summary>The parked resource's own path, as its delete left it.</summary>
+    [Id(0)]
+    public string Path { get; init; } = string.Empty;
+
+    /// <summary>The <c>api-version</c> the resource is stored under. ⚠ Required, as everywhere else.</summary>
+    [Id(1)]
+    public string ApiVersion { get; init; } = string.Empty;
+
+    /// <summary>The correlation id of whatever drove this, for the audit trail.</summary>
+    /// <remarks>
+    ///     ⚠ <b>A correlation id and not an identity.</b> It says which sweep ended this window; it
+    ///     does not say who did, because nobody did.
+    /// </remarks>
+    [Id(2)]
+    public string CorrelationId { get; init; } = string.Empty;
+}
+
+/// <summary>
 ///     The <c>202 Accepted</c> of step 12, with everything the response needs.
 /// </summary>
 [GenerateSerializer]

@@ -1,4 +1,8 @@
+// ⚠ For `Result<T>` on the retained-volume seam. Safe beside the GlobalUsings ErrorCode alias, which
+// is what disambiguates the one name this namespace collides with.
+using CyberCloud.Core;
 using CyberCloud.Core.Time;
+using System.Collections.Immutable;
 
 namespace CyberCloud.Providers.DBforMySQL;
 
@@ -213,6 +217,37 @@ public sealed class MariaDbServerReconciler(IClock clock) : IResourceReconciler 
 
         return ReconcileOutcome.Converged;
     }
+
+    /// <inheritdoc />
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>The other half of the <c>pvcRetentionPolicy</c> paragraph in
+    ///         <see cref="DeleteAsync" />, and it settles what that paragraph left open.</b> That
+    ///         comment said the fate of the data volumes was "the StatefulSet's default rather than a
+    ///         choice this platform made", recorded as owed under
+    ///         <c>volumes-outlive-the-resource</c>, and that picking a retention policy before there
+    ///         was a restore path would be picking it blind. The restore path exists now, so the
+    ///         answer is the one soft delete needs: <b>the claims outlive the teardown</b> — which
+    ///         they already did — <b>and a purge is what ends them</b>, through
+    ///         <see cref="MariaDbServers.RetainedClaims" /> and <c>VolumeReclaimer</c>. Rendering
+    ///         <c>whenDeleted: Delete</c> instead would have destroyed the data on the soft delete
+    ///         and made the seven-day window an advertisement.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The claims are named from mariadb-operator's conventions and this platform does
+    ///         not render the <c>StatefulSet</c></b> — see <see cref="MariaDbServers.OperatorSetName" />
+    ///         for the version coupling that creates and for which direction a stale reading fails in.
+    ///     </para>
+    /// </remarks>
+    public Task<Result<ImmutableArray<RetainedVolume>>> RetainedVolumesAsync(
+        ReconcileContext context,
+        CancellationToken cancellationToken = default
+    ) =>
+        Task.FromResult(
+            Result<ImmutableArray<RetainedVolume>>.Success(
+                MariaDbServers.RetainedClaims(context.Namespace, context.Id.Name, context.Desired)
+            )
+        );
 
     /// <inheritdoc />
     public async Task<ObservedState> ObserveAsync(

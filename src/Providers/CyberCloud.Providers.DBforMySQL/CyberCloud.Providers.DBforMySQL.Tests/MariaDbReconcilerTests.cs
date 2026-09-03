@@ -345,6 +345,97 @@ public sealed class MariaDbReconcilerTests {
         MariaDbServers.Matches(rendered.ToJsonString(), desired.RootElement).ShouldBeFalse();
     }
 
+    [Theory]
+    [InlineData("Galera", 3, true)]
+    [InlineData("None", 1, false)]
+    public void TheKeptClaimsFollowTheRenderedInstanceCountAndTheRenderedTopology(
+        string topology,
+        int instances,
+        bool galera
+    ) {
+        // ⚠ THE COUNT AND THE TOPOLOGY ARE READ BACK OUT OF THE RENDERED MariaDB rather than restated,
+        // because both halves of every claim name belong to the OPERATOR and only these two inputs are
+        // ours. `spec.replicas` is how many `storage-{name}-{i}` exist; `spec.galera.enabled` is
+        // whether a second claim per instance exists at all — the operator's Galera.SetDefaults fills
+        // in a 100Mi config.volumeClaimTemplate that nothing in this repository asks for, so a purge
+        // reading only `storage` would leave three disks behind on every HA server.
+        using var desired = JsonDocument.Parse(MariaDbServers.Body(ClusterId, highAvailability: topology));
+
+        var spec = Spec(MariaDbServers.ServerJson("observed", desired.RootElement));
+
+        spec["replicas"]!.GetValue<int>().ShouldBe(instances);
+        ((spec["galera"] as JsonObject)?["enabled"]?.GetValue<bool>() == true).ShouldBe(galera);
+
+        var claims = MariaDbServers.RetainedClaims("ns", "observed", desired.RootElement);
+
+        claims.Select(x => x.Claim.Name).ShouldBe(
+            galera
+                ? [
+                    "storage-observed-0", "storage-observed-1", "storage-observed-2",
+                    "galera-observed-0", "galera-observed-1", "galera-observed-2"
+                ]
+                : ["storage-observed-0"]
+        );
+
+        // ⚠ The set name is the CR's own, unsuffixed — mariadb-operator's reconcileStatefulSet passes
+        // client.ObjectKeyFromObject(mariadb) straight through, while the headless Service beside it
+        // IS suffixed. Asserted because "the set is called what the CR is called" is the half of the
+        // name a reader would most reasonably assume wrongly.
+        MariaDbServers.OperatorSetName("observed").ShouldBe("observed");
+
+        foreach (var claim in claims) {
+            claim.Claim.Kind.ShouldBe(RetainedVolume.ClaimKind);
+            claim.Claim.Namespace.ShouldBe("ns");
+            claim.OwnedBy["app.kubernetes.io/name"].ShouldBe("mariadb");
+            claim.OwnedBy["app.kubernetes.io/instance"].ShouldBe("observed");
+        }
+    }
+
+    [Fact]
+    public async Task TheFinalTeardownRemovesTheDataAndGaleraVolumes() {
+        // ⚠ THE ONE THAT WOULD HAVE CAUGHT THE LEAK. Before this the reconciler took
+        // IResourceReconciler's default — an empty array, "this type keeps nothing" — while
+        // mariadb-operator wrote no owner reference onto either template, registered no finalizer and
+        // was handed no pvcRetentionPolicy. So a purged server returned its quota, freed its name, and
+        // left six disks.
+        //
+        // The claims are PLANTED, because this connection runs no StatefulSet controller: the name is
+        // Kubernetes' {volume}-{set}-{ordinal} and the labels are the operator's own selector.
+        var connection = new RecordingConnection();
+        using var desired = JsonDocument.Parse(MariaDbServers.Body(ClusterId));
+        var context = Context(connection, desired.RootElement);
+
+        var planted = MariaDbServers.RetainedClaims(context.Namespace, "observed", desired.RootElement);
+        planted.Length.ShouldBe(6);
+
+        foreach (var claim in planted) {
+            connection.Objects[RecordingConnection.Key(claim.Claim)] = new JsonObject {
+                ["metadata"] = new JsonObject {
+                    ["name"] = claim.Claim.Name,
+                    ["namespace"] = claim.Claim.Namespace,
+                    ["labels"] = new JsonObject(
+                        claim.OwnedBy.Select(x => KeyValuePair.Create(x.Key, (JsonNode?)JsonValue.Create(x.Value)))
+                    )
+                }
+            }.ToJsonString();
+        }
+
+        var outcome = await VolumeReclaimer.ReclaimAsync(
+            new MariaDbServerReconciler(new FixedClock()),
+            context,
+            TestContext.Current.CancellationToken
+        );
+
+        outcome.IsConverged.ShouldBeTrue(outcome.ToString());
+
+        foreach (var claim in planted) {
+            connection.Objects.ContainsKey(RecordingConnection.Key(claim.Claim)).ShouldBeFalse(
+                $"'{claim.Claim}' survived the final teardown, so a purged server returned its quota "
+                + "and left its disk allocated."
+            );
+        }
+    }
+
     // ── Harness ───────────────────────────────────────────────────────────────────────────────
 
     static readonly Guid ClusterId = Guid.Parse("eeeeeeee-0000-4000-8000-000000000006");

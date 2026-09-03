@@ -238,6 +238,36 @@ public sealed class ResourceIndexGrain(
     }
 
     /// <inheritdoc />
+    public Task<Result<Guid>> ResolveExpiredAsync() {
+        var now = clock.UtcNow;
+        var entry = IndexClaimMachine.Effective(state.State.Entry, now);
+
+        if (entry.State != IndexEntryState.SoftDeleted) {
+            return Task.FromResult(
+                Result<Guid>.Failure(
+                    ErrorCode.ResourceNotFound,
+                    $"{Describe()} holds no soft-deleted resource: it is {entry.State}."
+                )
+            );
+        }
+
+        // ⚠ `<=` and THIS GRAIN'S OWN CLOCK, which is the same comparison IndexClaimMachine.Restore
+        // makes to refuse a restore. The two are complements by construction rather than by
+        // agreement: an instant that is too late to restore is exactly an instant at which the window
+        // has ended, and no second clock is involved in either answer.
+        return Task.FromResult(
+            entry.RecoverableUntil <= now
+                ? Result<Guid>.Success(entry.BoundTo)
+                : Result<Guid>.Failure(
+                    ErrorCode.ResourceNotFound,
+                    $"{Describe()} is soft-deleted and its recovery window runs until "
+                    + $"{entry.RecoverableUntil.ToString("u", System.Globalization.CultureInfo.InvariantCulture)}, so "
+                    + "is still restorable and nothing may end it on the clock's account."
+                )
+        );
+    }
+
+    /// <inheritdoc />
     public Task DeactivateAsync() {
         DeactivateOnIdle();
         return Task.CompletedTask;

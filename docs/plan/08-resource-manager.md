@@ -464,6 +464,32 @@ path item carrying that extension reads as a *second* type with the same name �
 the duplicate command, `SdkEmitter` throws on the duplicate model. The reserved-action route above
 needed no emitter change precisely because it is an action; a list is not.
 
+⚠ **`ListAsync` HAS SINCE LANDED, AND IT DOES NOT GIVE THE SOFT-DELETED COLLECTION ANYTHING — WHICH
+IS THE OPPOSITE OF WHAT THE PARAGRAPHS ABOVE PREDICT AND IS THE THING TO READ FIRST.** Both changes
+they name are built: the membership choreography is wired, and `IResourceManager.ListAsync` answers a
+`ResourceCollectionId` with a `Check` per member, a `MaxPageSize` of 100 and a continuation naming the
+last member *examined*. So *"the soft-deleted collection is one filter over whatever answers it"* is
+now testable, and it is **false**: the filter has an empty input. A parked resource is not a member of
+its resource group — `OperationGrain.ParkAsync` calls the **group's** `CompleteDeleteAsync`
+deliberately, because a member left behind would put a name into a listing whose every read is the
+canonical `404`, handing a caller who may list the group but may not read the resource the
+*"something is held here"* signal § Soft delete refuses a `410 Gone` over. That is the right decision
+and it is not the one to reverse. `SoftDeletePathTests.ASoftDeletedResourceIsInNoListingBecauseItLeft`
+`ItsGroupsMembership` pins both halves — absent from the page, and absent from the membership
+underneath the filter, which is where the finding actually is.
+
+⚠ **So listing what is recoverable needs an enumeration source, and the platform has none anywhere.**
+The index is one grain per path and one-way; `ResolveSoftDeletedAsync` answers a question you can only
+ask if you already know the name. Nothing else records that a resource is parked. **The shape that
+fits is a per-resource-group registry of parked resources, written where `ParkAsync` unlists the
+member and cleared where the restore relists it and the purge releases the name** — three call sites
+that already exist, in one grain that does not. It is deliberately *not* the group's own membership:
+the two collections answer different questions to different callers, and merging them is exactly the
+`410 Gone` the decision above refuses. ⚠ Its address is the smaller half and is no longer blocked —
+`ResourceCollectionId` exists and is resource-group-scoped, so *"what is recoverable in this group of
+this type"* is expressible today; anything wider is still the addressing question, because
+`ResourceId.ParsePath` has `const int fixedPrefix = 8` and no subscription-scoped shape.
+
 **Decided: the name is held for the whole window.** Azure holds it — *"You can't reuse the name of a
 key vault that was soft-deleted, until the retention period expires"*, DNS record included. Releasing
 it is the cheaper-sounding option and it breaks restore: a name taken by somebody else leaves a
@@ -584,6 +610,25 @@ nobody to authorize it, and `PurgeAsync` checks `PurgePermission` against a call
 platform gains a system principal, or the purge splits into an authorized front and a mechanism the
 clock may drive. Both are decisions about who the platform is when it acts for itself, which is
 [07](07-rebac-authorization.md)'s question rather than this one's.
+
+⚠ **[07](07-rebac-authorization.md) § Azure RBAC has now taken it, and it took the second fork: the
+purge splits, and there is no system principal.** `IResourceManager.PurgeExpiredAsync` takes an
+`ExpiredPurgeRequest` — a record whose *whole content is the absence of a `CallerContext`* — and runs
+the same `PurgeCoreAsync` an authorized purge runs. What stands where the `Check` stands is
+`IResourceIndexGrain.ResolveExpiredAsync`, which is `RecoverableUntil` read against the clock that
+stamped it, so *"may this still be restored"* and *"is this window over"* cannot disagree. The
+reasoning, the two things the mechanism does and does not inherit, and the purge-protection defect
+this uncovered are all there rather than here.
+
+⚠ **What is still owed is one thing and it is the caller.** Nothing drives `PurgeExpiredAsync` on a
+clock yet. ⚠ **A sweeper that searched could not be built even now, and the reason is worth stating
+where somebody will look for it: there is no enumeration of parked resources anywhere.** The index is
+one grain per path and one-way, `IKubeClusterConnection` has no list member, and — the one most
+likely to be assumed otherwise — **a parked resource has left its resource group's membership**:
+`OperationGrain.ParkAsync` calls the *group's* `CompleteDeleteAsync` deliberately, because a member
+left behind would put a name into a listing whose every read is the canonical `404`. So the shape
+that fits is a durable reminder registered at the moment the window opens, which needs no index at
+all.
 
 **Decided: committed quota is NOT returned on delete for a soft-deletable type. It is returned on
 purge.** ⚠ **This is the decision most easily got wrong from Azure by analogy, because Azure does

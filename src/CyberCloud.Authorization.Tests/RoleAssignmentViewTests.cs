@@ -129,11 +129,93 @@ public sealed class RoleAssignmentViewTests(AuthorizationCluster cluster) {
         check.GetValueOrThrow().Allowed.ShouldBeTrue();
     }
 
+    /// <summary>
+    ///     ⚠ <b>The one separation of <c>purge</c> from <c>delete</c> this platform can express, and
+    ///     it was claimed as asserted while nothing asserted it.</b>
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         docs/plan/07 § Azure RBAC states it in as many words — <i>"a deny assignment removes
+    ///         <c>purge</c> while leaving <c>delete</c>, which is <c>notActions</c> with one row in
+    ///         it"</i> — and the only test in the repository shaped like this one ran against
+    ///         <c>assignRole</c> on a <b>subscription</b>. <c>purge</c> is declared on
+    ///         <c>resource</c> and on nothing else, so that test could not have covered it, and its
+    ///         own comment still said <c>assignRole</c> was the only permission carrying the
+    ///         negation — which stopped being true when <c>purge</c> was added at
+    ///         <c>SchemaVersion</c> 2.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Against the real <see cref="CyberCloudSchema" /> through the real grains, which
+    ///         is the whole point.</b> The defect that put <c>purge</c> into the schema was a
+    ///         permission nothing declared, evaluating false for ever, invisible because every purge
+    ///         test in the repository ran against a doubled authorizer. An assertion about
+    ///         <c>purge</c> written against a fixture schema would be the same mistake with the same
+    ///         shape.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The second half is the gap rather than the feature, and it is asserted so that
+    ///         closing it is loud.</b> <c>contributor</c> holds neither verb and <c>owner</c> holds
+    ///         both, so the two permissions have <i>identical grant sets</i> and the deny is the only
+    ///         separation there is. That is less than docs/plan/08 § Soft delete asks for — Azure's
+    ///         Contributor holds <c>delete</c> and is refused <c>purge</c> — and it is why a
+    ///         grantable <c>purger</c> relation would not fix it on its own: the missing piece is
+    ///         that <c>delete</c> is <c>Rel(owner)</c> here, so there is no role beneath owner for a
+    ///         <c>notActions</c> row to be subtracted from.
+    ///     </para>
+    /// </remarks>
+    [Fact]
+    public async Task ADenyAssignmentRemovesPurgeAndLeavesDeleteAndNoGrantSeparatesThem() {
+        var tenant = await SeedHierarchyAsync(412, "p");
+        var resource = ObjectRef.Of(ObjectTypes.Resource, "resp");
+
+        // alice is a subscription owner and inherits `owner` on the resource through two parent
+        // edges — which is also the shape a PARKED resource has, one edge shorter.
+        (await Ask(tenant, resource, Permissions.Delete)).Allowed.ShouldBeTrue();
+        (await Ask(tenant, resource, Permissions.Purge)).Allowed.ShouldBeTrue();
+
+        // ── The deny, written on the resource itself ────────────────────────────────────────────
+        //
+        // ⚠ ON THE RESOURCE AND NOT ON THE SUBSCRIPTION, and that is forced rather than chosen:
+        // `suspended` is direct-only — CheckEvaluatorTests.ASuspensionAtTheParentDoesNotLeakDownBecauseSuspendedIsDirectOnly
+        // — so a row written one scope up would leave `purge` granted and this test would assert
+        // nothing.
+        await cluster.WriteAsync(tenant, "resource:resp#suspended@user:alice");
+
+        (await Ask(tenant, resource, Permissions.Purge)).Allowed.ShouldBeFalse(
+            "docs/plan/07 § Azure RBAC's only stated separation of purge from delete does not hold"
+        );
+
+        (await Ask(tenant, resource, Permissions.Delete)).Allowed.ShouldBeTrue(
+            "the deny took delete with it, which makes it a suspension rather than a notActions row "
+            + "— the tenant can no longer remove the resource at all"
+        );
+
+        // ── And the gap: nothing GRANTS one without the other ───────────────────────────────────
+        var undenied = ObjectRef.Of(ObjectTypes.Resource, "resq");
+        await cluster.WriteAsync(tenant, "resourceGroup:rgq#parent@subscription:subq");
+        await cluster.WriteAsync(tenant, "resource:resq#parent@resourceGroup:rgq");
+        await cluster.WriteAsync(tenant, "subscription:subq#contributor@user:alice");
+
+        (await Ask(tenant, undenied, Permissions.Write)).Allowed.ShouldBeTrue("a contributor may write");
+
+        (await Ask(tenant, undenied, Permissions.Delete)).Allowed.ShouldBeFalse(
+            "⚠ IF THIS FAILS, `delete` HAS BEEN WIDENED TO Rel(contributor) AND docs/plan/07 § Azure "
+            + "RBAC's paragraph on why purge and delete cannot be separated by a grant is now stale — "
+            + "update it rather than this line. Azure's Contributor CAN delete; this schema's cannot, "
+            + "and that is exactly why there is no role that holds 'may delete' without 'may destroy'."
+        );
+
+        (await Ask(tenant, undenied, Permissions.Purge)).Allowed.ShouldBeFalse(
+            "and a contributor holds purge, which would be worse than the gap"
+        );
+    }
+
     [Fact]
     public async Task ADenyAssignmentRemovesAssignRoleAndLeavesDeleteAlone() {
         // docs/plan/07 § Azure RBAC, row 4: "Deny assignment | `#suspended`, and the
-        // `& !Rel("suspended")` in the permission". Only `assignRole` carries it — see
-        // CyberCloudSchema — so `delete` is deliberately unaffected.
+        // `& !Rel("suspended")` in the permission". On a SUBSCRIPTION only `assignRole` carries it —
+        // `purge` is declared on `resource` and on nothing else, see CyberCloudSchema — so `delete`
+        // is deliberately unaffected here. The resource-scoped pair is the test above.
         var tenant = AuthorizationCluster.Tenant(405);
         var scope = ObjectRef.Of(ObjectTypes.Subscription, "subf");
 

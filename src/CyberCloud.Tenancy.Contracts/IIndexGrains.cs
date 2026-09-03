@@ -229,6 +229,41 @@ public interface IResourceIndexGrain : IGrainWithStringKey {
     /// </remarks>
     Task<Result<Guid>> ResolveSoftDeletedAsync();
 
+    /// <summary>
+    ///     Resolves the address to the GUID of the soft-deleted resource holding it <b>whose recovery
+    ///     window has already ended</b>, or <c>ResourceNotFound</c>.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>This is the complement of <see cref="RestoreAsync" />'s refusal, computed by the
+    ///         same clock, and that is the whole reason it is a member here rather than a comparison
+    ///         at the caller.</b> <see cref="SoftDeleteAsync" /> takes a duration and not a deadline
+    ///         precisely so that one activation stamps and reads the window — <i>"a caller-computed
+    ///         deadline would be stamped from the gateway's clock and read back against the
+    ///         silo's"</i>. A caller that read <see cref="IndexEntry.RecoverableUntil" /> out of
+    ///         <see cref="GetAsync" /> and compared it against its own clock would reintroduce
+    ///         exactly that skew, on the one path where being early destroys a resource that was
+    ///         still restorable. So "may this still be restored" and "is this window over" are two
+    ///         readings of one clock and cannot disagree.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>It resolves and does not release.</b> Ending the window is the resource manager's
+    ///         to sequence — the quota return, the operation and the volume reclaim are all its —
+    ///         and the release is still <see cref="ReleaseAsync" />, called in the order a purge
+    ///         already uses. This answers a question and changes nothing, so it is safe to ask on
+    ///         every tick of whatever drives it.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The refusal is the canonical absence for both reasons — a name holding no parked
+    ///         resource, and one whose window has not ended yet — for the reason every refusal on
+    ///         this grain shares.</b> The caller here is a mechanism rather than a subject, so the
+    ///         oracle argument does not bite; keeping the two answers identical does, because a
+    ///         mechanism that could tell them apart would be a mechanism whose retries encode how
+    ///         much window is left.
+    ///     </para>
+    /// </remarks>
+    Task<Result<Guid>> ResolveExpiredAsync();
+
     /// <summary>Drops this activation — see <c>ITenantGrain.DeactivateAsync</c>.</summary>
     Task DeactivateAsync();
 }

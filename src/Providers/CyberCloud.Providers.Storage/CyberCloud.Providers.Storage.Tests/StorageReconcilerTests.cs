@@ -403,6 +403,95 @@ public sealed class StorageReconcilerTests {
         vault.Writes.ShouldBe(1);
     }
 
+    [Theory]
+    [InlineData(1)]
+    [InlineData(5)]
+    public void TheKeptClaimsFollowTheRenderedVolumeServerCountAndTheRenderedFiler(int volumeServers) {
+        // ⚠ THE THREE INPUTS THAT ARE OURS ARE READ BACK OUT OF THE RENDERED Seaweed, because
+        // everything else about these names belongs to the operator. `spec.volume.replicas` is how
+        // many `mount0-{name}-volume-{i}` exist; the ABSENCE of `spec.volume.hostPath` is why they
+        // are claims at all rather than node-local disks — volumeServerDisksFor branches on that
+        // field and not on storageClassName; and `spec.filer.persistence.enabled` is why the filer
+        // has a claim to keep.
+        using var desired = JsonDocument.Parse(StorageAccounts.Body(ClusterId, volumeServers: volumeServers));
+
+        var spec = JsonNode.Parse(StorageAccounts.SeaweedJson("observed", desired.RootElement))!["spec"]!.AsObject();
+
+        spec["volume"]!["replicas"]!.GetValue<int>().ShouldBe(volumeServers);
+        (spec["volume"] as JsonObject)!.ContainsKey("hostPath").ShouldBeFalse();
+        spec["filer"]!["persistence"]!["enabled"]!.GetValue<bool>().ShouldBeTrue();
+        spec["filer"]!["replicas"]!.GetValue<int>().ShouldBe(1);
+
+        var claims = StorageAccounts.RetainedClaims("ns", "observed", desired.RootElement);
+
+        claims.Select(x => x.Claim.Name).ShouldBe(
+            [
+                .. Enumerable.Range(0, volumeServers).Select(i => $"mount0-observed-volume-{i}"),
+                // ⚠ The doubled name is real: the operator uses `m.Name + "-filer"` for the
+                // StatefulSet AND for its claim template, and Kubernetes composes
+                // {template}-{set}-{ordinal}.
+                "observed-filer-observed-filer-0"
+            ]
+        );
+
+        foreach (var claim in claims) {
+            claim.Claim.Kind.ShouldBe(RetainedVolume.ClaimKind);
+            claim.Claim.Namespace.ShouldBe("ns");
+            claim.OwnedBy["app.kubernetes.io/managed-by"].ShouldBe("seaweedfs-operator");
+            claim.OwnedBy["app.kubernetes.io/name"].ShouldBe("seaweedfs");
+            claim.OwnedBy["app.kubernetes.io/instance"].ShouldBe("observed");
+        }
+
+        // ⚠ The two sets carry DIFFERENT component labels, and a single list would have hidden it: a
+        // filer claim wearing `component=volume` is refused by VolumeReclaimer's guard and the
+        // metadata store survives every purge.
+        claims[0].OwnedBy["app.kubernetes.io/component"].ShouldBe("volume");
+        claims[^1].OwnedBy["app.kubernetes.io/component"].ShouldBe("filer");
+    }
+
+    [Fact]
+    public async Task TheFinalTeardownRemovesTheObjectDisksAndTheFilersMetadataStore() {
+        // ⚠ THE ONE THAT WOULD HAVE CAUGHT THE LEAK, and here upstream retention is a DECISION rather
+        // than an omission: internal/controller/pv_reclaim.go pins the claim retention policy's
+        // `whenDeleted` to Retain as a constant, with a comment saying deleting on cluster delete
+        // "would be an unpleasant surprise", and its own unit test asserts it for every input. So the
+        // disks were always going to survive the teardown — which is what makes this type's seven-day
+        // window worth having — and until RetainedVolumesAsync they survived the purge too.
+        var connection = new RecordingConnection();
+        using var desired = JsonDocument.Parse(StorageAccounts.Body(ClusterId));
+        var context = Context(connection, desired.RootElement);
+
+        var planted = StorageAccounts.RetainedClaims(context.Namespace, "observed", desired.RootElement);
+        planted.Length.ShouldBe(4);
+
+        foreach (var claim in planted) {
+            connection.Objects[RecordingConnection.Key(claim.Claim)] = new JsonObject {
+                ["metadata"] = new JsonObject {
+                    ["name"] = claim.Claim.Name,
+                    ["namespace"] = claim.Claim.Namespace,
+                    ["labels"] = new JsonObject(
+                        claim.OwnedBy.Select(x => KeyValuePair.Create(x.Key, (JsonNode?)JsonValue.Create(x.Value)))
+                    )
+                }
+            }.ToJsonString();
+        }
+
+        var outcome = await VolumeReclaimer.ReclaimAsync(
+            new StorageAccountReconciler(new FixedClock()),
+            context,
+            TestContext.Current.CancellationToken
+        );
+
+        outcome.IsConverged.ShouldBeTrue(outcome.ToString());
+
+        foreach (var claim in planted) {
+            connection.Objects.ContainsKey(RecordingConnection.Key(claim.Claim)).ShouldBeFalse(
+                $"'{claim.Claim}' survived the final teardown, so a purged account returned its quota "
+                + "and left a tenant's objects on disk."
+            );
+        }
+    }
+
     /// <summary>The Seaweed command, found by kind rather than by position.</summary>
     static KubeCommand Seaweed(RecordingConnection connection) =>
         connection.Applied.Single(x => x.Target.Kind.Kind == "Seaweed");
