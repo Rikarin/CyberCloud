@@ -36,6 +36,10 @@ public sealed class TenancyStateContractTests {
         ("ResourceGroupState", 0, "Descriptor"),
         ("ResourceGroupState", 1, "Members"),
         ("ResourceGroupState", 2, "CreatingSince"),
+        // Added with the group delete — the clusters a group placed objects on, which is the only
+        // record of which namespaces its own delete has to reclaim. It cannot be derived from the
+        // members, because by then there are none. IResourceGroupGrain.RecordClusterAsync.
+        ("ResourceGroupState", 3, "Clusters"),
 
         ("IndexState", 0, "Entry"),
         // Added with the per-parent child counter — docs/plan/08 § Deleting a parent resource that
