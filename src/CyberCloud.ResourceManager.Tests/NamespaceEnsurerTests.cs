@@ -347,10 +347,91 @@ public sealed class NamespaceEnsurerTests {
         var reclaim = Reclaim(occupants: [Occupant("StatefulSet", "harbor-core", managed: true)]);
 
         reclaim.Deletable.ShouldBeFalse();
-        reclaim.OperatorReclaimable.ShouldBeFalse("something of ours is still in there.");
+
+        // ⚠ THIS LINE USED TO ASSERT FALSE, AND THE ASSERTION WAS THE NARROWING RATHER THAN A
+        // REPORT OF IT. OperatorReclaimable required every occupant to be unmanaged, which was the
+        // same question as "the platform is finished here" only while nothing this platform wrote
+        // could outlive its resource. Once a volumeClaimTemplate's claims started carrying
+        // managed-by, a group whose only remains were its own disks answered false to both verdicts
+        // and reported as an unclassified refusal — the case an operator most needs told about,
+        // filed as noise. The flag now means what its own remarks always said.
+        reclaim.OperatorReclaimable.ShouldBeTrue(
+            "the group holds no members and the namespace is not empty, so a person decides. Who "
+            + "wrote the leftovers belongs in the refusal text, not in the verdict."
+        );
 
         (await DeleteAsync(ensurer, connection, reclaim)).IsFailure.ShouldBeTrue();
         connection.Deleted.ShouldBeEmpty();
+    }
+
+    // ── What Kubernetes puts there by itself ─────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task ANamespaceHoldingOnlyWhatKubernetesPutsInEveryNamespaceIsDeleted() {
+        // ⚠ THE DEFECT THAT MADE Deletable UNREACHABLE IN PRODUCTION AND ALWAYS REACHABLE IN A
+        // TEST. The rule was "the namespace holds nothing at all"; no conformant cluster can
+        // satisfy it, because the service-account controller creates ServiceAccount/default in
+        // every namespace and recreates it when deleted, and the root-CA publisher does the same
+        // with ConfigMap/kube-root-ca.crt. It went unnoticed because INamespaceInventory had no
+        // implementation, so the only occupant lists the rule was ever weighed against were the
+        // empty ones this file supplies.
+        var (ensurer, connection) = Build();
+
+        var reclaim = Reclaim(
+            occupants: [
+                Occupant("ServiceAccount", "default", managed: false),
+                Occupant("ConfigMap", "kube-root-ca.crt", managed: false),
+                Occupant("Event", "harbor-core.17f2a", managed: false)
+            ]
+        );
+
+        reclaim.Deletable.ShouldBeTrue(
+            "these three are Kubernetes' own and nothing restores from one. " + reclaim.Explain()
+        );
+
+        reclaim.OperatorReclaimable.ShouldBeFalse("there is nothing here for a person to decide about.");
+
+        (await DeleteAsync(ensurer, connection, reclaim)).IsSuccess.ShouldBeTrue();
+        connection.Deleted.Count.ShouldBe(1);
+    }
+
+    [Fact]
+    public void TheAmbientAllowanceIsByNameAndNotByKind() {
+        // ⚠ THE SABOTAGE. `default` and `kube-root-ca.crt` are names Kubernetes reserves, so no
+        // tenant object can wear one — but a kind-wide exemption for ServiceAccount or ConfigMap
+        // would hide a tenant's own, which is the exact class of object this whole file refuses
+        // over. A ConfigMap holding an application's configuration is not ambient.
+        NamespaceReclaim.IsAmbient(Occupant("ServiceAccount", "default", managed: false)).ShouldBeTrue();
+        NamespaceReclaim.IsAmbient(Occupant("ConfigMap", "kube-root-ca.crt", managed: false)).ShouldBeTrue();
+
+        NamespaceReclaim.IsAmbient(Occupant("ServiceAccount", "harbor-core", managed: false)).ShouldBeFalse();
+        NamespaceReclaim.IsAmbient(Occupant("ConfigMap", "harbor-config", managed: false)).ShouldBeFalse();
+
+        // ⚠ NOT the auto-mounted token Secret, which Kubernetes stopped creating in 1.24. The only
+        // rule that would match one is a name prefix, and a tenant can occupy a prefix — so an old
+        // cluster that still has one reports as an occupant and a person decides.
+        NamespaceReclaim.IsAmbient(Occupant("Secret", "default-token-x9f2b", managed: false)).ShouldBeFalse();
+    }
+
+    [Fact]
+    public void OneTenantObjectAmongTheAmbientOnesIsStillARefusal() {
+        var reclaim = Reclaim(
+            occupants: [
+                Occupant("ServiceAccount", "default", managed: false),
+                Occupant("PersistentVolumeClaim", "data-harbor-database-0", managed: false)
+            ]
+        );
+
+        reclaim.Deletable.ShouldBeFalse();
+        reclaim.OperatorReclaimable.ShouldBeTrue();
+
+        reclaim.Explain().ShouldContain("data-harbor-database-0");
+
+        // An object nobody has to decide about does not belong in the sample a person reads, and
+        // the count is of what is actually in the way — a refusal that says "2 objects" and names
+        // one is arguing against itself.
+        reclaim.Explain().ShouldNotContain("ServiceAccount/default");
+        reclaim.Explain().ShouldContain("1 object");
     }
 
     [Fact]
@@ -465,6 +546,40 @@ public sealed class NamespaceEnsurerTests {
 
         listed.TryGetError(out var error).ShouldBeTrue();
         error.Message.ShouldContain(Namespace);
+    }
+
+    [Fact]
+    public async Task TheConnectionBackedInventoryRefusesWhenThereIsNoConnectionToTheCluster() {
+        // ⚠ THE ONE-KEYSTROKE MISTAKE. `Connect` answering null and "this namespace is empty" are
+        // the same shape at the call site and a recursive delete apart in effect, so the branch is
+        // a failure rather than an empty array. NoClusterConnectionFactory is what every host that
+        // has not wired connections registers, so this is also the shipped default's behaviour.
+        var inventory = new ConnectionNamespaceInventory(new NoClusterConnectionFactory());
+
+        var listed = await inventory.ListAllAsync(Cluster, Namespace, TestContext.Current.CancellationToken);
+
+        listed.TryGetError(out var error).ShouldBeTrue();
+        error.Code.ShouldBe(ErrorCode.ResourceNotFound);
+        error.Message.ShouldContain(Namespace);
+    }
+
+    [Fact]
+    public async Task TheConnectionBackedInventoryCarriesLabelsThroughUntouched() {
+        // The reclaim's whole managed/unmanaged split is read off these, so a translation that
+        // dropped them would report every occupant as somebody else's — safe, but it would also
+        // make the refusal text say the opposite of what is true.
+        var inventory = new ConnectionNamespaceInventory(new OneConnectionFactory(new ListingConnection(Cluster)));
+
+        var occupants = (await inventory.ListAllAsync(
+            Cluster,
+            Namespace,
+            TestContext.Current.CancellationToken
+        )).GetValueOrThrow();
+
+        occupants.Length.ShouldBe(2);
+        occupants.Single(x => x.Name == "ours").IsManaged.ShouldBeTrue();
+        occupants.Single(x => x.Name == "theirs").IsManaged.ShouldBeFalse();
+        occupants.Single(x => x.Name == "ours").Kind.ShouldBe("PersistentVolumeClaim");
     }
 
     // ── The harness ──────────────────────────────────────────────────────────────────────────────
@@ -601,5 +716,73 @@ public sealed class NamespaceEnsurerTests {
                     : Result.Success
             );
         }
+    }
+
+    /// <summary>A connection that answers one namespace listing and nothing else.</summary>
+    /// <remarks>
+    ///     ⚠ Separate from <see cref="RecordingConnection" />, which deliberately does <b>not</b>
+    ///     override <c>ListNamespaceAsync</c>: the interface's default refuses, and every other test
+    ///     in this file is about the delete rather than the listing, so inheriting the refusal is the
+    ///     honest state for them.
+    /// </remarks>
+    sealed class ListingConnection(Guid cluster) : IKubeClusterConnection {
+        public Guid ClusterId => cluster;
+
+        public Task<Result<ApplyOutcome>> ApplyAsync(
+            KubeCommand command,
+            CancellationToken cancellationToken = default
+        ) =>
+            throw new NotSupportedException();
+
+        public Task<Result<KubeObject>> GetAsync(ObjectRef target, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public Task<Result> DeleteAsync(
+            KubeCommand command,
+            CascadePolicy policy = CascadePolicy.Background,
+            CancellationToken cancellationToken = default
+        ) =>
+            throw new NotSupportedException();
+
+        public Task<Result<IReadOnlyList<KubeObjectSummary>>> ListNamespaceAsync(
+            string ns,
+            CancellationToken cancellationToken = default
+        ) =>
+            Task.FromResult(
+                Result<IReadOnlyList<KubeObjectSummary>>.Success(
+                    [
+                        new() {
+                            Kind = new() {
+                                Group = "",
+                                Version = "v1",
+                                Kind = "PersistentVolumeClaim",
+                                Plural = "persistentvolumeclaims"
+                            },
+                            Namespace = ns,
+                            Name = "ours",
+                            Labels = new Dictionary<string, string>(StringComparer.Ordinal) {
+                                [KubeLabels.ManagedBy] = KubeLabels.ManagedByValue
+                            }
+                        },
+                        new() {
+                            Kind = new() {
+                                Group = "",
+                                Version = "v1",
+                                Kind = "PersistentVolumeClaim",
+                                Plural = "persistentvolumeclaims"
+                            },
+                            Namespace = ns,
+                            Name = "theirs",
+                            Labels = new Dictionary<string, string>(StringComparer.Ordinal)
+                        }
+                    ]
+                )
+            );
+    }
+
+    /// <summary>Hands out one connection, exactly as <c>GrainClusterConnectionFactory</c> does.</summary>
+    sealed class OneConnectionFactory(IKubeClusterConnection connection) : IClusterConnectionFactory {
+        public IKubeClusterConnection? Connect(Guid clusterId) =>
+            clusterId == connection.ClusterId ? connection : null;
     }
 }
