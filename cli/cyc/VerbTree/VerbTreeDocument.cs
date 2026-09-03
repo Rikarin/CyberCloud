@@ -163,6 +163,31 @@ sealed class VerbTreeVerb {
     [JsonPropertyName("waitFlags")]
     public IReadOnlyList<string> WaitFlags { get => field ?? []; init; } = [];
 
+    /// <summary>
+    ///     Whether the response is one page of a collection rather than the whole of it.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>A short page never means "that is all there is".</b> The platform filters a listing
+    ///     one permission check per member and clamps the page at
+    ///     <c>ListRequest.MaxPageSize</c>, so truncation looks exactly like a small result. The host
+    ///     says so on stderr when a page carries a <c>nextLink</c> nobody asked it to follow.
+    /// </remarks>
+    [JsonPropertyName("paged")]
+    public bool Paged { get; init; }
+
+    /// <summary>
+    ///     <c>["--all"]</c> on a paged verb, absent otherwise — the flags that are host behaviour
+    ///     rather than contract.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ Read rather than assumed, for the reason <see cref="WaitFlags" /> is: a verb the emitter
+    ///     stops offering them for stops offering them. <c>--top</c> and <c>--skip-token</c> are
+    ///     <i>not</i> here — they go on the wire, so they are in <see cref="Flags" /> with a
+    ///     <see cref="VerbTreeFlag.QueryParameter" />.
+    /// </remarks>
+    [JsonPropertyName("pageFlags")]
+    public IReadOnlyList<string> PageFlags { get => field ?? []; init; } = [];
+
     /// <summary>The <c>x-cybercloud-action</c> name, on an action verb.</summary>
     [JsonPropertyName("action")]
     public string? Action { get; init; }
@@ -211,6 +236,33 @@ sealed class VerbTreeFlag {
     /// <summary>The RFC 6901 pointer this flag sets in the request body, or <c>null</c> for an address flag.</summary>
     [JsonPropertyName("jsonPointer")]
     public string? JsonPointer { get; init; }
+
+    /// <summary>
+    ///     The <c>{…}</c> placeholder in the verb's own <c>path</c> this flag fills, or <c>null</c>.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>The emitter has declared this since 2026-08-12 and this reader did not have it, which
+    ///     is why five commands could not build a URL at all.</b> <c>ResourceVerb</c> filled four
+    ///     placeholders from a hard-coded table, so <c>cyc network virtual-networks-subnets show</c>
+    ///     reached <c>{virtualNetworksName}</c> and answered <i>"which this build of cyc does not know
+    ///     how to fill. Upgrade cyc."</i> — advice that could not have helped, because no newer build
+    ///     would have known either. Read it here and the table shrinks to what a <i>profile</i> can
+    ///     also supply.
+    /// </remarks>
+    [JsonPropertyName("pathPlaceholder")]
+    public string? PathPlaceholder { get; init; }
+
+    /// <summary>
+    ///     The query parameter this flag becomes, <c>$</c> and all, or <c>null</c>.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ The wire name, not the flag's: <c>--skip-token</c> sends <c>$skipToken</c>. A host that
+    ///     rebuilt one from the other would be re-deriving a convention the emitter owns, and a
+    ///     gateway ignores a query parameter it does not recognise — so the failure would be a
+    ///     <c>200</c> holding page one again.
+    /// </remarks>
+    [JsonPropertyName("queryParameter")]
+    public string? QueryParameter { get; init; }
 
     /// <summary>An environment variable that supplies the value — docs/plan/21 § Decisions.</summary>
     [JsonPropertyName("env")]

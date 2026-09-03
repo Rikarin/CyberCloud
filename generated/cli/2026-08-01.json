@@ -279,6 +279,13 @@
                   "pathPlaceholder": "resourceGroupName"
                 },
                 {
+                  "name": "--skip-token",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Where to resume. Take it from the previous page's nextLink rather than constructing one.",
+                  "queryParameter": "$skipToken"
+                },
+                {
                   "name": "--subscription",
                   "type": "string",
                   "required": false,
@@ -293,9 +300,19 @@
                   "summary": "The tenant. Defaults to the current profile.",
                   "pathPlaceholder": "tenantId",
                   "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--top",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "How many resources to examine. ⚠ A cap the platform clamps and not a promise: the filter runs once per member, so this bounds the work and not the number of results.",
+                  "queryParameter": "$top"
                 }
               ],
-              "paged": true
+              "paged": true,
+              "pageFlags": [
+                "--all"
+              ]
             },
             "list-keys": {
               "name": "list-keys",
@@ -837,6 +854,13 @@
                   "pathPlaceholder": "resourceGroupName"
                 },
                 {
+                  "name": "--skip-token",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Where to resume. Take it from the previous page's nextLink rather than constructing one.",
+                  "queryParameter": "$skipToken"
+                },
+                {
                   "name": "--subscription",
                   "type": "string",
                   "required": false,
@@ -851,9 +875,19 @@
                   "summary": "The tenant. Defaults to the current profile.",
                   "pathPlaceholder": "tenantId",
                   "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--top",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "How many resources to examine. ⚠ A cap the platform clamps and not a promise: the filter runs once per member, so this bounds the work and not the number of results.",
+                  "queryParameter": "$top"
                 }
               ],
-              "paged": true
+              "paged": true,
+              "pageFlags": [
+                "--all"
+              ]
             },
             "list-keys": {
               "name": "list-keys",
@@ -1387,6 +1421,13 @@
                   "pathPlaceholder": "resourceGroupName"
                 },
                 {
+                  "name": "--skip-token",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Where to resume. Take it from the previous page's nextLink rather than constructing one.",
+                  "queryParameter": "$skipToken"
+                },
+                {
                   "name": "--subscription",
                   "type": "string",
                   "required": false,
@@ -1401,9 +1442,19 @@
                   "summary": "The tenant. Defaults to the current profile.",
                   "pathPlaceholder": "tenantId",
                   "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--top",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "How many resources to examine. ⚠ A cap the platform clamps and not a promise: the filter runs once per member, so this bounds the work and not the number of results.",
+                  "queryParameter": "$top"
                 }
               ],
-              "paged": true
+              "paged": true,
+              "pageFlags": [
+                "--all"
+              ]
             },
             "list-credentials": {
               "name": "list-credentials",
@@ -1943,6 +1994,13 @@
                   "pathPlaceholder": "resourceGroupName"
                 },
                 {
+                  "name": "--skip-token",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Where to resume. Take it from the previous page's nextLink rather than constructing one.",
+                  "queryParameter": "$skipToken"
+                },
+                {
                   "name": "--subscription",
                   "type": "string",
                   "required": false,
@@ -1957,9 +2015,19 @@
                   "summary": "The tenant. Defaults to the current profile.",
                   "pathPlaceholder": "tenantId",
                   "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--top",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "How many resources to examine. ⚠ A cap the platform clamps and not a promise: the filter runs once per member, so this bounds the work and not the number of results.",
+                  "queryParameter": "$top"
                 }
               ],
-              "paged": true
+              "paged": true,
+              "pageFlags": [
+                "--all"
+              ]
             },
             "list-credentials": {
               "name": "list-credentials",
@@ -2420,6 +2488,13 @@
                   "pathPlaceholder": "resourceGroupName"
                 },
                 {
+                  "name": "--skip-token",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Where to resume. Take it from the previous page's nextLink rather than constructing one.",
+                  "queryParameter": "$skipToken"
+                },
+                {
                   "name": "--subscription",
                   "type": "string",
                   "required": false,
@@ -2434,9 +2509,19 @@
                   "summary": "The tenant. Defaults to the current profile.",
                   "pathPlaceholder": "tenantId",
                   "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--top",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "How many resources to examine. ⚠ A cap the platform clamps and not a promise: the filter runs once per member, so this bounds the work and not the number of results.",
+                  "queryParameter": "$top"
                 }
               ],
-              "paged": true
+              "paged": true,
+              "pageFlags": [
+                "--all"
+              ]
             },
             "show": {
               "name": "show",
@@ -2960,6 +3045,13 @@
                   "pathPlaceholder": "resourceGroupName"
                 },
                 {
+                  "name": "--skip-token",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Where to resume. Take it from the previous page's nextLink rather than constructing one.",
+                  "queryParameter": "$skipToken"
+                },
+                {
                   "name": "--subscription",
                   "type": "string",
                   "required": false,
@@ -2974,9 +3066,19 @@
                   "summary": "The tenant. Defaults to the current profile.",
                   "pathPlaceholder": "tenantId",
                   "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--top",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "How many resources to examine. ⚠ A cap the platform clamps and not a promise: the filter runs once per member, so this bounds the work and not the number of results.",
+                  "queryParameter": "$top"
                 }
               ],
-              "paged": true
+              "paged": true,
+              "pageFlags": [
+                "--all"
+              ]
             },
             "list-keys": {
               "name": "list-keys",
@@ -3667,6 +3769,13 @@
                   "pathPlaceholder": "resourceGroupName"
                 },
                 {
+                  "name": "--skip-token",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Where to resume. Take it from the previous page's nextLink rather than constructing one.",
+                  "queryParameter": "$skipToken"
+                },
+                {
                   "name": "--subscription",
                   "type": "string",
                   "required": false,
@@ -3681,9 +3790,19 @@
                   "summary": "The tenant. Defaults to the current profile.",
                   "pathPlaceholder": "tenantId",
                   "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--top",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "How many resources to examine. ⚠ A cap the platform clamps and not a promise: the filter runs once per member, so this bounds the work and not the number of results.",
+                  "queryParameter": "$top"
                 }
               ],
-              "paged": true
+              "paged": true,
+              "pageFlags": [
+                "--all"
+              ]
             },
             "list-keys": {
               "name": "list-keys",
@@ -4385,6 +4504,13 @@
                   "pathPlaceholder": "resourceGroupName"
                 },
                 {
+                  "name": "--skip-token",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Where to resume. Take it from the previous page's nextLink rather than constructing one.",
+                  "queryParameter": "$skipToken"
+                },
+                {
                   "name": "--subscription",
                   "type": "string",
                   "required": false,
@@ -4399,9 +4525,19 @@
                   "summary": "The tenant. Defaults to the current profile.",
                   "pathPlaceholder": "tenantId",
                   "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--top",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "How many resources to examine. ⚠ A cap the platform clamps and not a promise: the filter runs once per member, so this bounds the work and not the number of results.",
+                  "queryParameter": "$top"
                 }
               ],
-              "paged": true
+              "paged": true,
+              "pageFlags": [
+                "--all"
+              ]
             },
             "list-keys": {
               "name": "list-keys",
@@ -4989,6 +5125,13 @@
                   "pathPlaceholder": "resourceGroupName"
                 },
                 {
+                  "name": "--skip-token",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Where to resume. Take it from the previous page's nextLink rather than constructing one.",
+                  "queryParameter": "$skipToken"
+                },
+                {
                   "name": "--subscription",
                   "type": "string",
                   "required": false,
@@ -5003,9 +5146,19 @@
                   "summary": "The tenant. Defaults to the current profile.",
                   "pathPlaceholder": "tenantId",
                   "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--top",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "How many resources to examine. ⚠ A cap the platform clamps and not a promise: the filter runs once per member, so this bounds the work and not the number of results.",
+                  "queryParameter": "$top"
                 }
               ],
-              "paged": true
+              "paged": true,
+              "pageFlags": [
+                "--all"
+              ]
             },
             "list-keys": {
               "name": "list-keys",
@@ -5607,6 +5760,13 @@
                   "pathPlaceholder": "resourceGroupName"
                 },
                 {
+                  "name": "--skip-token",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Where to resume. Take it from the previous page's nextLink rather than constructing one.",
+                  "queryParameter": "$skipToken"
+                },
+                {
                   "name": "--subscription",
                   "type": "string",
                   "required": false,
@@ -5621,9 +5781,19 @@
                   "summary": "The tenant. Defaults to the current profile.",
                   "pathPlaceholder": "tenantId",
                   "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--top",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "How many resources to examine. ⚠ A cap the platform clamps and not a promise: the filter runs once per member, so this bounds the work and not the number of results.",
+                  "queryParameter": "$top"
                 }
               ],
-              "paged": true
+              "paged": true,
+              "pageFlags": [
+                "--all"
+              ]
             },
             "list-keys": {
               "name": "list-keys",
@@ -6174,6 +6344,13 @@
                   "pathPlaceholder": "resourceGroupName"
                 },
                 {
+                  "name": "--skip-token",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Where to resume. Take it from the previous page's nextLink rather than constructing one.",
+                  "queryParameter": "$skipToken"
+                },
+                {
                   "name": "--subscription",
                   "type": "string",
                   "required": false,
@@ -6188,9 +6365,19 @@
                   "summary": "The tenant. Defaults to the current profile.",
                   "pathPlaceholder": "tenantId",
                   "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--top",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "How many resources to examine. ⚠ A cap the platform clamps and not a promise: the filter runs once per member, so this bounds the work and not the number of results.",
+                  "queryParameter": "$top"
                 }
               ],
-              "paged": true
+              "paged": true,
+              "pageFlags": [
+                "--all"
+              ]
             },
             "list-keys": {
               "name": "list-keys",
@@ -6710,6 +6897,13 @@
                   "pathPlaceholder": "resourceGroupName"
                 },
                 {
+                  "name": "--skip-token",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Where to resume. Take it from the previous page's nextLink rather than constructing one.",
+                  "queryParameter": "$skipToken"
+                },
+                {
                   "name": "--subscription",
                   "type": "string",
                   "required": false,
@@ -6724,9 +6918,19 @@
                   "summary": "The tenant. Defaults to the current profile.",
                   "pathPlaceholder": "tenantId",
                   "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--top",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "How many resources to examine. ⚠ A cap the platform clamps and not a promise: the filter runs once per member, so this bounds the work and not the number of results.",
+                  "queryParameter": "$top"
                 }
               ],
-              "paged": true
+              "paged": true,
+              "pageFlags": [
+                "--all"
+              ]
             },
             "list-keys": {
               "name": "list-keys",
@@ -7244,6 +7448,13 @@
                   "pathPlaceholder": "resourceGroupName"
                 },
                 {
+                  "name": "--skip-token",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Where to resume. Take it from the previous page's nextLink rather than constructing one.",
+                  "queryParameter": "$skipToken"
+                },
+                {
                   "name": "--subscription",
                   "type": "string",
                   "required": false,
@@ -7258,9 +7469,19 @@
                   "summary": "The tenant. Defaults to the current profile.",
                   "pathPlaceholder": "tenantId",
                   "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--top",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "How many resources to examine. ⚠ A cap the platform clamps and not a promise: the filter runs once per member, so this bounds the work and not the number of results.",
+                  "queryParameter": "$top"
                 }
               ],
-              "paged": true
+              "paged": true,
+              "pageFlags": [
+                "--all"
+              ]
             },
             "show": {
               "name": "show",
@@ -7607,6 +7828,13 @@
                   "pathPlaceholder": "resourceGroupName"
                 },
                 {
+                  "name": "--skip-token",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Where to resume. Take it from the previous page's nextLink rather than constructing one.",
+                  "queryParameter": "$skipToken"
+                },
+                {
                   "name": "--subscription",
                   "type": "string",
                   "required": false,
@@ -7621,9 +7849,19 @@
                   "summary": "The tenant. Defaults to the current profile.",
                   "pathPlaceholder": "tenantId",
                   "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--top",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "How many resources to examine. ⚠ A cap the platform clamps and not a promise: the filter runs once per member, so this bounds the work and not the number of results.",
+                  "queryParameter": "$top"
                 }
               ],
-              "paged": true
+              "paged": true,
+              "pageFlags": [
+                "--all"
+              ]
             },
             "show": {
               "name": "show",
@@ -8080,6 +8318,13 @@
                   "pathPlaceholder": "resourceGroupName"
                 },
                 {
+                  "name": "--skip-token",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Where to resume. Take it from the previous page's nextLink rather than constructing one.",
+                  "queryParameter": "$skipToken"
+                },
+                {
                   "name": "--subscription",
                   "type": "string",
                   "required": false,
@@ -8096,6 +8341,13 @@
                   "env": "CYC_TENANT"
                 },
                 {
+                  "name": "--top",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "How many resources to examine. ⚠ A cap the platform clamps and not a promise: the filter runs once per member, so this bounds the work and not the number of results.",
+                  "queryParameter": "$top"
+                },
+                {
                   "name": "--virtual-networks-name",
                   "type": "string",
                   "required": true,
@@ -8103,7 +8355,10 @@
                   "pathPlaceholder": "virtualNetworksName"
                 }
               ],
-              "paged": true
+              "paged": true,
+              "pageFlags": [
+                "--all"
+              ]
             },
             "show": {
               "name": "show",
@@ -8653,6 +8908,13 @@
                   "pathPlaceholder": "resourceGroupName"
                 },
                 {
+                  "name": "--skip-token",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Where to resume. Take it from the previous page's nextLink rather than constructing one.",
+                  "queryParameter": "$skipToken"
+                },
+                {
                   "name": "--subscription",
                   "type": "string",
                   "required": false,
@@ -8669,6 +8931,13 @@
                   "env": "CYC_TENANT"
                 },
                 {
+                  "name": "--top",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "How many resources to examine. ⚠ A cap the platform clamps and not a promise: the filter runs once per member, so this bounds the work and not the number of results.",
+                  "queryParameter": "$top"
+                },
+                {
                   "name": "--virtual-networks-name",
                   "type": "string",
                   "required": true,
@@ -8676,7 +8945,10 @@
                   "pathPlaceholder": "virtualNetworksName"
                 }
               ],
-              "paged": true
+              "paged": true,
+              "pageFlags": [
+                "--all"
+              ]
             },
             "show": {
               "name": "show",
@@ -9154,6 +9426,13 @@
                   "pathPlaceholder": "resourceGroupName"
                 },
                 {
+                  "name": "--skip-token",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Where to resume. Take it from the previous page's nextLink rather than constructing one.",
+                  "queryParameter": "$skipToken"
+                },
+                {
                   "name": "--subscription",
                   "type": "string",
                   "required": false,
@@ -9170,6 +9449,13 @@
                   "env": "CYC_TENANT"
                 },
                 {
+                  "name": "--top",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "How many resources to examine. ⚠ A cap the platform clamps and not a promise: the filter runs once per member, so this bounds the work and not the number of results.",
+                  "queryParameter": "$top"
+                },
+                {
                   "name": "--virtual-networks-name",
                   "type": "string",
                   "required": true,
@@ -9177,7 +9463,10 @@
                   "pathPlaceholder": "virtualNetworksName"
                 }
               ],
-              "paged": true
+              "paged": true,
+              "pageFlags": [
+                "--all"
+              ]
             },
             "list-address-usage": {
               "name": "list-address-usage",
@@ -9606,6 +9895,13 @@
                   "pathPlaceholder": "resourceGroupName"
                 },
                 {
+                  "name": "--skip-token",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Where to resume. Take it from the previous page's nextLink rather than constructing one.",
+                  "queryParameter": "$skipToken"
+                },
+                {
                   "name": "--subscription",
                   "type": "string",
                   "required": false,
@@ -9620,9 +9916,19 @@
                   "summary": "The tenant. Defaults to the current profile.",
                   "pathPlaceholder": "tenantId",
                   "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--top",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "How many resources to examine. ⚠ A cap the platform clamps and not a promise: the filter runs once per member, so this bounds the work and not the number of results.",
+                  "queryParameter": "$top"
                 }
               ],
-              "paged": true
+              "paged": true,
+              "pageFlags": [
+                "--all"
+              ]
             },
             "ping": {
               "name": "ping",
@@ -10089,6 +10395,13 @@
                   "pathPlaceholder": "resourceGroupName"
                 },
                 {
+                  "name": "--skip-token",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Where to resume. Take it from the previous page's nextLink rather than constructing one.",
+                  "queryParameter": "$skipToken"
+                },
+                {
                   "name": "--subscription",
                   "type": "string",
                   "required": false,
@@ -10103,9 +10416,19 @@
                   "summary": "The tenant. Defaults to the current profile.",
                   "pathPlaceholder": "tenantId",
                   "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--top",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "How many resources to examine. ⚠ A cap the platform clamps and not a promise: the filter runs once per member, so this bounds the work and not the number of results.",
+                  "queryParameter": "$top"
                 }
               ],
-              "paged": true
+              "paged": true,
+              "pageFlags": [
+                "--all"
+              ]
             },
             "list-keys": {
               "name": "list-keys",
@@ -10620,6 +10943,13 @@
                   "pathPlaceholder": "resourceGroupName"
                 },
                 {
+                  "name": "--skip-token",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Where to resume. Take it from the previous page's nextLink rather than constructing one.",
+                  "queryParameter": "$skipToken"
+                },
+                {
                   "name": "--subscription",
                   "type": "string",
                   "required": false,
@@ -10634,9 +10964,19 @@
                   "summary": "The tenant. Defaults to the current profile.",
                   "pathPlaceholder": "tenantId",
                   "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--top",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "How many resources to examine. ⚠ A cap the platform clamps and not a promise: the filter runs once per member, so this bounds the work and not the number of results.",
+                  "queryParameter": "$top"
                 }
               ],
-              "paged": true
+              "paged": true,
+              "pageFlags": [
+                "--all"
+              ]
             },
             "list-keys": {
               "name": "list-keys",
@@ -11181,6 +11521,13 @@
                   "pathPlaceholder": "resourceGroupName"
                 },
                 {
+                  "name": "--skip-token",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Where to resume. Take it from the previous page's nextLink rather than constructing one.",
+                  "queryParameter": "$skipToken"
+                },
+                {
                   "name": "--subscription",
                   "type": "string",
                   "required": false,
@@ -11195,9 +11542,19 @@
                   "summary": "The tenant. Defaults to the current profile.",
                   "pathPlaceholder": "tenantId",
                   "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--top",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "How many resources to examine. ⚠ A cap the platform clamps and not a promise: the filter runs once per member, so this bounds the work and not the number of results.",
+                  "queryParameter": "$top"
                 }
               ],
-              "paged": true
+              "paged": true,
+              "pageFlags": [
+                "--all"
+              ]
             },
             "show": {
               "name": "show",
@@ -11671,6 +12028,13 @@
                   "pathPlaceholder": "resourceGroupName"
                 },
                 {
+                  "name": "--skip-token",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Where to resume. Take it from the previous page's nextLink rather than constructing one.",
+                  "queryParameter": "$skipToken"
+                },
+                {
                   "name": "--subscription",
                   "type": "string",
                   "required": false,
@@ -11685,9 +12049,19 @@
                   "summary": "The tenant. Defaults to the current profile.",
                   "pathPlaceholder": "tenantId",
                   "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--top",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "How many resources to examine. ⚠ A cap the platform clamps and not a promise: the filter runs once per member, so this bounds the work and not the number of results.",
+                  "queryParameter": "$top"
                 }
               ],
-              "paged": true
+              "paged": true,
+              "pageFlags": [
+                "--all"
+              ]
             },
             "show": {
               "name": "show",

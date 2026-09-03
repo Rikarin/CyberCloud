@@ -31,6 +31,19 @@ namespace CyberCloud.ResourceManager.Contracts.Generation;
 ///         path, which is a thing a surface can decide what to do about.
 ///     </para>
 /// </param>
+/// <param name="CollectionQuery">
+///     The query parameters the collection <c>GET</c> declares, ordered by name. Empty when there is
+///     no collection path.
+///     <para>
+///         ⚠ <b>Read out of the document for the same reason <paramref name="CollectionPath" /> is.</b>
+///         <c>$top</c> and <c>$skipToken</c> are two strings that would otherwise be written once in
+///         <c>OpenApiEmitter.CollectionParameters</c>, once in <c>CliEmitter</c> and once in the
+///         <c>cyc</c> host — three assemblies, two of which cannot see the first. That is the shape of
+///         the defect <c>CollectionPathTemplate</c> was added to close, and a CLI that sent
+///         <c>?$skip-token=</c> at a gateway reading <c>$skipToken</c> would page for ever without
+///         erroring: an ignored query parameter is a <c>200</c> holding page one again.
+///     </para>
+/// </param>
 public sealed record DocumentType(
     string ResourceType,
     string Path,
@@ -45,7 +58,8 @@ public sealed record DocumentType(
     string PurgeProtectionPointer,
     ImmutableArray<DocumentAction> Actions,
     bool Deprecated,
-    string CollectionPath
+    string CollectionPath,
+    ImmutableArray<DocumentQueryParameter> CollectionQuery
 ) {
     /// <summary>The provider namespace — everything before the <c>/</c>.</summary>
     public string ProviderNamespace {
@@ -78,6 +92,19 @@ public sealed record DocumentType(
     static string Text(JsonNode? node) =>
         node is JsonValue value && value.TryGetValue<string>(out var text) ? text : string.Empty;
 }
+
+/// <summary>One query parameter, read back out of an emitted document.</summary>
+/// <param name="Name">The name on the wire, <c>$</c> and all — <c>$skipToken</c>.</param>
+/// <param name="Type">The schema's <c>type</c>, with a nullable union already collapsed.</param>
+/// <param name="Description">The parameter's own description.</param>
+/// <param name="Required">Whether the operation refuses without it.</param>
+/// <remarks>
+///     ⚠ <b><paramref name="Name" /> keeps the <c>$</c>.</b> It is what goes on the wire, and a
+///     surface that stored the pretty form would have to put the sigil back — which is the one step
+///     nothing would notice getting wrong, because a gateway ignores a query parameter it does not
+///     recognise rather than refusing it.
+/// </remarks>
+public sealed record DocumentQueryParameter(string Name, string Type, string Description, bool Required);
 
 /// <summary>One action, read back out of an emitted document.</summary>
 /// <param name="Name">The action name.</param>
@@ -154,6 +181,7 @@ public static class DocumentReader {
             }
 
             var component = ComponentOf(item);
+            var collection = CollectionOf(paths, document, resourceType);
 
             found.Add(new(
                 resourceType,
@@ -169,7 +197,8 @@ public static class DocumentReader {
                 Text(item["x-cybercloud-purge-protection-pointer"]),
                 ActionsOf(paths, schemas, path.Key, resourceType),
                 Flag(item["get"]?["deprecated"]),
-                CollectionOf(paths, resourceType)
+                collection.Path,
+                collection.Query
             ));
         }
 
@@ -177,7 +206,8 @@ public static class DocumentReader {
     }
 
     /// <summary>
-    ///     The collection path declared for one resource type, or <c>""</c>.
+    ///     The collection path declared for one resource type and the query it accepts, or
+    ///     <c>("", [])</c>.
     /// </summary>
     /// <remarks>
     ///     ⚠ <b>Matched on the type and the collection flag, and NOT on a path prefix.</b> A prefix
@@ -187,16 +217,71 @@ public static class DocumentReader {
     ///     one", matches every ancestor collection as well: <c>…/servers</c> is a prefix of
     ///     <c>…/servers/{n}/databases/{n}</c>, so a database would take its parent's collection.
     /// </remarks>
-    static string CollectionOf(JsonObject paths, string resourceType) {
+    static (string Path, ImmutableArray<DocumentQueryParameter> Query) CollectionOf(
+        JsonObject paths,
+        JsonObject document,
+        string resourceType
+    ) {
         foreach (var path in paths) {
             if (path.Value is JsonObject item
                 && Flag(item["x-cybercloud-collection"])
                 && string.Equals(Text(item["x-cybercloud-resource-type"]), resourceType, StringComparison.Ordinal)) {
-                return path.Key;
+                return (path.Key, QueryOf(item, document));
             }
         }
 
-        return string.Empty;
+        return (string.Empty, []);
+    }
+
+    /// <summary>
+    ///     The <c>in: query</c> parameters of a path item, ordered by name.
+    /// </summary>
+    /// <param name="item">The path item.</param>
+    /// <param name="document">The document, for <c>components/parameters</c>.</param>
+    /// <remarks>
+    ///     ⚠ <b>A <c>$ref</c> is followed rather than skipped.</b> <c>OpenApiEmitter</c> writes the
+    ///     paging pair inline today and the address parameters as references, so a reader that only
+    ///     understood inline objects would be right by accident and would silently return nothing the
+    ///     day a shared <c>$top</c> component was factored out. It is the same fact
+    ///     <see cref="Resolve" /> already knows about schemas.
+    /// </remarks>
+    static ImmutableArray<DocumentQueryParameter> QueryOf(JsonObject item, JsonObject document) {
+        if (item["parameters"] is not JsonArray parameters) {
+            return [];
+        }
+
+        const string Prefix = "#/components/parameters/";
+        var shared = document["components"]?["parameters"] as JsonObject;
+        var found = new List<DocumentQueryParameter>();
+
+        foreach (var entry in parameters) {
+            if (entry is not JsonObject declared) {
+                continue;
+            }
+
+            if (Text(declared["$ref"]) is { Length: > 0 } reference) {
+                if (!reference.StartsWith(Prefix, StringComparison.Ordinal)
+                    || shared?[reference[Prefix.Length..]] is not JsonObject resolved) {
+                    continue;
+                }
+
+                declared = resolved;
+            }
+
+            if (!string.Equals(Text(declared["in"]), "query", StringComparison.Ordinal)
+                || Text(declared["name"]) is not { Length: > 0 } name) {
+                continue;
+            }
+
+            found.Add(new(
+                name,
+                declared["schema"] is JsonObject schema ? TypeOf(schema) : string.Empty,
+                Text(declared["description"]),
+                Flag(declared["required"])
+            ));
+        }
+
+        return [.. found.OrderBy(x => x.Name, StringComparer.Ordinal)];
     }
 
     static ImmutableArray<DocumentAction> ActionsOf(

@@ -16,21 +16,37 @@ namespace CyberCloud.Cli.Execution;
 /// </remarks>
 static class ResourceVerb {
     /// <summary>
-    ///     How each path placeholder is filled.
+    ///     Which placeholders a <i>profile</i> can also supply, and under what setting name.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>The emitter does not declare this mapping and it should.</b> The tree gives a path of
-    ///     <c>/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/…</c>
-    ///     and a flag list containing <c>--tenant</c>, <c>--subscription</c> and
-    ///     <c>--resource-group</c>, and nothing connects the two: the host has to know that
-    ///     <c>{resourceGroupName}</c> is what <c>--resource-group</c> fills. Reported — a flag carries
-    ///     a <c>jsonPointer</c> for the body and needs the equivalent for the path.
+    ///     <para>
+    ///         ⚠ <b>This used to be the mapping from placeholder to flag, and the note above it read
+    ///         "the emitter does not declare this mapping and it should". It does — since 2026-08-12,
+    ///         each address flag carries a <c>pathPlaceholder</c>.</b> The table outlived the fact,
+    ///         and while it did, the five nested types could not be addressed at all: a table of four
+    ///         has no row for <c>{virtualNetworksName}</c>, so <c>cyc network
+    ///         virtual-networks-subnets show</c> ended in <i>"which this build of cyc does not know
+    ///         how to fill. Upgrade cyc."</i> — advice no newer build could have satisfied, because
+    ///         the missing knowledge was the table rather than the version.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>What is left here is genuinely host knowledge and cannot come from the tree.</b>
+    ///         A <c>~/.cyc/config</c> profile names where you are working; the tree describes a URL.
+    ///         An <i>ancestor</i> deliberately has no row — docs/plan/21 § Decisions makes a profile
+    ///         context, and which virtual network a subnet is in is address.
+    ///     </para>
     /// </remarks>
-    static readonly (string Placeholder, string Flag, string? Setting)[] AddressMap = [
-        ("tenantId", "--tenant", "tenant"),
-        ("subscriptionId", "--subscription", "subscription"),
-        ("resourceGroupName", "--resource-group", "resource-group"),
-        ("resourceName", "--name", null),
+    /// <summary>
+    ///     The placeholder that names the tenant, which the client authenticates against as well as
+    ///     addressing. ⚠ Spelled the same in <c>DocumentReader.TenantPlaceholder</c>, which this
+    ///     assembly cannot reference — the tree it reads is the agreement between them.
+    /// </summary>
+    const string TenantPlaceholder = "tenantId";
+
+    static readonly (string Placeholder, string Setting)[] ProfileAddress = [
+        ("tenantId", "tenant"),
+        ("subscriptionId", "subscription"),
+        ("resourceGroupName", "resource-group"),
     ];
 
     /// <summary>Runs the verb.</summary>
@@ -38,6 +54,7 @@ static class ResourceVerb {
     /// <param name="verb">The verb, as the generator described it.</param>
     /// <param name="bindings">The verb's flags.</param>
     /// <param name="waitOptions">The <c>--wait</c> and <c>--no-wait</c> options, on a long-running verb.</param>
+    /// <param name="pageOptions">The <c>--all</c> option, on a paged verb.</param>
     /// <param name="parse">The parse result.</param>
     /// <param name="cancellationToken">The token, carrying <c>--timeout</c>.</param>
     public static async Task<int> RunAsync(
@@ -45,6 +62,7 @@ static class ResourceVerb {
         VerbTreeVerb verb,
         IReadOnlyList<FlagBinding> bindings,
         WaitOptions? waitOptions,
+        PageOptions? pageOptions,
         ParseResult parse,
         CancellationToken cancellationToken) {
         ArgumentNullException.ThrowIfNull(invocation);
@@ -56,13 +74,22 @@ static class ResourceVerb {
         // opened. A contradictory --wait/--no-wait that was noticed only after the write had been
         // accepted would be exit 2 reported over a resource that now exists.
         var noWait = waitOptions is not null && waitOptions.NoWait(parse);
-        var tenant = Address(invocation, bindings, parse, "--tenant", "tenant", required: false);
+        var tenant = Address(
+            invocation,
+            BindingFor(bindings, TenantPlaceholder),
+            parse,
+            TenantPlaceholder,
+            required: false);
+
         var path = ResolvePath(invocation, verb, bindings, parse);
         var body = RequestBody.Build(bindings, parse);
 
         using var client = invocation.CreateClient(tenant);
         var context = client.Context;
-        var uri = new Uri(context.Endpoint, path);
+        var uri = new Uri(context.Endpoint, path + Query(bindings, parse));
+
+        if (verb.Paged && pageOptions is not null && pageOptions.All(parse))
+            return await AllPagesAsync(invocation, context, uri, cancellationToken).ConfigureAwait(false);
 
         using var request = context.CreateRequest(new HttpMethod(verb.Method), uri);
 
@@ -94,7 +121,89 @@ static class ResourceVerb {
         }
 
         using var parsed = ResponseBody.Parse(response);
+
+        // ⚠ SAID OUT LOUD, BECAUSE A TRUNCATED LISTING LOOKS EXACTLY LIKE A SHORT ONE. The page is
+        // clamped at ListRequest.MaxPageSize and there is deliberately no `count` in the envelope —
+        // a total would say how many resources exist that the caller may not see. So the only
+        // evidence of a further page is `nextLink`, which `--output table` does not show and a
+        // `--query` over `value[]` throws away. On stderr rather than stdout: a script reading the
+        // JSON document must not find prose in it.
+        if (verb.Paged && parsed.Value.Member("nextLink").AsString() is { Length: > 0 })
+            invocation.Console.Note(
+                "cyc: this is one page and there are more. Pass --all to page through them, or "
+                + "--skip-token with the nextLink's token to resume. A page is what you may read and "
+                + "a short one never means that is all there is.");
+
         invocation.Render(parsed.Value);
+
+        return (int)ExitCode.Ok;
+    }
+
+    /// <summary>
+    ///     Follows <c>nextLink</c> to the end and renders every page as one <c>{ "value": [ … ] }</c>.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>One command, N round trips, and only when asked.</b> Paging by default would make
+    ///         the cost of <c>cyc … list</c> depend on how much is in the group, and would make
+    ///         <c>--top</c> mean nothing. Opt in, and the single-page path says on stderr that the
+    ///         option exists.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The result carries no <c>nextLink</c>, because there is no next page.</b> Echoing
+    ///         the last one would hand a script a URL that returns nothing.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b><c>nextLink</c> is requested as it was handed out.</b> docs/plan/10 makes it an
+    ///         absolute URL for exactly this reason — a client that rebuilt the next request from a
+    ///         bare token would need to know the endpoint's paging parameter. It already carries its
+    ///         own <c>api-version</c>, and <c>ApiVersionHandler</c> leaves a request that has one
+    ///         alone.
+    ///     </para>
+    /// </remarks>
+    static async Task<int> AllPagesAsync(
+        CycInvocation invocation,
+        CyberCloudClientContext context,
+        Uri first,
+        CancellationToken cancellationToken) {
+        var pages = new List<ResponseBody>();
+        var values = new List<Payload>();
+
+        try {
+            var next = first;
+            var count = 0;
+
+            while (true) {
+                using var request = context.CreateRequest(HttpMethod.Get, next);
+
+                invocation.Trace($"GET {Redaction.Url(next)}");
+
+                var response = await context.Pipeline.SendAsync(request, cancellationToken).ConfigureAwait(false);
+
+                invocation.Trace($"{response.Status} {response.ReasonPhrase} (request id {response.ServiceRequestId ?? "none"})");
+
+                if (response.IsError)
+                    throw CycRequestException.From(response, flag: null);
+
+                // ⚠ Held rather than disposed per page: a Payload is a view over its document's
+                // buffer, so the documents have to outlive the render at the end.
+                var page = ResponseBody.Parse(response);
+                pages.Add(page);
+                values.AddRange(page.Value.Member("value").Items);
+                count++;
+
+                if (page.Value.Member("nextLink").AsString() is not { Length: > 0 } link)
+                    break;
+
+                next = new Uri(link, UriKind.Absolute);
+            }
+
+            invocation.Trace($"paged: {count} request(s), {values.Count} resource(s)");
+            invocation.Render(Payload.Object([new KeyValuePair<string, Payload>("value", Payload.Array(values))]));
+        } finally {
+            foreach (var page in pages)
+                page.Dispose();
+        }
 
         return (int)ExitCode.Ok;
     }
@@ -185,16 +294,28 @@ static class ResourceVerb {
 
     static string? ErrorTarget(Response response) => CyberCloudError.TryParse(response.Content)?.Target;
 
+    /// <summary>
+    ///     Fills the verb's path template from the flags that declare which placeholder they fill.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Driven by the tree's <c>pathPlaceholder</c> members rather than by a table of names
+    ///     here.</b> The emitter reads a type's placeholders off its own URL template, so a nested
+    ///     type carries as many address flags as its depth needs; a host iterating a fixed list would
+    ///     be the second place that knowledge lives and the shorter of the two.
+    /// </remarks>
     static string ResolvePath(CycInvocation invocation, VerbTreeVerb verb, IReadOnlyList<FlagBinding> bindings, ParseResult parse) {
         var path = verb.Path;
 
-        foreach (var (placeholder, flag, setting) in AddressMap) {
+        foreach (var binding in bindings) {
+            if (binding.Flag.PathPlaceholder is not { Length: > 0 } placeholder)
+                continue;
+
             var token = "{" + placeholder + "}";
 
             if (!path.Contains(token, StringComparison.Ordinal))
                 continue;
 
-            var value = Address(invocation, bindings, parse, flag, setting, required: true)!;
+            var value = Address(invocation, binding, parse, placeholder, required: true)!;
             path = path.Replace(token, Uri.EscapeDataString(value), StringComparison.Ordinal);
         }
 
@@ -206,9 +327,52 @@ static class ResourceVerb {
         var end = path.IndexOf('}', unresolved);
 
         throw new CycUsageException(
-            $"The verb tree's path for this command contains {path[unresolved..(end < 0 ? path.Length : end + 1)]}, "
-            + "which this build of cyc does not know how to fill. Upgrade cyc.");
+            $"The verb tree's path for this command contains {path[unresolved..(end < 0 ? path.Length : end + 1)]} "
+            + "and declares no flag that fills it, so cyc cannot build the URL. This is a defect in the "
+            + "generated verb tree rather than in what you typed — regenerate it with ./build.sh Generate.");
     }
+
+    /// <summary>
+    ///     The query string the flags carrying a <c>queryParameter</c> build, or <c>""</c>.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Only flags the user actually typed.</b> The same rule <see cref="FlagBinding" />
+    ///     applies to the body: sending the tree's <c>default</c> for <c>$top</c> would turn "the
+    ///     platform's page size" into "whatever this build of cyc was generated against", and the
+    ///     platform clamps rather than refuses, so nothing would say the number had changed.
+    /// </remarks>
+    static string Query(IReadOnlyList<FlagBinding> bindings, ParseResult parse) {
+        var built = new StringBuilder();
+
+        foreach (var binding in bindings) {
+            if (binding.Flag.QueryParameter is not { Length: > 0 } parameter
+                || !binding.Provided(parse)
+                || binding.Text(parse) is not { Length: > 0 } value)
+                continue;
+
+            built.Append(built.Length == 0 ? '?' : '&')
+                .Append(Uri.EscapeDataString(parameter))
+                .Append('=')
+                .Append(Uri.EscapeDataString(value));
+        }
+
+        return built.ToString();
+    }
+
+    /// <summary>The profile setting a placeholder may also come from, or <c>null</c>.</summary>
+    static string? SettingFor(string placeholder) {
+        foreach (var (candidate, setting) in ProfileAddress) {
+            if (string.Equals(candidate, placeholder, StringComparison.Ordinal))
+                return setting;
+        }
+
+        return null;
+    }
+
+    /// <summary>The binding that fills one placeholder, or <see langword="null" />.</summary>
+    static FlagBinding? BindingFor(IReadOnlyList<FlagBinding> bindings, string placeholder)
+        => bindings.FirstOrDefault(
+            x => string.Equals(x.Flag.PathPlaceholder, placeholder, StringComparison.Ordinal));
 
     /// <summary>
     ///     One address value: the flag, then the environment variable the tree names, then the
@@ -220,16 +384,14 @@ static class ResourceVerb {
     /// </exception>
     static string? Address(
         CycInvocation invocation,
-        IReadOnlyList<FlagBinding> bindings,
+        FlagBinding? binding,
         ParseResult parse,
-        string flagName,
-        string? setting,
+        string placeholder,
         bool required) {
-        var binding = bindings.FirstOrDefault(x => string.Equals(x.Flag.Name, flagName, StringComparison.Ordinal));
-
         if (binding is not null && binding.Provided(parse) && binding.Text(parse) is { Length: > 0 } typed)
             return typed;
 
+        var setting = SettingFor(placeholder);
         var resolved = setting is null ? null : invocation.Settings.Get(setting);
 
         if (resolved is { Length: > 0 })
@@ -238,6 +400,7 @@ static class ResourceVerb {
         if (!required)
             return null;
 
+        var flagName = binding?.Flag.Name ?? "--" + placeholder;
         var variable = setting is null ? null : Configuration.CycSettings.VariableFor(setting);
 
         throw new CycUsageException(
@@ -245,6 +408,35 @@ static class ResourceVerb {
             + (variable is null ? string.Empty : $", set {variable}")
             + (setting is null ? string.Empty : $", or put '{setting} = …' in profile '{invocation.Settings.Profile}' of ~/.cyc/config")
             + ".");
+    }
+}
+
+/// <summary>
+///     The <c>--all</c> switch, from a paged verb's <c>pageFlags</c>.
+/// </summary>
+/// <remarks>
+///     ⚠ <b>Separate from the paging flags the tree lists in <c>flags</c>, and the split is the
+///     point.</b> <c>--top</c> and <c>--skip-token</c> are query parameters the document declares, so
+///     they bind like any other flag and the host needs no name for them. <c>--all</c> sends nothing:
+///     it is a loop in this process, so it is host behaviour, declared here and authorised by the
+///     tree — the same division <see cref="WaitOptions" /> draws.
+/// </remarks>
+sealed class PageOptions {
+    readonly Option<bool> all;
+
+    /// <summary>Creates the option.</summary>
+    /// <param name="all">The <c>--all</c> option.</param>
+    public PageOptions(Option<bool> all) => this.all = all;
+
+    /// <summary>The option, to add to a command.</summary>
+    public Option Option => all;
+
+    /// <summary>Whether this command line asked for every page.</summary>
+    /// <param name="parse">The parse result.</param>
+    public bool All(ParseResult parse) {
+        ArgumentNullException.ThrowIfNull(parse);
+
+        return parse.GetValue(all);
     }
 }
 
