@@ -27,9 +27,19 @@ namespace CyberCloud.ResourceManager.Contracts;
 ///         missing independently. <c>KubeCommandBuilder.Inject</c> writes ADR-013's seven labels into
 ///         the top-level <c>metadata.labels</c> and does not descend into a nested
 ///         <c>volumeClaimTemplate</c>, so a claim the <c>StatefulSet</c> controller creates carries
-///         none of them; and <see cref="IKubeClusterConnection" /> has <c>ApplyAsync</c>,
+///         none of them; and <see cref="IKubeClusterConnection" /> had <c>ApplyAsync</c>,
 ///         <c>GetAsync</c> and <c>DeleteAsync</c> and <b>no list member at all</b>, so even a fully
-///         labelled claim could not be found by selector today. What a claim <i>does</i> carry is the
+///         labelled claim could not be found by selector.
+///         <para>
+///             ⚠ <b>Both halves have since moved and neither changes this shape.</b>
+///             <c>IKubeCommandBuilder.WithTemplateLabels</c> stamps six of the seven onto a template,
+///             and <c>IKubeClusterConnection.ListNamespaceAsync</c> exists — but it enumerates a
+///             whole namespace for a resource-group delete and is a discovery plus a list per served
+///             kind, which is the wrong instrument for "the claims of one resource" by two orders of
+///             magnitude. A selector-scoped list is still what "select, then delete" would need, and
+///             there is still no member that does one.
+///         </para>
+///         What a claim <i>does</i> carry is the
 ///         set's <c>spec.selector.matchLabels</c>, which Kubernetes copies onto every claim its
 ///         <c>volumeClaimTemplate</c> produces — written by the provider, onto objects created from
 ///         the provider's own document. That is the evidence <see cref="OwnedBy" /> is built from,
