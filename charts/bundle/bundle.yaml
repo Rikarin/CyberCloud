@@ -136,7 +136,7 @@ owed:
     says: >
       ⚠ READ THIS BEFORE ANY OTHER ITEM. ⚠ AND THE ID NO LONGER CARRIES A COUNT, WHICH IS THE FOURTH
       CORRECTION RATHER THAN THE FOURTH COUNT. It read `nothing-here-has-been-installed`, then
-      `one-of-eighteen-has-been-installed`, then `most-of-the-roster-has-never-been-installed`; the
+      `one-of-eighteen-has-been-installed`, then `two-of-nineteen-have-been-installed`; the
       denominator in the second was already wrong when openebs-localpv landed, and "eighteen" survived
       into README.md, deploy/README.md and build/Build.Bundle.cs' prose. Renaming it to
       `three-of-nineteen` on 2026-09-03 would have been the same mistake a fourth time — a count
