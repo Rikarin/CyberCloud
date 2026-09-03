@@ -28,6 +28,7 @@ here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 dry_run=false
 verify_only=false
 only_phase=""
+only_components=()
 namespace_suffix="-system"
 kubectl_args=()
 helm_args=()
@@ -39,11 +40,15 @@ Usage: install.sh [options]
   --dry-run          Print every command and run none.
   --verify           Resolve every pin against its registry and apply nothing.
   --phase <n>        Install one phase only. Phases are listed in bundle.yaml.
+  --component <name> Install one component only. Repeatable. Combines with --phase as an AND.
   --context <name>   kubectl/helm context.
   -h, --help         This.
 
 Phases are barriers: every component in a phase is installed, and helm waits for it, before the
-next phase begins. --phase skips that guarantee and is for repairing one row, not for installing.
+next phase begins. --phase and --component both skip that guarantee and are for repairing a row,
+not for installing.
+
+A selector that matches no component is an error, not an empty success.
 USAGE
 }
 
@@ -52,6 +57,11 @@ while [[ $# -gt 0 ]]; do
         --dry-run) dry_run=true; shift ;;
         --verify) verify_only=true; shift ;;
         --phase) only_phase="$2"; shift 2 ;;
+        # ⚠ REPEATABLE, AND IT FILTERS THE ROSTER RATHER THAN ORDERING IT. The roster's order is the
+        # install order — bundle.yaml's header calls it "a property of the set" — so two --component
+        # flags given the other way round still install in roster order. A flag that reordered the
+        # roster would be a second place the order is written.
+        --component) only_components+=("$2"); shift 2 ;;
         --context) kubectl_args+=(--context "$2"); helm_args+=(--kube-context "$2"); shift 2 ;;
         -h|--help) usage; exit 0 ;;
         *) echo "install.sh: unknown option '$1'" >&2; usage >&2; exit 2 ;;
@@ -239,8 +249,54 @@ roster() {
     ' "$here/bundle.yaml"
 }
 
-phases=$(roster | awk '{print $1}' | sort -n -u)
-[[ -n "$only_phase" ]] && phases="$only_phase"
+# ── The selection ─────────────────────────────────────────────────────────────────────────────
+#
+# ⚠ THE ROSTER FILTERED, AND NEVER THE SELECTORS EXPANDED. `--phase 99` used to be spelled
+# `phases="$only_phase"`, which took the caller's word for it: the run printed one empty phase header
+# and exited 0 under "Bundle applied", and `--verify --phase 99` printed "Every pin resolves" having
+# resolved none. That is the mirror image of the defect verify_component's own comment records — "a
+# verifier that fails when there is nothing to verify is the same defect as one that passes when
+# there is" — and it is the more dangerous half, because the output reads like a green run.
+
+selects() {
+    local wanted found
+    while read -r p component; do
+        [[ -z "$only_phase" || "$p" == "$only_phase" ]] || continue
+
+        if [[ ${#only_components[@]} -gt 0 ]]; then
+            found=false
+            for wanted in ${only_components[@]+"${only_components[@]}"}; do
+                [[ "$wanted" == "$component" ]] && found=true
+            done
+            [[ "$found" == true ]] || continue
+        fi
+
+        printf '%s %s\n' "$p" "$component"
+    done < <(roster)
+}
+
+# ⚠ The name check runs FIRST and over every --component, so a misspelled name is reported as a
+# misspelled name. Left until after the emptiness check below it would be reported as "selected no
+# component", which is true and is the wrong sentence to hand somebody who typed `cloudnativepg`.
+for wanted in ${only_components[@]+"${only_components[@]}"}; do
+    if ! roster | awk '{print $2}' | grep -qx -- "$wanted"; then
+        printf 'install.sh: --component %s is not in bundle.yaml. A component off the roster is one\n' "$wanted" >&2
+        printf 'this script never installs — charts/bundle/README.md § What a component owes.\n' >&2
+        exit 2
+    fi
+done
+
+selection=$(selects)
+
+if [[ -z "$selection" ]]; then
+    printf 'install.sh: --phase/--component selected no component of the %d in bundle.yaml.\n' \
+        "$(roster | wc -l | tr -d ' ')" >&2
+    printf 'Nothing was installed and nothing was verified. Phases: %s.\n' \
+        "$(roster | awk '{print $1}' | sort -n -u | tr '\n' ' ')" >&2
+    exit 2
+fi
+
+phases=$(printf '%s\n' "$selection" | awk '{print $1}' | sort -n -u)
 
 failures=0
 
@@ -264,7 +320,7 @@ for phase in $phases; do
         else
             install_component "$dir"
         fi
-    done < <(roster)
+    done < <(printf '%s\n' "$selection")
 done
 
 printf '\n'
