@@ -44,6 +44,22 @@ static class LocalKubeconfigFiles {
     public const string Scheme = "file";
 
     /// <summary>
+    ///     What a reference has to start with, checked before it is parsed.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Because comparing <c>Uri.Scheme</c> alone answers a narrower question than it looks
+    ///     like it does, and the difference is per-platform.</b> <see cref="Uri" /> treats an
+    ///     <i>implicit</i> file path as a <c>file:</c> URI, so on Linux and macOS a bare
+    ///     <c>/etc/kubernetes/admin.conf</c> parsed as absolute, reported scheme <c>file</c> and was
+    ///     resolved — while the same reference on Windows failed to parse and was refused as "not a
+    ///     'file:' credential reference". A <c>CredentialRef</c> that means different things on
+    ///     different hosts is not a reference, and the silo that reads it is the one running on
+    ///     Linux. Every writer in this tree spells the scheme (<c>new Uri(path).AbsoluteUri</c>), so
+    ///     requiring it costs nothing and removes the divergence.
+    /// </remarks>
+    const string SchemePrefix = Scheme + ":";
+
+    /// <summary>
     ///     Builds the resolver <c>KubeApiClientFactory.ResolveKubeconfig</c> takes.
     /// </summary>
     /// <param name="root">The directory a reference must resolve inside.</param>
@@ -76,7 +92,8 @@ static class LocalKubeconfigFiles {
                 );
             }
 
-            if (!Uri.TryCreate(credentialRef, UriKind.Absolute, out var uri)
+            if (!credentialRef.StartsWith(SchemePrefix, StringComparison.Ordinal)
+                || !Uri.TryCreate(credentialRef, UriKind.Absolute, out var uri)
                 || !string.Equals(uri.Scheme, Scheme, StringComparison.Ordinal)) {
                 return Result<string>.Failure(
                     ErrorCode.InternalError,

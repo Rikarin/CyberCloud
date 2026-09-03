@@ -248,9 +248,13 @@ public sealed class LocalKubeconfigFilesTests : IDisposable {
     ///     A bare filesystem path is not a <c>file:</c> reference, and is refused rather than read.
     /// </summary>
     /// <remarks>
-    ///     ⚠ This is the one an operator writes by hand, and the tempting fix — "accept a path too"
-    ///     — is what would make the scheme check decorative. The path here is a real, readable file
-    ///     inside the root, so nothing but the missing scheme can be what refuses it.
+    ///     ⚠ <b>This one failed when it was written, and the way it failed is the reason it is
+    ///     here.</b> The scheme check was <c>Uri.TryCreate(…, Absolute)</c> plus
+    ///     <c>uri.Scheme == "file"</c>, which reads as "the reference declared <c>file:</c>" and is
+    ///     not: <see cref="Uri" /> parses an implicit file path, so on this platform a bare
+    ///     <c>/var/…/config</c> reported scheme <c>file</c> and was read, while the identical
+    ///     reference on Windows failed to parse and was refused. The path below is a real, readable
+    ///     file inside the root, so nothing but the missing scheme can be what refuses it.
     /// </remarks>
     [Fact]
     public async Task ABarePathIsNotACredentialReference() {
