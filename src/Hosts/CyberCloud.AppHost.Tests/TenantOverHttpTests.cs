@@ -298,7 +298,7 @@ public sealed class TenantOverHttpTests(LocalTopology topology) : IAsyncLifetime
         // four of which are byte-compared by the Generated surfaces gate, and the OpenAPI
         // compatibility gate diffs the published version against its predecessor. That is an owner's
         // decision, not a passing repair. Asserted as-served so the suite is honest about what ships;
-        // when #69 lands this assertion fails and this comment says why.
+        // when #72 lands this assertion fails and this comment says why.
         resource.GetProperty("properties")
             .GetProperty("properties")
             .GetProperty("message")
