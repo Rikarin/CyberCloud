@@ -1106,6 +1106,184 @@ public sealed class SoftDeletePathTests(ResourceManagerCluster cluster) {
         (await quota.GetUsageAsync(QuotaMeter.Vcpu)).GetValueOrThrow().Committed.ShouldBe(vcpuBefore);
     }
 
+    // ── The clock-driven half of purge — docs/plan/07 § Azure RBAC ──────────────────────────────
+
+    /// <summary>
+    ///     ⚠ <b>An expired window is ended by a mechanism that asks the authorizer nothing, and the
+    ///     same call one day earlier is refused.</b>
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         docs/plan/08 § Soft delete: <i>"an expiry is not a request, so there is nobody to
+    ///         authorize it"</i>. This is the shape docs/plan/07 § Azure RBAC chose over a system
+    ///         principal, and the assertion that makes it mean something is <b>negative</b>: the
+    ///         authorizer is set to deny every permission and is asked nothing at all.
+    ///         <c>SwitchableAuthorizer.Asked</c> is empty afterwards.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The refusal before the deadline is the half that makes this a deadline rather
+    ///         than a door.</b> Without it the test would pass for a mechanism that purged any parked
+    ///         resource on request — which is a purge with the permission removed and nothing put in
+    ///         its place, and it would look identical from the outside on the day the window ends.
+    ///     </para>
+    /// </remarks>
+    [Fact]
+    public async Task AnExpiredWindowIsEndedWithoutACallerAndAnUnexpiredOneIsNot() {
+        ResourceManagerCluster.ResetDoubles();
+        var address = VaultAddress("expired");
+
+        var quota = cluster.Quota(ResourceManagerCluster.Tenant, Subscription);
+        var vcpuBefore = (await quota.GetUsageAsync(QuotaMeter.Vcpu)).GetValueOrThrow().Committed;
+
+        var created = await Create(address, size: 3);
+        created.IsSuccess.ShouldBeTrue(created.Error?.Message);
+        await Converge(created.GetValueOrThrow());
+
+        await Converge((await Delete(address)).GetValueOrThrow());
+
+        // ── Six days into a seven-day window: the clock may not end it ──────────────────────────
+        TestClock.Instance.Advance(TimeSpan.FromDays(6));
+
+        var early = await PurgeExpired(address);
+        early.IsFailure.ShouldBeTrue("a window that has not ended is not an expiry");
+
+        // ⚠ The canonical absence, which is the same answer a path holding nothing parked gets. A
+        // distinct code here would let whatever drives this tell "not yet" from "not there", and its
+        // retry interval would then encode how much window is left.
+        early.Error!.Code.ShouldBe(ErrorCode.ResourceNotFound);
+
+        (await cluster.Index(address).GetAsync()).GetValueOrThrow()
+            .State.ShouldBe(IndexEntryState.SoftDeleted, "the refused mechanism changed nothing");
+
+        // ── Past the deadline, with the authorizer denying everything ───────────────────────────
+        TestClock.Instance.Advance(TimeSpan.FromDays(2));
+
+        SwitchableAuthorizer.GrantOnly();
+        SwitchableAuthorizer.Asked.Clear();
+
+        var purged = await PurgeExpired(address);
+        purged.IsSuccess.ShouldBeTrue(purged.Error?.Message);
+
+        SwitchableAuthorizer.Asked.ShouldBeEmpty(
+            "the clock-driven purge reached the authorizer. It carries no subject, so anything it "
+            + "asked would be answered for a caller the platform invented in order to pass its own "
+            + "check — which is the system principal docs/plan/07 § Azure RBAC declined."
+        );
+
+        await Converge(purged.GetValueOrThrow());
+
+        (await cluster.Index(address).GetAsync()).GetValueOrThrow()
+            .State.ShouldBe(IndexEntryState.Free, "ending the window is what finally releases the name");
+
+        (await quota.GetUsageAsync(QuotaMeter.Vcpu)).GetValueOrThrow().Committed.ShouldBe(
+            vcpuBefore,
+            "the committed quota a soft delete kept is returned by the purge, whoever drove it"
+        );
+    }
+
+    /// <summary>
+    ///     ⚠ <b>Purge protection ends when the window ends, which is what both of its own messages
+    ///     always said and what the code did not do.</b>
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         <c>PurgeAsync</c>'s refusal says the resource <i>"cannot be purged <b>before</b> its
+    ///         recovery window ends"</i> and <c>PurgeProtectionRefusalAsync</c>'s says <i>"wait for
+    ///         the recovery window to end"</i>, while the condition was the flag alone. So a
+    ///         protected resource became <b>permanently undestroyable</b> the moment its window
+    ///         closed: unrestorable past the deadline, unpurgeable by anybody, holding its name and
+    ///         its committed quota, with — as the message itself said — no request that changes the
+    ///         answer.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Both halves are asserted here and the first is what keeps this honest.</b> The
+    ///         flag must still refuse inside the window, or this test passes for a platform where
+    ///         purge protection does nothing at all.
+    ///     </para>
+    /// </remarks>
+    [Fact]
+    public async Task PurgeProtectionRefusesInsideTheWindowAndStopsRefusingAfterIt() {
+        ResourceManagerCluster.ResetDoubles();
+        var address = VaultAddress("protected-then-expired");
+
+        var created = await Create(address, purgeProtection: true);
+        created.IsSuccess.ShouldBeTrue(created.Error?.Message);
+        await Converge(created.GetValueOrThrow());
+
+        await Converge((await Delete(address)).GetValueOrThrow());
+
+        var inside = await Purge(address);
+        inside.IsFailure.ShouldBeTrue("the flag refuses a purge inside the window");
+        inside.Error!.Code.ShouldBe(ErrorCode.Conflict);
+
+        TestClock.Instance.Advance(TimeSpan.FromDays(8));
+
+        // ⚠ THE AUTHORIZED FRONT, not the mechanism, and deliberately so: the fix is to the shared
+        // rule rather than to the clock-driven path, so a tenant who protected a resource and then
+        // waited out its window can destroy it themselves.
+        var after = await Purge(address);
+        after.IsSuccess.ShouldBeTrue(
+            "a purge-protected resource past its window was refused for ever, by everybody: "
+            + after.Error?.Message
+        );
+
+        await Converge(after.GetValueOrThrow());
+
+        (await cluster.Index(address).GetAsync()).GetValueOrThrow().State.ShouldBe(IndexEntryState.Free);
+    }
+
+    /// <summary>
+    ///     ⚠ <b>The mechanism answers a live resource, an unknown name and a type with no window the
+    ///     same way it answers an unexpired one.</b>
+    /// </summary>
+    /// <remarks>
+    ///     The same identity <c>RestoringALiveResourceAnUnknownNameAndAHardDeleteTypeAllAnswerTheSame404</c>
+    ///     asserts for the restore verb, for a related reason rather than the same one. Here the
+    ///     caller is a mechanism rather than a subject, so there is no oracle to close; what four
+    ///     distinguishable answers <i>would</i> give is a driver whose behaviour depends on which
+    ///     kind of nothing it found, and every one of those branches is a way to purge something
+    ///     that is not expired.
+    /// </remarks>
+    [Fact]
+    public async Task TheMechanismRefusesEverythingThatIsNotAnExpiredWindow() {
+        ResourceManagerCluster.ResetDoubles();
+
+        var live = VaultAddress("still-alive");
+        await Converge((await Create(live)).GetValueOrThrow());
+
+        var onLive = await PurgeExpired(live);
+        var onUnknown = await PurgeExpired(VaultAddress("no-such-vault"));
+
+        var hard = ResourceManagerCluster.Address("no-window");
+        await Converge(
+            (await cluster.Manager.WriteAsync(
+                new() {
+                    Path = hard.Path,
+                    ApiVersion = TestingProvider.V2026,
+                    Verb = WriteVerb.Put,
+                    Body = TestingProvider.Body(),
+                    Caller = ResourceManagerCluster.Caller()
+                },
+                TestContext.Current.CancellationToken
+            )).GetValueOrThrow()
+        );
+
+        var onHard = await PurgeExpired(hard);
+
+        foreach (var refusal in new[] { onLive, onUnknown, onHard }) {
+            refusal.IsFailure.ShouldBeTrue();
+            refusal.Error!.Code.ShouldBe(ErrorCode.ResourceNotFound);
+        }
+
+        (await Read(live)).IsSuccess.ShouldBeTrue("the live resource is untouched");
+    }
+
+    Task<Result<WriteAccepted>> PurgeExpired(ResourceId address) =>
+        cluster.Manager.PurgeExpiredAsync(
+            new() { Path = address.Path, ApiVersion = TestingProvider.V2026 },
+            TestContext.Current.CancellationToken
+        );
+
     Task<Result<WriteAccepted>> Create(ResourceId address, int size = 2, bool? purgeProtection = null) =>
         cluster.Manager.WriteAsync(
             new() {
