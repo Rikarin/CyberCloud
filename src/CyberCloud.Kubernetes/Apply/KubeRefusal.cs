@@ -131,6 +131,30 @@ public static class KubeFailures {
     public const string TypedPatchFailurePrefix = "failed to create typed patch object";
 
     /// <summary>
+    ///     The phrase the API server uses when an apply changes an immutable field of a live
+    ///     <c>StatefulSet</c>.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>THIS EXISTS BECAUSE THE REFUSAL DOES NOT NAME THE FIELD THAT CHANGED.</b> The
+    ///         message is <c>"spec: Forbidden: updates to statefulset spec for fields other than
+    ///         'replicas', 'ordinals', 'template', 'updateStrategy', 'revisionHistoryLimit',
+    ///         'persistentVolumeClaimRetentionPolicy' and 'minReadySeconds' are forbidden"</c> —
+    ///         a list of what <i>may</i> change and nothing about what did. On an upgraded cluster
+    ///         that reads as an unattributable reconcile failure on every stateful resource at once,
+    ///         which is a support call rather than a diagnosis.
+    ///     </para>
+    ///     <para>
+    ///         Matched on the message rather than on a status code, because the identification is the
+    ///         sentence: the same rule can surface as a <c>422 Invalid</c> or a <c>403 Forbidden</c>
+    ///         depending on the path, and neither status distinguishes it from any other refusal.
+    ///         Measured against <c>rancher/k3s:v1.35.7-k3s1</c> in <c>ClaimTemplateLabelTests</c>,
+    ///         which re-measures it on every run.
+    ///     </para>
+    /// </remarks>
+    public const string ImmutableStatefulSetSpecPhrase = "updates to statefulset spec for fields other than";
+
+    /// <summary>
     ///     Whether a code means the cluster <i>answered</i> — the complement of
     ///     <c>KubeApiClient.Unreachable</c>.
     /// </summary>
@@ -203,6 +227,44 @@ public static class KubeFailures {
         var status = (int)exception.Response.StatusCode;
         var body = ApiStatus.Read(exception.Response.Content);
         var cluster = clusterId.ToString("D", CultureInfo.InvariantCulture);
+
+        // ── The one refusal that has to be translated rather than quoted ─────────────────────────
+        //
+        // ⚠ BEFORE THE STATUS SWITCH, BECAUSE WHAT IDENTIFIES THIS IS THE SENTENCE AND NOT THE CODE.
+        // Every other arm below decides on the status and then either quotes the API server or says
+        // whose fault it is. This one cannot: the API server's own words list the fields that MAY
+        // change and never name the one that did, so quoting them tells an operator a StatefulSet
+        // apply was rejected and nothing about why. On a cluster being upgraded to the claim-template
+        // labels of ADR-013 it fires on every stateful resource at once — see
+        // ImmutableStatefulSetSpecPhrase, and src/Providers/README.md § Labelling a nested claim
+        // template for what the labels changed.
+        if (body.Message.Contains(ImmutableStatefulSetSpecPhrase, StringComparison.OrdinalIgnoreCase)) {
+            return new KubeRefusal {
+                // ⚠ Terminal. ReconcileOutcome.IsRetryable lists this among the four refusals that
+                // are decided the same way every time they are asked — a live StatefulSet's spec is
+                // immutable now and in an hour, and rescheduling turns a migration an operator can
+                // perform into an OperationTimeout they cannot read.
+                Code = ErrorCode.InvalidRequestBody,
+                Status = status,
+                Reason = body.Reason,
+                // ⚠ THE CLUSTER'S OWN WORDS FIRST, THEN THE TRANSLATION — and keeping the quote is
+                // not politeness. The API server's sentence is the only evidence of which rule
+                // fired, and a message that replaced it with our paraphrase would make the one test
+                // that measures this rule against a real k3s assert our paraphrase instead.
+                TenantMessage =
+                    $"Cluster {cluster} refused to {verb} {target}: "
+                    + (body.Message.Length > 0 ? body.Message : "a live StatefulSet's spec is immutable")
+                    + ". ⚠ The cluster lists the fields that MAY change and does not name the one "
+                    + "that did. On a cluster upgraded to a platform version that labels volume "
+                    + "claim templates the field is spec.volumeClaimTemplates, and that is a "
+                    + "migration rather than a fault: the StatefulSet has to be deleted with "
+                    + "--cascade=orphan first, which keeps the pods and the PersistentVolumeClaims "
+                    + "running, after which the next reconcile recreates the set. Nothing in the "
+                    + "platform performs that step. The object was not written and no data was "
+                    + "touched.",
+                OperatorDetail = Detail()
+            };
+        }
 
         return status switch {
             (int)HttpStatusCode.BadRequest => Ours(

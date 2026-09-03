@@ -1832,6 +1832,37 @@ server-side apply of a label-only `PersistentVolumeClaim` would *create* an inva
 controller had not made it yet. **Owed, and it is the same owed item the purge reaches from the other
 end.**
 
+### Upgrading a cluster that already runs a StatefulSet: the migration
+
+An apply that changes *anything* under a live set's `spec.volumeClaimTemplates` is refused, and the
+template labels are a change. So the **first reconcile after the upgrade fails on every stateful
+resource on that cluster, and it fails identically on every pass after that** — a rejected apply does
+not heal.
+
+⚠ **The API server's refusal does not name the field.** It lists the ones that *may* change and says
+the rest are forbidden, which reads as "a StatefulSet apply was rejected" and nothing more. That is a
+support call rather than a diagnosis, and on an upgraded cluster it arrives everywhere at once.
+`KubeFailures.ImmutableStatefulSetSpecPhrase` is what recognises the sentence — matched on the message
+rather than on a status code, because the status does not distinguish it from any other refusal — and
+the refusal the tenant reads now carries the cluster's own words **and** the migration:
+`spec.volumeClaimTemplates`, the procedure, and the fact that nothing performs it. The code is
+`InvalidRequestBody`, one of `ReconcileOutcome.IsRetryable`'s four terminal codes: the spec is
+immutable now and in an hour, and rescheduling turns a migration an operator can perform into an
+`OperationTimeout` they cannot read.
+
+**The procedure, measured.** Delete the `StatefulSet` with `--cascade=orphan`; the pods keep running
+and the `PersistentVolumeClaim`s survive. The next reconcile recreates the set from the desired body,
+this time with labelled templates, and adopts the running pods. ⚠ The claims that already exist stay
+**unlabelled** — the StatefulSet controller stamps a claim once, when it creates it, and never
+revisits one — so the migration buys the *next* claims and not the current ones. Nothing in the
+platform runs the procedure; it refuses with a message that says why, which is the honest half of
+"either run it or refuse to proceed".
+
+⚠ **`ClaimTemplateLabelTests` is the whole measurement**, against `rancher/k3s:v1.35.7-k3s1`: it
+applies a sabotaged set twice at two api-versions, asserts the second is refused, asserts the cluster's
+own sentence is *kept* in the message — so the test measures the rule rather than our paraphrase of it
+— and asserts the platform's half names `volumeClaimTemplates` and `--cascade=orphan`.
+
 ### Closed: a resource group's delete removes its namespaces
 
 **Deleting a resource group reclaims the namespace it holds on every cluster it ever touched, and
