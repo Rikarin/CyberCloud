@@ -360,7 +360,7 @@ suite takes `ClusterSlot`, the same cross-process permit the other fifteen k3s-b
 take, so it does not widen the concurrency Task #95 capped — it lengthens the serial tail on a
 machine where a daemon answers, and costs nothing at all on one where none does.
 
-**With the cloudnative-pg class it is 4 m 30 s to 4 m 47 s green across two runs, 9 tests, none
+**With the cloudnative-pg class it is 4 m 27 s to 4 m 47 s green across three runs, 9 tests, none
 skipped, measured 2026-09-03.**
 The class costs about **1 m 50 s**: 26 s for `install.sh` to put both components on the cluster
 (cheaper than cert-manager's single row, which pays a `startupapicheck` Job), 8 s to the operator's

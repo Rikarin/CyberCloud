@@ -171,8 +171,8 @@ owed:
       first assertion here that covers every row, and it costs under a second because it touches no
       cluster. What a dry run cannot answer is whether "installed" implies "serving" at a phase
       boundary, and for the six `manifest:` rows the answer is no.
-      ⚠ THE LANE, DECIDED RATHER THAN DEFERRED, AND MEASURED. The suite is 4 m 30 s – 4 m 47 s green
-      across two runs with the cloudnative-pg class in it, against 2 m 20 s – 3 m 15 s without: the class costs about 1 m 50 s
+      ⚠ THE LANE, DECIDED RATHER THAN DEFERRED, AND MEASURED. The suite is 4 m 27 s – 4 m 47 s green
+      across three runs with the cloudnative-pg class in it, against 2 m 20 s – 3 m 15 s without: the class costs about 1 m 50 s
       of serial tail, of which 26 s is the two-component install, 68 s is PostgreSQL reaching Ready,
       and the rest is a second k3s start. It stays in the per-PR lane, and NOT because that is cheap.
       The only nightly lane that exists is `Build.E2E`, whose own preconditions refuse to run without
