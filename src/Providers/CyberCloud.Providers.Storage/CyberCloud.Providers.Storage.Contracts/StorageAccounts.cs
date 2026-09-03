@@ -244,6 +244,143 @@ public static class StorageAccounts {
     public static ObjectRef SeaweedRef(string ns, string name) =>
         new() { Kind = SeaweedKind, Namespace = ns, Name = name };
 
+    // ── What the operator makes, named the operator's way ─────────────────────────────────────
+
+    /// <summary>
+    ///     The name the operator gives the volume servers' <c>StatefulSet</c>:
+    ///     <c>{name}-volume</c>.
+    /// </summary>
+    /// <param name="name">The resource's own name.</param>
+    /// <remarks>
+    ///     ⚠ <c>internal/controller/controller_volume_statefulset.go</c>, <c>m.Name + "-volume"</c>.
+    ///     ⚠ <b>The flat set and not a topology one.</b> The operator replaces it with one set per
+    ///     group, named <c>{name}-volume-{topology}</c>, when <c>spec.volumeTopology</c> is present —
+    ///     and <see cref="SeaweedJson" /> never renders that field, so there is exactly one set.
+    /// </remarks>
+    public static string VolumeSetName(string name) => name + "-volume";
+
+    /// <summary>The name the operator gives the filer's <c>StatefulSet</c>: <c>{name}-filer</c>.</summary>
+    /// <param name="name">The resource's own name.</param>
+    /// <remarks>⚠ <c>internal/controller/controller_filer_statefulset.go</c>, <c>m.Name + "-filer"</c>.</remarks>
+    public static string FilerSetName(string name) => name + "-filer";
+
+    /// <summary>
+    ///     The volume servers' <c>volumeClaimTemplate</c> name for one disk ordinal:
+    ///     <c>mount{disk}</c>.
+    /// </summary>
+    /// <param name="disk">The disk ordinal, from zero.</param>
+    /// <remarks>
+    ///     ⚠ <c>pvcVolumeDisks</c> composes <c>fmt.Sprintf("mount%d", i)</c> once per
+    ///     <c>spec.volumeServerDiskCount</c>, which defaults to <b>1</b> and which
+    ///     <see cref="SeaweedJson" /> does not render — so <c>mount0</c> is the whole list.
+    ///     ⚠ <b>And the claims exist at all because <c>spec.volume.hostPath</c> is absent</b>:
+    ///     <c>volumeServerDisksFor</c> branches on that field alone, not on
+    ///     <c>storageClassName</c>. A body that ever set a host path would produce node-local disks
+    ///     and no claims, which is why this is read from the render rather than assumed.
+    /// </remarks>
+    public static string VolumeDiskName(int disk) =>
+        "mount" + disk.ToString(CultureInfo.InvariantCulture);
+
+    /// <summary>
+    ///     The filer's <c>volumeClaimTemplate</c> name, which is <c>{name}-filer</c> — the same
+    ///     string as its <c>StatefulSet</c>'s.
+    /// </summary>
+    /// <param name="name">The resource's own name.</param>
+    /// <remarks>
+    ///     ⚠ <b>The doubled name in the resulting claim is real and is not a typo.</b> Kubernetes
+    ///     composes <c>{template}-{set}-{ordinal}</c>, and the operator uses <c>m.Name + "-filer"</c>
+    ///     for both halves, so one filer's claim is <c>{name}-filer-{name}-filer-0</c>.
+    /// </remarks>
+    public static string FilerVolumeName(string name) => name + "-filer";
+
+    /// <summary>
+    ///     The labels the operator puts in a component's <c>spec.selector.matchLabels</c>, and
+    ///     therefore what Kubernetes copies onto every claim that component's templates create.
+    /// </summary>
+    /// <param name="name">The resource's own name.</param>
+    /// <param name="component">The component: <c>volume</c> or <c>filer</c>.</param>
+    /// <remarks>
+    ///     ⚠ <c>labelsForVolumeServer</c> and <c>labelsForFiler</c> in
+    ///     <c>internal/controller/</c>, which differ only in the component. ⚠ NOT ADR-013's seven:
+    ///     those go onto the <c>Seaweed</c>'s own <c>metadata.labels</c> and no builder descends into
+    ///     a template the operator renders.
+    /// </remarks>
+    public static ImmutableDictionary<string, string> OperatorSelectorLabels(string name, string component) =>
+        ImmutableDictionary.CreateRange(
+            StringComparer.Ordinal,
+            [
+                KeyValuePair.Create("app.kubernetes.io/managed-by", "seaweedfs-operator"),
+                KeyValuePair.Create("app.kubernetes.io/name", "seaweedfs"),
+                KeyValuePair.Create("app.kubernetes.io/component", component),
+                KeyValuePair.Create("app.kubernetes.io/instance", name)
+            ]
+        );
+
+    /// <summary>
+    ///     The claims a teardown of this type leaves standing — one per volume server, plus the
+    ///     filer's — with the labels that prove whose they are.
+    /// </summary>
+    /// <param name="ns">The resource's namespace.</param>
+    /// <param name="name">The resource's own name.</param>
+    /// <param name="desired">The validated desired body, which is where the volume-server count lives.</param>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>Nothing in the operator removes these, and here that is a <i>decision</i> upstream
+    ///         made rather than an omission.</b> <c>internal/controller/pv_reclaim.go</c> pins
+    ///         <c>WhenDeleted</c> to <c>Retain</c> as a constant — <c>spec.enablePVReclaim</c> moves
+    ///         only <c>WhenScaled</c> — with a comment saying deleting on cluster delete "would be an
+    ///         unpleasant surprise", and the operator's own unit test asserts it for every input. No
+    ///         owner reference is written onto a claim template and the <c>Seaweed</c> CR has no
+    ///         finalizer. So the objects survive the teardown, which is exactly what makes this type's
+    ///         seven-day window worth having — and it is this that ends them at the purge.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The filer's claim is one, not one per instance, and the two are separate sets.</b>
+    ///         <see cref="SeaweedJson" /> pins <c>spec.filer.replicas</c> to 1 — see its remarks on
+    ///         why two filers would be two divergent object namespaces — so the filer contributes a
+    ///         single claim. The masters and the S3 gateway contribute none: neither has a
+    ///         <c>volumeClaimTemplates</c> field in any configuration.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Version-coupled to a maintained project, and the failure direction is the quiet
+    ///         one.</b> This platform does not render either <c>StatefulSet</c>, so both halves of
+    ///         every claim name are the operator's. A bump that renames one produces a claim this
+    ///         file cannot find — <c>VolumeReclaimer</c> treats absence as convergence — so the
+    ///         volume is left exactly as it is left today. The guard protects against destroying
+    ///         somebody else's disk, never against missing our own.
+    ///     </para>
+    /// </remarks>
+    public static ImmutableArray<RetainedVolume> RetainedClaims(string ns, string name, JsonElement desired) {
+        ArgumentException.ThrowIfNullOrEmpty(ns);
+        ArgumentException.ThrowIfNullOrEmpty(name);
+
+        var claims = ImmutableArray.CreateBuilder<RetainedVolume>();
+
+        claims.AddRange(
+            RetainedVolume.OfSet(
+                ns,
+                VolumeDiskName(0),
+                VolumeSetName(name),
+                VolumeServers(desired),
+                OperatorSelectorLabels(name, "volume"),
+                "one volume server's data disk — the object contents themselves"
+            )
+        );
+
+        claims.AddRange(
+            RetainedVolume.OfSet(
+                ns,
+                FilerVolumeName(name),
+                FilerSetName(name),
+                1,
+                OperatorSelectorLabels(name, "filer"),
+                "the filer's embedded metadata store — every bucket, key and its placement"
+            )
+        );
+
+        return claims.ToImmutable();
+    }
+
     /// <summary>The <c>Service</c> the operator puts in front of the S3 gateway.</summary>
     /// <param name="name">The resource's own name.</param>
     /// <remarks>

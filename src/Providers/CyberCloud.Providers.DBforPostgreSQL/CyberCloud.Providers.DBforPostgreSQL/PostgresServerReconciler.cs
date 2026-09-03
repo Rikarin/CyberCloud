@@ -205,6 +205,26 @@ public sealed class PostgresServerReconciler(IClock clock) : IResourceReconciler
             }
         }
 
+        // ⚠ AND THE DATA GOES WITH THEM, WHICH IS THIS ROW'S ANSWER TO RetainedVolumesAsync AND IS
+        // NOT THE ANSWER THE OTHER TWO DATABASE ROWS GIVE.
+        //
+        // This reconciler deliberately does NOT implement IResourceReconciler.RetainedVolumesAsync,
+        // and taking the default here is a decision rather than the oversight that member's remarks
+        // warn about. CloudNativePG does not use a volumeClaimTemplate: it creates each instance's
+        // PVCs itself and stamps an OWNER REFERENCE onto every one of them —
+        // pkg/reconciler/persistentvolumeclaim/build.go's `.WithClusterInheritance(cluster)`, which
+        // reaches utils.SetAsOwnedBy with `Controller: true`. So deleting the Cluster above makes
+        // Kubernetes garbage-collect `{name}-{serial}`, its `-wal` claim and every tablespace claim,
+        // and there is nothing left for a purge to remove. Naming them here would be a reclaim that
+        // reads back "not found" every time.
+        //
+        // ⚠ THE COST OF THAT IS ON THE OTHER SIDE OF THE WINDOW AND IT IS RECORDED RATHER THAN
+        // FIXED HERE. A soft delete runs this same teardown, so a parked server's disks are gone
+        // before its recovery window starts and a restore comes back to an initdb —
+        // charts/managed/postgres/conformance.yaml § owed,
+        // `the-recovery-window-is-hollow-because-cloudnativepg-owns-its-claims`. It is not fixable
+        // through the retained-volume seam, which names claims for a purge to REMOVE; this needs
+        // claims DETACHED before a delete.
         context.Log.Report("deleted", $"the CloudNativePG objects of '{name}' are gone", 100);
         return ReconcileOutcome.Converged;
     }
