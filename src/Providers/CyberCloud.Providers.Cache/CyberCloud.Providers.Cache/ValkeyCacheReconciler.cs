@@ -3,6 +3,7 @@
 // `Orleans.ErrorCode` this import would otherwise put back in play.
 using CyberCloud.Core;
 using CyberCloud.Core.Time;
+using System.Collections.Immutable;
 
 namespace CyberCloud.Providers.Cache;
 
@@ -394,10 +395,46 @@ public sealed class ValkeyCacheReconciler(IClock clock) : IResourceReconciler {
             }
         }
 
+        // ⚠ AND THE DATA DIRECTORIES SURVIVE THIS, WHICH IS WHAT `keepAfterDeletion` ABOVE ASKED FOR
+        // AND WHAT NOTHING USED TO FINISH. The flag makes the operator withhold the owner reference
+        // it would otherwise write onto the claim, so the claim outlives the RedisFailover it was
+        // rendered under; this type declares no recovery window, so nothing was ever coming back for
+        // it. RetainedVolumesAsync below names those claims and VolumeReclaimer removes them, on the
+        // convergence of the hard delete and on nothing else.
         context.Log.Report("deleted", $"the objects of '{name}' are gone", 100);
 
         return ReconcileOutcome.Converged;
     }
+
+    /// <inheritdoc />
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>One claim per Valkey replica, named the OPERATOR's way rather than this
+    ///         platform's</b> — see <see cref="ValkeyCaches.RetainedClaims" />. This provider renders
+    ///         a custom resource and no <c>StatefulSet</c>, so the set whose
+    ///         <c>volumeClaimTemplate</c> made the claims is spotahome's; its name and its selector
+    ///         labels are read out of the operator's source and are recorded there with the reason
+    ///         that is safe here and would not be elsewhere.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b><c>ProviderConformanceTests</c> cannot cover this family and skips it with a
+    ///         reason.</b> Its retained-volume case plants claims read out of the
+    ///         <c>volumeClaimTemplates</c> of the documents a provider <i>applied</i>, and the
+    ///         document this provider applies is a <c>RedisFailover</c> — the templates exist only
+    ///         after a controller this platform does not run has expanded it. So the naming is
+    ///         asserted in <c>ValkeyReconcilerTests</c> instead, against the operator convention
+    ///         written down beside it.
+    ///     </para>
+    /// </remarks>
+    public Task<Result<ImmutableArray<RetainedVolume>>> RetainedVolumesAsync(
+        ReconcileContext context,
+        CancellationToken cancellationToken = default
+    ) =>
+        Task.FromResult(
+            Result<ImmutableArray<RetainedVolume>>.Success(
+                ValkeyCaches.RetainedClaims(context.Namespace, context.Id.Name, context.Desired)
+            )
+        );
 
     /// <summary>A non-empty stand-in for the <c>requirepass</c> on the delete path.</summary>
     /// <remarks>

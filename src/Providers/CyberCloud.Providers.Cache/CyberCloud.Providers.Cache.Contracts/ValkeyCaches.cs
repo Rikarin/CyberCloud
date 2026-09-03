@@ -557,6 +557,108 @@ public static class ValkeyCaches {
     public static ObjectRef CredentialSecretRef(string ns, string name) =>
         new() { Kind = SecretKind, Namespace = ns, Name = CredentialSecretName(name) };
 
+    // ── What the operator makes, named the operator's way ─────────────────────────────────────
+
+    /// <summary>The <c>volumeClaimTemplate</c>'s <c>metadata.name</c>, which this file writes.</summary>
+    /// <param name="name">The resource's own name.</param>
+    public static string DataVolumeName(string name) => name + "-data";
+
+    /// <summary>
+    ///     The name spotahome gives the <c>StatefulSet</c> it renders for a <c>RedisFailover</c>:
+    ///     <c>rfr-{name}</c>.
+    /// </summary>
+    /// <param name="name">The resource's own name, which is the <c>RedisFailover</c>'s.</param>
+    /// <remarks>
+    ///     ⚠ <b>This platform does not render the set, so this is the operator's convention read out
+    ///     of the operator's source rather than a name this file chose.</b>
+    ///     <c>operator/redisfailover/service/names.go</c>'s <c>GetRedisName</c> is
+    ///     <c>generateName(redisName, rf.Name)</c>, and <c>generateName</c> is
+    ///     <c>fmt.Sprintf("%s%s-%s", baseName, typeName, metaName)</c> over <c>baseName = "rf"</c> and
+    ///     <c>redisName = "r"</c>. ⚠ <b>Naming another project's object from its convention is
+    ///     version-coupled and would ordinarily be fragile</b> — here it is not, and for an unusual
+    ///     reason: <c>charts/bundle/redis-operator/component.yaml</c> records that
+    ///     <c>spotahome/redis-operator</c> is <b>archived</b>, last pushed 2024-07-01, and the
+    ///     component pins <c>v1.3.0-rc1</c>. The convention cannot change under us because nothing
+    ///     upstream can change again. ⚠ It can still be read WRONG, which is why nothing here deletes
+    ///     on a name: <see cref="OperatorSelectorLabels" /> is the evidence and
+    ///     <c>VolumeReclaimer</c> refuses a claim that does not carry it.
+    /// </remarks>
+    public static string OperatorSetName(string name) => "rfr-" + name;
+
+    /// <summary>
+    ///     The labels the operator puts in the <c>StatefulSet</c>'s
+    ///     <c>spec.selector.matchLabels</c>, and therefore the labels Kubernetes copies onto every
+    ///     claim the template creates.
+    /// </summary>
+    /// <param name="name">The resource's own name, which is the <c>RedisFailover</c>'s.</param>
+    /// <remarks>
+    ///     ⚠ <b>NOT ADR-013's seven, and not this platform's labels at all</b> — the same caveat
+    ///     <c>NatsClusters.PodLabels</c> carries, one step further out. There the four are at least
+    ///     written by CyberCloud; here they are <c>generateSelectorLabels(redisRoleName, rf.Name)</c>
+    ///     in the operator's <c>client.go</c>, so the only thing tying the claim to this resource is
+    ///     <c>app.kubernetes.io/name</c> carrying the resource's own name inside a namespace that is
+    ///     one resource group on one cluster. ⚠ <b>The failure direction is the safe one:</b> a claim
+    ///     that does not carry these is refused and the disk survives.
+    /// </remarks>
+    public static ImmutableDictionary<string, string> OperatorSelectorLabels(string name) =>
+        ImmutableDictionary.CreateRange(
+            StringComparer.Ordinal,
+            [
+                KeyValuePair.Create("app.kubernetes.io/name", name),
+                KeyValuePair.Create("app.kubernetes.io/component", "redis"),
+                KeyValuePair.Create("app.kubernetes.io/part-of", "redis-failover")
+            ]
+        );
+
+    /// <summary>
+    ///     The claims a teardown of this type leaves standing — one per Valkey replica — with the
+    ///     labels that prove whose they are.
+    /// </summary>
+    /// <param name="ns">The resource's namespace.</param>
+    /// <param name="name">The resource's own name.</param>
+    /// <param name="desired">The validated desired body: the replica count and the persistence mode.</param>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>This type declares NO recovery window and still kept its disks, which made the
+    ///         leak unconditional rather than a purge's problem.</b> <see cref="Storage" /> sets
+    ///         <c>keepAfterDeletion: true</c> so a rolling restart is not a cold start; the operator
+    ///         reads that flag by <i>withholding</i> the owner reference that would otherwise let the
+    ///         garbage collector take the claim. So every delete of a
+    ///         <c>CyberCloud.Cache/redis</c> returned the tenant's quota, freed the name and left the
+    ///         volume allocated for good. This is what removes it, on the hard delete's convergence.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Empty when the body asks for no persistence.</b> <c>persistence.mode: None</c>
+    ///         renders an <c>emptyDir</c> and no <c>persistentVolumeClaim</c> at all, so there is no
+    ///         template, no claim and nothing for a purge to remove — and naming one anyway would be
+    ///         a reclaim that fails on a claim that never existed.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Valkey replicas only, not the sentinels.</b> The three sentinels are a
+    ///         <c>Deployment</c> and mount no volume; only <c>spec.redis.storage</c> becomes a
+    ///         <c>volumeClaimTemplate</c>. ⚠ A cache scaled DOWN before it was deleted leaves the
+    ///         claims of the ordinals it shed, and those are not here — <c>RetainedVolume.OfSet</c>
+    ///         carries that caveat for every caller.
+    ///     </para>
+    /// </remarks>
+    public static ImmutableArray<RetainedVolume> RetainedClaims(string ns, string name, JsonElement desired) {
+        ArgumentException.ThrowIfNullOrEmpty(ns);
+        ArgumentException.ThrowIfNullOrEmpty(name);
+
+        if (!IsPersistent(desired)) {
+            return [];
+        }
+
+        return RetainedVolume.OfSet(
+            ns,
+            DataVolumeName(name),
+            OperatorSetName(name),
+            Replicas(desired),
+            OperatorSelectorLabels(name),
+            "one Valkey replica's data directory — the last AOF or RDB it wrote"
+        );
+    }
+
     // ── The credential: where it lives, what it is called, and how one is made ────────────────
     //
     // ⚠ THIS BLOCK IS docs/plan/12 § The pattern, once, PIECE 5, AND WITHOUT IT THIS TYPE DOES NOT
@@ -784,6 +886,16 @@ public static class ValkeyCaches {
     public static string PersistenceMode(JsonElement desired) =>
         Text(desired, "persistence", "mode", "AOF");
 
+    /// <summary>How many Valkey instances a body asks for.</summary>
+    /// <param name="desired">The validated desired body.</param>
+    /// <remarks>
+    ///     ⚠ Three by default, and it is the same literal <c>RedisFailoverJson</c> renders — read
+    ///     through this rather than repeated, because the count is also what
+    ///     <see cref="RetainedClaims" /> enumerates ordinals over, and a purge that disagreed with
+    ///     the render about the count would leave the last replica's disk behind.
+    /// </remarks>
+    public static int Replicas(JsonElement desired) => Number(desired, "replicas", 3);
+
     /// <summary>Whether the cache needs a persistent volume rather than an in-memory data directory.</summary>
     /// <param name="desired">The validated desired body.</param>
     public static bool IsPersistent(JsonElement desired) =>
@@ -984,7 +1096,7 @@ public static class ValkeyCaches {
 
         var redis = new JsonObject {
             ["image"] = Image(desired),
-            ["replicas"] = Number(desired, "replicas", 3),
+            ["replicas"] = Replicas(desired),
             ["customConfig"] = config,
             ["storage"] = Storage(name, desired),
             ["exporter"] = new JsonObject { ["enabled"] = Flag(desired, "monitoring", "enabled", true) }
@@ -1043,11 +1155,21 @@ public static class ValkeyCaches {
             // ⚠ Kept, and the operator's own default is to delete. A cache is not durable and its
             // volume still holds the last AOF: deleting the claim with the pod turns every rolling
             // restart into a cold start, which on a large cache is a latency incident for whatever is
-            // in front of it. The resource's own teardown removes the RedisFailover, and the operator
-            // removes the claim with it.
+            // in front of it.
+            //
+            // ⚠ THIS COMMENT USED TO END "the resource's own teardown removes the RedisFailover, and
+            // the operator removes the claim with it", AND THAT WAS FALSE — it described the branch
+            // this flag turns OFF. spotahome's `generateRedisStatefulSet` reads
+            // `if !rf.Spec.Redis.Storage.KeepAfterDeletion { pvc.OwnerReferences = ownerRefs }` and
+            // does nothing else with the field: the owner reference onto the RedisFailover, which is
+            // what would make the collector take the claim, is written only when the flag is FALSE.
+            // With it true the claim carries no owner reference, so it outlives the RedisFailover, the
+            // StatefulSet and every pod — and this type declares no recovery window, so nothing was
+            // ever coming back for it. What removes it now is <see cref="RetainedClaims" />, through
+            // VolumeReclaimer, on the convergence of the hard delete.
             ["keepAfterDeletion"] = true,
             ["persistentVolumeClaim"] = new JsonObject {
-                ["metadata"] = new JsonObject { ["name"] = name + "-data" },
+                ["metadata"] = new JsonObject { ["name"] = DataVolumeName(name) },
                 ["spec"] = claim
             }
         };
@@ -1128,7 +1250,7 @@ public static class ValkeyCaches {
             return false;
         }
 
-        if (redis["replicas"]?.GetValue<int>() != Number(desired, "replicas", 3)
+        if (redis["replicas"]?.GetValue<int>() != Replicas(desired)
             || redis["image"]?.GetValue<string>() != Image(desired)
             || (spec["sentinel"] as JsonObject)?["replicas"]?.GetValue<int>() != SentinelReplicas
             || (spec["auth"] as JsonObject)?["secretPath"]?.GetValue<string>() is not { Length: > 0 }) {
