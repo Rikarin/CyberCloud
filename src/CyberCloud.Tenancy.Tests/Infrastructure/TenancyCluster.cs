@@ -310,7 +310,16 @@ public sealed class TenancyCluster : IAsyncLifetime {
 
         var builder = OrleansApplication.CreateSilo(
             [.. args],
-            silo => silo.ConfigureServices(services => {
+            silo => silo
+                // ⚠ ResourceGroupGrain is IRemindable — it arms the two-phase-create reaper of
+                // docs/plan/06 § Two-phase create while it holds a member in Creating — and
+                // RegisterOrUpdateReminder throws on a silo with no reminder service. The grain
+                // catches that and logs, because a missing sweeper must not turn into a missing
+                // platform; wiring one here means this suite exercises the registration rather than
+                // the catch. In-memory rather than Redis (docs/plan/04 § Reminders): the production
+                // choice is the host's and this is a test.
+                .UseInMemoryReminderService()
+                .ConfigureServices(services => {
                     // Registered BEFORE AddCyberCloudTenancy's TryAdd calls run, so these win.
                     services.AddSingleton<IClock, TestClock>();
                     services.AddSingleton<SwitchablePlatformOperatorAuthority>();

@@ -48,6 +48,10 @@ public sealed class FakeKubeCluster(Guid clusterId) : IKubeClusterConnection {
     readonly ConcurrentDictionary<string, string> objects = new(StringComparer.Ordinal);
     readonly ConcurrentDictionary<string, string> hashes = new(StringComparer.Ordinal);
 
+    // ⚠ The addresses, kept beside the bodies because Key() is lossy: it folds the plural away, and
+    // a namespace listing has to hand back a GroupVersionKind a caller could address with.
+    readonly ConcurrentDictionary<string, ObjectRef> addresses = new(StringComparer.Ordinal);
+
     /// <inheritdoc />
     public Guid ClusterId => clusterId;
 
@@ -90,6 +94,7 @@ public sealed class FakeKubeCluster(Guid clusterId) : IKubeClusterConnection {
     public void Reset() {
         objects.Clear();
         hashes.Clear();
+        addresses.Clear();
         Applied.Clear();
         Deleted.Clear();
         Suspended = false;
@@ -118,13 +123,23 @@ public sealed class FakeKubeCluster(Guid clusterId) : IKubeClusterConnection {
     /// </remarks>
     public bool RemoveBehindTheirBack(ObjectRef target) {
         hashes.TryRemove(Key(target), out _);
+        addresses.TryRemove(Key(target), out _);
         return objects.TryRemove(Key(target), out _);
     }
 
     /// <summary>Replaces an object's JSON behind the reconciler's back — a hand edit in the cluster.</summary>
     /// <param name="target">Which object.</param>
     /// <param name="json">What it now says.</param>
-    public void MutateBehindTheirBack(ObjectRef target, string json) => objects[Key(target)] = json;
+    /// <remarks>
+    ///     ⚠ It records the address as well as the body, so an object planted this way is visible to
+    ///     <see cref="ListNamespaceAsync" />. That is the whole point when the thing being modelled
+    ///     is a <c>Secret</c> an operator added or a chart nobody registered — an occupant a
+    ///     namespace reclaim has to find and which no apply of ours ever created.
+    /// </remarks>
+    public void MutateBehindTheirBack(ObjectRef target, string json) {
+        objects[Key(target)] = json;
+        addresses[Key(target)] = target;
+    }
 
     /// <inheritdoc />
     public Task<Result<ApplyOutcome>> ApplyAsync(
@@ -188,6 +203,7 @@ public sealed class FakeKubeCluster(Guid clusterId) : IKubeClusterConnection {
         // does to one. See DropEmptyCollections' remarks.
         objects[key] = DropEmptyCollections(command.Target, command.Body);
         hashes[key] = command.ReconcileHash;
+        addresses[key] = command.Target;
 
         return Task.FromResult(
             Result<ApplyOutcome>.Success(
@@ -236,12 +252,51 @@ public sealed class FakeKubeCluster(Guid clusterId) : IKubeClusterConnection {
 
         var key = Key(command.Target);
         hashes.TryRemove(key, out _);
+        addresses.TryRemove(key, out _);
 
         return Task.FromResult(
             objects.TryRemove(key, out _)
                 ? Result.Success
                 : Result.Failure(ErrorCode.ResourceNotFound, $"'{command.Target}' is not in cluster {clusterId:D}.")
         );
+    }
+
+    /// <inheritdoc />
+    /// <remarks>
+    ///     ⚠ <b>The one member of <see cref="IKubeClusterConnection" /> whose default implementation
+    ///     refuses, overridden here because a fake that inherited it would make every namespace-reclaim
+    ///     test assert a refusal it did not mean.</b> What it models is a listing over everything the
+    ///     store holds in that namespace — which is the shape of the real one, minus the API discovery
+    ///     that is the expensive half. It cannot show that a real cluster's <c>ServiceAccount/default</c>
+    ///     is there, because nothing here creates one; <c>NamespaceReclaim.IsAmbient</c> is the rule
+    ///     for those and the cluster-backed suite is where a real one is met.
+    /// </remarks>
+    public Task<Result<IReadOnlyList<KubeObjectSummary>>> ListNamespaceAsync(
+        string ns,
+        CancellationToken cancellationToken = default
+    ) {
+        var found = new List<KubeObjectSummary>();
+
+        foreach (var (key, target) in addresses) {
+            if (!string.Equals(target.Namespace, ns, StringComparison.Ordinal)
+                || !objects.TryGetValue(key, out var json)) {
+                continue;
+            }
+
+            var labels = new Dictionary<string, string>(StringComparer.Ordinal);
+
+            if (JsonNode.Parse(json) is JsonObject root
+                && root["metadata"] is JsonObject metadata
+                && metadata["labels"] is JsonObject written) {
+                foreach (var (name, value) in written) {
+                    labels[name] = value?.GetValue<string>() ?? string.Empty;
+                }
+            }
+
+            found.Add(new() { Kind = target.Kind, Namespace = ns, Name = target.Name, Labels = labels });
+        }
+
+        return Task.FromResult(Result<IReadOnlyList<KubeObjectSummary>>.Success(found));
     }
 
     /// <summary>Every object currently held, for a test that wants to assert on the whole cluster.</summary>

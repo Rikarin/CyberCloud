@@ -1,4 +1,5 @@
 using CyberCloud.Core.Resources;
+using CyberCloud.Kubernetes.Apply;
 using CyberCloud.Kubernetes.Tests.Infrastructure;
 using Shouldly;
 using System.Text.Json.Nodes;
@@ -116,14 +117,37 @@ public sealed class ClaimTemplateLabelTests(K3sFixture k3s) {
             + "If this passed, the rule changed and KubeLabels.LifetimeStable can be widened."
         );
 
-        // ⚠ AND THE REFUSAL DOES NOT NAME THE OFFENDING FIELD. It lists the fields that MAY change
-        // and says the rest are forbidden, so an operator reading this in a log is told a
+        // ⚠ AND THE API SERVER'S OWN WORDS DO NOT NAME THE OFFENDING FIELD. It lists the fields that
+        // MAY change and says the rest are forbidden, so the raw refusal tells an operator a
         // StatefulSet apply was rejected and not which field did it. That is a second reason the
         // exclusion is enforced at the builder rather than left to be diagnosed: the failure this
-        // prevents is one nobody can read.
+        // prevents is one nobody can read. Both halves are asserted below, and the cluster's own
+        // sentence is kept in the message precisely so that this stays a measurement rather than an
+        // assertion about our paraphrase of it.
         second.Error!.Message.ShouldContain("Forbidden", Case.Insensitive);
         second.Error.Message.ShouldContain("minReadySeconds");
-        second.Error.Message.ShouldNotContain("volumeClaimTemplates");
+
+        second.Error.Message.ShouldContain(
+            KubeFailures.ImmutableStatefulSetSpecPhrase,
+            Case.Insensitive,
+            "the cluster's own sentence is what identifies the rule, so it is quoted rather than "
+            + "replaced."
+        );
+
+        // ⚠ AND THE PLATFORM SAYS WHAT THE CLUSTER WILL NOT. On an upgraded cluster this refusal
+        // arrives on every stateful resource at once, and "a StatefulSet apply was rejected" is a
+        // support call rather than a diagnosis. KubeFailures translates it into the migration:
+        // spec.volumeClaimTemplates, and the orphan-cascade delete that preserves the pods and the
+        // claims. Nothing performs that step, which is the sentence an operator needs to read.
+        second.Error.Message.ShouldContain("volumeClaimTemplates");
+        second.Error.Message.ShouldContain("--cascade=orphan");
+
+        second.Error.Code.ShouldBe(
+            ErrorCode.InvalidRequestBody,
+            "a live StatefulSet's spec is immutable now and in an hour, so this is one of the four "
+            + "terminal codes — rescheduling turns a migration an operator can perform into an "
+            + "OperationTimeout they cannot read."
+        );
     }
 
     KubeCommand Command(string name, string apiVersion) {

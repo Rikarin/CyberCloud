@@ -342,6 +342,153 @@ public sealed class KubeApiClient(
     }
 
     /// <inheritdoc />
+    public async Task<Result<IReadOnlyList<GroupVersionKind>>> DiscoverNamespacedKindsAsync(
+        CancellationToken cancellationToken = default
+    ) {
+        var kinds = new List<GroupVersionKind>();
+
+        // ── The core group ──────────────────────────────────────────────────────────────────────
+        //
+        // ⚠ Discovered rather than hard-coded, even though its group and version are known. The set
+        // of core kinds changes between Kubernetes releases, and a hard-coded list would silently
+        // stop covering whatever was added — which on this path reads as "the namespace does not
+        // hold any of those".
+        var core = await ReadAsync(
+                "v1",
+                () => client.CoreV1.GetAPIResourcesWithHttpMessagesAsync(cancellationToken: cancellationToken),
+                cancellationToken
+            )
+            .ConfigureAwait(false);
+
+        if (core.TryGetError(out var coreError)) {
+            return Result<IReadOnlyList<GroupVersionKind>>.Failure(coreError);
+        }
+
+        kinds.AddRange(Namespaced(core.GetValueOrThrow(), string.Empty, "v1"));
+
+        // ── Every other group ───────────────────────────────────────────────────────────────────
+        V1APIGroupList groups;
+
+        try {
+            using var response = await client.Apis
+                .GetAPIVersionsWithHttpMessagesAsync(cancellationToken: cancellationToken)
+                .ConfigureAwait(false);
+
+            groups = response.Body;
+        } catch (HttpOperationException ex) {
+            return Refuse<IReadOnlyList<GroupVersionKind>>(ex, DiscoveryRef, "discover");
+        } catch (Exception ex) when (IsTransport(ex)) {
+            return Result<IReadOnlyList<GroupVersionKind>>.Failure(Unreachable(ex));
+        }
+
+        foreach (var group in groups?.Groups ?? []) {
+            // ⚠ THE PREFERRED VERSION, AND EXACTLY ONE. See DiscoverNamespacedKindsAsync's remarks:
+            // a group serving v1 and v1beta1 serves the same stored objects under both, so taking
+            // every advertised version counts every object twice.
+            var version = group.PreferredVersion?.Version
+                ?? group.Versions?.FirstOrDefault()?.Version;
+
+            if (string.IsNullOrEmpty(group.Name) || string.IsNullOrEmpty(version)) {
+                continue;
+            }
+
+            var listed = await ReadAsync(
+                    group.Name + "/" + version,
+                    () => client.CustomObjects.GetAPIResourcesWithHttpMessagesAsync(
+                        group.Name,
+                        version,
+                        cancellationToken: cancellationToken
+                    ),
+                    cancellationToken
+                )
+                .ConfigureAwait(false);
+
+            if (listed.TryGetError(out var groupError)) {
+                // ⚠ THE WHOLE DISCOVERY FAILS, AND THE COMMONEST CAUSE IS A GROUP NOBODY MISSES.
+                // An aggregated API whose apiserver is down — metrics.k8s.io is the usual one — is
+                // advertised in /apis and answers 503 here. Skipping it would be the convenient
+                // choice and it is the wrong one: this method cannot tell that group from a CRD
+                // group holding a tenant's databases, and the caller reads a missing kind as "the
+                // namespace holds none of those". A reclaim that refuses while an apiservice is
+                // broken is an inconvenience; one that proceeds is a recursive delete decided on a
+                // listing with a hole in it. The refusal names the group so it is actionable.
+                return Result<IReadOnlyList<GroupVersionKind>>.Failure(
+                    groupError.Code,
+                    $"Cluster {clusterId:D} could not be asked what '{group.Name}/{version}' serves, "
+                    + "so a namespace listing would have a hole in it exactly the size of that "
+                    + $"group: {groupError.Message} Discovery refuses a partial answer, because a "
+                    + "kind that is missing from it reads as a kind the namespace does not hold."
+                );
+            }
+
+            kinds.AddRange(Namespaced(listed.GetValueOrThrow(), group.Name, version));
+        }
+
+        return Result<IReadOnlyList<GroupVersionKind>>.Success(kinds);
+    }
+
+    /// <summary>The object a discovery refusal is reported against. There is no single object.</summary>
+    static ObjectRef DiscoveryRef { get; } = new() {
+        Kind = new() { Group = "", Version = "v1", Kind = "APIResourceList", Plural = "apiresources" },
+        Name = "*"
+    };
+
+    /// <summary>
+    ///     The namespaced, listable, non-subresource entries of one discovery document.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <c>V1APIResource.Group</c> and <c>.Version</c> are populated only when an entry belongs
+    ///     to a <i>different</i> group from the document it appears in — which is how the core
+    ///     group's discovery advertises <c>events.k8s.io</c>. Taking them when present and the
+    ///     document's own otherwise is what keeps a kind addressed at the path that actually serves
+    ///     it.
+    /// </remarks>
+    static IEnumerable<GroupVersionKind> Namespaced(V1APIResourceList document, string group, string version) {
+        foreach (var resource in document?.Resources ?? []) {
+            if (resource.Namespaced != true) {
+                continue;
+            }
+
+            // ⚠ A subresource is discovered as `pods/log`, and addressing it as a collection is a
+            // 404. It is not a thing that can be in a namespace, so excluding it cannot hide one.
+            if (string.IsNullOrEmpty(resource.Name) || resource.Name.Contains('/', StringComparison.Ordinal)) {
+                continue;
+            }
+
+            // ⚠ ON THE VERBS THE API SERVER REPORTS, NEVER ON A NAME. `bindings` and the
+            // *accessreviews are create-only and answer 405 to a list; a hard-coded deny list would
+            // stop matching the day a release adds one.
+            if (resource.Verbs?.Contains("list") != true) {
+                continue;
+            }
+
+            yield return new() {
+                Group = string.IsNullOrEmpty(resource.Group) ? group : resource.Group,
+                Version = string.IsNullOrEmpty(resource.Version) ? version : resource.Version,
+                Kind = resource.Kind ?? string.Empty,
+                Plural = resource.Name
+            };
+        }
+    }
+
+    async Task<Result<V1APIResourceList>> ReadAsync(
+        string groupVersion,
+        Func<Task<HttpOperationResponse<V1APIResourceList>>> read,
+        CancellationToken cancellationToken
+    ) {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        try {
+            using var response = await read().ConfigureAwait(false);
+            return Result<V1APIResourceList>.Success(response.Body);
+        } catch (HttpOperationException ex) {
+            return Refuse<V1APIResourceList>(ex, DiscoveryRef, "discover " + groupVersion);
+        } catch (Exception ex) when (IsTransport(ex)) {
+            return Result<V1APIResourceList>.Failure(Unreachable(ex));
+        }
+    }
+
+    /// <inheritdoc />
     public async Task<Result<ListPage>> ListAsync(
         GroupVersionKind kind,
         string ns,
@@ -353,6 +500,12 @@ public sealed class KubeApiClient(
     ) {
         ArgumentNullException.ThrowIfNull(kind);
 
+        // ⚠ EMPTY BECOMES NULL. `labelSelector=` is a query parameter the API server accepts and
+        // reads as "everything", but only the null spelling omits it — and the namespace inventory
+        // is the first caller that wants no selector at all, so the distinction stopped being
+        // theoretical. Every other caller passes one and is unaffected.
+        var selector = string.IsNullOrEmpty(labelSelector) ? null : labelSelector;
+
         try {
             using var response = string.IsNullOrEmpty(ns)
                 ? await client.CustomObjects.ListClusterCustomObjectWithHttpMessagesAsync(
@@ -360,7 +513,7 @@ public sealed class KubeApiClient(
                         kind.Version,
                         kind.Plural,
                         continueParameter: continueToken,
-                        labelSelector: labelSelector,
+                        labelSelector: selector,
                         limit: limit ?? DefaultListPageSize,
                         resourceVersion: resourceVersion,
                         cancellationToken: cancellationToken
@@ -372,14 +525,26 @@ public sealed class KubeApiClient(
                         ns,
                         kind.Plural,
                         continueParameter: continueToken,
-                        labelSelector: labelSelector,
+                        labelSelector: selector,
                         limit: limit ?? DefaultListPageSize,
                         resourceVersion: resourceVersion,
                         cancellationToken: cancellationToken
                     )
                     .ConfigureAwait(false);
 
-            return Result<ListPage>.Success(ReadPage(Serialize(response.Body)));
+            // ⚠ A BODY THAT WILL NOT PARSE IS A FAILURE AND NOT AN EMPTY PAGE. It used to be the
+            // latter, on the reasoning that an informer would re-list; but an empty page with no
+            // continue token is indistinguishable from "this kind holds nothing", and the namespace
+            // inventory reads that as a licence to delete the namespace. The informer handles a
+            // failed list already — it is the 410 path — so failing costs it nothing.
+            return ReadPage(Serialize(response.Body)) is { } page
+                ? Result<ListPage>.Success(page)
+                : Result<ListPage>.Failure(
+                    ErrorCode.InternalError,
+                    $"Cluster {clusterId:D} answered a list of {kind} in "
+                    + $"'{(string.IsNullOrEmpty(ns) ? "<cluster scope>" : ns)}' with a body that is "
+                    + "not a JSON collection. An unreadable listing is not an empty one."
+                );
         } catch (HttpOperationException ex) when (ex.Response?.StatusCode == HttpStatusCode.Gone) {
             // ⚠ HTTP 410 — the resourceVersion we resumed from has been compacted out of etcd's
             // history. docs/plan/09 § Observing bounds the resume with exactly this caveat: "resume
@@ -570,7 +735,8 @@ public sealed class KubeApiClient(
         }
     }
 
-    static ListPage ReadPage(string json) {
+    /// <summary>One page, or <see langword="null" /> when the body is not a readable listing.</summary>
+    static ListPage? ReadPage(string json) {
         List<string> items = [];
         var resourceVersion = string.Empty;
         var continueToken = string.Empty;
@@ -597,10 +763,10 @@ public sealed class KubeApiClient(
                 }
             }
         } catch (JsonException) {
-            // A list body that will not parse is not a partial list — it is nothing. Returning an
-            // empty page with no cursor makes the informer re-list rather than advance past objects
-            // it never saw.
-            return new([], string.Empty, string.Empty);
+            // ⚠ Null, and the caller turns it into a failure. A list body that will not parse is not
+            // an empty list — it is no answer at all — and the two were the same value until a
+            // caller appeared for whom "empty" authorises a destructive act.
+            return null;
         }
 
         return new(items, resourceVersion, continueToken);

@@ -1832,74 +1832,184 @@ server-side apply of a label-only `PersistentVolumeClaim` would *create* an inva
 controller had not made it yet. **Owed, and it is the same owed item the purge reaches from the other
 end.**
 
-### ⚠ Owed: nothing deletes a namespace
+### Upgrading a cluster that already runs a StatefulSet: the migration
 
-**No component removes a namespace when its resource group is emptied or removed, and that is a
-decision.** Deleting a namespace is a recursive delete of everything inside it, and the platform
-cannot tell "empty" from "empty of objects we wrote": a tenant's own `PersistentVolumeClaim`, a
-`Secret` an operator added and a `StatefulSet` from a chart nobody registered all live there and none
-carries `cybercloud.io/managed-by`. There is also nothing to hang the delete on —
-`IResourceGroupGrain` has `BeginDeleteAsync`/`CompleteDeleteAsync` for its *members* and **no method
-that deletes the group itself**. So an emptied group leaves an empty namespace behind, which costs an
-etcd object and no compute. Closing it needs a group-delete choreography that first proves the
-namespace holds nothing but objects this platform wrote, and the safe order is the one docs/plan/06
-§ Two-phase create already uses in reverse.
+An apply that changes *anything* under a live set's `spec.volumeClaimTemplates` is refused, and the
+template labels are a change. So the **first reconcile after the upgrade fails on every stateful
+resource on that cluster, and it fails identically on every pass after that** — a rejected apply does
+not heal.
 
-⚠ **STILL OWED, AND THE SENTENCE ABOVE ABOUT WHAT CLOSING IT NEEDS IS WRONG IN ITS LAST CLAUSE.**
-"Proves the namespace holds nothing but objects this platform wrote" is the *weak* rule, and it is the
-one that destroys a tenant. What shipped is the strong rule and the shape of the proof, with no caller:
+⚠ **The API server's refusal does not name the field.** It lists the ones that *may* change and says
+the rest are forbidden, which reads as "a StatefulSet apply was rejected" and nothing more. That is a
+support call rather than a diagnosis, and on an upgraded cluster it arrives everywhere at once.
+`KubeFailures.ImmutableStatefulSetSpecPhrase` is what recognises the sentence — matched on the message
+rather than on a status code, because the status does not distinguish it from any other refusal — and
+the refusal the tenant reads now carries the cluster's own words **and** the migration:
+`spec.volumeClaimTemplates`, the procedure, and the fact that nothing performs it. The code is
+`InvalidRequestBody`, one of `ReconcileOutcome.IsRetryable`'s four terminal codes: the spec is
+immutable now and in an hour, and rescheduling turns a migration an operator can perform into an
+`OperationTimeout` they cannot read.
 
-- **`NamespaceReclaim.Decide` is the rule, and it says *nothing at all*, not *nothing foreign*.** It
-  takes the group's members and a listing of everything in the namespace and answers `Deletable` only
-  when both are empty. `NamespaceEnsurer.DeleteAsync` refuses without such a verdict, re-checks that
-  the verdict names this cluster and this namespace, and cannot be given a hand-built one — the
-  constructor is private and `default(NamespaceReclaim)` authorizes nothing.
-- **Why the weak rule is fatal, in three ways at once.** It deletes the objects of a resource whose
-  membership was never recorded — nothing in the write path calls `IResourceGroupGrain.BeginCreateAsync`
-  (docs/plan/08 § Soft delete), so every group's member list is empty and "empty" is evidence of
-  nothing. It deletes the objects of a resource that is simply live. And it deletes the volumes of
-  every resource inside its recovery window: a parked resource's data plane *is* torn down and its
-  claims are exactly what a restore restores from, so a namespace delete during a window turns every
-  restore in that group into a lie.
-- **⚠ The volume claims carried none of the seven labels — CLOSED for new claims, and permanently
-  open for the ones that already exist.** `KubeCommandBuilder.Inject` wrote the labels into the
-  top-level `metadata.labels` and did not walk into a nested template, and every provider's
-  `volumeClaimTemplate` metadata was a bare `name`, so the `PersistentVolumeClaim`s a `StatefulSet`
-  makes read as *foreign* to every rule the platform has. `IKubeCommandBuilder.WithTemplateLabels`
-  now stamps the template — see § Labelling a nested claim template for what that does and does not
-  buy, and for why it is six labels rather than seven. **What it does not change is the verdict:
-  the namespace of a group that ever ran a stateful type is still never `Deletable`, because
-  docs/plan/08 § Soft delete records that a purge still leaves the volumes and `IResourceReconciler`
-  has no member that asks for them.** ⚠ It also does not weaken `NamespaceReclaim.Decide` to
-  *nothing we wrote*: the unlabelled claims were only one of that rule's three reasons, and the other
-  two — membership is never recorded, and a live resource's objects are indistinguishable from a
-  finished one's — are untouched.
-- **⚠ It moves a namespace of leftover volumes out of `OperatorReclaimable`, and that is owed.** That
-  flag requires *every* occupant to be unmanaged, which was true only because the claims were
-  unlabelled. A group whose sole remaining objects are its own labelled claims now satisfies neither
-  it nor `Deletable` and reports as a plain refusal. Nothing regresses today — `Decide` has no caller
-  — and the predicate belongs to the purge that removes the disks it kept rather than to the
-  labelling, so it is left for whoever builds that.
-- **⚠ There is no seam that can answer "what is in this namespace", and `IClusterObjectInventory` is
-  not it.** That one selects on `cybercloud.io/managed-by=cybercloud`, which excludes precisely the
-  objects a delete has to find, so it is empty exactly when the delete is most dangerous.
-  `INamespaceInventory` is the right shape and its only implementation,
-  `UnavailableNamespaceInventory`, refuses — an empty listing is a licence to delete, so a stub must
-  never produce one. A real one is a discovery of every namespaced `APIResource` the cluster serves,
-  CRDs included, and a list per kind; the informer bridge of docs/plan/09 § Observing does not deliver
-  it, because `IClusterConnectionGrain.WatchAsync` watches one kind under a label selector.
-- **⚠ The memo is per silo, so a namespace delete is not a local act.** `NamespaceEnsurer.RecheckAfter`
-  is an hour and the memo lives in the ensurer instance. `DeleteAsync` drops its own entry, but every
-  other silo still believes the namespace exists and will not re-apply it, so a group whose namespace
-  is deleted and then immediately reused fails its reconciles elsewhere with a `404` for up to an hour.
-  Closing that needs an invalidation the memo has no channel for.
-- **What is left owed, in order.** A group-delete choreography on `IResourceGroupGrain` — refuse or
-  cascade is still open, and the *ordering* is settled either way: seal the group, then the members,
-  then the namespace, which is docs/plan/06 § Two-phase create in reverse. The membership wiring that
-  makes `ListAsync` mean anything. A real `INamespaceInventory`. A purge that removes the volumes it
-  kept. And the memo invalidation. **Until the first two, `NamespaceEnsurer.DeleteAsync` has no caller,
-  and adding one that reads today's `ListAsync` would delete the namespace of every populated group in
-  the platform.**
+**The procedure, measured.** Delete the `StatefulSet` with `--cascade=orphan`; the pods keep running
+and the `PersistentVolumeClaim`s survive. The next reconcile recreates the set from the desired body,
+this time with labelled templates, and adopts the running pods. ⚠ The claims that already exist stay
+**unlabelled** — the StatefulSet controller stamps a claim once, when it creates it, and never
+revisits one — so the migration buys the *next* claims and not the current ones. Nothing in the
+platform runs the procedure; it refuses with a message that says why, which is the honest half of
+"either run it or refuse to proceed".
+
+⚠ **`ClaimTemplateLabelTests` is the whole measurement**, against `rancher/k3s:v1.35.7-k3s1`: it
+applies a sabotaged set twice at two api-versions, asserts the second is refused, asserts the cluster's
+own sentence is *kept* in the message — so the test measures the rule rather than our paraphrase of it
+— and asserts the platform's half names `volumeClaimTemplates` and `--cascade=orphan`.
+
+### Closed: a resource group's delete removes its namespaces
+
+**Deleting a resource group reclaims the namespace it holds on every cluster it ever touched, and
+refuses rather than cascading.** `IScopeManager.DeleteAsync` → `ResourceGroupReclaimer` is the
+choreography, and the order is docs/plan/06 § Two-phase create in reverse: seal the group, then the
+members, then the namespace last.
+
+- **The seal is the only thing that closes the create-during-delete race, and it lives in the grain.**
+  `IResourceGroupGrain.BeginGroupDeleteAsync` checks the members and sets `ProvisioningState.Deleting`
+  **in one grain turn**, and `BeginCreateAsync` refuses while it is set. A caller that listed the
+  members and then sealed would have left exactly the window the seal exists to shut, because a create
+  could run between the two. Nothing below the group can close it: a resource created between the
+  reclaim's evidence and the namespace delete has its objects destroyed by a verdict that was true
+  when it was reached.
+- **Refuse, not cascade — the open question, decided.** Azure cascades and that is the better end
+  state. It is not what this does, because a cascade is a per-resource delete with each resource's own
+  lock, its own authorization, its own soft-delete window and its own failable teardown, driven as one
+  long-running operation with partial failure to report. A cascade that skipped any of those would be
+  **a way to delete a locked resource by deleting its group**. Refusing costs a tenant one extra step
+  and is reversible; a wrongly-sealed group is not.
+- **⚠ The name is freed LAST, which is the opposite of the resource ordering, and the deviation is
+  deliberate.** § Two-phase create says a delete should release the index first so the name is
+  immediately reusable. For a group the name is an *input to its namespace name* —
+  `{subscriptionId:N}-{resourceGroup}` — so freeing it first lets a new group of the same name be
+  created, have `NamespaceEnsurer` apply the very same namespace, and then have the old delete remove
+  it out from under the new group's first resource.
+- **⚠ Which clusters to reclaim on could not be derived, and is now recorded.** A namespace is keyed by
+  (group, cluster) and a group may span clusters; by the time the delete runs every member is gone,
+  which is its precondition, so the members cannot say. `IResourceGroupGrain.RecordClusterAsync` is
+  written from the reconcile driver whenever `NamespaceEnsurer`'s memo misses — once an hour per silo
+  per pair — and a failure to record is a logged note rather than a failed pass, because the
+  consequence is a namespace a later delete does not reclaim and the alternative is refusing to place a
+  tenant's resource over a bookkeeping write. ⚠ An **empty** cluster list is not proof that no namespace
+  exists: a group whose resources were placed before this existed reports empty.
+- **A refusal leaves the group sealed and `Deleting`**, which is the rule `FailDeleteAsync` already
+  applies to a member: a delete that began and did not finish stays visible rather than being quietly
+  returned to service. The whole choreography is idempotent and re-drivable.
+- **A group whose only member is an orphan is swept before the seal.** An orphan — a name claimed and
+  never confirmed — is a member record for a resource that does not exist, so without the sweep the
+  delete refuses over a resource the tenant cannot delete. `ReapOrphansAsync` proves each one against
+  its own index first, so this is not a licence to empty the group.
+- **⚠ The group's ReBAC `parent` tuple is left behind. Owed.** `IScopeRelationWriter` has no unlink.
+  The residue is inert for the reason its own remarks give about a link written before a create that
+  failed — the tuple names an object that resolves to nothing, and a group later recreated under the
+  same name is written the identical tuple.
+
+### The evidence rule, and the two things being able to list changed about it
+
+`NamespaceReclaim.Decide` takes the group's members **and** a listing of everything in the namespace,
+and answers `Deletable` only when both are clear. `NamespaceEnsurer.DeleteAsync` refuses without such a
+verdict, re-checks that the verdict names this cluster and this namespace, and cannot be given a
+hand-built one — the constructor is private and `default(NamespaceReclaim)` authorizes nothing.
+
+**Why the weak rule — "delete when nothing lacks `managed-by`" — is fatal, in three ways at once.** It
+deletes the objects of a resource whose membership was never recorded. It deletes the objects of a
+resource that is simply live. And it deletes the volumes of every resource inside its recovery window:
+a parked resource's data plane *is* torn down and its claims are exactly what a restore restores from,
+so a namespace delete during a window turns every restore in that group into a lie.
+
+- **⚠ "The namespace holds nothing at all" was unsatisfiable, and nothing could see that until
+  something could list.** Two controllers put an object in **every** namespace and recreate it when it
+  is deleted: the service-account controller's `ServiceAccount/default`, and the root-CA publisher's
+  `ConfigMap/kube-root-ca.crt`. `Deletable` would have been `false` forever in production while being
+  `true` in every unit test that supplied an empty array. `NamespaceReclaim.IsAmbient` is the exception
+  list and it is three entries long: those two **by kind and name** — names Kubernetes reserves, so no
+  tenant object can wear one — plus `Event` kind-wide, which carries no state, expires within the hour
+  and is what nothing restores from. Without the `Event` entry a group could only be reclaimed in the
+  gaps between its own teardown events expiring, which is a delete that succeeds or fails depending on
+  how long the operator waited.
+- **⚠ Not the `default-token-*` `Secret`, deliberately.** Kubernetes stopped auto-creating it in 1.24,
+  so on a supported cluster there is none to exempt, and the only rule that would match one is a name
+  prefix a tenant can occupy. A `Secret` is the object it would hurt most to delete by accident, so an
+  old cluster that still has one reports as an occupant and a person decides.
+- **⚠ `OperatorReclaimable` required *every* occupant to be unmanaged, and that stopped being the same
+  question. Fixed.** It was equivalent to "the platform is finished here" only while nothing this
+  platform wrote could outlive its resource; once `WithTemplateLabels` gave a `volumeClaimTemplate`'s
+  claims `managed-by`, a group whose only remains were its own disks satisfied neither verdict and
+  reported as an unclassified refusal — the case an operator most needs told about, filed as noise. It
+  now asks what its own remarks always said it asked: the control plane holds no members and the
+  cluster still holds something. Who wrote the leftovers is in the refusal text, where it informs the
+  decision instead of gating it.
+
+### Closed: something can list a namespace
+
+`INamespaceInventory` has an implementation. **`IClusterObjectInventory` was the wrong seam** — it
+selects on `cybercloud.io/managed-by=cybercloud`, which excludes precisely the objects a delete has to
+find, so it is empty exactly when the delete is most dangerous. And **`IKubeClusterConnection` had
+apply, get and delete and no list member at all**, which is why there was nowhere to build one.
+
+- **The list member is on the connection**, forwarded to `IClusterConnectionGrain.ListNamespaceAsync`
+  and implemented by `NamespaceContents` over `IKubeApiClient`: API discovery of every namespaced kind
+  the cluster serves — built-ins and CRDs — then one list per kind **with no label selector**. On a busy
+  cluster that is a hundred round trips, which is why it is not on the reconcile path and must never be
+  put there; its caller is a group delete, once per group per lifetime.
+- **⚠ Its default implementation on the interface FAILS rather than returning empty.** An abstract
+  member would have forced twenty reconciler test doubles to write a body, and the body everybody
+  writes is `return []` — the one answer that authorises a recursive delete of a tenant's live data.
+  Fail-closed is the only default whose worst case is a refused reclaim rather than a destroyed
+  namespace.
+- **Discovery takes one version per group — the preferred one.** A group serving `v1` and `v1beta1`
+  stores each object once and serves it under both, so listing every advertised version counts every
+  object as many times as it has versions. Subresources (`pods/log`) and kinds whose `verbs` omit
+  `list` (`bindings`, the `*accessreviews`) are excluded on the API server's own evidence rather than on
+  a name — neither is a thing that can be *in* a namespace, so neither exclusion can hide one.
+- **⚠ A group whose discovery fails fails the whole enumeration, and the commonest cause is a group
+  nobody misses.** An aggregated API whose apiserver is down — `metrics.k8s.io` is the usual one — is
+  advertised in `/apis` and answers `503`. Skipping it is the convenient choice and it is wrong:
+  discovery cannot tell that group from a CRD group holding a tenant's databases, and a kind missing
+  from the answer reads as a kind the namespace does not hold. The refusal names the group.
+- **⚠ MEASURED CONSEQUENCE: on a stock k3s the enumeration usually refuses, and the reason is
+  `metrics.k8s.io/v1beta1`.** k3s registers it as an aggregated `APIService` whose backend is not up
+  in a short-lived container, so a group delete against such a cluster refuses until it is. That is
+  **not** a reason to skip the group: Kubernetes' own namespace controller behaves the same way — an
+  incomplete discovery leaves a namespace stuck in `Terminating` with
+  `NamespaceDeletionDiscoveryFailure` — so refusing *before* issuing the delete is strictly better
+  than issuing one that hangs, and the condition clears on its own when the apiserver comes back.
+  What the platform owes is a refusal that names the group, and
+  `ARealNamespaceHoldsWhatKubernetesPutsThereAndTheReclaimSeesIt` asserts it.
+- **Two smaller repairs fell out.** A list body that would not parse was returned as an *empty page with
+  no cursor*, which reads as "this kind holds nothing"; it is now a failure. And an empty
+  `labelSelector` was sent as `labelSelector=` rather than omitted, which only mattered once a caller
+  wanted no selector at all.
+
+### Closed: the memo has an invalidation channel, and its trigger is the symptom
+
+`NamespaceEnsurer`'s memo is per silo and there is still no broadcast. What closes the gap is that **the
+silo holding the wrong belief is exactly the silo the API server is telling.** A namespace removed by an
+operator, or by a group delete running elsewhere, makes every apply routed here answer `404` naming it —
+so `ReconcileDriver` reads a pass that came back `ResourceNotFound` as the invalidation and calls
+`NamespaceEnsurer.Forget(clusterId, ns)`. Exposure drops from `RecheckAfter` — an hour — to one pass.
+
+⚠ **It is deliberately imprecise in the harmless direction.** A `ResourceNotFound` from a pass may be
+about the reconciler's own object rather than about the namespace, and telling the two apart needs a
+round trip that would defeat the memo. Forgetting when the namespace was fine costs one idempotent apply
+on the next pass; not forgetting when it was gone costs an hour of failed reconciles.
+
+### Still owed around the namespace
+
+- **The volumes a purge keeps.** docs/plan/08 § Soft delete records that a purge still leaves the
+  volumes; `VolumeReclaimer` removes the ones a provider declares, and a set scaled down leaves the
+  claims of the ordinals it dropped. A group that ever ran a stateful type therefore reports
+  `OperatorReclaimable` rather than `Deletable`, which is the honest answer and not a bug.
+- **Existing claims stay unlabelled forever** — see § Labelling a nested claim template — and adopting
+  the template labels on a cluster already running a `StatefulSet` needs an orphan-cascade delete that
+  nothing performs.
+- **A cross-silo broadcast** would close the memo from the writing end rather than the reading end.
+  Nothing needs it while the `404` channel exists.
 
 ### Closed: the drift scan no longer calls a namespace an orphan
 

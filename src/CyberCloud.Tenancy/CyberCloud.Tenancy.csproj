@@ -19,8 +19,16 @@
     -->
 
     <ItemGroup>
-        <!-- Grain implementations, [PersistentState], reminders. -->
+        <!-- Grain implementations, [PersistentState]. -->
         <PackageReference Include="Microsoft.Orleans.Server"/>
+        <!--
+          ⚠ IRemindable and TickStatus are NOT in Microsoft.Orleans.Server — see
+          CyberCloud.ResourceManager.csproj, where the same reference carries the verification against
+          the nuspec. ResourceGroupGrain is IRemindable: it arms the two-phase-create reaper of
+          docs/plan/06 § Two-phase create while it holds a member in Creating. Which reminder STORAGE
+          a silo uses stays the host's choice.
+        -->
+        <PackageReference Include="Microsoft.Orleans.Reminders"/>
         <!-- ICrossTenantAuthorizer, IGrainCallTenantSeparator, AddMultitenantCommunicationSeparation. -->
         <PackageReference Include="Orleans.Multitenant"/>
     </ItemGroup>

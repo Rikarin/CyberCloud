@@ -71,6 +71,45 @@ public interface IScopeManager {
     /// </returns>
     Task<Result<ScopeSnapshot>> CreateAsync(ScopeRequest request, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    ///     Deletes a resource group. <c>DELETE</c> on a scope path. Idempotent.
+    /// </summary>
+    /// <param name="request">The request. <see cref="ScopeRequest.Body" /> is ignored.</param>
+    /// <param name="cancellationToken">Cancels the delete.</param>
+    /// <returns>
+    ///     Success once the group's record is gone and the namespace it held on every cluster it ever
+    ///     touched has been reclaimed.
+    /// </returns>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>A GROUP THAT STILL HOLDS RESOURCES IS REFUSED, AND THIS DOES NOT CASCADE.</b>
+    ///         Azure's does, and that is the better end state; it is not what this is, because a
+    ///         cascade is a per-resource delete — each with its own lock, its own authorization, its
+    ///         own soft-delete window and its own teardown that can fail — driven as one long-running
+    ///         operation with partial failure to report. A cascade that skipped any of those would be
+    ///         a way to delete a locked resource by deleting its group.
+    ///         <c>IResourceGroupGrain.BeginGroupDeleteAsync</c> carries the argument; the refusal
+    ///         names what is in the way.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b><see cref="ScopeKind.Subscription" /> and <see cref="ScopeKind.Tenant" /> are
+    ///         refused, and those are gaps rather than decisions.</b> A subscription delete is every
+    ///         group's delete plus the meter, the quota and the shard; a tenant's is that plus the
+    ///         directory and the shard map. Neither is built, and both would be
+    ///         <i>silently partial</i> if this method treated them as "the group case, wider".
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Synchronous, unlike a resource delete, because there is nothing to wait for.</b>
+    ///         Every member is already gone — that is the precondition — so what is left is a sealed
+    ///         grain, one namespace per cluster, and a listing entry. There is no reconciler, no
+    ///         operation grain and no progress to report. A group whose namespace refuses reclaim is
+    ///         a failure with a reason rather than an operation that never converges, which
+    ///         docs/plan/08 § The reconcile loop prefers in both directions: <i>"a resource stuck
+    ///         forever is worse than a resource that failed, because a failure is actionable"</i>.
+    ///     </para>
+    /// </remarks>
+    Task<Result> DeleteAsync(ScopeRequest request, CancellationToken cancellationToken = default);
+
     /// <summary>Reads a scope. <c>GET</c> on a scope path.</summary>
     /// <param name="request">The request. <see cref="ScopeRequest.Body" /> is ignored.</param>
     /// <param name="cancellationToken">Cancels the read.</param>

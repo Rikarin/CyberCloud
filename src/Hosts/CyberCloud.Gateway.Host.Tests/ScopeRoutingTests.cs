@@ -145,8 +145,8 @@ public sealed class ScopeRoutingTests {
     // ── The verbs a scope does not serve ───────────────────────────────────────────────────────
 
     [Theory]
-    [InlineData("DELETE")]
     [InlineData("PATCH")]
+    [InlineData("HEAD")]
     public async Task AScopeRefusesTheVerbsItDoesNotServeAndSaysWhichItDoes(string method) {
         var gateway = new GatewayHarness();
 
@@ -161,6 +161,50 @@ public sealed class ScopeRoutingTests {
 
         // RFC 9110 § 15.5.6 requires it, and without it a 405 is a dead end.
         response.Headers.ShouldContainKey("Allow");
+    }
+
+    [Fact]
+    public async Task DeletingAResourceGroupIs204AndNot202BecauseThereIsNothingToPoll() {
+        // ⚠ DELETE used to be in the theory above, because a scope delete was the reverse of
+        // docs/plan/06 § Two-phase create and was not built. It is now served for a resource GROUP —
+        // and it answers 204 rather than the 202 a resource delete gives, because by the time it runs
+        // the group is already empty: IScopeManager.DeleteAsync refuses a group that still holds
+        // resources rather than cascading, so what the call did — seal a grain, reclaim a namespace
+        // per cluster, drop a listing entry — is finished when it returns. A 202 and an Operation-Id
+        // that resolves to nothing would be a poll loop for every client polite enough to follow it.
+        var gateway = new GatewayHarness();
+
+        var response = await gateway.SendAsync(
+            "DELETE",
+            GatewayHarness.GroupPath(GatewayHarness.TenantA),
+            gateway.Token(GatewayHarness.TenantA)
+        );
+
+        response.Status.ShouldBe(StatusCodes.Status204NoContent, response.Body);
+        gateway.Scopes.Paths.ShouldContain(GatewayHarness.GroupPath(GatewayHarness.TenantA));
+    }
+
+    [Fact]
+    public async Task AGroupDeleteThatIsRefusedIsShapedLikeEveryOtherRefusal() {
+        // The manager refuses a group that still holds resources. What matters here is that the
+        // gateway shapes that refusal rather than swallowing it into the 204 — a delete reported
+        // successful over a group whose resources are still running is the billing-dispute clause
+        // docs/plan/06 § Two-phase create is careful about, one scope up.
+        var gateway = new GatewayHarness();
+
+        gateway.Scopes.OnDelete = _ => Result.Failure(
+            ErrorCode.Conflict,
+            "the resource group still holds 2 resource(s)"
+        );
+
+        var response = await gateway.SendAsync(
+            "DELETE",
+            GatewayHarness.GroupPath(GatewayHarness.TenantA),
+            gateway.Token(GatewayHarness.TenantA)
+        );
+
+        response.Status.ShouldBe(StatusCodes.Status409Conflict, response.Body);
+        response.Body.ShouldContain("still holds 2 resource(s)");
     }
 
     [Fact]

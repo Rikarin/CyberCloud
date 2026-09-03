@@ -27,7 +27,7 @@ public readonly record struct NamespaceEnsured(bool Written, ApplyResult Result,
 /// <remarks>
 ///     <para>
 ///         ⚠ <b>Who owns namespace creation, and why it is this and not the resource-group grain.</b>
-///         <see cref="ReconcileDriver.NamespaceFor" /> derives
+///         <see cref="ReconcileDriver.NamespaceFor(ResourceId)" /> derives
 ///         <c>{subscriptionId:N}-{resourceGroup}</c> and every reconciler in the catalogue applies
 ///         into it. Three components could have created it, and two of them cannot:
 ///     </para>
@@ -78,12 +78,12 @@ public readonly record struct NamespaceEnsured(bool Written, ApplyResult Result,
 ///         ADR-013's builder injects all seven or refuses to build.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Nothing deletes the namespace, and <see cref="DeleteAsync" /> is not a counter-example
-///         to that.</b> It exists so the evidence rule is code rather than a paragraph, it refuses
-///         unless <see cref="NamespaceReclaim" /> proves the namespace holds nothing at all, and no
-///         production path calls it — because the thing that would call it, a resource-group delete,
-///         has nowhere to live yet. See <see cref="ReconcileDriver" />'s remarks and
-///         <c>src/Providers/README.md</c> § Namespaces.
+///         ⚠ <b>The namespace is deleted by exactly one thing — <c>ResourceGroupReclaimer</c>, on the
+///         group's own delete — and by nothing on the reconcile path.</b> <see cref="DeleteAsync" />
+///         refuses unless <see cref="NamespaceReclaim" /> proves the namespace holds nothing but what
+///         Kubernetes puts in every namespace, and a pass over one resource remains the wrong place
+///         for a group-scoped act in any case: it knows one member's state and nothing about the
+///         others. <c>src/Providers/README.md</c> § Namespaces.
 ///     </para>
 /// </remarks>
 /// <param name="clock">The clock the re-check interval is measured on.</param>
@@ -173,7 +173,7 @@ public sealed class NamespaceEnsurer(IClock clock) {
     ///     with ADR-013's seven labels, unless a recent pass already did.
     /// </summary>
     /// <param name="id">The resource whose pass needs the namespace. Supplies tenant, subscription and group.</param>
-    /// <param name="ns">The namespace name — <see cref="ReconcileDriver.NamespaceFor" />'s output.</param>
+    /// <param name="ns">The namespace name — <see cref="ReconcileDriver.NamespaceFor(ResourceId)" />'s output.</param>
     /// <param name="connection">The cluster the objects are about to land in.</param>
     /// <param name="cancellationToken">The pass's budget.</param>
     /// <returns>
@@ -273,15 +273,13 @@ public sealed class NamespaceEnsurer(IClock clock) {
     /// </returns>
     /// <remarks>
     ///     <para>
-    ///         ⚠ <b>NOTHING IN THIS TREE CALLS THIS, AND THAT IS THE STATE OF THE FEATURE RATHER THAN
-    ///         AN OVERSIGHT.</b> The caller would be a resource-group delete, and
-    ///         <c>IResourceGroupGrain</c> has no method that deletes the group itself — it has
-    ///         <c>BeginDeleteAsync</c>/<c>CompleteDeleteAsync</c> for its <i>members</i>. Worse, the
-    ///         membership those methods maintain is not recorded by anything in production
-    ///         (docs/plan/08 § Soft delete), so <c>ListAsync</c> answers empty for every group in the
-    ///         platform and half of <see cref="NamespaceReclaim.Decide" />'s evidence is currently
-    ///         vacuous. The other half — the namespace's own contents — is what makes this safe to
-    ///         have in the tree meanwhile: it refuses on any object at all.
+    ///         ⚠ <b>THE ONE CALLER IS <c>ResourceGroupReclaimer</c>, AND IT REACHES HERE ONLY AFTER
+    ///         THE GROUP HAS BEEN SEALED.</b> <c>IResourceGroupGrain.BeginGroupDeleteAsync</c> refuses
+    ///         while the group holds members and stops accepting new ones, which is what makes
+    ///         <see cref="NamespaceReclaim.Decide" />'s member evidence mean something and what closes
+    ///         the create-during-delete race this type's own remarks say it cannot close from here.
+    ///         Both halves of the evidence are now real: the write path records membership, and
+    ///         <c>ConnectionNamespaceInventory</c> reads the namespace's actual contents.
     ///     </para>
     ///     <para>
     ///         ⚠ <b>The verdict is re-checked against this cluster and this namespace, and that is not
@@ -294,12 +292,11 @@ public sealed class NamespaceEnsurer(IClock clock) {
     ///         ⚠ <b>The memo entry goes with the namespace, and this is the half a delete gets wrong
     ///         silently.</b> A deleted namespace whose memo still says "ensured 4 minutes ago" makes
     ///         the next apply into it answer <c>404</c>, for the rest of <see cref="RecheckAfter" />.
-    ///         Removing the entry closes that <i>on this silo</i> — and only on this silo, which is a
-    ///         real limitation and is recorded in <c>src/Providers/README.md</c> § Namespaces: every
-    ///         other silo keeps its own memo and will not re-apply the namespace for up to an hour, so
-    ///         a group whose namespace is deleted and then immediately reused fails its reconciles
-    ///         elsewhere. Closing that needs an invalidation the memo has no channel for, and it is
-    ///         one of the reasons the delete has no caller.
+    ///         Removing the entry closes that <i>on this silo</i>. Every other silo keeps its own
+    ///         memo, and what closes it there is <see cref="Forget(Guid, string)" />: a silo that
+    ///         still believes in the namespace gets a <c>404</c> naming it on its next apply, and
+    ///         <c>ReconcileDriver</c> reads that as the invalidation. The exposure elsewhere is one
+    ///         pass rather than the hour it used to be.
     ///     </para>
     /// </remarks>
     public async Task<Result> DeleteAsync(
@@ -393,6 +390,40 @@ public sealed class NamespaceEnsurer(IClock clock) {
     ///     </para>
     /// </remarks>
     public void Forget() => ensured.Clear();
+
+    /// <summary>
+    ///     Forgets one <c>(cluster, namespace)</c> pair, so the next pass that needs it applies again.
+    /// </summary>
+    /// <param name="clusterId">The cluster.</param>
+    /// <param name="ns">The namespace.</param>
+    /// <returns>Whether anything was being remembered.</returns>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>THIS IS THE INVALIDATION CHANNEL THE MEMO DID NOT HAVE, AND ITS TRIGGER IS THE
+    ///         SYMPTOM RATHER THAN A BROADCAST.</b> The memo is per silo, so a namespace deleted by
+    ///         an operator or by this platform on <i>another</i> silo stays believed-in here for the
+    ///         rest of <see cref="RecheckAfter" /> — and what that costs is precisely a
+    ///         <c>404</c> naming the namespace on every apply routed to this silo, for an hour. A
+    ///         cross-silo broadcast would close it from the writing end and needs a channel that does
+    ///         not exist; the reading end needs nothing, because the silo holding the wrong belief is
+    ///         exactly the silo the API server is telling. <c>ReconcileDriver</c> calls this when a
+    ///         pass comes back <see cref="ErrorCode.ResourceNotFound" />, so the exposure is one pass
+    ///         rather than one hour.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>It is deliberately allowed to be wrong in the harmless direction.</b> A
+    ///         <see cref="ErrorCode.ResourceNotFound" /> from a pass may be about the reconciler's own
+    ///         object rather than about the namespace, and this cannot tell the two apart without a
+    ///         round trip that would defeat the memo. Forgetting when the namespace was fine costs one
+    ///         idempotent apply on the next pass; not forgetting when it was gone costs an hour of
+    ///         failed reconciles. The asymmetry decides it.
+    ///     </para>
+    /// </remarks>
+    public bool Forget(Guid clusterId, string ns) {
+        ArgumentException.ThrowIfNullOrEmpty(ns);
+
+        return ensured.TryRemove((clusterId, ns), out _);
+    }
 
     /// <summary>
     ///     The address the namespace's seven labels are derived from: the resource group itself, as

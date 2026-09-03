@@ -754,6 +754,123 @@ public abstract class ClusterConformanceTests<TSource>(ClusterConformanceFixture
         );
     }
 
+    // ── 3b. What a real namespace actually holds ────────────────────────────────────────────────
+
+    [Fact]
+    public async Task ARealNamespaceHoldsWhatKubernetesPutsThereAndTheReclaimSeesIt() {
+        // ⚠ THIS IS THE ONLY PLACE THE NAMESPACE INVENTORY MEETS A REAL API SERVER, AND IT IS WHERE
+        // THE RULE IT FEEDS WAS FOUND TO BE UNSATISFIABLE. NamespaceReclaim.Decide said "the
+        // namespace holds nothing at all", and every test that had ever weighed it supplied an empty
+        // array — because INamespaceInventory had no implementation. A conformant cluster makes that
+        // rule impossible: the service-account controller creates ServiceAccount/default in every
+        // namespace and recreates it when it is deleted, and the root-CA publisher does the same with
+        // ConfigMap/kube-root-ca.crt. Deletable would have been false forever in production while
+        // being true in every unit test. NamespaceReclaim.IsAmbient is the answer and this is the
+        // measurement behind it.
+        var harness = Fixture.Require(
+            "that a namespace listing is a real API discovery plus a list per served kind. A "
+            + "dictionary cannot fail discovery, cannot serve a CRD, and — most of all — does not "
+            + "put anything in a namespace on its own."
+        );
+
+        var token = TestContext.Current.CancellationToken;
+        var ns = ClusterConformanceHarness<TSource>.Namespace;
+
+        // ── The finding, read AROUND our own code ───────────────────────────────────────────────
+        //
+        // ⚠ The raw client, deliberately. What is being measured is what KUBERNETES puts in a
+        // namespace, and reading it through the seam under test would let a bug in the seam hide the
+        // very objects the seam exists to find.
+        using var accounts = await harness.Raw.CoreV1
+            .ListNamespacedServiceAccountWithHttpMessagesAsync(ns, cancellationToken: token);
+
+        using var maps = await harness.Raw.CoreV1
+            .ListNamespacedConfigMapWithHttpMessagesAsync(ns, cancellationToken: token);
+
+        var ambient = ImmutableArray.Create(
+            Occupant("ServiceAccount", accounts.Body.Items.Single(x => x.Metadata.Name == "default")),
+            Occupant("ConfigMap", maps.Body.Items.Single(x => x.Metadata.Name == "kube-root-ca.crt"))
+        );
+
+        // ⚠ AND BOTH ARE UNLABELLED, which is what makes them indistinguishable from a tenant's own
+        // object by every rule except their names — the reason IsAmbient matches on kind AND name
+        // rather than on a kind.
+        ambient[0].IsManaged.ShouldBeFalse();
+        ambient[1].IsManaged.ShouldBeFalse();
+
+        NamespaceReclaim.Decide(ClusterConformanceHarness<TSource>.ClusterId, ns, [], ambient)
+            .Deletable
+            .ShouldBeTrue(
+                "a namespace holding nothing but Kubernetes' own objects is the state a finished "
+                + "resource group leaves behind, and under the original 'nothing at all' rule it was "
+                + "never deletable — which no test could show while nothing could list."
+            );
+
+        // ── And the enumeration is complete or it refuses, never partial ────────────────────────
+        //
+        // ⚠ BOTH ARMS ARE ASSERTED, because the disjunction IS the contract. A namespace listing that
+        // came back short would not look wrong — it would look like an emptier namespace, and an
+        // empty namespace is the one answer that authorises a recursive delete.
+        //
+        // ⚠ THE REFUSING ARM IS THE ONE THIS HARNESS USUALLY TAKES, AND IT IS A REAL OPERATIONAL
+        // FINDING RATHER THAN A TEST ARTEFACT. k3s registers `metrics.k8s.io/v1beta1` as an
+        // aggregated APIService whose backend is not up in a short-lived container, so discovery of
+        // that group answers 503 and the whole enumeration refuses. Kubernetes' own namespace
+        // controller behaves the same way — an incomplete discovery leaves a namespace stuck in
+        // Terminating with NamespaceDeletionDiscoveryFailure — so refusing BEFORE issuing the delete
+        // is strictly better than issuing one that hangs. What the platform owes the operator is a
+        // message that names the group, and that is what is asserted.
+        var listed = await harness.Connection.ListNamespaceAsync(ns, token);
+
+        if (listed.TryGetError(out var refusal)) {
+            // A refusal that does not say which namespace could not be read, and which group would
+            // not answer, tells an operator a namespace could not be enumerated and nothing about
+            // what to fix. Both are asserted; the group is recognised by its `group/version` slash.
+            refusal.Message.ShouldContain(ns);
+            refusal.Message.ShouldContain("/");
+
+            return;
+        }
+
+        var occupants = listed.GetValueOrThrow();
+
+        // ⚠ NAMESPACE-WIDE ON PURPOSE, AND THE ASSERTIONS ARE WRITTEN FOR THAT. Every class in this
+        // suite shares one namespace, so anything keyed on a count or on "only these" would be an
+        // assertion about which siblings had run.
+        occupants.ShouldContain(x => x.Kind.Kind == "ServiceAccount" && x.Name == "default");
+        occupants.ShouldContain(x => x.Kind.Kind == "ConfigMap" && x.Name == "kube-root-ca.crt");
+
+        var verdict = NamespaceReclaim.Decide(
+            ClusterConformanceHarness<TSource>.ClusterId,
+            ns,
+            [],
+            [.. occupants.Select(x => Occupant(x))]
+        );
+
+        verdict.Deletable.ShouldBeFalse(
+            "the namespace this suite runs in holds its own resources, so a reclaim must refuse: "
+            + verdict.Explain()
+        );
+    }
+
+    /// <summary>Reads a raw object as the reclaim decision sees it.</summary>
+    static NamespaceOccupant Occupant(string kind, IMetadata<V1ObjectMeta> found) =>
+        new() {
+            Kind = kind,
+            Name = found.Metadata.Name,
+            Labels = found.Metadata.Labels is { } labels
+                ? labels.ToImmutableDictionary(StringComparer.Ordinal)
+                : ImmutableDictionary<string, string>.Empty
+        };
+
+    /// <summary>Reads a listed object as the reclaim decision sees it.</summary>
+    static NamespaceOccupant Occupant(KubeObjectSummary found) =>
+        new() {
+            Kind = found.Kind.Kind,
+            Name = found.Name,
+            Labels = found.Labels.ToImmutableDictionary(StringComparer.Ordinal)
+        };
+
     // ── 4. Desired state survives a real serialization round trip ──────────────────────────────
 
     [Fact]

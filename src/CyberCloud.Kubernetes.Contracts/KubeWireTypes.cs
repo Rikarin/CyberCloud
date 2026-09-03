@@ -117,6 +117,50 @@ public sealed record KubeObject {
 }
 
 /// <summary>
+///     One object found by a listing, reduced to what a caller can decide with: what it is, what it
+///     is called, and what it is labelled.
+/// </summary>
+/// <remarks>
+///     <para>
+///         ⚠ <b>No body, and that is the point rather than an economy.</b> The one caller — a
+///         namespace reclaim — asks <i>is there anything here</i> and <i>is it ours</i>. A body would
+///         make this a copy of the namespace over a grain call, and every field in it would be a
+///         field somebody could be tempted to join the control plane against, which is exactly the
+///         join that is blind to the unlabelled objects the reclaim exists to see.
+///     </para>
+///     <para>
+///         ⚠ <b><see cref="Labels" /> is absent-as-empty, and here that is safe in the only direction
+///         it matters.</b> An object whose <c>metadata.labels</c> is missing reads as carrying no
+///         <c>managed-by</c>, so it counts as somebody else's — the conservative answer. The
+///         opposite mapping (absent as "no labels means ours") is the one that would authorise a
+///         delete, and it is not expressible here.
+///     </para>
+/// </remarks>
+[GenerateSerializer]
+[Alias("CyberCloud.Kubernetes.KubeObjectSummary")]
+public sealed record KubeObjectSummary {
+    /// <summary>The kind it was listed as.</summary>
+    [Id(0)]
+    public GroupVersionKind Kind { get; init; } = new();
+
+    /// <summary>The namespace it was found in.</summary>
+    [Id(1)]
+    public string Namespace { get; init; } = string.Empty;
+
+    /// <summary>The object's name.</summary>
+    [Id(2)]
+    public string Name { get; init; } = string.Empty;
+
+    /// <summary>Its labels, exactly as the API server holds them. Empty when it has none.</summary>
+    [Id(3)]
+    public IReadOnlyDictionary<string, string> Labels { get; init; } =
+        new Dictionary<string, string>(StringComparer.Ordinal);
+
+    /// <inheritdoc />
+    public override string ToString() => $"{Kind.Kind}/{Name}";
+}
+
+/// <summary>
 ///     One field another manager owns that we tried to set — the raw material of a drift event.
 /// </summary>
 [GenerateSerializer]

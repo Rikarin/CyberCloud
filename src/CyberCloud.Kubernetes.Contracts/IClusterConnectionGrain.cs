@@ -89,6 +89,29 @@ public interface IClusterConnectionGrain : IGrainWithStringKey {
     Task<Result<KubeObject>> GetAsync(ObjectRef target);
 
     /// <summary>
+    ///     Everything one namespace holds, of every kind the cluster serves and with no label
+    ///     selector.
+    /// </summary>
+    /// <param name="ns">The namespace to enumerate.</param>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>It is a discovery plus a list per kind, and it is the most expensive call on this
+    ///         interface by an order of magnitude.</b> There is no single Kubernetes call that lists
+    ///         a namespace's contents: the API server has to be asked which namespaced resources it
+    ///         serves — the built-ins and every CRD the cluster happens to have — and then listed
+    ///         once per kind. It is not on the reconcile path and must never be put there; its caller
+    ///         is a resource-group delete, which happens once per group per lifetime.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>No selector, deliberately.</b> <see cref="WatchAsync" /> always ANDs
+    ///         <see cref="KubeLabels.ManagedBySelector" /> because an informer feeds the drift scan.
+    ///         This one feeds a delete, which has to see the objects that selector hides.
+    ///     </para>
+    /// </remarks>
+    [Alias("ListNamespace")]
+    Task<Result<IReadOnlyList<KubeObjectSummary>>> ListNamespaceAsync(string ns);
+
+    /// <summary>
     ///     Establishes (or joins) the shared informer for a kind, filtered by
     ///     <see cref="KubeLabels.ManagedBySelector" />.
     /// </summary>

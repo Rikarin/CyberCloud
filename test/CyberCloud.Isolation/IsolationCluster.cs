@@ -10,6 +10,7 @@ using CyberCloud.Providers.Storage.Contracts;
 using CyberCloud.ResourceManager;
 using CyberCloud.ResourceManager.Actions;
 using CyberCloud.ResourceManager.Conformance;
+using CyberCloud.ResourceManager.Reconcile;
 using CyberCloud.ResourceManager.Registry;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -528,6 +529,18 @@ public sealed class IsolationCluster : IAsyncLifetime {
             new ReBacScopeAuthorizer(cluster.GrainFactory, NullLogger<ReBacScopeAuthorizer>.Instance),
             new ReBacScopeRelationWriter(cluster.GrainFactory, NullLogger<ReBacScopeRelationWriter>.Instance),
             cluster.GrainFactory,
+            // ⚠ Wired with NO cluster connections, which is what this suite wants: a group delete
+            // that reached a namespace would be reading a k3s that is not here. The reclaim refuses
+            // instead — ConnectionNamespaceInventory answers ResourceNotFound for a cluster with no
+            // connection — and what this suite attacks is everything ABOVE that: whether the tenant
+            // check and the permission check hold on a delete the way they do on a create.
+            new ResourceGroupReclaimer(
+                cluster.GrainFactory,
+                new NoClusterConnectionFactory(),
+                new ConnectionNamespaceInventory(new NoClusterConnectionFactory()),
+                new NamespaceEnsurer(new ConformanceClock()),
+                NullLogger<ResourceGroupReclaimer>.Instance
+            ),
             NullLogger<ScopeManagerService>.Instance
         );
 

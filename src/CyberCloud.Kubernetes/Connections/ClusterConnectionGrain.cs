@@ -359,6 +359,49 @@ public sealed class ClusterConnectionGrain : Grain, IClusterConnectionGrain {
     }
 
     /// <inheritdoc />
+    public async Task<Result<IReadOnlyList<KubeObjectSummary>>> ListNamespaceAsync(string ns) {
+        // ⚠ THE TENANCY CHECK RUNS FIRST, BEFORE THE ARGUMENT IS EVEN LOOKED AT. Every method here
+        // does, and here it is load-bearing twice over: an argument check that ran first would tell
+        // a caller who may not reach this cluster whether its argument was well-formed, and — since
+        // this is the only method on the interface whose sole parameter is a bare string — a throw
+        // on an empty one would escape the grain call as a serialization failure rather than a
+        // refusal. ClusterConnectionTenancyTests probes every method with default arguments.
+        var allowed = EnsureCallerMayReach(nameof(ListNamespaceAsync));
+        if (allowed.IsFailure) {
+            return Refused<IReadOnlyList<KubeObjectSummary>>(allowed);
+        }
+
+        if (string.IsNullOrEmpty(ns)) {
+            return Result<IReadOnlyList<KubeObjectSummary>>.Failure(
+                ErrorCode.InvalidRequestBody,
+                $"A namespace enumeration on cluster {clusterId:D} was asked for with no namespace. "
+                + "The empty string is not 'every namespace' here — it is a caller that has not "
+                + "decided which one it means."
+            );
+        }
+
+        var client = await ClientAsync(CancellationToken.None);
+        if (client.TryGetError(out var connectError)) {
+            return Result<IReadOnlyList<KubeObjectSummary>>.Failure(connectError);
+        }
+
+        // ⚠ CancellationToken.None, as every other method here. A grain call has no token to pass;
+        // what bounds this is the caller's own budget and Orleans' response timeout. That matters
+        // more here than elsewhere, because this is the one call on this grain whose cost scales
+        // with the cluster's kind count rather than being one round trip.
+        var outcome = await NamespaceContents.ListAsync(
+            client.GetValueOrThrow(),
+            clusterId,
+            ns,
+            CancellationToken.None
+        );
+
+        await RecordReachabilityAsync(Answered(outcome.Error));
+
+        return outcome;
+    }
+
+    /// <inheritdoc />
     public async Task<Result<InformerLease>> WatchAsync(GroupVersionKind kind, string labelSelector) {
         ArgumentNullException.ThrowIfNull(kind);
 

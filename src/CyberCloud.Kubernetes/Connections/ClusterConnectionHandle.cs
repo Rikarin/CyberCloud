@@ -52,4 +52,11 @@ public sealed class ClusterConnectionHandle(IGrainFactory grains, Guid clusterId
         CancellationToken cancellationToken = default
     ) =>
         Grain.DeleteAsync(command, policy);
+
+    /// <inheritdoc />
+    public Task<Result<IReadOnlyList<KubeObjectSummary>>> ListNamespaceAsync(
+        string ns,
+        CancellationToken cancellationToken = default
+    ) =>
+        Grain.ListNamespaceAsync(ns);
 }

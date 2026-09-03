@@ -18,19 +18,24 @@ namespace CyberCloud.ResourceManager.Contracts;
 ///         listing that is empty precisely when the delete is most dangerous.
 ///     </para>
 ///     <para>
-///         ⚠ <b>The shipped implementation refuses, for the same reason the drift inventory's does.</b>
-///         An empty listing says <i>this namespace holds nothing</i>, which is a licence to run a
-///         recursive delete over a tenant's live data. A failure says <i>do not conclude anything</i>.
-///         <c>UnavailableNamespaceInventory</c> is the one that ships.
+///         ⚠ <b>Every implementation refuses rather than reporting an empty namespace, and that rule
+///         did not relax when a real one arrived.</b> An empty listing says <i>this namespace holds
+///         nothing</i>, which is a licence to run a recursive delete over a tenant's live data. A
+///         failure says <i>do not conclude anything</i>. <c>ConnectionNamespaceInventory</c> is the
+///         one that ships and it refuses on a cluster it cannot reach, on a kind it could not list,
+///         and on a listing it could not finish. <c>UnavailableNamespaceInventory</c> stays in the
+///         tree for a host that wants the seam explicitly unavailable.
 ///     </para>
 ///     <para>
-///         ⚠ <b>What a real implementation costs, stated so that nobody starts it by accident.</b>
-///         There is no single Kubernetes call that lists a namespace's contents. It is a discovery of
-///         every served <c>APIResource</c> that is namespaced — the built-ins and every CRD the
-///         cluster happens to have — followed by a list per kind, and it has to stay correct as CRDs
-///         come and go. The informer bridge of docs/plan/09 § Observing does not deliver it:
+///         ⚠ <b>What it costs, stated so that nobody puts it on a hot path.</b> There is no single
+///         Kubernetes call that lists a namespace's contents. It is a discovery of every served
+///         <c>APIResource</c> that is namespaced — the built-ins and every CRD the cluster happens to
+///         have — followed by a list per kind, so on a busy cluster it is a hundred round trips. The
+///         informer bridge of docs/plan/09 § Observing does not deliver it:
 ///         <c>IClusterConnectionGrain.WatchAsync</c> watches one named <c>GroupVersionKind</c> under a
-///         label selector, which is the drift inventory's shape and not this one's.
+///         label selector, which is the drift inventory's shape and not this one's. The work lives
+///         behind <c>IKubeClusterConnection.ListNamespaceAsync</c>, because discovery is a Kubernetes
+///         concern and this assembly may not see one.
 ///     </para>
 /// </remarks>
 public interface INamespaceInventory {
@@ -91,14 +96,15 @@ public readonly record struct NamespaceOccupant {
     ///         to keep.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The change moves a namespace of leftover volumes out of
-    ///         <see cref="NamespaceReclaim.OperatorReclaimable" /> and into neither verdict, and that is owed rather
-    ///         than intended.</b> That flag requires <i>every</i> occupant to be unmanaged. A group
-    ///         whose only remaining objects are its own now-labelled claims satisfies neither it nor
-    ///         <see cref="NamespaceReclaim.Deletable" />, so it reports as a plain refusal. Nothing regresses today —
-    ///         <see cref="NamespaceReclaim.Decide" /> has no caller and <see cref="INamespaceInventory" />'s only
-    ///         implementation refuses — and the predicate belongs to the purge that removes the disks
-    ///         it kept rather than to the labelling. <c>src/Providers/README.md § Namespaces</c>.
+    ///         ⚠ <b>That change moved a namespace of leftover volumes out of
+    ///         <see cref="NamespaceReclaim.OperatorReclaimable" /> and into neither verdict, and it
+    ///         has been repaired.</b> The flag used to require <i>every</i> occupant to be unmanaged,
+    ///         so a group whose only remaining objects were its own now-labelled claims satisfied
+    ///         neither it nor <see cref="NamespaceReclaim.Deletable" /> and reported as a plain
+    ///         refusal. It now asks only what its own remarks always said it asked — the control
+    ///         plane has no members left and the cluster still holds something — and who wrote the
+    ///         leftovers informs the refusal text instead of gating the verdict.
+    ///         <c>src/Providers/README.md § Namespaces</c>.
     ///     </para>
     /// </remarks>
     public bool IsManaged =>
@@ -135,6 +141,16 @@ public readonly record struct NamespaceOccupant {
 ///         condition an operator can check by eye.
 ///     </para>
 ///     <para>
+///         ⚠ <b>"Nothing at all" turned out to be literally unsatisfiable, and the rule is now
+///         "nothing but what Kubernetes itself puts in every namespace" — <see cref="IsAmbient" /> is
+///         the exception list and it is three entries long.</b> The gap was invisible while
+///         <see cref="INamespaceInventory" /> had no implementation: with nothing producing
+///         occupants, the only lists the rule was ever weighed against were the empty ones tests
+///         supplied, and against a real API server <see cref="Deletable" /> would have been
+///         <see langword="false" /> forever. None of the three failures above reopens — every entry
+///         on that list is an object no restore reads and no tenant can own.
+///     </para>
+///     <para>
 ///         ⚠ <b>What this rule does <i>not</i> close is the race, and it cannot from here.</b> A
 ///         resource created between the listing and the delete has its objects destroyed. Closing that
 ///         needs the group to stop accepting members before the evidence is read — a group-delete
@@ -151,6 +167,59 @@ public readonly struct NamespaceReclaim : IEquatable<NamespaceReclaim> {
     /// </remarks>
     public const int NamedOccupants = 5;
 
+    /// <summary>
+    ///     Whether an occupant is one Kubernetes puts in <b>every</b> namespace by itself, and
+    ///     therefore not evidence that anything is using the namespace.
+    /// </summary>
+    /// <param name="occupant">The object found in the namespace.</param>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>THIS PREDICATE EXISTS BECAUSE "THE NAMESPACE HOLDS NOTHING AT ALL" IS
+    ///         UNREACHABLE AGAINST A REAL API SERVER, AND THAT WAS NOT KNOWN UNTIL SOMETHING COULD
+    ///         LIST.</b> The rule was written against an inventory that refused, so nothing ever
+    ///         produced an occupant list to test it with. Two controllers in every conformant
+    ///         cluster make the literal rule impossible to satisfy: the service-account controller
+    ///         creates <c>ServiceAccount/default</c> in every namespace and <b>recreates it if it is
+    ///         deleted</b>, and the root-CA publisher creates
+    ///         <c>ConfigMap/kube-root-ca.crt</c> in every namespace and does the same. A namespace
+    ///         that has finished being used therefore holds exactly these two, forever, and
+    ///         <see cref="Deletable" /> would never once be <see langword="true" /> in production
+    ///         while being <see langword="true" /> in every unit test that supplied an empty array.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The allowance is by kind AND name, never by kind alone, for everything the
+    ///         control plane names.</b> <c>default</c> and <c>kube-root-ca.crt</c> are names
+    ///         Kubernetes reserves, so no tenant object can wear one; a kind-wide exemption for
+    ///         <c>ServiceAccount</c> or <c>ConfigMap</c> would hide a tenant's own, which is exactly
+    ///         the class of object this whole file exists to refuse over.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b><c>Event</c> is the one kind-wide entry, and it is the one kind that carries no
+    ///         state.</b> An event is a timestamped sentence about something that already happened,
+    ///         the API server expires it on its own within the hour, and nothing restores from one.
+    ///         Without this entry a group could only be reclaimed during the gaps between its own
+    ///         teardown events expiring, which is a delete that succeeds or fails depending on how
+    ///         long the operator waited. It covers both spellings — core <c>v1</c> and
+    ///         <c>events.k8s.io/v1</c> are two views of one store and
+    ///         <see cref="NamespaceOccupant" /> carries only the kind, which is <c>Event</c> in both.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>What is deliberately NOT here: the <c>default-token-*</c> <c>Secret</c>.</b>
+    ///         Kubernetes stopped auto-creating it in 1.24, so on a supported cluster there is none
+    ///         to exempt — and the only rule that would match one is a name prefix, which a tenant
+    ///         can occupy. A <c>Secret</c> is the object in this list it would hurt most to delete by
+    ///         accident, so an old cluster that still has one reports as an occupant and a person
+    ///         decides. <c>src/Providers/README.md § Namespaces</c>.
+    ///     </para>
+    /// </remarks>
+    public static bool IsAmbient(NamespaceOccupant occupant) =>
+        occupant.Kind switch {
+            "Event" => true,
+            "ServiceAccount" => string.Equals(occupant.Name, "default", StringComparison.Ordinal),
+            "ConfigMap" => string.Equals(occupant.Name, "kube-root-ca.crt", StringComparison.Ordinal),
+            _ => false
+        };
+
     NamespaceReclaim(
         bool deletable,
         bool operatorReclaimable,
@@ -165,7 +234,17 @@ public readonly struct NamespaceReclaim : IEquatable<NamespaceReclaim> {
         Refusals = refusals;
     }
 
-    /// <summary>The namespace holds nothing and the group holds no members. Only then.</summary>
+    /// <summary>
+    ///     The namespace holds nothing but what Kubernetes puts in every namespace, and the group
+    ///     holds no members. Only then.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>"Nothing but" and not "nothing", and the difference is <see cref="IsAmbient" />.</b>
+    ///     The rule as first written was "nothing at all", which no conformant cluster can satisfy —
+    ///     see that predicate for the two controllers that make it so. Everything else about the rule
+    ///     is unchanged: one tenant object, of any kind, labelled or not, and this is
+    ///     <see langword="false" />.
+    /// </remarks>
     public bool Deletable { get; }
 
     /// <summary>
@@ -174,12 +253,19 @@ public readonly struct NamespaceReclaim : IEquatable<NamespaceReclaim> {
     /// </summary>
     /// <remarks>
     ///     ⚠ <b>This is the honest answer for every group that ever ran a stateful type, and it is not
-    ///     a rare case.</b> The group holds no members and every remaining object is unlabelled — which
-    ///     is what a purged <c>StatefulSet</c>-backed resource leaves behind, because docs/plan/08
-    ///     § Soft delete records that a purge still leaves the volumes and <c>IResourceReconciler</c>
-    ///     has no member that asks for them to go. So the namespace is not empty, never becomes empty,
-    ///     and <see cref="Deletable" /> is never <see langword="true" /> for it. Reporting that to an
-    ///     operator is the feature; deleting it is a data-loss bug wearing a cleanup's clothes.
+    ///     a rare case.</b> The group holds no members and the namespace still holds something —
+    ///     which is what a purged <c>StatefulSet</c>-backed resource leaves behind, because
+    ///     docs/plan/08 § Soft delete records that a purge still leaves the volumes. So the namespace
+    ///     is not empty, never becomes empty, and <see cref="Deletable" /> is never
+    ///     <see langword="true" /> for it. Reporting that to an operator is the feature; deleting it
+    ///     is a data-loss bug wearing a cleanup's clothes.
+    ///     <para>
+    ///         ⚠ <b>It does not ask who wrote the leftovers, and it used to.</b> Requiring every
+    ///         occupant to be unmanaged was equivalent while nothing this platform wrote outlived its
+    ///         resource; once a <c>volumeClaimTemplate</c>'s claims started carrying
+    ///         <c>managed-by</c>, a group whose only remains were its own disks satisfied neither
+    ///         verdict and came back as an unclassified refusal. See <see cref="Decide" />.
+    ///     </para>
     /// </remarks>
     public bool OperatorReclaimable { get; }
 
@@ -224,6 +310,15 @@ public readonly struct NamespaceReclaim : IEquatable<NamespaceReclaim> {
 
         var refusals = ImmutableArray.CreateBuilder<string>();
 
+        // ⚠ THE OCCUPANTS THAT COUNT, WHICH IS NOT ALL OF THEM. See IsAmbient: two objects are put
+        // in every namespace by Kubernetes itself and recreated when deleted, so weighing them would
+        // make Deletable unreachable on every real cluster while leaving it reachable in every test
+        // that passes an empty array. `occupants` may be `default` — a caller's unassigned field —
+        // and `IsDefaultOrEmpty` is what keeps that from throwing here rather than at the delete.
+        var significant = occupants.IsDefaultOrEmpty
+            ? []
+            : occupants.Where(x => !IsAmbient(x)).ToImmutableArray();
+
         if (members.Count > 0) {
             var deleting = members.Count(x => x.State == ProvisioningState.Deleting);
 
@@ -237,23 +332,35 @@ public readonly struct NamespaceReclaim : IEquatable<NamespaceReclaim> {
             );
         }
 
-        if (occupants.Length > 0) {
-            var managed = occupants.Count(x => x.IsManaged);
-            var foreign = occupants.Length - managed;
+        if (significant.Length > 0) {
+            var managed = significant.Count(x => x.IsManaged);
+            var foreign = significant.Length - managed;
 
             refusals.Add(
-                $"The namespace '{ns}' holds {occupants.Length} object(s) — {managed} written by this "
-                + $"platform and {foreign} carrying no {KubeLabels.ManagedBy}. Deleting a namespace is "
-                + "a recursive delete of all of them, and an unlabelled object is either somebody "
-                + "else's or a volume claim a StatefulSet made, which docs/plan/08 § Soft delete keeps "
-                + "on purpose so that a restore has something to restore from: "
-                + Sample(occupants.Select(x => $"{x.Kind}/{x.Name}"))
+                $"The namespace '{ns}' holds {significant.Length} object(s) — {managed} written by "
+                + $"this platform and {foreign} carrying no {KubeLabels.ManagedBy}. Deleting a "
+                + "namespace is a recursive delete of all of them, and an unlabelled object is either "
+                + "somebody else's or a volume claim a StatefulSet made, which docs/plan/08 § Soft "
+                + "delete keeps on purpose so that a restore has something to restore from: "
+                + Sample(significant.Select(x => $"{x.Kind}/{x.Name}"))
             );
         }
 
         return new(
             refusals.Count == 0,
-            members.Count == 0 && occupants.Length > 0 && occupants.All(x => !x.IsManaged),
+
+            // ⚠ THE PREDICATE THAT USED TO REQUIRE EVERY OCCUPANT TO BE UNMANAGED, AND WHY THAT WAS
+            // WRONG RATHER THAN MERELY NARROW. It was written when nothing this platform wrote could
+            // outlive its resource, so "the leftovers are all somebody else's" and "the platform is
+            // finished here" were the same sentence. `WithTemplateLabels` ended that: a purged
+            // StatefulSet-backed resource now leaves behind its own LABELLED claims, so a group whose
+            // only remains are its own volumes satisfied neither this nor Deletable and reported as a
+            // plain refusal — the one case an operator most needs told about, silently reclassified
+            // as noise. What this flag means is what its own remarks always said: the control plane
+            // has no members left, and the cluster still holds something, so a person decides. Who
+            // wrote the leftovers is in the refusal text, where it informs the decision instead of
+            // gating it.
+            members.Count == 0 && significant.Length > 0,
             clusterId,
             ns,
             refusals.ToImmutable()

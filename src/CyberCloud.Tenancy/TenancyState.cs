@@ -82,6 +82,20 @@ public sealed class ResourceGroupState {
     /// <summary>When each member entered <c>Creating</c>, for the orphan sweep.</summary>
     [Id(2)]
     public Dictionary<Guid, DateTimeOffset> CreatingSince { get; set; } = [];
+
+    /// <summary>
+    ///     Every cluster this group is known to have placed objects on — one namespace apiece, and
+    ///     the only record of which ones the group's own delete has to reclaim.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>A <see cref="HashSet{T}" /> because the writer is idempotent and calls repeatedly.</b>
+    ///     The reconcile driver records the cluster whenever <c>NamespaceEnsurer</c>'s memo misses,
+    ///     which is once an hour per silo per pair, and every silo records the same one. See
+    ///     <c>IResourceGroupGrain.RecordClusterAsync</c> for why this cannot be derived from the
+    ///     members.
+    /// </remarks>
+    [Id(3)]
+    public HashSet<Guid> Clusters { get; set; } = [];
 }
 
 /// <summary>

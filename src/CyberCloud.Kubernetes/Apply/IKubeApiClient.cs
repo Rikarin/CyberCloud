@@ -92,6 +92,44 @@ public interface IKubeApiClient : IDisposable {
         CancellationToken cancellationToken = default
     );
 
+    /// <summary>
+    ///     Every namespaced kind this cluster serves, one version per group — API discovery.
+    /// </summary>
+    /// <param name="cancellationToken">The caller's token.</param>
+    /// <returns>
+    ///     The kinds, or the failure that stopped discovery. ⚠ <b>Never a partial answer.</b> The one
+    ///     caller enumerates a namespace in order to decide whether it is empty, and a kind missing
+    ///     from this list is a kind whose objects are invisible to that decision.
+    /// </returns>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>ONE VERSION PER GROUP, AND IT IS THE PREFERRED ONE.</b> A group that serves
+    ///         <c>v1</c> and <c>v1beta1</c> stores each object once and serves it under both, so
+    ///         listing every advertised version would count every object as many times as it has
+    ///         versions. That inflates a refusal harmlessly and would corrupt any count built on top
+    ///         of it, so the ambiguity is removed here rather than left to each caller.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Subresources and kinds that cannot be listed are excluded, and both exclusions
+    ///         are on evidence the API server gives rather than on a name.</b> A subresource is
+    ///         discovered as <c>pods/log</c> — a name with a slash — and addressing it as a
+    ///         collection is a <c>404</c>. A resource whose <c>verbs</c> omit <c>list</c>
+    ///         (<c>bindings</c>, the <c>*accessreviews</c>) is create-only and answers <c>405</c>.
+    ///         Neither is a thing that can be <i>in</i> a namespace, so neither is a thing whose
+    ///         absence could be mistaken for emptiness.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Two kinds ARE listed twice on every cluster and that is not this method's to
+    ///         fix</b>: <c>v1 Event</c> and <c>events.k8s.io/v1 Event</c> are different groups over
+    ///         the same storage. They are different <see cref="GroupVersionKind" />s by every rule
+    ///         available here, and the caller that cares is the one that knows an Event is not
+    ///         evidence of occupancy.
+    ///     </para>
+    /// </remarks>
+    Task<Result<IReadOnlyList<GroupVersionKind>>> DiscoverNamespacedKindsAsync(
+        CancellationToken cancellationToken = default
+    );
+
     /// <summary>Lists a kind, for an informer's initial or resumed list.</summary>
     /// <param name="kind">The kind.</param>
     /// <param name="ns">The namespace, or empty for all namespaces / cluster scope.</param>
