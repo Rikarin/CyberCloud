@@ -10156,6 +10156,193 @@
         }
       }
     },
+    "scope": {
+      "name": "scope",
+      "summary": "The tenant, subscription and resource group a resource lives in — docs/plan/06 § The hierarchy. ⚠ These are not resources: a scope converges before the call returns, so there is nothing to wait for and no --wait.",
+      "commands": {
+        "resource-group": {
+          "name": "resource-group",
+          "scopeType": "CyberCloud.Resources/subscriptions/resourceGroups",
+          "title": "Resource group",
+          "plural": "Resource groups",
+          "summary": "The lifecycle boundary — what a resource is created in. docs/plan/06 § The hierarchy.",
+          "verbs": {
+            "create": {
+              "name": "create",
+              "summary": "Create a resource group. Repeating it with the same name is a success and changes nothing.",
+              "method": "PUT",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "scope": "resourceGroup",
+              "flags": [
+                {
+                  "name": "--location",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The region the group's resources default to. Required, and there is no platform-wide default to fall back on: a group whose region were guessed would place a tenant's data somewhere nobody chose.",
+                  "jsonPointer": "/location",
+                  "widget": "region"
+                },
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group's own name. ⚠ Required, and never taken from the profile: the flag that names what you are addressing is never the flag that remembers where you are working, or a create with the flag left off would create the scope you are already in.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                }
+              ]
+            },
+            "show": {
+              "name": "show",
+              "summary": "Read a resource group.",
+              "method": "GET",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "scope": "resourceGroup",
+              "flags": [
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group's own name. ⚠ Required, and never taken from the profile: the flag that names what you are addressing is never the flag that remembers where you are working, or a create with the flag left off would create the scope you are already in.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                }
+              ]
+            }
+          }
+        },
+        "subscription": {
+          "name": "subscription",
+          "scopeType": "CyberCloud.Resources/subscriptions",
+          "title": "Subscription",
+          "plural": "Subscriptions",
+          "summary": "The billing and quota boundary. docs/plan/06 § The hierarchy.",
+          "verbs": {
+            "create": {
+              "name": "create",
+              "summary": "Create a subscription. Repeating it with the same name is a success and changes nothing.",
+              "method": "PUT",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "scope": "subscription",
+              "flags": [
+                {
+                  "name": "--display-name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The name on an invoice and in every scope picker. Required — a subscription identified only by its GUID is one nobody can pick out of a list.",
+                  "jsonPointer": "/displayName"
+                },
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The subscription's own name. ⚠ Required, and never taken from the profile: the flag that names what you are addressing is never the flag that remembers where you are working, or a create with the flag left off would create the scope you are already in.",
+                  "pathPlaceholder": "subscriptionId"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                }
+              ]
+            },
+            "show": {
+              "name": "show",
+              "summary": "Read a subscription.",
+              "method": "GET",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "scope": "subscription",
+              "flags": [
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The subscription's own name. ⚠ Required, and never taken from the profile: the flag that names what you are addressing is never the flag that remembers where you are working, or a create with the flag left off would create the scope you are already in.",
+                  "pathPlaceholder": "subscriptionId"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                }
+              ]
+            }
+          }
+        },
+        "tenant": {
+          "name": "tenant",
+          "scopeType": "CyberCloud.Resources/tenants",
+          "title": "Tenant",
+          "plural": "Tenants",
+          "summary": "The isolation boundary. docs/plan/06 § The hierarchy.",
+          "verbs": {
+            "show": {
+              "name": "show",
+              "summary": "Read a tenant.",
+              "method": "GET",
+              "path": "/tenants/{tenantId}",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "scope": "tenant",
+              "flags": [
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
     "search": {
       "name": "search",
       "summary": "Commands for the CyberCloud.Search provider.",

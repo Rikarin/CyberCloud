@@ -4450,3 +4450,132 @@ public sealed partial class CloudTerminalCollection {
     /// <summary>The Cloud terminals in this group, paged.</summary>
     public partial AsyncPageable<CloudTerminalResource> GetAllAsync(CancellationToken cancellationToken = default);
 }
+
+/// <summary>The values /type accepts. ⚠ Closed: the write path refuses anything else.</summary>
+public enum ScopeResourceType {
+    /// <summary>Never assigned. Not a value the API accepts.</summary>
+    Unknown = 0,
+
+    /// <summary>CyberCloud.Resources/subscriptions/resourceGroups</summary>
+    [JsonStringEnumMemberName("CyberCloud.Resources/subscriptions/resourceGroups")]
+    CyberCloudResourcesSubscriptionsResourceGroups = 1,
+
+    /// <summary>CyberCloud.Resources/subscriptions</summary>
+    [JsonStringEnumMemberName("CyberCloud.Resources/subscriptions")]
+    CyberCloudResourcesSubscriptions = 2,
+
+    /// <summary>CyberCloud.Resources/tenants</summary>
+    [JsonStringEnumMemberName("CyberCloud.Resources/tenants")]
+    CyberCloudResourcesTenants = 3
+}
+
+/// <summary>A tenant, a subscription or a resource group, as the API renders it.</summary>
+/// <remarks>⚠ There is no provisioningState and no Operation&lt;T&gt; anywhere on this
+/// path: a scope is one grain activation and converges before the call returns, which is
+/// the visible half of "a scope is not a resource" — docs/plan/10 § Shape.</remarks>
+public sealed partial class ScopeResource {
+
+    /// <summary>The scope's own path — docs/plan/06 § Identifiers.</summary>
+    [JsonPropertyName("id")]
+    public required string Id { get; set; }
+
+    /// <summary>The region: a tenant's home region or a group's default. ⚠ Absent rather than empty where the scope has none, so a client tests for the property instead of comparing against "".</summary>
+    [JsonPropertyName("location")]
+    public string? Location { get; set; }
+
+    /// <summary>The name a human reads.</summary>
+    [JsonPropertyName("name")]
+    public required string Name { get; set; }
+
+    /// <summary>The Azure-shaped type string.</summary>
+    [JsonPropertyName("type")]
+    public required ScopeResourceType Type { get; set; }
+}
+
+/// <summary>The body of a PUT that creates a subscription.</summary>
+public sealed partial class SubscriptionCreateContent {
+
+    /// <summary>The name on an invoice and in every scope picker. Required — a subscription identified only by its GUID is one nobody can pick out of a list.</summary>
+    [JsonPropertyName("displayName")]
+    public required string DisplayName { get; set; }
+}
+
+/// <summary>The body of a PUT that creates a resource group.</summary>
+public sealed partial class ResourceGroupCreateContent {
+
+    /// <summary>The region the group's resources default to. Required, and there is no platform-wide default to fall back on: a group whose region were guessed would place a tenant's data somewhere nobody chose.</summary>
+    [JsonPropertyName("location")]
+    public required string Location { get; set; }
+}
+
+/// <summary>The scope API — docs/plan/06 § The hierarchy.</summary>
+/// <remarks>⚠ Generated from the OpenAPI document like everything else in this file,
+/// and the document is where the scope paths were missing until issue #63: a scope has
+/// no provider, no resource type and no api-version of its own, so nothing emitted from
+/// the provider registry could have known these addresses existed.</remarks>
+public sealed partial class ScopeClient {
+    /// <inheritdoc cref="GeneratedApiVersion.Value" />
+    public const string ApiVersion = "2026-08-01";
+
+    /// <summary>The URL template tenant operations address.</summary>
+    public const string TenantPathTemplate = "/tenants/{tenantId}";
+
+    /// <summary>The type string a tenant response carries.</summary>
+    public const string TenantType = "CyberCloud.Resources/tenants";
+
+    /// <summary>Reads one tenant. The isolation boundary. docs/plan/06 § The hierarchy.</summary>
+    public partial Task<Response<ScopeResource>> GetTenantAsync(
+        string tenantId,
+        CancellationToken cancellationToken = default);
+
+    // ⚠ There is no CreateTenantAsync, and the absence is the contract rather than an omission. A request's
+    // tenant is resolved from its token, so a call creating another tenant necessarily
+    // carries a token that is not that tenant's and is refused before routing runs —
+    // IScopeManager.CreateTenantAsync is off the request pipeline entirely.
+
+    /// <summary>The URL template subscription operations address.</summary>
+    public const string SubscriptionPathTemplate = "/tenants/{tenantId}/subscriptions/{subscriptionId}";
+
+    /// <summary>The type string a subscription response carries.</summary>
+    public const string SubscriptionType = "CyberCloud.Resources/subscriptions";
+
+    /// <summary>Reads one subscription. The billing and quota boundary. docs/plan/06 § The hierarchy.</summary>
+    public partial Task<Response<ScopeResource>> GetSubscriptionAsync(
+        string tenantId,
+        string subscriptionId,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Creates one subscription, or returns the existing one unchanged.</summary>
+    /// <remarks>⚠ No WaitUntil and no Operation&lt;T&gt;: this converges before it
+    /// returns. Repeating it with the same address is a success — 201 the first time
+    /// and 200 after, which is what makes the verb PUT.</remarks>
+    public partial Task<Response<ScopeResource>> CreateSubscriptionAsync(
+        string tenantId,
+        string subscriptionId,
+        SubscriptionCreateContent content,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>The URL template resource group operations address.</summary>
+    public const string ResourceGroupPathTemplate = "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}";
+
+    /// <summary>The type string a resource group response carries.</summary>
+    public const string ResourceGroupType = "CyberCloud.Resources/subscriptions/resourceGroups";
+
+    /// <summary>Reads one resource group. The lifecycle boundary — what a resource is created in. docs/plan/06 § The hierarchy.</summary>
+    public partial Task<Response<ScopeResource>> GetResourceGroupAsync(
+        string tenantId,
+        string subscriptionId,
+        string resourceGroupName,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Creates one resource group, or returns the existing one unchanged.</summary>
+    /// <remarks>⚠ No WaitUntil and no Operation&lt;T&gt;: this converges before it
+    /// returns. Repeating it with the same address is a success — 201 the first time
+    /// and 200 after, which is what makes the verb PUT.</remarks>
+    public partial Task<Response<ScopeResource>> CreateResourceGroupAsync(
+        string tenantId,
+        string subscriptionId,
+        string resourceGroupName,
+        ResourceGroupCreateContent content,
+        CancellationToken cancellationToken = default);
+}

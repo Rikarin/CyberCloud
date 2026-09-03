@@ -81,6 +81,46 @@ public static class OpenApiEmitter {
     const string OperationStatusSchema = "OperationStatus";
     const string OperationProgressSchema = "OperationProgress";
     const string OperationStateSchema = "OperationState";
+    /// <summary>
+    ///     The component every scope's <c>200</c> body points at.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ Public because <see cref="SdkEmitter" /> reads it back and a <c>$ref</c> is an unchecked
+    ///     string in both directions: two spellings would give a generated <c>ScopeResource</c> with
+    ///     no properties at all, which compiles.
+    /// </remarks>
+    public const string ScopeSchema = "Scope";
+
+    const string SubscriptionCreateSchema = "Scope.SubscriptionCreate";
+    const string ResourceGroupCreateSchema = "Scope.ResourceGroupCreate";
+
+    // ── The scope addresses, which every resource path is built on top of ──────────────────────
+
+    /// <summary>The tenant scope's path template.</summary>
+    /// <remarks>
+    ///     ⚠ <b>The resource path is built from these rather than beside them, so the scope API and
+    ///     the resource API cannot come to disagree about the envelope.</b> docs/plan/10 § Shape says
+    ///     the scope API <i>is</i> the first four and six segments of the resource path; writing the
+    ///     prefix twice would be the sentence's mechanism removed and the sentence left behind.
+    /// </remarks>
+    public const string TenantPathTemplate = "/tenants/{tenantId}";
+
+    /// <summary>The subscription scope's path template.</summary>
+    public const string SubscriptionPathTemplate = TenantPathTemplate + "/subscriptions/{subscriptionId}";
+
+    /// <summary>The resource group scope's path template.</summary>
+    public const string ResourceGroupPathTemplate =
+        SubscriptionPathTemplate + "/resourceGroups/{resourceGroupName}";
+
+    /// <summary>The extension a scope path item is recognised by.</summary>
+    /// <remarks>
+    ///     ⚠ <b>A discriminator for the same reason <c>x-cybercloud-collection</c> is one.</b>
+    ///     <see cref="DocumentReader.TypesOf" /> keys a resource type on
+    ///     <c>x-cybercloud-resource-type</c>; a scope carries no resource type at all, so it is
+    ///     already invisible to that reader — but a surface has to be able to find it deliberately
+    ///     rather than by testing what a path is not.
+    /// </remarks>
+    public const string ScopeExtension = "x-cybercloud-scope";
 
     /// <summary>
     ///     Every api-version any registered type declares, oldest first and each appearing once.
@@ -221,6 +261,13 @@ public static class OpenApiEmitter {
         }
 
         paths["/operations/{operationId}"] = OperationPathItem();
+
+        // ⚠ THE SECOND, NON-REGISTRY SOURCE — issue #63. Everything above came from a provider; a
+        // scope has none, and until this line the two addresses the gateway has served since #1
+        // appeared in no document, on no verb tree, in no SDK and in no form. See ScopePathItems for
+        // the decision and for the answer that was rejected.
+        Move(ScopePathItems(), paths);
+        Move(ScopeSchemas(), schemas);
 
         return new JsonObject {
             ["openapi"] = SpecificationVersion,
@@ -370,10 +417,10 @@ public static class OpenApiEmitter {
     ///     </para>
     /// </remarks>
     static string PathOf(ResourceTypeName type) {
-        var built = new StringBuilder(
-            "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}"
-            + "/providers/"
-        ).Append(type.Namespace);
+        // ⚠ The resource path IS the resource-group scope's path plus /providers/… — docs/plan/10
+        // § Shape's "the scope API is the first four and six segments of the resource path". Built
+        // from the same constant so the two cannot drift apart.
+        var built = new StringBuilder(ResourceGroupPathTemplate + "/providers/").Append(type.Namespace);
 
         var segments = type.Type.Split('/');
 
@@ -878,6 +925,292 @@ public static class OpenApiEmitter {
     ///     <c>GET /operations/{operationId}</c> — the poll half of docs/plan/10 § Long-running
     ///     operations, over HTTP.
     /// </summary>
+    /// <summary>
+    ///     Moves every member of one object into another, detaching as it goes.
+    /// </summary>
+    /// <param name="source">The object to empty. ⚠ It is emptied.</param>
+    /// <param name="target">The object to fill. An existing key is replaced.</param>
+    /// <remarks>
+    ///     ⚠ <b>Detached rather than assigned across.</b> A <see cref="JsonNode" /> belongs to
+    ///     exactly one parent, so <c>target[k] = source[k]</c> throws <i>"The node already has a
+    ///     parent"</i> — the same fact <c>CliFlag.ToJson</c> deep-clones for.
+    /// </remarks>
+    static void Move(JsonObject source, JsonObject target) {
+        foreach (var member in source.ToList()) {
+            source.Remove(member.Key);
+            target[member.Key] = member.Value;
+        }
+    }
+
+    // ── The scope API: the second, non-registry source, and the whole of issue #63 ─────────────
+
+    /// <summary>
+    ///     The three scope path items, keyed by path.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>THE DECISION ISSUE #63 ASKED FOR, AND THE OTHER ANSWER IS WRITTEN DOWN BECAUSE IT
+    ///         WAS DEFENSIBLE.</b> A scope has no provider, no resource type and no api-version, so
+    ///         ADR-012's five surfaces — all emitted from the provider registry — knew nothing about
+    ///         <c>PUT /tenants/{t}/subscriptions/{s}</c>. The alternative was to document the scope
+    ///         API by hand and exclude it from generation. It was rejected for one reason: the
+    ///         compatibility gate diffs the <i>published document</i>, and everything derived reads
+    ///         that document (docs/plan/21 § Generation's one hop). A hand-written page outside it
+    ///         would leave the CLI, the SDK and the portal exactly as unable to create a subscription
+    ///         as they are now, and would put the two addresses where no gate could see them break.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>"Non-registry" is not new here and that is what makes this cheap.</b>
+    ///         <c>/operations/{operationId}</c> has been in every document since this emitter was
+    ///         written and comes from no provider either. What is new is that a derived surface now
+    ///         has to <i>find</i> such a path, which is what <see cref="ScopeExtension" /> is for.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The tenant gets a <c>GET</c> and no <c>PUT</c>, and the absence is the contract.</b>
+    ///         <c>IScopeManager.CreateTenantAsync</c> is deliberately off the request pipeline: stage
+    ///         3 resolves the tenant from the token and refuses any path naming a different one, so a
+    ///         request creating tenant B necessarily carries a token that is not B's. A <c>PUT</c>
+    ///         here would document a route that cannot exist without breaching the gateway's one
+    ///         security boundary — and a generated <c>cyc</c> verb for it would fail every time it
+    ///         was used.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>No <c>202</c>, no <c>Azure-AsyncOperation</c>, and no <c>delete</c>.</b> A scope
+    ///         converges before the call returns, so <c>201</c> on a create and <c>200</c> on a repeat
+    ///         is the whole of it; a <c>DELETE</c> is the reverse of docs/plan/06 § Two-phase create
+    ///         and is not built, so the gateway answers <c>405</c> and this document must not claim
+    ///         otherwise.
+    ///     </para>
+    /// </remarks>
+    static JsonObject ScopePathItems() =>
+        new() {
+            [TenantPathTemplate] = ScopePathItem(
+                "tenant",
+                ScopeTypeNames.Tenant,
+                "Tenant",
+                "Tenants",
+                "The isolation boundary. docs/plan/06 § The hierarchy.",
+                [Ref("parameters", "TenantId")],
+                createComponent: null,
+                "A caller may read the tenant they hold a token for and no other, because the "
+                + "request's tenant is resolved from the token — docs/plan/10 § Request pipeline, "
+                + "stage 3.",
+                "⚠ There is no PUT. A tenant is created by IScopeManager.CreateTenantAsync, off the "
+                + "request pipeline entirely: the only tenant a request can address is one that "
+                + "already exists, so a create route could not authenticate. docs/plan/08 § The "
+                + "write path, end to end carries the argument and what was rejected."
+            ),
+            [SubscriptionPathTemplate] = ScopePathItem(
+                "subscription",
+                ScopeTypeNames.Subscription,
+                "Subscription",
+                "Subscriptions",
+                "The billing and quota boundary. docs/plan/06 § The hierarchy.",
+                [Ref("parameters", "TenantId"), Ref("parameters", "SubscriptionId")],
+                SubscriptionCreateSchema,
+                "Reads one subscription.",
+                "Creates the subscription at this address, or returns the existing one unchanged. "
+                + "⚠ 201 the first time and 200 on a repeat: that is what idempotent means and is "
+                + "why the verb is PUT. The id is the caller's to choose, so a retry addresses the "
+                + "same subscription rather than making a second one."
+            ),
+            [ResourceGroupPathTemplate] = ScopePathItem(
+                "resourceGroup",
+                ScopeTypeNames.ResourceGroup,
+                "Resource group",
+                "Resource groups",
+                "The lifecycle boundary — what a resource is created in. docs/plan/06 § The hierarchy.",
+                [
+                    Ref("parameters", "TenantId"),
+                    Ref("parameters", "SubscriptionId"),
+                    Ref("parameters", "ResourceGroupName")
+                ],
+                ResourceGroupCreateSchema,
+                "Reads one resource group.",
+                "Creates the resource group at this address, or returns the existing one unchanged. "
+                + "⚠ Every resource path names a resource group, so this is the call that has to "
+                + "succeed before any resource can be created at all."
+            )
+        };
+
+    /// <summary>Builds one scope's path item.</summary>
+    /// <param name="kind">The <see cref="ScopeExtension" /> value.</param>
+    /// <param name="typeName">The Azure-shaped type string the response carries.</param>
+    /// <param name="display">The singular display name.</param>
+    /// <param name="plural">The plural display name.</param>
+    /// <param name="summary">The one-sentence summary.</param>
+    /// <param name="address">The path parameters, in template order.</param>
+    /// <param name="createComponent">The <c>PUT</c> body's component, or <see langword="null" /> for a read-only scope.</param>
+    /// <param name="readSummary">The <c>GET</c>'s description.</param>
+    /// <param name="writeSummary">The <c>PUT</c>'s description, or the reason there is none.</param>
+    static JsonObject ScopePathItem(
+        string kind,
+        string typeName,
+        string display,
+        string plural,
+        string summary,
+        JsonArray address,
+        string? createComponent,
+        string readSummary,
+        string writeSummary
+    ) {
+        var parameters = new JsonArray();
+
+        foreach (var parameter in address.ToList()) {
+            address.Remove(parameter);
+            parameters.Add(parameter);
+        }
+
+        parameters.Add(Ref("parameters", "ApiVersion"));
+
+        var item = new JsonObject {
+            ["parameters"] = parameters,
+            ["get"] = new JsonObject {
+                ["operationId"] = "Scopes_Get" + SdkEmitter.Pascal(kind),
+                ["summary"] = "Read a " + display.ToLowerInvariant() + ".",
+                ["description"] = readSummary,
+                ["responses"] = new JsonObject {
+                    ["200"] = new JsonObject {
+                        ["description"] = "The scope.",
+                        ["content"] = new JsonObject {
+                            ["application/json"] = new JsonObject { ["schema"] = Ref("schemas", ScopeSchema) }
+                        }
+                    }
+                }.WithErrors()
+            },
+            [ScopeExtension] = kind,
+            // ⚠ Carried so a surface can render the `type` a response comes back with rather than
+            // rebuilding it from the kind. ScopeTypeNames' own remarks call these display strings
+            // that decide nothing — which is exactly why a second spelling of one would be silent.
+            ["x-cybercloud-scope-type"] = typeName,
+            ["x-cybercloud-display"] = new JsonObject {
+                ["name"] = display,
+                ["plural"] = plural,
+                ["summary"] = summary
+            }
+        };
+
+        if (createComponent is null) {
+            // ⚠ Said in the document rather than left as an absence. "There is no PUT" and "the PUT
+            // was forgotten" look identical to a reader and to a generator; only one of them is a
+            // decision.
+            item["x-cybercloud-scope-read-only"] = true;
+            item["get"]!["description"] = readSummary + " " + writeSummary;
+
+            return item;
+        }
+
+        item["put"] = new JsonObject {
+            ["operationId"] = "Scopes_Put" + SdkEmitter.Pascal(kind),
+            ["summary"] = "Create a " + display.ToLowerInvariant() + ".",
+            ["description"] = writeSummary,
+            ["requestBody"] = new JsonObject {
+                ["required"] = true,
+                ["content"] = new JsonObject {
+                    ["application/json"] = new JsonObject { ["schema"] = Ref("schemas", createComponent) }
+                }
+            },
+            ["responses"] = new JsonObject {
+                ["200"] = new JsonObject {
+                    ["description"] = "The scope already existed and is returned unchanged.",
+                    ["content"] = new JsonObject {
+                        ["application/json"] = new JsonObject { ["schema"] = Ref("schemas", ScopeSchema) }
+                    }
+                },
+                ["201"] = new JsonObject {
+                    ["description"] = "The scope was created.",
+                    ["content"] = new JsonObject {
+                        ["application/json"] = new JsonObject { ["schema"] = Ref("schemas", ScopeSchema) }
+                    }
+                }
+            }.WithErrors()
+        };
+
+        return item;
+    }
+
+    /// <summary>
+    ///     The scope response and the two create bodies.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>The property names come from <see cref="ScopeBodyProperties" />, which is in this
+    ///     assembly precisely so that they can.</b> They were <c>ScopeManagerService</c>'s, in an
+    ///     assembly this one cannot see; a copy retyped here would be two constants agreeing by hand,
+    ///     and the failure would be a flag spelled correctly writing a property nobody reads.
+    /// </remarks>
+    static JsonObject ScopeSchemas() =>
+        new() {
+            [ScopeSchema] = new JsonObject {
+                ["type"] = "object",
+                ["title"] = ScopeSchema,
+                ["description"] =
+                    "A tenant, a subscription or a resource group, as the API renders it. ⚠ There is "
+                    + "no provisioningState: a scope is one grain activation and converges before the "
+                    + "call returns, which is the visible half of \"a scope is not a resource\".",
+                ["properties"] = new JsonObject {
+                    ["id"] = new JsonObject {
+                        ["type"] = "string",
+                        ["description"] = "The scope's own path — docs/plan/06 § Identifiers."
+                    },
+                    ["location"] = new JsonObject {
+                        ["type"] = "string",
+                        ["description"] =
+                            "The region: a tenant's home region or a group's default. ⚠ Absent rather "
+                            + "than empty where the scope has none, so a client tests for the "
+                            + "property instead of comparing against \"\"."
+                    },
+                    ["name"] = new JsonObject {
+                        ["type"] = "string",
+                        ["description"] = "The name a human reads."
+                    },
+                    ["type"] = new JsonObject {
+                        ["type"] = "string",
+                        ["description"] = "The Azure-shaped type string.",
+                        ["enum"] = new JsonArray {
+                            ScopeTypeNames.ResourceGroup,
+                            ScopeTypeNames.Subscription,
+                            ScopeTypeNames.Tenant
+                        }
+                    }
+                },
+                ["required"] = new JsonArray { "id", "name", "type" },
+                ["additionalProperties"] = false
+            },
+            [SubscriptionCreateSchema] = new JsonObject {
+                ["type"] = "object",
+                ["title"] = SubscriptionCreateSchema,
+                ["description"] = "The body of a PUT that creates a subscription.",
+                ["properties"] = new JsonObject {
+                    [ScopeBodyProperties.DisplayName] = new JsonObject {
+                        ["type"] = "string",
+                        ["description"] =
+                            "The name on an invoice and in every scope picker. Required — a "
+                            + "subscription identified only by its GUID is one nobody can pick out of "
+                            + "a list."
+                    }
+                },
+                ["required"] = new JsonArray { ScopeBodyProperties.DisplayName },
+                ["additionalProperties"] = false
+            },
+            [ResourceGroupCreateSchema] = new JsonObject {
+                ["type"] = "object",
+                ["title"] = ResourceGroupCreateSchema,
+                ["description"] = "The body of a PUT that creates a resource group.",
+                ["properties"] = new JsonObject {
+                    [ScopeBodyProperties.Location] = new JsonObject {
+                        ["type"] = "string",
+                        ["description"] =
+                            "The region the group's resources default to. Required, and there is no "
+                            + "platform-wide default to fall back on: a group whose region were "
+                            + "guessed would place a tenant's data somewhere nobody chose.",
+                        ["x-cybercloud-widget"] = "region"
+                    }
+                },
+                ["required"] = new JsonArray { ScopeBodyProperties.Location },
+                ["additionalProperties"] = false
+            }
+        };
+
     static JsonObject OperationPathItem() =>
         new() {
             ["parameters"] = new JsonArray {

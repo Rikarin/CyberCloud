@@ -101,6 +101,8 @@ public static class SdkEmitter {
             AppendType(built, type, names[type.ResourceType], version);
         }
 
+        AppendScopes(built, document, version);
+
         return built.ToString();
     }
 
@@ -679,6 +681,219 @@ public static class SdkEmitter {
             .Append("CancellationToken cancellationToken = default);\n")
             .Append("}\n");
     }
+
+    // ── The scope API, which comes from no provider — issue #63 ────────────────────────────────
+
+    /// <summary>The class name a scope kind takes — <c>resourceGroup</c> is <c>ResourceGroup</c>.</summary>
+    static string ScopeName(DocumentScope scope) => Pascal(scope.Kind);
+
+    /// <summary>
+    ///     The scope models and the client that reaches them.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>One <c>ScopeResource</c> for all three, because the document declares one
+    ///         response schema for all three.</b> A class per kind would be three identical classes
+    ///         whose only difference is the value of <c>Type</c>, and a caller holding a
+    ///         <c>SubscriptionResource</c> could not be handed the result of reading a group.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b><c>Task&lt;Response&lt;T&gt;&gt;</c> and never <c>Operation&lt;T&gt;</c>, which
+    ///         is the one place a scope differs from every resource in this file.</b> Every resource
+    ///         write ends in a <c>202</c> and therefore in a poller; a scope converges before the
+    ///         call returns, so there is no <c>WaitUntil</c> parameter to take and no operation URL
+    ///         to poll. An SDK that offered one would hand every caller a poller for an operation
+    ///         that was never started.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The path parameters are the template's own placeholders, in order.</b> The same
+    ///         rule <c>AncestorParametersOf</c> follows for a nested resource: a method signature
+    ///         written from the kind would be a second place that knows a group is addressed through
+    ///         a subscription.
+    ///     </para>
+    /// </remarks>
+    static void AppendScopes(StringBuilder built, JsonObject document, string version) {
+        var scopes = DocumentReader.ScopesOf(document);
+
+        if (scopes.IsEmpty) {
+            return;
+        }
+
+        var shared = document["components"]?["schemas"]?[ScopeResponseComponent] as JsonObject ?? [];
+        var leaves = DocumentReader.LeavesOf(shared);
+
+        // ⚠ THE ENUMS FIRST, AND LEAVING THEM OUT IS A GENERATED FILE THAT DOES NOT COMPILE. The
+        // scope response's `type` is a closed set of three, so ClrType renders it as
+        // `ScopeResourceType` — a name nothing else would ever emit. The first run of this method
+        // produced exactly that: a property whose type was undeclared, in a file no build in this
+        // repository compiles, so nothing here would have caught it either.
+        AppendEnums(built, "ScopeResource", leaves);
+
+        built.Append("\n/// <summary>A tenant, a subscription or a resource group, as the API renders it.</summary>\n")
+            .Append("/// <remarks>⚠ There is no provisioningState and no Operation&lt;T&gt; anywhere on this\n")
+            .Append("/// path: a scope is one grain activation and converges before the call returns, which is\n")
+            .Append("/// the visible half of \"a scope is not a resource\" — docs/plan/10 § Shape.</remarks>\n")
+            .Append("public sealed partial class ScopeResource {\n");
+
+        foreach (var leaf in leaves) {
+            if (leaf.IsObject) {
+                continue;
+            }
+
+            built.Append("\n    /// <summary>")
+                .Append(Escape(DocumentReader.Text(leaf.Schema["description"]) is { Length: > 0 } text
+                    ? text
+                    : leaf.Name))
+                .Append("</summary>\n")
+                .Append("    [JsonPropertyName(")
+                .Append(Quote(leaf.Name))
+                .Append(")]\n")
+                .Append("    public ")
+                // ⚠ `required` on the members the schema requires, exactly as AppendPayload does. A
+                // non-nullable string with no initialiser and no `required` is CS8618 in whatever
+                // project consumes this file — and nothing in THIS repository compiles it, so the
+                // first person to find out would be the first person to use the SDK.
+                .Append(Required(leaf) ? "required " : string.Empty)
+                .Append(ClrType("ScopeResource", leaf))
+                .Append(' ')
+                .Append(Pascal(leaf.Name))
+                .Append(" { get; set; }")
+                .Append(Initialiser("ScopeResource", leaf))
+                .Append('\n');
+        }
+
+        built.Append("}\n");
+
+        foreach (var scope in scopes) {
+            if (!scope.Creatable) {
+                continue;
+            }
+
+            AppendScopeContent(built, scope);
+        }
+
+        built.Append("\n/// <summary>The scope API — docs/plan/06 § The hierarchy.</summary>\n")
+            .Append("/// <remarks>⚠ Generated from the OpenAPI document like everything else in this file,\n")
+            .Append("/// and the document is where the scope paths were missing until issue #63: a scope has\n")
+            .Append("/// no provider, no resource type and no api-version of its own, so nothing emitted from\n")
+            .Append("/// the provider registry could have known these addresses existed.</remarks>\n")
+            .Append("public sealed partial class ScopeClient {\n")
+            .Append("    /// <inheritdoc cref=\"GeneratedApiVersion.Value\" />\n")
+            .Append("    public const string ApiVersion = ")
+            .Append(Quote(version))
+            .Append(";\n");
+
+        foreach (var scope in scopes) {
+            var name = ScopeName(scope);
+            var parameters = DocumentReader.PlaceholdersOf(scope.Path)
+                .Select(x => "string " + Camel(x))
+                .ToList();
+
+            built.Append("\n    /// <summary>The URL template ")
+                .Append(Escape(scope.DisplayName.ToLowerInvariant()))
+                .Append(" operations address.</summary>\n")
+                .Append("    public const string ")
+                .Append(name)
+                .Append("PathTemplate = ")
+                .Append(Quote(scope.Path))
+                .Append(";\n")
+                .Append("\n    /// <summary>The type string a ")
+                .Append(Escape(scope.DisplayName.ToLowerInvariant()))
+                .Append(" response carries.</summary>\n")
+                .Append("    public const string ")
+                .Append(name)
+                .Append("Type = ")
+                .Append(Quote(scope.TypeName))
+                .Append(";\n")
+                .Append("\n    /// <summary>Reads one ")
+                .Append(Escape(scope.DisplayName.ToLowerInvariant()))
+                .Append(". ")
+                .Append(Escape(scope.Summary))
+                .Append("</summary>\n")
+                .Append("    public partial Task<Response<ScopeResource>> Get")
+                .Append(name)
+                .Append("Async(\n        ")
+                .Append(string.Join(",\n        ", parameters))
+                .Append(parameters.Count > 0 ? ",\n        " : "\n        ")
+                .Append("CancellationToken cancellationToken = default);\n");
+
+            if (!scope.Creatable) {
+                // ⚠ SAID IN THE GENERATED FILE, because "there is no create" and "the create was
+                // forgotten" are indistinguishable to somebody reading a class with one method.
+                built.Append("\n    // ⚠ There is no Create")
+                    .Append(name)
+                    .Append("Async, and the absence is the contract rather than an omission. A ")
+                    .Append("request's\n    // tenant is resolved from its token, so a call creating ")
+                    .Append("another tenant necessarily\n    // carries a token that is not that ")
+                    .Append("tenant's and is refused before routing runs —\n    // ")
+                    .Append("IScopeManager.CreateTenantAsync is off the request pipeline entirely.\n");
+
+                continue;
+            }
+
+            built.Append("\n    /// <summary>Creates one ")
+                .Append(Escape(scope.DisplayName.ToLowerInvariant()))
+                .Append(", or returns the existing one unchanged.</summary>\n")
+                .Append("    /// <remarks>⚠ No WaitUntil and no Operation&lt;T&gt;: this converges before it\n")
+                .Append("    /// returns. Repeating it with the same address is a success — 201 the first time\n")
+                .Append("    /// and 200 after, which is what makes the verb PUT.</remarks>\n")
+                .Append("    public partial Task<Response<ScopeResource>> Create")
+                .Append(name)
+                .Append("Async(\n        ")
+                .Append(string.Join(",\n        ", parameters))
+                .Append(parameters.Count > 0 ? ",\n        " : "\n        ")
+                .Append(name)
+                .Append("CreateContent content,\n        CancellationToken cancellationToken = default);\n");
+        }
+
+        built.Append("}\n");
+    }
+
+    static void AppendScopeContent(StringBuilder built, DocumentScope scope) {
+        var name = ScopeName(scope) + "CreateContent";
+
+        built.Append("\n/// <summary>The body of a PUT that creates a ")
+            .Append(Escape(scope.DisplayName.ToLowerInvariant()))
+            .Append(".</summary>\n")
+            .Append("public sealed partial class ")
+            .Append(name)
+            .Append(" {\n");
+
+        foreach (var leaf in DocumentReader.LeavesOf(scope.Body)) {
+            if (leaf.IsObject) {
+                continue;
+            }
+
+            built.Append("\n    /// <summary>")
+                .Append(Escape(DocumentReader.Text(leaf.Schema["description"]) is { Length: > 0 } text
+                    ? text
+                    : leaf.Name))
+                .Append("</summary>\n")
+                .Append("    [JsonPropertyName(")
+                .Append(Quote(leaf.Name))
+                .Append(")]\n")
+                .Append("    public ")
+                .Append(Required(leaf) ? "required " : string.Empty)
+                .Append(ClrType(name, leaf))
+                .Append(' ')
+                .Append(Pascal(leaf.Name))
+                .Append(" { get; set; }")
+                .Append(Initialiser(name, leaf))
+                .Append('\n');
+        }
+
+        built.Append("}\n");
+    }
+
+    /// <summary>
+    ///     The component every scope's <c>200</c> body points at.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <see cref="OpenApiEmitter.ScopeSchema" />, not a second spelling of it. A <c>$ref</c>
+    ///     string is an unchecked string in both directions, and the failure would be a generated
+    ///     <c>ScopeResource</c> with no properties at all — which compiles.
+    /// </remarks>
+    const string ScopeResponseComponent = OpenApiEmitter.ScopeSchema;
 
     // ── Small shared machinery ─────────────────────────────────────────────────────────────────
 

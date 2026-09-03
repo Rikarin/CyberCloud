@@ -66,17 +66,20 @@ public sealed class ScopeManagerService(
     ILogger<ScopeManagerService> logger
 )
     : IScopeManager {
-    /// <summary>The default region a resource group takes when the body names none.</summary>
+    /// <summary>
+    ///     The property name a resource group's region arrives under.
+    /// </summary>
     /// <remarks>
-    ///     ⚠ <b>There is no platform default and this constant is not one.</b> A group's region is
-    ///     required; this is the property name the body carries it under. Azure spells it
-    ///     <c>location</c> on every resource, and a scope answering to a different name would be the
-    ///     one field of the API a client had to special-case.
+    ///     ⚠ <b>Read from <see cref="ScopeBodyProperties" /> rather than declared here, and the move
+    ///     is the point.</b> The generated surfaces live in the contracts assembly and cannot see
+    ///     this one, so a copy here and a copy there would be two constants agreeing by hand — the
+    ///     failure this repository keeps re-finding. Issue #63 is what made a second reader exist.
     /// </remarks>
-    public const string LocationProperty = "location";
+    public const string LocationProperty = ScopeBodyProperties.Location;
 
     /// <summary>The body property a subscription's display name arrives in.</summary>
-    public const string DisplayNameProperty = "displayName";
+    /// <remarks>⚠ <see cref="ScopeBodyProperties" />'s, for the reason above.</remarks>
+    public const string DisplayNameProperty = ScopeBodyProperties.DisplayName;
 
     /// <inheritdoc />
     public async Task<Result<ScopeSnapshot>> CreateAsync(

@@ -88,6 +88,25 @@ public static class CliEmitter {
             commands.Add(name, Command(type, version));
         }
 
+        // ⚠ THE SCOPE GROUP — issue #63, and the one group that comes from no provider. Added after
+        // the loop so the check below sees an already-populated `groups`: a provider namespace whose
+        // last segment is `scope` would otherwise MERGE into this group rather than collide with it,
+        // and JsonObject's indexer would leave one of the two commands nowhere.
+        var scopes = ScopeGroup(document, version);
+
+        if (scopes is not null) {
+            if (groups.ContainsKey(ScopeGroupName)) {
+                throw new InvalidOperationException(
+                    $"A provider namespace produces the CLI group '{ScopeGroupName}', which is the "
+                    + "group the scope API takes — 'cyc scope subscription create' and that "
+                    + "provider's commands would share a parent command and one of them would be "
+                    + "unreachable. Rename the provider namespace — docs/plan/21 § Grammar."
+                );
+            }
+
+            groups[ScopeGroupName] = scopes;
+        }
+
         // ⚠ THE SECOND WAY ONE TOKEN COMES TO MEAN TWO THINGS, AND THE CHECK ABOVE CANNOT SEE IT. A
         // command name lands in a JsonObject key, so a duplicate is visible there; a SHORT NAME lands
         // in an `alias` member on a command of a different name, so two of them — or one of them and
@@ -365,6 +384,231 @@ public static class CliEmitter {
         return verb;
     }
 
+    // ── The scope group, which comes from no provider ──────────────────────────────────────────
+
+    /// <summary>
+    ///     The top-level group the scope API takes.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>One group holding three commands rather than three top-level groups.</b> Azure spells
+    ///     these <c>az account</c> and <c>az group</c>, and both of those names are already taken
+    ///     here: <c>account</c> is one of the <c>cyc</c> host's own commands, and <c>group</c> next
+    ///     to fourteen provider groups reads as "a group of commands". One named parent makes the
+    ///     scope API findable — <c>cyc scope --help</c> lists exactly the three things a scope is —
+    ///     and leaves one name to keep clear of providers instead of three.
+    /// </remarks>
+    public const string ScopeGroupName = "scope";
+
+    /// <summary>
+    ///     The scope group, or <see langword="null" /> when the document declares no scope.
+    /// </summary>
+    /// <param name="document">An emitted document.</param>
+    /// <param name="version">The api-version.</param>
+    /// <remarks>
+    ///     ⚠ <b>Null rather than an empty group when there is nothing to put in it.</b> A group with
+    ///     no commands is a <c>cyc scope</c> that parses, prints a heading and can do nothing — the
+    ///     same "a verb whose URL does not exist" failure the <c>list</c> verb guards against, one
+    ///     level up.
+    /// </remarks>
+    static JsonObject? ScopeGroup(JsonObject document, string version) {
+        var scopes = DocumentReader.ScopesOf(document);
+
+        if (scopes.IsEmpty) {
+            return null;
+        }
+
+        var commands = new JsonObject();
+
+        foreach (var scope in scopes) {
+            commands[Kebab(scope.Kind)] = ScopeCommand(scope, version);
+        }
+
+        return new JsonObject {
+            ["name"] = ScopeGroupName,
+            ["summary"] =
+                "The tenant, subscription and resource group a resource lives in — docs/plan/06 "
+                + "§ The hierarchy. ⚠ These are not resources: a scope converges before the call "
+                + "returns, so there is nothing to wait for and no --wait.",
+            ["commands"] = Sorted(commands)
+        };
+    }
+
+    static JsonObject ScopeCommand(DocumentScope scope, string version) {
+        var verbs = new JsonObject();
+        var address = ScopeAddress(scope);
+
+        verbs["show"] = ScopeVerb("show", "Read a " + scope.DisplayName.ToLowerInvariant() + ".", "GET", scope, version, address, []);
+
+        if (scope.Creatable) {
+            // ⚠ `create` and NOT long-running, which is the one place a scope verb differs from a
+            // resource verb of the same name. docs/plan/10 § Shape: a scope is one grain activation
+            // and converges before the call returns, so a --wait would poll an operation URL that
+            // answers 404.
+            verbs["create"] = ScopeVerb(
+                "create",
+                "Create a " + scope.DisplayName.ToLowerInvariant()
+                + ". Repeating it with the same name is a success and changes nothing.",
+                "PUT",
+                scope,
+                version,
+                address,
+                FlagsOf(scope.Body, string.Empty, address)
+            );
+        }
+
+        return new JsonObject {
+            ["name"] = Kebab(scope.Kind),
+            // ⚠ The Azure-shaped type string, so a scope command answers the same question a
+            // resource command's `resourceType` does. It is NOT a registered resource type and
+            // nothing routes on it — ScopeTypeNames' own remarks.
+            ["scopeType"] = scope.TypeName,
+            ["title"] = scope.DisplayName,
+            ["plural"] = scope.DisplayPlural,
+            ["summary"] = scope.Summary,
+            ["verbs"] = Sorted(verbs)
+        };
+    }
+
+    static JsonObject ScopeVerb(
+        string name,
+        string summary,
+        string method,
+        DocumentScope scope,
+        string version,
+        ImmutableArray<CliFlag> address,
+        ImmutableArray<CliFlag> body
+    ) {
+        var flags = new JsonArray();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var flag in address.AddRange(body).OrderBy(x => x.Name, StringComparer.Ordinal)) {
+            if (!seen.Add(flag.Name)) {
+                throw new InvalidOperationException(
+                    $"'{flag.Name}' is the name of two flags on 'scope {Kebab(scope.Kind)} {name}'. A "
+                    + "verb's flags are a JSON array, so both would be emitted and the host would "
+                    + "bind one of them. Rename the scope body property — docs/plan/21 § Grammar."
+                );
+            }
+
+            flags.Add(flag.ToJson());
+        }
+
+        return new JsonObject {
+            ["name"] = name,
+            ["summary"] = summary,
+            ["method"] = method,
+            ["path"] = scope.Path,
+            ["apiVersion"] = version,
+            // ⚠ Emitted as false rather than omitted, because every other verb in this tree carries
+            // it and a reader comparing two verbs should not have to know that absent means false.
+            ["longRunning"] = false,
+            ["scope"] = scope.Kind,
+            ["flags"] = flags
+        };
+    }
+
+    /// <summary>
+    ///     A scope's address flags: <c>--name</c> for its own segment, and the ancestors' own flags.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>The scope's own segment is <c>--name</c> and is required, even when that segment
+    ///         is <c>{subscriptionId}</c>.</b> The obvious alternative — reuse <c>--subscription</c>,
+    ///         which is the flag every resource verb fills that placeholder from — would make
+    ///         <c>cyc scope subscription create</c> read the profile's current subscription and
+    ///         create <i>that</i> when the flag was omitted. Creating a scope the caller did not name
+    ///         is not a thing a CLI may do quietly, so the flag that names what is being created is
+    ///         never the flag that remembers where you are working.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The ancestors keep their profile-backed flags, which is the same asymmetry the
+    ///         resource verbs have.</b> A subscription's tenant is context; a group's subscription is
+    ///         context; the thing on the end of the path is not.
+    ///     </para>
+    /// </remarks>
+    static ImmutableArray<CliFlag> ScopeAddress(DocumentScope scope) {
+        var flags = ImmutableArray.CreateBuilder<CliFlag>();
+
+        foreach (var placeholder in scope.AncestorPlaceholders) {
+            flags.Add(ProfileFlag(placeholder));
+        }
+
+        // ⚠ The tenant scope's only placeholder is its ancestor-free own, and it is the one scope
+        // whose name IS context: `cyc scope tenant show` with no flags reads the tenant the token is
+        // for, which is the only tenant a request can address at all. So it takes the profile flag
+        // rather than a --name.
+        if (scope.AncestorPlaceholders.IsEmpty && ProfileFlagFor(scope.NamePlaceholder) is { } own) {
+            flags.Add(own);
+
+            return flags.ToImmutable();
+        }
+
+        flags.Add(
+            new(
+                "--name",
+                "string",
+                "The " + scope.DisplayName.ToLowerInvariant()
+                + "'s own name. ⚠ Required, and never taken from the profile: the flag that names "
+                + "what you are addressing is never the flag that remembers where you are working, "
+                + "or a create with the flag left off would create the scope you are already in.",
+                Required: true
+            ) { PathPlaceholder = scope.NamePlaceholder }
+        );
+
+        return flags.ToImmutable();
+    }
+
+    /// <summary>The profile-backed address flag a platform placeholder takes.</summary>
+    static CliFlag ProfileFlag(string placeholder) =>
+        ProfileFlagFor(placeholder)
+        ?? throw new InvalidOperationException(
+            $"A scope path names the ancestor placeholder '{placeholder}', which is not one of the "
+            + "platform envelope's. Every scope's ancestors are the tenant and the subscription — "
+            + "docs/plan/06 § The hierarchy — so this is a change to OpenApiEmitter.ScopePathItems "
+            + "that this emitter has not been taught."
+        );
+
+    /// <summary>The platform envelope's flag for a placeholder, or <see langword="null" />.</summary>
+    /// <remarks>
+    ///     ⚠ Built from <see cref="Address" />'s own output rather than listed a second time, so a
+    ///     scope's <c>--tenant</c> and a resource's are the same flag — same name, same environment
+    ///     variable, same summary. Two spellings of <c>CYC_SUBSCRIPTION</c> is a CI pipeline that
+    ///     works for one command and not the next.
+    /// </remarks>
+    static CliFlag? ProfileFlagFor(string placeholder) =>
+        PlatformFlags.FirstOrDefault(
+            x => string.Equals(x.PathPlaceholder, placeholder, StringComparison.Ordinal)
+        ) is { Name.Length: > 0 } flag
+            ? flag
+            : null;
+
+    /// <summary>
+    ///     The platform envelope's address flags — the three every path carries.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>One list, read by <see cref="Address" /> and by <see cref="ScopeAddress" />.</b> A
+    ///     scope's <c>--tenant</c> and a resource's have to be the same flag — same name, same
+    ///     environment variable, same summary — or a CI pipeline that exports <c>CYC_TENANT</c> works
+    ///     for one command and not the next, which is the kind of difference nobody looks for.
+    /// </remarks>
+    static readonly ImmutableArray<CliFlag> PlatformFlags = [
+        new(
+            "--resource-group",
+            "string",
+            "The resource group. docs/plan/06 § The hierarchy.",
+            Required: true
+        ) { PathPlaceholder = DocumentReader.ResourceGroupPlaceholder },
+        new(
+            "--subscription",
+            "string",
+            "The subscription. Defaults to the current profile.",
+            Required: false
+        ) { Environment = "CYC_SUBSCRIPTION", PathPlaceholder = DocumentReader.SubscriptionPlaceholder },
+        new("--tenant", "string", "The tenant. Defaults to the current profile.", Required: false) {
+            Environment = "CYC_TENANT", PathPlaceholder = DocumentReader.TenantPlaceholder
+        }
+    ];
+
     // ── Flags ──────────────────────────────────────────────────────────────────────────────────
 
     /// <summary>
@@ -415,31 +659,7 @@ public static class CliEmitter {
             );
         }
 
-        flags.Add(
-            new(
-                "--resource-group",
-                "string",
-                "The resource group. docs/plan/06 § The hierarchy.",
-                Required: true
-            ) { PathPlaceholder = DocumentReader.ResourceGroupPlaceholder }
-        );
-
-        flags.Add(
-            new(
-                "--subscription",
-                "string",
-                "The subscription. Defaults to the current profile.",
-                Required: false
-            ) {
-                Environment = "CYC_SUBSCRIPTION", PathPlaceholder = DocumentReader.SubscriptionPlaceholder
-            }
-        );
-
-        flags.Add(
-            new("--tenant", "string", "The tenant. Defaults to the current profile.", Required: false) {
-                Environment = "CYC_TENANT", PathPlaceholder = DocumentReader.TenantPlaceholder
-            }
-        );
+        flags.AddRange(PlatformFlags);
 
         foreach (var placeholder in DocumentReader.AncestorPlaceholdersOf(type.Path)) {
             flags.Add(

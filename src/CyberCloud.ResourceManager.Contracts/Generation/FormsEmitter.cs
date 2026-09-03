@@ -48,6 +48,25 @@ public static class FormsEmitter {
             forms[type.ResourceType] = Form(type, version);
         }
 
+        var scopes = new JsonObject();
+
+        // ⚠ A SECOND MAP RATHER THAN THREE MORE ENTRIES IN `forms` — issue #63. A scope has no
+        // resource type, so it has no key of the shape every entry in `forms` is keyed by, and
+        // inventing one would make the portal's lookup ambiguous the day a provider registered
+        // `CyberCloud.Resources/subscriptions`. Separate maps also let the portal render the
+        // subscription picker without walking twenty-two resource forms looking for the three that
+        // are not resources.
+        foreach (var scope in DocumentReader.ScopesOf(document)) {
+            if (!scope.Creatable) {
+                // ⚠ No form for a scope the API will not create. A portal that rendered a tenant
+                // form would render a submit button whose request is refused before routing runs —
+                // see OpenApiEmitter.ScopePathItems.
+                continue;
+            }
+
+            scopes[scope.Kind] = ScopeForm(scope, version);
+        }
+
         return new JsonObject {
             ["format"] = FormatVersion,
             ["apiVersion"] = version,
@@ -56,8 +75,74 @@ public static class FormsEmitter {
                 "Portal form schemas at api-version " + version + ". Generated from the OpenAPI "
                 + "document — docs/plan/21 § Generation — and consumed by libs/resource-forms' "
                 + "schema-renderer (docs/plan/20).",
-            ["forms"] = forms
+            ["forms"] = forms,
+            ["scopeForms"] = scopes
         };
+    }
+
+    /// <summary>One scope's create form.</summary>
+    /// <param name="scope">The scope.</param>
+    /// <param name="version">The api-version.</param>
+    /// <remarks>
+    ///     ⚠ <b>The same field vocabulary as a resource form, so the renderer needs no second
+    ///     code path.</b> docs/plan/20's schema→widget table is applied by
+    ///     <see cref="ControlOf" /> either way; what differs is the envelope, and it differs because
+    ///     a scope genuinely has no tags, no cluster, no soft-delete window and no actions.
+    /// </remarks>
+    static JsonObject ScopeForm(DocumentScope scope, string version) {
+        var fields = new JsonArray();
+        var covered = new JsonArray();
+
+        foreach (var leaf in DocumentReader.LeavesOf(scope.Body)) {
+            fields.Add(ScopeField(leaf));
+            covered.Add(leaf.JsonPointer);
+        }
+
+        var address = new JsonArray();
+
+        foreach (var placeholder in DocumentReader.PlaceholdersOf(scope.Path)) {
+            address.Add(placeholder);
+        }
+
+        return new JsonObject {
+            ["scope"] = scope.Kind,
+            ["scopeType"] = scope.TypeName,
+            ["apiVersion"] = version,
+            ["path"] = scope.Path,
+            ["method"] = "PUT",
+            // ⚠ The placeholders the portal has to fill from its own scope picker rather than from
+            // the form. A group's subscription is where you are, not what you are typing.
+            ["addressPlaceholders"] = address,
+            ["title"] = scope.DisplayName,
+            ["plural"] = scope.DisplayPlural,
+            ["summary"] = scope.Summary,
+            ["overrideKey"] = scope.TypeName + "@" + version,
+            ["coveredPointers"] = covered,
+            // ⚠ Said rather than left to be inferred from the absent 202. A portal that showed a
+            // progress bar for a scope create would show one that never moves.
+            ["longRunning"] = false,
+            ["fields"] = fields
+        };
+    }
+
+    static JsonObject ScopeField(SchemaLeaf leaf) {
+        var field = new JsonObject {
+            ["jsonPointer"] = leaf.JsonPointer,
+            ["name"] = leaf.Name,
+            ["label"] = Label(leaf.Name),
+            ["control"] = ControlOf(leaf.Schema, leaf.IsObject),
+            ["required"] = leaf.Required
+        };
+
+        if (DocumentReader.Text(leaf.Schema["description"]) is { Length: > 0 } description) {
+            field["help"] = description;
+        }
+
+        if (DocumentReader.Text(leaf.Schema["x-cybercloud-widget"]) is { Length: > 0 } widget) {
+            field["widget"] = widget;
+        }
+
+        return field;
     }
 
     /// <summary>The file one api-version's forms are written to.</summary>
