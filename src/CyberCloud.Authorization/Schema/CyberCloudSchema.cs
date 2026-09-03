@@ -185,10 +185,23 @@ public static class CyberCloudSchema {
             // SAID PLAINLY BECAUSE IT IS LESS THAN docs/plan/08 DESCRIBES. That section wants "a role
             // can hold the first without the second", copying `deletedVaults/purge/action` sitting in
             // Key Vault Contributor's notActions. Here `delete` is already Rel(owner), so any purge
-            // defined in terms of owner is held by everyone who can delete, and a strictly separable
-            // purge needs a grantable role of its own — which needs a role-assignment story that does
-            // not exist. What this does deliver is a deny assignment that removes purge while leaving
-            // delete, which is `notActions` with one row in it. Tightening it is docs/plan/07's.
+            // defined in terms of owner is held by everyone who can delete. What this does deliver is
+            // a deny assignment that removes purge while leaving delete, which is `notActions` with
+            // one row in it — RoleAssignmentViewTests.ADenyAssignmentRemovesPurgeAndLeavesDeleteAndNoGrantSeparatesThem,
+            // which runs THIS schema and which nothing did until it was written.
+            //
+            // ⚠ A GRANTABLE `purger` RELATION WOULD NOT FIX IT, AND BOTH REASONS ARE CONCRETE RATHER
+            // THAN "a role-assignment story that does not exist". First, nothing in this platform can
+            // WRITE a role tuple: ITupleStoreGrain.WriteAsync is the store, IObjectRelationsGrain's
+            // remarks forbid reaching past it, and the only grant above either is
+            // IScopeRelationWriter.GrantOwnerAsync at scope creation — there is no PUT
+            // /roleAssignments and nothing writes `contributor` or `reader` either. A `purger`
+            // relation would be a relation nobody can be given. Second, and the deeper one: the
+            // separation Azure achieves lives BETWEEN TWO ROLES, and here there is no role beneath
+            // owner that can delete — `delete` is Rel(owner) while Azure's Contributor deletes. So the
+            // question the owed item is really asking is whether `delete` should be Rel(contributor),
+            // which is a widening of this platform's most destructive verb and not an addition.
+            // docs/plan/07 § Azure RBAC carries both.
             .Permission(
                 Permissions.Purge,
                 Rel(Relations.Owner) & !Rel(Relations.Suspended)
