@@ -45,28 +45,29 @@ public readonly record struct ReconcilePass(
 ///         against. The <i>conformance suite</i> is what turns the claim into a check.
 ///     </para>
 ///     <para>
-///         ⚠ <b>The driver creates the namespace, and nothing deletes it.</b>
-///         <see cref="NamespaceFor(ResourceId)" /> derives the name, <see cref="NamespaceEnsurer" /> applies it
-///         with ADR-013's seven labels before the pass, and the second half of that sentence is a
-///         decision rather than an omission. Deleting a namespace is a recursive delete of everything
-///         inside it, and the platform cannot tell "empty" from "empty of objects we wrote": a
-///         tenant's own <c>PersistentVolumeClaim</c>, a <c>Secret</c> an operator added and a
-///         <c>StatefulSet</c> from a chart nobody registered all live in the same namespace and all
-///         carry no <c>cybercloud.io/managed-by</c>. There is also nothing to hang the delete on —
-///         <c>IResourceGroupGrain</c> has <c>BeginDeleteAsync</c>/<c>CompleteDeleteAsync</c> for its
-///         <i>members</i> and <b>no method that deletes the group itself</b>. So an emptied group
-///         leaves an empty namespace behind, which costs an etcd object and no compute, and the
-///         alternative — a sweeper that deletes namespaces it believes are empty — is how a tenant's
-///         running database disappears. <c>src/Providers/README.md</c> § Namespaces records it as
-///         owed with what closing it needs.
+///         ⚠ <b>The driver creates the namespace and never deletes it, and the second half stays
+///         true now that something else does.</b> <see cref="NamespaceFor(ResourceId)" /> derives the
+///         name and <see cref="NamespaceEnsurer" /> applies it with ADR-013's seven labels before the
+///         pass. Removing it belongs to <c>ResourceGroupReclaimer</c>, on the group's own delete,
+///         because a pass over one resource knows one member's state and nothing about the others —
+///         and a namespace delete is a recursive delete of everything inside, including the objects
+///         carrying no <c>cybercloud.io/managed-by</c>: a tenant's own
+///         <c>PersistentVolumeClaim</c>, a <c>Secret</c> an operator added, a <c>StatefulSet</c> from
+///         a chart nobody registered.
 ///         <para>
-///             ⚠ <c>NamespaceEnsurer.DeleteAsync</c> and <c>NamespaceReclaim</c> exist and this driver
-///             does not call them, which is the same decision rather than a contradiction of it. They
-///             are the evidence rule as code — a delete that refuses unless the namespace holds
-///             nothing at all — and the thing that would call them is a resource-group delete, which
-///             has nowhere to live until <c>IResourceGroupGrain</c> gains one and until the write path
-///             starts recording membership. A pass over one resource is the wrong place for a
-///             group-scoped act in any case: it knows one member's state and nothing about the others.
+///             ⚠ <b>What the driver DOES do about the namespace after a pass is invalidate its own
+///             memo on a <see cref="ErrorCode.ResourceNotFound" />.</b> The memo is per silo and has
+///             no broadcast, so a namespace removed by an operator or by a group delete on another
+///             silo would otherwise be believed in here for the rest of
+///             <c>NamespaceEnsurer.RecheckAfter</c> — an hour of applies answering <c>404</c> naming
+///             it. The silo holding the wrong belief is exactly the silo the API server is telling,
+///             which is why the channel needs nothing but this.
+///         </para>
+///         <para>
+///             ⚠ <c>RecordClusterAsync</c> is the driver's other group-scoped act, and it is
+///             bookkeeping rather than placement: a namespace is keyed by (group, cluster) and the
+///             group's delete has to know which clusters those were, at a point when every member is
+///             already gone. Its failure is a logged note and not a failed pass.
 ///         </para>
 ///     </para>
 /// </remarks>
@@ -382,6 +383,31 @@ public sealed class ReconcileDriver(
                     100
                 );
             }
+        }
+
+        // ── The namespace memo's invalidation channel ────────────────────────────────────────────
+        //
+        // ⚠ THE MEMO IS PER SILO AND HAS NO BROADCAST, SO THE 404 IS THE CHANNEL. A namespace deleted
+        // by an operator, or by this platform's own group delete running on another silo, leaves this
+        // silo believing in it for the rest of NamespaceEnsurer.RecheckAfter — and every apply routed
+        // here answers 404 naming the namespace for that whole hour. The silo holding the wrong
+        // belief is exactly the silo the API server is telling, so nothing has to be broadcast: the
+        // evidence arrives on its own and this is where it is read. Exposure drops from an hour to
+        // one pass.
+        //
+        // ⚠ Deliberately imprecise in the harmless direction. A ResourceNotFound may be about the
+        // reconciler's own object rather than about the namespace, and telling the two apart needs a
+        // round trip that would defeat the memo. Forgetting when the namespace was fine costs one
+        // idempotent apply; not forgetting when it was gone costs an hour of failed reconciles.
+        if (connection is not null
+            && outcome.Error is { Code: var failed } && failed == ErrorCode.ResourceNotFound
+            && namespaces.Forget(reconcileInput.ClusterId, ns)) {
+            log.Report(
+                "ensuring-namespace",
+                $"the pass reported {ErrorCode.ResourceNotFound}, so the belief that namespace "
+                + $"'{ns}' exists on cluster {reconcileInput.ClusterId:D} has been dropped and the "
+                + "next pass will apply it again."
+            );
         }
 
         // Observe after every pass that ran, converged or not. The drift scan compares against this,
