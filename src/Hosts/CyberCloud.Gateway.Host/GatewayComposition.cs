@@ -1,3 +1,6 @@
+using CyberCloud.Gateway.Host.Hubs;
+using CyberCloud.Gateway.Host.Pipeline;
+using CyberCloud.Gateway.Host.Routing;
 using CyberCloud.ResourceManager.Contracts.Registry;
 using CyberCloud.ServiceDefaults;
 using CyberCloud.Vault;
@@ -28,8 +31,38 @@ public static class GatewayComposition {
     ///     Composes the gateway and returns the built host, ready to initialize and run.
     /// </summary>
     /// <param name="args">The process arguments, passed through to configuration.</param>
+    /// <param name="configure">
+    ///     What this deployment supplies on top of the composition, or <see langword="null" />.
+    /// </param>
     /// <returns>The built host. Nothing has started.</returns>
-    public static async Task<WebApplication> BuildAsync(string[] args) {
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b><paramref name="configure" /> exists because the identity seam is the one part of
+    ///         this host that no deployment shares.</b> Stage 2 resolves
+    ///         <c>ICallerContextResolver</c>, and there is deliberately no default: a gateway that
+    ///         authenticated nobody and served anyway is the failure
+    ///         <see cref="GatewayServiceCollectionExtensions.AddIssuedTokenAuthentication" />'s
+    ///         remarks refuse to build. What a deployment registers here is a real registration —
+    ///         nothing about this parameter bypasses a stage, relaxes a check or is read anywhere
+    ///         else — and a host that passes nothing gets exactly what it got before this parameter
+    ///         existed.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>It is not a test hook, and the distinction is the one worth keeping.</b> A
+    ///         test-only registration living in the composition root would mean production code
+    ///         carrying a seam whose only caller is a test; this is the composition root taking its
+    ///         deployment-specific half as a parameter, which is what lets a test compose the
+    ///         <i>same</i> host as production and differ only where a deployment legitimately
+    ///         differs. Its one caller today is
+    ///         <c>CyberCloud.AppHost.Tests</c>' <c>TenantOverHttpTests</c>; when
+    ///         <c>CyberCloud.Identity.Host</c> issues real tokens, the gateway's own
+    ///         <c>Program.cs</c> becomes the second.
+    ///     </para>
+    /// </remarks>
+    public static async Task<WebApplication> BuildAsync(
+        string[] args,
+        Action<IServiceCollection>? configure = null
+    ) {
         ArgumentNullException.ThrowIfNull(args);
 
         // ⚠ CreateClient, not CreateSilo — docs/plan/03 § Hosts and docs/plan/10 § Shape. The gateway
@@ -95,6 +128,63 @@ public static class GatewayComposition {
         // not matter because the registry is a factory resolved after all wiring.
         await builder.Services.AddApplicationAsync<GatewayHostModule>();
 
+        // ⚠ LAST, so a deployment's registration wins over a TryAdd above and loses to nothing.
+        configure?.Invoke(builder.Services);
+
         return builder.Build();
+    }
+
+    /// <summary>
+    ///     Puts the request pipeline and the four hubs on a built host.
+    /// </summary>
+    /// <param name="app">The host <see cref="BuildAsync" /> returned.</param>
+    /// <returns>The same host, so a caller can chain.</returns>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>This is the second half of the argument the top of this file makes, applied to
+    ///         the half that was left behind.</b> <c>Program.cs</c> holds no composition because top
+    ///         -level statements cannot be called from a test — and it went on holding the one
+    ///         <c>app.Use</c> that runs the nine stages, which is exactly as untestable and rather
+    ///         more load-bearing. The consequence was structural: <c>CyberCloud.Gateway.Host.Tests</c>
+    ///         could run the stages only by constructing them itself against a
+    ///         <c>DefaultHttpContext</c> with a substituted <c>IResourceManager</c>, and
+    ///         <c>CyberCloud.AppHost.Tests</c> could reach the real manager only by resolving it out
+    ///         of the container and calling it directly. Nothing could drive HTTP through to the real
+    ///         manager, and the two suites met at an interface neither covered.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>A hub handshake goes through the pipeline too</b> — a SignalR negotiate is an
+    ///         HTTP request, so it gets stages 1 to 5 and only then reaches the hub. A hub mapped
+    ///         outside this method would be an endpoint with no tenant establishment at all, which
+    ///         docs/plan/00 § The tenant-separation row, corrected makes a cross-tenant hole rather
+    ///         than an oversight. That is why the hubs are mapped here and not by the caller.
+    ///     </para>
+    /// </remarks>
+    public static WebApplication MapGateway(this WebApplication app) {
+        ArgumentNullException.ThrowIfNull(app);
+
+        app.Use(async (context, next) => {
+            if (context.Request.Path.StartsWithSegments("/health")
+                || context.Request.Path.StartsWithSegments("/alive")) {
+                await next(context);
+
+                return;
+            }
+
+            var pipeline = context.RequestServices.GetRequiredService<GatewayPipeline>();
+            var result = await pipeline.RunAsync(context);
+
+            if (result.Route.Kind == RouteKind.Hub) {
+                context.Items[GatewayCallerFeature.ItemKey] = result.Caller;
+                await next(context);
+            }
+        });
+
+        app.MapHub<ResourcesHub>(GatewayRouter.HubPrefix + HubNames.Resources);
+        app.MapHub<OperationsHub>(GatewayRouter.HubPrefix + HubNames.Operations);
+        app.MapHub<MetricsHub>(GatewayRouter.HubPrefix + HubNames.Metrics);
+        app.MapHub<TerminalHub>(GatewayRouter.HubPrefix + HubNames.Terminal);
+
+        return app;
     }
 }

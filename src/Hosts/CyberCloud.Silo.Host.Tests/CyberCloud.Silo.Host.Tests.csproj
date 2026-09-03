@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      The silo host's own unit suite. ADR-018 — the sibling test project — which
+      Directory.Build.targets already grants InternalsVisibleTo by name, and which until now did not
+      exist, so that grant was inert.
+
+      ⚠ WHAT IT IS FOR, IN ONE SENTENCE: LocalKubeconfigFiles is the one file in this host that is
+      ordinary code rather than composition — it parses a credential reference, decides whether the
+      path it names is inside a directory this silo was given, and reads a file — and it was the
+      largest single row behind CyberCloud.Silo.Host's 32.5 % on the coverage ratchet.
+
+      ⚠ COVERAGE IS THE SYMPTOM AND NOT THE SUBJECT. What is asserted here is the pair of properties
+      the file exists for: the resolver is OPT-IN, so a silo given no root keeps
+      KubeApiClientFactory's refusal rather than reading anything; and it is ROOTED, so a reference
+      that resolves outside the configured directory is refused BEFORE the filesystem is touched.
+      The second half is the one with teeth — a ClusterConnectionDescriptor is written by a
+      reconciler, and a rooted path check that is not one turns a provider bug into read access to
+      the whole host.
+
+      What this suite does NOT do: build a silo. The opt-in half is a claim about a composed host, so
+      it is asserted in CyberCloud.Hosts.Tests against the real SiloComposition.BuildAsync, next to
+      every other claim about what these two hosts compose. Nothing here starts a process, a
+      container or a cluster.
+    -->
+
+    <ItemGroup>
+        <PackageReference Include="xunit.v3"/>
+        <PackageReference Include="Shouldly"/>
+    </ItemGroup>
+
+    <ItemGroup Label="Global usings">
+        <Using Include="Xunit"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../CyberCloud.Silo.Host/CyberCloud.Silo.Host.csproj"/>
+    </ItemGroup>
+
+</Project>

@@ -73,16 +73,15 @@ namespace CyberCloud.AppHost.Tests;
 ///         the one grant no rewrite can produce, because <c>tenant</c> has no <c>parent</c>.
 ///     </para>
 ///     <para>
-///         ⚠ <b>What it still cannot prove.</b> The gateway's nine HTTP stages are not in this path:
-///         <see cref="IResourceManager" /> is resolved from the real
+///         ⚠ <b>What this file does not prove, and what now does.</b> The gateway's nine HTTP stages
+///         are not in this path: <see cref="IResourceManager" /> is resolved from the real
 ///         <c>GatewayComposition.BuildAsync</c> container — the same object graph
 ///         <c>CyberCloud.Gateway.Host</c>'s own <c>Program.cs</c> builds — but the request is handed to
-///         it directly rather than parsed off an <c>HttpContext</c>. That half is
-///         <c>CyberCloud.Gateway.Host.Tests</c>, which runs the whole pipeline against a
-///         <c>DefaultHttpContext</c> with a substituted manager; the two suites meet at
-///         <c>IResourceManager</c> and neither covers the join. Driving it over HTTP would need a
-///         bearer token, and the only resolver that issues one is <c>internal</c> to the gateway and
-///         in-process by design.
+///         it directly rather than parsed off an <c>HttpContext</c>. That was a gap in the repository
+///         rather than a choice here, and it is closed: <see cref="TenantOverHttpTests" /> drives the
+///         same story over HTTP through the stages against this same real manager. This file keeps
+///         the direct call deliberately, because a failure it reports is a failure of the write path
+///         and not of a route, and the two answers are worth being able to tell apart.
 ///     </para>
 ///     <para>
 ///         ⚠ <b>The namespace seam used to be held open by hand here and is now an assertion.</b>

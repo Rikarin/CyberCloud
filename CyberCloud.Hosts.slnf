@@ -5,6 +5,7 @@
       "src/Hosts/CyberCloud.Gateway.Host/CyberCloud.Gateway.Host.csproj",
       "src/Hosts/CyberCloud.Gateway.Host.Tests/CyberCloud.Gateway.Host.Tests.csproj",
       "src/Hosts/CyberCloud.Silo.Host/CyberCloud.Silo.Host.csproj",
+      "src/Hosts/CyberCloud.Silo.Host.Tests/CyberCloud.Silo.Host.Tests.csproj",
       "src/Hosts/CyberCloud.AppHost/CyberCloud.AppHost.csproj",
       "src/Hosts/CyberCloud.AppHost.Tests/CyberCloud.AppHost.Tests.csproj",
       "src/Hosts/CyberCloud.Identity.Host/CyberCloud.Identity.Host.csproj",

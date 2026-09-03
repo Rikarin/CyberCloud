@@ -501,6 +501,8 @@ partial class Build
         // four times before anyone noticed the name had been captured all along.
         var named = failures.OrderBy(x => x, StringComparer.Ordinal).ToList();
 
+        ReportSkippedTests(target);
+
         Assert.Empty(
             named,
             $"{failures.Count} of {projects.Count} {target} suite(s) failed: {string.Join(", ", named)}. "
@@ -511,6 +513,103 @@ partial class Build
             + "fixture, a suite sitting at zero tests started, and a TLS reset from a k3s API server "
             + "that went away are all the same cause wearing different clothes. Run the named suite "
             + "alone before believing it, and if it passes alone, lower CC_TEST_CONTAINER_PARALLELISM.");
+    }
+
+    /// <summary>
+    ///     Prints what every suite in this run skipped, from the reports the suites just wrote.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>Nothing in this build read a skip count until this method, and that is a bigger
+    ///         hole than it sounds.</b> Pass and fail come from a process exit code, and a suite
+    ///         whose cluster-backed tests all skipped exits <b>0</b>: its daemonless companions keep
+    ///         <c>--minimum-expected-tests 1</c> satisfied, the assembly prints <c>Passed!</c>, and
+    ///         a gate reading the exit code cannot tell a run that proved nothing from one that
+    ///         proved everything. That was measured — the bundle assembly's 1-in-8 second-k3s flake
+    ///         (<c>EmptyClusterFixture</c>'s remarks) reported <c>Skipped: 1</c> inside a green
+    ///         build, and it left no other trace.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>It reports and does not fail, and the reason is the mirror-image trap
+    ///         <c>Build.Architecture.cs</c> § <c>LabelsGate</c> spends a paragraph on.</b> Skipping
+    ///         when no Docker daemon answers is this repository's contract, kept deliberately so a
+    ///         developer without one gets a report rather than a red build. Failing on any skip
+    ///         would break every such machine, and a gate people switch off is not a gate. Where a
+    ///         skip is genuinely dishonest — a daemon that has already run one cluster in this
+    ///         process and then could not run a second — the failure belongs at the fixture, which
+    ///         is where <c>EmptyClusterFixture</c> now throws.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Best-effort by construction.</b> A suite that exits non-zero before writing a
+    ///         report writes no <c>.trx</c> at all, and that case is already named in the failure
+    ///         message above — so an unreadable or missing report is passed over here rather than
+    ///         turned into a second, less informative failure about XML.
+    ///     </para>
+    /// </remarks>
+    /// <param name="target">The target whose run is being summarised, for the log line.</param>
+    void ReportSkippedTests(string target)
+    {
+        var skipped = TestResultsDirectory
+            .GlobFiles("*.trx")
+            .Select(report => (Suite: report.NameWithoutExtension, Count: NotExecuted(report)))
+            .Where(x => x.Count > 0)
+            .OrderByDescending(x => x.Count)
+            .ThenBy(x => x.Suite, StringComparer.Ordinal)
+            .ToList();
+
+        if (skipped.Count == 0)
+        {
+            Log.Information("{Target}: no test was skipped in this run.", target);
+
+            return;
+        }
+
+        Log.Information(
+            "{Target}: {Total} test(s) skipped across {Suites} suite(s) — {Detail}. ⚠ A skip is not "
+            + "a pass: these are sentences this run did NOT check, and the exit code says nothing "
+            + "about them. The commonest honest cause is no Docker daemon. Build.Test.cs § "
+            + "ReportSkippedTests.",
+            target,
+            skipped.Sum(x => x.Count),
+            skipped.Count,
+            string.Join(", ", skipped.Select(x => $"{x.Suite} {x.Count}")));
+    }
+
+    /// <summary>
+    ///     The skip count in one xunit TRX report, or <c>0</c> if it cannot be read.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <c>ResultSummary/Counters/@notExecuted</c> is TRX's name for a skip, and it is read
+    ///     rather than the <c>UnitTestResult</c> rows counted: the summary is one attribute the
+    ///     writer computes, and counting rows would quietly answer a different question the day a
+    ///     report gains an outcome this build has not met.
+    /// </remarks>
+    /// <param name="report">The <c>.trx</c> a suite wrote.</param>
+    static int NotExecuted(AbsolutePath report)
+    {
+        try
+        {
+            return XDocument.Load(report)
+                .Descendants()
+                .Where(x => x.Name.LocalName == "Counters")
+                .Select(x => int.TryParse(
+                    x.Attribute("notExecuted")?.Value,
+                    NumberStyles.Integer,
+                    CultureInfo.InvariantCulture,
+                    out var parsed)
+                    ? parsed
+                    : 0)
+                .Sum();
+        }
+        catch (Exception unreadable) when (unreadable is IOException or System.Xml.XmlException)
+        {
+            Log.Debug(
+                unreadable,
+                "Test: {Report} could not be read for its skip count, so this run's report omits it.",
+                report);
+
+            return 0;
+        }
     }
 
     /// <summary>

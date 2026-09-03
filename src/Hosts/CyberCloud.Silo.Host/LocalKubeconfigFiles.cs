@@ -44,14 +44,39 @@ static class LocalKubeconfigFiles {
     public const string Scheme = "file";
 
     /// <summary>
+    ///     What a reference has to start with, checked before it is parsed.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Because comparing <c>Uri.Scheme</c> alone answers a narrower question than it looks
+    ///     like it does, and the difference is per-platform.</b> <see cref="Uri" /> treats an
+    ///     <i>implicit</i> file path as a <c>file:</c> URI, so on Linux and macOS a bare
+    ///     <c>/etc/kubernetes/admin.conf</c> parsed as absolute, reported scheme <c>file</c> and was
+    ///     resolved — while the same reference on Windows failed to parse and was refused as "not a
+    ///     'file:' credential reference". A <c>CredentialRef</c> that means different things on
+    ///     different hosts is not a reference, and the silo that reads it is the one running on
+    ///     Linux. Every writer in this tree spells the scheme (<c>new Uri(path).AbsoluteUri</c>), so
+    ///     requiring it costs nothing and removes the divergence.
+    /// </remarks>
+    const string SchemePrefix = Scheme + ":";
+
+    /// <summary>
     ///     Builds the resolver <c>KubeApiClientFactory.ResolveKubeconfig</c> takes.
     /// </summary>
     /// <param name="root">The directory a reference must resolve inside.</param>
     /// <returns>A resolver that reads the file, or refuses and says why.</returns>
     /// <remarks>
-    ///     ⚠ Every refusal names the reference and the root. A kubeconfig that cannot be found is
-    ///     otherwise indistinguishable, from the reconciler's side, from a cluster that is down: both
-    ///     arrive as a failed apply, hours after the create, in a log nobody is reading.
+    ///     ⚠ Every refusal names the reference or the path it resolved to, and the one that is about
+    ///     the root names the root as well. A kubeconfig that cannot be found is otherwise
+    ///     indistinguishable, from the reconciler's side, from a cluster that is down: both arrive as
+    ///     a failed apply, hours after the create, in a log nobody is reading.
+    ///     <para>
+    ///         ⚠ <b>The root check is lexical and does not follow links.</b> It compares resolved
+    ///         paths, so <c>..</c> cannot climb out of the root, but a symbolic link placed
+    ///         <i>inside</i> the root is followed wherever it points. That is the right boundary for
+    ///         what this guards — a <c>CredentialRef</c> written by a reconciler — and it is not a
+    ///         boundary against whoever can write into the root directory, who is the operator that
+    ///         configured it.
+    ///     </para>
     /// </remarks>
     public static Func<string, CancellationToken, Task<Result<string>>> ResolverFor(string root) {
         ArgumentException.ThrowIfNullOrWhiteSpace(root);
@@ -67,7 +92,8 @@ static class LocalKubeconfigFiles {
                 );
             }
 
-            if (!Uri.TryCreate(credentialRef, UriKind.Absolute, out var uri)
+            if (!credentialRef.StartsWith(SchemePrefix, StringComparison.Ordinal)
+                || !Uri.TryCreate(credentialRef, UriKind.Absolute, out var uri)
                 || !string.Equals(uri.Scheme, Scheme, StringComparison.Ordinal)) {
                 return Result<string>.Failure(
                     ErrorCode.InternalError,
