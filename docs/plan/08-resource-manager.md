@@ -464,6 +464,32 @@ path item carrying that extension reads as a *second* type with the same name �
 the duplicate command, `SdkEmitter` throws on the duplicate model. The reserved-action route above
 needed no emitter change precisely because it is an action; a list is not.
 
+⚠ **`ListAsync` HAS SINCE LANDED, AND IT DOES NOT GIVE THE SOFT-DELETED COLLECTION ANYTHING — WHICH
+IS THE OPPOSITE OF WHAT THE PARAGRAPHS ABOVE PREDICT AND IS THE THING TO READ FIRST.** Both changes
+they name are built: the membership choreography is wired, and `IResourceManager.ListAsync` answers a
+`ResourceCollectionId` with a `Check` per member, a `MaxPageSize` of 100 and a continuation naming the
+last member *examined*. So *"the soft-deleted collection is one filter over whatever answers it"* is
+now testable, and it is **false**: the filter has an empty input. A parked resource is not a member of
+its resource group — `OperationGrain.ParkAsync` calls the **group's** `CompleteDeleteAsync`
+deliberately, because a member left behind would put a name into a listing whose every read is the
+canonical `404`, handing a caller who may list the group but may not read the resource the
+*"something is held here"* signal § Soft delete refuses a `410 Gone` over. That is the right decision
+and it is not the one to reverse. `SoftDeletePathTests.ASoftDeletedResourceIsInNoListingBecauseItLeft`
+`ItsGroupsMembership` pins both halves — absent from the page, and absent from the membership
+underneath the filter, which is where the finding actually is.
+
+⚠ **So listing what is recoverable needs an enumeration source, and the platform has none anywhere.**
+The index is one grain per path and one-way; `ResolveSoftDeletedAsync` answers a question you can only
+ask if you already know the name. Nothing else records that a resource is parked. **The shape that
+fits is a per-resource-group registry of parked resources, written where `ParkAsync` unlists the
+member and cleared where the restore relists it and the purge releases the name** — three call sites
+that already exist, in one grain that does not. It is deliberately *not* the group's own membership:
+the two collections answer different questions to different callers, and merging them is exactly the
+`410 Gone` the decision above refuses. ⚠ Its address is the smaller half and is no longer blocked —
+`ResourceCollectionId` exists and is resource-group-scoped, so *"what is recoverable in this group of
+this type"* is expressible today; anything wider is still the addressing question, because
+`ResourceId.ParsePath` has `const int fixedPrefix = 8` and no subscription-scoped shape.
+
 **Decided: the name is held for the whole window.** Azure holds it — *"You can't reuse the name of a
 key vault that was soft-deleted, until the retention period expires"*, DNS record included. Releasing
 it is the cheaper-sounding option and it breaks restore: a name taken by somebody else leaves a

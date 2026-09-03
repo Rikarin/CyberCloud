@@ -1278,6 +1278,94 @@ public sealed class SoftDeletePathTests(ResourceManagerCluster cluster) {
         (await Read(live)).IsSuccess.ShouldBeTrue("the live resource is untouched");
     }
 
+    /// <summary>
+    ///     ⚠ <b>A parked resource is in no listing and in no membership, so there is nothing for a
+    ///     "what is recoverable" filter to filter.</b>
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>This pins the fact that refutes the obvious design for issue #13.</b> That issue
+    ///         reads as <i>"one filter over the collection endpoint"</i>, and
+    ///         <c>IResourceManager.ListAsync</c> exists with a per-member <c>Check</c>, a page cap
+    ///         and a continuation. What it enumerates is <c>IResourceGroupGrain.ListAsync</c>, and a
+    ///         parked resource has left that membership: <c>OperationGrain.ParkAsync</c> calls the
+    ///         <b>group's</b> <c>CompleteDeleteAsync</c> deliberately, because a member left behind
+    ///         would put a name into a listing whose every read is the canonical <c>404</c> —
+    ///         handing a caller who may list the group but may not read the resource the
+    ///         "something is held here" signal docs/plan/08 § Soft delete refuses a <c>410 Gone</c>
+    ///         over. So the filter has an empty input, and a listing of what is recoverable needs an
+    ///         enumeration source that does not exist rather than a predicate over one that does.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Both doors are asserted, and the second is the one that matters.</b> The listing
+    ///         could have been empty because the <c>Check</c> filtered the member out, which would be
+    ///         a different platform with the same symptom — so the group's own membership is read
+    ///         directly, underneath the filter.
+    ///     </para>
+    /// </remarks>
+    [Fact]
+    public async Task ASoftDeletedResourceIsInNoListingBecauseItLeftItsGroupsMembership() {
+        ResourceManagerCluster.ResetDoubles();
+
+        const string group = "listing-parked";
+        var live = VaultAddress("still-here", group);
+        var parked = VaultAddress("gone-away", group);
+
+        // ⚠ A group of its own rather than `prod`, because this case counts what is in the listing
+        // and the shared group carries whatever every other case in this class left there.
+        (await cluster.Group(live).CreateAsync(live.TenantId, "eu-west-1")).IsSuccess.ShouldBeTrue();
+
+        await Converge((await Create(live)).GetValueOrThrow());
+        await Converge((await Create(parked)).GetValueOrThrow());
+
+        var before = await cluster.Manager.ListAsync(
+            new() {
+                Path = ResourceCollectionId.Of(live).Path,
+                ApiVersion = TestingProvider.V2026,
+                Caller = ResourceManagerCluster.Caller()
+            },
+            TestContext.Current.CancellationToken
+        );
+
+        before.GetValueOrThrow().Resources.Length.ShouldBe(2, "both are live and listable");
+
+        await Converge((await Delete(parked)).GetValueOrThrow());
+
+        var after = await cluster.Manager.ListAsync(
+            new() {
+                Path = ResourceCollectionId.Of(live).Path,
+                ApiVersion = TestingProvider.V2026,
+                Caller = ResourceManagerCluster.Caller()
+            },
+            TestContext.Current.CancellationToken
+        );
+
+        after.GetValueOrThrow().Resources.Select(x => x.Name).ShouldBe(["still-here"]);
+
+        // ── Underneath the filter, which is where the finding actually is ───────────────────────
+        var members = (await cluster.Group(parked).ListAsync())
+            .GetValueOrThrow();
+
+        // ⚠ The calibration, and without it the assertion below passes for an empty membership — a
+        // group grain that answered nothing at all would look exactly like the finding.
+        members.Select(x => x.CanonicalPath).ShouldContain(
+            live.CanonicalPath,
+            "the group's membership does not hold the LIVE resource either, so the assertion below "
+            + "would be measuring an empty list rather than the park"
+        );
+
+        members.Select(x => x.CanonicalPath).ShouldNotContain(
+            parked.CanonicalPath,
+            "the parked resource is still a member of its group, so ListAsync's page was short for "
+            + "the FILTER's reason rather than the membership's — which would make 'list what is "
+            + "recoverable' a predicate over an input that exists"
+        );
+
+        // And it is still recoverable, so the absence above is a listing gap and not a lost resource.
+        (await cluster.Index(parked).GetAsync()).GetValueOrThrow().State.ShouldBe(IndexEntryState.SoftDeleted);
+        (await RestoreAndConverge(parked)).IsSuccess.ShouldBeTrue();
+    }
+
     Task<Result<WriteAccepted>> PurgeExpired(ResourceId address) =>
         cluster.Manager.PurgeExpiredAsync(
             new() { Path = address.Path, ApiVersion = TestingProvider.V2026 },
