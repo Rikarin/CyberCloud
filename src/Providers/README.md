@@ -1972,6 +1972,15 @@ apply, get and delete and no list member at all**, which is why there was nowher
   advertised in `/apis` and answers `503`. Skipping it is the convenient choice and it is wrong:
   discovery cannot tell that group from a CRD group holding a tenant's databases, and a kind missing
   from the answer reads as a kind the namespace does not hold. The refusal names the group.
+- **⚠ MEASURED CONSEQUENCE: on a stock k3s the enumeration usually refuses, and the reason is
+  `metrics.k8s.io/v1beta1`.** k3s registers it as an aggregated `APIService` whose backend is not up
+  in a short-lived container, so a group delete against such a cluster refuses until it is. That is
+  **not** a reason to skip the group: Kubernetes' own namespace controller behaves the same way — an
+  incomplete discovery leaves a namespace stuck in `Terminating` with
+  `NamespaceDeletionDiscoveryFailure` — so refusing *before* issuing the delete is strictly better
+  than issuing one that hangs, and the condition clears on its own when the apiserver comes back.
+  What the platform owes is a refusal that names the group, and
+  `ARealNamespaceHoldsWhatKubernetesPutsThereAndTheReclaimSeesIt` asserts it.
 - **Two smaller repairs fell out.** A list body that would not parse was returned as an *empty page with
   no cursor*, which reads as "this kind holds nothing"; it is now a failure. And an empty
   `labelSelector` was sent as `labelSelector=` rather than omitted, which only mattered once a caller
