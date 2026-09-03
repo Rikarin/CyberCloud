@@ -77,12 +77,19 @@ public sealed class GrainClusterConnectionFactory(IGrainFactory grains) : IClust
 ///     <see cref="IKubeClusterConnection" /> over <see cref="IClusterConnectionGrain" />.
 /// </summary>
 /// <remarks>
-///     ⚠ <b>The same three methods <c>CyberCloud.Kubernetes.Connections.ClusterConnectionHandle</c>
+///     ⚠ <b>The same methods <c>CyberCloud.Kubernetes.Connections.ClusterConnectionHandle</c>
 ///     forwards, and the duplication is the cycle's cost.</b> That type cannot be reached from here
 ///     without <c>CyberCloud.ResourceManager -&gt; CyberCloud.Kubernetes</c> becoming a two-way edge.
-///     The forwarding is mechanical and the interface is three methods wide, which is what makes
+///     The forwarding is mechanical and the interface is four methods wide, which is what makes
 ///     paying it cheaper than merging two modules — and <see cref="IKubeClusterConnection" /> is
 ///     deliberately smaller than the grain for exactly this reason.
+///     <para>
+///         ⚠ <b><c>ListNamespaceAsync</c> is overridden here rather than left to the interface's
+///         fail-closed default, and forgetting to would have been invisible.</b> The default refuses,
+///         so a resource-group delete would report "this connection cannot enumerate a namespace"
+///         against the one connection type that can — a refusal, so nothing would be destroyed, but
+///         also a feature that never works in production and works in every test.
+///     </para>
 /// </remarks>
 /// <param name="grains">The grain factory.</param>
 /// <param name="clusterId">The cluster this handle addresses.</param>
@@ -111,4 +118,11 @@ sealed class GrainClusterConnection(IGrainFactory grains, Guid clusterId) : IKub
         CancellationToken cancellationToken = default
     ) =>
         Grain.DeleteAsync(command, policy);
+
+    /// <inheritdoc />
+    public Task<Result<IReadOnlyList<KubeObjectSummary>>> ListNamespaceAsync(
+        string ns,
+        CancellationToken cancellationToken = default
+    ) =>
+        Grain.ListNamespaceAsync(ns);
 }

@@ -74,4 +74,61 @@ public interface IKubeClusterConnection {
         CascadePolicy policy = CascadePolicy.Background,
         CancellationToken cancellationToken = default
     );
+
+    /// <summary>
+    ///     Everything in one namespace, of every kind the cluster serves, whether or not this
+    ///     platform wrote it.
+    /// </summary>
+    /// <param name="ns">The namespace to enumerate.</param>
+    /// <param name="cancellationToken">The caller's budget.</param>
+    /// <returns>
+    ///     Every object, or the failure that stopped the enumeration. ⚠ <b>Never a partial
+    ///     listing.</b> An implementation that returned what it managed to read would report the
+    ///     kinds it could not reach as absent, and absence here is what authorises deleting the
+    ///     namespace.
+    /// </returns>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>THIS IS THE FIRST READ MEMBER HERE THAT IS NOT KEYED BY AN OBJECT, AND IT WAS
+    ///         ADDED BY THE ONE CALLER THAT CANNOT BE EXPRESSED WITHOUT IT.</b> Until it existed the
+    ///         interface had <see cref="ApplyAsync" />, <see cref="GetAsync" /> and
+    ///         <see cref="DeleteAsync" /> — two writes and a read of a name you already know — so a
+    ///         component asking "what is in this namespace" had nowhere to ask. That is why
+    ///         <c>RetainedVolume</c> is shaped "name, then verify" rather than "select, then delete",
+    ///         and why <c>INamespaceInventory</c> had no implementation.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Not <c>IClusterObjectInventory</c>, and the difference is the whole safety of a
+    ///         namespace delete.</b> That seam selects on
+    ///         <c>cybercloud.io/managed-by=cybercloud</c> because a drift scan compares what the
+    ///         platform wrote against what it meant to write. This one must find the objects that
+    ///         selector excludes — a tenant's own <c>PersistentVolumeClaim</c>, a <c>Secret</c> an
+    ///         operator added, a <c>StatefulSet</c> from a chart nobody registered — so it applies no
+    ///         selector at all.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The default implementation FAILS, and every connection that cannot really
+    ///         enumerate a namespace inherits it on purpose.</b> The alternative — an abstract member
+    ///         — would have forced twenty reconciler test doubles to write a body, and the body
+    ///         everybody writes is <c>return []</c>, which is the one answer that authorises a
+    ///         recursive delete of a tenant's live data. Fail-closed by default is the only default
+    ///         whose worst case is a refused reclaim rather than a destroyed namespace. The
+    ///         production path overrides it; see <c>ClusterConnectionHandle</c>.
+    ///     </para>
+    /// </remarks>
+    Task<Result<IReadOnlyList<KubeObjectSummary>>> ListNamespaceAsync(
+        string ns,
+        CancellationToken cancellationToken = default
+    ) =>
+        Task.FromResult(
+            Result<IReadOnlyList<KubeObjectSummary>>.Failure(
+                ErrorCode.InternalError,
+                $"This cluster connection ({GetType().Name}) cannot enumerate namespace '{ns}' on "
+                + $"cluster {ClusterId:D}, so nothing can say what is in it. It fails rather than "
+                + "reporting an empty namespace: an empty namespace is the one answer that "
+                + "authorises deleting it, and deleting a namespace is a recursive delete of every "
+                + "object inside — including the volume claims a soft-deleted resource is restored "
+                + "from."
+            )
+        );
 }

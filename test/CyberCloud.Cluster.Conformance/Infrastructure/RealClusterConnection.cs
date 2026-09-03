@@ -81,6 +81,20 @@ public sealed class RealClusterConnection(IKubeApiClient api, Guid clusterId) : 
         ArgumentNullException.ThrowIfNull(command);
         return api.DeleteAsync(command.Target, policy, cancellationToken);
     }
+
+    /// <inheritdoc />
+    /// <remarks>
+    ///     ⚠ <b>The same code the connection grain runs, against the same API server, and that is
+    ///     what makes this the only place the namespace inventory is really exercised.</b> Everything
+    ///     it does that a dictionary cannot fail is here: the discovery of what a real cluster
+    ///     serves, the objects Kubernetes puts in a namespace without being asked, and the CRDs the
+    ///     conformance fixtures install.
+    /// </remarks>
+    public Task<Result<IReadOnlyList<KubeObjectSummary>>> ListNamespaceAsync(
+        string ns,
+        CancellationToken cancellationToken = default
+    ) =>
+        NamespaceContents.ListAsync(api, clusterId, ns, cancellationToken);
 }
 
 /// <summary>Hands the reconcile driver the one real connection a harness owns.</summary>

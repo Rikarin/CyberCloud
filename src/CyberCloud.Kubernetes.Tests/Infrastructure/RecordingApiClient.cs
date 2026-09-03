@@ -91,6 +91,33 @@ public sealed class RecordingApiClient : IKubeApiClient {
     ) =>
         Task.FromResult(Result.Success);
 
+    /// <summary>
+    ///     The kinds <see cref="DiscoverNamespacedKindsAsync" /> answers with, or the refusal it
+    ///     answers with instead.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ Defaults to a <b>failure</b>, deliberately. A fake that discovered nothing would let a
+    ///     namespace enumeration report a namespace as empty without a single list call, which is
+    ///     the one wrong answer on this path. A test that wants an enumeration says which kinds it
+    ///     is over.
+    /// </remarks>
+    public Result<IReadOnlyList<GroupVersionKind>> Discovery { get; set; } =
+        Result<IReadOnlyList<GroupVersionKind>>.Failure(
+            ErrorCode.InternalError,
+            "RecordingApiClient.Discovery was not scripted."
+        );
+
+    /// <summary>How many discovery calls have been made.</summary>
+    public int Discoveries { get; private set; }
+
+    /// <inheritdoc />
+    public Task<Result<IReadOnlyList<GroupVersionKind>>> DiscoverNamespacedKindsAsync(
+        CancellationToken cancellationToken = default
+    ) {
+        Discoveries++;
+        return Task.FromResult(Discovery);
+    }
+
     /// <inheritdoc />
     public Task<Result<ListPage>> ListAsync(
         GroupVersionKind kind,

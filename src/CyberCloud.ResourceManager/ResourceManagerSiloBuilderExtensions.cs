@@ -41,8 +41,9 @@ public static class ResourceManagerSiloBuilderExtensions {
     ///         <see cref="NotSupportedPolicyEvaluator" /> says no policy engine ran rather than
     ///         allowing; <see cref="UnavailableSecretResolver" /> refuses rather than returning empty;
     ///         <see cref="UnavailableClusterObjectInventory" /> fails rather than reporting an empty
-    ///         cluster; <see cref="UnavailableNamespaceInventory" /> fails rather than reporting an
-    ///         empty namespace, which is the answer that would authorize deleting it. Each of those is
+    ///         cluster; <see cref="ConnectionNamespaceInventory" /> refuses when there is no
+    ///         connection rather than reporting an empty namespace, which is the answer that would
+    ///         authorize deleting it. Each of those is
     ///         a place where the plausible default is the dangerous one, and
     ///         the reasons are on the types. <c>TryAdd</c> throughout, so a host that has the real
     ///         thing registers it first and keeps it.
@@ -110,7 +111,13 @@ public static class ResourceManagerSiloBuilderExtensions {
         services.TryAddSingleton<IClusterConnectionFactory, NoClusterConnectionFactory>();
         services.TryAddSingleton<IClusterConnectionRegistrar, UnavailableClusterConnectionRegistrar>();
         services.TryAddSingleton<IClusterObjectInventory, UnavailableClusterObjectInventory>();
-        services.TryAddSingleton<INamespaceInventory, UnavailableNamespaceInventory>();
+        // ⚠ THE CONNECTION-BACKED ONE, AND IT IS STILL FAIL-CLOSED. It reads through
+        // IClusterConnectionFactory, whose own default answers null for every cluster — so a host
+        // that has not wired connections gets a refusal naming the cluster rather than an empty
+        // namespace, which is what UnavailableNamespaceInventory was standing in to guarantee. That
+        // type stays in the tree and stays registered by nothing: it is what a host registers when
+        // it wants the seam explicitly unavailable.
+        services.TryAddSingleton<INamespaceInventory, ConnectionNamespaceInventory>();
         services.TryAddSingleton<IResourceAuthorizer, ReBacResourceAuthorizer>();
 
         // Writes the resource -> resourceGroup `parent` edge at step 8 of the write path. It belongs
