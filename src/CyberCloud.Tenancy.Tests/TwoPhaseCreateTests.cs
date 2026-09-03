@@ -303,6 +303,29 @@ public sealed class TwoPhaseCreateTests(TenancyCluster cluster) {
     }
 
     [Fact]
+    public async Task TheReaperRefusesAThresholdShorterThanTheIndexLease() {
+        // ⚠ THE SABOTAGE ON THE REAPER'S OWN EVIDENCE. Its proof is "old, and the index does not
+        // name this member" — but a claim inside its five-minute lease has not expired yet, so a
+        // two-minute threshold would sweep a create that is merely slow on the strength of an index
+        // entry that was about to be confirmed. Refused rather than clamped: quietly widening it
+        // would hide that the caller asked for something this cannot answer.
+        var tenant = Tenant(11);
+        var address = await GroupAndAddress(tenant, "too-eager", "web-01");
+
+        var refused = await Group(address).ReapOrphansAsync(TimeSpan.FromMinutes(2));
+
+        refused.TryGetError(out var error).ShouldBeTrue();
+        error.Code.ShouldBe(ErrorCode.InvalidRequestBody);
+        error.Message.ShouldContain("index lease");
+
+        IResourceGroupGrain.OrphanAge.ShouldBeGreaterThan(
+            TimeSpan.FromMinutes(5),
+            "the value both callers use has to clear the floor, or the reaper is refused every time "
+            + "it runs and nothing says so."
+        );
+    }
+
+    [Fact]
     public async Task TheReaperLeavesAMemberThatIsSimplyYoung() {
         var tenant = Tenant(10);
         var address = await GroupAndAddress(tenant, "in-flight", "web-01");

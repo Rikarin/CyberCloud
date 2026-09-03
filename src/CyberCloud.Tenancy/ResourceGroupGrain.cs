@@ -388,6 +388,23 @@ public sealed class ResourceGroupGrain(
 
     /// <inheritdoc />
     public async Task<Result<IReadOnlyList<ResourceGroupMember>>> ReapOrphansAsync(TimeSpan olderThan) {
+        // ⚠ THE FLOOR IS THE INDEX LEASE, AND WITHOUT IT THE REAPER'S EVIDENCE IS CIRCULAR. The
+        // proof below is "old, and the index does not name this member" — but a claim inside its
+        // five-minute lease has not expired yet, so a threshold shorter than the lease would sweep a
+        // create that is merely slow, on the strength of an index entry that was about to be
+        // confirmed. Refused rather than clamped: a caller that asked for a two-minute sweep asked
+        // for something this cannot answer, and quietly widening it would hide that.
+        if (olderThan < IndexClaimMachine.LeaseDuration) {
+            return Result<IReadOnlyList<ResourceGroupMember>>.Failure(
+                ErrorCode.InvalidRequestBody,
+                $"A {olderThan.TotalMinutes.ToString("0.##", CultureInfo.InvariantCulture)}-minute "
+                + "orphan threshold is shorter than the index lease of "
+                + IndexClaimMachine.LeaseDuration.TotalMinutes.ToString("0", CultureInfo.InvariantCulture)
+                + " minutes, so a create that is simply slow is indistinguishable from one that "
+                + "died. IResourceGroupGrain.OrphanAge is the value the reaper uses."
+            );
+        }
+
         var candidates = (await ListOrphansAsync(olderThan)).GetValueOrThrow();
 
         if (candidates.Count == 0) {

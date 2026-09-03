@@ -78,6 +78,20 @@ public sealed class ResourceGroupReclaimer(
             );
         }
 
+        // ⚠ A ScopeId is a struct and ScopeId.Group takes any string, so a caller can hand this one
+        // whose Kind says resource group and whose name is empty. Refused here rather than left to
+        // throw out of GrainKeys or NamespaceFor: every step below this either addresses a grain or
+        // derives a namespace from that name, and a namespace derived from an empty group name is
+        // '{subscriptionId:N}-' — an address no resource ever applied into and one this method would
+        // then report a clean reclaim over.
+        if (string.IsNullOrEmpty(scope.ResourceGroup) || scope.SubscriptionId == Guid.Empty) {
+            return Result.Failure(
+                ErrorCode.InvalidResourceId,
+                $"'{scope.Path}' does not name a resource group in a subscription, so there is "
+                + "nothing to seal and no namespace to derive."
+            );
+        }
+
         var tenant = scope.TenantId.ToString("D", CultureInfo.InvariantCulture);
 
         var group = grains
