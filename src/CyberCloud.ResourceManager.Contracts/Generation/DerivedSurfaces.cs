@@ -238,11 +238,27 @@ public static class DerivedSurfaces {
             return [];
         }
 
-        var commandCount = groups.Sum(
-            group => group.Value?["commands"] is JsonObject c ? c.Count : 0
-        );
+        // ⚠ THE SCOPE GROUP IS COUNTED SEPARATELY BECAUSE IT COMES FROM NO PROVIDER — issue #63.
+        // Folding it in would make "one command per resource type" off by three and the invariant
+        // would have to be relaxed to a range, which is the shape of a check that stops catching the
+        // thing it was written for.
+        var commandCount = groups
+            .Where(x => !string.Equals(x.Key, CliEmitter.ScopeGroupName, StringComparison.Ordinal))
+            .Sum(group => group.Value?["commands"] is JsonObject c ? c.Count : 0);
 
         var typeCount = DocumentReader.TypesOf(document).Length;
+        var scopeCount = groups[CliEmitter.ScopeGroupName]?["commands"] is JsonObject scopes ? scopes.Count : 0;
+        var declaredScopes = DocumentReader.ScopesOf(document).Length;
+
+        if (scopeCount != declaredScopes) {
+            problems.Add(
+                $"the verb tree's '{CliEmitter.ScopeGroupName}' group has "
+                + $"{scopeCount.ToString(CultureInfo.InvariantCulture)} command(s) and the document "
+                + $"declares {declaredScopes.ToString(CultureInfo.InvariantCulture)} scope(s). A scope "
+                + "the CLI cannot reach is an address a tenant can only use by hand — issue #63 is "
+                + "exactly that state, and this is what stops it coming back one scope at a time."
+            );
+        }
 
         if (commandCount != typeCount) {
             problems.Add(
@@ -265,7 +281,14 @@ public static class DerivedSurfaces {
             // builds; this one asks whether the tree sitting in `generated/cli/` collides — a
             // question a hand edit, a partial regeneration or a merge can answer differently. Same
             // scope rule, same sentence: CliTokens owns both.
-            problems.AddRange(CliTokens.Collisions(commands.Select(x => Declaration(x.Value))));
+            //
+            // ⚠ Not the scope group: its commands carry no `resourceType`, so every one of them
+            // would arrive here as the declaration ("", "", "") and collide with itself — three
+            // messages naming an empty provider and an empty type, which is worse than no check.
+            // Its own count is asserted above, and a JsonObject cannot hold one key twice.
+            if (!string.Equals(group.Key, CliEmitter.ScopeGroupName, StringComparison.Ordinal)) {
+                problems.AddRange(CliTokens.Collisions(commands.Select(x => Declaration(x.Value))));
+            }
 
             foreach (var command in commands) {
                 if (command.Value?["verbs"] is not JsonObject verbs) {

@@ -88,6 +88,25 @@ public static class CliEmitter {
             commands.Add(name, Command(type, version));
         }
 
+        // ⚠ THE SCOPE GROUP — issue #63, and the one group that comes from no provider. Added after
+        // the loop so the check below sees an already-populated `groups`: a provider namespace whose
+        // last segment is `scope` would otherwise MERGE into this group rather than collide with it,
+        // and JsonObject's indexer would leave one of the two commands nowhere.
+        var scopes = ScopeGroup(document, version);
+
+        if (scopes is not null) {
+            if (groups.ContainsKey(ScopeGroupName)) {
+                throw new InvalidOperationException(
+                    $"A provider namespace produces the CLI group '{ScopeGroupName}', which is the "
+                    + "group the scope API takes — 'cyc scope subscription create' and that "
+                    + "provider's commands would share a parent command and one of them would be "
+                    + "unreachable. Rename the provider namespace — docs/plan/21 § Grammar."
+                );
+            }
+
+            groups[ScopeGroupName] = scopes;
+        }
+
         // ⚠ THE SECOND WAY ONE TOKEN COMES TO MEAN TWO THINGS, AND THE CHECK ABOVE CANNOT SEE IT. A
         // command name lands in a JsonObject key, so a duplicate is visible there; a SHORT NAME lands
         // in an `alias` member on a command of a different name, so two of them — or one of them and
@@ -198,28 +217,34 @@ public static class CliEmitter {
                 "GET",
                 type,
                 version,
-                [],
+                PageFlags(type),
                 longRunning: false,
                 named: false
             );
 
             list["path"] = type.CollectionPath;
 
-            // ⚠ PAGED, AND THE HOST HAS TO KNOW IT EVEN THOUGH IT CANNOT YET ACT ON IT. docs/plan/07
-            // puts ListObjects at M2, so the platform filters a listing one permission check per
-            // member and caps the page (ListRequest.MaxPageSize) — a host that read one page and
-            // stopped would silently truncate, and a listing is the one response whose truncation
-            // looks exactly like a small result.
+            // ⚠ PAGED, AND THE HOST ACTS ON IT. docs/plan/07 puts ListObjects at M2, so the platform
+            // filters a listing one permission check per member and caps the page
+            // (ListRequest.MaxPageSize) — a host that read one page and stopped would silently
+            // truncate, and a listing is the one response whose truncation looks exactly like a small
+            // result.
             //
-            // ⚠ AND THERE IS DELIBERATELY NO `pageFlags` HERE. The obvious member is a list of the
-            // flags that drive paging — `--top`, `--skip-token` — and it would be two constants in
-            // assemblies that cannot see each other: CliFlag can bind a body pointer (JsonPointer) or
-            // a path placeholder (PathPlaceholder) and has no QUERY binding at all, so `cyc` would
-            // accept both flags, parse both, and send neither. A flag that is accepted and ignored is
-            // worse than a flag that is absent. The verb says it is paged; wiring the query is a
-            // change to CliFlag and to the host, and until that lands `cyc … list` fetches the first
-            // page.
+            // ⚠ THIS MEMBER USED TO SAY there is deliberately no `pageFlags`, because `--top` and
+            // `--skip-token` would have been "two constants in assemblies that cannot see each
+            // other": CliFlag could bind a body pointer or a path placeholder and had no query
+            // binding, so cyc would have accepted both flags, parsed both and sent neither. Both
+            // halves are now built — CliFlag.QueryParameter, and the flags above are read off the
+            // document's own declared query parameters rather than named here — so the constants are
+            // one constant, in the document. Issue #64.
             list["paged"] = true;
+
+            // ⚠ Host behaviour, so it is named here rather than assumed there — the argument
+            // `waitFlags` already makes. `--top` and `--skip-token` are contract: they go on the
+            // wire and are in `flags` with a `queryParameter`. `--all` sends nothing; it means "keep
+            // following nextLink", which turns one command into N round trips and is therefore the
+            // host's decision to implement and the tree's to authorise.
+            list["pageFlags"] = new JsonArray { "--all" };
 
             verbs["list"] = list;
         }
@@ -359,6 +384,231 @@ public static class CliEmitter {
         return verb;
     }
 
+    // ── The scope group, which comes from no provider ──────────────────────────────────────────
+
+    /// <summary>
+    ///     The top-level group the scope API takes.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>One group holding three commands rather than three top-level groups.</b> Azure spells
+    ///     these <c>az account</c> and <c>az group</c>, and both of those names are already taken
+    ///     here: <c>account</c> is one of the <c>cyc</c> host's own commands, and <c>group</c> next
+    ///     to fourteen provider groups reads as "a group of commands". One named parent makes the
+    ///     scope API findable — <c>cyc scope --help</c> lists exactly the three things a scope is —
+    ///     and leaves one name to keep clear of providers instead of three.
+    /// </remarks>
+    public const string ScopeGroupName = "scope";
+
+    /// <summary>
+    ///     The scope group, or <see langword="null" /> when the document declares no scope.
+    /// </summary>
+    /// <param name="document">An emitted document.</param>
+    /// <param name="version">The api-version.</param>
+    /// <remarks>
+    ///     ⚠ <b>Null rather than an empty group when there is nothing to put in it.</b> A group with
+    ///     no commands is a <c>cyc scope</c> that parses, prints a heading and can do nothing — the
+    ///     same "a verb whose URL does not exist" failure the <c>list</c> verb guards against, one
+    ///     level up.
+    /// </remarks>
+    static JsonObject? ScopeGroup(JsonObject document, string version) {
+        var scopes = DocumentReader.ScopesOf(document);
+
+        if (scopes.IsEmpty) {
+            return null;
+        }
+
+        var commands = new JsonObject();
+
+        foreach (var scope in scopes) {
+            commands[Kebab(scope.Kind)] = ScopeCommand(scope, version);
+        }
+
+        return new JsonObject {
+            ["name"] = ScopeGroupName,
+            ["summary"] =
+                "The tenant, subscription and resource group a resource lives in — docs/plan/06 "
+                + "§ The hierarchy. ⚠ These are not resources: a scope converges before the call "
+                + "returns, so there is nothing to wait for and no --wait.",
+            ["commands"] = Sorted(commands)
+        };
+    }
+
+    static JsonObject ScopeCommand(DocumentScope scope, string version) {
+        var verbs = new JsonObject();
+        var address = ScopeAddress(scope);
+
+        verbs["show"] = ScopeVerb("show", "Read a " + scope.DisplayName.ToLowerInvariant() + ".", "GET", scope, version, address, []);
+
+        if (scope.Creatable) {
+            // ⚠ `create` and NOT long-running, which is the one place a scope verb differs from a
+            // resource verb of the same name. docs/plan/10 § Shape: a scope is one grain activation
+            // and converges before the call returns, so a --wait would poll an operation URL that
+            // answers 404.
+            verbs["create"] = ScopeVerb(
+                "create",
+                "Create a " + scope.DisplayName.ToLowerInvariant()
+                + ". Repeating it with the same name is a success and changes nothing.",
+                "PUT",
+                scope,
+                version,
+                address,
+                FlagsOf(scope.Body, string.Empty, address)
+            );
+        }
+
+        return new JsonObject {
+            ["name"] = Kebab(scope.Kind),
+            // ⚠ The Azure-shaped type string, so a scope command answers the same question a
+            // resource command's `resourceType` does. It is NOT a registered resource type and
+            // nothing routes on it — ScopeTypeNames' own remarks.
+            ["scopeType"] = scope.TypeName,
+            ["title"] = scope.DisplayName,
+            ["plural"] = scope.DisplayPlural,
+            ["summary"] = scope.Summary,
+            ["verbs"] = Sorted(verbs)
+        };
+    }
+
+    static JsonObject ScopeVerb(
+        string name,
+        string summary,
+        string method,
+        DocumentScope scope,
+        string version,
+        ImmutableArray<CliFlag> address,
+        ImmutableArray<CliFlag> body
+    ) {
+        var flags = new JsonArray();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var flag in address.AddRange(body).OrderBy(x => x.Name, StringComparer.Ordinal)) {
+            if (!seen.Add(flag.Name)) {
+                throw new InvalidOperationException(
+                    $"'{flag.Name}' is the name of two flags on 'scope {Kebab(scope.Kind)} {name}'. A "
+                    + "verb's flags are a JSON array, so both would be emitted and the host would "
+                    + "bind one of them. Rename the scope body property — docs/plan/21 § Grammar."
+                );
+            }
+
+            flags.Add(flag.ToJson());
+        }
+
+        return new JsonObject {
+            ["name"] = name,
+            ["summary"] = summary,
+            ["method"] = method,
+            ["path"] = scope.Path,
+            ["apiVersion"] = version,
+            // ⚠ Emitted as false rather than omitted, because every other verb in this tree carries
+            // it and a reader comparing two verbs should not have to know that absent means false.
+            ["longRunning"] = false,
+            ["scope"] = scope.Kind,
+            ["flags"] = flags
+        };
+    }
+
+    /// <summary>
+    ///     A scope's address flags: <c>--name</c> for its own segment, and the ancestors' own flags.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>The scope's own segment is <c>--name</c> and is required, even when that segment
+    ///         is <c>{subscriptionId}</c>.</b> The obvious alternative — reuse <c>--subscription</c>,
+    ///         which is the flag every resource verb fills that placeholder from — would make
+    ///         <c>cyc scope subscription create</c> read the profile's current subscription and
+    ///         create <i>that</i> when the flag was omitted. Creating a scope the caller did not name
+    ///         is not a thing a CLI may do quietly, so the flag that names what is being created is
+    ///         never the flag that remembers where you are working.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The ancestors keep their profile-backed flags, which is the same asymmetry the
+    ///         resource verbs have.</b> A subscription's tenant is context; a group's subscription is
+    ///         context; the thing on the end of the path is not.
+    ///     </para>
+    /// </remarks>
+    static ImmutableArray<CliFlag> ScopeAddress(DocumentScope scope) {
+        var flags = ImmutableArray.CreateBuilder<CliFlag>();
+
+        foreach (var placeholder in scope.AncestorPlaceholders) {
+            flags.Add(ProfileFlag(placeholder));
+        }
+
+        // ⚠ The tenant scope's only placeholder is its ancestor-free own, and it is the one scope
+        // whose name IS context: `cyc scope tenant show` with no flags reads the tenant the token is
+        // for, which is the only tenant a request can address at all. So it takes the profile flag
+        // rather than a --name.
+        if (scope.AncestorPlaceholders.IsEmpty && ProfileFlagFor(scope.NamePlaceholder) is { } own) {
+            flags.Add(own);
+
+            return flags.ToImmutable();
+        }
+
+        flags.Add(
+            new(
+                "--name",
+                "string",
+                "The " + scope.DisplayName.ToLowerInvariant()
+                + "'s own name. ⚠ Required, and never taken from the profile: the flag that names "
+                + "what you are addressing is never the flag that remembers where you are working, "
+                + "or a create with the flag left off would create the scope you are already in.",
+                Required: true
+            ) { PathPlaceholder = scope.NamePlaceholder }
+        );
+
+        return flags.ToImmutable();
+    }
+
+    /// <summary>The profile-backed address flag a platform placeholder takes.</summary>
+    static CliFlag ProfileFlag(string placeholder) =>
+        ProfileFlagFor(placeholder)
+        ?? throw new InvalidOperationException(
+            $"A scope path names the ancestor placeholder '{placeholder}', which is not one of the "
+            + "platform envelope's. Every scope's ancestors are the tenant and the subscription — "
+            + "docs/plan/06 § The hierarchy — so this is a change to OpenApiEmitter.ScopePathItems "
+            + "that this emitter has not been taught."
+        );
+
+    /// <summary>The platform envelope's flag for a placeholder, or <see langword="null" />.</summary>
+    /// <remarks>
+    ///     ⚠ Built from <see cref="Address" />'s own output rather than listed a second time, so a
+    ///     scope's <c>--tenant</c> and a resource's are the same flag — same name, same environment
+    ///     variable, same summary. Two spellings of <c>CYC_SUBSCRIPTION</c> is a CI pipeline that
+    ///     works for one command and not the next.
+    /// </remarks>
+    static CliFlag? ProfileFlagFor(string placeholder) =>
+        PlatformFlags.FirstOrDefault(
+            x => string.Equals(x.PathPlaceholder, placeholder, StringComparison.Ordinal)
+        ) is { Name.Length: > 0 } flag
+            ? flag
+            : null;
+
+    /// <summary>
+    ///     The platform envelope's address flags — the three every path carries.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>One list, read by <see cref="Address" /> and by <see cref="ScopeAddress" />.</b> A
+    ///     scope's <c>--tenant</c> and a resource's have to be the same flag — same name, same
+    ///     environment variable, same summary — or a CI pipeline that exports <c>CYC_TENANT</c> works
+    ///     for one command and not the next, which is the kind of difference nobody looks for.
+    /// </remarks>
+    static readonly ImmutableArray<CliFlag> PlatformFlags = [
+        new(
+            "--resource-group",
+            "string",
+            "The resource group. docs/plan/06 § The hierarchy.",
+            Required: true
+        ) { PathPlaceholder = DocumentReader.ResourceGroupPlaceholder },
+        new(
+            "--subscription",
+            "string",
+            "The subscription. Defaults to the current profile.",
+            Required: false
+        ) { Environment = "CYC_SUBSCRIPTION", PathPlaceholder = DocumentReader.SubscriptionPlaceholder },
+        new("--tenant", "string", "The tenant. Defaults to the current profile.", Required: false) {
+            Environment = "CYC_TENANT", PathPlaceholder = DocumentReader.TenantPlaceholder
+        }
+    ];
+
     // ── Flags ──────────────────────────────────────────────────────────────────────────────────
 
     /// <summary>
@@ -409,31 +659,7 @@ public static class CliEmitter {
             );
         }
 
-        flags.Add(
-            new(
-                "--resource-group",
-                "string",
-                "The resource group. docs/plan/06 § The hierarchy.",
-                Required: true
-            ) { PathPlaceholder = DocumentReader.ResourceGroupPlaceholder }
-        );
-
-        flags.Add(
-            new(
-                "--subscription",
-                "string",
-                "The subscription. Defaults to the current profile.",
-                Required: false
-            ) {
-                Environment = "CYC_SUBSCRIPTION", PathPlaceholder = DocumentReader.SubscriptionPlaceholder
-            }
-        );
-
-        flags.Add(
-            new("--tenant", "string", "The tenant. Defaults to the current profile.", Required: false) {
-                Environment = "CYC_TENANT", PathPlaceholder = DocumentReader.TenantPlaceholder
-            }
-        );
+        flags.AddRange(PlatformFlags);
 
         foreach (var placeholder in DocumentReader.AncestorPlaceholdersOf(type.Path)) {
             flags.Add(
@@ -447,6 +673,66 @@ public static class CliEmitter {
                     + "part of the address rather than part of the body.",
                     Required: true
                 ) { PathPlaceholder = placeholder }
+            );
+        }
+
+        return flags.ToImmutable();
+    }
+
+    /// <summary>
+    ///     One flag per query parameter the collection <c>GET</c> declares — the paging pair.
+    /// </summary>
+    /// <param name="type">The resource type, whose collection path item supplies the parameters.</param>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>Read off the document's declared parameters rather than named here, and that is
+    ///         the whole of issue #64's second half.</b> The first half was that <c>CliFlag</c> had no
+    ///         query binding, so a <c>--top</c> would have been accepted, parsed and never sent. The
+    ///         second is subtler and outlives the fix: <c>$top</c> and <c>$skipToken</c> written here
+    ///         would be a second copy of what
+    ///         <c>OpenApiEmitter.CollectionParameters</c> writes, and a gateway ignores a query
+    ///         parameter it does not recognise. A CLI sending <c>$skip-token</c> at a gateway reading
+    ///         <c>$skipToken</c> would answer <c>200</c> with page one, for ever, with nothing
+    ///         anywhere saying so.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The flag name drops the <c>$</c> and kebabs what is left; the wire name keeps
+    ///         it.</b> <c>--$top</c> is not a flag any shell makes easy to type, and
+    ///         <see cref="CliFlag.QueryParameter" /> carries the name the request needs, so the two
+    ///         never have to be derived from each other.
+    ///     </para>
+    /// </remarks>
+    static ImmutableArray<CliFlag> PageFlags(DocumentType type) {
+        var flags = ImmutableArray.CreateBuilder<CliFlag>();
+
+        foreach (var parameter in type.CollectionQuery) {
+            var name = "--" + Kebab(parameter.Name.TrimStart('$'));
+
+            // ⚠ THE COLLECTION DECLARES `api-version` TOO, AND IT MUST NOT BECOME A VERB FLAG.
+            // Reading the document's query parameters rather than naming two of them is what this
+            // method is for, and the first thing it found was a third: every operation declares
+            // `api-version`, so `cyc … list` grew a REQUIRED `--api-version` that shadowed the
+            // global one of the same name — the verb would have refused every invocation that did
+            // not repeat a value the SDK's ApiVersionHandler already puts on the wire. Filtered
+            // against the global flags this file emits rather than against the string
+            // "api-version", so a global flag added later cannot be shadowed by a provider
+            // declaring a query parameter of that name.
+            if (GlobalFlagNames.Contains(name)) {
+                continue;
+            }
+
+            flags.Add(
+                new(
+                    name,
+                    parameter.Type switch {
+                        "integer" => "integer",
+                        "number" => "number",
+                        "boolean" => "switch",
+                        _ => "string"
+                    },
+                    parameter.Description,
+                    parameter.Required
+                ) { QueryParameter = parameter.Name }
             );
         }
 
@@ -581,6 +867,18 @@ public static class CliEmitter {
 
     // ── The platform envelope, which no provider varies ────────────────────────────────────────
 
+    /// <summary>
+    ///     The names <see cref="GlobalFlags" /> takes, which no verb's own flag may shadow.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Read back off the emitted array rather than listed beside it.</b> Two lists is how
+    ///     the check comes to disagree with the thing it is checking, and the failure here is
+    ///     quiet: a verb flag that shadows a global one is a flag <c>System.CommandLine</c> resolves
+    ///     to whichever it finds first.
+    /// </remarks>
+    static readonly ImmutableHashSet<string> GlobalFlagNames =
+        [.. GlobalFlags(string.Empty).Select(x => DocumentReader.Text(x?["name"]))];
+
     static JsonArray GlobalFlags(string version) =>
         new() {
             new JsonObject {
@@ -684,6 +982,23 @@ public readonly record struct CliFlag(string Name, string Type, string Summary, 
     /// </remarks>
     public string PathPlaceholder { get; init; } = string.Empty;
 
+    /// <summary>
+    ///     The query parameter this flag becomes, <c>$</c> and all, or <c>""</c> when the flag is not
+    ///     one.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>The third binding, and until it existed a paging flag could not be emitted at all.</b>
+    ///     <see cref="JsonPointer" /> puts a value in the body and <see cref="PathPlaceholder" /> puts
+    ///     one in the URL's path; a <c>$top</c> belongs in neither, so <c>CliEmitter</c> deliberately
+    ///     emitted no flag for it rather than emit one the host would accept, parse and never
+    ///     send — issue #64. ⚠ The name is the wire name rather than the flag's, because the flag is
+    ///     <c>--skip-token</c> and the parameter is <c>$skipToken</c>, and a host recomputing one from
+    ///     the other would be re-deriving a convention this emitter owns. A gateway ignores a query
+    ///     parameter it does not recognise, so getting that wrong is a <c>200</c> holding page one
+    ///     again rather than an error.
+    /// </remarks>
+    public string QueryParameter { get; init; } = string.Empty;
+
     /// <summary>A second name for the same flag, or <c>""</c>.</summary>
     public string Alias { get; init; } = string.Empty;
 
@@ -758,6 +1073,11 @@ public readonly record struct CliFlag(string Name, string Type, string Summary, 
             // ⚠ Which `{…}` in the verb's own `path` this flag fills. The host substitutes rather
             // than guessing from the flag's name — see the member's remarks.
             node["pathPlaceholder"] = PathPlaceholder;
+        }
+
+        if (QueryParameter.Length > 0) {
+            // ⚠ The name on the wire, sigil and all. See the member's remarks.
+            node["queryParameter"] = QueryParameter;
         }
 
         if (Environment.Length > 0) {

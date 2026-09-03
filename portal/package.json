@@ -14,6 +14,7 @@
     "node:gate": "node scripts/check-node.mjs --strict",
     "node:recap": "node scripts/check-node.mjs --recap",
     "lint": "eslint .",
+    "typecheck:api": "tsc -p libs/api/tsconfig.json",
     "test": "pnpm node:check && jest --ci && pnpm node:recap",
     "test:watch": "jest --watch",
     "test:ssr": "node scripts/ssr-isolation.test.mjs",
@@ -27,7 +28,7 @@
     "serve:ssr": "node dist/portal/server/server.mjs",
     "serve:ssr:identity": "node dist/identity/server/server.mjs",
     "i18n:extract": "ng extract-i18n portal --output-path apps/portal/src/locale --format xlf2",
-    "verify": "pnpm lint && pnpm test && pnpm build",
+    "verify": "pnpm lint && pnpm typecheck:api && pnpm test && pnpm build",
     "gates": "pnpm node:gate && pnpm verify"
   },
   "dependencies": {

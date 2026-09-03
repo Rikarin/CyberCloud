@@ -25,6 +25,11 @@
     "useDefineForClassFields": false,
     "forceConsistentCasingInFileNames": true,
     "paths": {
+      // ⚠ GENERATED, and the mapping was deliberately absent until it existed — libs/api/README.md:
+      // "an import of a client that does not exist fails at compile time rather than resolving to
+      // an empty module". It exists now (issue #21), so the mapping is here and `pnpm typecheck:api`
+      // compiles the package on every `pnpm verify`.
+      "@cybercloud/api": ["./libs/api/src/index.ts"],
       "@cybercloud/shell": ["./libs/shell/src/index.ts"],
       "@cybercloud/charts": ["./libs/charts/src/index.ts"],
       "@cybercloud/resource-forms": ["./libs/resource-forms/src/index.ts"],

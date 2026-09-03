@@ -561,10 +561,20 @@ public sealed class DerivedSurfaceTests {
         var document = OpenApiEmitter.Emit(Fixtures.Postgres(), ApiVersion.Parse(Fixtures.FirstVersion));
         var tree = CliEmitter.Emit(document);
 
+        // ⚠ The scope group is excluded here for the reason DerivedSurfaces.CliProblems excludes it:
+        // it holds three commands that come from no provider, so folding them in would make "one
+        // command per resource type" off by three — and the fix somebody would reach for is to relax
+        // the assertion into a range, which is this check no longer catching what it was written for.
         var commands = tree["groups"]!.AsObject()
+            .Where(x => x.Key != CliEmitter.ScopeGroupName)
             .Sum(group => group.Value!["commands"]!.AsObject().Count);
 
         commands.ShouldBe(DocumentReader.TypesOf(document).Length);
+
+        // …and the scope group is counted against its own source, so excluding it above cannot
+        // become a way of not checking it.
+        tree["groups"]![CliEmitter.ScopeGroupName]!["commands"]!.AsObject()
+            .Count.ShouldBe(DocumentReader.ScopesOf(document).Length);
 
         // …including the nested one, which is the type the collision would have eaten.
         tree["groups"]!["dbforpostgresql"]!["commands"]!.AsObject()
@@ -664,11 +674,27 @@ public sealed class DerivedSurfaceTests {
 
         list["paged"]!.GetValue<bool>().ShouldBeTrue();
 
-        // ⚠ And no `pageFlags`, because CliFlag has no query binding — see the emitter. A member
-        // naming flags no verb declares is the failure this suite exists to catch.
-        list["pageFlags"].ShouldBeNull();
+        // ⚠ THIS USED TO ASSERT THAT `pageFlags` WAS ABSENT, because CliFlag had no query binding.
+        // It has one now (issue #64), so the member is present and names the flag that is HOST
+        // behaviour: `--all` sends nothing and means "keep following nextLink". `--top` and
+        // `--skip-token` are not here — they go on the wire, so they are ordinary flags carrying a
+        // `queryParameter`, asserted below.
+        list["pageFlags"]!.AsArray().Select(x => DocumentReader.Text(x)).ShouldBe(["--all"]);
+
         Flag("list", "--name").ShouldBeNull("list addresses a collection and has no resource to name");
         Flag("list", "--resource-group").ShouldNotBeNull();
+
+        // ⚠ The WIRE names, sigil and all. The flag is `--skip-token` and the parameter is
+        // `$skipToken`, and a gateway ignores a query parameter it does not recognise — so a surface
+        // that spelled it `$skip-token` would page for ever and nothing would say so.
+        DocumentReader.Text(Flag("list", "--top")?["queryParameter"]).ShouldBe("$top");
+        DocumentReader.Text(Flag("list", "--skip-token")?["queryParameter"]).ShouldBe("$skipToken");
+
+        // ⚠ AND NOT `--api-version`. Every operation declares it as a query parameter, so reading
+        // the collection's declared parameters emitted a required verb flag shadowing the global one
+        // of that name — a `list` that refused every invocation not repeating a value the pipeline
+        // already sends.
+        Flag("list", "--api-version").ShouldBeNull("--api-version is a global flag, not a verb's");
 
         var nested = Cli["groups"]!["dbforpostgresql"]!["commands"]!["servers-databases"]!["verbs"]!["list"]!;
 

@@ -63,6 +63,312 @@
         }
       }
     },
+    "/tenants/{tenantId}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "get": {
+        "operationId": "Scopes_GetTenant",
+        "summary": "Read a tenant.",
+        "description": "A caller may read the tenant they hold a token for and no other, because the request's tenant is resolved from the token — docs/plan/10 § Request pipeline, stage 3. ⚠ There is no PUT. A tenant is created by IScopeManager.CreateTenantAsync, off the request pipeline entirely: the only tenant a request can address is one that already exists, so a create route could not authenticate. docs/plan/08 § The write path, end to end carries the argument and what was rejected.",
+        "responses": {
+          "200": {
+            "description": "The scope.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Scope"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      },
+      "x-cybercloud-scope": "tenant",
+      "x-cybercloud-scope-type": "CyberCloud.Resources/tenants",
+      "x-cybercloud-display": {
+        "name": "Tenant",
+        "plural": "Tenants",
+        "summary": "The isolation boundary. docs/plan/06 § The hierarchy."
+      },
+      "x-cybercloud-scope-read-only": true
+    },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "get": {
+        "operationId": "Scopes_GetSubscription",
+        "summary": "Read a subscription.",
+        "description": "Reads one subscription.",
+        "responses": {
+          "200": {
+            "description": "The scope.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Scope"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      },
+      "x-cybercloud-scope": "subscription",
+      "x-cybercloud-scope-type": "CyberCloud.Resources/subscriptions",
+      "x-cybercloud-display": {
+        "name": "Subscription",
+        "plural": "Subscriptions",
+        "summary": "The billing and quota boundary. docs/plan/06 § The hierarchy."
+      },
+      "put": {
+        "operationId": "Scopes_PutSubscription",
+        "summary": "Create a subscription.",
+        "description": "Creates the subscription at this address, or returns the existing one unchanged. ⚠ 201 the first time and 200 on a repeat: that is what idempotent means and is why the verb is PUT. The id is the caller's to choose, so a retry addresses the same subscription rather than making a second one.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Scope.SubscriptionCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The scope already existed and is returned unchanged.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Scope"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "The scope was created.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Scope"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "get": {
+        "operationId": "Scopes_GetResourceGroup",
+        "summary": "Read a resource group.",
+        "description": "Reads one resource group.",
+        "responses": {
+          "200": {
+            "description": "The scope.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Scope"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      },
+      "x-cybercloud-scope": "resourceGroup",
+      "x-cybercloud-scope-type": "CyberCloud.Resources/subscriptions/resourceGroups",
+      "x-cybercloud-display": {
+        "name": "Resource group",
+        "plural": "Resource groups",
+        "summary": "The lifecycle boundary — what a resource is created in. docs/plan/06 § The hierarchy."
+      },
+      "put": {
+        "operationId": "Scopes_PutResourceGroup",
+        "summary": "Create a resource group.",
+        "description": "Creates the resource group at this address, or returns the existing one unchanged. ⚠ Every resource path names a resource group, so this is the call that has to succeed before any resource can be created at all.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Scope.ResourceGroupCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The scope already existed and is returned unchanged.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Scope"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "The scope was created.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Scope"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    },
     "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Analytics/clickhouseClusters": {
       "parameters": [
         {
@@ -15391,6 +15697,71 @@
         },
         "required": [
           "status"
+        ],
+        "additionalProperties": false
+      },
+      "Scope": {
+        "type": "object",
+        "title": "Scope",
+        "description": "A tenant, a subscription or a resource group, as the API renders it. ⚠ There is no provisioningState: a scope is one grain activation and converges before the call returns, which is the visible half of \"a scope is not a resource\".",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "The scope's own path — docs/plan/06 § Identifiers."
+          },
+          "location": {
+            "type": "string",
+            "description": "The region: a tenant's home region or a group's default. ⚠ Absent rather than empty where the scope has none, so a client tests for the property instead of comparing against \"\"."
+          },
+          "name": {
+            "type": "string",
+            "description": "The name a human reads."
+          },
+          "type": {
+            "type": "string",
+            "description": "The Azure-shaped type string.",
+            "enum": [
+              "CyberCloud.Resources/subscriptions/resourceGroups",
+              "CyberCloud.Resources/subscriptions",
+              "CyberCloud.Resources/tenants"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "type"
+        ],
+        "additionalProperties": false
+      },
+      "Scope.ResourceGroupCreate": {
+        "type": "object",
+        "title": "Scope.ResourceGroupCreate",
+        "description": "The body of a PUT that creates a resource group.",
+        "properties": {
+          "location": {
+            "type": "string",
+            "description": "The region the group's resources default to. Required, and there is no platform-wide default to fall back on: a group whose region were guessed would place a tenant's data somewhere nobody chose.",
+            "x-cybercloud-widget": "region"
+          }
+        },
+        "required": [
+          "location"
+        ],
+        "additionalProperties": false
+      },
+      "Scope.SubscriptionCreate": {
+        "type": "object",
+        "title": "Scope.SubscriptionCreate",
+        "description": "The body of a PUT that creates a subscription.",
+        "properties": {
+          "displayName": {
+            "type": "string",
+            "description": "The name on an invoice and in every scope picker. Required — a subscription identified only by its GUID is one nobody can pick out of a list."
+          }
+        },
+        "required": [
+          "displayName"
         ],
         "additionalProperties": false
       }

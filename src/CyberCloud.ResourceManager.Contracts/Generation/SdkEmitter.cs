@@ -101,6 +101,8 @@ public static class SdkEmitter {
             AppendType(built, type, names[type.ResourceType], version);
         }
 
+        AppendScopes(built, document, version);
+
         return built.ToString();
     }
 
@@ -189,7 +191,7 @@ public static class SdkEmitter {
     static void AppendType(StringBuilder built, DocumentType type, string model, string version) {
         var leaves = DocumentReader.LeavesOf(type.Body);
 
-        AppendEnums(built, model, leaves);
+        AppendEnums(built, EnumNaming.For(model, leaves), leaves);
         AppendData(built, type, model, leaves);
         AppendResource(built, type, model);
         AppendCollection(built, type, model, version);
@@ -207,43 +209,111 @@ public static class SdkEmitter {
     ///         reason here: a <c>default(T)</c> that named a real sku would silently send one.
     ///     </para>
     /// </remarks>
-    static void AppendEnums(StringBuilder built, string model, ImmutableArray<SchemaLeaf> leaves) {
+    static void AppendEnums(
+        StringBuilder built,
+        EnumNaming naming,
+        ImmutableArray<SchemaLeaf> leaves,
+        string indent = ""
+    ) {
         foreach (var leaf in leaves) {
             var values = DocumentReader.EnumOf(leaf.Schema);
 
-            if (values.IsEmpty) {
+            if (leaf.IsObject || values.IsEmpty) {
                 continue;
             }
 
-            built.Append("\n/// <summary>The values ")
+            built.Append('\n').Append(indent).Append("/// <summary>The values ")
                 .Append(Escape(leaf.JsonPointer))
                 .Append(" accepts. ⚠ Closed: the write path refuses anything else.</summary>\n")
-                .Append("public enum ")
-                .Append(EnumName(model, leaf))
+                .Append(indent).Append("public enum ")
+                .Append(naming.NameOf(leaf))
                 .Append(" {\n")
-                .Append("    /// <summary>Never assigned. Not a value the API accepts.</summary>\n")
-                .Append("    Unknown = 0")
+                .Append(indent).Append("    /// <summary>Never assigned. Not a value the API accepts.</summary>\n")
+                .Append(indent).Append("    Unknown = 0")
                 .Append(values.IsEmpty ? "\n" : ",\n");
 
             for (var i = 0; i < values.Length; i++) {
-                built.Append("\n    /// <summary>")
+                built.Append('\n').Append(indent).Append("    /// <summary>")
                     .Append(Escape(values[i]))
                     .Append("</summary>\n")
-                    .Append("    [JsonStringEnumMemberName(")
+                    .Append(indent).Append("    [JsonStringEnumMemberName(")
                     .Append(Quote(values[i]))
                     .Append(")]\n")
-                    .Append("    ")
+                    .Append(indent).Append("    ")
                     .Append(Pascal(values[i]))
                     .Append(" = ")
                     .Append((i + 1).ToString(CultureInfo.InvariantCulture))
                     .Append(i == values.Length - 1 ? "\n" : ",\n");
             }
 
-            built.Append("}\n");
+            built.Append(indent).Append("}\n");
         }
     }
 
-    static string EnumName(string model, SchemaLeaf leaf) => model + Pascal(leaf.Name);
+    /// <summary>
+    ///     How one model's enum leaves are named, and which of them need their nesting to stay
+    ///     apart.
+    /// </summary>
+    /// <param name="Model">The owning model's name.</param>
+    /// <param name="Ambiguous">
+    ///     The leaf names that appear more than once with an <c>enum</c>. ⚠ Only these take the
+    ///     nested form, which is what keeps <c>ClickHouseClusterPreset</c> from becoming
+    ///     <c>ClickHouseClusterSizingPreset</c> for no reader's benefit — the same
+    ///     "disambiguate only what collides" rule <c>CliEmitter.FlagsOf</c> applies to flag names.
+    /// </param>
+    /// <remarks>
+    ///     ⚠ <b>THIS EXISTS BECAUSE THE NAME WAS <c>model + Pascal(leaf.Name)</c> AND THAT PRODUCED A
+    ///     FILE THAT DOES NOT COMPILE.</b> <c>CyberCloud.Cache/redis</c> declares <c>mode</c> at
+    ///     <c>/properties/mode</c> and again at <c>/properties/persistence/mode</c>, and both are
+    ///     closed sets — so <c>generated/sdk/2026-08-01.cs</c> declared <c>public enum
+    ///     ValkeyCacheMode</c> twice and two properties referred to it. That is <c>CS0101</c> in
+    ///     whatever consumes the SDK, it was checked in, and every gate in this repository was green
+    ///     over it: nothing here compiles the generated file. Found by running <c>tsc</c> over the
+    ///     TypeScript client, which has the same shape and a compiler that was actually run.
+    /// </remarks>
+    readonly record struct EnumNaming(string Model, ImmutableHashSet<string> Ambiguous) {
+        /// <summary>The naming for one model's leaves.</summary>
+        /// <param name="model">The model name.</param>
+        /// <param name="leaves">Its leaves.</param>
+        public static EnumNaming For(string model, ImmutableArray<SchemaLeaf> leaves) {
+            var counts = new Dictionary<string, int>(StringComparer.Ordinal);
+
+            foreach (var leaf in leaves) {
+                if (leaf.IsObject || DocumentReader.EnumOf(leaf.Schema).IsEmpty) {
+                    continue;
+                }
+
+                counts[leaf.Name] = counts.GetValueOrDefault(leaf.Name) + 1;
+            }
+
+            return new(model, [.. counts.Where(x => x.Value > 1).Select(x => x.Key)]);
+        }
+
+        /// <summary>The C# name one enum leaf takes.</summary>
+        /// <param name="leaf">The leaf.</param>
+        public string NameOf(SchemaLeaf leaf) =>
+            Model + (Ambiguous.Contains(leaf.Name) ? NestedName(leaf.JsonPointer) : Pascal(leaf.Name));
+    }
+
+    /// <summary>
+    ///     The dotted path under <c>/properties</c>, Pascal-cased —
+    ///     <c>/properties/persistence/mode</c> is <c>PersistenceMode</c>.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ The <c>properties</c> envelope is dropped for the reason <c>CliEmitter.PathName</c>
+    ///     drops it: every provider's body has one and no reader thinks of it as part of the field's
+    ///     name. Dropping it also leaves a top-level leaf with the name it already had, so only the
+    ///     nested member of a colliding pair moves.
+    /// </remarks>
+    static string NestedName(string jsonPointer) {
+        var segments = jsonPointer.Split('/', StringSplitOptions.RemoveEmptyEntries);
+
+        if (segments.Length > 1 && string.Equals(segments[0], "properties", StringComparison.Ordinal)) {
+            segments = segments[1..];
+        }
+
+        return string.Concat(segments.Select(Pascal));
+    }
 
     static void AppendData(
         StringBuilder built,
@@ -261,6 +331,8 @@ public static class SdkEmitter {
             .Append(model)
             .Append("Data {\n");
 
+        var naming = EnumNaming.For(model, leaves);
+
         foreach (var leaf in leaves) {
             // A container is a nested object in the wire body; it is flattened onto this class with
             // a JsonPropertyName that carries the nesting, so a caller sets one property rather than
@@ -269,7 +341,7 @@ public static class SdkEmitter {
                 continue;
             }
 
-            AppendMember(built, model, leaf);
+            AppendMember(built, naming, leaf);
         }
 
         // ⚠ No special case for tags, and that is the tag fix paying off on this surface. The bag is
@@ -279,7 +351,7 @@ public static class SdkEmitter {
         built.Append("}\n");
     }
 
-    static void AppendMember(StringBuilder built, string model, SchemaLeaf leaf) {
+    static void AppendMember(StringBuilder built, EnumNaming naming, SchemaLeaf leaf) {
         var schema = leaf.Schema;
         var description = DocumentReader.Text(schema["description"]);
 
@@ -322,11 +394,11 @@ public static class SdkEmitter {
             // object initialiser rather than a 400 at run time — which is the whole reason the SDK is
             // generated from the same schema the validator reads.
             .Append(Required(leaf) ? "required " : string.Empty)
-            .Append(ClrType(model, leaf))
+            .Append(ClrType(naming, leaf))
             .Append(' ')
             .Append(Pascal(leaf.Name))
             .Append(" { get; set; }")
-            .Append(Initialiser(model, leaf))
+            .Append(Initialiser(naming, leaf))
             .Append('\n');
     }
 
@@ -353,24 +425,24 @@ public static class SdkEmitter {
     ///     only honest rendering was <c>IList&lt;object&gt;</c> — a member no caller could use without
     ///     casting and no compiler could check.
     /// </remarks>
-    static string ClrType(string model, SchemaLeaf leaf) {
+    static string ClrType(EnumNaming naming, SchemaLeaf leaf) {
         var schema = leaf.Schema;
         var nullable = DocumentReader.IsNullable(schema) || !leaf.Required;
 
         if (!DocumentReader.EnumOf(schema).IsEmpty && DocumentReader.TypeOf(schema) != "array") {
-            return EnumName(model, leaf) + (nullable ? "?" : string.Empty);
+            return naming.NameOf(leaf) + (nullable ? "?" : string.Empty);
         }
 
         return DocumentReader.TypeOf(schema) switch {
-            "array" => "IList<" + Scalar(schema["items"] as JsonObject ?? [], model, leaf) + ">",
+            "array" => "IList<" + Scalar(schema["items"] as JsonObject ?? [], naming, leaf) + ">",
             "object" => "IDictionary<string, string>",
-            var scalar => Suffix(Scalar(schema, model, leaf), scalar, nullable)
+            var scalar => Suffix(Scalar(schema, naming, leaf), scalar, nullable)
         };
     }
 
-    static string Scalar(JsonObject schema, string model, SchemaLeaf leaf) {
+    static string Scalar(JsonObject schema, EnumNaming naming, SchemaLeaf leaf) {
         if (!DocumentReader.EnumOf(schema).IsEmpty) {
-            return EnumName(model, leaf);
+            return naming.NameOf(leaf);
         }
 
         return DocumentReader.TypeOf(schema) switch {
@@ -400,11 +472,11 @@ public static class SdkEmitter {
         return clr + "?";
     }
 
-    static string Initialiser(string model, SchemaLeaf leaf) =>
+    static string Initialiser(EnumNaming naming, SchemaLeaf leaf) =>
         DocumentReader.TypeOf(leaf.Schema) switch {
             // ⚠ Initialised, because a null collection is the member a caller has to new up before
             // using and forgets to. It stays settable so a caller can assign one wholesale.
-            "array" => " = new List<" + Scalar(leaf.Schema["items"] as JsonObject ?? [], model, leaf) + ">();",
+            "array" => " = new List<" + Scalar(leaf.Schema["items"] as JsonObject ?? [], naming, leaf) + ">();",
             "object" => " = new Dictionary<string, string>(StringComparer.Ordinal);",
             _ => string.Empty
         };
@@ -509,12 +581,24 @@ public static class SdkEmitter {
     ///     so the type reads as what it is at the call site: <c>ServerResource.ListKeysResult</c>.
     /// </remarks>
     static void AppendPayload(StringBuilder built, string name, JsonObject schema, string summary) {
+        var leaves = DocumentReader.LeavesOf(schema);
+        var naming = EnumNaming.For(name, leaves);
+
+        // ⚠ AN ACTION'S OWN CLOSED SETS, AND LEAVING THEM OUT WAS A GENERATED FILE THAT DOES NOT
+        // COMPILE. `ClrType` renders an enum leaf as `{payload}{Member}` whether or not anything
+        // declared it, so `CyberCloud.Messaging/kafkaClusters`'s listKeys response emitted
+        // `public required ListKeysResultSecurityProtocol SecurityProtocol` against a type that
+        // appeared nowhere in the file — CS0246, checked in, and green under every gate here because
+        // nothing in this repository compiles generated/sdk/*.cs. Nested at the payload's own indent
+        // because the payload class is nested inside the resource.
+        AppendEnums(built, naming, leaves, "    ");
+
         built.Append("\n    /// <summary>").Append(Escape(summary)).Append("</summary>\n")
             .Append("    public sealed partial class ")
             .Append(name)
             .Append(" {\n");
 
-        foreach (var leaf in DocumentReader.LeavesOf(schema)) {
+        foreach (var leaf in leaves) {
             if (leaf.IsObject) {
                 continue;
             }
@@ -529,11 +613,11 @@ public static class SdkEmitter {
                 .Append(")]\n")
                 .Append("        public ")
                 .Append(Required(leaf) ? "required " : string.Empty)
-                .Append(ClrType(name, leaf))
+                .Append(ClrType(naming, leaf))
                 .Append(' ')
                 .Append(Pascal(leaf.Name))
                 .Append(" { get; set; }")
-                .Append(Initialiser(name, leaf))
+                .Append(Initialiser(naming, leaf))
                 .Append('\n');
         }
 
@@ -679,6 +763,223 @@ public static class SdkEmitter {
             .Append("CancellationToken cancellationToken = default);\n")
             .Append("}\n");
     }
+
+    // ── The scope API, which comes from no provider — issue #63 ────────────────────────────────
+
+    /// <summary>The class name a scope kind takes — <c>resourceGroup</c> is <c>ResourceGroup</c>.</summary>
+    static string ScopeName(DocumentScope scope) => Pascal(scope.Kind);
+
+    /// <summary>
+    ///     The scope models and the client that reaches them.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>One <c>ScopeResource</c> for all three, because the document declares one
+    ///         response schema for all three.</b> A class per kind would be three identical classes
+    ///         whose only difference is the value of <c>Type</c>, and a caller holding a
+    ///         <c>SubscriptionResource</c> could not be handed the result of reading a group.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b><c>Task&lt;Response&lt;T&gt;&gt;</c> and never <c>Operation&lt;T&gt;</c>, which
+    ///         is the one place a scope differs from every resource in this file.</b> Every resource
+    ///         write ends in a <c>202</c> and therefore in a poller; a scope converges before the
+    ///         call returns, so there is no <c>WaitUntil</c> parameter to take and no operation URL
+    ///         to poll. An SDK that offered one would hand every caller a poller for an operation
+    ///         that was never started.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The path parameters are the template's own placeholders, in order.</b> The same
+    ///         rule <c>AncestorParametersOf</c> follows for a nested resource: a method signature
+    ///         written from the kind would be a second place that knows a group is addressed through
+    ///         a subscription.
+    ///     </para>
+    /// </remarks>
+    static void AppendScopes(StringBuilder built, JsonObject document, string version) {
+        var scopes = DocumentReader.ScopesOf(document);
+
+        if (scopes.IsEmpty) {
+            return;
+        }
+
+        var shared = document["components"]?["schemas"]?[ScopeResponseComponent] as JsonObject ?? [];
+        var leaves = DocumentReader.LeavesOf(shared);
+
+        // ⚠ THE ENUMS FIRST, AND LEAVING THEM OUT IS A GENERATED FILE THAT DOES NOT COMPILE. The
+        // scope response's `type` is a closed set of three, so ClrType renders it as
+        // `ScopeResourceType` — a name nothing else would ever emit. The first run of this method
+        // produced exactly that: a property whose type was undeclared, in a file no build in this
+        // repository compiles, so nothing here would have caught it either.
+        AppendEnums(built, EnumNaming.For("ScopeResource", leaves), leaves);
+
+        built.Append("\n/// <summary>A tenant, a subscription or a resource group, as the API renders it.</summary>\n")
+            .Append("/// <remarks>⚠ There is no provisioningState and no Operation&lt;T&gt; anywhere on this\n")
+            .Append("/// path: a scope is one grain activation and converges before the call returns, which is\n")
+            .Append("/// the visible half of \"a scope is not a resource\" — docs/plan/10 § Shape.</remarks>\n")
+            .Append("public sealed partial class ScopeResource {\n");
+
+        foreach (var leaf in leaves) {
+            if (leaf.IsObject) {
+                continue;
+            }
+
+            built.Append("\n    /// <summary>")
+                .Append(Escape(DocumentReader.Text(leaf.Schema["description"]) is { Length: > 0 } text
+                    ? text
+                    : leaf.Name))
+                .Append("</summary>\n")
+                .Append("    [JsonPropertyName(")
+                .Append(Quote(leaf.Name))
+                .Append(")]\n")
+                .Append("    public ")
+                // ⚠ `required` on the members the schema requires, exactly as AppendPayload does. A
+                // non-nullable string with no initialiser and no `required` is CS8618 in whatever
+                // project consumes this file — and nothing in THIS repository compiles it, so the
+                // first person to find out would be the first person to use the SDK.
+                .Append(Required(leaf) ? "required " : string.Empty)
+                .Append(ClrType(EnumNaming.For("ScopeResource", leaves), leaf))
+                .Append(' ')
+                .Append(Pascal(leaf.Name))
+                .Append(" { get; set; }")
+                .Append(Initialiser(EnumNaming.For("ScopeResource", leaves), leaf))
+                .Append('\n');
+        }
+
+        built.Append("}\n");
+
+        foreach (var scope in scopes) {
+            if (!scope.Creatable) {
+                continue;
+            }
+
+            AppendScopeContent(built, scope);
+        }
+
+        built.Append("\n/// <summary>The scope API — docs/plan/06 § The hierarchy.</summary>\n")
+            .Append("/// <remarks>⚠ Generated from the OpenAPI document like everything else in this file,\n")
+            .Append("/// and the document is where the scope paths were missing until issue #63: a scope has\n")
+            .Append("/// no provider, no resource type and no api-version of its own, so nothing emitted from\n")
+            .Append("/// the provider registry could have known these addresses existed.</remarks>\n")
+            .Append("public sealed partial class ScopeClient {\n")
+            .Append("    /// <inheritdoc cref=\"GeneratedApiVersion.Value\" />\n")
+            .Append("    public const string ApiVersion = ")
+            .Append(Quote(version))
+            .Append(";\n");
+
+        foreach (var scope in scopes) {
+            var name = ScopeName(scope);
+            var parameters = DocumentReader.PlaceholdersOf(scope.Path)
+                .Select(x => "string " + Camel(x))
+                .ToList();
+
+            built.Append("\n    /// <summary>The URL template ")
+                .Append(Escape(scope.DisplayName.ToLowerInvariant()))
+                .Append(" operations address.</summary>\n")
+                .Append("    public const string ")
+                .Append(name)
+                .Append("PathTemplate = ")
+                .Append(Quote(scope.Path))
+                .Append(";\n")
+                .Append("\n    /// <summary>The type string a ")
+                .Append(Escape(scope.DisplayName.ToLowerInvariant()))
+                .Append(" response carries.</summary>\n")
+                .Append("    public const string ")
+                .Append(name)
+                .Append("Type = ")
+                .Append(Quote(scope.TypeName))
+                .Append(";\n")
+                .Append("\n    /// <summary>Reads one ")
+                .Append(Escape(scope.DisplayName.ToLowerInvariant()))
+                .Append(". ")
+                .Append(Escape(scope.Summary))
+                .Append("</summary>\n")
+                .Append("    public partial Task<Response<ScopeResource>> Get")
+                .Append(name)
+                .Append("Async(\n        ")
+                .Append(string.Join(",\n        ", parameters))
+                .Append(parameters.Count > 0 ? ",\n        " : "\n        ")
+                .Append("CancellationToken cancellationToken = default);\n");
+
+            if (!scope.Creatable) {
+                // ⚠ SAID IN THE GENERATED FILE, because "there is no create" and "the create was
+                // forgotten" are indistinguishable to somebody reading a class with one method.
+                built.Append("\n    // ⚠ There is no Create")
+                    .Append(name)
+                    .Append("Async, and the absence is the contract rather than an omission. A ")
+                    .Append("request's\n    // tenant is resolved from its token, so a call creating ")
+                    .Append("another tenant necessarily\n    // carries a token that is not that ")
+                    .Append("tenant's and is refused before routing runs —\n    // ")
+                    .Append("IScopeManager.CreateTenantAsync is off the request pipeline entirely.\n");
+
+                continue;
+            }
+
+            built.Append("\n    /// <summary>Creates one ")
+                .Append(Escape(scope.DisplayName.ToLowerInvariant()))
+                .Append(", or returns the existing one unchanged.</summary>\n")
+                .Append("    /// <remarks>⚠ No WaitUntil and no Operation&lt;T&gt;: this converges before it\n")
+                .Append("    /// returns. Repeating it with the same address is a success — 201 the first time\n")
+                .Append("    /// and 200 after, which is what makes the verb PUT.</remarks>\n")
+                .Append("    public partial Task<Response<ScopeResource>> Create")
+                .Append(name)
+                .Append("Async(\n        ")
+                .Append(string.Join(",\n        ", parameters))
+                .Append(parameters.Count > 0 ? ",\n        " : "\n        ")
+                .Append(name)
+                .Append("CreateContent content,\n        CancellationToken cancellationToken = default);\n");
+        }
+
+        built.Append("}\n");
+    }
+
+    static void AppendScopeContent(StringBuilder built, DocumentScope scope) {
+        var name = ScopeName(scope) + "CreateContent";
+        var leaves = DocumentReader.LeavesOf(scope.Body);
+        var naming = EnumNaming.For(name, leaves);
+
+        AppendEnums(built, naming, leaves);
+
+        built.Append("\n/// <summary>The body of a PUT that creates a ")
+            .Append(Escape(scope.DisplayName.ToLowerInvariant()))
+            .Append(".</summary>\n")
+            .Append("public sealed partial class ")
+            .Append(name)
+            .Append(" {\n");
+
+        foreach (var leaf in leaves) {
+            if (leaf.IsObject) {
+                continue;
+            }
+
+            built.Append("\n    /// <summary>")
+                .Append(Escape(DocumentReader.Text(leaf.Schema["description"]) is { Length: > 0 } text
+                    ? text
+                    : leaf.Name))
+                .Append("</summary>\n")
+                .Append("    [JsonPropertyName(")
+                .Append(Quote(leaf.Name))
+                .Append(")]\n")
+                .Append("    public ")
+                .Append(Required(leaf) ? "required " : string.Empty)
+                .Append(ClrType(naming, leaf))
+                .Append(' ')
+                .Append(Pascal(leaf.Name))
+                .Append(" { get; set; }")
+                .Append(Initialiser(naming, leaf))
+                .Append('\n');
+        }
+
+        built.Append("}\n");
+    }
+
+    /// <summary>
+    ///     The component every scope's <c>200</c> body points at.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <see cref="OpenApiEmitter.ScopeSchema" />, not a second spelling of it. A <c>$ref</c>
+    ///     string is an unchecked string in both directions, and the failure would be a generated
+    ///     <c>ScopeResource</c> with no properties at all — which compiles.
+    /// </remarks>
+    const string ScopeResponseComponent = OpenApiEmitter.ScopeSchema;
 
     // ── Small shared machinery ─────────────────────────────────────────────────────────────────
 

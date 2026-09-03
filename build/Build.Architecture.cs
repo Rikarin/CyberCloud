@@ -132,7 +132,7 @@ partial class Build
         ("Wire compatibility", "round-trip every wire type through the last three released contract assemblies"),
         ("Secrets", "no [Id] member named *Password/*Secret/*Token/*Key outside CyberCloud.Vault"),
         ("No blocking", ".Result, .Wait(), async void banned in grain assemblies"),
-        ("Generated surfaces", "OpenAPI/CLI/SDK/forms regenerate byte-identically from the registry"),
+        ("Generated surfaces", "OpenAPI/CLI/SDK/forms and the portal's TypeScript client regenerate byte-identically from the registry"),
         ("Action handlers", "every synchronous declared action names an IResourceActionHandler; a long-running one must not — not in docs/plan/23"),
         ("OpenAPI compatibility", "published api-versions diffed; a breaking change fails"),
         ("Labels", "every reconciler's rendered output carries the seven cybercloud.io/* labels, asserted against real output"),
@@ -1311,12 +1311,39 @@ partial class Build
                 + "generates is one nobody can reproduce");
         }
 
+        // ⚠ THE PORTAL'S CLIENT IS PART OF THIS ROW — issue #21. It is written to portal/libs/api
+        // rather than to generated/, and a row that counted "3 derived file(s)" while a fourth
+        // surface regenerated unchecked would be this repository's standing failure: a check that
+        // answers a narrower question than its name.
+        foreach (var problem in Generation.TypeScriptProblems)
+            violations.Add($"{PortalApiRelative} is not usable — {problem}");
+
+        foreach (var file in Generation.TypeScript)
+        {
+            if (file.Drifted)
+            {
+                violations.Add(
+                    $"{PortalApiRelative}/{file.File} is not what the OpenAPI document generates. Run "
+                    + "./build.sh Generate and commit the result — docs/plan/23 § The architecture "
+                    + "gates, row Generated surfaces");
+            }
+        }
+
+        foreach (var stale in Generation.TypeScriptStale)
+        {
+            violations.Add(
+                $"{PortalApiRelative}/{stale} is checked in and nothing produces it. docs/plan/03 "
+                + "§ Assembly graph rules, rule 6 gives that directory to the generator, so a file it "
+                + "does not produce is a hand-written one");
+        }
+
         return GateOutcome.From(
             "Generated surfaces",
             Generation.ResourceTypes,
-            $"resource type(s) over {Generation.Documents.Count} OpenAPI document(s) and "
+            $"resource type(s) over {Generation.Documents.Count} OpenAPI document(s), "
             + $"{Generation.Derived.Count} derived file(s) — the cyc verb tree, the .NET SDK and the "
-            + "portal forms — all regenerated and compared byte-for-byte",
+            + $"portal forms — and {Generation.TypeScript.Count} file(s) of the portal's TypeScript "
+            + "client, all regenerated and compared byte-for-byte",
             violations);
     }
 

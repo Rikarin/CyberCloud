@@ -154,13 +154,40 @@ static class CommandTree {
                 command.Options.Add(option);
         }
 
+        var pageOptions = PageFor(verb);
+
+        if (pageOptions is not null)
+            command.Options.Add(pageOptions.Option);
+
         command.SetAction((parse, cancellationToken) => {
             var invocation = CycRunner.Bind(host, globals, tree, parse);
 
-            return ResourceVerb.RunAsync(invocation, verb, bindings, waitOptions, parse, cancellationToken);
+            return ResourceVerb.RunAsync(invocation, verb, bindings, waitOptions, pageOptions, parse, cancellationToken);
         });
 
         return command;
+    }
+
+    /// <summary>
+    ///     Declares <c>--all</c> when — and only when — the tree says the verb pages and names the
+    ///     flag.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ Both conditions, for the reason <see cref="WaitFor" /> reads <c>waitFlags</c> rather than
+    ///     <c>longRunning</c>: <c>paged</c> and <c>pageFlags</c> are separate members, and a verb the
+    ///     emitter still marks paged but stops offering the flag for must stop offering it here.
+    /// </remarks>
+    static PageOptions? PageFor(VerbTreeVerb verb) {
+        if (!verb.Paged || verb.PageFlags.Count != 1)
+            return null;
+
+        return new PageOptions(
+            new Option<bool>(verb.PageFlags[0]) {
+                Description =
+                    "Follow nextLink to the end and print every page as one list. ⚠ One request per "
+                    + "page: this is N round trips, and a listing is filtered per member, so it is "
+                    + "what you may read rather than everything there is.",
+            });
     }
 
     /// <summary>

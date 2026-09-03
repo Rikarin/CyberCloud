@@ -45,5 +45,11 @@ makes the gateway serve `openapi/` as files. Nothing here is served to anyone.
   depend on nothing but the BCL. ⚠ The drift gate does not care either way — it compares bytes — so the
   contract this surface owes is enforced from the day it is generated rather than from the day it
   compiles.
-- **TypeScript, Python, Go and the Terraform provider.**
+- **The portal's TypeScript client.** It exists (issue #21) and is generated from the same document
+  by the same run, but it is written to `portal/libs/api/` rather than here — [03](../docs/plan/03-repository-layout.md)
+  § Assembly graph rules, rule 6 gives the generator that directory, and `Build.Architecture` enforces
+  it by reading the head of every file *there*. Writing it here and copying it across would make that
+  gate inspect a copy, and the copy step would be the one part of the chain nothing checked. The
+  `Generated surfaces` gate compares it byte-for-byte alongside the three above.
+- **Python, Go and the Terraform provider.**
   [21](../docs/plan/21-cli-and-sdks.md) § Other SDKs schedules them for M1–M3.

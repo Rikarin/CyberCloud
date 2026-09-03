@@ -134,6 +134,38 @@ public sealed record ScopeSnapshot {
 }
 
 /// <summary>
+///     The properties a scope <c>PUT</c> body carries.
+/// </summary>
+/// <remarks>
+///     ⚠ <b>Here rather than on <c>ScopeManagerService</c>, because the generated surfaces are in
+///     this assembly and the service is not.</b> The service is where they were, and the day the
+///     OpenAPI document grew a scope path (issue #63) that placement would have made them the
+///     failure this repository keeps re-finding: two constants in assemblies that cannot see each
+///     other, agreeing by hand. A CLI offering <c>--display-name</c> against a manager reading
+///     <c>displayName</c> is right by luck; one offering <c>--name</c> is a <c>400</c> nobody can
+///     act on, because the flag is spelled correctly and the property it writes is not the one the
+///     manager reads.
+/// </remarks>
+public static class ScopeBodyProperties {
+    /// <summary>
+    ///     The property a resource group's region arrives in. ⚠ Required — there is no platform-wide
+    ///     default, because a group whose region were guessed would place a tenant's data somewhere
+    ///     nobody chose.
+    /// </summary>
+    /// <remarks>
+    ///     Azure spells it <c>location</c> on every resource, and a scope answering to a different
+    ///     name would be the one field of the API a client had to special-case.
+    /// </remarks>
+    public const string Location = "location";
+
+    /// <summary>
+    ///     The property a subscription's display name arrives in. ⚠ Required — it is the name that
+    ///     appears on an invoice and in every scope picker.
+    /// </summary>
+    public const string DisplayName = "displayName";
+}
+
+/// <summary>
 ///     The three <c>type</c> strings a scope renders as, in Azure's shape.
 /// </summary>
 /// <remarks>

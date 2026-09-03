@@ -6361,5 +6361,67 @@
         }
       ]
     }
+  },
+  "scopeForms": {
+    "subscription": {
+      "scope": "subscription",
+      "scopeType": "CyberCloud.Resources/subscriptions",
+      "apiVersion": "2026-08-01",
+      "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}",
+      "method": "PUT",
+      "addressPlaceholders": [
+        "tenantId",
+        "subscriptionId"
+      ],
+      "title": "Subscription",
+      "plural": "Subscriptions",
+      "summary": "The billing and quota boundary. docs/plan/06 § The hierarchy.",
+      "overrideKey": "CyberCloud.Resources/subscriptions@2026-08-01",
+      "coveredPointers": [
+        "/displayName"
+      ],
+      "longRunning": false,
+      "fields": [
+        {
+          "jsonPointer": "/displayName",
+          "name": "displayName",
+          "label": "Display name",
+          "control": "xui-input",
+          "required": true,
+          "help": "The name on an invoice and in every scope picker. Required — a subscription identified only by its GUID is one nobody can pick out of a list."
+        }
+      ]
+    },
+    "resourceGroup": {
+      "scope": "resourceGroup",
+      "scopeType": "CyberCloud.Resources/subscriptions/resourceGroups",
+      "apiVersion": "2026-08-01",
+      "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}",
+      "method": "PUT",
+      "addressPlaceholders": [
+        "tenantId",
+        "subscriptionId",
+        "resourceGroupName"
+      ],
+      "title": "Resource group",
+      "plural": "Resource groups",
+      "summary": "The lifecycle boundary — what a resource is created in. docs/plan/06 § The hierarchy.",
+      "overrideKey": "CyberCloud.Resources/subscriptions/resourceGroups@2026-08-01",
+      "coveredPointers": [
+        "/location"
+      ],
+      "longRunning": false,
+      "fields": [
+        {
+          "jsonPointer": "/location",
+          "name": "location",
+          "label": "Location",
+          "control": "xui-region",
+          "required": true,
+          "help": "The region the group's resources default to. Required, and there is no platform-wide default to fall back on: a group whose region were guessed would place a tenant's data somewhere nobody chose.",
+          "widget": "region"
+        }
+      ]
+    }
   }
 }

@@ -31,6 +31,19 @@ namespace CyberCloud.ResourceManager.Contracts.Generation;
 ///         path, which is a thing a surface can decide what to do about.
 ///     </para>
 /// </param>
+/// <param name="CollectionQuery">
+///     The query parameters the collection <c>GET</c> declares, ordered by name. Empty when there is
+///     no collection path.
+///     <para>
+///         ⚠ <b>Read out of the document for the same reason <paramref name="CollectionPath" /> is.</b>
+///         <c>$top</c> and <c>$skipToken</c> are two strings that would otherwise be written once in
+///         <c>OpenApiEmitter.CollectionParameters</c>, once in <c>CliEmitter</c> and once in the
+///         <c>cyc</c> host — three assemblies, two of which cannot see the first. That is the shape of
+///         the defect <c>CollectionPathTemplate</c> was added to close, and a CLI that sent
+///         <c>?$skip-token=</c> at a gateway reading <c>$skipToken</c> would page for ever without
+///         erroring: an ignored query parameter is a <c>200</c> holding page one again.
+///     </para>
+/// </param>
 public sealed record DocumentType(
     string ResourceType,
     string Path,
@@ -45,7 +58,8 @@ public sealed record DocumentType(
     string PurgeProtectionPointer,
     ImmutableArray<DocumentAction> Actions,
     bool Deprecated,
-    string CollectionPath
+    string CollectionPath,
+    ImmutableArray<DocumentQueryParameter> CollectionQuery
 ) {
     /// <summary>The provider namespace — everything before the <c>/</c>.</summary>
     public string ProviderNamespace {
@@ -78,6 +92,85 @@ public sealed record DocumentType(
     static string Text(JsonNode? node) =>
         node is JsonValue value && value.TryGetValue<string>(out var text) ? text : string.Empty;
 }
+
+/// <summary>
+///     One scope — a tenant, a subscription or a resource group — read back out of an emitted
+///     document.
+/// </summary>
+/// <param name="Kind">The <c>x-cybercloud-scope</c> value: <c>tenant</c>, <c>subscription</c> or <c>resourceGroup</c>.</param>
+/// <param name="Path">The URL template.</param>
+/// <param name="TypeName">The Azure-shaped type string a response carries.</param>
+/// <param name="Display">The <c>x-cybercloud-display</c> object.</param>
+/// <param name="Creatable">Whether the document declares a <c>PUT</c>.</param>
+/// <param name="Component">The create body's component key, or <c>""</c>.</param>
+/// <param name="Body">The create body schema, or empty.</param>
+/// <remarks>
+///     <para>
+///         ⚠ <b>A scope is not a <see cref="DocumentType" /> and must not be made one.</b> It has no
+///         provider, no api-version of its own, no tags, no soft-delete window, no actions and no
+///         collection — six members that would be permanently empty, and the next reader would have
+///         to work out per member whether "empty" meant "not applicable" or "not declared". The same
+///         argument <c>ScopeRequest</c> makes for not reusing <c>WriteRequest</c>.
+///     </para>
+///     <para>
+///         ⚠ <b><paramref name="Creatable" /> is read off the document rather than off the kind.</b>
+///         The tenant is the read-only one today, and a surface that hard-coded which is which would
+///         be a second copy of a decision — see <c>OpenApiEmitter.ScopePathItems</c> for why a tenant
+///         cannot have a create route at all.
+///     </para>
+/// </remarks>
+public sealed record DocumentScope(
+    string Kind,
+    string Path,
+    string TypeName,
+    JsonObject Display,
+    bool Creatable,
+    string Component,
+    JsonObject Body
+) {
+    /// <summary>The display name, which the emitter guarantees is present.</summary>
+    public string DisplayName => Text(Display["name"]);
+
+    /// <summary>The plural display name.</summary>
+    public string DisplayPlural => Text(Display["plural"]);
+
+    /// <summary>The one-sentence summary.</summary>
+    public string Summary => Text(Display["summary"]);
+
+    /// <summary>
+    ///     The placeholder this scope's own name occupies — the last one in its path.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>The last placeholder rather than a name per kind.</b> A subscription's is
+    ///     <c>{subscriptionId}</c> and a group's is <c>{resourceGroupName}</c>; reading the template
+    ///     is the same rule <c>DocumentReader.PlaceholdersOf</c> already applies to a resource, and
+    ///     it cannot disagree with the URL it fills.
+    /// </remarks>
+    public string NamePlaceholder =>
+        DocumentReader.PlaceholdersOf(Path) is [.., var last] ? last : string.Empty;
+
+    /// <summary>
+    ///     The placeholders that address this scope's ancestors, in template order.
+    /// </summary>
+    public ImmutableArray<string> AncestorPlaceholders =>
+        DocumentReader.PlaceholdersOf(Path) is [.. var ancestors, _] ? [.. ancestors] : [];
+
+    static string Text(JsonNode? node) =>
+        node is JsonValue value && value.TryGetValue<string>(out var text) ? text : string.Empty;
+}
+
+/// <summary>One query parameter, read back out of an emitted document.</summary>
+/// <param name="Name">The name on the wire, <c>$</c> and all — <c>$skipToken</c>.</param>
+/// <param name="Type">The schema's <c>type</c>, with a nullable union already collapsed.</param>
+/// <param name="Description">The parameter's own description.</param>
+/// <param name="Required">Whether the operation refuses without it.</param>
+/// <remarks>
+///     ⚠ <b><paramref name="Name" /> keeps the <c>$</c>.</b> It is what goes on the wire, and a
+///     surface that stored the pretty form would have to put the sigil back — which is the one step
+///     nothing would notice getting wrong, because a gateway ignores a query parameter it does not
+///     recognise rather than refusing it.
+/// </remarks>
+public sealed record DocumentQueryParameter(string Name, string Type, string Description, bool Required);
 
 /// <summary>One action, read back out of an emitted document.</summary>
 /// <param name="Name">The action name.</param>
@@ -154,6 +247,7 @@ public static class DocumentReader {
             }
 
             var component = ComponentOf(item);
+            var collection = CollectionOf(paths, document, resourceType);
 
             found.Add(new(
                 resourceType,
@@ -169,7 +263,8 @@ public static class DocumentReader {
                 Text(item["x-cybercloud-purge-protection-pointer"]),
                 ActionsOf(paths, schemas, path.Key, resourceType),
                 Flag(item["get"]?["deprecated"]),
-                CollectionOf(paths, resourceType)
+                collection.Path,
+                collection.Query
             ));
         }
 
@@ -177,7 +272,68 @@ public static class DocumentReader {
     }
 
     /// <summary>
-    ///     The collection path declared for one resource type, or <c>""</c>.
+    ///     Every scope in a document, ordered by path — so a tenant comes before its subscription
+    ///     and a subscription before its group, because each path is a prefix of the next.
+    /// </summary>
+    /// <param name="document">An emitted per-version document.</param>
+    /// <remarks>
+    ///     ⚠ <b>The second thing this reader reads, and the reason it exists at all is issue #63.</b>
+    ///     <see cref="TypesOf" /> answers "what did a provider register"; a scope was registered by
+    ///     nobody, so every derived surface was silent about two addresses the gateway has served
+    ///     since #1. The rule that surfaces read the <i>document</i> rather than the registry is what
+    ///     makes one extension here enough for all four of them.
+    /// </remarks>
+    public static ImmutableArray<DocumentScope> ScopesOf(JsonObject document) {
+        ArgumentNullException.ThrowIfNull(document);
+
+        if (document["paths"] is not JsonObject paths) {
+            return [];
+        }
+
+        var schemas = document["components"]?["schemas"] as JsonObject;
+        var found = new List<DocumentScope>();
+
+        foreach (var path in paths) {
+            if (path.Value is not JsonObject item
+                || Text(item[ScopeExtension]) is not { Length: > 0 } kind) {
+                continue;
+            }
+
+            var component = ComponentOf(
+                item["put"]?["requestBody"]?["content"]?["application/json"]?["schema"]?["$ref"]
+            );
+
+            found.Add(new(
+                kind,
+                path.Key,
+                Text(item["x-cybercloud-scope-type"]),
+                item["x-cybercloud-display"] as JsonObject ?? [],
+                // ⚠ The presence of the operation, not the absence of the read-only marker. A
+                // surface asks "may I create one" and the honest answer is whether the document
+                // declares the write.
+                item["put"] is JsonObject,
+                component,
+                (component.Length > 0 ? schemas?[component] as JsonObject : null) ?? []
+            ));
+        }
+
+        return [.. found.OrderBy(x => x.Path, StringComparer.Ordinal)];
+    }
+
+    /// <summary>
+    ///     The extension a scope path item is recognised by.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <see cref="OpenApiEmitter.ScopeExtension" />'s, not a second spelling of it. The two
+    ///     halves of a round trip within one build step is the only thing that makes this reader
+    ///     acceptable at all — see the remarks on this class — and a key each half spelled for itself
+    ///     would be exactly the second interpretation it is not allowed to be.
+    /// </remarks>
+    public const string ScopeExtension = OpenApiEmitter.ScopeExtension;
+
+    /// <summary>
+    ///     The collection path declared for one resource type and the query it accepts, or
+    ///     <c>("", [])</c>.
     /// </summary>
     /// <remarks>
     ///     ⚠ <b>Matched on the type and the collection flag, and NOT on a path prefix.</b> A prefix
@@ -187,16 +343,71 @@ public static class DocumentReader {
     ///     one", matches every ancestor collection as well: <c>…/servers</c> is a prefix of
     ///     <c>…/servers/{n}/databases/{n}</c>, so a database would take its parent's collection.
     /// </remarks>
-    static string CollectionOf(JsonObject paths, string resourceType) {
+    static (string Path, ImmutableArray<DocumentQueryParameter> Query) CollectionOf(
+        JsonObject paths,
+        JsonObject document,
+        string resourceType
+    ) {
         foreach (var path in paths) {
             if (path.Value is JsonObject item
                 && Flag(item["x-cybercloud-collection"])
                 && string.Equals(Text(item["x-cybercloud-resource-type"]), resourceType, StringComparison.Ordinal)) {
-                return path.Key;
+                return (path.Key, QueryOf(item, document));
             }
         }
 
-        return string.Empty;
+        return (string.Empty, []);
+    }
+
+    /// <summary>
+    ///     The <c>in: query</c> parameters of a path item, ordered by name.
+    /// </summary>
+    /// <param name="item">The path item.</param>
+    /// <param name="document">The document, for <c>components/parameters</c>.</param>
+    /// <remarks>
+    ///     ⚠ <b>A <c>$ref</c> is followed rather than skipped.</b> <c>OpenApiEmitter</c> writes the
+    ///     paging pair inline today and the address parameters as references, so a reader that only
+    ///     understood inline objects would be right by accident and would silently return nothing the
+    ///     day a shared <c>$top</c> component was factored out. It is the same fact
+    ///     <see cref="Resolve" /> already knows about schemas.
+    /// </remarks>
+    static ImmutableArray<DocumentQueryParameter> QueryOf(JsonObject item, JsonObject document) {
+        if (item["parameters"] is not JsonArray parameters) {
+            return [];
+        }
+
+        const string Prefix = "#/components/parameters/";
+        var shared = document["components"]?["parameters"] as JsonObject;
+        var found = new List<DocumentQueryParameter>();
+
+        foreach (var entry in parameters) {
+            if (entry is not JsonObject declared) {
+                continue;
+            }
+
+            if (Text(declared["$ref"]) is { Length: > 0 } reference) {
+                if (!reference.StartsWith(Prefix, StringComparison.Ordinal)
+                    || shared?[reference[Prefix.Length..]] is not JsonObject resolved) {
+                    continue;
+                }
+
+                declared = resolved;
+            }
+
+            if (!string.Equals(Text(declared["in"]), "query", StringComparison.Ordinal)
+                || Text(declared["name"]) is not { Length: > 0 } name) {
+                continue;
+            }
+
+            found.Add(new(
+                name,
+                declared["schema"] is JsonObject schema ? TypeOf(schema) : string.Empty,
+                Text(declared["description"]),
+                Flag(declared["required"])
+            ));
+        }
+
+        return [.. found.OrderBy(x => x.Name, StringComparer.Ordinal)];
     }
 
     static ImmutableArray<DocumentAction> ActionsOf(
@@ -229,12 +440,16 @@ public static class DocumentReader {
         return [.. found.OrderBy(x => x.Name, StringComparer.Ordinal)];
     }
 
-    /// <summary>The component key a <c>$ref</c> points at, or <c>""</c>.</summary>
-    static string ComponentOf(JsonObject item) {
-        var reference = Text(item["get"]?["responses"]?["200"]?["content"]?["application/json"]?["schema"]?["$ref"]);
-        const string Prefix = "#/components/schemas/";
+    /// <summary>The component key a path item's <c>200</c> body points at, or <c>""</c>.</summary>
+    static string ComponentOf(JsonObject item) =>
+        ComponentOf(item["get"]?["responses"]?["200"]?["content"]?["application/json"]?["schema"]?["$ref"]);
 
-        return reference.StartsWith(Prefix, StringComparison.Ordinal) ? reference[Prefix.Length..] : string.Empty;
+    /// <summary>The component key a <c>$ref</c> node points at, or <c>""</c>.</summary>
+    static string ComponentOf(JsonNode? reference) {
+        const string Prefix = "#/components/schemas/";
+        var text = Text(reference);
+
+        return text.StartsWith(Prefix, StringComparison.Ordinal) ? text[Prefix.Length..] : string.Empty;
     }
 
     /// <summary>

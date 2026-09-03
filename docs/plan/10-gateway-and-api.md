@@ -37,10 +37,19 @@ only tenant a request can address is one that already exists. Tenant creation is
 `IScopeManager.CreateTenantAsync`, off this pipeline entirely;
 [08](08-resource-manager.md) § The write path, end to end carries the argument and what was rejected.
 
-⚠ **The scope API is not in the generated OpenAPI document, and that is owed rather than decided.**
-§ API versioning's document is generated from the provider registry, and a scope has no provider — so
-`cyc`, the SDK and the portal forms know nothing about these two addresses. Closing it means teaching
-the generator a surface that is not a resource type.
+⚠ **The scope API is in the generated OpenAPI document, and the generator therefore has a second,
+non-registry source.** § API versioning's document is generated from the provider registry and a scope
+has no provider, so until this was closed `cyc`, the SDK and the portal forms knew nothing about these
+addresses and a tenant could create a subscription only by hand. The alternative — documenting the
+scope API separately and excluding it from generation — was rejected because the compatibility gate
+diffs the *published document* and every derived surface reads it ([21](21-cli-and-sdks.md)
+§ Generation's one hop): a page outside that document would have left all four surfaces exactly as
+unable to create a subscription, and would have put the two addresses where no gate could see them
+break. `OpenApiEmitter.ScopePathItems` emits them, discriminated by `x-cybercloud-scope`; the
+precedent is `/operations/{operationId}`, which has come from no provider since the emitter was
+written. ⚠ The tenant path carries a `GET` and no `PUT`, and the absence is emitted as a decision:
+stage 3 below resolves the request's tenant from the token, so a create route could not authenticate,
+and documenting one would have generated a `cyc` verb that fails every time it is used.
 
 ## Request pipeline
 
