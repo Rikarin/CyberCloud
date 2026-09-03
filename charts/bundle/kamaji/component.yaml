@@ -36,6 +36,20 @@ requiredBy:
 values:
   datastore.enabled: "true"
 
+# Every container image this component's pinned artefact renders, with the digest its registry served
+# on 2026-09-03. Regenerate with `./charts/bundle/images.sh --resolve`; check with `images.sh`.
+#
+# ⚠ THIS IS A RECORD, NOT A PIN, AND THE DIFFERENCE IS WORTH BEING EXACT ABOUT. The tag is what the
+# chart passes to the kubelet; the digest beside it is what that tag resolved to when somebody looked.
+# A tag is mutable, so an upstream rebuild moves these bytes without moving any version in this
+# directory — and `images.sh` is what turns that from invisible into a red run.
+images:
+  - cfssl/cfssl:latest@sha256:c9018c2ddf0b1f8dbef166057cc751d1becd5c3b0b7014cb9fe06972f725106f
+  - clastix/kamaji:v1.0.0@sha256:d54553535ad43ef48dae79e416474e72f44292abeb252f6483a1aeb3b7b3cdc2
+  - clastix/kubectl:v1.36@sha256:e0d36c70466434165766f9feda3a89550942b262696e0c40f60f8b2a6cc7df23
+  - quay.io/coreos/etcd:v3.5.1@sha256:56aa454c329505b221216a60647ab315bf87c5bafe1ffe81c0af9014b496788a
+  - quay.io/coreos/etcd:v3.5.6@sha256:28cb0630cb8536504f9bd547c3e63e608242c40dbffb1464c892d8d59fd3da44
+
 notes: >
   ⚠ THE REPOSITORY'S NEWEST GITHUB RELEASE IS NOT THE PIN, AND THAT IS DELIBERATE.
   api.github.com/repos/clastix/kamaji/releases/latest reports `26.8.4-edge`. An `-edge` tag is a

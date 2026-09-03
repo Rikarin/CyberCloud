@@ -37,14 +37,28 @@ requiredBy:
 # ⚠ A TAG AND NOT A DIGEST, BECAUSE THE CHART HAS NO DIGEST KEY. templates/deployment.yaml composes
 # the reference as `"{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion
 # }}"` and nothing else, so `image.digest` would be a values key that silently does nothing — which
-# is worse than a tag, because it reads as a stronger pin than it is. The digest below is recorded so
-# that `install.sh --verify` can compare what it pulled against what was reviewed; it is a fact to
-# check against, not a value that is passed.
+# is worse than a tag, because it reads as a stronger pin than it is.
+#
+# ⚠ THIS FILE USED TO CARRY AN `imageDigest:` KEY WHOSE OWN COMMENT SAID IT WAS "recorded so that
+# `install.sh --verify` can compare what it pulled against what was reviewed". NOTHING READ IT.
+# `verify_component` reads install, repo, chart, version, archive, manifest and manifestExtra, and
+# has never read a digest — so the sentence described a check that did not exist, which is the failure
+# class this repository has shipped roughly a dozen times. The key is gone and the digest is in the
+# `images:` block below, which `charts/bundle/images.sh` re-resolves and compares. Re-read on
+# 2026-09-03 through the OCI distribution API rather than quay's own: same digest, and the chart's
+# DEFAULT tag `v1.3.0` still answers 404.
 values:
   image.tag: "v1.3.0-rc1"
 
-# quay.io/api/v1/repository/spotahome/redis-operator/tag/?specificTag=v1.3.0-rc1, read 2026-08-19.
-imageDigest: sha256:8c772955184e60ee3116428540ec21abe7b648f4d5a5d74ecf3f19aec52b7e49
+# Every container image this component's pinned artefact renders, with the digest its registry served
+# on 2026-09-03. Regenerate with `./charts/bundle/images.sh --resolve`; check with `images.sh`.
+#
+# ⚠ THIS IS A RECORD, NOT A PIN, AND THE DIFFERENCE IS WORTH BEING EXACT ABOUT. The tag is what the
+# chart passes to the kubelet; the digest beside it is what that tag resolved to when somebody looked.
+# A tag is mutable, so an upstream rebuild moves these bytes without moving any version in this
+# directory — and `images.sh` is what turns that from invisible into a red run.
+images:
+  - quay.io/spotahome/redis-operator:v1.3.0-rc1@sha256:8c772955184e60ee3116428540ec21abe7b648f4d5a5d74ecf3f19aec52b7e49
 
 notes: >
   ⚠ ADR-011 IS SATISFIED AND IT IS SATISFIED BY THE CHART, NOT BY THIS COMPONENT. The licence

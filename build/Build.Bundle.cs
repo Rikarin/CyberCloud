@@ -190,7 +190,9 @@ partial class Build
             : components.Count == 0 || chartsInspected == 0 ? GateStatus.Vacuous
             : GateStatus.Enforced,
             $"{components.Count} component(s) serving {components.Sum(x => x.Serves.Count)} "
-            + $"group/version(s); {chartsInspected} chart(s) rendering {rendered.Count} "
+            + $"group/version(s) and recording "
+            + $"{components.Sum(x => ReadBundleSequence(x.File, "images").Count)} image digest(s); "
+            + $"{chartsInspected} chart(s) rendering {rendered.Count} "
             + $"non-built-in group/version(s); {orderingDetail}",
             violations);
     }
@@ -270,6 +272,7 @@ partial class Build
                     + "nothing");
             }
 
+            violations.AddRange(ImagesViolations(relative, file));
             violations.AddRange(LicenceViolations(relative, scalars));
             violations.AddRange(PinViolations(relative, scalars));
             violations.AddRange(CheckedDateViolations(relative, scalars));
@@ -368,6 +371,102 @@ partial class Build
     ///     them. Sixty is above the first group and below anything a reviewer would call an argument.
     /// </remarks>
     const int ServesNoDefinitionsMinimumReason = 60;
+
+    /// <summary>
+    ///     A component records every image its pinned artefact renders, with the digest each tag
+    ///     served — or argues, in prose, that it renders none.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>What this closes is one level below the pin, and the two decay differently.</b>
+    ///         A chart version is immutable once published, which is why <c>install.sh --verify</c>
+    ///         can answer "does the pin resolve" with an HTTP HEAD. The image tag inside that chart
+    ///         is mutable, so a component whose every pin resolves can be running bytes that were
+    ///         rebuilt last night by somebody else, and nothing in this directory would say so.
+    ///         <c>charts/bundle/images.sh</c> is what re-resolves these; this gate is what stops the
+    ///         record from being unreadable, absent, or quietly emptied.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>It does NOT resolve anything, and the reason is the same one
+    ///         <see cref="CheckedDateViolations" /> gives for having no maximum age.</b> An
+    ///         architecture gate that made thirty registry calls would be a gate that goes red when
+    ///         a network is slow, and a gate that goes red for reasons unrelated to the tree is a
+    ///         gate somebody switches off. The network half is a script a person runs, exactly as
+    ///         <c>--verify</c> is.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The prose escape is <c>servesNoDefinitions:</c>'s shape and exists for one real
+    ///         component.</b> <c>prometheus-operator-crds</c> renders CustomResourceDefinition
+    ///         documents and no container at all. An empty <c>images:</c> list and a list nobody has
+    ///         filled in look identical, which is exactly the checkbox failure the sixty-character
+    ///         floor exists to prevent.
+    ///     </para>
+    /// </remarks>
+    static IEnumerable<string> ImagesViolations(string relative, AbsolutePath file)
+    {
+        var images = ReadBundleSequence(file, "images");
+        var reason = ReadBundleReason(file, "rendersNoWorkloadImages");
+
+        if (images.Count > 0 && reason is not null)
+        {
+            yield return
+                $"{relative} declares {images.Count} `images:` entr(y/ies) AND "
+                + "`rendersNoWorkloadImages:`. One of the two is wrong, and this gate will not choose "
+                + "which: the escape is for a component that renders no container, and a component "
+                + "that renders one owes charts/bundle/images.sh a line to compare against";
+
+            yield break;
+        }
+
+        if (images.Count == 0)
+        {
+            if (reason is null)
+            {
+                yield return
+                    $"{relative} records no `images:`. Every image this bundle pulls is a tag inside "
+                    + "somebody else's chart, and a tag is mutable — charts/bundle/bundle.yaml § owed, "
+                    + "`images-are-not-pinned-by-digest`. Generate the block with "
+                    + "`./charts/bundle/images.sh --component <name> --resolve`, review what it found, "
+                    + "and paste it. ⚠ If this component genuinely renders no container — a chart of "
+                    + "CustomResourceDefinitions does — say so in `rendersNoWorkloadImages:`, in at "
+                    + $"least {ServesNoDefinitionsMinimumReason} characters of prose. Do NOT write an "
+                    + "empty `images:` list: it is indistinguishable from one nobody filled in";
+            }
+            else if (reason.Length < ServesNoDefinitionsMinimumReason)
+            {
+                yield return
+                    $"{relative} declares `rendersNoWorkloadImages:` in {reason.Length} character(s) "
+                    + $"and the floor is {ServesNoDefinitionsMinimumReason}, for the same reason "
+                    + "`servesNoDefinitions:` has one: a one-word reason is a checkbox, and a checkbox "
+                    + "is how an exception becomes the default";
+            }
+
+            yield break;
+        }
+
+        foreach (var image in images.Where(image => !ImageReference.IsMatch(image)))
+        {
+            yield return
+                $"{relative} lists `{image}` under `images:`, which is not a "
+                + "`repository:tag@sha256:<64 hex>` reference. charts/bundle/images.sh compares its "
+                + "resolved digest against these strings verbatim, so an entry in another shape "
+                + "matches nothing it finds and is reported as an image nobody recorded — which reads "
+                + "as a supply-chain change rather than as a typo";
+        }
+
+        // ⚠ Duplicates are a violation rather than a set union, because the two entries would carry
+        // two different digests for one reference and the comparison would accept whichever came
+        // first. A record that can hold two answers is a record that has none.
+        foreach (var duplicate in images
+            .GroupBy(image => image.Split('@')[0], StringComparer.Ordinal)
+            .Where(group => group.Count() > 1))
+        {
+            yield return
+                $"{relative} lists `{duplicate.Key}` under `images:` {duplicate.Count()} times. One "
+                + "reference has one digest; two rows for it means one of them is stale and nothing "
+                + "can say which";
+        }
+    }
 
     static IEnumerable<string> LicenceViolations(string relative, Dictionary<string, string> scalars)
     {
@@ -713,6 +812,24 @@ partial class Build
     /// <summary>A <c>group/version</c> pair, as <c>serves:</c> must spell one.</summary>
     static readonly Regex GroupVersion = new(
         @"^[a-z0-9]([a-z0-9.-]*[a-z0-9])?/v[0-9]+((alpha|beta)[0-9]+)?$",
+        RegexOptions.Compiled);
+
+    /// <summary>
+    ///     An <c>images:</c> entry: a reference, a tag, and the digest that tag served when somebody
+    ///     looked.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>The tag half is required and is not redundant with the digest.</b> A digest alone
+    ///     would be unreviewable — nobody can tell <c>sha256:a2701eb9…</c> from
+    ///     <c>sha256:b2701eb9…</c> in a diff, and nobody can tell which upstream release either is.
+    ///     The pair is what makes a moved tag a readable failure: <c>charts/bundle/images.sh</c>
+    ///     re-renders the chart, resolves the tag, and prints the two digests side by side.
+    ///     ⚠ <b><c>sha256</c> only, and lower-case hex only.</b> An entry with a truncated or
+    ///     upper-cased digest would never equal what a registry returns, so the comparison would
+    ///     always be red and the natural response would be to delete the check.
+    /// </remarks>
+    static readonly Regex ImageReference = new(
+        @"^[a-z0-9][a-z0-9._/-]*:[A-Za-z0-9._-]+@sha256:[0-9a-f]{64}$",
         RegexOptions.Compiled);
 
     // ── Ordering ──────────────────────────────────────────────────────────────────────────────

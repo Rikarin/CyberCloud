@@ -146,6 +146,13 @@ owed:
       ⚠ WHAT THIS DOES NOT ESTABLISH: that the image boots, that its kubelet matches its tag, or that
       the bootstrap check completes — see `bootstrap-check-may-never-complete`. A tag list is a
       registry read, not a running node.
+      ⚠ RE-READ 2026-09-03 AND UNCHANGED, WHICH IS ITSELF THE FINDING. The same four tags,
+      `has_additional: false`, newest v1.34.1 pushed 2025-09-27 — eleven months with nothing added,
+      because CAPK automates no container-disk build at all. The repository this chart names is
+      therefore a dead end for any minor worth offering, and
+      charts/managed/kubernetes-agentpool/node-image/ is the recipe for building our own.
+      `nodeImageRepository` is unchanged on purpose: pointing it somewhere before an image is hosted
+      there would move the broken pin rather than fix it.
   - id: bootstrap-check-may-never-complete
     says: >
       ⚠ THE RISKIEST DEFAULT ON THIS TYPE, AND IT IS A DEFAULT RATHER THAN A CHOICE.

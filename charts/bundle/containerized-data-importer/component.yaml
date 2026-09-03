@@ -24,6 +24,16 @@ serves:
 requiredBy:
   - charts/bundle/cluster-api-provider-kubevirt
 
+# Every container image this component's pinned artefact renders, with the digest its registry served
+# on 2026-09-03. Regenerate with `./charts/bundle/images.sh --resolve`; check with `images.sh`.
+#
+# ⚠ THIS IS A RECORD, NOT A PIN, AND THE DIFFERENCE IS WORTH BEING EXACT ABOUT. The tag is what the
+# chart passes to the kubelet; the digest beside it is what that tag resolved to when somebody looked.
+# A tag is mutable, so an upstream rebuild moves these bytes without moving any version in this
+# directory — and `images.sh` is what turns that from invisible into a red run.
+images:
+  - quay.io/kubevirt/cdi-operator:v1.66.0@sha256:45964f62a027e09463c8dd48a2cbaf063c0afe771edb18e505f4461d0915984c
+
 notes: >
   ⚠ CDI's import pods write into a PersistentVolume, so this component depends on a storage class and
   this bundle installs none — bundle.yaml § owed, `no-csi`. On a cluster with no default storage

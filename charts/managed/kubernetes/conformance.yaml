@@ -289,6 +289,27 @@ owed:
       exists. Adding 1.34 now would spend an immutable api-version on a minor that dies before most
       tenants would have migrated onto it. Nothing in this pass changed Versions, PinnedPatch or the
       chart's enum; what changed is that the reason is now measured rather than assumed.
+      ✅ THE RECIPE LANDED ON 2026-09-03 AND THE HOSTING DID NOT, AND THE SPLIT IS THE ITEM.
+      charts/managed/kubernetes-agentpool/node-image/ holds the build and its verification. Every
+      claim this row makes about upstream was re-read that day rather than carried forward: the quay
+      tag API still returns exactly four tags with `has_additional: false`, newest v1.34.1 pushed
+      2025-09-27; kubernetes-sigs/image-builder at tag v0.1.55 (commit 7ffb9b7f) still derives
+      `build-kubevirt-qemu-ubuntu-2404` from QEMU_BUILD_NAMES, and its packer/config/kubernetes.json
+      still defaults to v1.36.1. So building 1.36 is upstream's DEFAULT rather than an override, and
+      the container-disk format is a `FROM scratch` image with a qcow2 at /disk/ — the whole
+      post-processor is fourteen lines of shell.
+      ⚠ WHAT IS OWED IS HOSTING, AND IT IS NOT SOMETHING THIS ROW CAN INVENT. `build.sh` has no
+      default `--repository` because this platform has no registry — issue #25 — and a container disk
+      that is not in a registry is not a node image: a KubevirtMachineTemplate cannot reference one.
+      ⚠ AND THE PACKER RUN ITSELF IS UNEXECUTED HERE. The default mode of `build.sh` resolves every
+      input firsthand on every invocation and builds nothing; the build needs a QEMU-capable host,
+      half an hour and about 4 GB, and no lane in this repository has one. Transcribed from
+      upstream's own Makefile is not the same as run, which is the same distinction SOURCE draws with
+      "a registry read is not a running node".
+      THE ORDER, AND NONE OF IT MAY BE REORDERED: a registry (#25); a disk built and pushed for a
+      supported minor; a node that actually joins with the kubelet its tag claims — which
+      `a-green-cluster-suite-proves-the-apply-path-only` says nothing here can check; THEN the new
+      api-version. An api-version cut against an image that does not boot cannot be withdrawn.
   - id: version-skew-is-not-enforced
     says: >
       ⚠ docs/plan/13 SAYS "the API enforces it with a clear error, rather than letting a tenant break

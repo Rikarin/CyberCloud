@@ -26,6 +26,16 @@ serves:
 requiredBy:
   - charts/managed/kubernetes
 
+# Every container image this component's pinned artefact renders, with the digest its registry served
+# on 2026-09-03. Regenerate with `./charts/bundle/images.sh --resolve`; check with `images.sh`.
+#
+# ⚠ THIS IS A RECORD, NOT A PIN, AND THE DIFFERENCE IS WORTH BEING EXACT ABOUT. The tag is what the
+# chart passes to the kubelet; the digest beside it is what that tag resolved to when somebody looked.
+# A tag is mutable, so an upstream rebuild moves these bytes without moving any version in this
+# directory — and `images.sh` is what turns that from invisible into a red run.
+images:
+  - docker.io/clastix/cluster-api-control-plane-provider-kamaji:v0.20.0@sha256:e1db02682e01d25c8d8f0249f5cead8d6c8246a5a5f74c454428cbd98afef7aa
+
 notes: >
   ⚠ This document declares no cert-manager objects, unlike its two phase-40 siblings. It was checked
   rather than inferred: `grep -c cert-manager.io` over control-plane-components.yaml v0.20.0 returns

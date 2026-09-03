@@ -33,6 +33,18 @@ requiredBy:
   - charts/bundle/kamaji-control-plane-provider
   - charts/bundle/cluster-api-provider-kubevirt
 
+# Every container image this component's pinned artefact renders, with the digest its registry served
+# on 2026-09-03. Regenerate with `./charts/bundle/images.sh --resolve`; check with `images.sh`.
+#
+# ⚠ THIS IS A RECORD, NOT A PIN, AND THE DIFFERENCE IS WORTH BEING EXACT ABOUT. The tag is what the
+# chart passes to the kubelet; the digest beside it is what that tag resolved to when somebody looked.
+# A tag is mutable, so an upstream rebuild moves these bytes without moving any version in this
+# directory — and `images.sh` is what turns that from invisible into a red run.
+images:
+  - registry.k8s.io/cluster-api/cluster-api-controller:v1.14.0@sha256:4f57cf35b7de52e568eb85295f2a505268f29f1c7b76e7b12ce7cf6d2034f8f4
+  - registry.k8s.io/cluster-api/kubeadm-bootstrap-controller:v1.14.0@sha256:3209310007d8f015545f5cd621b110cc1af2bcf2538d91bbac81aaf989451102
+  - registry.k8s.io/cluster-api/kubeadm-control-plane-controller:v1.14.0@sha256:bab6f68839cef892102427f03599dd4d7b433bcae0e4794724ba80253fb8aa98
+
 notes: >
   ⚠ `clusterctl init` is the documented install path and is deliberately not the one taken. It
   resolves provider versions from a remote contract at install time, which is a pin this directory

@@ -43,6 +43,18 @@ requiredBy:
 values:
   watchNamespaces[0]: ".*"
 
+# Every container image this component's pinned artefact renders, with the digest its registry served
+# on 2026-09-03. Regenerate with `./charts/bundle/images.sh --resolve`; check with `images.sh`.
+#
+# ⚠ THIS IS A RECORD, NOT A PIN, AND THE DIFFERENCE IS WORTH BEING EXACT ABOUT. The tag is what the
+# chart passes to the kubelet; the digest beside it is what that tag resolved to when somebody looked.
+# A tag is mutable, so an upstream rebuild moves these bytes without moving any version in this
+# directory — and `images.sh` is what turns that from invisible into a red run.
+images:
+  - altinity/clickhouse-operator:0.27.3@sha256:0520bfb8015dcb270f0600f542cad117e637cdcdc791bfd71b7964ff067d1589
+  - altinity/metrics-exporter:0.27.3@sha256:1e7c1d8167aad902513be37dcf7e439cf8a2564779a23008b8c81d879e71fb60
+  - bitnami/kubectl:latest@sha256:e0fcb25c485a8ad0665d0dd4b4a67cefb6baee32b0e3b19f54f1b468c49c1ed5
+
 notes: >
   charts/managed/clickhouse/values.yaml carries twelve `@internal` rows where its siblings carry ten
   or eleven, and charts/README.md attributes two of the extras to this component's shape: it is the

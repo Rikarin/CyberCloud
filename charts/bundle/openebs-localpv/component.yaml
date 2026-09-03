@@ -140,6 +140,16 @@ requiredBy:
 # piraeus-operator and LINSTOR rather than it. A 0.x control plane is not where a customer's block
 # storage goes, and this note says watch for that reason. Read 2026-08-20.
 
+# Every container image this component's pinned artefact renders, with the digest its registry served
+# on 2026-09-03. Regenerate with `./charts/bundle/images.sh --resolve`; check with `images.sh`.
+#
+# ⚠ THIS IS A RECORD, NOT A PIN, AND THE DIFFERENCE IS WORTH BEING EXACT ABOUT. The tag is what the
+# chart passes to the kubelet; the digest beside it is what that tag resolved to when somebody looked.
+# A tag is mutable, so an upstream rebuild moves these bytes without moving any version in this
+# directory — and `images.sh` is what turns that from invisible into a red run.
+images:
+  - docker.io/openebs/provisioner-localpv:4.6.0@sha256:99f5116f5cb83fb9d046ef5ff5b8ea98da90e7da5250d7b101bd650662238a0a
+
 notes: >
   Phase 25 rather than 20: phase 20 is definitions with no controller behind them, and this has a
   controller. Phase 25 rather than 50: KubeVirt's DataVolumes in phase 30, Kamaji's etcd in phase 40

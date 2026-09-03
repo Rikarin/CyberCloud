@@ -300,7 +300,7 @@ public sealed class CertManagerComponentInstaller {
 ///         <c>component.yaml</c> and installs it; <c>--wait</c> means what
 ///         <c>cert-manager/component.yaml</c> says it means, so "installed" implies "serving"; and
 ///         the one <c>serves:</c> line that component declares is true of the cluster afterwards.
-///         What a green run here does NOT support: that the other seventeen pins install, that the
+///         What a green run here does NOT support: that the other sixteen pins install, that the
 ///         phase barriers order them correctly, that nineteen operators fit on one node, or that a
 ///         managed chart's custom resource reconciles. <c>charts/bundle/bundle.yaml</c> § owed keeps
 ///         that list; this class narrows the first row of it and closes nothing.
@@ -342,7 +342,7 @@ public sealed class CertManagerOnAnEmptyCluster(EmptyClusterFixture cluster) : I
             cluster.Client is null || cluster.KubeconfigPath is null,
             cluster.Skip(
                 BundleInstaller.CertManagerComponent,
-                "two-of-nineteen-have-been-installed",
+                "most-of-the-roster-has-never-been-installed",
                 "that charts/bundle/install.sh --phase 15 installs the cert-manager component onto a "
                 + "fresh API server unattended, that cert-manager.io/v1 — the component's only "
                 + "`serves:` line — is served afterwards, and that a self-signed Certificate reaches "
@@ -368,7 +368,8 @@ public sealed class CertManagerOnAnEmptyCluster(EmptyClusterFixture cluster) : I
             0,
             "charts/bundle/install.sh --phase 15 failed against a fresh k3s. This is the first thing "
             + "in the repository to run it against an API server at all — charts/bundle/bundle.yaml "
-            + "§ owed, `two-of-nineteen-have-been-installed` — so a failure here is a defect in the "
+            + "§ owed, `most-of-the-roster-has-never-been-installed` — so a failure here is a "
+            + "defect in the "
             + "installer or in the pin, not in this test's expectations. Its output was:\n"
             + run.Output
         );

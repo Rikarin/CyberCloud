@@ -22,6 +22,16 @@ serves:
 requiredBy:
   - charts/managed/rabbitmq
 
+# Every container image this component's pinned artefact renders, with the digest its registry served
+# on 2026-09-03. Regenerate with `./charts/bundle/images.sh --resolve`; check with `images.sh`.
+#
+# ⚠ THIS IS A RECORD, NOT A PIN, AND THE DIFFERENCE IS WORTH BEING EXACT ABOUT. The tag is what the
+# chart passes to the kubelet; the digest beside it is what that tag resolved to when somebody looked.
+# A tag is mutable, so an upstream rebuild moves these bytes without moving any version in this
+# directory — and `images.sh` is what turns that from invisible into a red run.
+images:
+  - ghcr.io/rabbitmq/cluster-operator:2.22.4@sha256:4dd71f4345e8fdd7edaed44ba0e37731172a4e8832236e3b5dfedb44f8ff595f
+
 notes: >
   ⚠ THE RELEASE SHIPS THREE MANIFESTS AND THEY DIFFER ONLY IN THE REGISTRY THEY PULL FROM —
   `cluster-operator.yml` (Docker Hub), `cluster-operator-ghcr-io.yml` and

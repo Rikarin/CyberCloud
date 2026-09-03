@@ -27,6 +27,16 @@ requiredBy:
   - charts/managed/kubernetes
   - charts/managed/kubernetes-agentpool
 
+# Every container image this component's pinned artefact renders, with the digest its registry served
+# on 2026-09-03. Regenerate with `./charts/bundle/images.sh --resolve`; check with `images.sh`.
+#
+# ⚠ THIS IS A RECORD, NOT A PIN, AND THE DIFFERENCE IS WORTH BEING EXACT ABOUT. The tag is what the
+# chart passes to the kubelet; the digest beside it is what that tag resolved to when somebody looked.
+# A tag is mutable, so an upstream rebuild moves these bytes without moving any version in this
+# directory — and `images.sh` is what turns that from invisible into a red run.
+images:
+  - quay.io/capk/capk-manager:v0.11.2@sha256:5a9cce74b4d073c5468ba4e5ecbd8879b00a5880868590dc71018b41f56c545c
+
 notes: >
   ⚠ Its RBAC is where charts/bundle/kubevirt and charts/bundle/containerized-data-importer became
   requirements. infrastructure-components.yaml v0.11.2 grants this controller rules over the

@@ -32,6 +32,16 @@ requiredBy:
   - charts/managed/ferretdb
   - charts/managed/harbor
 
+# ⚠ This component installs CustomResourceDefinitions and no workload, so there is no
+# image to record. Stated in prose rather than as an empty `images:` list, for the same
+# reason `servesNoDefinitions:` is prose: an empty list and an unfilled list look
+# identical, and `images.sh` cannot tell a component that pulls nothing from one nobody
+# has got round to recording.
+rendersNoWorkloadImages: >
+  The prometheus-operator-crds chart renders CustomResourceDefinition documents only —
+  no Deployment, no Job, no container, and therefore no image. The controller that
+  reconciles these kinds is not in this bundle at all; see this file's header.
+
 notes: >
   The chart also installs monitoring.coreos.com/v1alpha1 (AlertmanagerConfig, PrometheusAgent,
   ScrapeConfig). Those are not listed above because nothing in this platform renders them and a

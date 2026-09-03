@@ -54,6 +54,8 @@ if it ever inspects nothing.
 | `checked` | always | The ISO date it was read. Not in the future |
 | `serves` | unless `servesNoDefinitions` | The `group/version` pairs the component's definitions serve |
 | `servesNoDefinitions` | when `serves` is absent | Why this component installs no CustomResourceDefinition. At least 60 characters of prose |
+| `images` | unless `rendersNoWorkloadImages` | Every image the pinned artefact renders, as `repository:tag@sha256:…` |
+| `rendersNoWorkloadImages` | when `images` is absent | Why this component renders no container. At least 60 characters of prose |
 | `requiredBy` | always | The charts and components that need it |
 | `repo`, `chart`, `version` | `install: helm` | Chart repository, chart name, chart version |
 | `archive`, `chart`, `version` | `install: helm-archive` | Packaged-chart URL, chart name, chart version |
@@ -117,15 +119,28 @@ Two halves, enforced by two different things because only one of them is a prope
 ## Installing
 
 ```bash
-./charts/bundle/install.sh --dry-run          # print every command, run none
-./charts/bundle/install.sh                    # apply, phase by phase
-./charts/bundle/install.sh --phase 50         # one phase
-./charts/bundle/install.sh --verify           # resolve every pin against its registry, apply nothing
+./charts/bundle/install.sh --dry-run              # print every command, run none
+./charts/bundle/install.sh                        # apply, phase by phase
+./charts/bundle/install.sh --phase 50             # one phase — which here is EIGHT components
+./charts/bundle/install.sh --component kube-ovn   # one row. Repeatable
+./charts/bundle/install.sh --verify               # resolve every pin against its registry, apply nothing
 ```
 
 The script reads `bundle.yaml` and each `component.yaml`; it hard-codes no version. `--verify`
 answers the question this directory rots on — *does every pin still resolve* — without needing a
 cluster.
+
+> ⚠ **`--phase` is not "one row", whatever the usage text used to say.** Phase 30 is two components,
+> phase 40 is four and phase 50 is eight, so fourteen of the nineteen could not be addressed
+> individually at all until `--component` existed. `--component` **filters** the roster and never
+> reorders it: two of them given the other way round still install in `bundle.yaml`'s order, because
+> the order is the roster's property and a flag that reordered it would be a second place the order
+> is written.
+
+> ⚠ **A selector that matches nothing is an error, and until 2026-09-03 it was a green run.**
+> `--phase 99` printed one empty phase header and exited 0 under *"Bundle applied"*; `--verify
+> --phase 99` printed *"Every pin resolves"* having resolved none. `bundle.yaml` § owed,
+> `a-selector-that-matched-nothing-reported-success`.
 
 `deploy/bootstrap/` is a different job and the two must not be merged. `bootstrap/` installs
 **Cyber Cloud onto a cluster** with `kubectl` and checked-in YAML only, because it is what an
@@ -180,19 +195,67 @@ chart pins an image tag that does not exist in the registry it names. The operat
 and works; what it does not have is anybody to fix it. See
 `charts/bundle/redis-operator/component.yaml` and `bundle.yaml` § owed.
 
+## What this bundle pulls
+
+A chart version is immutable once published, which is what makes `--verify` a real answer to *does
+the pin still resolve*. **The image tag inside that chart is not.** So a bundle whose every pin
+resolves can be running bytes somebody rebuilt last night, and until 2026-09-03 nothing in this
+directory knew which images those were.
+
+Now every component records them. `images:` lists each container image the pinned artefact renders,
+with the digest its registry served when somebody looked, and `./charts/bundle/images.sh` re-renders,
+re-resolves and compares:
+
+```bash
+./charts/bundle/images.sh                      # compare every component against its record
+./charts/bundle/images.sh --component kamaji   # one component
+./charts/bundle/images.sh --resolve            # regenerate the block after a bump
+```
+
+**Thirty-two images across eighteen components**, counted on 2026-09-03; `prometheus-operator-crds`
+renders CustomResourceDefinitions and no container, and says so in `rendersNoWorkloadImages:`.
+
+> ⚠ **A record, not a pin, and being exact about that is the point.** The tag is still what reaches
+> the kubelet. This detects a tag that moved; it does not prevent one. Preventing it needs a values
+> override per chart and several charts have no digest key — `redis-operator/component.yaml`
+> documents that case: its template composes `repository:tag` and nothing else, so an `image.digest`
+> value would be a key that silently does nothing, which is worse than a tag because it reads as a
+> stronger pin than it is.
+
+> ⚠ **The row that used to say redis-operator was the exception was wrong, and the correction is the
+> more useful half.** It pinned a *tag* and recorded an `imageDigest:` beside it whose own comment
+> said `install.sh --verify` compared it. Nothing read that key — `verify_component` reads the chart
+> and manifest pins and has never read a digest. The true count of images checked by digest was zero
+> of nineteen. See `bundle.yaml` § owed, `images-are-not-pinned-by-digest`.
+
+> ⚠ **Two images in this bundle are `latest`.** `clickhouse-operator` renders
+> `bitnami/kubectl:latest` and `kamaji` renders `cfssl/cfssl:latest` — neither is ours to fix, both
+> are recorded with the digest they resolve to today, and `images.sh` is what will notice when they
+> move. `bundle.yaml` § owed, `two-images-in-this-bundle-are-latest`, has the reading on why
+> `bitnami/kubectl` is the sharper of the two, and why the two untagged references in the Kamaji
+> provider's CRD schema are deliberately *not* counted here.
+
+The scan ADR-011 § Enforcement asks for is a different thing again, and `build/Build.Licence.cs`
+carries the measurement showing it cannot be written against the allow-list that ADR names: 76 of
+the 99 packaged components in `mcr.microsoft.com/dotnet/aspnet:10.0` declare GPL or LGPL, so the
+gate would fail on our own base image. Which list answers which question is issue #18's decision.
+
 ## Verification, and its honest limit
 
-**Two of the nineteen components are installed onto a real cluster by CI. Seventeen are not, and the
+**Three of the nineteen components are installed onto a real cluster by CI. Sixteen are not, and the
 state of the tree says which in `bundle.yaml` § owed rather than implying otherwise.**
 
 > ⚠ **The denominator here read "eighteen" until 2026-09-02 and had been wrong since
 > `openebs-localpv` landed.** `bundle.yaml`'s `components:` holds nineteen rows and this directory
 > holds nineteen subdirectories. A count written in words is a claim nothing checks, and this one
-> outlived its own correction in `deploy/README.md` and in `build/Build.Bundle.cs`' prose too.
+> outlived its own correction in `deploy/README.md` and in `build/Build.Bundle.cs`' prose too. The
+> owed row that tracked it is no longer *named* after a count either — three names in a row carried
+> a number that was wrong by the time somebody quoted it, so it is
+> `most-of-the-roster-has-never-been-installed`.
 
 `test/CyberCloud.Bundle.Cluster.Conformance` starts an empty k3s — **a fresh one per test class, so
-neither component's assertions are about a cluster the other one touched** — and runs **this
-directory's own `install.sh`**, not a re-implementation of it.
+no class's assertions are about a cluster another one touched** — and runs **this directory's own
+`install.sh`**, not a re-implementation of it.
 
 **cert-manager, `--phase 15`.** Asserts the two things a CRD apply could not fake: that
 `cert-manager.io/v1` is served afterwards, and that a self-signed `Certificate` reaches `Ready` with
@@ -212,14 +275,42 @@ the default-class annotation landed on **our** class, on a cluster that now has 
 > does not distinguish it either. `bundle.yaml` § owed, `one-volume-has-been-provisioned`, has the
 > readings.
 
-What that supports is **the install mechanism**: the script runs unattended against a cluster it is
-handed, reads a pin out of a `component.yaml` rather than carrying one, and its `--wait` makes
-"installed" mean "serving". What it does not support is the roster. Seventeen pins are still
-resolved-but-never-applied; no `manifest:` component has been applied, so `kubectl` has never been
-invoked by this script under test; nothing has installed two components onto **one** cluster; and
-the phase barrier is unexercised, because `--phase` is the flag whose own usage text says it
-*"skips that guarantee"*. `bundle.yaml` § owed, `two-of-nineteen-have-been-installed`, keeps the
-full list.
+**openebs-localpv and cloudnative-pg, one run, `--component` twice.** The sentence this directory
+exists for, and it was unexercised until 2026-09-03. One `install.sh` invocation installs the storage
+component (phase 25) and the PostgreSQL operator (phase 50) onto **one** cluster, in the roster's
+order and not the command line's. Then `helm template charts/managed/postgres` renders a
+`postgresql.cnpg.io/v1` `Cluster`, the API server admits it against the definition the bundle just
+installed, and **CloudNativePG** — not the test — creates a `PersistentVolumeClaim` on
+`openebs-hostpath`, binds it to a volume under `/var/openebs/local`, and brings the database to
+`Ready`.
+
+> ⚠ **One field on the API server is what separates this from the storage case above.** The claim
+> carries a *controller* `ownerReference` to the `Cluster`, whose kind and api-group are asserted, so
+> it cannot be a claim the test wrote — which is exactly the criticism `bundle.yaml` § owed,
+> `one-volume-has-been-provisioned`, makes of itself. See `an-operator-created-and-bound-the-claim`.
+
+What that supports is **the install mechanism**, and now one path through it end to end: the script
+runs unattended against a cluster it is handed, reads a pin out of a `component.yaml` rather than
+carrying one, two components install onto one node without fighting, and its `--wait` makes
+"installed" mean "serving" — **for a `helm` component**. What it does not support is the roster.
+Sixteen pins are still resolved-but-never-applied; no `manifest:` component has been applied, so
+`kubectl` has never been invoked by *this script* under test.
+
+> ⚠ **The `--wait` clause is false for six of the nineteen, and it took reading the script to
+> notice.** The `manifest:` branch is a bare `kubectl apply --server-side` with no wait of any kind;
+> the one `kubectl wait --for=condition=Established` it can reach runs only for a component that has
+> a `manifestExtra`, and even then inside the component rather than at the phase boundary. So
+> `bundle.yaml` § phases overstates its own guarantee for kubevirt, containerized-data-importer,
+> cluster-api, kamaji-control-plane-provider, cluster-api-provider-kubevirt and
+> rabbitmq-cluster-operator. `bundle.yaml` § owed, `the-manifest-path-waits-for-nothing`, has the
+> reading and says why the wait is not written in advance of running those six.
+
+**The phase *order* is exercised and the phase *barrier* is not, and they are different claims.** A
+full `--dry-run` — no cluster, under a second — asserts that all nineteen components are attempted
+once each, in the roster's order, under ascending phase headers. That is the only assertion here that
+covers every row. What a dry run cannot answer is whether "installed" implies "serving" at a
+boundary, which is the paragraph above. `bundle.yaml` § owed,
+`most-of-the-roster-has-never-been-installed`, keeps the full list.
 
 > ⚠ **A defect the install found rather than the reading.** `cert-manager/component.yaml` recorded
 > that dropping `crds.enabled: true` would produce "a controller and no Certificate kind", noticed
@@ -260,14 +351,29 @@ the same skip the other cluster suites use, installing **one** component and say
 name. That is the suite described above; it took cert-manager rather than a phase-50 row because
 cert-manager's readiness is observable from outside and a data-service operator's is not.
 
-**Costs, measured on a ten-CPU host rather than estimated:** a green run of the suite is **2 m 20 s
-to 3 m 15 s** end to end across repeated runs — roughly 80 s for Testcontainers to bring up k3s, 45 s
+**Costs, measured on a ten-CPU host rather than estimated:** a green run of the suite was **2 m 20 s
+to 3 m 15 s** with two installing classes — roughly 80 s for Testcontainers to bring up k3s, 45 s
 for the helm install with `--wait`, the assertions in under a second, and the rest variance in what
 the machine was already doing. A red run costs more: the sabotage that removes `crds.enabled` takes
 **6 m 40 s**, because helm retries its post-install hook before giving up. The
 suite takes `ClusterSlot`, the same cross-process permit the other fifteen k3s-backed assemblies
-take, so it does not widen the concurrency Task #95 capped — it lengthens the serial tail by about
-two minutes on a machine where a daemon answers, and by nothing at all on one where none does.
+take, so it does not widen the concurrency Task #95 capped — it lengthens the serial tail on a
+machine where a daemon answers, and costs nothing at all on one where none does.
+
+**With the cloudnative-pg class it is 4 m 27 s to 4 m 47 s green across three runs, 9 tests, none
+skipped, measured 2026-09-03.**
+The class costs about **1 m 50 s**: 26 s for `install.sh` to put both components on the cluster
+(cheaper than cert-manager's single row, which pays a `startupapicheck` Job), 8 s to the operator's
+claim, 18 s to `Bound`, 68 s to `Ready` — the bulk of that last figure being the
+`ghcr.io/cloudnative-pg/postgresql` pull — and a second k3s start for the rest.
+
+> ⚠ **The lane was decided rather than deferred, and the answer is "here", which is not the same as
+> "cheap".** The only nightly lane that exists is `Build.E2E`, and its own preconditions refuse to
+> run without `--e2e-base-url` pointing at a real staging deployment and a `cyc` CLI to drive — a
+> Testcontainers k3s suite moved there would be run by nothing at all, which is worse than slow. A
+> lane for container-backed suites that are too slow for per-PR and need no deployment does not
+> exist; creating one is what `bundle.yaml` § owed,
+> `most-of-the-roster-has-never-been-installed`, now records as owed.
 
 **The "nothing to run" trap was checked rather than reasoned about.** A run with `helm` off `PATH`
 reports *1 passed, 1 skipped* in 414 ms — not "Zero tests ran", which `--minimum-expected-tests 1`
@@ -277,11 +383,19 @@ with **no Docker daemon** is the one path here that has not been exercised end t
 default socket when the override does not answer. The two branches record their failure into the same
 field and produce the same skip, so the untested half is the container start and not the reporting.
 
-The next row is **not** a second component. It is either the **phase barrier** — two components on
-one cluster, which is the first thing `--phase 15` cannot reach — or a **`manifest:` component**,
-which would be the first time `install.sh`'s `kubectl` path and its establishment wait ran at all.
-Both are strictly more than "one more operator installs", and either would want the nightly lane
-rather than this one.
+That paragraph used to say the next row was **not** a second component but the phase barrier or a
+`manifest:` one, and half of it was right. Two components on one cluster came cheap — 26 s, because
+neither has a post-install hook — and it arrived alongside the thing that was actually worth buying,
+which is an *operator* creating the claim. The barrier turned out not to be a matter of test coverage
+at all: for the six `manifest:` components it is not implemented, and that is a fix rather than a
+test.
+
+So the next row is a **`manifest:` component**, and it is now two questions rather than one. It would
+be the first time `install.sh`'s `kubectl` path ran under test, and it is the only way to find out
+what those six components need to be waited on for — which is what
+`bundle.yaml` § owed, `the-manifest-path-waits-for-nothing`, refuses to guess at in advance.
+`rabbitmq-cluster-operator` is the cheap one: phase 50, one document, no second apply, and a
+`rabbitmq.com/v1beta1` `RabbitmqCluster` that `charts/managed/rabbitmq` already renders.
 
 See [ADR-010](../../docs/plan/02-technology-decisions.md) § ADR-010, ADR-011 § The licence audit, and
 [docs/plan/12](../../docs/plan/12-managed-data-services.md) § The pattern, once.

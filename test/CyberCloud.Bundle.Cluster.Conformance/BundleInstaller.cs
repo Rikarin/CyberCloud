@@ -9,8 +9,9 @@ namespace CyberCloud.Bundle.Cluster.Conformance;
 /// <remarks>
 ///     <para>
 ///         ⚠ <b>The script is the subject, so the test may not do the script's job.</b>
-///         <c>charts/bundle/bundle.yaml</c> § owed, <c>two-of-nineteen-have-been-installed</c>, is about
-///         <c>install.sh</c> specifically: <i>"a procedure that has been reasoned about and not
+///         <c>charts/bundle/bundle.yaml</c> § owed,
+///         <c>most-of-the-roster-has-never-been-installed</c>, is about <c>install.sh</c>
+///         specifically: <i>"a procedure that has been reasoned about and not
 ///         exercised"</i>. A test that ran <c>helm upgrade --install</c> itself with the same
 ///         arguments would prove that helm installs cert-manager, which nobody doubted, and would
 ///         leave the ordering, the flag handling, the bash 3.2 array expansions and the
@@ -34,6 +35,12 @@ public static class BundleInstaller {
     ///     The component that installs the storage class eleven <c>charts/managed/</c> charts need.
     /// </summary>
     public const string OpenEbsLocalPvComponent = "openebs-localpv";
+
+    /// <summary>
+    ///     The operator behind <c>CyberCloud.DBforPostgreSQL/servers</c>, and the first component in
+    ///     this bundle whose install makes an <i>operator</i> create a PersistentVolumeClaim.
+    /// </summary>
+    public const string CloudNativePgComponent = "cloudnative-pg";
 
     /// <summary>How long the installer gets before the test gives up on it.</summary>
     /// <remarks>
@@ -73,6 +80,55 @@ public static class BundleInstaller {
     /// <param name="component">The component's directory name.</param>
     public static string ComponentFile(string component) =>
         Path.Combine(RepositoryRoot, "charts", "bundle", component, "component.yaml");
+
+    /// <summary>The roster — <c>charts/bundle/bundle.yaml</c>.</summary>
+    public static string RosterFile => Path.Combine(RepositoryRoot, "charts", "bundle", "bundle.yaml");
+
+    /// <summary>
+    ///     Every component the roster lists, paired with its phase, in the roster's own order.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>The same narrow reader <c>install.sh</c>'s <c>roster()</c> awk is, mirrored rather
+    ///     than shared, for the reason <see cref="Pin" /> gives.</b> Its two rules are easy to get
+    ///     subtly wrong and both matter: <c>components:</c> opens the block, and <b>any</b> other
+    ///     line beginning with a lower-case letter closes it — which is what stops the reader
+    ///     walking on into <c>ordering:</c> and <c>owed:</c>, where the word <c>name</c> appears in
+    ///     prose. A reader that closed the block only on a blank line would return rows install.sh
+    ///     never sees.
+    ///     ⚠ <b>The order is the roster's, and it is the subject rather than the scaffolding.</b>
+    ///     <c>bundle.yaml</c>'s header calls the order "a property of the set", and
+    ///     <see cref="BundleInstallSelection" /> compares this sequence against what the installer
+    ///     prints. Sorting it here would delete the only thing that comparison can find.
+    /// </remarks>
+    public static IReadOnlyList<(string Phase, string Component)> Roster() {
+        var roster = new List<(string, string)>();
+        var inside = false;
+        string? name = null;
+
+        foreach (var line in File.ReadLines(RosterFile)) {
+            if (line.StartsWith("components:", StringComparison.Ordinal)) {
+                inside = true;
+                continue;
+            }
+
+            if (line.Length > 0 && char.IsLower(line[0])) {
+                inside = false;
+                continue;
+            }
+
+            if (!inside) {
+                continue;
+            }
+
+            if (line.StartsWith("  - name:", StringComparison.Ordinal)) {
+                name = line["  - name:".Length..].Trim();
+            } else if (line.StartsWith("    phase:", StringComparison.Ordinal) && name is not null) {
+                roster.Add((line["    phase:".Length..].Trim(), name));
+            }
+        }
+
+        return roster;
+    }
 
     /// <summary>
     ///     The value of a top-level scalar in a <c>component.yaml</c>, or <see langword="null" />.
