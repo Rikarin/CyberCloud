@@ -38,19 +38,23 @@ namespace CyberCloud.Bundle.Cluster.Conformance;
 ///         hid a real defect underneath a green full suite.
 ///     </para>
 ///     <para>
-///         ⚠ <b>THE PRICE OF THAT CHOICE, MEASURED AND NOT YET EXPLAINED. One full-assembly run in
-///         eight started the SECOND k3s and did not get one</b>, and the openebs class reported
-///         <c>Skipped: 1</c> where the other seven reported none; four deliberate attempts to
-///         reproduce it were all green. The suspected cause is container-start pressure while the
-///         first cluster is still being torn down — two k3s starts per process is new with the
-///         second installing class, and <c>ClusterSlot</c> does not serialise them because it is
-///         taken once per PROCESS and held for its life, which is what makes it a cross-process
-///         permit rather than a per-fixture one.
-///         ⚠ It degrades to a SKIP and not to a red, which is this assembly's contract and is why it
-///         is easy to miss: the daemonless companions always run, so
-///         <c>--minimum-expected-tests 1</c> is satisfied and the run says "Passed!". The skip text
-///         names the component and the sentence that went unchecked — read the count, not the word.
-///         Owed: either a retry around the container start, or a reason.
+///         ⚠ <b>THE PRICE OF THAT CHOICE, MEASURED. One full-assembly run in eight started the
+///         SECOND k3s and did not get one</b>, and the openebs class reported <c>Skipped: 1</c>
+///         where the other seven reported none; four deliberate attempts to reproduce it were all
+///         green. The suspected cause is container-start pressure while the first cluster is still
+///         being torn down — two k3s starts per process is new with the second installing class, and
+///         <c>ClusterSlot</c> does not serialise them because it is taken once per PROCESS and held
+///         for its life, which is what makes it a cross-process permit rather than a per-fixture
+///         one.
+///     </para>
+///     <para>
+///         ⚠ <b>It used to degrade to a SKIP rather than to a red, and that — not the flake — was
+///         the defect.</b> The daemonless companions keep <c>--minimum-expected-tests 1</c>
+///         satisfied, so the assembly printed <c>Passed!</c> and only the skip count told a run that
+///         proved nothing from one that proved everything. Nothing in <c>build/</c> reads a skip
+///         count, so nothing could tell them apart at all.
+///         <see cref="ADaemonThatHasAlreadyRunOneClusterIsNotAMissingDaemon" /> is the fix, and its
+///         remarks carry the argument for why it is a reason rather than a retry.
 ///     </para>
 ///     <para>
 ///         ⚠ <b>Postgres and Redis are not started, unlike the provider suites' fixture.</b> Nothing
@@ -60,8 +64,42 @@ namespace CyberCloud.Bundle.Cluster.Conformance;
 ///     </para>
 /// </remarks>
 public sealed class EmptyClusterFixture : IAsyncLifetime {
+    /// <summary>How many clusters this process has actually brought up.</summary>
+    static int clustersStarted;
+
     K3sContainer? container;
     Exception? failure;
+
+    /// <summary>
+    ///     Whether a start failure in this process can still honestly be reported as "no Docker".
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>This is the whole answer to "a retry around the container start, or a reason",
+    ///         and it is neither of them yet — it is the thing that has to come first.</b> A retry
+    ///         would hide a real capacity limit, and a reason cannot be found for a failure that
+    ///         reports success: the 1-in-8 run left one line of skip text in several thousand lines
+    ///         of suite output and a green build, which is not evidence anybody can work from. The
+    ///         next occurrence now fails the class carrying the container's own exception, and that
+    ///         is what a reason gets diagnosed from.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>It answers the narrow question rather than the broad one, deliberately.</b>
+    ///         "Any skip fails" would be wrong: a machine with no Docker daemon skipping this
+    ///         assembly is this repository's contract, kept on purpose, and a gate that broke it
+    ///         would be one people switch off. What cannot be true is that a daemon which just ran
+    ///         a k3s to completion is suddenly missing. Once this process has started one cluster,
+    ///         the daemon has proved it can run the image — so a later failure is a failure, and the
+    ///         only outcome that would be dishonest is a skip.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Per process rather than per machine</b>, because that is the scope in which the
+    ///         evidence was collected. It says nothing about a daemon that died between two runs,
+    ///         which is a skip and should stay one.
+    ///     </para>
+    /// </remarks>
+    static bool ADaemonThatHasAlreadyRunOneClusterIsNotAMissingDaemon
+        => Volatile.Read(ref clustersStarted) > 0;
 
     /// <summary>The kubeconfig file <c>install.sh</c> is pointed at, or <see langword="null" />.</summary>
     public string? KubeconfigPath { get; private set; }
@@ -128,7 +166,27 @@ public sealed class EmptyClusterFixture : IAsyncLifetime {
 
             using var yaml = new MemoryStream(Encoding.UTF8.GetBytes(kubeconfig));
             Client = new k8s.Kubernetes(await KubernetesClientConfiguration.BuildConfigFromConfigFileAsync(yaml).ConfigureAwait(false));
+
+            // ⚠ Recorded AFTER the client is built rather than after StartAsync, so what it claims
+            // is "this process has had a working cluster" and not "a container object was returned".
+            Interlocked.Increment(ref clustersStarted);
         } catch (Exception ex) when (ex is not OperationCanceledException) {
+            if (ADaemonThatHasAlreadyRunOneClusterIsNotAMissingDaemon) {
+                throw new InvalidOperationException(
+                    "The cluster for this class did not come up, and this run has already brought "
+                    + $"{Volatile.Read(ref clustersStarted)} up in this process — so the daemon can "
+                    + $"run {ClusterInfrastructure.K3sImage} and this is a failure rather than an "
+                    + "absent Docker. ⚠ This is the 1-in-8 flake recorded in EmptyClusterFixture's "
+                    + "remarks, caught red instead of degrading to a skip that a green build could "
+                    + "not be told from a real one. Do NOT answer it by sharing one cluster across "
+                    + "the installing classes: each class asserts what the cluster does NOT have "
+                    + "before it installs, and a shared cluster makes those assertions depend on "
+                    + "what ran first. The suspected cause is the previous cluster still being torn "
+                    + "down; the exception below is the evidence that was missing.",
+                    ex
+                );
+            }
+
             failure = ex;
         }
     }
