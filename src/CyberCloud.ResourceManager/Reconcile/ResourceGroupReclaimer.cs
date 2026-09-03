@@ -84,6 +84,31 @@ public sealed class ResourceGroupReclaimer(
             .ForTenant(tenant)
             .GetGrain<IResourceGroupGrain>(GrainKeys.ResourceGroup(scope.SubscriptionId, scope.ResourceGroup));
 
+        // ── 0. Sweep the phantoms first ──────────────────────────────────────────────────────────
+        //
+        // ⚠ WITHOUT THIS, A GROUP WHOSE ONLY MEMBER IS AN ORPHAN CAN NEVER BE DELETED. An orphan —
+        // docs/plan/06 § Two-phase create: a name claimed and never confirmed — is a member record
+        // for a resource that does not exist, so BeginGroupDeleteAsync refuses over it and the
+        // tenant is told to delete a resource that is not there to delete. ReapOrphansAsync proves
+        // each one against its own index before removing it, so this is not a licence to empty the
+        // group: a member whose index is confirmed survives the sweep and the delete still refuses
+        // over it, which is correct.
+        var swept = await group.ReapOrphansAsync(IResourceGroupGrain.OrphanAge);
+
+        if (swept.TryGetError(out var sweepError)) {
+            return Result.Failure(sweepError);
+        }
+
+        if (swept.GetValueOrThrow() is { Count: > 0 } reaped) {
+            logger.LogInformation(
+                "Deleting resource group '{Group}' swept {Count} orphaned member(s) that claimed a "
+                + "name and never confirmed it: {Paths}",
+                scope.ResourceGroup,
+                reaped.Count,
+                string.Join(", ", reaped.Select(x => x.CanonicalPath))
+            );
+        }
+
         // ── 1. Seal. Nothing below this may run before it. ───────────────────────────────────────
         var sealed_ = await group.BeginGroupDeleteAsync();
         if (sealed_.TryGetError(out var sealError)) {

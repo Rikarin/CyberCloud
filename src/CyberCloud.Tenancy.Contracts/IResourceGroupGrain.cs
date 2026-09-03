@@ -32,6 +32,26 @@ namespace CyberCloud.Tenancy.Contracts;
 /// </remarks>
 [Alias("CyberCloud.Tenancy.IResourceGroupGrain")]
 public interface IResourceGroupGrain : IGrainWithStringKey {
+    /// <summary>
+    ///     How long a member must have been <see cref="ProvisioningState.Creating" /> before the
+    ///     reaper of docs/plan/06 § Two-phase create will consider it an orphan.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Three times the index lease, and the margin is what stops the reaper's evidence being
+    ///     circular.</b> Step 1's claim carries a five-minute lease, so a create that is merely slow
+    ///     has lost its name well before this — which is what makes "old, and the index is free" mean
+    ///     the same thing as "died between steps 1 and 3". A tighter figure would have the reaper
+    ///     reading an index whose lease might still be alive and calling that "no confirmed index".
+    ///     <para>
+    ///         ⚠ On the interface rather than on the grain, because <b>both</b> callers need it and
+    ///         one of them cannot see the other: <c>ResourceGroupReclaimer</c> sweeps before it seals
+    ///         a group, and it lives in <c>CyberCloud.ResourceManager</c>, which references these
+    ///         contracts and not <c>CyberCloud.Tenancy</c>. Two spellings of the threshold would be
+    ///         two definitions of what an orphan is.
+    ///     </para>
+    /// </remarks>
+    static TimeSpan OrphanAge { get; } = TimeSpan.FromMinutes(15);
+
     /// <summary>Creates the group. Idempotent on the same region.</summary>
     /// <param name="tenantId">The owning tenant.</param>
     /// <param name="region">The region its resources default to.</param>
@@ -112,6 +132,49 @@ public interface IResourceGroupGrain : IGrainWithStringKey {
     /// </summary>
     /// <param name="olderThan">The age threshold.</param>
     Task<Result<IReadOnlyList<ResourceGroupMember>>> ListOrphansAsync(TimeSpan olderThan);
+
+    /// <summary>
+    ///     Removes the members that are orphans <b>and can be proved to be</b> — the reaper of
+    ///     docs/plan/06 § Two-phase create, doing the sweeping rather than the listing.
+    /// </summary>
+    /// <param name="olderThan">
+    ///     How long a member must have been <see cref="ProvisioningState.Creating" /> to be
+    ///     considered. ⚠ Must comfortably exceed the index lease, or a create that is simply slow is
+    ///     indistinguishable from one that died.
+    /// </param>
+    /// <returns>The members that were removed. Empty is the ordinary answer.</returns>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>AGE IS NOT EVIDENCE, AND THIS IS THE WHOLE DIFFERENCE BETWEEN THIS AND
+    ///         <see cref="ListOrphansAsync" />.</b> That one answers "which members have been
+    ///         <see cref="ProvisioningState.Creating" /> for a while", which is a question about a
+    ///         clock. Removing a member is a claim that the resource does not exist, and the only
+    ///         thing that can support it is the index: docs/plan/06 § Two-phase create defines the
+    ///         orphan as <i>"durable state, no confirmed index"</i>. So each candidate's own
+    ///         <c>IResourceIndexGrain</c> is read, and the member is removed <b>only</b> when the
+    ///         name is free or bound to a different GUID. A <see cref="IndexEntryState.Confirmed" />
+    ///         or <see cref="IndexEntryState.SoftDeleted" /> binding to this member's id means the
+    ///         create got through step 3 and the resource is real — that member stays, however old
+    ///         it is.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>An index that cannot be read is a member that stays.</b> Removing on a failed
+    ///         read would make an unreachable shard look like an empty platform, and the mistake is
+    ///         the one docs/plan/06 § Two-phase create calls a billing-dispute prevention measure:
+    ///         a resource that is silently gone from listings while its pods still run.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>What it does NOT do, recorded rather than assumed: it does not clear the resource
+    ///         grain's durable state.</b> This grain cannot see <c>IResourceGrain</c> —
+    ///         <c>CyberCloud.Tenancy</c> holds no reference to the resource manager's contracts, and
+    ///         reversing that edge is a module cycle. In practice the commonest orphan has no
+    ///         resource-grain state at all, because step 7b of docs/plan/08 § The write path records
+    ///         membership <i>before</i> step 9 writes the resource; what is left when it does exist
+    ///         is state under a GUID no name resolves to. Clearing that belongs to the resource
+    ///         manager and is owed.
+    ///     </para>
+    /// </remarks>
+    Task<Result<IReadOnlyList<ResourceGroupMember>>> ReapOrphansAsync(TimeSpan olderThan);
 
     /// <summary>
     ///     Records that this group's objects have been placed on <paramref name="clusterId" />, so
