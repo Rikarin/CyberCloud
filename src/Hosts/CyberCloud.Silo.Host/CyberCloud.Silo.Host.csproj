@@ -31,8 +31,9 @@
           here, twice over, and both are deliberate: the Aspire AppHost takes a `Projects.*` handle to
           this project, and CyberCloud.AppHost.Tests calls IHelloGrain through a real Orleans client, so
           the grain interface and its wire types have to be public. Directory.Build.targets' automatic
-          InternalsVisibleTo covers only `CyberCloud.Silo.Host.Tests`, which is not the suite that
-          exercises this host — the exit criterion belongs to the AppHost, not to the silo.
+          InternalsVisibleTo covers only `CyberCloud.Silo.Host.Tests`, which is this host's unit suite
+          and not the suite that exercises it end to end — the exit criterion belongs to the AppHost,
+          not to the silo.
         -->
         <NoWarn>$(NoWarn);CA1515</NoWarn>
     </PropertyGroup>

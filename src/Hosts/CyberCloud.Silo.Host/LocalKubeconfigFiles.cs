@@ -49,9 +49,18 @@ static class LocalKubeconfigFiles {
     /// <param name="root">The directory a reference must resolve inside.</param>
     /// <returns>A resolver that reads the file, or refuses and says why.</returns>
     /// <remarks>
-    ///     ⚠ Every refusal names the reference and the root. A kubeconfig that cannot be found is
-    ///     otherwise indistinguishable, from the reconciler's side, from a cluster that is down: both
-    ///     arrive as a failed apply, hours after the create, in a log nobody is reading.
+    ///     ⚠ Every refusal names the reference or the path it resolved to, and the one that is about
+    ///     the root names the root as well. A kubeconfig that cannot be found is otherwise
+    ///     indistinguishable, from the reconciler's side, from a cluster that is down: both arrive as
+    ///     a failed apply, hours after the create, in a log nobody is reading.
+    ///     <para>
+    ///         ⚠ <b>The root check is lexical and does not follow links.</b> It compares resolved
+    ///         paths, so <c>..</c> cannot climb out of the root, but a symbolic link placed
+    ///         <i>inside</i> the root is followed wherever it points. That is the right boundary for
+    ///         what this guards — a <c>CredentialRef</c> written by a reconciler — and it is not a
+    ///         boundary against whoever can write into the root directory, who is the operator that
+    ///         configured it.
+    ///     </para>
     /// </remarks>
     public static Func<string, CancellationToken, Task<Result<string>>> ResolverFor(string root) {
         ArgumentException.ThrowIfNullOrWhiteSpace(root);

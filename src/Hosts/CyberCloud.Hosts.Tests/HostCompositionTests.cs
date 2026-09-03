@@ -1,5 +1,7 @@
+using CyberCloud.Core;
 using CyberCloud.Gateway.Host;
 using CyberCloud.Kubernetes.Connections;
+using CyberCloud.Kubernetes.Contracts;
 using CyberCloud.ResourceManager;
 using CyberCloud.ResourceManager.Contracts;
 using CyberCloud.ResourceManager.Contracts.Registry;
@@ -14,6 +16,8 @@ using Orleans.Configuration;
 using Shouldly;
 using System.Net;
 using System.Net.Sockets;
+// Orleans has an ErrorCode too, and the Orleans global using arrives with both hosts' reference sets.
+using ErrorCode = CyberCloud.Core.ErrorCode;
 
 namespace CyberCloud.Hosts.Tests;
 
@@ -373,6 +377,121 @@ public sealed class HostCompositionTests {
             .Classes
             .ShouldContain(typeof(ClusterConnectionGrain));
     }
+
+    /// <summary>
+    ///     ⚠ A silo given no kubeconfig root reads nothing off its host's disk, and says so.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         <b>Reading a kubeconfig off the filesystem is a capability, and this is the assertion
+    ///         that it stays opt-in.</b> <c>SiloComposition</c> § <c>ConfigureKubeconfigResolver</c>
+    ///         registers a resolver only when <c>CyberCloud:Silo:KubeconfigRoot</c> names a directory,
+    ///         and <c>CyberCloud.Silo.Host</c>'s shipped <c>appsettings.json</c> sets no such key — so
+    ///         a deployed silo keeps <c>KubeApiClientFactory</c>'s refusal until
+    ///         <c>CyberCloud.KeyVault</c> (docs/plan/18) can answer for it.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>It drives <c>ConnectAsync</c> rather than reading the registration</b>, because
+    ///         the registration is not the property. <c>AddCyberCloudKubernetes</c> registers a
+    ///         <c>KubeApiClientFactory</c> either way — the difference is whether its
+    ///         <c>ResolveKubeconfig</c> is null, which is an <c>init</c>-only property no test can see
+    ///         from the outside. Asserting the type would pass against a silo that reads every path on
+    ///         the host.
+    ///     </para>
+    ///     <para>
+    ///         The rooting half — which paths a configured resolver will and will not read — is
+    ///         <c>CyberCloud.Silo.Host.Tests</c>' <c>LocalKubeconfigFilesTests</c>.
+    ///     </para>
+    /// </remarks>
+    [Fact]
+    public async Task TheSiloReadsNoKubeconfigUntilItIsGivenARoot() {
+        await using var silo = await BuildSiloAsync();
+
+        var result = await silo.Services
+            .GetRequiredService<IKubeApiClientFactory>()
+            .ConnectAsync(
+                new() {
+                    ClusterId = Guid.NewGuid(),
+                    Kind = ClusterConnectionKind.Kubeconfig,
+                    CredentialRef = "file:///etc/kubernetes/admin.conf"
+                },
+                TestContext.Current.CancellationToken
+            );
+
+        result.TryGetError(out var error).ShouldBeTrue(
+            "a silo with no CyberCloud:Silo:KubeconfigRoot connected to a cluster using a kubeconfig "
+            + "path it was never given a root for."
+        );
+
+        error!.Code.ShouldBe(ErrorCode.InternalError);
+        error.Message.ShouldContain("ResolveKubeconfig");
+    }
+
+    /// <summary>
+    ///     ⚠ A silo given a root resolves inside it, and refuses outside it — through the composed
+    ///     factory rather than through the resolver on its own.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>The two halves are one test because the wiring is what joins them.</b>
+    ///     <c>ConfigureKubeconfigResolver</c> runs <i>before</i> <c>AddCyberCloudKubernetes</c> and
+    ///     both registrations are <c>TryAdd</c>, so the order is what decides whether the configured
+    ///     resolver or the refusing default wins. Reverse those two lines and every assertion in
+    ///     <c>LocalKubeconfigFilesTests</c> still passes while the silo reads nothing.
+    /// </remarks>
+    [Fact]
+    public async Task TheSiloGivenARootResolvesInsideItAndRefusesOutsideIt() {
+        var root = Directory.CreateDirectory(
+            Path.Combine(Path.GetTempPath(), "cc-silo-kubeconfig-" + Guid.NewGuid().ToString("N"))
+        );
+
+        try {
+            var config = Path.Combine(root.FullName, "kubeconfig.yaml");
+            await File.WriteAllTextAsync(config, "not a kubeconfig", TestContext.Current.CancellationToken);
+
+            await using var silo = await SiloComposition.BuildAsync(
+                [
+                    "--environment", "Development",
+                    "--urls", "http://127.0.0.1:0",
+                    $"--{CyberCloudClusterOptions.SectionName}:LocalhostSiloPort={FreePort()}",
+                    $"--{CyberCloudClusterOptions.SectionName}:LocalhostGatewayPort={FreePort()}",
+                    "--CyberCloud:Silo:KubeconfigRoot=" + root.FullName
+                ]
+            );
+
+            var factory = silo.Services.GetRequiredService<IKubeApiClientFactory>();
+
+            // Inside the root: the file is read, and the failure that follows is about the YAML
+            // rather than about the resolver. That is the whole difference being asserted — a silo
+            // with no root never gets far enough to complain about the contents.
+            var inside = await factory.ConnectAsync(
+                Descriptor(new Uri(config).AbsoluteUri),
+                TestContext.Current.CancellationToken
+            );
+
+            inside.TryGetError(out var read).ShouldBeTrue();
+            read!.Message.ShouldNotContain("ResolveKubeconfig");
+
+            // Outside it: refused before the filesystem is touched, and the refusal names the root.
+            var outside = await factory.ConnectAsync(
+                Descriptor("file:///etc/kubernetes/admin.conf"),
+                TestContext.Current.CancellationToken
+            );
+
+            outside.TryGetError(out var refused).ShouldBeTrue();
+            refused!.Code.ShouldBe(ErrorCode.AuthorizationFailed);
+            refused.Message.ShouldContain(root.FullName);
+        } finally {
+            root.Delete(recursive: true);
+        }
+    }
+
+    /// <summary>A kubeconfig-kind connection naming one credential reference.</summary>
+    static ClusterConnectionDescriptor Descriptor(string credentialRef) =>
+        new() {
+            ClusterId = Guid.NewGuid(),
+            Kind = ClusterConnectionKind.Kubeconfig,
+            CredentialRef = credentialRef
+        };
 
     // ── Failure class (d): two hosts driving the same reminder ────────────────────────────────────
 
