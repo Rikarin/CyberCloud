@@ -132,13 +132,14 @@ sealed class DispatchStage(
     ///         <c>GatewayIsolationTests</c> reads this project's source for that.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b><c>DELETE</c> is deliberately not served and answers <c>405</c>.</b> Deleting a
-    ///         resource group is the reverse of docs/plan/06 § Two-phase create — the harder half:
-    ///         everything in it goes, in dependency order, as one operation, which is a long-running
-    ///         operation with a teardown that can fail and a group that must stay visible in
-    ///         <c>Deleting</c> while it does. None of that is built, and a <c>DELETE</c> that removed
-    ///         the group record while its resources kept running would leave a tenant billed for pods
-    ///         nothing lists.
+    ///         ⚠ <b><c>DELETE</c> serves a resource group and refuses a subscription and a tenant,
+    ///         and it answers <c>204</c> rather than <c>202</c>.</b> It does <b>not</b> cascade: a
+    ///         group that still holds resources is refused, naming them, because a cascade is a
+    ///         per-resource delete with each resource's own lock, authorization, soft-delete window
+    ///         and failable teardown, and one that skipped those would be a way to delete a locked
+    ///         resource by deleting its group. Since the group is therefore already empty when this
+    ///         runs, there is nothing to poll — <c>IScopeManager.DeleteAsync</c>'s remarks carry the
+    ///         whole argument.
     ///     </para>
     /// </remarks>
     async Task<GatewayOutcome> ScopeAsync(
@@ -163,17 +164,31 @@ sealed class DispatchStage(
                 : new() { StatusCode = StatusCodes.Status200OK, Json = ResponseBodies.Scope(read.GetValueOrThrow()) };
         }
 
+        if (HttpMethods.IsDelete(method)) {
+            var removed = await scopes.DeleteAsync(request, cancellationToken);
+
+            // ⚠ 204 and not 202, unlike a resource delete. There is no operation to poll: every
+            // member is already gone — IScopeManager.DeleteAsync refuses otherwise — so what the
+            // call did was seal a grain, reclaim a namespace per cluster and drop a listing entry,
+            // all of it finished by the time this returns. Handing back a 202 and an Operation-Id
+            // that resolves to nothing would be a poll loop for every client polite enough to
+            // follow it.
+            return removed.TryGetError(out var removeError)
+                ? ResultShaper.Shape(removeError, path)
+                : new GatewayOutcome { StatusCode = StatusCodes.Status204NoContent };
+        }
+
         if (!HttpMethods.IsPut(method)) {
             return new GatewayOutcome {
                 StatusCode = StatusCodes.Status405MethodNotAllowed,
                 Error = new(
                     ErrorCode.InvalidRequestBody,
                     $"{method} is not supported on a scope. A subscription and a resource group are "
-                    + "read with GET and created with PUT; POST is an action on an existing resource "
-                    + "and never a create (docs/plan/08 § The write path, end to end), and a scope "
-                    + "delete is the reverse of docs/plan/06 § Two-phase create and is not built."
+                    + "read with GET, created with PUT and — for a resource group — deleted with "
+                    + "DELETE; POST is an action on an existing resource and never a create "
+                    + "(docs/plan/08 § The write path, end to end)."
                 )
-            }.WithHeader(GatewayHeaders.Allow, "GET, PUT");
+            }.WithHeader(GatewayHeaders.Allow, "GET, PUT, DELETE");
         }
 
         var created = await scopes.CreateAsync(request, cancellationToken);

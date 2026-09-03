@@ -27,7 +27,7 @@ public readonly record struct NamespaceEnsured(bool Written, ApplyResult Result,
 /// <remarks>
 ///     <para>
 ///         ⚠ <b>Who owns namespace creation, and why it is this and not the resource-group grain.</b>
-///         <see cref="ReconcileDriver.NamespaceFor" /> derives
+///         <see cref="ReconcileDriver.NamespaceFor(ResourceId)" /> derives
 ///         <c>{subscriptionId:N}-{resourceGroup}</c> and every reconciler in the catalogue applies
 ///         into it. Three components could have created it, and two of them cannot:
 ///     </para>
@@ -173,7 +173,7 @@ public sealed class NamespaceEnsurer(IClock clock) {
     ///     with ADR-013's seven labels, unless a recent pass already did.
     /// </summary>
     /// <param name="id">The resource whose pass needs the namespace. Supplies tenant, subscription and group.</param>
-    /// <param name="ns">The namespace name — <see cref="ReconcileDriver.NamespaceFor" />'s output.</param>
+    /// <param name="ns">The namespace name — <see cref="ReconcileDriver.NamespaceFor(ResourceId)" />'s output.</param>
     /// <param name="connection">The cluster the objects are about to land in.</param>
     /// <param name="cancellationToken">The pass's budget.</param>
     /// <returns>

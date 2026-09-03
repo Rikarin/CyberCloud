@@ -85,8 +85,24 @@ public sealed class ResourceGroupGrain(
 
     /// <inheritdoc />
     public async Task<Result> BeginCreateAsync(ResourceId address) {
-        if (state.State.Descriptor is null) {
+        if (state.State.Descriptor is not { } group) {
             return Result.Failure(TenancyGrainKeys.NotCreated(ErrorCode.ResourceGroupNotFound, "Resource group", name));
+        }
+
+        // ⚠ THE SEAL, AND THIS IS THE HALF OF IT THAT DOES THE WORK. BeginGroupDeleteAsync setting a
+        // flag would be decorative if the create path did not read it: a resource whose membership
+        // is recorded after the group's namespace has been judged empty gets its objects destroyed
+        // by a verdict that was true when it was reached. Because both run in this grain's single
+        // turn, there is no window between the two — which is the whole reason the seal lives here
+        // rather than in the caller.
+        if (group.State == ProvisioningState.Deleting) {
+            return Result.Failure(
+                ErrorCode.Conflict,
+                $"Resource group '{name}' is being deleted, so '{address.Path}' cannot be created in "
+                + "it. docs/plan/06 § Two-phase create in reverse seals the group before anything "
+                + "below it is touched, precisely so that a create cannot land inside a delete that "
+                + "has already decided the group is empty."
+            );
         }
 
         if (address.TenantId != tenantId
@@ -227,6 +243,122 @@ public sealed class ResourceGroupGrain(
             .ToList();
 
         return Task.FromResult(Result<IReadOnlyList<ResourceGroupMember>>.Success(orphans));
+    }
+
+    /// <inheritdoc />
+    public async Task<Result> RecordClusterAsync(Guid clusterId) {
+        if (state.State.Descriptor is null) {
+            return Result.Failure(TenancyGrainKeys.NotCreated(ErrorCode.ResourceGroupNotFound, "Resource group", name));
+        }
+
+        if (clusterId == Guid.Empty) {
+            return Result.Failure(
+                ErrorCode.InvalidRequestBody,
+                "The empty GUID is not a cluster. Recording it would make the group's delete try to "
+                + "reclaim a namespace on a cluster that does not exist, and report the refusal as "
+                + "though a real one had refused."
+            );
+        }
+
+        // ⚠ Not sealed-gated. A pass may still be finishing while a delete is being attempted, and
+        // learning about one more cluster is strictly better for the reclaim that follows —
+        // forgetting one is how a namespace outlives every record of itself.
+        if (!state.State.Clusters.Add(clusterId)) {
+            return Result.Success;
+        }
+
+        await state.WriteStateAsync();
+        return Result.Success;
+    }
+
+    /// <inheritdoc />
+    public Task<Result<IReadOnlyList<Guid>>> ListClustersAsync() =>
+        Task.FromResult(Result<IReadOnlyList<Guid>>.Success([.. state.State.Clusters]));
+
+    /// <inheritdoc />
+    public async Task<Result> BeginGroupDeleteAsync() {
+        if (state.State.Descriptor is not { } descriptor) {
+            // Absence is the goal of the whole choreography, so a group that is already gone has
+            // nothing to seal and the caller may proceed to the namespaces.
+            return Result.Success;
+        }
+
+        // ⚠ THE CHECK AND THE SEAL ARE ONE TURN. A caller that listed the members and then sealed
+        // would have left exactly the window this method exists to shut, because BeginCreateAsync
+        // could run between the two.
+        if (state.State.Members.Count > 0) {
+            var deleting = state.State.Members.Values.Count(x => x.State == ProvisioningState.Deleting);
+
+            return Result.Failure(
+                ErrorCode.Conflict,
+                $"Resource group '{name}' still holds {state.State.Members.Count} resource(s), "
+                + $"{deleting} of them already Deleting, so it cannot be deleted. Delete them first: "
+                + "a group delete does not cascade — see IResourceGroupGrain.BeginGroupDeleteAsync "
+                + "for why a cascade that skipped each resource's own lock and authorization would "
+                + "be a lock that does not hold. "
+                + string.Join(
+                    ", ",
+                    state.State.Members.Values
+                        .Select(x => x.CanonicalPath)
+                        .Order(StringComparer.Ordinal)
+                        .Take(5)
+                )
+            );
+        }
+
+        if (descriptor.State == ProvisioningState.Deleting) {
+            // Idempotent: a re-driven delete finds the seal it set.
+            return Result.Success;
+        }
+
+        state.State.Descriptor = descriptor with {
+            State = ProvisioningState.Deleting, Version = descriptor.Version + 1
+        };
+
+        await state.WriteStateAsync();
+        return Result.Success;
+    }
+
+    /// <inheritdoc />
+    public async Task<Result> CompleteGroupDeleteAsync() {
+        if (state.State.Descriptor is not { } descriptor) {
+            return Result.Success;
+        }
+
+        if (descriptor.State != ProvisioningState.Deleting) {
+            return Result.Failure(
+                ErrorCode.Conflict,
+                $"Resource group '{name}' is {descriptor.State}, not Deleting. Removing its record "
+                + "without BeginGroupDeleteAsync having sealed it would skip the only step that "
+                + "stops a resource being created inside a delete that has already judged the group "
+                + "empty — docs/plan/06 § Two-phase create, in reverse."
+            );
+        }
+
+        if (state.State.Members.Count > 0) {
+            // ⚠ Re-checked rather than assumed from the seal. The seal refuses to be set while
+            // members exist, but a member can be recorded by a call that was already in flight when
+            // the seal was written, and a group record removed while a member is listed is a
+            // resource whose pods run and whose meter ticks with nothing above it.
+            return Result.Failure(
+                ErrorCode.Conflict,
+                $"Resource group '{name}' acquired {state.State.Members.Count} member(s) after it "
+                + "was sealed, so its record stays. The group is still sealed and the delete can be "
+                + "re-driven once they are gone."
+            );
+        }
+
+        state.State.Descriptor = null;
+        state.State.Members.Clear();
+        state.State.CreatingSince.Clear();
+
+        // ⚠ The clusters go LAST and they go with the record. Until this point they are what the
+        // caller reclaims namespaces from; keeping them after the record is gone would leave a group
+        // that does not exist still naming clusters.
+        state.State.Clusters.Clear();
+
+        await state.WriteStateAsync();
+        return Result.Success;
     }
 
     /// <inheritdoc />

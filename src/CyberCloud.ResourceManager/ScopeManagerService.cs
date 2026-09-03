@@ -1,4 +1,5 @@
 using CyberCloud.Authorization.Contracts;
+using CyberCloud.ResourceManager.Reconcile;
 using Microsoft.Extensions.Logging;
 using Orleans.Multitenant;
 using System.Globalization;
@@ -63,6 +64,7 @@ public sealed class ScopeManagerService(
     IScopeAuthorizer authorizer,
     IScopeRelationWriter relations,
     IGrainFactory grains,
+    ResourceGroupReclaimer reclaimer,
     ILogger<ScopeManagerService> logger
 )
     : IScopeManager {
@@ -116,6 +118,90 @@ public sealed class ScopeManagerService(
         return scope.Kind == ScopeKind.Subscription
             ? await CreateSubscriptionAsync(scope, document.RootElement, request.Caller, cancellationToken)
             : await CreateGroupAsync(scope, document.RootElement, request.Caller, cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public async Task<Result> DeleteAsync(ScopeRequest request, CancellationToken cancellationToken = default) {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var resolved = Resolve(request);
+        if (resolved.TryGetError(out var resolveError)) {
+            return Result.Failure(resolveError);
+        }
+
+        var scope = resolved.GetValueOrThrow();
+
+        if (scope.Kind != ScopeKind.ResourceGroup) {
+            // ⚠ NOT a 404 and not a silent partial. A subscription delete is every group's delete
+            // plus the meter, the quota and the shard; a tenant's is that plus the directory and the
+            // shard map. Treating either as "the group case, wider" is how a tenant ends up billed
+            // for a shard nothing lists.
+            return Result.Failure(
+                ErrorCode.InvalidResourceId,
+                $"'{scope.Path}' is a {scope.Kind} and only a resource group can be deleted over this "
+                + "API. Deleting a subscription or a tenant also has to end the meter, release the "
+                + "quota and unassign the shard, and none of that is built — a delete that removed "
+                + "the record and left those would be worse than one that refuses."
+            );
+        }
+
+        // ⚠ THE CHECK IS ON THE GROUP ITSELF, exactly as it is for a read and unlike a create. A
+        // create checks the parent because the scope does not exist yet; a delete is about one that
+        // does, so it has a ReBAC object of its own — and checking the subscription instead would
+        // let somebody who holds `write` there delete a group whose own `#suspended` says otherwise.
+        var permitted = await authorizer.AuthorizeAsync(
+            scope,
+            Permissions.Write,
+            Permissions.Read,
+            request.Caller,
+            cancellationToken: cancellationToken
+        );
+
+        if (permitted.TryGetError(out var denied)) {
+            return Result.Failure(denied);
+        }
+
+        var tenant = scope.TenantId.ToString("D", CultureInfo.InvariantCulture);
+
+        var group = grains
+            .ForTenant(tenant)
+            .GetGrain<IResourceGroupGrain>(GrainKeys.ResourceGroup(scope.SubscriptionId, scope.ResourceGroup));
+
+        var record = await group.GetAsync();
+        if (record.IsFailure) {
+            // ⚠ Success rather than 404, and this is the one place the two differ from a read's. The
+            // goal of a delete is the absence of the thing, so a group that is already gone has
+            // reached it — and a re-driven DELETE after a network timeout must not report a failure
+            // for work that succeeded.
+            return Result.Success;
+        }
+
+        // ── The locks. Both links of the chain, and the group's own is not enough. ───────────────
+        //
+        // ⚠ ILockResolver is not used here for the reason CreateGroupAsync does not use it: it takes
+        // a ResourceId and walks resource → group → subscription, and a group is not a resource. The
+        // two links that exist are read directly and combined with LockLevels.Strongest, which is
+        // what stops a subscription-wide ReadOnly being downgraded by the group's weaker lock.
+        var subscription = grains
+            .ForTenant(tenant)
+            .GetGrain<ISubscriptionGrain>(GrainKeys.Subscription(scope.SubscriptionId));
+
+        var owner = await subscription.GetAsync();
+
+        var effective = LockLevels.Strongest(
+            record.GetValueOrThrow().Lock,
+            owner.IsSuccess ? owner.GetValueOrThrow().Lock : LockLevel.None
+        );
+
+        if (effective is LockLevel.ReadOnly or LockLevel.CanNotDelete) {
+            return Result.Failure(
+                ErrorCode.ScopeLocked,
+                $"'{scope.Path}' carries an inherited {effective} lock, so it cannot be deleted — "
+                + "docs/plan/06 § Tags, locks. Clear the lock and retry."
+            );
+        }
+
+        return await reclaimer.DeleteAsync(scope, cancellationToken);
     }
 
     /// <inheritdoc />

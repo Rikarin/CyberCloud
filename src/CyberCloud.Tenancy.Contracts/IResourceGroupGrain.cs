@@ -113,6 +113,107 @@ public interface IResourceGroupGrain : IGrainWithStringKey {
     /// <param name="olderThan">The age threshold.</param>
     Task<Result<IReadOnlyList<ResourceGroupMember>>> ListOrphansAsync(TimeSpan olderThan);
 
+    /// <summary>
+    ///     Records that this group's objects have been placed on <paramref name="clusterId" />, so
+    ///     that the group's own delete knows which namespaces are its.
+    /// </summary>
+    /// <param name="clusterId">The cluster a namespace was just written to.</param>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>WITHOUT THIS THE GROUP DELETE HAS NOTHING TO ENUMERATE, AND THAT IS NOT OBVIOUS
+    ///         UNTIL THE DELETE IS WRITTEN.</b> A namespace is keyed by (group, cluster) and a group
+    ///         may hold resources on several clusters, so a group delete has to reclaim one namespace
+    ///         per cluster the group ever touched. By the time the delete runs, every member is gone
+    ///         — that is the precondition — so the members cannot say which clusters those were, and
+    ///         nothing else in the control plane knows either. <c>NamespaceEnsurer</c>'s own remarks
+    ///         rule out a platform-level controller for the same reason: the set of (group × cluster)
+    ///         pairs "is not knowable from the control plane's own state".
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Written from the reconcile driver, and only when the namespace apply really
+    ///         happened.</b> The driver is the one place that holds the group and a live connection
+    ///         at once, and <c>NamespaceEnsurer</c>'s memo already bounds that to once per (cluster,
+    ///         namespace) per hour per silo — so this costs one grain call an hour rather than one
+    ///         per pass. A failure to record is <b>not</b> a failed pass: the consequence is a
+    ///         namespace a later delete does not reclaim, which is the leak that existed anyway,
+    ///         and refusing to place a tenant's resource over a bookkeeping write would be the worse
+    ///         trade.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>It is a set and it is never pruned.</b> A cluster that once held this group's
+    ///         objects may hold its namespace still, so forgetting one is how a namespace outlives
+    ///         every record of itself. The cardinality is the number of clusters a tenant has, which
+    ///         is small and is not tenant-controllable at scale.
+    ///     </para>
+    /// </remarks>
+    Task<Result> RecordClusterAsync(Guid clusterId);
+
+    /// <summary>Every cluster this group is known to have placed objects on.</summary>
+    /// <returns>
+    ///     The clusters, in no particular order. ⚠ An <b>empty</b> list means "nothing was ever
+    ///     recorded", which is not the same as "no namespaces exist" — a group whose resources were
+    ///     placed before <see cref="RecordClusterAsync" /> existed reports empty and still has
+    ///     namespaces. The group delete says so rather than reporting a clean reclaim.
+    /// </returns>
+    Task<Result<IReadOnlyList<Guid>>> ListClustersAsync();
+
+    /// <summary>
+    ///     Group delete, step 1: <b>seals</b> the group, so that nothing new can join it, and
+    ///     refuses outright if it still holds members.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>SEALING IS THE ONLY THING THAT CLOSES THE CREATE-DURING-DELETE RACE, AND NOTHING
+    ///         BELOW THE GROUP CAN DO IT.</b> <c>NamespaceReclaim</c> weighs evidence and then a
+    ///         namespace is deleted; a resource created in between has its objects destroyed by a
+    ///         verdict that was true when it was reached. The window cannot be closed by looking
+    ///         harder — only by the group refusing to accept a member first. That is why this is a
+    ///         method on this grain and not a flag the caller keeps.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The check and the seal are one grain turn, which is what makes the race actually
+    ///         closed rather than narrowed.</b> An Orleans grain is single-threaded, so "no members,
+    ///         therefore sealed" cannot be interleaved with a <see cref="BeginCreateAsync" />. A
+    ///         caller that listed first and sealed second would have reopened exactly the window this
+    ///         exists to shut.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>REFUSE, NOT CASCADE, and this was the open question.</b> Azure cascades: deleting
+    ///         a resource group deletes everything in it. That is the better end state and it is not
+    ///         what this does, because a cascade is a per-resource delete — twelve steps each,
+    ///         including the resource's own lock, its own authorization, its own soft-delete window
+    ///         and its own teardown that can fail — driven as one long-running operation with partial
+    ///         failure to report. A cascade that skipped any of those would be a way to delete a
+    ///         locked resource by deleting its group, which is a lock that does not hold. Refusing
+    ///         costs a tenant one extra step and is reversible: the cascade can be built on top of
+    ///         this, and it cannot be built on top of a group that has already been sealed
+    ///         wrongly.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>A sealed group STAYS sealed, including when the reclaim below it then refuses.</b>
+    ///         It is the same rule <see cref="FailDeleteAsync" /> applies to a member: a delete that
+    ///         began and did not finish stays visible and stays in
+    ///         <see cref="ProvisioningState.Deleting" /> rather than being quietly returned to
+    ///         service. The group is re-drivable — this method is idempotent — and a namespace whose
+    ///         reclaim refuses is reported to an operator by
+    ///         <c>NamespaceReclaim.OperatorReclaimable</c>.
+    ///     </para>
+    /// </remarks>
+    Task<Result> BeginGroupDeleteAsync();
+
+    /// <summary>
+    ///     Group delete, the last step: removes the group's own record. Requires the group to be
+    ///     sealed and empty.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>It refuses a group that was never sealed, and that refusal is the ordering.</b>
+    ///     docs/plan/06 § Two-phase create in reverse is: seal the group, then the members, then the
+    ///     namespace last. A caller that reached this without <see cref="BeginGroupDeleteAsync" />
+    ///     has skipped the only step that closes the race, and it is refused rather than obeyed.
+    ///     Idempotent on a group that is already gone: absence is the goal.
+    /// </remarks>
+    Task<Result> CompleteGroupDeleteAsync();
+
     /// <summary>Drops this activation — see <c>ITenantGrain.DeactivateAsync</c>.</summary>
     Task DeactivateAsync();
 }

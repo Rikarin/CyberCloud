@@ -46,7 +46,7 @@ public readonly record struct ReconcilePass(
 ///     </para>
 ///     <para>
 ///         ⚠ <b>The driver creates the namespace, and nothing deletes it.</b>
-///         <see cref="NamespaceFor" /> derives the name, <see cref="NamespaceEnsurer" /> applies it
+///         <see cref="NamespaceFor(ResourceId)" /> derives the name, <see cref="NamespaceEnsurer" /> applies it
 ///         with ADR-013's seven labels before the pass, and the second half of that sentence is a
 ///         decision rather than an omission. Deleting a namespace is a recursive delete of everything
 ///         inside it, and the platform cannot tell "empty" from "empty of objects we wrote": a
@@ -244,6 +244,39 @@ public sealed class ReconcileDriver(
 
                 default:
                     break;
+            }
+
+            // ── Which clusters this group's namespaces are on ────────────────────────────────────
+            //
+            // ⚠ RECORDED HERE BECAUSE NOTHING ELSE EVER KNOWS. A namespace is keyed by (group,
+            // cluster) and a group may span clusters, so the group's own delete has to reclaim one
+            // namespace per cluster it ever touched — and by then every member is gone, which is the
+            // precondition, so the members cannot say. IResourceGroupGrain.RecordClusterAsync
+            // carries the argument.
+            //
+            // ⚠ Only when the apply really happened, which the memo already bounds to once per
+            // (cluster, namespace) per RecheckAfter. Recording on every pass would be a grain call
+            // per reconcile to write a value that has not changed.
+            if (namespaceOutcome.Written) {
+                var recorded = await grains
+                    .ForTenant(id.TenantId.ToString("D", CultureInfo.InvariantCulture))
+                    .GetGrain<IResourceGroupGrain>(GrainKeys.ResourceGroup(id.SubscriptionId, id.ResourceGroup))
+                    .RecordClusterAsync(reconcileInput.ClusterId);
+
+                if (recorded.TryGetError(out var recordError)) {
+                    // ⚠ NOT A FAILED PASS, and the asymmetry with the ensure above is deliberate. An
+                    // ensure that fails means the objects cannot be placed; this failing means a
+                    // namespace a future group delete will not know to reclaim — the leak that
+                    // existed before this line did. Refusing to place a tenant's resource over a
+                    // bookkeeping write would trade a live failure for a dormant one.
+                    log.Report(
+                        "ensuring-namespace",
+                        $"the namespace '{ns}' exists, and cluster {reconcileInput.ClusterId:D} could "
+                        + $"not be recorded against resource group '{id.ResourceGroup}': "
+                        + recordError.Message
+                        + " A later delete of the group will not reclaim this namespace."
+                    );
+                }
             }
         }
 
@@ -540,11 +573,27 @@ public sealed class ReconcileDriver(
     ///         make alone.
     ///     </para>
     /// </remarks>
-    public static string NamespaceFor(ResourceId id) {
+    public static string NamespaceFor(ResourceId id) => NamespaceFor(id.SubscriptionId, id.ResourceGroup);
+
+    /// <summary>
+    ///     The same rule, from the group's own coordinates rather than from a resource's.
+    /// </summary>
+    /// <param name="subscriptionId">The owning subscription.</param>
+    /// <param name="resourceGroup">The group's name.</param>
+    /// <remarks>
+    ///     ⚠ <b>The group delete needs this and has no resource to derive it from — every member is
+    ///     gone by then, which is its precondition.</b> It is an overload rather than a second rule
+    ///     for the reason the rule is here at all: two spellings of "what namespace does this group
+    ///     map to" is how a delete comes to address a namespace nothing was ever applied into,
+    ///     report a clean reclaim, and leave the real one behind.
+    /// </remarks>
+    public static string NamespaceFor(Guid subscriptionId, string resourceGroup) {
+        ArgumentException.ThrowIfNullOrEmpty(resourceGroup);
+
         const int dnsLabelLimit = 63;
 
-        var prefix = id.SubscriptionId.ToString("N", CultureInfo.InvariantCulture);
-        var candidate = prefix + "-" + id.ResourceGroup;
+        var prefix = subscriptionId.ToString("N", CultureInfo.InvariantCulture);
+        var candidate = prefix + "-" + resourceGroup;
 
         return candidate.Length <= dnsLabelLimit ? candidate : candidate[..dnsLabelLimit];
     }

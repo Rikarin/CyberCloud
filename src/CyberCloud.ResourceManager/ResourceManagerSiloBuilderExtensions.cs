@@ -153,6 +153,13 @@ public static class ResourceManagerSiloBuilderExtensions {
         // IScopeAuthorizer would not start, which is the failure worth having.
         services.TryAddSingleton<IScopeAuthorizer, ReBacScopeAuthorizer>();
         services.TryAddSingleton<IScopeRelationWriter, ReBacScopeRelationWriter>();
+
+        // ⚠ Beside the scope manager and not in the silo-only list, because a resource group is
+        // deleted through IScopeManager and IScopeManager is held by the GATEWAY. It resolves
+        // NamespaceEnsurer — the same singleton the driver holds, so a delete drops the memo entry
+        // for the namespace it removed. That only helps on the process that ran the delete, which is
+        // the per-silo memo limitation NamespaceEnsurer.DeleteAsync records.
+        services.TryAddSingleton<ResourceGroupReclaimer>();
         services.TryAddSingleton<IScopeManager, ScopeManagerService>();
 
         // ── The SignalR connection grain's dependencies. docs/plan/10 § SignalR ──────────────────

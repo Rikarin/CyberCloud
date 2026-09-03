@@ -347,6 +347,17 @@ sealed class RecordingScopeManager : IScopeManager {
             + "different one, so a tenant-create route cannot exist without breaching that boundary."
         );
 
+    /// <summary>What <see cref="DeleteAsync" /> answers. Default: the group went.</summary>
+    public Func<ScopeRequest, Result> OnDelete { get; set; } = _ => Result.Success;
+
+    /// <inheritdoc />
+    public Task<Result> DeleteAsync(ScopeRequest request, CancellationToken cancellationToken = default) {
+        ArgumentNullException.ThrowIfNull(request);
+        paths.Enqueue(request.Path);
+        callers.Enqueue(request.Caller);
+        return Task.FromResult(OnDelete(request));
+    }
+
     Task<Result<ScopeSnapshot>> Record(ScopeRequest request, Func<ScopeRequest, Result<ScopeSnapshot>> answer) {
         ArgumentNullException.ThrowIfNull(request);
         paths.Enqueue(request.Path);
