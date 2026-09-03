@@ -50,7 +50,15 @@ public sealed class GenerationReportTests {
         "documents",
         "providers",
         "resourceTypes",
-        "stale"
+        "stale",
+        // ⚠ THE SIXTH SURFACE, AND THIS LIST WENT STALE THE SAME WAY THE CHART KEYS DID — the note
+        // four entries up describes its own repeat. The portal's TypeScript client landed with three
+        // keys and Build.Generate.cs § Parse reading all three, and nothing failed until this test
+        // ran: `Generate` and `Architecture` are both green on a report whose vocabulary this file
+        // has never agreed with, because they read the keys rather than enumerate them.
+        "typescript",
+        "typescriptProblems",
+        "typescriptStale"
     ];
 
     // ⚠ The MEMBERS of a chartAnnotations entry are deliberately not asserted here, and that is a
