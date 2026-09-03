@@ -92,12 +92,63 @@
 # 70.8 %, which clears the floor by eight tenths of a point — it is the row this file is most likely
 # to gain next, and the answer when that happens is a test.
 
-# CyberCloud.Silo.Host is the development silo, and what is uncovered is three files that a unit
-# test cannot reach honestly. `Program.cs` (32 lines) is the composition root — it builds a host and
-# runs it, and a test that asserted it did so would be asserting the framework. `HelloGrain.cs`
-# (46 lines) is the smoke-test grain the host ships to prove a silo came up; nothing calls it but a
-# human. `LocalKubeconfigFiles.cs` (73 lines, the largest gap) is the one with a real test owed: it
-# discovers and merges kubeconfig files off the developer's disk, which is ordinary file-system code
-# behind an interface, and it is untested only because nothing has needed it to be. Covering that
-# file alone would take this project past the floor and this row out of the file.
-CyberCloud.Silo.Host                              32.5
+# ── 2026-09-03: this row measures WHERE THE CODE RUNS, not how well it is tested ────────────────
+#
+# ⚠ THE ONE SENTENCE, BECAUSE IT EXPLAINS EVERYTHING BELOW IT: coverlet instruments
+# `artifacts/bin/<suite>/`, and Aspire launches the silo from `artifacts/bin/CyberCloud.Silo.Host/`.
+# So the code this host exists to run is exercised — hard, by CyberCloud.AppHost.Tests, against two
+# real silo processes, a real Redis and a real PostgreSQL — in processes the collector never
+# instrumented. What this row records is a MEASUREMENT BOUNDARY, not a testing gap.
+#
+# The paragraph this replaced said three things, and the sentence above is why none of them was true:
+#
+#   * "Covering LocalKubeconfigFiles.cs alone would take this project past the floor and this row
+#     out of the file." ⚠ IT CANNOT, AND COULD NOT ON THE DAY IT WAS WRITTEN. The assembly has 256
+#     coverable lines. `HelloGrain.cs` (46) and `Program.cs` (32) are 78 of them that no in-process
+#     unit test reaches, so the ceiling is 178/256 = 69.5 % — under the floor before one other line
+#     is counted. The file IS covered now, by CyberCloud.Silo.Host.Tests, and the first test that
+#     ran against it found a real defect (a bare path parsed as a `file:` URI on Linux and not on
+#     Windows). That work moved the rate 32.5 % → 58.6 %, which is all it could ever have bought.
+#
+#   * "HelloGrain.cs — nothing calls it but a human." Eight call sites call it, across
+#     Phase0ExitCriterionTests and TwoSiloClusterTests, through a real Orleans client: it is
+#     docs/plan/24 § Phase 0's exit-criterion subject and the only thing in the tree that proves both
+#     storage tiers are wired at once. ⚠ DELETING IT TO MOVE THIS NUMBER WOULD DELETE THE CRITERION.
+#     It reads as 0 % because of the sentence at the top, and for no other reason.
+#
+#   * "Program.cs is the composition root — it builds a host and runs it." It also holds the
+#     `--apply-durable-schema` job mode, a second entry point with real branching that is the thing
+#     making a fresh PostgreSQL shard usable at all, and the AppHost runs it as a WaitForCompletion
+#     resource. Also exercised, also out of process.
+#
+# THE THREE WAYS OUT, and why this change took the first:
+#
+#   raise the pin and rewrite this reason — done here. Truthful, and it buys nothing: the row stays,
+#     and a row that can never be deleted is the permanent exemption this file's own rules refuse to
+#     build. It is the right holding position and the wrong destination.
+#   [ExcludeFromCodeCoverage] on the two out-of-process entry points — CoverageReport.cs § CoverableLines
+#     already subtracts it and coverlet already honours it, so it needs no build change; it would put
+#     this project near 83 % and delete this row. ⚠ IT IS A REVIEW REQUEST AND NOT A REPAIR, and it
+#     was deliberately not applied by the change that would have benefited from it: nothing in src/
+#     uses that attribute today, so it is a new policy, and the same attribute that honestly excludes
+#     a process the collector cannot reach is the fastest way for the next project under the floor to
+#     stop being under it. Adopt it only with the written reason this file already demands of a row.
+#   instrument the silo processes — ⚠ THE ONLY ONE THAT MAKES THE NUMBER MEAN WHAT THE FLOOR THINKS
+#     IT MEANS, rather than making it smaller. coverlet would have to instrument
+#     artifacts/bin/CyberCloud.Silo.Host/ and merge reports written by processes Aspire launches and
+#     kills. Owed, and named here so the other two are read as what they are.
+#
+# ⚠ ASKED AND ANSWERED FOR THE NEXT ROW, because a boundary nobody has scoped is a boundary that
+# turns up again: CyberCloud.Silo.Host is the ONLY project this affects. CyberCloud.AppHost's
+# Program.cs is the only thing that launches a project as a process, and the only project it launches
+# is this one — three times, as the durable-schema job and the two silos. Everything else measured by
+# this floor runs inside the suite that tests it.
+#
+# In particular CyberCloud.Communication, which clears the floor by eight tenths of a point and is the
+# row this file is most likely to gain next, is NOT affected: its grains activate in an in-process
+# TestCluster (CommunicationCluster.cs), inside the instrumented process, so its 70.8 % is honestly
+# earned and the answer when it slips is still a test. ⚠ Note the direction — this boundary can only
+# DEFLATE a rate, never inflate one. A line covered in the instrumented process is really covered;
+# out-of-process execution simply adds nothing. So no row here is flattered by it, and no green
+# project is secretly red.
+CyberCloud.Silo.Host                              58.6

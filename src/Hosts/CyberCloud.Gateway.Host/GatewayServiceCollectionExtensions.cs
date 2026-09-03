@@ -112,11 +112,37 @@ static class GatewayServiceCollectionExtensions {
     /// </summary>
     /// <param name="services">The container.</param>
     /// <remarks>
-    ///     ⚠ <b>Separate from <see cref="AddCyberCloudGateway" /> so that a production host cannot
-    ///     get it by accident.</b> A host that calls only <c>AddCyberCloudGateway</c> has no
-    ///     <see cref="ICallerContextResolver" /> registered and fails to resolve the pipeline at
-    ///     startup — which is the failure you want, rather than a gateway that authenticates nobody
-    ///     and serves anyway.
+    ///     <para>
+    ///         ⚠ <b>Separate from <see cref="AddCyberCloudGateway" /> so that a production host
+    ///         cannot get it by accident.</b> A host that calls only <c>AddCyberCloudGateway</c> has
+    ///         no <see cref="ICallerContextResolver" /> registered and cannot resolve the pipeline —
+    ///         which is the failure you want, rather than a gateway that authenticates nobody and
+    ///         serves anyway.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>THAT FAILURE ARRIVES AT THE FIRST REQUEST AND NOT AT START-UP, and this remark
+    ///         used to say the opposite.</b> The pipeline is a singleton the one middleware resolves
+    ///         per request, and <c>OrleansApplication.CreateClient</c> calls
+    ///         <c>builder.Host.UseAutofac()</c> — so ASP.NET Core's <c>ValidateOnBuild</c>, which
+    ///         belongs to the default provider factory, never runs and cannot catch it. A gateway
+    ///         with no identity implementation therefore starts, passes its health checks, and
+    ///         answers <c>500</c> to everything else. ⚠ <b>And no host in this tree calls this
+    ///         method</b>: its only caller is <c>CyberCloud.AppHost.Tests</c>'
+    ///         <c>TenantOverHttpTests</c>, through <c>GatewayComposition.BuildAsync</c>'s
+    ///         <c>configure</c> parameter. Until <c>CyberCloud.Identity.Host</c> issues real tokens
+    ///         (docs/plan/11), the shipping gateway can serve no authenticated request at all — which
+    ///         is a state to leave deliberately rather than to discover. Tracked as
+    ///         https://github.com/Rikarin/CyberCloud/issues/68.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Calling this method from a host is NOT the fix, and it is the tempting one.</b>
+    ///         The tokens below come from an in-process dictionary, so a gateway that registered
+    ///         this would authenticate against a table that is empty in every replica and different
+    ///         in each — worse than the <c>500</c> precisely because it would <i>work</i>, and would
+    ///         answer <c>401</c> rather than failing. #68 carries the two real options: a
+    ///         composition-time refusal that names the missing registration, or the identity host
+    ///         and JWKS validation that docs/plan/11 budgets.
+    ///     </para>
     /// </remarks>
     public static IServiceCollection AddIssuedTokenAuthentication(this IServiceCollection services) {
         ArgumentNullException.ThrowIfNull(services);

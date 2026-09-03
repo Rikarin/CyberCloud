@@ -63,6 +63,27 @@ namespace CyberCloud.AppHost.Tests;
 ///         where a claim assertion listed a shared namespace and saw five sibling resources.
 ///     </para>
 ///     <para>
+///         ⚠⚠ <b>WHAT THIS TEST DOES NOT PROVE, AND IT IS THE FIRST THING TO READ.</b> It composes
+///         the real gateway and then supplies, through <c>configure</c>, an identity implementation
+///         that <b>no shipping host supplies</b>: <c>AddIssuedTokenAuthentication</c> has no caller
+///         anywhere except <see cref="BuildGatewayAsync" /> below. So a green run here is compatible
+///         with a deployed <c>CyberCloud.Gateway.Host</c> that registers no
+///         <c>ICallerContextResolver</c>, starts, passes its health checks, and answers <c>500</c> to
+///         every request — which it does today. This test proves the nine stages reach the real
+///         resource manager <i>given</i> an identity implementation; it proves nothing about whether
+///         production has one, and it must not be read as evidence that it does.
+///     </para>
+///     <para>
+///         ⚠ That gap is deliberate rather than a defect of this file — docs/plan/11's identity host
+///         maps no token endpoint yet, so there is no correct production registration to make, and
+///         inventing one here would ship a gateway authenticating against an in-process table, which
+///         is worse than the <c>500</c> precisely because it would <i>work</i>. It is tracked as
+///         https://github.com/Rikarin/CyberCloud/issues/68 and written down in
+///         <c>GatewayServiceCollectionExtensions.AddIssuedTokenAuthentication</c>'s remarks.
+///         ⚠ <b>The day #68 closes, this paragraph stops being true and must be deleted</b> — a
+///         warning that has outlived its cause is how a file starts lying.
+///     </para>
+///     <para>
 ///         ⚠ <b>One test, not a sweep.</b> Every additional case here costs a topology cycle and
 ///         a five-minute convergence budget, and the sweep already exists one layer down:
 ///         <c>CyberCloud.Gateway.Host.Tests</c> covers the stages exhaustively and cheaply. What only
@@ -248,7 +269,41 @@ public sealed class TenantOverHttpTests(LocalTopology topology) : IAsyncLifetime
         );
 
         resource.GetProperty("name").GetString().ShouldBe(Widget);
-        resource.GetProperty("properties").GetProperty("message").GetString().ShouldBe("hello");
+
+        // ⚠⚠ THE SHAPE BELOW IS THE ONE THE PLATFORM SERVES AND IT IS ALMOST CERTAINLY WRONG.
+        // ⚠⚠ https://github.com/Rikarin/CyberCloud/issues/69 — do not "tidy" this assertion.
+        //
+        // The rendered body nests `properties` inside `properties` and repeats `location`:
+        //
+        //   { "id":…, "name":…, "location":"eu-central", "provisioningState":"Succeeded",
+        //     "properties": { "location":"eu-central",
+        //                     "properties": { "clusterId":…, "message":"hello", … } } }
+        //
+        // ResourceGrain.Project writes each declared pointer at its FULL path, so a type declaring
+        // `/location` and `/properties/message` projects a whole document; ResponseBodies
+        // .WriteResource then writes that document raw under a `properties` member, on the stated
+        // assumption that it is already the inner slice. Both halves are self-consistent and they
+        // disagree, which is docs/plan/08's projection and docs/plan/10's Azure shape meeting at
+        // ResourceSnapshot.Properties with nothing covering the join.
+        //
+        // ⚠ WHY NOTHING SAW IT, AND IT IS THIS FILE'S OWN THESIS ARRIVING ONE LAYER DOWN.
+        // CyberCloud.Gateway.Host.Tests renders this body constantly — against a SUBSTITUTED
+        // IResourceManager whose snapshots carry a hand-written inner object, so the substitute's
+        // Properties and the real grain's Properties are different shapes with one name and every
+        // assertion about the rendered body was made against the wrong one. The first HTTP request
+        // ever driven to the real manager found it, which is the whole argument for this file.
+        //
+        // ⚠ NOT FIXED HERE ON PURPOSE. The wire shape is the API contract: changing it moves the
+        // published OpenAPI document, the generated SDK, the cyc verb tree and the portal forms, all
+        // four of which are byte-compared by the Generated surfaces gate, and the OpenAPI
+        // compatibility gate diffs the published version against its predecessor. That is an owner's
+        // decision, not a passing repair. Asserted as-served so the suite is honest about what ships;
+        // when #69 lands this assertion fails and this comment says why.
+        resource.GetProperty("properties")
+            .GetProperty("properties")
+            .GetProperty("message")
+            .GetString()
+            .ShouldBe("hello");
 
         // ── Step 6: list it. ────────────────────────────────────────────────────────────────────
         //
