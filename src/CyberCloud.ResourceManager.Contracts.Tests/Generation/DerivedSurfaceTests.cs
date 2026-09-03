@@ -561,10 +561,20 @@ public sealed class DerivedSurfaceTests {
         var document = OpenApiEmitter.Emit(Fixtures.Postgres(), ApiVersion.Parse(Fixtures.FirstVersion));
         var tree = CliEmitter.Emit(document);
 
+        // ⚠ The scope group is excluded here for the reason DerivedSurfaces.CliProblems excludes it:
+        // it holds three commands that come from no provider, so folding them in would make "one
+        // command per resource type" off by three — and the fix somebody would reach for is to relax
+        // the assertion into a range, which is this check no longer catching what it was written for.
         var commands = tree["groups"]!.AsObject()
+            .Where(x => x.Key != CliEmitter.ScopeGroupName)
             .Sum(group => group.Value!["commands"]!.AsObject().Count);
 
         commands.ShouldBe(DocumentReader.TypesOf(document).Length);
+
+        // …and the scope group is counted against its own source, so excluding it above cannot
+        // become a way of not checking it.
+        tree["groups"]![CliEmitter.ScopeGroupName]!["commands"]!.AsObject()
+            .Count.ShouldBe(DocumentReader.ScopesOf(document).Length);
 
         // …including the nested one, which is the type the collision would have eaten.
         tree["groups"]!["dbforpostgresql"]!["commands"]!.AsObject()

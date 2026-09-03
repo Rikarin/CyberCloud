@@ -213,3 +213,106 @@ public sealed class PagingTests {
             "/tenants/t/subscriptions/s/resourceGroups/prod/providers/CyberCloud.Network/virtualNetworks/vnet1/subnets");
     }
 }
+
+/// <summary>
+///     <c>cyc scope …</c> — the scope API on the CLI, issue #63.
+/// </summary>
+/// <remarks>
+///     ⚠ <b>These are here rather than in the emitter's suite because the emitter's suite cannot
+///     answer the question.</b> The verb tree could describe the scope group perfectly and the host
+///     could still fail to build the URL or the body — which is exactly what happened to the five
+///     nested resource types for as long as the host filled placeholders from a table of four. The
+///     scope paths are the first this CLI has ever addressed that name no provider.
+/// </remarks>
+public sealed class ScopeCommandTests {
+    [Fact]
+    public async Task ASubscriptionIsCreatedAtTheAddressTheFlagNames() {
+        var transport = new ScriptedTransport((_, _) => Responses.Json(
+            HttpStatusCode.Created,
+            """{"id":"/tenants/t/subscriptions/s1","name":"Platform","type":"CyberCloud.Resources/subscriptions"}"""));
+
+        using var host = TestHost.Create(transport);
+
+        var code = await host.RunAsync(
+            "scope", "subscription", "create",
+            "--name", "s1", "--display-name", "Platform", "--tenant", "t", "--output", "json");
+
+        code.ShouldBe((int)ExitCode.Ok);
+
+        var request = transport.Requests[0];
+
+        request.Method.ShouldBe(HttpMethod.Put);
+        request.Uri.AbsolutePath.ShouldBe("/tenants/t/subscriptions/s1");
+
+        // ⚠ The property name the manager reads. ScopeBodyProperties is in the contracts assembly so
+        // that the emitter and the service share one constant; this asserts the far end of that.
+        using var body = JsonDocument.Parse(request.Body);
+        body.RootElement.GetProperty("displayName").GetString().ShouldBe("Platform");
+
+        // ⚠ A 201 is a success. Every resource write in this CLI ends in a 202 and a poller, so the
+        // one status a scope answers with is the one nothing else here produces.
+        host.Stdout.ShouldContain("CyberCloud.Resources/subscriptions");
+    }
+
+    [Fact]
+    public async Task AScopeCreateWithoutANameIsRefusedRatherThanTakingTheProfiles() {
+        var transport = new ScriptedTransport((_, _) => Responses.Json(HttpStatusCode.Created, "{}"));
+
+        using var host = TestHost.Create(
+            transport,
+            config: "[default]\ntenant = t\nsubscription = already-mine\n");
+
+        // ⚠ THE WRITE NOBODY ASKED FOR. --subscription is profile-backed and optional on every
+        // resource verb; if the scope's own segment reused it, this command line would have created
+        // the subscription the profile points at. It is a usage error instead, and no request is
+        // made at all.
+        var code = await host.RunAsync(
+            "scope", "subscription", "create", "--display-name", "Platform", "--output", "none");
+
+        code.ShouldBe((int)ExitCode.Usage);
+        transport.RequestCount.ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task AResourceGroupIsAddressedThroughItsSubscription() {
+        var transport = new ScriptedTransport((_, _) => Responses.Json(HttpStatusCode.OK, "{}"));
+        using var host = TestHost.Create(transport);
+
+        var code = await host.RunAsync(
+            "scope", "resource-group", "create",
+            "--name", "prod", "--location", "eu-central",
+            "--subscription", "s", "--tenant", "t", "--output", "none");
+
+        code.ShouldBe((int)ExitCode.Ok);
+        transport.Requests[0].Uri.AbsolutePath.ShouldBe("/tenants/t/subscriptions/s/resourceGroups/prod");
+
+        using var body = JsonDocument.Parse(transport.Requests[0].Body);
+        body.RootElement.GetProperty("location").GetString().ShouldBe("eu-central");
+    }
+
+    [Fact]
+    public async Task TheTenantCanBeReadFromTheProfileAndNotCreated() {
+        var transport = new ScriptedTransport((_, _) => Responses.Json(HttpStatusCode.OK, "{}"));
+        using var host = TestHost.Create(transport, config: "[default]\ntenant = t\n");
+
+        (await host.RunAsync("scope", "tenant", "show", "--output", "none")).ShouldBe((int)ExitCode.Ok);
+        transport.Requests[0].Uri.AbsolutePath.ShouldBe("/tenants/t");
+
+        // ⚠ No create verb, and the reason is not that nobody wrote one: a request's tenant comes
+        // from its token, so a call creating another tenant carries a token that is not that
+        // tenant's and is refused before routing runs.
+        (await host.RunAsync("scope", "tenant", "create", "--output", "none")).ShouldBe((int)ExitCode.Usage);
+    }
+
+    [Fact]
+    public async Task AScopeVerbOffersNoWaitFlags() {
+        using var host = TestHost.Create();
+
+        // A scope converges before the call returns, so --wait would follow an operation URL that
+        // answers 404. The tree marks the verb longRunning: false and the host declares the pair
+        // only from waitFlags, so the flag is not merely ignored — it does not parse.
+        (await host.RunAsync(
+            "scope", "subscription", "create",
+            "--name", "s1", "--display-name", "P", "--tenant", "t", "--wait")).ShouldBe((int)ExitCode.Usage);
+    }
+}

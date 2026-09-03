@@ -359,11 +359,17 @@ public sealed class OpenApiEmitterTests {
 
         OpenApiStructure.Validate(document).ShouldBeEmpty();
 
-        // Two resource paths, two collection paths, and /operations/{operationId}. ⚠ The count was 3
-        // until a type gained a collection path; it is asserted at all because a path that silently
+        // Two resource paths, two collection paths, /operations/{operationId} and the three scope
+        // paths. ⚠ The count was 3 until a type gained a collection path and 5 until the scope API
+        // reached the document (issue #63); it is asserted at all because a path that silently
         // replaced another would leave the document valid and one provider missing, which is the
         // failure `paths[key] = …` makes invisible.
-        document["paths"]!.AsObject().Count.ShouldBe(5);
+        document["paths"]!.AsObject().Count.ShouldBe(8);
+
+        // ⚠ And the three that came from no provider are named, not just counted. A count of 8 is
+        // also what a document with three duplicated collection paths would have.
+        DocumentReader.ScopesOf(document).Select(x => x.Kind)
+            .ShouldBe(["tenant", "subscription", "resourceGroup"]);
         document["components"]!["schemas"]!.AsObject().ShouldContainKey("CyberCloud.DBforMySQL.servers");
         document["components"]!["schemas"]!.AsObject().ShouldContainKey("CyberCloud.DBforPostgreSQL.servers");
 
