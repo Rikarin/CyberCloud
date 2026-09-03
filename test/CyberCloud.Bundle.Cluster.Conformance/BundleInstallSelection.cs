@@ -14,7 +14,8 @@ namespace CyberCloud.Bundle.Cluster.Conformance;
 ///         — so the loop that walks the phases in order, the loop that picks a phase's components out
 ///         of the roster, and the numeric sort between them were reached exactly once per run, over a
 ///         single phase, where an ordering defect cannot show. That is one of the three gaps
-///         <c>charts/bundle/bundle.yaml</c> § owed, <c>two-of-nineteen-have-been-installed</c>, names.
+///         <c>charts/bundle/bundle.yaml</c> § owed,
+///         <c>most-of-the-roster-has-never-been-installed</c>, names.
 ///     </para>
 ///     <para>
 ///         ⚠ <b>What this closes is the ORDER, and not the barrier, and the two are different

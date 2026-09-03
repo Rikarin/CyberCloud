@@ -15,12 +15,14 @@
 #
 # ⚠ WHAT HAS AND HAS NOT BEEN EXERCISED. Every URL and version below was resolved against its
 # registry on the date each component records. The APPLY path is run against a real API server by
-# test/CyberCloud.Bundle.Cluster.Conformance for TWO of the nineteen components — `--phase 15` and
-# `--phase 25`, each against its own fresh k3s. Seventeen have never been applied by anything, no
-# `manifest:` component has, so the `kubectl` branch below has never executed under test, and
-# `--phase` is by its own usage text the flag that skips the barrier — so the phase ordering is
-# unexercised too. charts/bundle/README.md § Verification, and its honest limit. `--verify` is the
-# half that is reproducible with no cluster at all, and it is the half to run first.
+# test/CyberCloud.Bundle.Cluster.Conformance for THREE of the nineteen components: cert-manager
+# (`--phase 15`), openebs-localpv (`--phase 25`), and openebs-localpv with cloudnative-pg in one run
+# over two phases (`--component` twice), each against a fresh k3s. Sixteen have never been applied by
+# anything. NO `manifest:` COMPONENT HAS, so the `kubectl` branch below has never executed under
+# test. The phase ORDER is asserted over all nineteen rows by a full `--dry-run`; the phase BARRIER
+# is not, and for the six manifest rows it is not implemented — see the ⚠ on the manifest branch.
+# charts/bundle/README.md § Verification, and its honest limit. `--verify` is the half that is
+# reproducible with no cluster at all, and it is the half to run first.
 
 set -euo pipefail
 
@@ -218,6 +220,16 @@ install_component() {
                 ${sets[@]+"${sets[@]}"} ${helm_args[@]+"${helm_args[@]}"}
             ;;
         manifest)
+            # ⚠ THIS BRANCH WAITS FOR NOTHING, AND THE SENTENCE "`--wait` MAKES INSTALLED MEAN
+            # SERVING" IS FALSE FOR THE SIX COMPONENTS THAT REACH IT. `kubectl apply` returns when
+            # the API server has stored the objects, which is long before an operator Deployment has
+            # a running pod or its definitions are Established. bundle.yaml § phases nonetheless
+            # promises that "every component in phase N is installed and its CRDs are established
+            # before phase N+1 begins", and for kubevirt, containerized-data-importer, cluster-api,
+            # kamaji-control-plane-provider, cluster-api-provider-kubevirt and
+            # rabbitmq-cluster-operator that promise is not kept. It is NOT patched here on purpose:
+            # every candidate wait is a guess until somebody has run these six against an API server,
+            # and nothing has. bundle.yaml § owed, `the-manifest-path-waits-for-nothing`.
             manifest=$(key "$file" manifest)
             run kubectl ${kubectl_args[@]+"${kubectl_args[@]}"} apply --server-side -f "$manifest"
 

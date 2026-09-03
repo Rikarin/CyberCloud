@@ -3,16 +3,23 @@
     <!--
       The first thing in this repository that installs a charts/bundle/ component onto an API server.
 
-      ⚠ IT COVERS TWO COMPONENTS OF NINETEEN, AND ITS NAME IS THE ONLY HONEST PLACE TO SAY SO.
-      charts/bundle/bundle.yaml § owed, `two-of-nineteen-have-been-installed`, is the row this project
-      narrows rather than closes: every pin in that directory was resolved against a registry and none
-      of it had ever been applied. Applying a component proves THE INSTALL MECHANISM — that
-      install.sh reads a pin out of a component.yaml, invokes helm unattended, waits for the right
-      thing, and leaves a cluster where the group the component claims to serve is served. It proves
-      nothing whatever about the other seventeen pins. A suite that installed two and called itself
-      `TheBundleInstalls` would be the failure class this repository has shipped repeatedly — a check
-      that answers a narrower question than it appears to — so the test methods here are named for the
-      sentence each can defend and for no more of one.
+      ⚠ IT COVERS THREE COMPONENTS OF NINETEEN, AND ITS NAME IS THE ONLY HONEST PLACE TO SAY SO.
+      charts/bundle/bundle.yaml § owed, `most-of-the-roster-has-never-been-installed`, is the
+      row this project narrows rather than closes: every pin in that directory was resolved against a
+      registry and none of it had ever been applied. Applying a component proves THE INSTALL
+      MECHANISM — that install.sh reads a pin out of a component.yaml, invokes helm unattended, waits
+      for the right thing, and leaves a cluster where the group the component claims to serve is
+      served. It proves nothing whatever about the other sixteen pins. A suite that installed three
+      and called itself `TheBundleInstalls` would be the failure class this repository has shipped
+      repeatedly — a check that answers a narrower question than it appears to — so the test methods
+      here are named for the sentence each can defend and for no more of one.
+
+      ⚠ THAT SAID, ONE ROW HERE IS NOT A NARROWING. CloudNativePgOnAnEmptyCluster runs the sentence
+      the whole of charts/bundle/ exists for: two components installed by ONE install.sh run onto ONE
+      cluster, then a charts/managed/postgres Cluster whose PersistentVolumeClaim CLOUDNATIVEPG
+      creates — controller ownerReference asserted, so the test could not have written it — and binds
+      through the class the same run installed. bundle.yaml § owed,
+      `an-operator-created-and-bound-the-claim`.
 
       ⚠ THE DENOMINATOR IN THAT FIRST LINE READ "EIGHTEEN" UNTIL 2026-09-02 AND WAS WRONG. bundle.yaml
       lists nineteen components and charts/bundle/ holds nineteen directories; openebs-localpv landed

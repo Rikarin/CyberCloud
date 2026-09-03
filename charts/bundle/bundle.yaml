@@ -132,45 +132,119 @@ ordering:
 # Named here rather than left to be discovered. Every item below was found while pinning this bundle
 # and none of it is speculative.
 owed:
-  - id: two-of-nineteen-have-been-installed
+  - id: most-of-the-roster-has-never-been-installed
     says: >
-      ⚠ READ THIS BEFORE ANY OTHER ITEM. It used to read `nothing-here-has-been-installed`, then
-      `one-of-eighteen-has-been-installed`, and neither number in the second name was right by the
-      time it was read. ⚠ THE DENOMINATOR WAS ALREADY WRONG WHEN openebs-localpv LANDED AND NOBODY
-      RE-COUNTED: `components:` above holds NINETEEN rows and charts/bundle/ holds nineteen
-      directories, counted on 2026-09-02. "Eighteen" survived into README.md, deploy/README.md and
-      build/Build.Bundle.cs' prose because a count written in words is not a count anything checks —
-      the same shape as the two-charts-name-a-storage-class sentence that
-      `the-replicated-stage-is-not-installed` corrects nine charts below its own subject.
-      TWO components are installed onto a real API server by
-      test/CyberCloud.Bundle.Cluster.Conformance, which runs THIS DIRECTORY'S OWN `install.sh`
-      against a fresh k3s in both cases:
+      ⚠ READ THIS BEFORE ANY OTHER ITEM. ⚠ AND THE ID NO LONGER CARRIES A COUNT, WHICH IS THE FOURTH
+      CORRECTION RATHER THAN THE FOURTH COUNT. It read `nothing-here-has-been-installed`, then
+      `one-of-eighteen-has-been-installed`, then `most-of-the-roster-has-never-been-installed`; the
+      denominator in the second was already wrong when openebs-localpv landed, and "eighteen" survived
+      into README.md, deploy/README.md and build/Build.Bundle.cs' prose. Renaming it to
+      `three-of-nineteen` on 2026-09-03 would have been the same mistake a fourth time — a count
+      written into an ID is a count nothing checks, and every reader of the ID then quotes it.
+      THE COUNT, ON 2026-09-03: `components:` above holds NINETEEN rows and charts/bundle/ holds
+      nineteen directories. THREE of them are installed onto a real API server by
+      test/CyberCloud.Bundle.Cluster.Conformance, which runs THIS DIRECTORY'S OWN `install.sh` in
+      every case:
       cert-manager, phase 15 — `cert-manager.io/v1` is served afterwards and a self-signed
       Certificate reaches Ready with a parseable certificate in the Secret it names. Sabotage-verified
       both ways: deleting the `values:` block from cert-manager/component.yaml turns the run red, and
       so does removing the `--set` from the installer.
       openebs-localpv, phase 25 — see `one-volume-has-been-provisioned` below.
-      WHAT THAT PROVES: the install MECHANISM. `install.sh` runs unattended against a cluster it is
-      handed; it reads a pin out of a component.yaml rather than carrying one; its `--wait` makes
-      "installed" mean "serving"; and a `serves:` line is true of the cluster afterwards.
-      WHAT IT DOES NOT PROVE, AND THE DISTANCE IS THE WHOLE OF THIS ROW: that the other SEVENTEEN
-      pins install. Nothing has exercised the PHASE BARRIER — both tests use `--phase`, whose own
-      usage text says it "skips that guarantee" — so the ordering `phases:` above encodes is still
-      reasoned rather than run. Nothing has exercised any `manifest:` component, so the two-document
-      apply with the establishment wait between them is unexercised, and `kubectl` has never been
-      invoked by this script under test at all.
-      ⚠ NOTHING HAS INSTALLED TWO COMPONENTS ONTO ONE CLUSTER, AND THE TWO ROWS ABOVE DO NOT ADD UP
-      TO THAT. Each takes its own fresh k3s from its own IClassFixture instance, deliberately: a
-      shared cluster would make each class's subject depend on which classes ran before it, and
-      "a test whose subject depends on what ran before it" is a failure this repository has shipped
-      and found a production defect hiding under. So the phase barrier, the co-tenancy of two
-      operators on one node, and any interaction between components remain unexercised, and buying
-      them means paying that risk down some other way rather than by deleting a fixture.
-      Nothing has applied a charts/managed/ custom resource against a bundle-installed definition,
-      which is the sentence the whole directory exists for.
-      Two rows of nineteen is a beginning that can be pointed at, and calling it more than that would
-      be the failure class this directory's README already names twice. Closing the rest is a lane
-      question, not a willingness question — see README.md § Verification, and its honest limit.
+      openebs-localpv AND cloudnative-pg TOGETHER, in ONE run, across TWO phases — see
+      `an-operator-created-and-bound-the-claim` below, which is the row that closes the sentence this
+      directory exists for.
+      WHAT THAT PROVES: the install MECHANISM, and now one end-to-end path through it. `install.sh`
+      runs unattended against a cluster it is handed; it reads a pin out of a component.yaml rather
+      than carrying one; its `--wait` makes "installed" mean "serving" FOR A HELM COMPONENT — see
+      `the-manifest-path-waits-for-nothing`, which is the clause that turned out to be false for six
+      of the nineteen; a `serves:` line is true of the cluster afterwards; and two components install
+      onto one node without fighting.
+      WHAT IT DOES NOT PROVE, AND THE DISTANCE IS STILL THE WHOLE OF THIS ROW: that the other SIXTEEN
+      pins install. Nothing has exercised any `manifest:` component, so the two-document apply with
+      the establishment wait between them is unexercised and `kubectl` has never been invoked BY THIS
+      SCRIPT under test — the kubectl in the cloudnative-pg suite is the test's own, applying a
+      rendered chart. Nothing runs kube-ovn, KubeVirt, CDI, Cluster API or Kamaji, which is where the
+      three virtual machines and most of the risk are.
+      ⚠ THE PHASE ORDER IS NOW RUN AND THE PHASE BARRIER IS STILL NOT, AND THE TWO ARE DIFFERENT
+      CLAIMS. `BundleInstallSelection` drives a full `--dry-run` and asserts that all nineteen
+      components are attempted once each, in the roster's order, under ascending phase headers — the
+      first assertion here that covers every row, and it costs under a second because it touches no
+      cluster. What a dry run cannot answer is whether "installed" implies "serving" at a phase
+      boundary, and for the six `manifest:` rows the answer is no.
+      ⚠ THE LANE, DECIDED RATHER THAN DEFERRED, AND MEASURED. The suite is 4 m 30 s – 4 m 47 s green
+      across two runs with the cloudnative-pg class in it, against 2 m 20 s – 3 m 15 s without: the class costs about 1 m 50 s
+      of serial tail, of which 26 s is the two-component install, 68 s is PostgreSQL reaching Ready,
+      and the rest is a second k3s start. It stays in the per-PR lane, and NOT because that is cheap.
+      The only nightly lane that exists is `Build.E2E`, whose own preconditions refuse to run without
+      `--e2e-base-url` pointing at a real staging deployment and without a `cyc` CLI to drive; a
+      Testcontainers k3s suite moved there would be run by nothing, which is a worse outcome than a
+      slow one. A lane for container-backed suites that are too slow for per-PR and need no
+      deployment does not exist, and creating one is the decision this row now owes.
+  - id: an-operator-created-and-bound-the-claim
+    says: >
+      ✅ THE SENTENCE THIS DIRECTORY EXISTS FOR IS NO LONGER OWED, AND IT IS THE ONLY ROW HERE THAT
+      HAS EVER BEEN ABLE TO SAY SO. `one-volume-has-been-provisioned` set the target in its own words
+      — "a reconciler applies a resource, an operator creates the claim, the claim binds" — and
+      test/CyberCloud.Bundle.Cluster.Conformance § CloudNativePgOnAnEmptyCluster now runs it:
+      ONE `install.sh` run installs openebs-localpv (phase 25) and cloudnative-pg (phase 50) onto one
+      fresh k3s; `helm template charts/managed/postgres` renders a `postgresql.cnpg.io/v1` Cluster;
+      the API server admits it against the definition the bundle just installed; CloudNativePG creates
+      a PersistentVolumeClaim NAMING `openebs-hostpath`; the claim binds; and the cluster reports
+      Ready.
+      ⚠ WHAT MAKES IT DIFFERENT FROM THE STORAGE ROW IS ONE FIELD ON THE API SERVER. The claim carries
+      a CONTROLLER ownerReference to the `Cluster`, kind and apiVersion asserted, so the test could
+      not have written it — which is precisely the criticism `one-volume-has-been-provisioned` makes
+      of itself ("a 64Mi directory by a test's own hand-written claim").
+      ⚠ AND THE VOLUME'S NODE-LOCAL PATH IS ASSERTED, FOR THE SAME REASON AS OVER THERE. This cluster
+      has two default classes; openebs writes under /var/openebs/local and k3s's own provisioner under
+      /var/lib/rancher/k3s/storage, so the path is the one assertion that survives a mix-up in every
+      other one. Measured on a ten-CPU host on 2026-09-03: the claim exists 8 s after the apply, is
+      Bound at 18 s, and the cluster is Ready at 68 s.
+      ⚠ WHAT IT DOES NOT SAY. It is one of the two charts that render this group — charts/managed/
+      ferretdb renders a Cluster too and is not exercised — and it is not the chart's DEFAULT body:
+      seven values are overridden, each with the reason beside it in the test, and two of them
+      (`pooling.enabled`, `monitoring.enabled`) switch off objects that would need a second and third
+      bundle component. It says nothing about the other seventeen charts, and nothing at all about a
+      RECONCILER: the resource here is applied by a test running helm and kubectl, not by the
+      platform's own reconcile path.
+  - id: the-manifest-path-waits-for-nothing
+    says: >
+      ⚠ FOUND ON 2026-09-03 BY READING install.sh WHILE ADDING A SELECTOR TO IT, AND IT REFUTES A
+      SENTENCE THIS FILE AND README.md BOTH REPEAT. The claim is that `--wait` makes "installed" mean
+      "serving". That is true of the THIRTEEN `helm` and `helm-archive` components and false of the
+      SIX `manifest:` ones — kubevirt and containerized-data-importer in phase 30, cluster-api,
+      kamaji-control-plane-provider and cluster-api-provider-kubevirt in phase 40, and
+      rabbitmq-cluster-operator in phase 50. The `manifest` branch is a bare
+      `kubectl apply --server-side` with no wait of any kind. The ONE wait it can reach —
+      `kubectl wait --for=condition=Established crd --all` — runs only when the component declares a
+      `manifestExtra`, which two of the six do, and even then it runs INSIDE the component, before its
+      second document, rather than at a phase boundary.
+      ⚠ SO `phases:` ABOVE OVERSTATES ITS OWN GUARANTEE. It says "every component in phase N is
+      installed and its CRDs are established before phase N+1 begins". For a manifest component,
+      "installed" means the apply returned — the operator Deployment may not have a running pod, and
+      its definitions may not be Established — and phase 40's four rows are exactly where that matters,
+      because cluster-api-provider-kubevirt and the Kamaji control-plane provider both admit against
+      CRDs and webhooks the rows before them installed.
+      ⚠ IT IS NOT FIXED HERE, DELIBERATELY. The fix is a `kubectl wait` per manifest component —
+      Established on its own CRDs, Available on its Deployments — and every candidate wait is a guess
+      until somebody has run those six components against an API server, which nothing has. Writing
+      the wait first would produce a barrier that is asserted and untested, which is the same shape of
+      claim this row exists to retract.
+  - id: a-selector-that-matched-nothing-reported-success
+    says: >
+      ✅ FIXED ON 2026-09-03, RECORDED BECAUSE THE READING IS WORTH MORE THAN THE FIX.
+      `install.sh --phase 99` printed one empty phase header and exited 0 under "Bundle applied",
+      and `--verify --phase 99` printed "Every pin resolves" having resolved none. The cause was one
+      line — `phases="$only_phase"` took the caller's word rather than filtering the roster — and the
+      shape is the mirror image of the defect `verify_component`'s own comment already records: "a
+      verifier that fails when there is nothing to verify is the same defect as one that passes when
+      there is". This was the second half, and it is the more dangerous one, because its output reads
+      like a green run and a typo in a phase number is a plausible thing to type.
+      ⚠ THE USAGE TEXT WAS WRONG IN THE SAME AREA AND IS ALSO CORRECTED. It said `--phase` is "for
+      repairing one row"; phases 30, 40 and 50 hold two, four and eight rows, so fourteen of the
+      nineteen components could not be addressed individually at all. `--component <name>` now exists,
+      is repeatable, filters the roster and never reorders it — the roster carries the order, and a
+      flag that reordered it would be a second place the order is written.
   - id: redis-operator-is-archived-and-its-chart-is-broken
     says: >
       ⚠ THE FOURTH SIGHTING OF ADR-010 CLAUSE 1'S AMENDMENT, AND THE FIRST WHERE THE OPERATOR EXISTS.
@@ -249,12 +323,13 @@ owed:
       anything in that state: the install succeeds, the Deployment goes Ready, the class exists, and
       the eleven managed charts that leave `storageClassName` at `""` keep silently using k3s's
       provisioner. That is why the flag is asserted in two places and not one.
-      ⚠ ONE VOLUME IS NOT THE SENTENCE THE DIRECTORY EXISTS FOR. What is bound is a 64Mi directory by
-      a test's own hand-written claim. NOTHING HAS APPLIED A charts/managed/ CUSTOM RESOURCE AGAINST
-      A BUNDLE-INSTALLED DEFINITION, so the path that actually matters — a reconciler applies a
-      resource, an operator creates the claim, the claim binds — is still unexercised end to end, and
-      it is the row `two-of-nineteen-have-been-installed` keeps. The smallest honest next step is
-      named there and is a phase-50 operator, not a bigger storage test.
+      ✅ ONE VOLUME WAS NOT THE SENTENCE THE DIRECTORY EXISTS FOR, AND THE SENTENCE IS NOW RUN. What
+      is bound HERE is still a 64Mi directory by a test's own hand-written claim, and that has not
+      changed. What has is that `an-operator-created-and-bound-the-claim` above does the other half:
+      a charts/managed/postgres Cluster, applied against the definition charts/bundle/cloudnative-pg
+      installed, whose claim CloudNativePG creates — controller ownerReference asserted — and binds
+      through this component's class. The recommendation this paragraph carried, "a phase-50 operator,
+      not a bigger storage test", was taken.
       ⚠ AND IT IS ONE COPY OF A DIRECTORY ON ONE NODE, WITH NO QUOTA. Binding a volume says nothing
       about surviving the loss of the node it is on — `the-replicated-stage-is-not-installed` is
       where that lives, and this row closing does not move it.

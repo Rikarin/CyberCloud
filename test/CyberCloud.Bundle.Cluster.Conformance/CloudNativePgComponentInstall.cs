@@ -237,7 +237,7 @@ public sealed class CloudNativePgOnAnEmptyCluster(EmptyClusterFixture cluster) :
             cluster.Client is null || cluster.KubeconfigPath is null,
             cluster.Skip(
                 BundleInstaller.CloudNativePgComponent,
-                "two-of-nineteen-have-been-installed",
+                "most-of-the-roster-has-never-been-installed",
                 "that one charts/bundle/install.sh run installs TWO components across TWO phases onto "
                 + "one API server, and that a charts/managed/postgres Cluster applied afterwards makes "
                 + "CloudNativePG create a PersistentVolumeClaim on the openebs-hostpath class the "
