@@ -42,6 +42,19 @@ public static class FakeWorld {
     public static ConcurrentDictionary<Guid, string> FailTeardownWith { get; } = new();
 
     /// <summary>
+    ///     The <see cref="ErrorCode" /> a scripted failure carries, when it should not be
+    ///     <see cref="ErrorCode.ProvisioningFailed" />.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>A separate dictionary rather than a second field on <see cref="FailWith" />, so that
+    ///     every existing caller keeps the code it already asserts.</b> What needs a different one is
+    ///     the namespace memo's invalidation channel: the driver reads a pass that came back
+    ///     <see cref="ErrorCode.ResourceNotFound" /> as evidence the namespace is gone, and that
+    ///     branch is unreachable while every scripted failure is a ProvisioningFailed.
+    /// </remarks>
+    public static ConcurrentDictionary<Guid, ErrorCode> FailCode { get; } = new();
+
+    /// <summary>
     ///     Resources whose reconcile reports a cluster it produced, with the endpoint to report.
     /// </summary>
     /// <remarks>
@@ -76,6 +89,7 @@ public static class FakeWorld {
         Deletes.Clear();
         StayInProgress.Clear();
         FailWith.Clear();
+        FailCode.Clear();
         FailTeardownWith.Clear();
         ProduceClusterAt.Clear();
         KeepsVolume.Clear();
@@ -109,7 +123,13 @@ public sealed class ConformingReconciler(IClock clock) : IResourceReconciler {
 
         if (FakeWorld.FailWith.TryGetValue(context.Id.Id, out var failure)) {
             context.Log.Report("applying", $"refused: {failure}");
-            return Task.FromResult(ReconcileOutcome.Failed(ErrorCode.ProvisioningFailed, failure));
+
+            return Task.FromResult(
+                ReconcileOutcome.Failed(
+                    FakeWorld.FailCode.TryGetValue(context.Id.Id, out var code) ? code : ErrorCode.ProvisioningFailed,
+                    failure
+                )
+            );
         }
 
         var desired = context.Desired.GetRawText();

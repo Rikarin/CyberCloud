@@ -262,7 +262,14 @@ public sealed class ReconcileDriver(
                 var recorded = await grains
                     .ForTenant(id.TenantId.ToString("D", CultureInfo.InvariantCulture))
                     .GetGrain<IResourceGroupGrain>(GrainKeys.ResourceGroup(id.SubscriptionId, id.ResourceGroup))
-                    .RecordClusterAsync(reconcileInput.ClusterId);
+                    // ⚠ THE CONNECTION'S OWN ID, NOT THE BODY'S. NamespaceEnsurer keys its memo on
+                    // connection.ClusterId, so a factory that answered with a connection to some
+                    // other cluster would have the namespace remembered under one id and recorded
+                    // under another — and the group's delete would then look for its namespace on a
+                    // cluster nothing was ever applied to. In production the two agree; relying on
+                    // that rather than reading the one the write actually went through is how two
+                    // spellings of the same fact drift apart.
+                    .RecordClusterAsync(connection.ClusterId);
 
                 if (recorded.TryGetError(out var recordError)) {
                     // ⚠ NOT A FAILED PASS, and the asymmetry with the ensure above is deliberate. An
@@ -401,11 +408,11 @@ public sealed class ReconcileDriver(
         // idempotent apply; not forgetting when it was gone costs an hour of failed reconciles.
         if (connection is not null
             && outcome.Error is { Code: var failed } && failed == ErrorCode.ResourceNotFound
-            && namespaces.Forget(reconcileInput.ClusterId, ns)) {
+            && namespaces.Forget(connection.ClusterId, ns)) {
             log.Report(
                 "ensuring-namespace",
                 $"the pass reported {ErrorCode.ResourceNotFound}, so the belief that namespace "
-                + $"'{ns}' exists on cluster {reconcileInput.ClusterId:D} has been dropped and the "
+                + $"'{ns}' exists on cluster {connection.ClusterId:D} has been dropped and the "
                 + "next pass will apply it again."
             );
         }

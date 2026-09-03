@@ -509,6 +509,51 @@ public sealed class NamespaceEnsurerTests {
         connection.Applied.Count.ShouldBe(2);
     }
 
+    // ── The invalidation channel ─────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task ForgettingOnePairLeavesTheOthersAlone() {
+        // ⚠ THE MEMO'S ONLY INVALIDATION CHANNEL, AND ITS PRECISION MATTERS IN ONE DIRECTION. A
+        // targeted forget that cleared the whole map would make one namespace's 404 cost every other
+        // namespace on the silo an extra apply — small, but it would also hide the imprecision this
+        // is deliberately allowed: the driver forgets on any ResourceNotFound, so an over-broad
+        // forget would multiply an over-broad trigger.
+        var (ensurer, connection) = Build();
+        var other = new RecordingConnection(new("2b6c1d3e-0000-4000-8000-00000000000f"));
+
+        await EnsureAsync(ensurer, connection);
+        await ensurer.EnsureAsync(Address, Namespace, other, TestContext.Current.CancellationToken);
+
+        ensurer.Forget(Cluster, Namespace).ShouldBeTrue();
+        ensurer.Forget(Cluster, Namespace).ShouldBeFalse("there is nothing left to forget.");
+
+        (await EnsureAsync(ensurer, connection)).GetValueOrThrow()
+            .Written.ShouldBeTrue("the forgotten pair is applied again.");
+
+        (await ensurer.EnsureAsync(Address, Namespace, other, TestContext.Current.CancellationToken))
+            .GetValueOrThrow()
+            .Written.ShouldBeFalse("the same namespace on another cluster is a different belief.");
+    }
+
+    [Fact]
+    public async Task AFailedEnsureIsNeverMemoisedSoTheNextPassTriesAgain() {
+        // The other half of "no stale belief": nothing may be remembered that was not written. An
+        // ensure that the cluster refused, or that was suspended because the cluster is degraded,
+        // must not make the next pass skip the namespace.
+        var (ensurer, connection) = Build();
+
+        connection.RefuseWith = ErrorCode.AuthorizationFailed;
+        (await EnsureAsync(ensurer, connection)).IsFailure.ShouldBeTrue();
+
+        connection.RefuseWith = null;
+        connection.Suspended = true;
+        (await EnsureAsync(ensurer, connection)).GetValueOrThrow().Result.ShouldBe(ApplyResult.Suspended);
+
+        connection.Suspended = false;
+        (await EnsureAsync(ensurer, connection)).GetValueOrThrow()
+            .Written.ShouldBeTrue("neither a refusal nor a suspension is evidence the namespace exists.");
+    }
+
     [Fact]
     public async Task ANamespaceThatIsAlreadyGoneIsASuccessfulDelete() {
         var (ensurer, connection) = Build();
