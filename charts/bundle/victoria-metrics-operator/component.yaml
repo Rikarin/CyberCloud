@@ -23,6 +23,16 @@ serves:
 requiredBy:
   - charts/managed/monitor-workspace
 
+# Every container image this component's pinned artefact renders, with the digest its registry served
+# on 2026-09-03. Regenerate with `./charts/bundle/images.sh --resolve`; check with `images.sh`.
+#
+# ⚠ THIS IS A RECORD, NOT A PIN, AND THE DIFFERENCE IS WORTH BEING EXACT ABOUT. The tag is what the
+# chart passes to the kubelet; the digest beside it is what that tag resolved to when somebody looked.
+# A tag is mutable, so an upstream rebuild moves these bytes without moving any version in this
+# directory — and `images.sh` is what turns that from invisible into a red run.
+images:
+  - victoriametrics/operator:v0.74.0@sha256:c4fde419a4f03c7c45d7ee554e7039c12c75af161f7f7e1baef1b343015e3df9
+
 notes: >
   ⚠ THE DEFINITIONS COME FROM A SUBCHART AND THE FLAG THAT CONTROLS THEM IS NOT THE OBVIOUS ONE.
   `crds.enabled: true` is the chart's default and it disables creation "only in combination with

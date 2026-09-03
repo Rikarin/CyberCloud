@@ -27,6 +27,16 @@ requiredBy:
   - charts/managed/postgres
   - charts/managed/ferretdb
 
+# Every container image this component's pinned artefact renders, with the digest its registry served
+# on 2026-09-03. Regenerate with `./charts/bundle/images.sh --resolve`; check with `images.sh`.
+#
+# ⚠ THIS IS A RECORD, NOT A PIN, AND THE DIFFERENCE IS WORTH BEING EXACT ABOUT. The tag is what the
+# chart passes to the kubelet; the digest beside it is what that tag resolved to when somebody looked.
+# A tag is mutable, so an upstream rebuild moves these bytes without moving any version in this
+# directory — and `images.sh` is what turns that from invisible into a red run.
+images:
+  - ghcr.io/cloudnative-pg/cloudnative-pg:1.30.0@sha256:a2701eb97cdd2a34b1fdb2cb51987f544b706e40bec72ae7146cd8580efefebb
+
 notes: >
   ⚠ The chart's definitions carry `helm.sh/resource-policy: keep`, so `helm uninstall` leaves the
   definitions and therefore leaves every tenant's Cluster object behind. That is the right default

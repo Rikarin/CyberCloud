@@ -32,6 +32,18 @@ requiredBy:
 # `kubeovn/kube-ovn-v2` carries the same chart version and app version as `kubeovn/kube-ovn`; the
 # suffix is a packaging generation, not a release. Reading "v2" as "newer" is the mistake this note
 # exists to prevent, and the two were compared rather than assumed.
+
+# Every container image this component's pinned artefact renders, with the digest its registry served
+# on 2026-09-03. Regenerate with `./charts/bundle/images.sh --resolve`; check with `images.sh`.
+#
+# ⚠ THIS IS A RECORD, NOT A PIN, AND THE DIFFERENCE IS WORTH BEING EXACT ABOUT. The tag is what the
+# chart passes to the kubelet; the digest beside it is what that tag resolved to when somebody looked.
+# A tag is mutable, so an upstream rebuild moves these bytes without moving any version in this
+# directory — and `images.sh` is what turns that from invisible into a red run.
+images:
+  - docker.io/kubeovn/kube-ovn:v1.16.2@sha256:a106d9625dd586996693f3cbefd1ee49869c2a08c456d8b8a119f2b90d3b4d99
+  - docker.io/kubeovn/vpc-nat-gateway:v1.16.2@sha256:9bed1396f07edc69ca14cc3b9bf9493e7c98b3e837d1ea25ee1dd6df53e8b1d4
+
 notes: >
   A CNI is the one component in this bundle that cannot be installed onto a running cluster without
   consequence — replacing the CNI restarts every pod's networking. It is phase 10 for that reason and

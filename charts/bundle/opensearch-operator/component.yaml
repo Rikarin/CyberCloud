@@ -34,6 +34,16 @@ serves:
 requiredBy:
   - charts/managed/opensearch
 
+# Every container image this component's pinned artefact renders, with the digest its registry served
+# on 2026-09-03. Regenerate with `./charts/bundle/images.sh --resolve`; check with `images.sh`.
+#
+# ⚠ THIS IS A RECORD, NOT A PIN, AND THE DIFFERENCE IS WORTH BEING EXACT ABOUT. The tag is what the
+# chart passes to the kubelet; the digest beside it is what that tag resolved to when somebody looked.
+# A tag is mutable, so an upstream rebuild moves these bytes without moving any version in this
+# directory — and `images.sh` is what turns that from invisible into a red run.
+images:
+  - opensearchproject/opensearch-operator:2.8.0@sha256:ad86464ea5b1661ea25294058e78b3697286cc6b742df7a543fd96d2de0bc61a
+
 notes: >
   ⚠ WHAT THIS PIN OWES charts/managed/opensearch/conformance.yaml § owed, `api-group-is-deprecated`.
   That item's closing move is "a new api-version on the resource type plus a charts/bundle/ bump, in

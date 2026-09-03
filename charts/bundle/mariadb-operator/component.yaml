@@ -30,6 +30,16 @@ serves:
 requiredBy:
   - charts/managed/mariadb
 
+# Every container image this component's pinned artefact renders, with the digest its registry served
+# on 2026-09-03. Regenerate with `./charts/bundle/images.sh --resolve`; check with `images.sh`.
+#
+# ⚠ THIS IS A RECORD, NOT A PIN, AND THE DIFFERENCE IS WORTH BEING EXACT ABOUT. The tag is what the
+# chart passes to the kubelet; the digest beside it is what that tag resolved to when somebody looked.
+# A tag is mutable, so an upstream rebuild moves these bytes without moving any version in this
+# directory — and `images.sh` is what turns that from invisible into a red run.
+images:
+  - ghcr.io/mariadb-operator/mariadb-operator:26.6.0@sha256:a5e17b48f08ef02cda59a5b0ed68a18ae5e0f820129ac391fa220ea117aebd6c
+
 notes: >
   `currentNamespaceOnly: false` is the chart's default, so the operator watches every namespace out
   of the box. Checked rather than assumed — two of the nine data-service operators in this bundle

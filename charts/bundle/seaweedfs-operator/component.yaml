@@ -29,6 +29,18 @@ requiredBy:
   - charts/managed/seaweedfs
   - charts/managed/seaweedfs-bucket
 
+# Every container image this component's pinned artefact renders, with the digest its registry served
+# on 2026-09-03. Regenerate with `./charts/bundle/images.sh --resolve`; check with `images.sh`.
+#
+# ⚠ THIS IS A RECORD, NOT A PIN, AND THE DIFFERENCE IS WORTH BEING EXACT ABOUT. The tag is what the
+# chart passes to the kubelet; the digest beside it is what that tag resolved to when somebody looked.
+# A tag is mutable, so an upstream rebuild moves these bytes without moving any version in this
+# directory — and `images.sh` is what turns that from invisible into a red run.
+images:
+  - chrislusf/seaweedfs-operator:1.0.35@sha256:eb783fe8c6cec9024aea61ef822d60b2f1442f7d6601c6a33853d513bdd1ac27
+  - curlimages/curl:8.8.0@sha256:73e4d532ea62d7505c5865b517d3704966ffe916609bedc22af6833dc9969bcd
+  - registry.k8s.io/ingress-nginx/kube-webhook-certgen:v20231011-8b53cabe0@sha256:a7943503b45d552785aa3b5e457f169a5661fb94d82b8a3373bcd9ebaf9aac80
+
 notes: >
   ⚠ THE DEFINITIONS ARE IN `templates/`, NOT IN `crds/`, AND THAT CHANGES WHAT AN UNINSTALL DOES.
   A chart's `crds/` directory is never deleted by `helm uninstall`; a templated definition is. So

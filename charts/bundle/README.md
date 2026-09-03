@@ -54,6 +54,8 @@ if it ever inspects nothing.
 | `checked` | always | The ISO date it was read. Not in the future |
 | `serves` | unless `servesNoDefinitions` | The `group/version` pairs the component's definitions serve |
 | `servesNoDefinitions` | when `serves` is absent | Why this component installs no CustomResourceDefinition. At least 60 characters of prose |
+| `images` | unless `rendersNoWorkloadImages` | Every image the pinned artefact renders, as `repository:tag@sha256:…` |
+| `rendersNoWorkloadImages` | when `images` is absent | Why this component renders no container. At least 60 characters of prose |
 | `requiredBy` | always | The charts and components that need it |
 | `repo`, `chart`, `version` | `install: helm` | Chart repository, chart name, chart version |
 | `archive`, `chart`, `version` | `install: helm-archive` | Packaged-chart URL, chart name, chart version |
@@ -192,6 +194,51 @@ operator, so the workload is the chart".
 chart pins an image tag that does not exist in the registry it names. The operator exists, installs,
 and works; what it does not have is anybody to fix it. See
 `charts/bundle/redis-operator/component.yaml` and `bundle.yaml` § owed.
+
+## What this bundle pulls
+
+A chart version is immutable once published, which is what makes `--verify` a real answer to *does
+the pin still resolve*. **The image tag inside that chart is not.** So a bundle whose every pin
+resolves can be running bytes somebody rebuilt last night, and until 2026-09-03 nothing in this
+directory knew which images those were.
+
+Now every component records them. `images:` lists each container image the pinned artefact renders,
+with the digest its registry served when somebody looked, and `./charts/bundle/images.sh` re-renders,
+re-resolves and compares:
+
+```bash
+./charts/bundle/images.sh                      # compare every component against its record
+./charts/bundle/images.sh --component kamaji   # one component
+./charts/bundle/images.sh --resolve            # regenerate the block after a bump
+```
+
+**Thirty-two images across eighteen components**, counted on 2026-09-03; `prometheus-operator-crds`
+renders CustomResourceDefinitions and no container, and says so in `rendersNoWorkloadImages:`.
+
+> ⚠ **A record, not a pin, and being exact about that is the point.** The tag is still what reaches
+> the kubelet. This detects a tag that moved; it does not prevent one. Preventing it needs a values
+> override per chart and several charts have no digest key — `redis-operator/component.yaml`
+> documents that case: its template composes `repository:tag` and nothing else, so an `image.digest`
+> value would be a key that silently does nothing, which is worse than a tag because it reads as a
+> stronger pin than it is.
+
+> ⚠ **The row that used to say redis-operator was the exception was wrong, and the correction is the
+> more useful half.** It pinned a *tag* and recorded an `imageDigest:` beside it whose own comment
+> said `install.sh --verify` compared it. Nothing read that key — `verify_component` reads the chart
+> and manifest pins and has never read a digest. The true count of images checked by digest was zero
+> of nineteen. See `bundle.yaml` § owed, `images-are-not-pinned-by-digest`.
+
+> ⚠ **Two images in this bundle are `latest`.** `clickhouse-operator` renders
+> `bitnami/kubectl:latest` and `kamaji` renders `cfssl/cfssl:latest` — neither is ours to fix, both
+> are recorded with the digest they resolve to today, and `images.sh` is what will notice when they
+> move. `bundle.yaml` § owed, `two-images-in-this-bundle-are-latest`, has the reading on why
+> `bitnami/kubectl` is the sharper of the two, and why the two untagged references in the Kamaji
+> provider's CRD schema are deliberately *not* counted here.
+
+The scan ADR-011 § Enforcement asks for is a different thing again, and `build/Build.Licence.cs`
+carries the measurement showing it cannot be written against the allow-list that ADR names: 76 of
+the 99 packaged components in `mcr.microsoft.com/dotnet/aspnet:10.0` declare GPL or LGPL, so the
+gate would fail on our own base image. Which list answers which question is issue #18's decision.
 
 ## Verification, and its honest limit
 

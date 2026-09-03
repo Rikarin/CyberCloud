@@ -342,10 +342,78 @@ owed:
       and does not open an image. build/Build.Licence.cs is still `NotImplementedYet`, and the
       distance between what it will do and what this gate does is the distance between a scan and an
       attestation.
+      ⚠ AND ON 2026-09-03 THE ROW GREW A SECOND HALF THAT IS BIGGER THAN THE FIRST: THE SCAN AS
+      ADR-011 WORDS IT CANNOT BE GREEN AGAINST THE ONLY ALLOW-LIST THIS REPOSITORY HAS. Measured
+      against `mcr.microsoft.com/dotnet/aspnet:10.0`, which is the base image Build.Images publishes
+      every platform host onto: /usr/share/doc holds 99 packaged components and 76 of them declare
+      GPL or LGPL in their Debian copyright file — coreutils is `License: GPL-3+`. So a scan over
+      image CONTENTS that failed on anything outside `BundleLicenceAllowList` would fail on our own
+      runtime image before it reached a single bundle component.
+      ⚠ THE FAULT IS ONE LIST BEING ASKED TWO QUESTIONS, NOT THE LIST AND NOT THE ADR. The list
+      answers "may this platform OFFER this as a managed service", which is what SSPL and BUSL exist
+      to prevent. A scan over layers answers "what is linked into this artefact", where GPL and LGPL
+      are the ordinary state of every Linux base image and imply nothing about offering anything.
+      That is the same confusion `the-replicated-stage-is-not-installed` records from the other end,
+      and it is ISSUE #18's decision — deliberately not taken here, because widening the existing
+      list to make the target implementable would answer #18 by making the list stop answering its
+      own question. build/Build.Licence.cs now carries the measurement and stays unimplemented on
+      purpose.
   - id: images-are-not-pinned-by-digest
     says: >
-      Every component but redis-operator installs at its upstream's own default image, which is a tag
-      rather than a digest. A tag is mutable and an air-gapped mirror is a values override this
-      directory does not model. Closing it is a digest per image per component and a mirror map,
-      which is the same shape charts/managed/harbor's `imageRegistry` escape hatch takes for a single
-      service.
+      ⚠ THE FIRST SENTENCE OF THIS ROW WAS WRONG AND IS CORRECTED RATHER THAN QUIETLY EDITED. It read
+      "Every component but redis-operator installs at its upstream's own default image, which is a
+      tag rather than a digest", which reads as though redis-operator were the one component pinned
+      by digest. It was not. It passed `--set image.tag=v1.3.0-rc1` — a TAG — and recorded an
+      `imageDigest:` beside it whose own comment claimed `install.sh --verify` compared it. NOTHING
+      READ THAT KEY: `verify_component` reads install, repo, chart, version, archive, manifest and
+      manifestExtra and has never read a digest. So the true count of images pinned or checked by
+      digest was ZERO, of nineteen components.
+      ✅ WHAT LANDED ON 2026-09-03 IS THE RECORD AND THE CHECK, WHICH IS THE HALF THAT IS OURS TO
+      BUILD. Every component now carries an `images:` block naming every container image its pinned
+      artefact renders, each with the digest its registry served — THIRTY-TWO images across
+      eighteen components, prometheus-operator-crds declaring in prose that it renders none.
+      charts/bundle/images.sh re-renders each component (applying the same `values:` overrides
+      install.sh does, without which redis-operator resolves the chart's broken default), extracts
+      the images, resolves each tag through the OCI distribution API with curl alone, and compares.
+      Sabotage-verified both ways: a moved digest and a recorded image nothing renders each turn it
+      red, with different messages. The Bundle gate keeps the record readable — shape, no duplicates,
+      and the prose escape — and deliberately resolves nothing, because a gate that makes thirty
+      registry calls goes red when a network is slow.
+      ⚠ WHAT IS STILL OWED, AND IT IS NOT THE SAME ITEM ANY MORE. (1) The record is a RECORD, not a
+      pin: the tag is still what reaches the kubelet, so this detects a moved tag rather than
+      preventing one. Preventing it means a values override per chart, and several charts have no
+      digest key at all — redis-operator's component.yaml documents that case firsthand. (2) A
+      MIRROR MAP, still unmodelled, the same shape charts/managed/harbor's `imageRegistry` escape
+      hatch takes for a single service. (3) The `manifest:` components under-report: kubevirt and
+      containerized-data-importer record their OPERATOR image, and the operator then pulls
+      virt-api, virt-controller, virt-handler and virt-launcher by names that appear nowhere in the
+      applied document. (4) Nothing runs images.sh on a schedule, so a tag that moves is caught when
+      somebody asks.
+  - id: two-images-in-this-bundle-are-latest
+    says: >
+      ⚠ FOUND BY THE FIRST RUN OF images.sh ON 2026-09-03, AND IT IS A DIFFERENT PROBLEM FROM
+      `images-are-not-pinned-by-digest` RATHER THAN AN INSTANCE OF IT. A tag that names a version is
+      a weak pin; a tag that names no version is not a pin at all.
+      charts/bundle/clickhouse-operator renders `bitnami/kubectl:latest`, and charts/bundle/kamaji
+      renders `cfssl/cfssl:latest`. Both resolve today and both are recorded with the digest they
+      resolved to, so images.sh will go red the next time either moves — which for `latest` is a
+      question of when. ⚠ `bitnami/kubectl` is the sharper of the two, and the reading is firsthand
+      rather than remembered: on 2026-09-03 `bitnami/kubectl:latest` resolves, a VERSIONED tag on the
+      same repository (`bitnami/kubectl:1.34.1`) answers 404, and `bitnamilegacy/kubectl:latest`
+      resolves. So the versioned catalogue has moved namespace and what this component depends on is
+      the one tag left behind in the old one — a `latest` with nothing beside it to fall back to.
+      ⚠ A THIRD SIGHTING IS DELIBERATELY NOT COUNTED HERE, AND CHECKING IT IS THE POINT. The Kamaji
+      control-plane provider's CRD carries `registry.k8s.io/kas-network-proxy/proxy-agent` and
+      `-server` with NO TAG — which means `latest` — as `default:` values inside the KamajiControlPlane
+      OpenAPI schema. images.sh drops CustomResourceDefinition documents and so does not report them,
+      because they are not images this bundle pulls: nothing runs until a tenant creates a control
+      plane that asks for konnectivity. It is a real hazard for charts/managed/kubernetes and it
+      belongs to that chart's conformance.yaml, not to this row. Counting it would have made the
+      bundle's own install look worse than it is, which is the mirror of the failure this repository
+      keeps finding.
+      Closing all of it is upstream's `values:` in two cases and a decision in the third; nothing is
+      overridden here, because an override that pins somebody else's helper image to a digest we
+      chose is a fork of their chart with no note saying so.
+      ⚠ TWO ETCD VERSIONS IN ONE CHART, RECORDED WHILE HERE: charts/bundle/kamaji renders
+      `quay.io/coreos/etcd:v3.5.1` AND `v3.5.6`. Both are pulled by the same install. Whether that is
+      deliberate on Kamaji's part is unread.

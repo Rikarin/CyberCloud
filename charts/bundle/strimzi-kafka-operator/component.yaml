@@ -40,6 +40,16 @@ serves:
 requiredBy:
   - charts/managed/kafka
 
+# Every container image this component's pinned artefact renders, with the digest its registry served
+# on 2026-09-03. Regenerate with `./charts/bundle/images.sh --resolve`; check with `images.sh`.
+#
+# ⚠ THIS IS A RECORD, NOT A PIN, AND THE DIFFERENCE IS WORTH BEING EXACT ABOUT. The tag is what the
+# chart passes to the kubelet; the digest beside it is what that tag resolved to when somebody looked.
+# A tag is mutable, so an upstream rebuild moves these bytes without moving any version in this
+# directory — and `images.sh` is what turns that from invisible into a red run.
+images:
+  - quay.io/strimzi/operator:0.51.0@sha256:ef3e406aa09449dd0241d53cdc81e15e58bf59b51f2425fb64384a179d676b1d
+
 notes: >
   0.51.0 also serves `kafka.strimzi.io/v1` and `core.strimzi.io` (StrimziPodSet, an internal kind).
   Only the version this platform renders is claimed, because a `serves:` line is what the coverage
