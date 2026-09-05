@@ -14,6 +14,20 @@
 #
 # cluster-api-provider-kubevirt's document carries cert-manager annotations too. The Kamaji CONTROL
 # PLANE PROVIDER's does not — it was checked separately rather than assumed from its sibling.
+#
+# ⚠ ALL OF THAT WAS READ OFF DOCUMENTS AND ON 2026-09-05 IT WAS READ OFF AN API SERVER INSTEAD, WHICH
+# CONFIRMED IT AND ADDED A FOURTH DEPENDANT IN A PHASE THE HEADING ABOVE DOES NOT MENTION. Applying
+# all six `manifest:` components to one k3s and listing what they created: eleven cert-manager objects
+# exist afterwards, and FIVE Deployments mount a Secret only a `Certificate` produces —
+# capi-system/capi-controller-manager, capi-kubeadm-bootstrap-system/…-controller-manager and
+# capi-kubeadm-control-plane-system/…-controller-manager (charts/bundle/cluster-api, which is the
+# "three webhook Deployments" above, now counted rather than read), capk-system/capk-controller-manager,
+# and rabbitmq-system/rabbitmq-cluster-operator — WHICH IS PHASE 50 AND WAS NOT ON THIS LIST.
+# kamaji-control-plane-provider creates none, exactly as the paragraph above says it would.
+# The rabbitmq row was also run WITHOUT cert-manager: `kubectl apply` places thirteen of that
+# document's sixteen objects, refuses the three cert-manager ones with "ensure CRDs are installed
+# first", and install.sh exits 1. So that dependency fails loudly rather than silently, which is not
+# true of the Cluster API ones — theirs is a Deployment whose pod never starts.
 
 component: cert-manager
 phase: 15
@@ -34,6 +48,10 @@ requiredBy:
   - charts/bundle/cluster-api
   - charts/bundle/cluster-api-provider-kubevirt
   - charts/bundle/kamaji
+  # ⚠ The fourth, added 2026-09-05 after the install above rather than after a reading. It is also
+  # the first entry here that is not in phase 40, which is why the header's "two phase-40 rows" no
+  # longer describes this list.
+  - charts/bundle/rabbitmq-cluster-operator
 
 # ⚠ THE CHART DOES NOT INSTALL ITS OWN DEFINITIONS UNLESS ASKED. values.yaml ships `crds.enabled:
 # false`, so `helm install cert-manager jetstack/cert-manager` with default values produces a
@@ -71,7 +89,11 @@ notes: >
   needs the CNI. Phase 15 rather than 40: cert-manager's own webhook has to be Ready before anything
   in phase 40 creates a Certificate, and `helm install --wait` is the barrier that makes "installed"
   mean "serving".
-  ⚠ THIS IS THE ONE COMPONENT IN THE BUNDLE THAT HAS BEEN INSTALLED ONTO A CLUSTER BY A TEST.
+  ⚠ THIS WAS "THE ONE COMPONENT IN THE BUNDLE THAT HAS BEEN INSTALLED ONTO A CLUSTER BY A TEST" AND
+  IT IS NOW ONE OF THREE — openebs-localpv and cloudnative-pg are the others, and
+  bundle.yaml § owed, `most-of-the-roster-has-never-been-installed`, is the row that keeps that count
+  rather than this file. Corrected 2026-09-05 while #74 was being read; the sentence had been false
+  since 2026-09-03.
   test/CyberCloud.Bundle.Cluster.Conformance runs `install.sh --phase 15` against a fresh k3s and
   asserts that `cert-manager.io/v1` is served afterwards and that a self-signed Certificate reaches
   Ready with a parseable certificate in the Secret it names. The namespace that produces is

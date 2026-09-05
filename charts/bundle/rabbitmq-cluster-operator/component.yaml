@@ -22,6 +22,20 @@ serves:
 requiredBy:
   - charts/managed/rabbitmq
 
+# ⚠ AND THIS COMPONENT REQUIRES ONE ITSELF, WHICH WAS RECORDED NOWHERE UNTIL #74 AND WAS FOUND BY
+# INSTALLING IT RATHER THAN BY READING IT. `cluster-operator.yml` v2.22.4 carries two
+# `cert-manager.io/v1` Certificates and one Issuer, and the operator Deployment mounts
+# `cluster-operator-webhook-server-cert` — the Secret the first of those Certificates produces. So
+# this PHASE 50 row depends on charts/bundle/cert-manager in phase 15, and cert-manager's own header
+# described that dependency as belonging to phase 40 alone. The dependency is now written down in the
+# one place something already looks, cert-manager/component.yaml § requiredBy, rather than as a new
+# key here that nothing would read — which is the defect bundle.yaml § owed,
+# `images-are-not-pinned-by-digest`, records about `imageDigest:`.
+# ⚠ MEASURED 2026-09-05, by applying this component to a k3s with no cert-manager: `kubectl apply`
+# places THIRTEEN of the document's SIXTEEN objects, refuses the THREE with "ensure CRDs are
+# installed first", and install.sh exits 1. The roster already orders 15 before 50, so nothing is
+# broken today; what was missing is the record, and the record is what stops somebody moving this row.
+
 # Every container image this component's pinned artefact renders, with the digest its registry served
 # on 2026-09-03. Regenerate with `./charts/bundle/images.sh --resolve`; check with `images.sh`.
 #
@@ -42,3 +56,17 @@ notes: >
   ⚠ The Messaging provider's own remarks record the failure mode of installing nothing here:
   RabbitmqClusterReconciler notes that "with no operator installed, the object never goes away at all
   and the resource" never converges on delete. That sentence is about this component.
+  ⚠ THIS IS THE `manifest:` COMPONENT #74 NAMED AS THE CHEAP ONE TO RUN, AND ON 2026-09-05 IT WAS RUN.
+  `install.sh --component rabbitmq-cluster-operator` against a `rancher/k3s:v1.35.7-k3s1` API server
+  (started `--disable-agent`; the host's Docker is cgroup v1 and 1.35's kubelet refuses to start on
+  one) exits 0 with cert-manager's definitions present, creating namespace `rabbitmq-system`,
+  definition `rabbitmqclusters.rabbitmq.com` — Established, asserted off the API server — and
+  Deployment `rabbitmq-system/rabbitmq-cluster-operator`. ⚠ NOTE THE NAMESPACE. install.sh's
+  `<component>-system` rule would have said `rabbitmq-cluster-operator-system`, that namespace does
+  not exist on the cluster afterwards, and the `manifest` branch never uses the rule — so a phase
+  barrier written from the component's name would have waited on nothing. bundle.yaml § owed,
+  `the-manifest-path-waits-for-nothing`, has the same reading for all six and the eight Deployments
+  they actually create.
+  ⚠ AND THE OPERATOR HAS STILL NEVER STARTED. With no kubelet the Deployment reports
+  `Available=False (MinimumReplicasUnavailable)`, which is the expected state of that fixture and not
+  a finding about this component. Nothing here has read a RabbitmqCluster.

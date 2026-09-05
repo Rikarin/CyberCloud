@@ -18,13 +18,21 @@ namespace CyberCloud.Bundle.Cluster.Conformance;
 ///         <c>component.yaml</c> reader exactly as unexercised as they were.
 ///     </para>
 ///     <para>
-///         ⚠ <b><c>--phase 15</c>, and that narrows what the run proves.</b> The script's own usage
-///         text says <c>--phase</c> <i>"skips that guarantee and is for repairing one row, not for
-///         installing"</i> — the guarantee being the phase barrier. So this exercises the installer's
-///         per-component path and NOT its ordering: a defect in the barrier between phases would not
-///         be caught here. Installing every phase would mean nineteen operators and three virtual
-///         machines in a lane narrower than one suite, which is the reason the bundle had no
-///         cluster-backed proof at all.
+///         ⚠ <b><c>--phase 15</c>, and that narrows what the run proves.</b> A selector narrows a
+///         run to what it selects, so this exercises the installer's per-component path and NOT its
+///         ordering: a defect in the barrier between phases would not be caught here. Installing
+///         every phase would mean nineteen operators and three virtual machines in a lane narrower
+///         than one suite, which is the reason the bundle had no cluster-backed proof at all.
+///     </para>
+///     <para>
+///         ⚠ <b>That paragraph used to quote the script's usage text — <i>"skips that guarantee and
+///         is for repairing one row, not for installing"</i> — and the quotation had been stale since
+///         2026-09-03</b>, when <c>--component</c> landed and that sentence was rewritten around it.
+///         #74 rewrote the same text again on 2026-09-05, so the quotation is not re-quoted: it is
+///         removed. What this paragraph needs is a property of the script's BEHAVIOUR — a selector
+///         narrows a run — and quoting prose to establish behaviour is how a citation goes stale
+///         without anything going red. <c>charts/bundle/bundle.yaml</c> § owed,
+///         <c>a-selector-that-matched-nothing-reported-success</c>, keeps the usage text's history.
 ///     </para>
 ///     <para>
 ///         ⚠ <b>That sentence read "in a Testcontainers lane Task #95 capped at four concurrent
@@ -58,6 +66,31 @@ public static class BundleInstaller {
     ///     ⚠ Longer than <c>install.sh</c>'s own <c>--timeout 10m</c> on the helm call, so a helm
     ///     timeout surfaces as helm's message rather than as this harness killing the process. A
     ///     harness that times out first turns every slow install into the same uninformative failure.
+    ///     ⚠ <b>#74 added a SECOND timeout inside the script and this number was left to be
+    ///     reconsidered on 2026-09-05, which is recorded here rather than acted on.</b> The
+    ///     <c>manifest:</c> branch now runs
+    ///     <c>kubectl wait --for=condition=Established --timeout=5m crd --all</c> after EVERY
+    ///     manifest apply — six of the nineteen rows, up from the two that declare a
+    ///     <c>manifestExtra</c> — so the worst case of a run is no longer bounded by helm's 10 m
+    ///     alone but by <c>10 m × (helm rows selected) + 5 m × (manifest rows selected)</c>.
+    ///     ⚠ <b>Twelve minutes still bounds every run this assembly makes, and that is COUNTED
+    ///     rather than assumed.</b> Three call sites run the installer for real rather than
+    ///     <c>--dry-run</c>: <c>--phase 15</c> (cert-manager), <c>--phase 25</c> (openebs-localpv)
+    ///     and one <c>--component</c> pair (openebs-localpv, cloudnative-pg). The THREE distinct
+    ///     components between them — cert-manager, openebs-localpv, cloudnative-pg — all declare
+    ///     <c>install: helm</c> in their component.yaml, so ZERO of the three runs reaches the manifest
+    ///     branch and no run under test can pay the establishment wait at all — which is the same
+    ///     fact <see cref="CloudNativePgOnAnEmptyCluster" /> states as a gap. Raising this number now
+    ///     would buy slack no test can spend and would hide a slow helm install, which is the defect
+    ///     the paragraph above exists to prevent.
+    ///     ⚠ <b>What must move it, so the next person does not discover it as a harness timeout.</b>
+    ///     The first test that installs a <c>manifest:</c> component — the row
+    ///     <c>charts/bundle/README.md</c> already names as next — makes this bound wrong for any
+    ///     selection wider than one component: a <c>--phase 40</c> run is three manifest rows and one
+    ///     helm row, so 3 × 5 m + 10 m = 25 m, and a full install is 30 m of establishment waits
+    ///     alone. <c>charts/bundle/bundle.yaml</c> § owed,
+    ///     <c>the-manifest-path-waits-for-nothing</c>, carries why that wait is cluster-wide and what
+    ///     it costs.
     /// </remarks>
     public static readonly TimeSpan Budget = TimeSpan.FromMinutes(12);
 
