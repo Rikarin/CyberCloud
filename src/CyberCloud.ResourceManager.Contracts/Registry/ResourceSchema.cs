@@ -1208,6 +1208,30 @@ public sealed record ResourceSchema {
     ///         reason (#76's review). Anything else that comes to validate a literal at declaration
     ///         time owes the same care.
     ///     </para>
+    ///     <para>
+    ///         ⚠ <b>And one other thing already did, through a door <c>Incoherences</c> does not
+    ///         cover.</b> <c>ChartAnnotationEmitter.CheckAgainstOwnConstraints</c> checks a chart key's
+    ///         declared <c>DefaultJson</c> the same way, in an emitter that never calls
+    ///         <c>Incoherences</c> — so it reached this method with an unrunnable pattern and threw out
+    ///         of a method whose contract is to return problems (#78). It now runs its own compile
+    ///         probe, <c>ChartAnnotationEmitter.CheckPatternRuns</c>, and clears
+    ///         <see cref="SchemaProperty.Pattern" /> the same way.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>So the doors are enumerated rather than assumed, because a per-site fix that leaves
+    ///         the next one open is how this hole was reopened once already.</b> Counted 2026-09-05
+    ///         with <c>grep -rn "ValueProblems(" --include=*.cs .</c> from the repository root — the
+    ///         trailing parenthesis is what keeps prose like this paragraph out of the count — which
+    ///         reports SEVEN occurrences: two declarations (this method and the private forwarder on
+    ///         <see cref="SchemaProperty" />), the forwarder's own body, this method's array recursion,
+    ///         and THREE real callers. Those three are <c>SchemaProperty.CheckLiteral</c> (reached from
+    ///         <see cref="SchemaProperty.Incoherences" />, guarded there), <see cref="Validate" />
+    ///         (the request path, deliberately unguarded for the reason the paragraph above gives), and
+    ///         <c>ChartAnnotationEmitter.CheckAgainstOwnConstraints</c> (guarded as of #78). ⚠ <b>What
+    ///         would make this stale:</b> a fourth caller. If it judges a provider-declared literal
+    ///         before <see cref="Of" /> has run, it owes the same probe-and-clear; if it is a request
+    ///         path, it owes nothing and the throw is the point.
+    ///     </para>
     /// </remarks>
     static string? PatternProblem(string pattern, string value) =>
         SchemaProperty.Matcher(pattern).IsMatch(value)

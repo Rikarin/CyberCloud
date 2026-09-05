@@ -439,6 +439,11 @@ public static class ChartAnnotationEmitter {
         CheckInexpressible(property, problems);
         CheckUnspellable(property, problems);
 
+        // ⚠ Outside CheckUnspellable, because its answer is needed BELOW as well as reported: Literal
+        // checks a declared DefaultJson by running it through the ordinary request-path validation,
+        // which builds the same matcher a second time somewhere nothing catches. See CheckPatternRuns.
+        var patternRuns = CheckPatternRuns(property, problems);
+
         var type = property.Kind is SchemaKind.Unknown
             ? string.Empty
             : SchemaVocabulary.JsonTypeOf(property.Kind);
@@ -469,7 +474,7 @@ public static class ChartAnnotationEmitter {
             );
         }
 
-        var literal = Literal(node, problems);
+        var literal = Literal(node, patternRuns, problems);
 
         if (problems.Count > before) {
             // Nothing is appended for a property that could not be described. Emit returns "" whenever
@@ -699,6 +704,12 @@ public static class ChartAnnotationEmitter {
     ///         takes the whole rest of the line verbatim; and only <c>@enum</c> splits on <c>|</c>.
     ///         Refusing them would be a vocabulary that cannot spell the first pattern anybody wrote.
     ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Nothing here compiles anything, and that was once the whole of this emitter's
+    ///         opinion about a pattern.</b> Whether the expression can be RUN is
+    ///         <see cref="CheckPatternRuns" />, which is a separate question with a separate answer and
+    ///         a return value the literal check needs (#78).
+    ///     </para>
     /// </remarks>
     static void CheckPatternIsSpellable(SchemaProperty property, List<string> problems) {
         if (property.Pattern.Length == 0) {
@@ -730,6 +741,109 @@ public static class ChartAnnotationEmitter {
             );
 
             return;
+        }
+    }
+
+    /// <summary>
+    ///     Whether the engine that runs a <see cref="SchemaProperty.Pattern" /> can actually run this
+    ///     one — the compile probe <see cref="SchemaProperty.Incoherences" /> does at declaration time,
+    ///     done again here because nothing on this path calls it (#78).
+    /// </summary>
+    /// <param name="property">The declaring property.</param>
+    /// <param name="problems">The collector.</param>
+    /// <returns>
+    ///     <see langword="true" /> when the pattern is empty or builds, <see langword="false" /> when it
+    ///     was reported here — in which case the caller must not let anything build it a second time.
+    /// </returns>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>This is <see cref="CheckPatternIsSpellable" />'s other half, and it is about the
+    ///         expression rather than the transport.</b> That method asks whether the pattern survives
+    ///         the trip through a <c>## @pattern</c> line; this one asks whether the pattern runs at
+    ///         all. Both are refusals a chart block owes: <c>build/Build.Charts.cs</c> compiles the
+    ///         argument it reads back with <c>RegexOptions.NonBacktracking</c> and the same anchoring,
+    ///         explicitly so that this file cannot approve a <c>@pattern</c> the runtime validator
+    ///         would refuse to run — so emitting one produces a gate failure against a file this
+    ///         emitter had just written, which is the failure every case in
+    ///         <see cref="CheckUnspellable" /> exists to prevent.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The return value is the load-bearing part, and it is why this is not simply a
+    ///         seventh case inside <see cref="CheckUnspellable" />.</b> #76 made
+    ///         <see cref="SchemaProperty.Matcher" /> <c>RegexOptions.NonBacktracking</c> with no match
+    ///         timeout, so a lookaround, a backreference or an atomic group is refused when the matcher
+    ///         is BUILT. <see cref="CheckAgainstOwnConstraints" /> then checks a declared
+    ///         <see cref="SchemaProperty.DefaultJson" /> by running it through
+    ///         <c>ResourceSchema.ValueProblems</c> — the ordinary request-path validation, which
+    ///         reaches <c>ResourceSchema.PatternProblem</c> and builds the very same matcher a second
+    ///         time, in a method that catches nothing on purpose. So without the flag, a property
+    ///         declaring both an unrunnable pattern and a default threw a bare
+    ///         <see cref="NotSupportedException" /> out of <see cref="Emit" />: it named neither the
+    ///         pointer nor the rule, and it took every other problem collected for that schema with it.
+    ///         That is exactly the escape #76's review closed one door over, inside
+    ///         <see cref="SchemaProperty.Incoherences" />, and pattern-plus-default is the NORMAL
+    ///         combination here — <c>Cidr.OptionalV4Pattern</c> and <c>PortRange.OptionalListPattern</c>
+    ///         exist so that an optional patterned property can default to <c>""</c>.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Why this emitter needs its own probe when <c>OpenApiEmitter</c> did not.</b>
+    ///         <c>OpenApiEmitter</c> re-runs <see cref="SchemaProperty.Incoherences" /> over every
+    ///         property before it writes anything, so #76's guard covers it for free. This emitter
+    ///         deliberately does not: its refusals are about what the chart vocabulary can carry, and a
+    ///         registry may legitimately hold a coherent declaration no <c>@</c> directive can spell
+    ///         (see the note on <c>@secret</c> in <see cref="CheckUnspellable" />).
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>And the doors were enumerated rather than guessed at, because a per-site fix that
+    ///         leaves the next one open is the defect class this tree keeps finding.</b> Counted
+    ///         2026-09-05 with <c>grep -rn "ValueProblems(" --include=*.cs .</c> from the repository
+    ///         root — the trailing parenthesis keeps prose like this paragraph out of the count — which
+    ///         reports seven occurrences and exactly THREE real callers:
+    ///         <c>SchemaProperty.CheckLiteral</c> (reached from
+    ///         <see cref="SchemaProperty.Incoherences" />, guarded there since #76's review),
+    ///         <c>ResourceSchema.Validate</c>, and <see cref="CheckAgainstOwnConstraints" /> below.
+    ///         <c>Validate</c> is the request path and is deliberately unguarded: by the time a body
+    ///         reaches it the schema has been through <c>ResourceSchema.Of</c>, so an unrunnable
+    ///         pattern there is a bug in this tree and throws rather than becoming a <c>400</c> aimed
+    ///         at a caller who did nothing wrong — <c>ResourceSchema.PatternProblem</c>'s remarks are
+    ///         where that argument lives, and where the same enumeration is written down. ⚠ <b>What
+    ///         would make this stale:</b> a fourth caller. One that judges a provider-declared literal
+    ///         before <c>Of</c> has run owes this same probe-and-clear.
+    ///     </para>
+    /// </remarks>
+    static bool CheckPatternRuns(SchemaProperty property, List<string> problems) {
+        if (property.Pattern.Length == 0) {
+            return true;
+        }
+
+        // ⚠ The probe builds the SAME matcher the request path runs — anchored, non-backtracking —
+        // rather than compiling the bare expression, because those are different expressions and only
+        // one of them is what a value is ever tested against. SchemaProperty.Matcher keeps it, and
+        // ConcurrentDictionary.GetOrAdd does not remember a factory that threw, so the refusal below
+        // comes back on every call rather than once.
+        try {
+            _ = SchemaProperty.Matcher(property.Pattern);
+
+            return true;
+        } catch (ArgumentException malformed) {
+            problems.Add(
+                $"'{property.JsonPointer}' declares the Pattern '{property.Pattern}', which does not "
+                + $"compile: {malformed.Message} `@pattern` would carry it into values.schema.json, and "
+                + "build/Build.Charts.cs compiles what it reads back."
+            );
+
+            return false;
+        } catch (NotSupportedException unsupported) {
+            problems.Add(
+                $"'{property.JsonPointer}' declares the Pattern '{property.Pattern}', which the "
+                + $"non-backtracking engine refuses: {unsupported.Message} A schema pattern runs against "
+                + "a caller-supplied string, so it must be linear in the input — lookarounds, "
+                + "backreferences and atomic groups are not expressible here, and build/Build.Charts.cs "
+                + "compiles a `@pattern` with the same engine, so emitting this one would fail the "
+                + "chart gate against a file this emitter had just written."
+            );
+
+            return false;
         }
     }
 
@@ -823,6 +937,13 @@ public static class ChartAnnotationEmitter {
     /// <summary>
     ///     The YAML scalar written on the key's own line.
     /// </summary>
+    /// <param name="node">The key being written.</param>
+    /// <param name="patternRuns">
+    ///     What <see cref="CheckPatternRuns" /> found, carried down to
+    ///     <see cref="CheckAgainstOwnConstraints" /> — a declared literal is checked by the ordinary
+    ///     request-path validation, and that path builds the property's matcher.
+    /// </param>
+    /// <param name="problems">The collector.</param>
     /// <remarks>
     ///     ⚠ <b>The default is the value, and there is no <c>@default</c> directive</b> — that is
     ///     charts/README.md § The annotation format's rule and it makes
@@ -834,7 +955,7 @@ public static class ChartAnnotationEmitter {
     ///     problem rather than an invented <c>0</c> or <c>false</c>. An invented default is a value a
     ///     tenant gets without anybody having chosen it.
     /// </remarks>
-    static string Literal(Node node, List<string> problems) {
+    static string Literal(Node node, bool patternRuns, List<string> problems) {
         var property = node.Property;
 
         if (property.Kind is SchemaKind.Nested) {
@@ -872,7 +993,7 @@ public static class ChartAnnotationEmitter {
         }
 
         var literal = Scalar(parsed, property, problems);
-        CheckAgainstOwnConstraints(property, parsed, problems);
+        CheckAgainstOwnConstraints(property, parsed, patternRuns, problems);
 
         return literal;
     }
@@ -968,12 +1089,46 @@ public static class ChartAnnotationEmitter {
     ///     to fix the wrong end. <see cref="SchemaProperty.Incoherences" /> already refuses most of
     ///     these at construction; this is the belt for a schema that reached here another way.
     /// </summary>
+    /// <param name="property">The declaring property.</param>
+    /// <param name="value">Its parsed <see cref="SchemaProperty.DefaultJson" />.</param>
+    /// <param name="patternRuns">
+    ///     Whether <see cref="CheckPatternRuns" /> found the pattern buildable. When it did not, the
+    ///     literal is judged by a copy with <see cref="SchemaProperty.Pattern" /> cleared — see the
+    ///     remarks.
+    /// </param>
+    /// <param name="problems">The collector.</param>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b><c>ResourceSchema.ValueProblems</c> is the request path, and it builds this
+    ///         property's matcher.</b> A pattern the linear engine refuses has already been reported by
+    ///         <see cref="CheckPatternRuns" />, and building it again here would throw out of
+    ///         <c>ResourceSchema.PatternProblem</c>, which catches nothing by design: reaching that
+    ///         method with a pattern that cannot run is a bug in this tree, so it raises rather than
+    ///         turning into a <c>400</c> aimed at a caller. Out of THIS method the raise is the wrong
+    ///         answer twice over — <see cref="Emit" /> returns problems rather than throwing, and the
+    ///         bare <see cref="NotSupportedException" /> named neither the pointer nor the rule and
+    ///         discarded every other problem the block had collected (#78, the same shape #76's review
+    ///         closed inside <see cref="SchemaProperty.Incoherences" />).
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The literal is still checked on everything else — kind, bounds, length, the closed
+    ///         set — because dropping it would hide a second, independent declaration bug behind the
+    ///         first.</b> The whole point of collecting into <paramref name="problems" /> rather than
+    ///         failing on the first entry is that an author gets the entire list from one
+    ///         <c>./build.sh Charts</c>. ⚠ And the clearing reaches an array's elements for free:
+    ///         <c>ValueProblems</c> recurses with <c>property with { Kind = ElementKind, … }</c>, so an
+    ///         element carries the empty <see cref="SchemaProperty.Pattern" /> it was handed.
+    ///     </para>
+    /// </remarks>
     static void CheckAgainstOwnConstraints(
         SchemaProperty property,
         JsonElement value,
+        bool patternRuns,
         List<string> problems
     ) {
-        foreach (var problem in ResourceSchema.ValueProblems(property, value, property.JsonPointer)) {
+        var checkable = patternRuns ? property : property with { Pattern = "" };
+
+        foreach (var problem in ResourceSchema.ValueProblems(checkable, value, property.JsonPointer)) {
             problems.Add(
                 $"'{property.JsonPointer}' declares a DefaultJson its own constraints reject: "
                 + problem.Message
