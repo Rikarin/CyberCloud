@@ -39,17 +39,35 @@ namespace CyberCloud.AppHost.Tests;
 ///         about the one test in that assembly that never touches Docker.
 ///     </para>
 ///     <para>
+///         ⚠ <b>And that sentence was false for one day, which is issue #82.</b> The two tests that
+///         read <c>build/Build.Test.cs</c> arrived with a <c>static string BuildTestSource { get; } =
+///         File.ReadAllText(…)</c>, and a static property initialiser runs in the type's static
+///         constructor — triggered by first access to <em>any</em> static member of the type. So the
+///         claim above quietly became "answer on a machine with no Docker daemon <em>and</em> with the
+///         repository source tree beside the artifacts directory": a run from published or copied
+///         output failed all of these with one <c>TypeInitializationException</c>, and a
+///         published-artifacts run is exactly the degraded environment the daemonless ones exist to
+///         survive. The read is now a <see cref="Lazy{T}" /> dereferenced inside
+///         <see cref="SourceOf" />, so <b>four</b> of the six tests here need nothing but this
+///         assembly, and the two that need the source tree fail on their own with the path in the
+///         exception. <see cref="ReadingTheBuildSourceIsNotPartOfInitialisingThisClass" /> is what
+///         keeps it that way.
+///     </para>
+///     <para>
 ///         ⚠ <b>WHAT THIS CLASS COVERS, STATED EXACTLY, BECAUSE #77'S COMMIT MESSAGE CALLED IT "THE
 ///         REGRESSION TEST" AND THAT OVERSTATED IT.</b> The first three tests below assert facts
 ///         about <em>this</em> assembly against a copy of the build's globs, so on their own they
 ///         would all stay green if <c>StartsCluster</c> were deleted outright and
 ///         <c>StartsContainers</c> reverted to its bare <c>Testcontainers*.dll</c> glob — the exact
 ///         hole #77 measured, reopened, with a green suite over it. The review that found that is
-///         right, and the last two tests are the repair: they read <c>build/Build.Test.cs</c> itself
-///         and fail if the globs the build runs are no longer the globs this file copies, or if
-///         <c>StartsContainers</c> stops delegating to <c>StartsCluster</c>. There is no test
-///         project under <c>build/</c> to put them in, and a suite that is <i>itself</i> the subject
-///         of the classification is the honest second-best place for them.
+///         right, and the two below the line that says so are the repair: they read
+///         <c>build/Build.Test.cs</c> itself and fail if the globs the build runs are no longer the
+///         globs this file copies, or if <c>StartsContainers</c> stops delegating to
+///         <c>StartsCluster</c>. There is no test project under <c>build/</c> to put them in, and a
+///         suite that is <i>itself</i> the subject of the classification is the honest second-best
+///         place for them. The sixth,
+///         <see cref="ReadingTheBuildSourceIsNotPartOfInitialisingThisClass" />, covers the cost that
+///         reading a source file from here turned out to have — issue #82, two paragraphs up.
 ///     </para>
 ///     <para>
 ///         ⚠ <b>What they still do not cover</b> is the semaphore, the ordering and the degrees —
@@ -156,9 +174,46 @@ public sealed partial class ClusterBackedGatingTests {
     // one more place for the same drift. Both tests fail with the edit a reader has to make, which
     // is the property that matters: this is the file the person renaming a package will not think of.
 
-    /// <summary>The build file both globs are actually spelled in.</summary>
-    static string BuildTestSource { get; } =
-        File.ReadAllText(Path.Combine(TestPaths.Repository, "build", "Build.Test.cs"));
+    /// <summary>
+    ///     The build file both globs are actually spelled in, read on first use and never before.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>A <see cref="Lazy{T}" /> and not a property initialiser, and issue #82 is the whole of
+    ///     the reason.</b> This read
+    ///     <c>static string BuildTestSource { get; } = File.ReadAllText(…)</c>, which runs in the
+    ///     static constructor along with <see cref="ClusterEvidence" /> and
+    ///     <see cref="OutputDirectory" />, so <see cref="TestPaths" />'s walk for
+    ///     <c>CyberCloud.slnx</c> and this <c>ReadAllText</c> both became preconditions of touching the
+    ///     class at all. Constructing a <c>Lazy&lt;string&gt;</c> touches no disk; the repository is
+    ///     reached only from <see cref="SourceOf" />, which only the two source-reading tests call.
+    ///     ⚠ Not <c>=> File.ReadAllText(…)</c> on every access either: <see cref="SourceOf" /> reads
+    ///     the property three times per call and is called twice, and six reads of the same file to
+    ///     avoid one <c>Lazy</c> is a worse trade in a suite whose whole complaint is I/O it did not
+    ///     need. <c>Lazy&lt;T&gt;</c>'s default mode also caches the exception, so a missing source
+    ///     tree gives both tests the same message rather than a different one each.
+    /// </remarks>
+    static readonly Lazy<string> LazyBuildTestSource =
+        new(() => File.ReadAllText(Path.Combine(TestPaths.Repository, "build", "Build.Test.cs")));
+
+    static string BuildTestSource => LazyBuildTestSource.Value;
+
+    /// <summary>
+    ///     Whether <see cref="LazyBuildTestSource" /> had already been forced by the time this type
+    ///     finished initialising.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Frozen in the static constructor rather than asked at test time, and that is the only
+    ///     way the question has a stable answer.</b> By the time any test in this class runs the type
+    ///     is initialised and one of the source-reading tests may already have forced the
+    ///     <c>Lazy</c>, so <c>IsValueCreated</c> read from a test body would answer "true" or "false"
+    ///     depending on execution order. The static constructor body runs after every static field
+    ///     initialiser in the type and before any test, so what it sees is exactly "did initialising
+    ///     this class read the repository", which is the property issue #82 is about.
+    /// </remarks>
+    static readonly bool SourceReadDuringTypeInitialisation;
+
+    static ClusterBackedGatingTests() =>
+        SourceReadDuringTypeInitialisation = LazyBuildTestSource.IsValueCreated;
 
     /// <summary>The source of one method of <see cref="BuildTestSource" />, by its signature.</summary>
     /// <remarks>
@@ -223,6 +278,49 @@ public sealed partial class ClusterBackedGatingTests {
             + "\"cluster-backed implies container-backed\" is back to holding only while two globs "
             + "happen to agree. This suite ships no Testcontainers assembly, so the container glob "
             + "alone calls it cheap: it is the one that stops being gated, which is exactly #77."
+        );
+    }
+
+    /// <summary>
+    ///     That the three tests above which need only this assembly still need only this assembly.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>It asserts a fact about the STATIC CONSTRUCTOR, because that is where issue #82
+    ///     lived and nothing else in this class can see it.</b> Reverting the fix — putting
+    ///     <c>File.ReadAllText</c> back in a static initialiser, or simply adding
+    ///     <c>_ = LazyBuildTestSource.Value;</c> to the static constructor — turns this red and leaves
+    ///     the other five green, which is the shape the defect had: every test passing on a machine
+    ///     that has the source tree, and every test failing at once on a machine that does not.
+    ///     ⚠ <b>Why not the direct test</b> — run the class with the repository absent and watch the
+    ///     other four still pass: <see cref="TestPaths" /> finds the root by walking up from the
+    ///     assembly's own location, so a test process cannot be handed a different answer without
+    ///     moving the assembly. This is the observable half of the same property, in-process and with
+    ///     no fixture.
+    ///     <para>
+    ///         ✔ <b>Verified by breaking it, on 2026-09-05</b>, filtered to this class alone so that
+    ///         nothing in the run starts a container — which is the state this class is supposed to
+    ///         answer in, and the rest of this suite cannot. Four runs of
+    ///         <c>--filter-class …ClusterBackedGatingTests</c>:
+    ///         as committed, <b>6 passed</b>; with <c>_ = LazyBuildTestSource.Value;</c> added to the
+    ///         static constructor — the fix reverted in the smallest way that still compiles —
+    ///         <b>1 failed, 5 passed</b>, and the one was this test; with the <c>Lazy</c> pointed at a
+    ///         file that does not exist, standing in for the absent source tree, <b>2 failed,
+    ///         4 passed</b> — the two that read the source, which is the outcome issue #82 asked for;
+    ///         with both sabotages at once, the pre-#82 shape exactly, <b>6 failed, 0 passed</b> on one
+    ///         <c>TypeInitializationException</c>. All four probes reverted.
+    ///     </para>
+    /// </remarks>
+    [Fact]
+    public void ReadingTheBuildSourceIsNotPartOfInitialisingThisClass() {
+        SourceReadDuringTypeInitialisation.ShouldBeFalse(
+            "build/Build.Test.cs was read while this class was being initialised, so it is a "
+            + "precondition of touching ANY test here rather than of the two that read it. A machine "
+            + "with no repository source tree beside the artifacts directory — a published-artifacts "
+            + "or copied-output run — now fails all six of these with one "
+            + "TypeInitializationException, including the ones that assert facts about this assembly "
+            + "and nothing else. Those are what keeps --minimum-expected-tests 1 satisfiable when no "
+            + "Docker daemon is available, so coupling them to the source tree is issue #82 "
+            + "reopened. Read the file through SourceOf, not from a static initialiser."
         );
     }
 

@@ -101,8 +101,16 @@
           literal four, and since #77 the suites that hold a CLUSTER have a budget of their own at
           one — build/Build.Test.cs § ClusterBackedSuiteDegree, which finds them by what their output
           ships rather than by whether they took this lock. Two suites that hold a k3s never did take
-          it. The number is deliberately not repeated here: build/README.md § "The cluster degree is
-          1" is where it lives.
+          it.
+
+          ⚠ THIS PARAGRAPH ENDED "The number is deliberately not repeated here: build/README.md
+          § 'The cluster degree is 1' is where it lives" UNTIL ISSUE #81, having repeated it two
+          sentences earlier — and the section it cites carries the number in its own heading, so the
+          rule was unkeepable as written. Same defect, same day, as the sibling BundleInstaller.cs
+          paragraph #81 was filed about; found here by looking for the copy rather than by being told
+          about it, which is the lesson the "third copy nobody looked for" note above records. The
+          number stays: build/README.md § "The cluster degree is 1" is where it is ARGUED, and
+          build/Build.Test.cs § ClusterBackedSuiteDegree is the line that moves it.
 
           It does drag Orleans, PostgreSQL and Redis in as transitive package references. Nothing here
           binds to a type from any of them, and the alternative — copying an image tag and a lock-file

@@ -9,7 +9,7 @@ description: Restore the SDK from global.json, warm the NuGet cache, and prove t
 runs:
   using: composite
   steps:
-    # global-json-file rather than a literal version. global.json pins 10.0.100 with
+    # global-json-file rather than a literal version. global.json pins 10.0.300 with
     # rollForward: latestFeature, and repeating "10.0.x" here would be a second pin that nobody
     # updates when the first one moves.
     - name: Install the SDK from global.json
@@ -34,6 +34,28 @@ runs:
     # ⚠ Not a formality. `dotnet --version` run from the repository root fails outright when the
     # SDK on PATH cannot satisfy global.json, and it fails here — in a step named for the
     # toolchain — rather than forty lines into a restore, where the message is about a package.
+    #
+    # ⚠ AND WHAT IT ASSERTS IS NOW THE ROSLYN FLOOR, WHICH IS WHAT ISSUE #80 WAS ABOUT.
+    # CyberCloud.Analyzers is built against Microsoft.CodeAnalysis.CSharp 5.6.0
+    # (Directory.Packages.props § Roslyn), a compiler refuses to load an analyzer built against a
+    # newer Roslyn than itself, and 10.0.3xx is the lowest band on which Roslyn 5.6 is attested —
+    # Directory.Packages.props § Roslyn has the measurements. While global.json read
+    # `10.0.100` that floor was unwritten anywhere the toolchain reads: a runner image already
+    # carrying a 10.0.1xx SDK satisfies `10.0.100`, so the step above finds a match, installs
+    # nothing, and this step happily echoes an SDK that cannot build the tree. The failure then
+    # arrives forty lines into the compile as `CSC : error CS9057: Analyzer assembly … references
+    # version '5.6.0.0' of the compiler, which is newer than the currently running version
+    # '5.0.0.0'`, naming neither global.json nor the SDK. With the floor at `10.0.300` the same image
+    # no longer matches: the step above has to fetch a 10.0.3xx-or-later SDK or fail trying, and if
+    # PATH still resolves below the floor for any other reason this step fails with the resolver's
+    # own message — "Requested SDK version: 10.0.300 … global.json file: …".
+    #
+    # ⚠ There is deliberately no second literal version in this file to compare against. That would
+    # be a third copy of the floor (global.json, Directory.Packages.props § Roslyn, here) and the one
+    # nobody updates; the resolver comparing what is on PATH against global.json is the same check
+    # without a copy. Verified on 2026-09-05 locally rather than reasoned about: `dotnet --version`
+    # in a directory whose global.json names an uninstalled band exits 155 and prints both the
+    # requested version and the global.json path.
     - name: Prove the SDK satisfies global.json
       shell: bash
       run: |

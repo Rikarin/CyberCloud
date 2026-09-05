@@ -46,7 +46,7 @@ CyberCloud/
 │   └── survival/                 # symlink → ~/Projects/Survival/Server — the Orleans reference
 ├── Directory.Build.props / .targets
 ├── Directory.Packages.props      # CPM — every version pinned (02)
-├── global.json                   # SDK pin: 10.0.100
+├── global.json                   # SDK floor: 10.0.300 — the Roslyn 5.6 band (02)
 ├── CyberCloud.slnx
 ├── CyberCloud.Core.slnf          # filter: core + tenancy + authorization + kubernetes  (fast load)
 ├── CyberCloud.Providers.slnf
@@ -119,8 +119,11 @@ documented exception to [02 § Platform baseline](02-technology-decisions.md)'s 
 than drift. A Roslyn analyzer is loaded by the *compiler*, which may be running on .NET Framework
 (Visual Studio's design-time build) or on .NET (`dotnet build`); `netstandard2.0` is the only target
 both can load, and `Microsoft.CodeAnalysis.Analyzers`' `RS1041` enforces it. Re-checked against the
-SDK in use rather than assumed: `Microsoft.CodeAnalysis.CSharp` 5.6.0 — the version of the compiler
-SDK 10.0.302 ships — still publishes a `netstandard2.0` lib.
+pinned package rather than assumed, because that is what the analyzer is compiled against and it is
+the same on every machine: `Microsoft.CodeAnalysis.CSharp` 5.6.0 still publishes a `netstandard2.0`
+lib. ⚠ This read "the version of the compiler SDK 10.0.302 ships" until issue #80; which SDK
+`global.json` resolves to is a property of the machine reading it, and `10.0.300` is the floor it
+now states.
 
 ⚠ **Nothing *references* it in the ordinary sense.** The projects it polices name it with
 `OutputItemType="Analyzer" ReferenceOutputAssembly="false"`, so it never reaches their compile line,

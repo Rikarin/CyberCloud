@@ -8,10 +8,25 @@
       Program.cs, which starts the real Redis, PostgreSQL, NATS and k3s containers and launches the
       two silo processes. A test that rebuilt the topology in-process would be a test of the test.
   
-      ⚠ IT IS THEREFORE SLOW AND IT IS A PER-PR TEST ANYWAY. docs/plan/23 § CI shape budgets `Test`
-      at 3 minutes and this suite is a large fraction of it. The alternative — moving it to the
+      ⚠ IT IS THEREFORE SLOW AND IT IS A PER-PR TEST ANYWAY. The alternative — moving it to the
       nightly E2E suite — would mean the one criterion Phase 0 is defined by is not checked on the
       changes most likely to break it, which are changes to the AppHost and to CreateSilo.
+
+      ⚠ THAT SENTENCE OPENED WITH A CITATION TO A ROW THAT DOES NOT EXIST, UNTIL ISSUE #81: it read
+      "docs/plan/23 § CI shape budgets `Test` at 3 minutes and this suite is a large fraction of it".
+      Checked on 2026-09-05: § CI shape is a five-row table of WORKFLOWS and carries exactly one
+      number, `pr.yml` at `≤ 25 min` for the whole pipeline. It has no per-target row. The three
+      minutes exists a section earlier, in § Test layers, where it bounds the `Unit` LAYER — a
+      different thing from the `Test` target, which runs every per-PR suite including the grain and
+      reconciler layers that same table gives 12 and 15 minutes of their own.
+
+      What actually bounds this suite: `.github/workflows/gate.yml` § `test` sets
+      `timeout-minutes: 30`, which is a kill switch and not a budget, and
+      `.github/workflows/pr.yml` § "Enforce the 25-minute budget" fails the pipeline past
+      `BUDGET_MINUTES: 25` — six gate jobs in parallel, this suite inside one of them. The cost
+      argument above is unaffected; only the number attached to it was wrong, which is the failure
+      mode a citation to a section rather than to a line is supposed to make less likely and does
+      not.
     -->
 
     <ItemGroup>
