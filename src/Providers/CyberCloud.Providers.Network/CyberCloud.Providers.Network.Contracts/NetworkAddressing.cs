@@ -160,10 +160,11 @@ public readonly record struct Cidr {
     ///     ⚠ <b>Shape only, and deliberately looser than <see cref="TryParse" />.</b> It refuses
     ///     <c>hello</c>, <c>10.0.0.0</c> and <c>10.0.0.0/</c>; it accepts <c>999.1.1.1/8</c>, which
     ///     <see cref="TryParse" /> then refuses. The division of labour is on purpose: a
-    ///     <c>Pattern</c> runs on the request path against a caller-supplied string with a 100 ms
-    ///     budget, so it must be linear and boring, and every alternative to <c>\d{1,3}</c> that
-    ///     enforces 0–255 is a longer expression with more backtracking in it. The exact refusal comes
-    ///     from <see cref="TryParse" /> — see <see cref="NetworkAddressing.ProblemWith" />.
+    ///     <c>Pattern</c> runs on the request path against a caller-supplied string, under the
+    ///     non-backtracking engine <c>SchemaProperty.Matcher</c> builds, so it must be linear and
+    ///     boring — and every alternative to <c>\d{1,3}</c> that enforces 0–255 is a longer expression
+    ///     that buys nothing a parser does not already decide. The exact refusal comes from
+    ///     <see cref="TryParse" /> — see <see cref="NetworkAddressing.ProblemWith" />.
     /// </remarks>
     public const string V4Pattern = @"(\d{1,3}\.){3}\d{1,3}/\d{1,2}";
 
@@ -173,10 +174,10 @@ public readonly record struct Cidr {
     /// <remarks>
     ///     ⚠ <b>Deliberately permissive, and more so than the v4 one.</b> A complete IPv6 grammar in
     ///     one regular expression is long, unreadable and — with <c>::</c> compression and embedded
-    ///     v4 — a well-known source of catastrophic backtracking, which on the request path is a
-    ///     denial of service a tenant can trigger with one string
-    ///     (<c>SchemaProperty.PatternTimeout</c> exists because of that class of bug). So this
-    ///     admits the character set and the slash, and <see cref="TryParse" /> decides.
+    ///     v4 — a well-known source of catastrophic backtracking, which on a backtracking engine is a
+    ///     denial of service a tenant can trigger with one string (<c>SchemaProperty.Matcher</c> is
+    ///     non-backtracking because of that class of bug, and used to carry a match timeout for it).
+    ///     So this admits the character set and the slash, and <see cref="TryParse" /> decides.
     /// </remarks>
     public const string V6Pattern = "[0-9A-Fa-f:.]+/[0-9]{1,3}";
 

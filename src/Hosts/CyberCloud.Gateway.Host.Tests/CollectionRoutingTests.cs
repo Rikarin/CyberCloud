@@ -212,4 +212,90 @@ public sealed class CollectionRoutingTests {
         last.Body.ShouldNotContain("nextLink");
         last.Body.ShouldContain("\"value\"");
     }
+
+    /// <summary>
+    ///     ⚠ <b>The <c>nextLink</c> carries every parameter that shaped the page it came from, and
+    ///     <c>$top</c> is the one it did not (#76).</b>
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         The regression is silent, which is why it needs a test rather than a report: the link
+    ///         was well-formed, the second page was a valid page, and the only evidence was that
+    ///         <c>cyc … list --all --top 10</c> examined ten members and then fifty. A generated pager
+    ///         follows the URL it is handed and reassembles nothing, so a parameter missing from the
+    ///         link is a parameter that applied to page one alone.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Asserted on the body's text and not on a parsed URL, because the body is what a
+    ///         client receives.</b> <c>Utf8JsonWriter</c>'s default encoder rewrites the query
+    ///         separators into their <c>\u00</c>-escaped form, so they are not searched for;
+    ///         <c>$top=10</c> and <c>$skipToken=</c> pass through unescaped and are.
+    ///     </para>
+    /// </remarks>
+    [Fact]
+    public async Task TheNextLinkCarriesTheCallersPageSizeSoPageTwoIsTheSizePageOneWas() {
+        var gateway = new GatewayHarness();
+
+        gateway.Manager.OnList = _ => Result<ResourceListPage>.Success(new() { Continuation = "some/path" });
+
+        var paged = await gateway.SendAsync(
+            "GET",
+            CollectionPath(GatewayHarness.TenantA),
+            gateway.Token(GatewayHarness.TenantA),
+            query: "api-version=" + OneTypeRegistry.TheVersion + "&$top=10"
+        );
+
+        paged.Status.ShouldBe(StatusCodes.Status200OK, paged.Body);
+
+        paged.Body.ShouldContain(
+            "$top=10",
+            Case.Sensitive,
+            "the nextLink dropped the caller's $top, so every page after the first is the platform "
+            + "default and nothing says so"
+        );
+
+        paged.Body.ShouldContain(
+            "$skipToken=",
+            Case.Sensitive,
+            "the nextLink lost the continuation it exists to carry"
+        );
+    }
+
+    /// <summary>
+    ///     ⚠ <b>And it invents no page size when the caller expressed none — including when what they
+    ///     sent was not a number.</b>
+    /// </summary>
+    /// <remarks>
+    ///     A <c>$top</c> the gateway wrote itself would be the platform's own default frozen into a
+    ///     URL a client may store and replay, so a later change to <c>ListRequest.DefaultPageSize</c>
+    ///     would not reach the callers already paging. Echoing a malformed one is worse: <c>$top</c>
+    ///     is ignored rather than refused precisely so a client that guessed wrong still pages, and
+    ///     reflecting the junk back out of a URL the platform generates gives it the look of a value
+    ///     the platform accepted.
+    /// </remarks>
+    [Theory]
+    [InlineData("")]
+    [InlineData("&$top=not-a-number")]
+    [InlineData("&$top=0")]
+    [InlineData("&$top=-3")]
+    public async Task ANextLinkCarriesNoPageSizeWhenTheCallerAskedForNoneOrAskedNonsensically(string top) {
+        var gateway = new GatewayHarness();
+
+        gateway.Manager.OnList = _ => Result<ResourceListPage>.Success(new() { Continuation = "some/path" });
+
+        var paged = await gateway.SendAsync(
+            "GET",
+            CollectionPath(GatewayHarness.TenantA),
+            gateway.Token(GatewayHarness.TenantA),
+            query: "api-version=" + OneTypeRegistry.TheVersion + top
+        );
+
+        paged.Status.ShouldBe(StatusCodes.Status200OK, paged.Body);
+        paged.Body.ShouldContain("nextLink");
+        paged.Body.ShouldNotContain(
+            "$top",
+            Case.Sensitive,
+            $"the nextLink invented a page size for `{top}`"
+        );
+    }
 }

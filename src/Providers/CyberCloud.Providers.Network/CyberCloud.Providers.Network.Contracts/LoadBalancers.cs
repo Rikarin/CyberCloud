@@ -427,8 +427,10 @@ public static class LoadBalancers {
     ///     ⚠ <b>Deliberately loose, for <see cref="IpAddresses.V6Pattern" />'s reason</b>: the character
     ///     class admits both families and the exact reading is <see cref="System.Net.IPAddress" />'s in
     ///     <see cref="BackendProblem" />. The separator is outside the class, so the expression is
-    ///     unambiguous and linear — a full IPv6 grammar under a repetition would be the catastrophic
-    ///     backtracking hazard this family refuses to put on a request path.
+    ///     unambiguous and linear — a full IPv6 grammar under a repetition is the long, unreadable
+    ///     thing this family refuses to write, and on a backtracking engine it is also the classic
+    ///     catastrophic backtrack (<c>SchemaProperty.Matcher</c> is not one, #76, which removes the
+    ///     second reason and leaves the first).
     /// </remarks>
     public const string AddressListPattern = "[0-9A-Fa-f:.]+(,[0-9A-Fa-f:.]+)*";
 
