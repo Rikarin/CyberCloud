@@ -503,10 +503,25 @@ the direction of every crash window: the registry can be short and never long, b
 but may not read the resource that the name is held, which is the oracle § Soft delete refuses a
 `410 Gone` over.
 
+⚠ **Short has to be repairable, and that is a second rule rather than a consequence of the first.**
+The registry's only writer is `OperationGrain.ParkAsync`, driven by a delete operation that has
+terminated by the time any of this runs — so a clear that is followed by a refusal is a clear nothing
+undoes. `RestoreAsync` shipped with exactly that: the recovery window was checked *after* the unpark,
+inside `IndexClaimMachine.Restore`, and nothing upstream filtered an expired entry
+(`ResolveSoftDeletedAsync` answers for any binding the index calls `SoftDeleted` and never reads
+`RecoverableUntil`), so restoring an expired-but-unpurged resource returned `404` and left it holding
+its name and its committed quota in **no** collection — this section's own defect, on a non-crash
+path, in what is the normal long-term state of a parked resource until #12's sweeper exists. Two
+lines fix it and the pair is the rule: the expired case is refused **before** the unpark, asked of
+the index grain so one clock still owns the deadline; and any other refusal from the index restore
+repairs the registry by re-parking, but only while the index still says `SoftDeleted` of the same
+GUID — a blind re-park would resurrect an entry a concurrent purge had just released, which is the
+permanent **long** the ordering exists to prevent.
+
 ⚠ **It is a second collection and not a second membership.** The member still leaves the group at the
 park; `SoftDeletePathTests.ASoftDeletedResourceIsInNoListingBecauseItLeftItsGroupsMembership` is
-unchanged and still passes, and `SoftDeletePathTests.AParkedResourceIsInItsGroupsRegistryOfWhat`
-`IsRecoverable` is the other half of it — absent from the membership *and* present somewhere.
+unchanged and still passes, and its other half — absent from the membership *and* present somewhere
+— is `SoftDeletePathTests.AParkedResourceIsInItsGroupsRegistryOfWhatIsRecoverable`.
 
 **What is still owed is the endpoint**, and it is the third cost this section already named rather
 than a new one: a collection `GET` needs a page cap, a continuation and a `Check` per entry (ReBAC's

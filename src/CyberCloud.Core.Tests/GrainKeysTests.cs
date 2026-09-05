@@ -685,20 +685,32 @@ public class GrainKeysTests {
     public void EveryKeyIsBoundedInLengthSoRedisKeysAreNotUnbounded() {
         // A grain key becomes a Redis key (docs/plan/05); an unbounded one is a memory problem.
         //
-        // ⚠ THE LONGEST SHAPE IS NO LONGER sub/{32}/rg/{63}, AND THE NUMBER IS RECOUNTED RATHER THAN
-        // CARRIED. GrainKeys.ParkedResourceRegistry addresses the same resource group through a
-        // longer prefix, so the cap moved from 103 to 106 when it landed:
+        // ⚠ THE LONGEST SHAPE IN THE TYPE IS NO LONGER sub/{32}/rg/{63}, AND THE NUMBER IS RECOUNTED
+        // RATHER THAN CARRIED. GrainKeys.ParkedResourceRegistry addresses the same resource group
+        // through a longer prefix, so the longest key the type can build moved from 103 to 106
+        // characters when it landed. Counted by hand on 2026-09-05, segment by segment, with
+        // ResourceNaming's 63-character ceiling on a resource group name as the only variable part:
         //
         //   sub/{32}/rg/{63}     = 4 + 32 + 4 + 63 = 103
         //   parked/{32}/rg/{63}  = 7 + 32 + 4 + 63 = 106
         //
-        // Both are asserted, so a third shape with a longer prefix has to come here and say so.
+        // Both are asserted by name, which is what makes a third shape with a longer prefix have to
+        // come here and say so.
         var group = GrainKeys.ResourceGroup(Subscription, new('a', 63));
         var parked = GrainKeys.ParkedResourceRegistry(Subscription, new('a', 63));
 
         group.Length.ShouldBe(103);
         parked.Length.ShouldBe(106);
 
+        // ⚠ 103 AND NOT 106 BELOW, AND THE TWO NUMBERS ARE NOT IN CONFLICT — the loop's scope is
+        // narrower than the type's. Corpus.EveryGrainKeyShapeFor yields docs/plan/06 § Grain keys'
+        // EIGHT shapes and not the type's twenty (see its remarks: it is that table, deliberately,
+        // not an inventory of GrainKeys), and 103 is the true maximum over those eight. Raising it
+        // to 106 to match the sentence above would weaken the only bound this loop enforces in
+        // exchange for nothing, since the parked shape is not among the eight it walks and is
+        // asserted exactly, one line up. What the loop catches that the two lines above cannot is
+        // one of those eight growing a component — a longer digest, a prefix renamed — which is a
+        // change nobody would think to come back here for.
         foreach (var key in Corpus.EveryGrainKeyShapeFor(Sample)) {
             key.Length.ShouldBeLessThanOrEqualTo(103);
         }

@@ -769,6 +769,53 @@ public sealed class ResourceManagerService(
             }
         }
 
+        // ── AND A WINDOW THAT HAS ALREADY ENDED IS REFUSED HERE, BEFORE ANYTHING IS CLEARED ───────
+        //
+        // ⚠ THIS REFUSAL USED TO STAND BELOW THE UNPARK, AND THAT ORDER LOST THE REGISTRY ENTRY FOR
+        // GOOD (#71 review, 2026-09-05). Nothing above filters an expired entry out:
+        // RestorableAsync asks IResourceIndexGrain.ResolveSoftDeletedAsync, which succeeds for ANY
+        // entry the index calls SoftDeleted and never reads RecoverableUntil, and
+        // IndexClaimMachine.Effective collapses an expired CLAIM and never an expired soft delete.
+        // So an expired-but-unpurged resource passed every check, the unpark below removed its entry
+        // and wrote state, and only THEN did IndexClaimMachine.Restore answer with its permanent
+        // "passed the end of its recovery window". The caller got a 404 and the entry was gone: no
+        // retry can bring it back, because the only writer is OperationGrain.ParkAsync and the
+        // delete operation that drives it terminated when the resource was parked. What was left is
+        // a resource still holding its name and its committed quota, still SoftDeleted, and in NO
+        // listing at all — the exact state issue #71 exists to end, reached on an ordinary non-crash
+        // path, and reached by the COMMON case rather than a corner: #12's expiry sweeper does not
+        // exist yet, so expired-but-unpurged is where every parked resource eventually sits, and the
+        // enumeration destroyed is the one that sweeper is going to read.
+        //
+        // ⚠ ASKED OF THE INDEX GRAIN, WHICH IS WHY THIS IS NOT THE "TWO READS OF ONE DEADLINE" THE
+        // NOTE FURTHER DOWN WARNS ABOUT. ResolveExpiredAsync compares RecoverableUntil against that
+        // grain's own clock with the same `<=` IndexClaimMachine.Restore uses — its remarks call the
+        // two complements by construction — so this is the one authority answering twice, not a
+        // deadline copied out and compared here. Time only moves forward between the two calls, so
+        // the pair can disagree in one direction only: this line passes and the restore below
+        // refuses, for a request that crossed the deadline in the width of the one grain call
+        // between them. That residual is what RepairParkedRegistryAsync covers, so the entry
+        // survives on either reading.
+        //
+        // ⚠ NotFound RATHER THAN THE INDEX'S OWN MESSAGE, which is the second thing this line fixes.
+        // The refusal below was returned verbatim, so a caller learned that the name WAS held and
+        // exactly when it stopped being restorable — an oracle on the one verb that knows soft
+        // delete exists. docs/plan/07 § The enforcement seam wants one sentence for every absence,
+        // and RestorableAsync three screens up already gives this method's other absences that one.
+        if ((await Index(addressed).ResolveExpiredAsync()).IsSuccess) {
+            // ⚠ AND THE REGISTRY IS MADE TO AGREE ON THE WAY OUT, WHICH IS A NO-OP EVERY TIME BUT
+            // ONE. ParkAsync early-returns for an entry that is already there without restamping
+            // ParkedAt, so this costs one grain call and writes nothing in the ordinary case. The
+            // case it is not a no-op in is the one where a previous attempt unparked, met the
+            // refusal below and had its repair fail: without this line that attempt's loss would be
+            // permanent, because every later retry stops HERE, above the repair. With it, a retry
+            // of a refused restore converges — which is what the paragraph under the unpark claims
+            // and, before this change, was false.
+            await RepairParkedRegistryAsync(addressed);
+
+            return NotFound<WriteAccepted>(request.Path);
+        }
+
         // ── AND IT LEAVES THE REGISTRY OF WHAT IS RECOVERABLE, BEFORE IT STOPS BEING RECOVERABLE ──
         //
         // ⚠ THE SECOND OF THE THREE CALL SITES docs/plan/08 § Soft delete NAMES — "cleared where the
@@ -787,6 +834,15 @@ public sealed class ResourceManagerService(
         // answers for it and UnparkAsync is idempotent, so the retry re-runs the whole method and
         // converges.
         //
+        // ⚠ THAT LAST SENTENCE IS A CLAIM ABOUT THIS METHOD AND IT IS NOT SELF-EVIDENT — it holds
+        // only because no step below can refuse PERMANENTLY while the index still says SoftDeleted.
+        // It did not hold before the #71 review (2026-09-05): the window check under the next
+        // heading was one such refusal, every retry failed at the same line, and the entry this line
+        // had already removed was gone for good. Two things now keep the claim true, and a third
+        // permanent refusal added below would break it again: the expired case is screened above,
+        // before this line, and anything else the index refuses is repaired by
+        // RepairParkedRegistryAsync.
+        //
         // ⚠ AND IT IS STRICT, like the rejoin further down. Nothing irreversible has happened yet:
         // a failure here returns before the index is touched, so the caller's retry starts from the
         // same state this call did.
@@ -804,12 +860,26 @@ public sealed class ResourceManagerService(
         // subscription role holder, which is who asked for the restore. The other order would leave it
         // addressable to nobody after a partial failure, and nothing would notice.
         //
-        // ⚠ The window is checked HERE and not above, because the index is what holds it:
-        // RestoreAsync refuses a binding past IndexEntry.RecoverableUntil with the same
-        // ResourceNotFound a name that holds nothing gets. Reading the deadline first and acting on it
-        // second would be two reads of a value that can change between them.
+        // ⚠ The window is checked HERE TOO, and this is still the authoritative check, because the
+        // index is what holds it: RestoreAsync refuses a binding past IndexEntry.RecoverableUntil
+        // with the same ResourceNotFound a name that holds nothing gets. What changed at the #71
+        // review (2026-09-05) is that it is no longer the FIRST place the window is read — the
+        // screen above asks the same grain the same question before the unpark, because a refusal
+        // that arrives after an irreversible step is a refusal that destroys something. The old note
+        // here argued that reading the deadline first would be "two reads of a value that can change
+        // between them"; the value cannot change (§ Soft delete: the window "is set at creation and
+        // is not extendable"), only the clock advances, and the one disagreement that advance can
+        // produce is repaired below rather than argued away.
         var restored = await Index(addressed).RestoreAsync(addressed.Id.Id);
         if (restored.TryGetError(out var restoreError)) {
+            // ⚠ THE ENTRY GOES BACK IF THE INDEX STILL SAYS IT WAS TRUE, WHICH IS THE OTHER HALF OF
+            // THE FIX ABOVE AND COVERS EVERYTHING THE SCREEN CANNOT SEE COMING: a request that
+            // crossed the deadline between the two reads, and any refusal a future edit adds here.
+            // Without it the unpark two screens up is an irreversible step taken before the last
+            // check that can refuse — which is the shape of the defect, independently of which
+            // particular check it is.
+            await RepairParkedRegistryAsync(addressed);
+
             return Result<WriteAccepted>.Failure(restoreError);
         }
 
@@ -1251,6 +1321,54 @@ public sealed class ResourceManagerService(
         var parked = await Index(target).ResolveSoftDeletedAsync();
 
         return parked.IsSuccess ? parked : NotFound<Guid>(target.Id.Path);
+    }
+
+    /// <summary>
+    ///     Makes the resource group's parked-resource registry agree with the index again, after a
+    ///     restore that cleared an entry and was then refused.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>The registry's invariant is <i>an entry exists only while the index says
+    ///         <c>SoftDeleted</c></i>, and this is the only place that repairs it rather than
+    ///         maintaining it.</b> <c>RestoreAsync</c> clears the entry before the index write that
+    ///         would make it false — the order docs/plan/08 § Soft delete fixes, because a registry
+    ///         that over-reports offers a restore that answers <c>404</c> and tells a caller who may
+    ///         list the collection but may not read the resource that the name is held. The cost of
+    ///         that order is that a refusal after the clear leaves the registry short, and the
+    ///         registry has exactly one writer — <c>OperationGrain.ParkAsync</c>, driven by a delete
+    ///         operation that terminated when the resource was parked — so short would be permanent.
+    ///         This puts it back instead.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The index is asked again rather than the refusal being read, and that is what
+    ///         makes the repair safe.</b> A blind re-park would resurrect an entry for a resource a
+    ///         concurrent purge had just released: that purge unparks and then releases, so a restore
+    ///         interleaved with it can find the binding <c>Free</c> at
+    ///         <c>IndexClaimMachine.Restore</c> — and an entry written after the name came back is
+    ///         the "long" registry the ordering above exists to make impossible, permanently, since
+    ///         nothing can address that resource again. So the entry comes back only when the index
+    ///         still says <c>SoftDeleted</c> <i>and</i> still says it of the same GUID; on every
+    ///         other answer, short is the correct state and staying short is the repair.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The re-park's own failure is not propagated, because the caller's answer belongs
+    ///         to the refusal that brought us here.</b> A failed repair leaves the state the defect
+    ///         left and is no worse; what makes it recoverable rather than permanent is that a
+    ///         retried restore reaches a repair again — the expired screen in <c>RestoreAsync</c>
+    ///         calls this method before it returns for exactly that reason. <c>ParkAsync</c> is
+    ///         idempotent and does not restamp <c>ParkedAt</c> on an entry that is already there, so
+    ///         a repair that was not needed writes nothing.
+    ///     </para>
+    /// </remarks>
+    async Task RepairParkedRegistryAsync(WriteTarget addressed) {
+        var stillParked = await Index(addressed).ResolveSoftDeletedAsync();
+
+        if (stillParked.IsFailure || stillParked.GetValueOrThrow() != addressed.Id.Id) {
+            return;
+        }
+
+        _ = await Parked(addressed).ParkAsync(addressed.Id);
     }
 
     /// <summary>

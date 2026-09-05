@@ -1541,6 +1541,116 @@ public sealed class SoftDeletePathTests(ResourceManagerCluster cluster) {
         );
     }
 
+    /// <summary>
+    ///     ⚠ <b>A restore that is refused because the window has passed leaves the registry entry
+    ///     exactly where it was — the case the ordering bug destroyed.</b>
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>This is the #71 review's blocker (2026-09-05), and it was a real data-loss
+    ///         path.</b> <c>RestoreAsync</c> cleared the registry entry and only then met the window
+    ///         check inside <c>IndexClaimMachine.Restore</c>. Nothing upstream filtered an expired
+    ///         entry — <c>ResolveSoftDeletedAsync</c> answers for any binding the index calls
+    ///         <c>SoftDeleted</c> and never reads <c>RecoverableUntil</c> — so the caller got a
+    ///         <c>404</c> and the entry was gone permanently: its only writer is
+    ///         <c>OperationGrain.ParkAsync</c>, whose delete operation terminated when the resource
+    ///         was parked. The resource kept its name and its committed quota, stayed
+    ///         <c>SoftDeleted</c>, and appeared in no collection anywhere, which is precisely what
+    ///         issue #71 exists to end.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Expired-but-unpurged is the ordinary long-term state and not a corner, which is
+    ///         why this case matters more than its rarity suggests.</b> Issue #12's expiry sweeper
+    ///         does not exist yet, so nothing ends a window on the clock's account; every parked
+    ///         resource that nobody restores or purges arrives here and stays. The other three
+    ///         registry cases in this section all use unexpired windows, so none of them would have
+    ///         gone red — <see cref="ARestoreAfterTheWindowHasPassedIsRefused" /> drives this exact
+    ///         sequence and passes because it never reads the registry.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b><c>ParkedAt</c> is asserted unchanged, and that is the assertion that separates
+    ///         the fix from a plausible wrong one.</b> A repair that cleared the entry and wrote a
+    ///         fresh one would satisfy every other assertion here while restamping the answer to
+    ///         "when was this deleted" with the time of the failed restore — a listing of what is
+    ///         recoverable would then say a resource seven days past its window had been parked a
+    ///         moment ago. The refusal must not touch the entry at all.
+    ///     </para>
+    /// </remarks>
+    [Fact]
+    public async Task ARestoreRefusedPastTheWindowLeavesTheRegistryEntryUntouched() {
+        ResourceManagerCluster.ResetDoubles();
+
+        const string group = "registry-expired";
+        var address = VaultAddress("too-late-to-restore", group);
+
+        (await cluster.Group(address).CreateAsync(address.TenantId, "eu-west-1")).IsSuccess.ShouldBeTrue();
+
+        await Converge((await Create(address)).GetValueOrThrow());
+        await Converge((await Delete(address)).GetValueOrThrow());
+
+        var before = (await cluster.Parked(address).ListAsync()).GetValueOrThrow();
+
+        before.Select(x => x.AddressOf().Name)
+            .ShouldBe(["too-late-to-restore"], "the calibration: it was in the registry before the refusal");
+
+        // ⚠ EIGHT DAYS INTO THE SEVEN-DAY WINDOW `vaults` DECLARES, and past it rather than at its
+        // edge so that the refusal below is the deadline and not a boundary condition.
+        // ARestoreAfterTheWindowHasPassedIsRefused establishes that six days in still works, which
+        // is what makes eight mean the window.
+        TestClock.Instance.Advance(TimeSpan.FromDays(8));
+
+        var late = await Restore(address);
+
+        late.IsFailure.ShouldBeTrue("eight days into a seven-day window");
+        late.Error!.Code.ShouldBe(ErrorCode.ResourceNotFound);
+
+        // ── The finding: what the refusal left behind ───────────────────────────────────────────
+        (await cluster.Index(address).GetAsync()).GetValueOrThrow()
+            .State.ShouldBe(
+                IndexEntryState.SoftDeleted,
+                "the refused restore did not move the index either, so the entry is still TRUE — "
+                + "which is what makes its absence a loss rather than a correct clear"
+            );
+
+        var after = (await cluster.Parked(address).ListAsync()).GetValueOrThrow();
+
+        after.Select(x => x.AddressOf().Name).ShouldBe(
+            ["too-late-to-restore"],
+            "a refused restore must not unlist the resource: nothing re-parks it, so the entry would "
+            + "be gone for good and the resource would hold its name and its committed quota in no "
+            + "collection at all"
+        );
+
+        after[0].ParkedAt.ShouldBe(
+            before[0].ParkedAt,
+            "the entry is the one the park wrote and not a fresh one — a re-park would restamp "
+            + "'when was this deleted' with the time of the failed restore"
+        );
+
+        after[0].ResourceId.ShouldBe(before[0].ResourceId);
+
+        // ⚠ AND THE SECOND ATTEMPT IS THE ONE THAT WOULD CATCH A FIX THAT ONLY REORDERED. A repair
+        // reached through a path that a retry no longer takes would pass everything above and lose
+        // the entry on any later attempt.
+        (await Restore(address)).Error!.Code.ShouldBe(ErrorCode.ResourceNotFound);
+
+        (await cluster.Parked(address).ListAsync()).GetValueOrThrow()
+            .Select(x => x.AddressOf().Name)
+            .ShouldBe(["too-late-to-restore"], "and the second refusal did not lose it either");
+
+        // ── And the purge, which is what SHOULD end this, is unaffected ─────────────────────────
+        //
+        // ⚠ THE PURGE SIDE WAS NEVER BROKEN and this proves the fix did not break it: Index's
+        // ReleaseAsync has no permanent refusal, so its unpark has nothing that can fail after it.
+        // Asserting it here rather than trusting it keeps the expired resource from being one this
+        // file can only park.
+        await Converge((await Purge(address)).GetValueOrThrow());
+
+        (await cluster.Parked(address).ListAsync()).GetValueOrThrow().ShouldBeEmpty(
+            "the purge is the ending an expired resource has, and it clears the entry"
+        );
+    }
+
     Task<Result<WriteAccepted>> PurgeExpired(ResourceId address) =>
         cluster.Manager.PurgeExpiredAsync(
             new() { Path = address.Path, ApiVersion = TestingProvider.V2026 },
