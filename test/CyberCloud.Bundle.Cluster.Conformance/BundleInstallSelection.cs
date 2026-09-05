@@ -177,6 +177,30 @@ public sealed class BundleInstallSelection {
     ///         regression test whose sabotage turns every row red would not have told this defect
     ///         apart from the wait being deleted outright.
     ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The assertion was a containment check until the #74 review, which is weaker than
+    ///         the sentence at the top of this comment and than the method's own name.</b> "Is
+    ///         followed by" is an order; <c>ShouldContain</c> is not. A wait emitted BEFORE the apply
+    ///         satisfied it, and so did one emitted after the SECOND apply for the two components
+    ///         with a <c>manifestExtra</c> — and both of those defeat the barrier while leaving the
+    ///         line in the file, which is the failure mode this whole class exists to refuse. It is
+    ///         now TWO index comparisons — the wait after the first apply, and the second apply
+    ///         after the wait — over lines located by the component's own <c>manifest:</c> and
+    ///         <c>manifestExtra:</c> pins rather than by matching the verb <c>kubectl apply</c>,
+    ///         because a component with a second document emits that verb twice and which of the two
+    ///         the wait sits between is the entire claim.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Two more sabotages were run on 2026-09-05 for the assertion the review added,
+    ///         and the counts are the point: both were fully GREEN under the containment check this
+    ///         replaced.</b> Moving the wait line above the first <c>kubectl apply</c> turns all SIX
+    ///         manifest rows red. Moving it below the <c>manifestExtra</c> apply turns exactly TWO
+    ///         red — kubevirt and containerized-data-importer, the only two component.yaml files
+    ///         with that key — and leaves the other four green, which is the right answer rather
+    ///         than a lucky one: a component with no second document cannot have the wait on the
+    ///         wrong side of it. Each was applied to a copy of <c>charts/bundle/</c> and read off
+    ///         <c>install.sh --dry-run</c>'s own output, the same input this method reads.
+    ///     </para>
     /// </remarks>
     [Fact]
     public async Task EveryManifestComponentIsFollowedByAnEstablishmentWait() {
@@ -234,9 +258,20 @@ public sealed class BundleInstallSelection {
             if (kind == "manifest") {
                 manifests++;
 
-                segment.ShouldContain(
+                // ⚠ POSITIONS AND NOT `ShouldContain`, WHICH IS WHAT THIS ASSERTED UNTIL THE #74
+                // REVIEW AND IS WEAKER THAN THE NAME OF THIS METHOD. A containment check is true of
+                // a wait emitted BEFORE the apply, and true of one emitted after the SECOND apply
+                // for the two components that declare a `manifestExtra` — and both of those defeat
+                // the barrier exactly as deleting the line would, because the point of the wait is
+                // that the definitions are served before anything is admitted against them. "Is
+                // followed by" is an ORDER, so only an index comparison asserts it.
+                var wait = segment.IndexOf(
                     "kubectl wait --for=condition=Established",
-                    Case.Sensitive,
+                    StringComparison.Ordinal
+                );
+
+                wait.ShouldBeGreaterThanOrEqualTo(
+                    0,
                     $"charts/bundle/install.sh applied `{component}` — a `manifest:` component in "
                     + $"phase {roster[index].Phase} — and moved on without waiting for its "
                     + "definitions to be Established. `kubectl apply` returns when the API server has "
@@ -245,6 +280,71 @@ public sealed class BundleInstallSelection {
                     + "§ phases calls a phase a barrier and this is the half of it that is "
                     + "implemented. What install.sh emitted for this component was:\n" + segment
                 );
+
+                // ⚠ The apply is located by the URL out of the component's own component.yaml
+                // rather than by matching `kubectl apply` as a string, for the same reason the
+                // roster is read out of bundle.yaml: a component with a `manifestExtra` emits TWO
+                // apply lines and the assertions below are about WHICH of the two the wait sits
+                // between. Matching the pin distinguishes them; matching the verb cannot.
+                var manifest = BundleInstaller.Pin(component, "manifest");
+
+                manifest.ShouldNotBeNullOrEmpty(
+                    $"charts/bundle/{component}/component.yaml declares `install: manifest` and no "
+                    + "`manifest:` URL, so this test could not tell the apply it is asserting an "
+                    + "order against from any other line. The Bundle gate rejects that component.yaml "
+                    + "and this assertion refuses to pass over it."
+                );
+
+                var apply = segment.IndexOf(
+                    "kubectl apply --server-side -f " + manifest,
+                    StringComparison.Ordinal
+                );
+
+                apply.ShouldBeGreaterThanOrEqualTo(
+                    0,
+                    $"charts/bundle/install.sh never applied `{component}`'s own `manifest:` URL "
+                    + $"{manifest}. What it emitted for this component was:\n" + segment
+                );
+
+                wait.ShouldBeGreaterThan(
+                    apply,
+                    $"charts/bundle/install.sh emitted the establishment wait for `{component}` "
+                    + "BEFORE applying its definitions, which waits on whatever the cluster already "
+                    + "had and lets the next component be admitted against definitions the API "
+                    + "server has stored and does not serve. That is the barrier defeated while the "
+                    + "line is still present, so a check that only looked for the line would stay "
+                    + "green. What install.sh emitted for this component was:\n" + segment
+                );
+
+                // ⚠ The second apply is a custom resource naming a kind the FIRST document just
+                // defined — install.sh says so at the line itself — so the wait belongs between the
+                // two and not after both. Two of the six manifest components have one, and those
+                // two are exactly the pair that reached the wait at all before #74, so this is the
+                // clause that keeps the pre-#74 shape from passing in the other direction.
+                var extra = BundleInstaller.Pin(component, "manifestExtra");
+
+                if (!string.IsNullOrEmpty(extra)) {
+                    var second = segment.IndexOf(
+                        "kubectl apply --server-side -f " + extra,
+                        StringComparison.Ordinal
+                    );
+
+                    second.ShouldBeGreaterThanOrEqualTo(
+                        0,
+                        $"charts/bundle/{component}/component.yaml declares `manifestExtra: {extra}` "
+                        + "and install.sh never applied it, so the custom resource the component "
+                        + "needs is never created. What it emitted was:\n" + segment
+                    );
+
+                    second.ShouldBeGreaterThan(
+                        wait,
+                        $"charts/bundle/install.sh applied `{component}`'s second document before "
+                        + "waiting for the first document's definitions to be Established. The "
+                        + "second document is a custom resource naming a kind the first defines, so "
+                        + "that ordering loses the race install.sh's own comment says the two "
+                        + "separate applies exist to avoid. What it emitted was:\n" + segment
+                    );
+                }
             } else {
                 segment.ShouldNotContain(
                     "kubectl",

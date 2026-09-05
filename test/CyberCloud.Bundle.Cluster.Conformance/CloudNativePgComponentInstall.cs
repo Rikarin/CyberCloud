@@ -252,8 +252,10 @@ public sealed class CloudNativePgOnAnEmptyCluster(EmptyClusterFixture cluster) :
             "SKIPPED — this class renders charts/managed/postgres with `helm template` and applies it "
             + "with `kubectl`, and one of the two is not on PATH. ⚠ That kubectl is THIS TEST'S, not "
             + "install.sh's: the installer's own kubectl branch belongs to the six `manifest:` "
-            + "components and is still unexecuted by anything. WOULD PROVE: that an operator this "
-            + "bundle installed creates and binds the claim for a managed chart's custom resource."
+            + "components, none of which is installed here, and it has been executed exactly once — "
+            + "by hand on 2026-09-05 against an API server with no kubelet — and by no test. WOULD "
+            + "PROVE: that an operator this bundle installed creates and binds the claim for a "
+            + "managed chart's custom resource."
         );
 
         var client = cluster.Client!;

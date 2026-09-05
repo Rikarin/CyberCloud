@@ -172,7 +172,22 @@ public sealed class OpenEbsLocalPvComponentInstaller {
 ///         on is where that is written down. That a <c>charts/managed/</c> custom resource
 ///         reconciles — nothing has applied one against a bundle-installed definition yet, which is
 ///         still the sentence <c>charts/bundle/</c> exists for. And that the phase barrier works:
-///         this uses <c>--phase 25</c>, whose own usage text says it skips that guarantee.
+///         <c>--phase 25</c> narrows the run to one phase, that phase holds exactly one component,
+///         and a run that crosses no boundary exercises none.
+///     </para>
+///     <para>
+///         ⚠ <b>That last clause quoted <c>install.sh</c>'s usage text — <i>"skips that
+///         guarantee"</i> — until the #74 review, and the quotation had been stale since
+///         2026-09-03.</b> The sibling quotation in <see cref="BundleInstaller" /> was removed for
+///         exactly this on 2026-09-05, in the commit that rewrote the usage text a second time; this
+///         was the third copy, in the same assembly, and it survived that commit because nobody
+///         grepped for the phrase. What this paragraph needs is a property of the script's
+///         BEHAVIOUR — a selector narrows a run to what it selects — and quoting prose to establish
+///         behaviour is how a citation goes stale without anything going red.
+///         <c>charts/bundle/bundle.yaml</c> § owed,
+///         <c>a-selector-that-matched-nothing-reported-success</c>, keeps the usage text's history,
+///         and <c>--help</c> now counts the phases out of <c>bundle.yaml</c> rather than asserting
+///         them so the number cannot go stale a third time.
 ///     </para>
 /// </remarks>
 /// <param name="cluster">The empty k3s.</param>

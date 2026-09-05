@@ -282,10 +282,28 @@ install_component() {
             # wrong for the case the issue itself calls out: phase 40 holds cluster-api, kamaji,
             # kamaji-control-plane-provider and cluster-api-provider-kubevirt, and the two providers
             # admit against definitions and webhooks the rows BEFORE THEM IN THE SAME PHASE
-            # installed. A wait that only fires when the phase ends cannot order those four. A wait
-            # that fires after each manifest apply orders them AND implies the boundary property,
-            # because the last component of any phase has run it. A `helm` component needs no such
-            # line — `--wait` is helm's own barrier, and it is the clause that is true.
+            # installed. A wait that only fires when the phase ends cannot order those four.
+            #
+            # ⚠ AND THE BOUNDARY PROPERTY DOES FOLLOW FROM THIS ONE — BUT NOT FOR THE REASON THIS
+            # COMMENT GAVE UNTIL THE #74 REVIEW, WHICH WAS FALSE FOR SIX OF THE EIGHT PHASES. It read
+            # "because the last component of any phase has run it", which is written as a general
+            # property of the roster and is not one. COUNTED OUT OF bundle.yaml ON 2026-09-05, by
+            # taking each phase's LAST row and reading its component.yaml's `install:` key: phase 10
+            # ends on kube-ovn (helm), 15 on cert-manager (helm), 20 on prometheus-operator-crds
+            # (helm), 25 on openebs-localpv (helm), 30 on containerized-data-importer (manifest), 40
+            # on cluster-api-provider-kubevirt (manifest), 50 on strimzi-kafka-operator (helm) and 60
+            # on victoria-metrics-operator (helm). TWO of the EIGHT phases end on a `manifest:` row
+            # and SIX do not, and phase 50's only manifest row — rabbitmq-cluster-operator — is fifth
+            # of that phase's eight, so for six phases the last row never reaches this line at all.
+            # The conclusion survives on the argument that is actually available, which is per row
+            # rather than per phase: EVERY manifest row waits immediately after its OWN apply, so no
+            # phase can END holding a definition this script applied and did not wait for, whatever
+            # kind its last row happens to be. The tail of those six phases is a `helm` or
+            # `helm-archive` row, which needs no line here — `--wait` is helm's own barrier, and it
+            # is the clause that was always true. ⚠ The reason mattered rather than the conclusion:
+            # this argument is the whole of why #74's "wait at the phase boundary" is answered with a
+            # per-component wait instead, so an argument stated as a property nothing has is the same
+            # defect as a version pinned in two places.
             #
             # ⚠ `crd --all` AND NOT THE COMPONENT'S OWN DEFINITIONS, WHICH IS DELIBERATE AND IS THE
             # WEAKER OF THE TWO. A per-component list would be exact, and nothing here can spell it:
@@ -294,15 +312,60 @@ install_component() {
             # `images-are-not-pinned-by-digest`, records about `imageDigest:`. `--all` is broader
             # than the component and cannot be narrower than it, so it cannot pass while this
             # component's definitions are unestablished, which is the property the barrier needs.
-            # ⚠ AND IT CANNOT PASS VACUOUSLY, WHICH IS THE FAILURE #74 IS ABOUT. Measured on
-            # 2026-09-05 against `rancher/k3s:v1.35.7-k3s1`: `kubectl wait --for=condition=Established
-            # crd -l <label nothing carries>` prints "error: no matching resources found" and exits 1
-            # rather than reporting a met condition over an empty set.
+            # ⚠ AND IT CANNOT PASS VACUOUSLY, WHICH IS THE FAILURE #74 IS ABOUT — RE-MEASURED ON THE
+            # FORM THIS LINE ACTUALLY RUNS. Until the #74 review the evidence cited here was a run of
+            # `kubectl wait --for=condition=Established crd -l <label nothing carries>`, which is a
+            # LABEL SELECTOR and not the `--all` below, so it said nothing about the shipped line.
+            # Re-measured on 2026-09-05 against `rancher/k3s:v1.35.7-k3s1` started `--disable-agent`,
+            # on an `--all` selection that really is empty — `kubectl wait --for=condition=Ready
+            # --timeout=5s node --all`, on an agentless server, which has NO nodes: it prints "error:
+            # no matching resources found" and exits 1, exactly as the label form does. Both forms
+            # reach the same resource builder and it is the builder that refuses an empty result, so
+            # the guard does cover `--all`.
+            # ⚠ AND THE SHIPPED LINE DOES NOT REST ON THAT GUARD ANYWAY, which is worth writing down
+            # because `--all` can hardly be empty here: a fresh k3s carries FOUR definitions before
+            # anything in this bundle runs — addons.k3s.cattle.io, etcdsnapshotfiles.k3s.cattle.io,
+            # helmchartconfigs.helm.cattle.io and helmcharts.helm.cattle.io, counted with
+            # `kubectl get crd` on that same cluster the same day, as soon as its API server answered,
+            # and the same four the 2026-09-05 hand run counted independently. What makes this line non-vacuous is the apply directly above it:
+            # `kubectl apply --server-side` returns once the API server has STORED the objects, so
+            # this component's own definitions are already in the selection the wait lists.
             # ⚠ ITS COST, MEASURED THE SAME DAY ON THE SAME CLUSTER, WITH ALL SIX MANIFEST COMPONENTS
             # ALREADY APPLIED AND EVERY DEFINITION ALREADY ESTABLISHED: 3.9 s, 4.4 s and 4.2 s over
             # THIRTY-SIX definitions across three runs, against 0.6 s over five earlier in the same
             # session. That is kubectl opening one watch per definition rather than any waiting, so a
             # full install pays it six times and it grows with the roster.
+            #
+            # ⚠ AND THE PRICE, WHICH IS A FALSE FAILURE, AND WHICH NOTHING HERE RECORDED UNTIL THE
+            # #74 REVIEW ASKED FOR IT. Everything above argues the two directions that would make this
+            # line too WEAK — it cannot pass while this component's definitions are unestablished, and
+            # it cannot pass over an empty set. The direction left unargued is the one `--all` creates
+            # by being cluster-wide: it waits on definitions this bundle never installed, so ANY
+            # definition on the cluster that is not Established and never will be blocks the run. The
+            # terminal case is a name conflict — a CustomResourceDefinition whose plural, singular,
+            # kind or shortName collides with one already served is marked NamesAccepted=False and
+            # Established=False and does not recover — which is exactly what a half-installed operator
+            # leaves behind; a definition mid-deletion is the other. MEASURED ON 2026-09-05 ON THAT
+            # SAME AGENTLESS k3s, by applying two definitions in one group sharing the shortName
+            # `dup`: the second reports Established=False and NamesAccepted=False, and `kubectl wait
+            # --for=condition=Established --timeout=20s crd --all` then burned the full 20.09 s and
+            # exited 1 — while reporting "timed out" for THREE definitions that were Established=True,
+            # because one invocation shares one deadline across every object it walks. The failure
+            # does not reliably even name the definition that caused it.
+            # ⚠ WHAT THAT COSTS, COUNTED ON 2026-09-05. Before #74 this wait ran only for a component
+            # declaring a `manifestExtra`, which is TWO of the six manifest rows — kubevirt and
+            # containerized-data-importer, the only two component.yaml files with that key. It now
+            # runs for all SIX, so one stuck definition anywhere on the cluster goes from breaking two
+            # of six manifest components to breaking six of six. Under `set -e` the first failing wait
+            # ends the run, so the bill is ONE 5 m timeout charged to the first manifest row the run
+            # reaches — kubevirt, phase 30, on a run with no selector — a component that is fine and
+            # is not what went wrong; and the bound on a run where
+            # every wait is slow but succeeds went from 2 × 5 m to 6 × 5 m. It is ACCEPTED rather than
+            # fixed, because the only narrower selector is the per-component definition list the
+            # paragraph above explains this file cannot spell without a key nothing checks. bundle.yaml
+            # § owed, `the-manifest-path-waits-for-nothing`, carries it as owed rather than as an
+            # accident, and test/CyberCloud.Bundle.Cluster.Conformance § BundleInstaller.Budget
+            # records what it does to the harness budget.
             run kubectl ${kubectl_args[@]+"${kubectl_args[@]}"} wait --for=condition=Established --timeout=5m \
                 crd --all
 

@@ -306,7 +306,12 @@ Sixteen pins are still resolved-but-never-applied *by a test*.
 > a component that has a `manifestExtra`. Since #74 it runs after **every** manifest apply — after
 > each component rather than once per phase, because phase 40's two providers admit against
 > definitions the rows before them *in the same phase* installed, and a wait that fires after every
-> apply gives the boundary property as well. What is still missing is the operator: nothing waits for
+> apply gives the boundary property as well — **by induction over the rows, not because a phase ends
+> on a manifest row.** Counted out of `bundle.yaml` on 2026-09-05, only phases 30 and 40 do; the
+> other six of the eight end on a `helm` or `helm-archive` component, and phase 50's single manifest
+> row is fifth of eight. Every manifest row waits right after its own apply, so no phase can end
+> holding a definition `install.sh` applied and did not wait for. What is still missing is the
+> operator: nothing waits for
 > a manifest component's Deployment to be Available, and that wait stays unwritten because no pod of
 > any of the eight it would name has ever run. `bundle.yaml` § owed,
 > `the-manifest-path-waits-for-nothing`, has every reading and the eight names.
@@ -412,8 +417,14 @@ That paragraph used to say the next row was **not** a second component but the p
 `manifest:` one, and half of it was right. Two components on one cluster came cheap — 26 s, because
 neither has a post-install hook — and it arrived alongside the thing that was actually worth buying,
 which is an *operator* creating the claim. The barrier turned out not to be a matter of test coverage
-at all: for the six `manifest:` components it is not implemented, and that is a fix rather than a
-test.
+at all: for the six `manifest:` components it was **not implemented**, and that was a fix rather than
+a test. ⚠ That last sentence stood in the present tense until 2026-09-05 and is corrected here rather
+than left as history, because the fix landed: since #74 the definitions half **is** implemented — a
+`kubectl wait --for=condition=Established` after every manifest apply — and only the operator half is
+still missing. The equivalent sentences in § Verification and in `bundle.yaml` were corrected when the
+fix landed and this copy was missed — the same shape as the stale `--phase` quotation `install.sh`'s
+usage text has now gone stale under twice: one sentence moves and a duplicate nobody grepped for does
+not.
 
 So the next row is a **`manifest:` component**, and it is now two questions rather than one. It would
 be the first time `install.sh`'s `kubectl` path ran under test, and it is the only way to find out
