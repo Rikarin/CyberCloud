@@ -529,7 +529,8 @@ public sealed class OperationGrain(
 
     /// <summary>
     ///     What a soft delete does once its teardown has converged: re-parent the resource, drop its
-    ///     direct role assignments, and stop short of everything that would make the delete
+    ///     direct role assignments, move it out of its group's listing and into its group's registry
+    ///     of what is recoverable, and stop short of everything that would make the delete
     ///     irreversible.
     /// </summary>
     /// <remarks>
@@ -587,6 +588,38 @@ public sealed class OperationGrain(
             return;
         }
 
+        // ── AND IT JOINS THE REGISTRY OF WHAT IS RECOVERABLE, ONE LINE BEFORE IT LEAVES THE OTHER ─
+        //
+        // ⚠ THIS IS THE SECOND PLACE TO LOOK, AND WITHOUT IT THE LINE BELOW PUTS THE RESOURCE IN NO
+        // LISTING AT ALL. docs/plan/08 § Soft delete: "listing what is recoverable needs an
+        // enumeration source, and the platform has none anywhere … the shape that fits is a
+        // per-resource-group registry of parked resources, written where ParkAsync unlists the member
+        // and cleared where the restore relists it and the purge releases the name". This is the
+        // first of those three, and issue #71 is the finding that the filter over ListAsync it was
+        // supposed to be one of has an EMPTY INPUT: the index is one grain per path and one-way, so
+        // ResolveSoftDeletedAsync answers a question you can only ask if you already know the name.
+        //
+        // ⚠ BEFORE THE UNLIST AND NOT AFTER, WHICH IS THE ORDER THE REGISTRY'S OWN INVARIANT FIXES:
+        // an entry exists only while the index says SoftDeleted. The index was parked on the delete's
+        // REQUEST path, long before this line, so the entry is true the moment it is written; and
+        // writing it first means there is no crash window — not even a one-call-wide one — in which
+        // the resource is in neither collection. The state a crash leaves instead is the resource in
+        // the registry AND still a Deleting member of its group, which is the state it has been in
+        // for the whole teardown already (ResourceManagerService.DeleteAsync marked the member
+        // Deleting at the accept and docs/plan/06 § Two-phase create keeps it listed), so the
+        // overlap is one grain call longer rather than new in kind. The opposite order would make the
+        // crash window the exact defect this registry exists to close.
+        //
+        // ⚠ AND IT IS RETRIED RATHER THAN BEST-EFFORT, like both of its neighbours here. A park that
+        // silently failed would leave a resource holding its name and its committed quota for a whole
+        // recovery window with nothing anywhere naming it — which is worse than the failure it would
+        // be hiding, because a failed operation is at least actionable.
+        var registered = await Parked(spec).ParkAsync(address);
+        if (registered.TryGetError(out var registerError)) {
+            await ScheduleAsync(ReconcileOutcome.Failed(registerError, true));
+            return;
+        }
+
         // ── AND IT LEAVES THE GROUP'S MEMBERSHIP, WHICH IS NOT THE DELETE THIS PATH REFUSED TO DO ─
         //
         // ⚠ THE GROUP'S CompleteDeleteAsync, NOT THE RESOURCE'S — and the remarks above forbid only
@@ -615,7 +648,9 @@ public sealed class OperationGrain(
                 + "addressable, its name is held for its recovery window, its parent edge names its "
                 + "subscription and "
                 + dropped.GetValueOrThrow().ToString(CultureInfo.InvariantCulture)
-                + " direct role assignment(s) were dropped. Its desired state and its committed quota "
+                + " direct role assignment(s) were dropped. It has left its resource group's listing "
+                + "and joined its resource group's registry of parked resources, which is where it "
+                + "can be found while the window lasts. Its desired state and its committed quota "
                 + "are kept so that a restore can apply it again; both end at the purge."
             )
         );
@@ -972,6 +1007,22 @@ public sealed class OperationGrain(
         Tenant(spec)
             .GetGrain<IResourceGroupGrain>(
                 GrainKeys.ResourceGroup(spec.SubscriptionId, Address(spec).ResourceGroup)
+            );
+
+    /// <summary>
+    ///     The same resource group's registry of parked resources — docs/plan/08 § Soft delete.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Built from exactly the two values <see cref="Group" /> is built from</b>, so the two
+    ///     grains this path writes in the same breath cannot be addressed at two different groups.
+    ///     They are two grain <i>types</i> behind two key shapes rather than one grain with two
+    ///     collections, which is docs/plan/08 § Soft delete's refusal to merge them: they answer
+    ///     different questions to different callers.
+    /// </remarks>
+    IParkedResourceRegistryGrain Parked(OperationSpec spec) =>
+        Tenant(spec)
+            .GetGrain<IParkedResourceRegistryGrain>(
+                GrainKeys.ParkedResourceRegistry(spec.SubscriptionId, Address(spec).ResourceGroup)
             );
 
     TenantGrainFactory Tenant(OperationSpec spec) =>

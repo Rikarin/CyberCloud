@@ -769,6 +769,88 @@ public sealed class ResourceManagerService(
             }
         }
 
+        // ── AND A WINDOW THAT HAS ALREADY ENDED IS REFUSED HERE, BEFORE ANYTHING IS CLEARED ───────
+        //
+        // ⚠ THIS REFUSAL USED TO STAND BELOW THE UNPARK, AND THAT ORDER LOST THE REGISTRY ENTRY FOR
+        // GOOD (#71 review, 2026-09-05). Nothing above filters an expired entry out:
+        // RestorableAsync asks IResourceIndexGrain.ResolveSoftDeletedAsync, which succeeds for ANY
+        // entry the index calls SoftDeleted and never reads RecoverableUntil, and
+        // IndexClaimMachine.Effective collapses an expired CLAIM and never an expired soft delete.
+        // So an expired-but-unpurged resource passed every check, the unpark below removed its entry
+        // and wrote state, and only THEN did IndexClaimMachine.Restore answer with its permanent
+        // "passed the end of its recovery window". The caller got a 404 and the entry was gone: no
+        // retry can bring it back, because the only writer is OperationGrain.ParkAsync and the
+        // delete operation that drives it terminated when the resource was parked. What was left is
+        // a resource still holding its name and its committed quota, still SoftDeleted, and in NO
+        // listing at all — the exact state issue #71 exists to end, reached on an ordinary non-crash
+        // path, and reached by the COMMON case rather than a corner: #12's expiry sweeper does not
+        // exist yet, so expired-but-unpurged is where every parked resource eventually sits, and the
+        // enumeration destroyed is the one that sweeper is going to read.
+        //
+        // ⚠ ASKED OF THE INDEX GRAIN, WHICH IS WHY THIS IS NOT THE "TWO READS OF ONE DEADLINE" THE
+        // NOTE FURTHER DOWN WARNS ABOUT. ResolveExpiredAsync compares RecoverableUntil against that
+        // grain's own clock with the same `<=` IndexClaimMachine.Restore uses — its remarks call the
+        // two complements by construction — so this is the one authority answering twice, not a
+        // deadline copied out and compared here. Time only moves forward between the two calls, so
+        // the pair can disagree in one direction only: this line passes and the restore below
+        // refuses, for a request that crossed the deadline in the width of the one grain call
+        // between them. That residual is what RepairParkedRegistryAsync covers, so the entry
+        // survives on either reading.
+        //
+        // ⚠ NotFound RATHER THAN THE INDEX'S OWN MESSAGE, which is the second thing this line fixes.
+        // The refusal below was returned verbatim, so a caller learned that the name WAS held and
+        // exactly when it stopped being restorable — an oracle on the one verb that knows soft
+        // delete exists. docs/plan/07 § The enforcement seam wants one sentence for every absence,
+        // and RestorableAsync three screens up already gives this method's other absences that one.
+        if ((await Index(addressed).ResolveExpiredAsync()).IsSuccess) {
+            // ⚠ AND THE REGISTRY IS MADE TO AGREE ON THE WAY OUT, WHICH IS A NO-OP EVERY TIME BUT
+            // ONE. ParkAsync early-returns for an entry that is already there without restamping
+            // ParkedAt, so this costs one grain call and writes nothing in the ordinary case. The
+            // case it is not a no-op in is the one where a previous attempt unparked, met the
+            // refusal below and had its repair fail: without this line that attempt's loss would be
+            // permanent, because every later retry stops HERE, above the repair. With it, a retry
+            // of a refused restore converges — which is what the paragraph under the unpark claims
+            // and, before this change, was false.
+            await RepairParkedRegistryAsync(addressed);
+
+            return NotFound<WriteAccepted>(request.Path);
+        }
+
+        // ── AND IT LEAVES THE REGISTRY OF WHAT IS RECOVERABLE, BEFORE IT STOPS BEING RECOVERABLE ──
+        //
+        // ⚠ THE SECOND OF THE THREE CALL SITES docs/plan/08 § Soft delete NAMES — "cleared where the
+        // restore relists it". OperationGrain.ParkAsync wrote the entry; this is the ending that
+        // makes it false, and issue #71's registry is only worth having if both endings clear it.
+        //
+        // ⚠ BEFORE THE INDEX RESTORE, WHICH IS THE REGISTRY'S OWN INVARIANT AND NOT A PREFERENCE:
+        // an entry exists only while the index says SoftDeleted. Clearing after the index had been
+        // restored would leave, on any failure between the two, a registry that OFFERS a resource
+        // that is live — a restore that answers 404 to whoever accepts the offer, and, worse, a
+        // caller who may list this collection but may not read the resource being told the name is
+        // held. That is the enumeration oracle docs/plan/07 § The enforcement seam closes and the
+        // reason § Soft delete refuses a 410 Gone. Clearing first fails the other way: the resource
+        // stays parked, stays restorable by its own path, and is missing from one listing until the
+        // restore is retried — which every step below can also require, since RestorableAsync still
+        // answers for it and UnparkAsync is idempotent, so the retry re-runs the whole method and
+        // converges.
+        //
+        // ⚠ THAT LAST SENTENCE IS A CLAIM ABOUT THIS METHOD AND IT IS NOT SELF-EVIDENT — it holds
+        // only because no step below can refuse PERMANENTLY while the index still says SoftDeleted.
+        // It did not hold before the #71 review (2026-09-05): the window check under the next
+        // heading was one such refusal, every retry failed at the same line, and the entry this line
+        // had already removed was gone for good. Two things now keep the claim true, and a third
+        // permanent refusal added below would break it again: the expired case is screened above,
+        // before this line, and anything else the index refuses is repaired by
+        // RepairParkedRegistryAsync.
+        //
+        // ⚠ AND IT IS STRICT, like the rejoin further down. Nothing irreversible has happened yet:
+        // a failure here returns before the index is touched, so the caller's retry starts from the
+        // same state this call did.
+        var unparked = await Parked(addressed).UnparkAsync(addressed.Id.Id);
+        if (unparked.TryGetError(out var unparkError)) {
+            return Result<WriteAccepted>.Failure(unparkError);
+        }
+
         trace.Enter(WriteStep.IndexClaim);
 
         // ⚠ THE INDEX GOES FIRST HERE TOO, AND FOR THE MIRROR OF THE DELETE'S REASON. The index is
@@ -778,12 +860,26 @@ public sealed class ResourceManagerService(
         // subscription role holder, which is who asked for the restore. The other order would leave it
         // addressable to nobody after a partial failure, and nothing would notice.
         //
-        // ⚠ The window is checked HERE and not above, because the index is what holds it:
-        // RestoreAsync refuses a binding past IndexEntry.RecoverableUntil with the same
-        // ResourceNotFound a name that holds nothing gets. Reading the deadline first and acting on it
-        // second would be two reads of a value that can change between them.
+        // ⚠ The window is checked HERE TOO, and this is still the authoritative check, because the
+        // index is what holds it: RestoreAsync refuses a binding past IndexEntry.RecoverableUntil
+        // with the same ResourceNotFound a name that holds nothing gets. What changed at the #71
+        // review (2026-09-05) is that it is no longer the FIRST place the window is read — the
+        // screen above asks the same grain the same question before the unpark, because a refusal
+        // that arrives after an irreversible step is a refusal that destroys something. The old note
+        // here argued that reading the deadline first would be "two reads of a value that can change
+        // between them"; the value cannot change (§ Soft delete: the window "is set at creation and
+        // is not extendable"), only the clock advances, and the one disagreement that advance can
+        // produce is repaired below rather than argued away.
         var restored = await Index(addressed).RestoreAsync(addressed.Id.Id);
         if (restored.TryGetError(out var restoreError)) {
+            // ⚠ THE ENTRY GOES BACK IF THE INDEX STILL SAYS IT WAS TRUE, WHICH IS THE OTHER HALF OF
+            // THE FIX ABOVE AND COVERS EVERYTHING THE SCREEN CANNOT SEE COMING: a request that
+            // crossed the deadline between the two reads, and any refusal a future edit adds here.
+            // Without it the unpark two screens up is an irreversible step taken before the last
+            // check that can refuse — which is the shape of the defect, independently of which
+            // particular check it is.
+            await RepairParkedRegistryAsync(addressed);
+
             return Result<WriteAccepted>.Failure(restoreError);
         }
 
@@ -1122,6 +1218,27 @@ public sealed class ResourceManagerService(
 
         trace.Enter(WriteStep.IndexClaim);
 
+        // ── AND IT LEAVES THE REGISTRY OF WHAT IS RECOVERABLE, BECAUSE IT IS ABOUT TO STOP BEING ──
+        //
+        // ⚠ THE THIRD OF THE THREE CALL SITES docs/plan/08 § Soft delete NAMES — "cleared where …
+        // the purge releases the name". Shared by both fronts, the authorized purge and the
+        // clock-driven one, for the reason this whole method is shared: a purge the clock drove
+        // through a different body would be a second implementation of the platform's one
+        // irreversible operation.
+        //
+        // ⚠ BEFORE THE RELEASE, AND HERE THE ORDER IS ALSO WHAT KEEPS THE PURGE RE-DRIVABLE. While
+        // the index still says SoftDeleted, RestorableAsync still answers, so a purge interrupted at
+        // any point up to the release can be retried from the top and will converge — UnparkAsync is
+        // idempotent, so the second attempt walks the same path. Once the name is released nothing
+        // can resolve the resource again, so bookkeeping left behind after that line has no request
+        // that finishes it: the entry would stand for ever, claiming a restore that answers 404.
+        // That is also the registry's invariant read from the other side — an entry exists only
+        // while the index says SoftDeleted, so it must go before the index stops saying it.
+        var unparked = await Parked(addressed).UnparkAsync(addressed.Id.Id);
+        if (unparked.TryGetError(out var unparkError)) {
+            return Result<WriteAccepted>.Failure(unparkError);
+        }
+
         // ⚠ THE NAME COMES BACK NOW, WHICH IS THE HARD DELETE'S ORDER AND FOR THE HARD DELETE'S
         // REASON. docs/plan/06 § Two-phase create: "release the index first (so the name is
         // immediately reusable), then tear down the data plane, then delete the grain state." A purge
@@ -1204,6 +1321,69 @@ public sealed class ResourceManagerService(
         var parked = await Index(target).ResolveSoftDeletedAsync();
 
         return parked.IsSuccess ? parked : NotFound<Guid>(target.Id.Path);
+    }
+
+    /// <summary>
+    ///     Makes the resource group's parked-resource registry agree with the index again, after a
+    ///     restore that cleared an entry and was then refused.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>The registry's invariant is <i>an entry exists only while the index says
+    ///         <c>SoftDeleted</c></i>, and this is the only place that repairs it rather than
+    ///         maintaining it.</b> <c>RestoreAsync</c> clears the entry before the index write that
+    ///         would make it false — the order docs/plan/08 § Soft delete fixes, because a registry
+    ///         that over-reports offers a restore that answers <c>404</c> and tells a caller who may
+    ///         list the collection but may not read the resource that the name is held. The cost of
+    ///         that order is that a refusal after the clear leaves the registry short, and the
+    ///         registry has exactly one writer — <c>OperationGrain.ParkAsync</c>, driven by a delete
+    ///         operation that terminated when the resource was parked — so short would be permanent.
+    ///         This puts it back instead.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The index is asked again rather than the refusal being read, and that is what
+    ///         makes the repair safe.</b> A blind re-park would resurrect an entry for a resource a
+    ///         concurrent purge had just released: that purge unparks and then releases, so a restore
+    ///         interleaved with it can find the binding <c>Free</c> at
+    ///         <c>IndexClaimMachine.Restore</c> — and an entry written after the name came back is
+    ///         the "long" registry the ordering above exists to make impossible, permanently, since
+    ///         nothing can address that resource again. So the entry comes back only when the index
+    ///         still says <c>SoftDeleted</c> <i>and</i> still says it of the same GUID; on every
+    ///         other answer, short is the correct state and staying short is the repair.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>NARROWED, NOT CLOSED, and said here because the paragraph above reads as though
+    ///         it were closed.</b> The guard holds at <i>read</i> time: this is a read of the index
+    ///         followed by a write to the registry, two grain calls, and a purge that unparks and
+    ///         releases in the gap still leaves an entry naming a name that is free. That is the
+    ///         permanent "long" the ordering exists to prevent, and it needs a purge and a restore of
+    ///         the same resource to overlap inside that window. It is left rather than fixed for two
+    ///         reasons, both worth stating: closing it needs the index and the registry to move under
+    ///         one decision, which is a larger change than the data loss it would be buying down; and
+    ///         master already carries a wider unguarded version of the same race — a restore that
+    ///         <i>succeeds</i> between a purge's unpark and its release leaves a live resource whose
+    ///         name has been given away. ⚠ #12's sweeper makes purge-of-an-expired-resource
+    ///         concurrent with restore-of-an-expired-resource the likeliest pair in the tree, so this
+    ///         paragraph is the one to re-read when that driver is built.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The re-park's own failure is not propagated, because the caller's answer belongs
+    ///         to the refusal that brought us here.</b> A failed repair leaves the state the defect
+    ///         left and is no worse; what makes it recoverable rather than permanent is that a
+    ///         retried restore reaches a repair again — the expired screen in <c>RestoreAsync</c>
+    ///         calls this method before it returns for exactly that reason. <c>ParkAsync</c> is
+    ///         idempotent and does not restamp <c>ParkedAt</c> on an entry that is already there, so
+    ///         a repair that was not needed writes nothing.
+    ///     </para>
+    /// </remarks>
+    async Task RepairParkedRegistryAsync(WriteTarget addressed) {
+        var stillParked = await Index(addressed).ResolveSoftDeletedAsync();
+
+        if (stillParked.IsFailure || stillParked.GetValueOrThrow() != addressed.Id.Id) {
+            return;
+        }
+
+        _ = await Parked(addressed).ParkAsync(addressed.Id);
     }
 
     /// <summary>
@@ -2705,6 +2885,21 @@ public sealed class ResourceManagerService(
     IResourceGroupGrain Group(WriteTarget target) =>
         Tenant(target)
             .GetGrain<IResourceGroupGrain>(GrainKeys.ResourceGroup(target.Id.SubscriptionId, target.Id.ResourceGroup));
+
+    /// <summary>
+    ///     The same resource group's registry of parked resources — docs/plan/08 § Soft delete, and
+    ///     the collection a soft-deleted resource is in instead of <see cref="Group" />'s.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ Built from the <b>address</b> for the reason <see cref="Group" /> is, and the grain
+    ///     re-checks the tenant, the subscription and the group name against its own key — so a wrong
+    ///     key here is a refusal rather than a restore offered out of somebody else's group.
+    /// </remarks>
+    IParkedResourceRegistryGrain Parked(WriteTarget target) =>
+        Tenant(target)
+            .GetGrain<IParkedResourceRegistryGrain>(
+                GrainKeys.ParkedResourceRegistry(target.Id.SubscriptionId, target.Id.ResourceGroup)
+            );
 
     TenantGrainFactory Tenant(WriteTarget target) =>
         grains.ForTenant(target.Id.TenantId.ToString("D", CultureInfo.InvariantCulture));

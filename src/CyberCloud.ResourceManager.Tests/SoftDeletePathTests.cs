@@ -1294,7 +1294,18 @@ public sealed class SoftDeletePathTests(ResourceManagerCluster cluster) {
     ///         handing a caller who may list the group but may not read the resource the
     ///         "something is held here" signal docs/plan/08 § Soft delete refuses a <c>410 Gone</c>
     ///         over. So the filter has an empty input, and a listing of what is recoverable needs an
-    ///         enumeration source that does not exist rather than a predicate over one that does.
+    ///         enumeration source rather than a predicate over one that does exist.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>THE ENUMERATION SOURCE NOW EXISTS AND THIS CASE IS UNCHANGED, WHICH IS THE POINT
+    ///         OF SAYING SO.</b> Issue #71 built <c>IParkedResourceRegistryGrain</c> — a second
+    ///         collection, keyed <c>parked/{subscriptionId:N}/rg/{name}</c>, written where
+    ///         <c>OperationGrain.ParkAsync</c> unlists the member. What it did <b>not</b> do is put
+    ///         the member back, because that is the decision docs/plan/08 § Soft delete calls right
+    ///         and not the one to reverse. Every assertion below therefore still holds, and
+    ///         <see cref="AParkedResourceIsInItsGroupsRegistryOfWhatIsRecoverable" /> is the other
+    ///         half: absent from the membership <i>and</i> present somewhere. A change that
+    ///         "fixed" #13 by relisting the member would turn this case red, which is what it is for.
     ///     </para>
     ///     <para>
     ///         ⚠ <b>Both doors are asserted, and the second is the one that matters.</b> The listing
@@ -1364,6 +1375,280 @@ public sealed class SoftDeletePathTests(ResourceManagerCluster cluster) {
         // And it is still recoverable, so the absence above is a listing gap and not a lost resource.
         (await cluster.Index(parked).GetAsync()).GetValueOrThrow().State.ShouldBe(IndexEntryState.SoftDeleted);
         (await RestoreAndConverge(parked)).IsSuccess.ShouldBeTrue();
+    }
+
+    // ── The second place to look — docs/plan/08 § Soft delete, issue #71 ───────────────────────
+    //
+    // ⚠ THE THREE CASES BELOW ARE THE OTHER HALF OF THE ONE ABOVE, AND THEY ARE HERE RATHER THAN IN
+    // ParkedResourceRegistryTests BECAUSE THE FINDING WAS NEVER ABOUT THE GRAIN. A registry with a
+    // correct ParkAsync that nothing calls is exactly the state IResourceGroupGrain was in when
+    // docs/plan/08 § Soft delete recorded that "nothing in production calls any of them" — fully
+    // implemented, covered, and answering an empty collection for every group in the platform. So
+    // each case drives the real verb end to end and reads the registry afterwards.
+
+    /// <summary>
+    ///     ⚠ <b>A parked resource is in the group's registry of what is recoverable, which is where
+    ///     it went when it left the membership.</b>
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         The calibration is the same one
+    ///         <see cref="ASoftDeletedResourceIsInNoListingBecauseItLeftItsGroupsMembership" /> carries
+    ///         and pointing the other way: the live resource must be in the membership and
+    ///         <b>not</b> in the registry, or the two assertions below would pass for a platform that
+    ///         had simply copied one collection into the other — which is the merge docs/plan/08
+    ///         § Soft delete refuses, since it would put a name whose every read is the canonical
+    ///         <c>404</c> back into a listing a caller may enumerate.
+    ///     </para>
+    ///     <para>
+    ///         The type filter is asserted against a collection of the <i>other</i> type in the same
+    ///         group. That type declares no window, so nothing can ever be parked in it and the
+    ///         correct answer is empty — which is only meaningful beside a non-empty answer from the
+    ///         collection that does have one, on the same grain, in the same call sequence.
+    ///     </para>
+    /// </remarks>
+    [Fact]
+    public async Task AParkedResourceIsInItsGroupsRegistryOfWhatIsRecoverable() {
+        ResourceManagerCluster.ResetDoubles();
+
+        const string group = "registry-parked";
+        var live = VaultAddress("stays-live", group);
+        var parked = VaultAddress("goes-away", group);
+
+        (await cluster.Group(live).CreateAsync(live.TenantId, "eu-west-1")).IsSuccess.ShouldBeTrue();
+
+        await Converge((await Create(live)).GetValueOrThrow());
+        await Converge((await Create(parked)).GetValueOrThrow());
+
+        (await cluster.Parked(live).ListAsync())
+            .GetValueOrThrow()
+            .ShouldBeEmpty("nothing is parked before the delete");
+
+        await Converge((await Delete(parked)).GetValueOrThrow());
+
+        // ── The membership, which is where it is NOT ─────────────────────────────────────────
+        var members = (await cluster.Group(parked).ListAsync()).GetValueOrThrow();
+
+        members.Select(x => x.CanonicalPath).ShouldContain(live.CanonicalPath);
+        members.Select(x => x.CanonicalPath).ShouldNotContain(parked.CanonicalPath);
+
+        // ── The registry, which is where it IS ───────────────────────────────────────────────
+        var recoverable = (await cluster.Parked(parked).ListAsync()).GetValueOrThrow();
+
+        recoverable.Select(x => x.AddressOf().Name).ShouldBe(["goes-away"]);
+        recoverable[0].ResourceId.ShouldBe(
+            (await cluster.Index(parked).ResolveSoftDeletedAsync()).GetValueOrThrow(),
+            "the entry has to carry the GUID a restore and a purge address the resource by"
+        );
+
+        // ── "What is recoverable in this group, of this type" ────────────────────────────────
+        var ofVaults = (await cluster.Parked(parked).ListOfTypeAsync(ResourceCollectionId.Of(parked)))
+            .GetValueOrThrow();
+
+        var ofWidgets = (await cluster.Parked(parked)
+                .ListOfTypeAsync(
+                    new(parked.TenantId, parked.SubscriptionId, group, ConformingReconciler.TypeName)
+                ))
+            .GetValueOrThrow();
+
+        ofVaults.Select(x => x.AddressOf().Name).ShouldBe(["goes-away"]);
+        ofWidgets.ShouldBeEmpty("widgets declare no recovery window, so nothing can be parked in one");
+    }
+
+    /// <summary>
+    ///     ⚠ <b>A restore takes the resource out of the registry and puts it back into the
+    ///     membership, so it is in exactly one collection at every ending.</b>
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>The registry entry going is the half that would be silently missed.</b> A restore
+    ///     that relisted the member and left the entry standing would still return <c>200</c>, still
+    ///     restore the data plane and still pass every case in this file that predates this one — and
+    ///     the registry would then offer a restore of a live resource, which answers <c>404</c> to
+    ///     whoever accepts it and tells a caller who may list this collection but may not read the
+    ///     resource that the name is held. That is the enumeration oracle docs/plan/07 § The
+    ///     enforcement seam closes.
+    /// </remarks>
+    [Fact]
+    public async Task ARestoreTakesTheResourceOutOfTheRegistryAndPutsItBackIntoTheMembership() {
+        ResourceManagerCluster.ResetDoubles();
+
+        const string group = "registry-restored";
+        var address = VaultAddress("comes-back", group);
+
+        (await cluster.Group(address).CreateAsync(address.TenantId, "eu-west-1")).IsSuccess.ShouldBeTrue();
+
+        await Converge((await Create(address)).GetValueOrThrow());
+        await Converge((await Delete(address)).GetValueOrThrow());
+
+        (await cluster.Parked(address).ListAsync())
+            .GetValueOrThrow()
+            .Select(x => x.AddressOf().Name)
+            .ShouldBe(["comes-back"], "the calibration: it was in the registry before the restore");
+
+        (await RestoreAndConverge(address)).IsSuccess.ShouldBeTrue();
+
+        (await cluster.Parked(address).ListAsync()).GetValueOrThrow().ShouldBeEmpty();
+
+        (await cluster.Group(address).ListAsync())
+            .GetValueOrThrow()
+            .Select(x => x.CanonicalPath)
+            .ShouldContain(address.CanonicalPath);
+
+        (await Read(address)).IsSuccess.ShouldBeTrue("and it is readable at its own address again");
+    }
+
+    /// <summary>
+    ///     ⚠ <b>A purge takes the resource out of the registry, and it is in no collection at all
+    ///     afterwards — which is what "there is nothing to recover" means.</b>
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>An entry left behind by a purge cannot be cleared by anything.</b> Once the name is
+    ///     released, <c>RestorableAsync</c> answers the canonical <c>404</c> for that address, so no
+    ///     request reaches the registry again; the entry would stand for the life of the group,
+    ///     offering a restore of a resource whose grain state, quota and name are all gone. That is
+    ///     why the clear runs before the release rather than after it, and why this case reads the
+    ///     registry after a purge that converged rather than only after the accept.
+    /// </remarks>
+    [Fact]
+    public async Task APurgeTakesTheResourceOutOfTheRegistryForGood() {
+        ResourceManagerCluster.ResetDoubles();
+
+        const string group = "registry-purged";
+        var address = VaultAddress("goes-for-good", group);
+
+        (await cluster.Group(address).CreateAsync(address.TenantId, "eu-west-1")).IsSuccess.ShouldBeTrue();
+
+        await Converge((await Create(address)).GetValueOrThrow());
+        await Converge((await Delete(address)).GetValueOrThrow());
+
+        (await cluster.Parked(address).ListAsync())
+            .GetValueOrThrow()
+            .Select(x => x.AddressOf().Name)
+            .ShouldBe(["goes-for-good"], "the calibration: it was in the registry before the purge");
+
+        await Converge((await Purge(address)).GetValueOrThrow());
+
+        (await cluster.Parked(address).ListAsync()).GetValueOrThrow().ShouldBeEmpty();
+
+        (await cluster.Group(address).ListAsync())
+            .GetValueOrThrow()
+            .Select(x => x.CanonicalPath)
+            .ShouldNotContain(address.CanonicalPath, "and it did not come back to the membership either");
+
+        (await Restore(address)).Error!.Code.ShouldBe(
+            ErrorCode.ResourceNotFound,
+            "there is nothing to recover, and the refusal is the canonical 404"
+        );
+    }
+
+    /// <summary>
+    ///     ⚠ <b>A restore that is refused because the window has passed leaves the registry entry
+    ///     exactly where it was — the case the ordering bug destroyed.</b>
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>This is the #71 review's blocker (2026-09-05), and it was a real data-loss
+    ///         path.</b> <c>RestoreAsync</c> cleared the registry entry and only then met the window
+    ///         check inside <c>IndexClaimMachine.Restore</c>. Nothing upstream filtered an expired
+    ///         entry — <c>ResolveSoftDeletedAsync</c> answers for any binding the index calls
+    ///         <c>SoftDeleted</c> and never reads <c>RecoverableUntil</c> — so the caller got a
+    ///         <c>404</c> and the entry was gone permanently: its only writer is
+    ///         <c>OperationGrain.ParkAsync</c>, whose delete operation terminated when the resource
+    ///         was parked. The resource kept its name and its committed quota, stayed
+    ///         <c>SoftDeleted</c>, and appeared in no collection anywhere, which is precisely what
+    ///         issue #71 exists to end.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Expired-but-unpurged is the ordinary long-term state and not a corner, which is
+    ///         why this case matters more than its rarity suggests.</b> Issue #12's expiry sweeper
+    ///         does not exist yet, so nothing ends a window on the clock's account; every parked
+    ///         resource that nobody restores or purges arrives here and stays. The other three
+    ///         registry cases in this section all use unexpired windows, so none of them would have
+    ///         gone red — <see cref="ARestoreAfterTheWindowHasPassedIsRefused" /> drives this exact
+    ///         sequence and passes because it never reads the registry.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b><c>ParkedAt</c> is asserted unchanged, and that is the assertion that separates
+    ///         the fix from a plausible wrong one.</b> A repair that cleared the entry and wrote a
+    ///         fresh one would satisfy every other assertion here while restamping the answer to
+    ///         "when was this deleted" with the time of the failed restore — a listing of what is
+    ///         recoverable would then say a resource seven days past its window had been parked a
+    ///         moment ago. The refusal must not touch the entry at all.
+    ///     </para>
+    /// </remarks>
+    [Fact]
+    public async Task ARestoreRefusedPastTheWindowLeavesTheRegistryEntryUntouched() {
+        ResourceManagerCluster.ResetDoubles();
+
+        const string group = "registry-expired";
+        var address = VaultAddress("too-late-to-restore", group);
+
+        (await cluster.Group(address).CreateAsync(address.TenantId, "eu-west-1")).IsSuccess.ShouldBeTrue();
+
+        await Converge((await Create(address)).GetValueOrThrow());
+        await Converge((await Delete(address)).GetValueOrThrow());
+
+        var before = (await cluster.Parked(address).ListAsync()).GetValueOrThrow();
+
+        before.Select(x => x.AddressOf().Name)
+            .ShouldBe(["too-late-to-restore"], "the calibration: it was in the registry before the refusal");
+
+        // ⚠ EIGHT DAYS INTO THE SEVEN-DAY WINDOW `vaults` DECLARES, and past it rather than at its
+        // edge so that the refusal below is the deadline and not a boundary condition.
+        // ARestoreAfterTheWindowHasPassedIsRefused establishes that six days in still works, which
+        // is what makes eight mean the window.
+        TestClock.Instance.Advance(TimeSpan.FromDays(8));
+
+        var late = await Restore(address);
+
+        late.IsFailure.ShouldBeTrue("eight days into a seven-day window");
+        late.Error!.Code.ShouldBe(ErrorCode.ResourceNotFound);
+
+        // ── The finding: what the refusal left behind ───────────────────────────────────────────
+        (await cluster.Index(address).GetAsync()).GetValueOrThrow()
+            .State.ShouldBe(
+                IndexEntryState.SoftDeleted,
+                "the refused restore did not move the index either, so the entry is still TRUE — "
+                + "which is what makes its absence a loss rather than a correct clear"
+            );
+
+        var after = (await cluster.Parked(address).ListAsync()).GetValueOrThrow();
+
+        after.Select(x => x.AddressOf().Name).ShouldBe(
+            ["too-late-to-restore"],
+            "a refused restore must not unlist the resource: nothing re-parks it, so the entry would "
+            + "be gone for good and the resource would hold its name and its committed quota in no "
+            + "collection at all"
+        );
+
+        after[0].ParkedAt.ShouldBe(
+            before[0].ParkedAt,
+            "the entry is the one the park wrote and not a fresh one — a re-park would restamp "
+            + "'when was this deleted' with the time of the failed restore"
+        );
+
+        after[0].ResourceId.ShouldBe(before[0].ResourceId);
+
+        // ⚠ AND THE SECOND ATTEMPT IS THE ONE THAT WOULD CATCH A FIX THAT ONLY REORDERED. A repair
+        // reached through a path that a retry no longer takes would pass everything above and lose
+        // the entry on any later attempt.
+        (await Restore(address)).Error!.Code.ShouldBe(ErrorCode.ResourceNotFound);
+
+        (await cluster.Parked(address).ListAsync()).GetValueOrThrow()
+            .Select(x => x.AddressOf().Name)
+            .ShouldBe(["too-late-to-restore"], "and the second refusal did not lose it either");
+
+        // ── And the purge, which is what SHOULD end this, is unaffected ─────────────────────────
+        //
+        // ⚠ THE PURGE SIDE WAS NEVER BROKEN and this proves the fix did not break it: Index's
+        // ReleaseAsync has no permanent refusal, so its unpark has nothing that can fail after it.
+        // Asserting it here rather than trusting it keeps the expired resource from being one this
+        // file can only park.
+        await Converge((await Purge(address)).GetValueOrThrow());
+
+        (await cluster.Parked(address).ListAsync()).GetValueOrThrow().ShouldBeEmpty(
+            "the purge is the ending an expired resource has, and it clears the entry"
+        );
     }
 
     Task<Result<WriteAccepted>> PurgeExpired(ResourceId address) =>

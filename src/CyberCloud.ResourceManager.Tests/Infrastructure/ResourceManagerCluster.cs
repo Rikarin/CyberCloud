@@ -528,6 +528,21 @@ public sealed class ResourceManagerCluster : IAsyncLifetime {
         For(address.TenantId)
             .GetGrain<IResourceGroupGrain>(GrainKeys.ResourceGroup(address.SubscriptionId, address.ResourceGroup));
 
+    /// <summary>
+    ///     The same group's registry of parked resources — docs/plan/08 § Soft delete.
+    /// </summary>
+    /// <param name="address">Any address in the group. Only its subscription and group name are read.</param>
+    /// <remarks>
+    ///     ⚠ Taken from an <b>address</b> for <see cref="Group" />'s reason, and built from the same
+    ///     two values, so a case cannot assert against the registry of one group and the membership
+    ///     of another — which is a soft-delete test that passes because both lookups found nothing.
+    /// </remarks>
+    public IParkedResourceRegistryGrain Parked(ResourceId address) =>
+        For(address.TenantId)
+            .GetGrain<IParkedResourceRegistryGrain>(
+                GrainKeys.ParkedResourceRegistry(address.SubscriptionId, address.ResourceGroup)
+            );
+
     /// <summary>The resource grain.</summary>
     public IResourceGrain Resource(Guid tenant, Guid resourceId) =>
         For(tenant).GetGrain<IResourceGrain>(GrainKeys.Resource(resourceId));
