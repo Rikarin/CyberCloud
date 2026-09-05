@@ -1352,6 +1352,21 @@ public sealed class ResourceManagerService(
     ///         other answer, short is the correct state and staying short is the repair.
     ///     </para>
     ///     <para>
+    ///         ⚠ <b>NARROWED, NOT CLOSED, and said here because the paragraph above reads as though
+    ///         it were closed.</b> The guard holds at <i>read</i> time: this is a read of the index
+    ///         followed by a write to the registry, two grain calls, and a purge that unparks and
+    ///         releases in the gap still leaves an entry naming a name that is free. That is the
+    ///         permanent "long" the ordering exists to prevent, and it needs a purge and a restore of
+    ///         the same resource to overlap inside that window. It is left rather than fixed for two
+    ///         reasons, both worth stating: closing it needs the index and the registry to move under
+    ///         one decision, which is a larger change than the data loss it would be buying down; and
+    ///         master already carries a wider unguarded version of the same race — a restore that
+    ///         <i>succeeds</i> between a purge's unpark and its release leaves a live resource whose
+    ///         name has been given away. ⚠ #12's sweeper makes purge-of-an-expired-resource
+    ///         concurrent with restore-of-an-expired-resource the likeliest pair in the tree, so this
+    ///         paragraph is the one to re-read when that driver is built.
+    ///     </para>
+    ///     <para>
     ///         ⚠ <b>The re-park's own failure is not propagated, because the caller's answer belongs
     ///         to the refusal that brought us here.</b> A failed repair leaves the state the defect
     ///         left and is no worse; what makes it recoverable rather than permanent is that a

@@ -504,9 +504,9 @@ but may not read the resource that the name is held, which is the oracle § Soft
 `410 Gone` over.
 
 ⚠ **Short has to be repairable, and that is a second rule rather than a consequence of the first.**
-The registry's only writer is `OperationGrain.ParkAsync`, driven by a delete operation that has
-terminated by the time any of this runs — so a clear that is followed by a refusal is a clear nothing
-undoes. `RestoreAsync` shipped with exactly that: the recovery window was checked *after* the unpark,
+The registry's only writer *was* `OperationGrain.ParkAsync`, driven by a delete operation that has
+terminated by the time any of this runs — so a clear that is followed by a refusal was a clear nothing
+undoes. (`RepairParkedRegistryAsync`, below, is the second, and it is why that sentence is past tense.) `RestoreAsync` shipped with exactly that: the recovery window was checked *after* the unpark,
 inside `IndexClaimMachine.Restore`, and nothing upstream filtered an expired entry
 (`ResolveSoftDeletedAsync` answers for any binding the index calls `SoftDeleted` and never reads
 `RecoverableUntil`), so restoring an expired-but-unpurged resource returned `404` and left it holding

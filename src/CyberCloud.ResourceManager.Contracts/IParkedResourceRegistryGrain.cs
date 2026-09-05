@@ -130,12 +130,24 @@ public sealed record ParkedResource {
 ///         reverses.</b> What was missing is a second collection, and this is it.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Three writes, at three call sites that already existed.</b> Written by
-///         <c>OperationGrain.ParkAsync</c> where the soft delete unlists the member; cleared by
-///         <c>ResourceManagerService.RestoreAsync</c> where the restore puts it back; cleared by
-///         <c>ResourceManagerService.PurgeCoreAsync</c> where the purge releases the name. There is
-///         no fourth writer and there must not be — an entry that appeared from anywhere else would
-///         be a claim about a recovery window made by something that does not hold one.
+///         ⚠ <b>Three writes, at three call sites that already existed — and a fourth that re-asks
+///         the index.</b> Written by <c>OperationGrain.ParkAsync</c> where the soft delete unlists the
+///         member; cleared by <c>ResourceManagerService.RestoreAsync</c> where the restore puts it
+///         back; cleared by <c>ResourceManagerService.PurgeCoreAsync</c> where the purge releases the
+///         name.
+///     </para>
+///     <para>
+///         ⚠ <b>THE RULE IS NOT "NO FOURTH WRITER". IT IS "NO WRITER THAT DOES NOT RE-ASK THE
+///         INDEX".</b> This paragraph said the first of those until 2026-09-05, and it forbade the
+///         code that had to be written: a restore can be refused <i>permanently</i> — by a recovery
+///         window that has passed — at a point below the clear, and an entry cleared for a restore
+///         that then never happens is gone for good, because the delete operation that would re-park
+///         it has long since terminated. So <c>ResourceManagerService.RepairParkedRegistryAsync</c> is
+///         a fourth caller of <see cref="ParkAsync" />, and it is legitimate for exactly the reason
+///         the old rule was groping at: it re-parks <i>only</i> while the index still says
+///         <see cref="IndexEntryState.SoftDeleted" /> of the same resource GUID, so it makes no claim
+///         of its own. An entry that appeared from anywhere else — from a writer that did not ask —
+///         would be a claim about a recovery window made by something that does not hold one.
 ///     </para>
 ///     <para>
 ///         ⚠ <b>THE INVARIANT, WHICH IS WHAT FIXES THE ORDER OF ALL THREE:
